@@ -1,0 +1,171 @@
+mod common;
+
+use common::*;
+
+const FIRST_QUESTION: &str = r#"### 1.1 What is the unit of authority called?
+
+Problem: names leaked into decisions.
+
+Standard: plain words.
+
+- A) The authoritative sentence is a decision, and the question that produced it is a question.
+  Why: plainest word.
+  Costs: two nouns.
+- B) The whole unit is a block.
+  Why: matches predecessors.
+  Costs: names a region.
+"#;
+
+const SECOND_QUESTION: &str = r#"
+### 1.2 What is the second unit of authority called?
+
+- A) The second thing is a widget.
+  Why: reasons.
+- B) The second thing is a gadget.
+  Why: other reasons.
+"#;
+
+#[test]
+fn lock_writes_answer_line_and_ledger_row() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let ids = extract_ids(&content);
+    let question_id = &ids[0];
+
+    let out = adr_owner(&dir, &["lock", question_id, "A"], "");
+    assert!(out.status.success(), "lock failed: {}", stderr(&out));
+    assert!(stdout(&out).contains("The authoritative sentence is a decision"));
+
+    let after = std::fs::read_to_string(&record).unwrap();
+    assert!(after.contains("**Answer:** A"));
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        ledger
+            .lines()
+            .any(|l| l.contains("\tanswered\t") && l.contains(question_id.as_str())),
+        "ledger missing answered row: {}",
+        ledger
+    );
+}
+
+#[test]
+fn lock_refuses_when_claudecode_is_set() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let ids = extract_ids(&content);
+    let question_id = &ids[0];
+
+    // CLAUDECODE set, no bypass: must be refused with exit code 2, and
+    // nothing should be written.
+    let out = adr(
+        &dir,
+        &["lock", question_id, "A"],
+        &[("CLAUDECODE", "1")],
+        "",
+    );
+    assert_eq!(out.status.code(), Some(2), "stderr: {}", stderr(&out));
+
+    let after = std::fs::read_to_string(&record).unwrap();
+    assert!(
+        !after.contains("**Answer:**"),
+        "lock must not have written anything: {}",
+        after
+    );
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        !ledger.contains("\tanswered\t"),
+        "lock must not have appended a ledger row: {}",
+        ledger
+    );
+}
+
+#[test]
+fn lock_with_supersedes_writes_superseded_row_and_show_hides_old() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let ids = extract_ids(&content);
+    let old_id = ids[0].clone();
+
+    let lock_out = adr_owner(&dir, &["lock", &old_id, "A"], "");
+    assert!(
+        lock_out.status.success(),
+        "lock A failed: {}",
+        stderr(&lock_out)
+    );
+
+    // Add a second question that supersedes the first, with `supersedes:`
+    // directly under its heading.
+    let mut content = std::fs::read_to_string(&record).unwrap();
+    let second_with_supersedes = SECOND_QUESTION.replacen(
+        "### 1.2 What is the second unit of authority called?\n",
+        &format!(
+            "### 1.2 What is the second unit of authority called?\n\nsupersedes: {}\n",
+            old_id
+        ),
+        1,
+    );
+    content.push_str(&second_with_supersedes);
+    std::fs::write(&record, content).unwrap();
+
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let ids = extract_ids(&content);
+    let new_id = ids
+        .iter()
+        .find(|id| *id != &old_id)
+        .expect("new id assigned")
+        .clone();
+
+    let lock_out = adr_owner(&dir, &["lock", &new_id, "A"], "");
+    assert!(
+        lock_out.status.success(),
+        "lock B failed: {}",
+        stderr(&lock_out)
+    );
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        ledger
+            .lines()
+            .any(|l| l.contains("\tsuperseded\t") && l.contains(old_id.as_str())),
+        "ledger missing superseded row: {}",
+        ledger
+    );
+
+    let show = adr(&dir, &["show"], &[], "");
+    assert!(show.status.success());
+    let shown = stdout(&show);
+    assert!(
+        !shown.contains("The authoritative sentence is a decision"),
+        "superseded sentence still shown: {}",
+        shown
+    );
+    assert!(
+        shown.contains("The second thing is a widget."),
+        "new sentence missing: {}",
+        shown
+    );
+}
