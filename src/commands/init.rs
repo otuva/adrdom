@@ -1,10 +1,9 @@
 use crate::commands::DENY_ENTRIES;
 use crate::repo;
 use std::fs;
-use std::io::Write;
 use std::path::Path;
 
-pub fn run() -> i32 {
+pub fn run(claude: bool) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
@@ -41,14 +40,14 @@ pub fn run() -> i32 {
 
     repo::git(&root, &["config", "core.hooksPath", ".githooks"]);
 
-    update_editorconfig(&root.join(".editorconfig"));
-
     let mut messages = Vec::new();
-    match merge_settings(&root) {
-        Ok(mut msgs) => messages.append(&mut msgs),
-        Err(e) => {
-            eprintln!("init: failed to update .claude/settings.json: {}", e);
-            return 1;
+    if claude {
+        match merge_settings(&root) {
+            Ok(mut msgs) => messages.append(&mut msgs),
+            Err(e) => {
+                eprintln!("init: failed to update .claude/settings.json: {}", e);
+                return 1;
+            }
         }
     }
 
@@ -83,21 +82,6 @@ fn create_hook(path: &Path, content: &str) {
             perms.set_mode(0o755);
             fs::set_permissions(path, perms).ok();
         }
-    }
-}
-
-fn update_editorconfig(path: &Path) {
-    let section = "\n[adrdom/**]\ntrim_trailing_whitespace = false\ninsert_final_newline = false\n";
-    if path.exists() {
-        let content = fs::read_to_string(path).unwrap_or_default();
-        if content.contains("[adrdom/**]") {
-            return;
-        }
-        if let Ok(mut f) = fs::OpenOptions::new().append(true).open(path) {
-            f.write_all(section.as_bytes()).ok();
-        }
-    } else {
-        fs::write(path, section.trim_start()).ok();
     }
 }
 

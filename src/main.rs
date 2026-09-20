@@ -26,7 +26,11 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Set up adrdom/ in the current repository.
-    Init,
+    Init {
+        /// Also merge the deny entries into .claude/settings.json.
+        #[arg(long)]
+        claude: bool,
+    },
     /// Assign ids and record `asked` for every unasked/changed question in a record.
     Ask { record: PathBuf },
     /// Owner-only: approve a record's plan/context, or the terms file.
@@ -57,7 +61,7 @@ enum Command {
 fn main() {
     let cli = Cli::parse();
     let code = match cli.command {
-        Command::Init => commands::init::run(),
+        Command::Init { claude } => commands::init::run(claude),
         Command::Ask { record } => commands::ask::run(record),
         Command::Approve { file } => commands::approve::run(file),
         Command::Lock { id, letter } => commands::lock::run(id, letter),

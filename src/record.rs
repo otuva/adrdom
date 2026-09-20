@@ -638,7 +638,11 @@ pub fn context_hash(rf: &RecordFile) -> String {
     while to > from && slice[to - 1].trim().is_empty() {
         to -= 1;
     }
-    let text = slice[from..to].join("\n");
+    let text = slice[from..to]
+        .iter()
+        .map(|l| l.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n");
     sha256_hex(&text)
 }
 
@@ -662,7 +666,11 @@ pub fn hash_range(lines: &[String], sec: &Section) -> (usize, usize) {
 
 pub fn section_hash(lines: &[String], sec: &Section) -> String {
     let (s, e) = hash_range(lines, sec);
-    let text = lines[s..e].join("\n");
+    let text = lines[s..e]
+        .iter()
+        .map(|l| l.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n");
     sha256_hex(&text)
 }
 
@@ -829,6 +837,21 @@ mod tests {
             plan_hash(&rf_two),
             plan_hash(&rf_swapped),
             "reordering headings must move plan hash"
+        );
+    }
+
+    #[test]
+    fn section_hash_ignores_trailing_whitespace_on_a_line() {
+        let clean = rf_from(SHAPED);
+        let clean_hash = section_hash(&clean.lines, &clean.sections[0]);
+
+        let trailing = SHAPED.replace("- A) Do the thing.", "- A) Do the thing.  ");
+        let dirty = rf_from(&trailing);
+        let dirty_hash = section_hash(&dirty.lines, &dirty.sections[0]);
+
+        assert_eq!(
+            clean_hash, dirty_hash,
+            "trailing whitespace on an option line must not move the section hash"
         );
     }
 

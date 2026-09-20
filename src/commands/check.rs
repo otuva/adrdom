@@ -462,6 +462,10 @@ fn skip_path(p: &str) -> bool {
 fn check_install(root: &Path) -> Vec<Failure> {
     let mut out = Vec::new();
 
+    if !root.join(".claude").is_dir() {
+        return out;
+    }
+
     let settings_path = root.join(".claude/settings.json");
     let content = std::fs::read_to_string(&settings_path).unwrap_or_default();
     if content.trim().is_empty() {
@@ -488,7 +492,7 @@ fn check_install(root: &Path) -> Vec<Failure> {
             check: "install".to_string(),
             id: None,
             message: format!(
-                "{} cannot be parsed; owner runs: adr init",
+                "{} cannot be parsed; owner runs: adr init --claude",
                 settings_path.display()
             ),
         }),
@@ -502,7 +506,7 @@ fn missing_deny_entry(entry: &str) -> Failure {
         check: "install".to_string(),
         id: None,
         message: format!(
-            ".claude/settings.json lacks deny entry {}; owner runs: adr init",
+            ".claude/settings.json lacks deny entry {}; owner runs: adr init --claude",
             entry
         ),
     }

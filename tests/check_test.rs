@@ -186,7 +186,7 @@ fn check_ties_failure_when_no_tie_and_not_unchecked() {
 #[test]
 fn check_install_fails_when_settings_deny_entry_removed_and_passes_after_init() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["init", "--claude"], &[], "").status.success());
 
     std::fs::remove_file(dir.join(".claude/settings.json")).unwrap();
 
@@ -199,8 +199,9 @@ fn check_install_fails_when_settings_deny_entry_removed_and_passes_after_init() 
         "{}",
         out_text
     );
+    assert!(out_text.contains("adr init --claude"), "{}", out_text);
 
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["init", "--claude"], &[], "").status.success());
 
     let out2 = adr(&dir, &["check"], &[], "");
     let out2_text = stdout(&out2);
@@ -208,6 +209,25 @@ fn check_install_fails_when_settings_deny_entry_removed_and_passes_after_init() 
         !out2_text.contains("install:"),
         "install check should pass after re-init: {}",
         out2_text
+    );
+}
+
+#[test]
+fn check_install_passes_when_no_claude_directory() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+
+    assert!(
+        !dir.join(".claude").exists(),
+        "plain init must not create .claude"
+    );
+
+    let out = adr(&dir, &["check"], &[], "");
+    let out_text = stdout(&out);
+    assert!(
+        !out_text.contains("install:"),
+        "no .claude directory should not trigger the install check: {}",
+        out_text
     );
 }
 

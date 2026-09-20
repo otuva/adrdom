@@ -19,7 +19,7 @@ const ALL_DENY_ENTRIES: &[&str] = &[
 fn init_creates_layout_and_is_idempotent() {
     let dir = init_repo();
 
-    let out = adr(&dir, &["init"], &[], "");
+    let out = adr(&dir, &["init", "--claude"], &[], "");
     assert!(out.status.success(), "init failed: {}", stderr(&out));
 
     assert!(dir.join("adrdom/decisions").is_dir());
@@ -28,16 +28,10 @@ fn init_creates_layout_and_is_idempotent() {
     assert!(dir.join("adrdom/state/unchecked.tsv").is_file());
     assert!(dir.join(".githooks/pre-commit").is_file());
     assert!(dir.join(".githooks/commit-msg").is_file());
-    assert!(dir.join(".editorconfig").is_file());
     assert!(dir.join(".claude/settings.json").is_file());
 
     let hooks_cfg = run_git(&dir, &["config", "core.hooksPath"]);
     assert_eq!(stdout(&hooks_cfg).trim(), ".githooks");
-
-    let editorconfig = std::fs::read_to_string(dir.join(".editorconfig")).unwrap();
-    assert!(editorconfig.contains("[adrdom/**]"));
-    assert!(editorconfig.contains("trim_trailing_whitespace = false"));
-    assert!(editorconfig.contains("insert_final_newline = false"));
 
     let settings: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(dir.join(".claude/settings.json")).unwrap(),
@@ -60,10 +54,9 @@ fn init_creates_layout_and_is_idempotent() {
 
     // Mark a sentinel in state so we can prove a second init never overwrites it.
     std::fs::write(dir.join("adrdom/state/ledger.tsv"), "sentinel\n").unwrap();
-    let editorconfig_before = std::fs::read_to_string(dir.join(".editorconfig")).unwrap();
     let settings_before = std::fs::read(dir.join(".claude/settings.json")).unwrap();
 
-    let out2 = adr(&dir, &["init"], &[], "");
+    let out2 = adr(&dir, &["init", "--claude"], &[], "");
     assert!(
         out2.status.success(),
         "second init failed: {}",
@@ -74,12 +67,6 @@ fn init_creates_layout_and_is_idempotent() {
     assert_eq!(
         ledger_after, "sentinel\n",
         "init overwrote existing ledger.tsv"
-    );
-
-    let editorconfig_after = std::fs::read_to_string(dir.join(".editorconfig")).unwrap();
-    assert_eq!(
-        editorconfig_after, editorconfig_before,
-        "second init duplicated the [adrdom/**] section"
     );
 
     let settings_after = std::fs::read(dir.join(".claude/settings.json")).unwrap();
@@ -108,7 +95,7 @@ fn init_preserves_existing_settings_content() {
     )
     .unwrap();
 
-    let out = adr(&dir, &["init"], &[], "");
+    let out = adr(&dir, &["init", "--claude"], &[], "");
     assert!(out.status.success(), "init failed: {}", stderr(&out));
 
     let settings: serde_json::Value = serde_json::from_str(
@@ -126,4 +113,19 @@ fn init_preserves_existing_settings_content() {
     for entry in ALL_DENY_ENTRIES {
         assert!(deny.contains(entry), "missing {}: {:?}", entry, deny);
     }
+}
+
+#[test]
+fn init_without_claude_flag_leaves_no_claude_directory() {
+    let dir = init_repo();
+
+    let out = adr(&dir, &["init"], &[], "");
+    assert!(out.status.success(), "init failed: {}", stderr(&out));
+
+    assert!(dir.join("adrdom/decisions").is_dir());
+    assert!(dir.join(".githooks/pre-commit").is_file());
+    assert!(
+        !dir.join(".claude").exists(),
+        "plain init must not create .claude"
+    );
 }
