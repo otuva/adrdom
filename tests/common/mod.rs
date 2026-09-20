@@ -57,7 +57,7 @@ pub fn run_git(dir: &Path, args: &[&str]) -> Output {
 
 /// Runs `adr <args>` in `dir` with the given extra env vars and stdin.
 /// Always runs non-interactively (stdin is piped, never inherited), so
-/// commands like `lock`/`override` are refused unless the caller passes
+/// commands like `lock`/`unban` are refused unless the caller passes
 /// ADR_OWNER_BYPASS=1 (and the binary was built with the owner-bypass
 /// feature, which `cargo test --features owner-bypass` provides).
 pub fn adr(dir: &Path, args: &[&str], envs: &[(&str, &str)], stdin: &str) -> Output {

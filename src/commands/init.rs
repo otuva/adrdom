@@ -1,7 +1,14 @@
+use crate::commands::DENY_ENTRIES;
 use crate::repo;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
+
+const RULES_CONTENT: &str = "# adrdom rules\n\n\
+One line per rule agents follow that no gate enforces, each citing the decision it comes from.\n\
+Lines are added only when the decision exists.\n";
+
+const CLAUDE_MD_INCLUDE: &str = "@adrdom/rules.md";
 
 pub fn run() -> i32 {
     let root = match repo::find_root() {
@@ -42,10 +49,20 @@ pub fn run() -> i32 {
 
     update_editorconfig(&root.join(".editorconfig"));
 
+    let mut messages = vec![write_rules_file(&root)];
+    messages.push(update_claude_md(&root));
+    match merge_settings(&root) {
+        Ok(mut msgs) => messages.append(&mut msgs),
+        Err(e) => {
+            eprintln!("init: failed to update .claude/settings.json: {}", e);
+            return 1;
+        }
+    }
+
     println!("adrdom initialized at {}", root.display());
-    println!();
-    println!("Add this to your Claude Code settings.json permissions.deny list:");
-    println!("{}", permissions_snippet());
+    for m in &messages {
+        println!("{}", m);
+    }
     0
 }
 
@@ -91,17 +108,108 @@ fn update_editorconfig(path: &Path) {
     }
 }
 
-fn permissions_snippet() -> &'static str {
-    r#"{
-  "permissions": {
-    "deny": [
-      "Bash(adr lock*)",
-      "Bash(* adr lock*)",
-      "Bash(adr override*)",
-      "Bash(* adr override*)",
-      "Edit(adrdom/state/**)",
-      "Write(adrdom/state/**)"
-    ]
-  }
-}"#
+fn write_rules_file(root: &Path) -> String {
+    let path = root.join("adrdom/rules.md");
+    if path.exists() {
+        "init: adrdom/rules.md already present".to_string()
+    } else {
+        match fs::write(&path, RULES_CONTENT) {
+            Ok(()) => "init: adrdom/rules.md written".to_string(),
+            Err(e) => format!("init: failed to write adrdom/rules.md: {}", e),
+        }
+    }
+}
+
+fn update_claude_md(root: &Path) -> String {
+    let path = root.join("CLAUDE.md");
+    if path.exists() {
+        let content = fs::read_to_string(&path).unwrap_or_default();
+        if content.lines().any(|l| l == CLAUDE_MD_INCLUDE) {
+            return "init: CLAUDE.md already has @adrdom/rules.md".to_string();
+        }
+        let mut new_content = content;
+        if !new_content.is_empty() && !new_content.ends_with('\n') {
+            new_content.push('\n');
+        }
+        new_content.push('\n');
+        new_content.push_str(CLAUDE_MD_INCLUDE);
+        new_content.push('\n');
+        match fs::write(&path, new_content) {
+            Ok(()) => "init: CLAUDE.md: added @adrdom/rules.md".to_string(),
+            Err(e) => format!("init: failed to update CLAUDE.md: {}", e),
+        }
+    } else {
+        match fs::write(&path, format!("{}\n", CLAUDE_MD_INCLUDE)) {
+            Ok(()) => "init: CLAUDE.md: created with @adrdom/rules.md".to_string(),
+            Err(e) => format!("init: failed to write CLAUDE.md: {}", e),
+        }
+    }
+}
+
+/// Merges `DENY_ENTRIES` into `.claude/settings.json`'s
+/// `permissions.deny` array, preserving every other key and array entry.
+/// Creates the directory/file if missing. Returns one message per entry.
+fn merge_settings(root: &Path) -> Result<Vec<String>, String> {
+    let dir = root.join(".claude");
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join("settings.json");
+
+    let mut value: serde_json::Value = if path.exists() {
+        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        if content.trim().is_empty() {
+            serde_json::json!({})
+        } else {
+            serde_json::from_str(&content)
+                .map_err(|e| format!("{}: {}", path.display(), e))?
+        }
+    } else {
+        serde_json::json!({})
+    };
+
+    if !value.is_object() {
+        return Err(format!("{} is not a JSON object", path.display()));
+    }
+    let obj = value.as_object_mut().unwrap();
+
+    let permissions = obj
+        .entry("permissions")
+        .or_insert_with(|| serde_json::json!({}));
+    if !permissions.is_object() {
+        return Err(format!("{}: permissions is not an object", path.display()));
+    }
+    let permissions_obj = permissions.as_object_mut().unwrap();
+
+    let deny = permissions_obj
+        .entry("deny")
+        .or_insert_with(|| serde_json::json!([]));
+    if !deny.is_array() {
+        return Err(format!(
+            "{}: permissions.deny is not an array",
+            path.display()
+        ));
+    }
+    let deny_arr = deny.as_array_mut().unwrap();
+
+    let mut messages = Vec::new();
+    for entry in DENY_ENTRIES {
+        let already = deny_arr.iter().any(|v| v.as_str() == Some(*entry));
+        if already {
+            messages.push(format!(
+                "init: .claude/settings.json: deny entry {} already present",
+                entry
+            ));
+        } else {
+            deny_arr.push(serde_json::Value::String(entry.to_string()));
+            messages.push(format!(
+                "init: .claude/settings.json: added deny entry {}",
+                entry
+            ));
+        }
+    }
+
+    let mut pretty = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
+    pretty.push('\n');
+    fs::write(&path, pretty).map_err(|e| e.to_string())?;
+
+    Ok(messages)
 }

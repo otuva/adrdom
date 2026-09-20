@@ -37,57 +37,19 @@ pub fn run(staged: bool, message: Option<PathBuf>) -> i32 {
     failures.extend(check_ledger(&led, &records, &root, &ledger_path));
     failures.extend(check_answers(&records, &led));
     failures.extend(check_banned(&root, staged, message.as_deref()));
+    failures.extend(check_install(&root));
     let (tie_failures, tied_count, unchecked_count) = check_ties(&root, &records, &led);
-    let tie_failure_count = tie_failures.len();
     failures.extend(tie_failures);
 
     let mut exit_code = 0;
-    let mut ties_overridden = 0;
     for f in &failures {
-        if let Some(reason) = is_overridden(&led, &f.check, f.id.as_deref()) {
-            println!("{}: OVERRIDDEN {} (reason: {})", f.check, f.message, reason);
-            if f.check == "ties" {
-                ties_overridden += 1;
-            }
-        } else {
-            println!("{}: {}", f.check, f.message);
-            exit_code = 1;
-        }
+        println!("{}: {}", f.check, f.message);
+        exit_code = 1;
     }
 
-    if ties_overridden == tie_failure_count {
-        println!("ties: {} tied, {} unchecked", tied_count, unchecked_count);
-    }
+    println!("ties: {} tied, {} unchecked", tied_count, unchecked_count);
 
     exit_code
-}
-
-fn is_overridden(led: &Ledger, check: &str, failure_id: Option<&str>) -> Option<String> {
-    let cutoff = failure_id
-        .and_then(|id| led.latest_asked(id))
-        .map(|r| r.time.clone());
-    for row in led.overrides_for(check) {
-        if row.id == "-" || Some(row.id.as_str()) == failure_id {
-            let reason = row
-                .detail
-                .split_once(": ")
-                .map(|x| x.1)
-                .unwrap_or("")
-                .to_string();
-            match &cutoff {
-                // Ledger timestamps only carry one-second resolution, so a
-                // same-second override still counts as "later than" the ask
-                // it is responding to.
-                Some(c) => {
-                    if &row.time >= c {
-                        return Some(reason);
-                    }
-                }
-                None => return Some(reason),
-            }
-        }
-    }
-    None
 }
 
 fn check_parse(records: &[RecordFile]) -> Vec<Failure> {
@@ -369,6 +331,74 @@ fn collect_targets(root: &Path, staged: bool, message: Option<&Path>) -> Vec<(St
 
 fn skip_path(p: &str) -> bool {
     p == "adrdom/state/banned.sha256" || p.starts_with(".git/")
+}
+
+fn check_install(root: &Path) -> Vec<Failure> {
+    let mut out = Vec::new();
+
+    if !root.join("adrdom/rules.md").is_file() {
+        out.push(Failure {
+            check: "install".to_string(),
+            id: None,
+            message: "adrdom/rules.md missing; owner runs: adr init".to_string(),
+        });
+    }
+
+    let has_include = std::fs::read_to_string(root.join("CLAUDE.md"))
+        .map(|c| c.lines().any(|l| l == "@adrdom/rules.md"))
+        .unwrap_or(false);
+    if !has_include {
+        out.push(Failure {
+            check: "install".to_string(),
+            id: None,
+            message: "CLAUDE.md lacks @adrdom/rules.md; owner runs: adr init".to_string(),
+        });
+    }
+
+    let settings_path = root.join(".claude/settings.json");
+    let content = std::fs::read_to_string(&settings_path).unwrap_or_default();
+    if content.trim().is_empty() {
+        for entry in super::DENY_ENTRIES {
+            out.push(missing_deny_entry(entry));
+        }
+        return out;
+    }
+    match serde_json::from_str::<serde_json::Value>(&content) {
+        Ok(value) => {
+            let deny: Vec<&str> = value
+                .get("permissions")
+                .and_then(|p| p.get("deny"))
+                .and_then(|d| d.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
+                .unwrap_or_default();
+            for entry in super::DENY_ENTRIES {
+                if !deny.contains(entry) {
+                    out.push(missing_deny_entry(entry));
+                }
+            }
+        }
+        Err(_) => out.push(Failure {
+            check: "install".to_string(),
+            id: None,
+            message: format!(
+                "{} cannot be parsed; owner runs: adr init",
+                settings_path.display()
+            ),
+        }),
+    }
+
+    out
+}
+
+fn missing_deny_entry(entry: &str) -> Failure {
+    Failure {
+        check: "install".to_string(),
+        id: None,
+        message: format!(
+            ".claude/settings.json lacks deny entry {}; owner runs: adr init",
+            entry
+        ),
+    }
 }
 
 fn check_ties(root: &Path, records: &[RecordFile], led: &Ledger) -> (Vec<Failure>, usize, usize) {

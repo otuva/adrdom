@@ -52,7 +52,7 @@ fn walk_md(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// The owner-authorization gate shared by `adr lock` and `adr override`:
+/// The owner-authorization gate shared by `adr lock` and `adr unban`:
 /// refuse unless running interactively as a human (no CLAUDECODE, stdin is
 /// a TTY), or built with the test-only `owner-bypass` feature and
 /// `ADR_OWNER_BYPASS=1`.

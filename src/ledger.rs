@@ -2,7 +2,17 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-pub const EVENTS: [&str; 5] = ["asked", "answered", "superseded", "overridden", "banned"];
+pub const EVENTS: [&str; 9] = [
+    "asked",
+    "answered",
+    "superseded",
+    "withdrawn",
+    "approved",
+    "context",
+    "terms",
+    "banned",
+    "unbanned",
+];
 
 #[derive(Debug, Clone)]
 pub struct Row {
@@ -69,9 +79,16 @@ pub fn append(path: &Path, rows: &[Row]) -> std::io::Result<()> {
 }
 
 impl Ledger {
+    /// The latest row that puts an id in a state: `asked`, `answered`,
+    /// `superseded`, or `withdrawn` are all state rows; the most recent one
+    /// wins.
     pub fn latest_state(&self, id: &str) -> Option<&Row> {
         self.rows.iter().rfind(|r| {
-            r.id == id && matches!(r.event.as_str(), "asked" | "answered" | "superseded")
+            r.id == id
+                && matches!(
+                    r.event.as_str(),
+                    "asked" | "answered" | "superseded" | "withdrawn"
+                )
         })
     }
 
@@ -79,11 +96,10 @@ impl Ledger {
         self.rows.iter().rfind(|r| r.id == id && r.event == "asked")
     }
 
-    pub fn overrides_for(&self, check: &str) -> Vec<&Row> {
-        let prefix = format!("{}: ", check);
+    /// The latest row of `event` whose `detail` column equals `path`.
+    pub fn latest_for_path(&self, event: &str, path: &str) -> Option<&Row> {
         self.rows
             .iter()
-            .filter(|r| r.event == "overridden" && r.detail.starts_with(&prefix))
-            .collect()
+            .rfind(|r| r.event == event && r.detail == path)
     }
 }

@@ -51,3 +51,27 @@ fn ledger_append_only_violation_is_detected_after_a_commit() {
     assert!(out2_text.contains("ledger:"), "{}", out2_text);
     assert!(out2_text.contains("not append-only"), "{}", out2_text);
 }
+
+#[test]
+fn ledger_accepts_new_event_kinds() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+
+    let ledger_path = dir.join("adrdom/state/ledger.tsv");
+    let mut content = std::fs::read_to_string(&ledger_path).unwrap();
+    for event in ["withdrawn", "approved", "context", "terms", "unbanned"] {
+        content.push_str(&format!(
+            "2024-01-01T00:00:00Z\t{}\t-\t-\tsomedetail\n",
+            event
+        ));
+    }
+    std::fs::write(&ledger_path, content).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    let out_text = stdout(&out);
+    assert!(
+        !out_text.contains("malformed row"),
+        "new event kinds should not be treated as malformed: {}",
+        out_text
+    );
+}

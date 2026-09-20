@@ -152,10 +152,10 @@ fn check_banned_default_and_message_modes_never_print_the_text() {
 }
 
 #[test]
-fn check_ties_failure_and_override() {
+fn check_ties_failure_when_no_tie_and_not_unchecked() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
-    let (_record, id) = lock_one_question(&dir);
+    let (_record, _id) = lock_one_question(&dir);
     // No tie line and no unchecked.tsv entry for `id`.
 
     let out = adr(&dir, &["check"], &[], "");
@@ -167,31 +167,34 @@ fn check_ties_failure_and_override() {
         "{}",
         out_text
     );
+}
+
+#[test]
+fn check_install_fails_when_claude_md_line_removed_and_passes_after_init() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+
+    std::fs::write(dir.join("CLAUDE.md"), "# nothing here\n").unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let out_text = stdout(&out);
+    assert!(out_text.contains("install:"), "{}", out_text);
     assert!(
-        !out_text.contains("ties: 0 tied"),
-        "success line must not print alongside a real failure"
+        out_text.contains("CLAUDE.md lacks @adrdom/rules.md"),
+        "{}",
+        out_text
     );
 
-    let override_out = adr_owner(
-        &dir,
-        &["override", "ties", &id, "--reason", "reviewing this week"],
-        "",
-    );
-    assert!(
-        override_out.status.success(),
-        "override failed: {}",
-        stderr(&override_out)
-    );
+    assert!(adr(&dir, &["init"], &[], "").status.success());
 
     let out2 = adr(&dir, &["check"], &[], "");
-    assert!(
-        out2.status.success(),
-        "check should pass after override: {}",
-        stdout(&out2)
-    );
     let out2_text = stdout(&out2);
-    assert!(out2_text.contains("OVERRIDDEN"), "{}", out2_text);
-    assert!(out2_text.contains("reviewing this week"), "{}", out2_text);
+    assert!(
+        !out2_text.contains("install:"),
+        "install check should pass after re-init: {}",
+        out2_text
+    );
 }
 
 #[test]

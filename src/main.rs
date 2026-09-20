@@ -3,6 +3,7 @@ mod commands;
 mod ledger;
 mod record;
 mod repo;
+mod terms;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -31,13 +32,9 @@ enum Command {
     Show { record: Option<PathBuf> },
     /// Read lines from stdin and ban them (and their tokens) from the repo.
     Ban,
-    /// Owner-only: record that a check's failure is accepted for now.
-    Override {
-        check: String,
-        id: String,
-        #[arg(long)]
-        reason: String,
-    },
+    /// Owner-only: read lines from stdin and remove them (and their tokens)
+    /// from the ban list.
+    Unban,
     /// Run all governance checks.
     Check {
         #[arg(long)]
@@ -55,7 +52,7 @@ fn main() {
         Command::Lock { id, letter } => commands::lock::run(id, letter),
         Command::Show { record } => commands::show::run(record),
         Command::Ban => commands::ban::run(),
-        Command::Override { check, id, reason } => commands::override_cmd::run(check, id, reason),
+        Command::Unban => commands::unban::run(),
         Command::Check { staged, message } => commands::check::run(staged, message),
     };
     std::process::exit(code);
