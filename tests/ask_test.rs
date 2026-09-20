@@ -7,6 +7,7 @@ fn example_record_round_trips_and_ask_assigns_ids() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "ask failed: {}", stderr(&out));
@@ -43,6 +44,7 @@ fn ask_reasks_on_edit() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -86,6 +88,7 @@ fn ask_refuses_to_edit_an_answered_section() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());

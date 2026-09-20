@@ -2,7 +2,11 @@ mod common;
 
 use common::*;
 
-const FIRST_QUESTION: &str = r#"### 1.1 What is the unit of authority called?
+const FIRST_QUESTION: &str = r#"# Example
+
+## Group
+
+### 1.1 What is the unit of authority called?
 
 Problem: names leaked into decisions.
 
@@ -19,6 +23,10 @@ Standard: plain words.
 const SECOND_QUESTION: &str = r#"
 ### 1.2 What is the second unit of authority called?
 
+Problem: naming the second unit.
+
+Standard: plain words.
+
 - A) The second thing is a widget.
   Why: reasons.
 - B) The second thing is a gadget.
@@ -27,6 +35,10 @@ const SECOND_QUESTION: &str = r#"
 
 const THIRD_QUESTION: &str = r#"
 ### 1.3 What is the third unit of authority called?
+
+Problem: naming the third unit.
+
+Standard: plain words.
 
 - A) The third thing is a gizmo.
   Why: reasons.
@@ -39,6 +51,7 @@ fn lock_writes_answer_line_and_ledger_row() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -69,6 +82,7 @@ fn lock_refuses_when_claudecode_is_set() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -107,6 +121,7 @@ fn lock_with_supersedes_writes_superseded_row_and_show_hides_old() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -134,7 +149,8 @@ fn lock_with_supersedes_writes_superseded_row_and_show_hides_old() {
         1,
     );
     content.push_str(&second_with_supersedes);
-    std::fs::write(&record, content).unwrap();
+    std::fs::write(&record, &content).unwrap();
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
 
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
@@ -184,6 +200,7 @@ fn lock_with_two_id_supersedes_writes_a_row_per_id() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -194,7 +211,8 @@ fn lock_with_two_id_supersedes_writes_a_row_per_id() {
 
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(SECOND_QUESTION);
-    std::fs::write(&record, content).unwrap();
+    std::fs::write(&record, &content).unwrap();
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -218,7 +236,8 @@ fn lock_with_two_id_supersedes_writes_a_row_per_id() {
         1,
     );
     content.push_str(&third_with_supersedes);
-    std::fs::write(&record, content).unwrap();
+    std::fs::write(&record, &content).unwrap();
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -250,6 +269,7 @@ fn lock_with_two_id_supersedes_refuses_when_one_is_not_in_force() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -261,7 +281,8 @@ fn lock_with_two_id_supersedes_refuses_when_one_is_not_in_force() {
     // 1.2 is asked but never locked, so it is not in force.
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(SECOND_QUESTION);
-    std::fs::write(&record, content).unwrap();
+    std::fs::write(&record, &content).unwrap();
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -281,7 +302,8 @@ fn lock_with_two_id_supersedes_refuses_when_one_is_not_in_force() {
         1,
     );
     content.push_str(&third_with_supersedes);
-    std::fs::write(&record, content).unwrap();
+    std::fs::write(&record, &content).unwrap();
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());

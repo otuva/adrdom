@@ -3,6 +3,7 @@ mod commands;
 mod ledger;
 mod record;
 mod repo;
+mod state;
 mod terms;
 
 use clap::{Parser, Subcommand};
@@ -26,6 +27,8 @@ enum Command {
     Init,
     /// Assign ids and record `asked` for every unasked/changed question in a record.
     Ask { record: PathBuf },
+    /// Owner-only: approve a record's plan/context, or the terms file.
+    Approve { file: PathBuf },
     /// Owner-only: answer a question by id with an option letter.
     Lock { id: String, letter: String },
     /// Print every decision currently in force.
@@ -49,6 +52,7 @@ fn main() {
     let code = match cli.command {
         Command::Init => commands::init::run(),
         Command::Ask { record } => commands::ask::run(record),
+        Command::Approve { file } => commands::approve::run(file),
         Command::Lock { id, letter } => commands::lock::run(id, letter),
         Command::Show { record } => commands::show::run(record),
         Command::Ban => commands::ban::run(),

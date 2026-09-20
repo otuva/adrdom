@@ -1,3 +1,4 @@
+pub mod approve;
 pub mod ask;
 pub mod ban;
 pub mod check;

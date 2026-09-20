@@ -2,7 +2,15 @@ mod common;
 
 use common::*;
 
-const ONE_QUESTION: &str = r#"### 5.1 Does this pass?
+const ONE_QUESTION: &str = r#"# Example
+
+## Group
+
+### 5.1 Does this pass?
+
+Problem: whether it passes.
+
+Standard: clear yes or no.
 
 - A) Yes it passes.
   Why: reasons.
@@ -15,6 +23,7 @@ fn ledger_append_only_violation_is_detected_after_a_commit() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -39,9 +48,12 @@ fn ledger_append_only_violation_is_detected_after_a_commit() {
     let ledger_path = dir.join("adrdom/state/ledger.tsv");
     let content = std::fs::read_to_string(&ledger_path).unwrap();
     let mut lines: Vec<&str> = content.lines().collect();
-    assert!(!lines.is_empty());
-    let tampered = lines[0].replace("Does this pass?", "rewritten after the fact");
-    lines[0] = &tampered;
+    let asked_idx = lines
+        .iter()
+        .position(|l| l.contains("\tasked\t"))
+        .expect("an asked row");
+    let tampered = lines[asked_idx].replace("Does this pass?", "rewritten after the fact");
+    lines[asked_idx] = &tampered;
     let new_content = lines.join("\n") + "\n";
     std::fs::write(&ledger_path, new_content).unwrap();
 

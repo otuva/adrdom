@@ -4,7 +4,13 @@ use common::*;
 
 const RECORD: &str = r#"# Example
 
+## Group
+
 ### 1.1 Is this in force?
+
+Problem: whether it is in force.
+
+Standard: clear yes or no.
 
 - A) Yes it is in force.
   Why: reasons.
@@ -12,6 +18,10 @@ const RECORD: &str = r#"# Example
   Why: other reasons.
 
 ### 1.2 Is this only asked?
+
+Problem: whether it is only asked.
+
+Standard: clear yes or no.
 
 - A) Yes only asked.
   Why: reasons.
@@ -24,6 +34,7 @@ fn show_prints_only_in_force_sentences() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", RECORD);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", RECORD);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
