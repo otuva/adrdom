@@ -124,3 +124,23 @@ fn ask_refuses_to_edit_an_answered_section() {
         "ask must not modify the file when it refuses"
     );
 }
+
+#[test]
+fn ask_leaves_a_skeleton_heading_without_id_or_row() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let content = format!("{}\n### 1.2 Where does the plan live?\n", EXAMPLE_RECORD);
+    let record = write_record(&dir, "adrdom/decisions/example.md", &content);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
+    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(out.status.success(), "ask failed: {}", stderr(&out));
+    let after = std::fs::read_to_string(&record).unwrap();
+    let idx = after.find("### 1.2 Where does the plan live?").unwrap();
+    assert!(
+        !after[idx..].contains("id: "),
+        "skeleton heading got an id: {}",
+        &after[idx..]
+    );
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(!ledger.contains("Where does the plan live?"));
+}

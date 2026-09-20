@@ -9,6 +9,8 @@ use std::path::{Path, PathBuf};
 
 struct Failure {
     check: String,
+    /// The decision a failure is about, kept so the page can group by it.
+    #[allow(dead_code)]
     id: Option<String>,
     message: String,
 }
@@ -35,7 +37,7 @@ fn build(root: &Path, staged: bool, message: Option<&Path>) -> view::CheckReport
     let mut records = Vec::new();
     let mut notes: Vec<String> = Vec::new();
     for f in &files {
-        match record::load(f) {
+        match record::load_in(root, f) {
             Ok(rf) => records.push(rf),
             Err(e) => notes.push(format!("parse: {}: cannot read: {}", f.display(), e)),
         }
@@ -142,7 +144,7 @@ fn check_parse(records: &[RecordFile]) -> Vec<Failure> {
             out.push(Failure {
                 check: "parse".to_string(),
                 id: None,
-                message: format!("{}: {}", rf.path.display(), e),
+                message: format!("{}: {}", rf.rel, e),
             });
         }
         for sec in &rf.sections {
@@ -150,14 +152,14 @@ fn check_parse(records: &[RecordFile]) -> Vec<Failure> {
                 out.push(Failure {
                     check: "parse".to_string(),
                     id: sec.id.clone(),
-                    message: format!("{}: {}: {}", rf.path.display(), sec.heading_text, e),
+                    message: format!("{}: {}: {}", rf.rel, sec.heading_text, e),
                 });
             }
             for e in &sec.shape_errors {
                 out.push(Failure {
                     check: "parse".to_string(),
                     id: sec.id.clone(),
-                    message: format!("{}: {}: {}", rf.path.display(), sec.heading_text, e),
+                    message: format!("{}: {}: {}", rf.rel, sec.heading_text, e),
                 });
             }
         }
@@ -180,7 +182,7 @@ fn check_ids(records: &[RecordFile], led: &Ledger) -> Vec<Failure> {
                     id: None,
                     message: format!(
                         "{}: {}: missing id, run adr ask",
-                        rf.path.display(),
+                        rf.rel,
                         sec.heading_text
                     ),
                 }),
@@ -193,14 +195,14 @@ fn check_ids(records: &[RecordFile], led: &Ledger) -> Vec<Failure> {
                                 "duplicate id {} in {} and {}:{}",
                                 id,
                                 prev,
-                                rf.path.display(),
+                                rf.rel,
                                 sec.heading_text
                             ),
                         });
                     } else {
                         seen.insert(
                             id.clone(),
-                            format!("{}:{}", rf.path.display(), sec.heading_text),
+                            format!("{}:{}", rf.rel, sec.heading_text),
                         );
                     }
                 }
@@ -238,7 +240,7 @@ fn check_ids(records: &[RecordFile], led: &Ledger) -> Vec<Failure> {
                         message: format!(
                             "withdrawn id {} still present in {}",
                             id,
-                            rf.path.display()
+                            rf.rel
                         ),
                     });
                 }
@@ -337,7 +339,7 @@ fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure> {
                             id: Some(id.clone()),
                             message: format!(
                                 "{}: {}: answer line without ledger row",
-                                rf.path.display(),
+                                rf.rel,
                                 sec.heading_text
                             ),
                         });
@@ -354,7 +356,7 @@ fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure> {
                             id: Some(id.clone()),
                             message: format!(
                                 "{}: {}: answered row without answer line",
-                                rf.path.display(),
+                                rf.rel,
                                 sec.heading_text
                             ),
                         });
@@ -366,7 +368,7 @@ fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure> {
                                 id: Some(id.clone()),
                                 message: format!(
                                     "{}: {}: edited after asking; run adr ask",
-                                    rf.path.display(),
+                                    rf.rel,
                                     sec.heading_text
                                 ),
                             });

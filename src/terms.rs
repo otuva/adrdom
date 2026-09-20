@@ -10,6 +10,9 @@ pub struct Term {
     pub name: String,
     pub id: Option<String>,
     pub definition: String,
+    /// Part of the file shape (parsed and required) but not read anywhere
+    /// yet; no view surfaces individual terms today.
+    #[allow(dead_code)]
     pub test: String,
     pub owner: String,
     pub aliases: Vec<String>,

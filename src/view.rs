@@ -65,7 +65,6 @@ pub struct Snapshot {
     pub files: Vec<FileView>,
     pub terms: Option<TermsView>,
     pub check: CheckReport,
-    pub open_count: usize,
 }
 
 /// The state a question/principle heading is in, from the ledger's latest
@@ -247,17 +246,10 @@ pub fn snapshot(root: &Path) -> Snapshot {
         notes: report.notes,
     };
 
-    let open_count = files
-        .iter()
-        .flat_map(|f| f.questions.iter())
-        .filter(|q| q.state == QState::Open)
-        .count();
-
     Snapshot {
         files,
         terms,
         check: check_report,
-        open_count,
     }
 }
 

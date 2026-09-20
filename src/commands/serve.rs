@@ -218,7 +218,7 @@ fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> String {
     body.push_str("<h1>adrdom</h1>\n");
     body.push_str(&format!(
         "<p><a class=\"next-link\" href=\"/next\">Answer next &rarr;</a> &middot; <a href=\"/decisions\">Decisions</a> &middot; {} open</p>\n",
-        snap.open_count
+        view::open_questions(snap).len()
     ));
 
     for f in &snap.files {
@@ -470,11 +470,20 @@ fn render_decisions(snap: &Snapshot) -> String {
                 .find(|o| Some(o.letter) == q.answer)
                 .map(|o| o.sentence.as_str())
                 .unwrap_or("");
+            let supersedes = if q.supersedes.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    " <span class=\"supersedes\">(supersedes {})</span>",
+                    esc(&q.supersedes.join(", "))
+                )
+            };
             body.push_str(&format!(
-                "<li><strong>{}</strong> &mdash; {} <span class=\"ties\">({} tie(s))</span></li>\n",
+                "<li><strong>{}</strong> &mdash; {} <span class=\"ties\">({} tie(s))</span>{}</li>\n",
                 esc(&q.heading),
                 esc(sentence),
-                q.ties
+                q.ties,
+                supersedes
             ));
         }
     }

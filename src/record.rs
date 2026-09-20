@@ -101,6 +101,9 @@ pub struct Group {
 
 pub struct RecordFile {
     pub path: PathBuf,
+    /// The path as printed: relative to the repo root with forward slashes
+    /// when loaded through `load_in`, otherwise the path as given.
+    pub rel: String,
     pub lines: Vec<String>,
     pub sections: Vec<Section>,
     /// The h1 topic text, or `None` if the file has no h1 (a shape error).
@@ -137,14 +140,27 @@ pub fn join_lines(lines: &[String]) -> String {
 pub fn load(path: &Path) -> std::io::Result<RecordFile> {
     let content = fs::read_to_string(path)?;
     let lines = split_lines(&content);
-    Ok(build(path.to_path_buf(), lines))
+    let rel = path.display().to_string();
+    Ok(build(path.to_path_buf(), rel, lines))
 }
 
-fn build(path: PathBuf, lines: Vec<String>) -> RecordFile {
+/// Like `load`, with the printed path made relative to `root`.
+pub fn load_in(root: &Path, path: &Path) -> std::io::Result<RecordFile> {
+    let mut rf = load(path)?;
+    rf.rel = path
+        .strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/");
+    Ok(rf)
+}
+
+fn build(path: PathBuf, rel: String, lines: Vec<String>) -> RecordFile {
     let mut sections = parse_sections(&lines);
     let (topic, context_range, groups, shape_errors) = analyze_shape(&lines, &mut sections);
     RecordFile {
         path,
+        rel,
         lines,
         sections,
         topic,
@@ -697,7 +713,7 @@ mod tests {
 
     fn rf_from(content: &str) -> RecordFile {
         let lines = split_lines(content);
-        build(PathBuf::from("test.md"), lines)
+        build(PathBuf::from("test.md"), "test.md".to_string(), lines)
     }
 
     const SHAPED: &str = "# Topic\n\ncontext prose line one.\ncontext prose line two.\n\n## Group A\n\n### 1.1 First question?\n\nProblem: p.\n\nStandard: s.\n\n- A) Do the thing.\n  Why: reasons.\n";

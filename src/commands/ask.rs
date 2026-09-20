@@ -177,7 +177,13 @@ pub fn run(record_path: PathBuf) -> i32 {
 
     // Insert missing ids, bottom-to-top so earlier insertions don't shift
     // the line numbers sections below still need to be found at.
-    let needs_id: Vec<bool> = rf.sections.iter().map(|s| s.id.is_none()).collect();
+    // Only candidates get ids: a skeleton heading stays without one (4.7).
+    let needs_id: Vec<bool> = rf
+        .sections
+        .iter()
+        .enumerate()
+        .map(|(i, s)| candidate[i] && s.id.is_none())
+        .collect();
     let mut ids_inserted = false;
     for i in (0..rf.sections.len()).rev() {
         if needs_id[i] {
