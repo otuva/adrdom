@@ -54,10 +54,15 @@ pub fn do_lock(root: &Path, id: &str, letter: char) -> Result<Outcome, String> {
         }
         supersedes_val = sec.supersedes.clone();
         for old in &supersedes_val {
+            // In force, or already superseded by an earlier lock: a later
+            // lock naming the same older id is accepted as lineage.
             match led.latest_state(old) {
-                Some(row) if row.event == "answered" => {}
+                Some(row) if row.event == "answered" || row.event == "superseded" => {}
                 _ => {
-                    return Err(format!("supersedes target {} is not currently in force", old));
+                    return Err(format!(
+                        "supersedes target {} is not in force and was never superseded",
+                        old
+                    ));
                 }
             }
         }

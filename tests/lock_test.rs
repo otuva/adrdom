@@ -377,3 +377,73 @@ fn lock_with_two_id_supersedes_refuses_when_one_is_not_in_force() {
         ledger
     );
 }
+
+#[test]
+fn lock_accepts_a_supersedes_target_already_superseded_as_lineage() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let old_id = extract_ids(&content)[0].clone();
+    let lock_out = adr_owner(&dir, &["lock", &old_id, "A"], "");
+    assert!(lock_out.status.success(), "lock 1.1 failed: {}", stderr(&lock_out));
+
+    // The second question supersedes the first and is locked: the first
+    // leaves force here.
+    let mut content = std::fs::read_to_string(&record).unwrap();
+    content.push_str(&SECOND_QUESTION.replacen(
+        "### 1.2 What is the second unit of authority called?\n",
+        &format!(
+            "### 1.2 What is the second unit of authority called?\n\nsupersedes: {}\n",
+            old_id
+        ),
+        1,
+    ));
+    std::fs::write(&record, &content).unwrap();
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let second_id = extract_ids(&content)
+        .into_iter()
+        .find(|id| id != &old_id)
+        .expect("second id assigned");
+    let lock_out = adr_owner(&dir, &["lock", &second_id, "A"], "");
+    assert!(lock_out.status.success(), "lock 1.2 failed: {}", stderr(&lock_out));
+
+    // The third question names the same, now superseded, first id: the
+    // lock is accepted as lineage and writes a second superseded row.
+    let mut content = std::fs::read_to_string(&record).unwrap();
+    content.push_str(&THIRD_QUESTION.replacen(
+        "### 1.3 What is the third unit of authority called?\n",
+        &format!(
+            "### 1.3 What is the third unit of authority called?\n\nsupersedes: {}\n",
+            old_id
+        ),
+        1,
+    ));
+    std::fs::write(&record, &content).unwrap();
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let third_id = extract_ids(&content)
+        .into_iter()
+        .find(|id| id != &old_id && id != &second_id)
+        .expect("third id assigned");
+    let lock_out = adr_owner(&dir, &["lock", &third_id, "A"], "");
+    assert!(lock_out.status.success(), "lineage lock failed: {}", stderr(&lock_out));
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    let rows = ledger
+        .lines()
+        .filter(|l| l.contains("\tsuperseded\t") && l.contains(old_id.as_str()))
+        .count();
+    assert_eq!(rows, 2, "expected two superseded rows for the first id: {}", ledger);
+}

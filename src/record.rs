@@ -373,6 +373,11 @@ fn scan_body(lines: &[String], start: usize, end: usize) -> BodyScan {
         stray_errors.push(format!("stray line {}", j + 1));
     }
 
+    // Two or three options; a fourth is a shape error.
+    if options.len() > 3 {
+        option_errors.push(format!("{} options; at most three", options.len()));
+    }
+
     BodyScan {
         id,
         id_count,
@@ -862,5 +867,40 @@ mod tests {
             rf.sections[0].supersedes,
             vec!["old-1".to_string(), "old-2".to_string()]
         );
+    }
+
+    #[test]
+    fn an_option_decides_exactly_its_first_sentence() {
+        assert_eq!(
+            extract_sentence("Ties live in code. Because tests move."),
+            Some("Ties live in code.".to_string())
+        );
+        assert_eq!(extract_sentence("Ties live in code"), None);
+    }
+
+    #[test]
+    fn a_lean_line_inside_a_question_is_a_shape_error() {
+        let rf = rf_from(
+            "# T\n\n## G\n\n### Q?\n\nProblem: p.\nStandard: s.\nLean: A.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n",
+        );
+        assert!(rf.sections[0]
+            .shape_errors
+            .iter()
+            .any(|e| e.starts_with("stray line")));
+    }
+
+    #[test]
+    fn a_fourth_option_is_a_shape_error() {
+        let rf = rf_from(
+            "# T\n\n## G\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n- D) Four.\n  Why: w.\n  Costs: c.\n",
+        );
+        assert!(rf.sections[0]
+            .parse_errors
+            .iter()
+            .any(|e| e == "4 options; at most three"));
+        let ok = rf_from(
+            "# T\n\n## G\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n",
+        );
+        assert!(ok.sections[0].parse_errors.is_empty());
     }
 }
