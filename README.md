@@ -19,10 +19,8 @@ runtime dependencies beyond `git` on `PATH`.
 ## Commands
 
 - `adr init` — set up `adrdom/decisions/`, `adrdom/state/`, git hooks, and
-  `.editorconfig` in the current repository; also writes `adrdom/rules.md`
-  if missing, adds an `@adrdom/rules.md` line to `CLAUDE.md`, and merges a
-  set of deny entries into `.claude/settings.json`'s `permissions.deny`.
-  Idempotent.
+  `.editorconfig` in the current repository; also merges a set of deny
+  entries into `.claude/settings.json`'s `permissions.deny`. Idempotent.
 - `adr ask <record>` — assign ids to new questions, write their `terms:`
   binding line, and record them as asked (re-asking ones that changed since
   they were last asked); refuses on an unapproved plan/context/terms file, an
@@ -81,12 +79,11 @@ as `terms: <name>=<uuid>, <name>=<uuid>`.
 
 ## Install and check
 
-`adr init` writes `adrdom/rules.md` if missing, adds the line
-`@adrdom/rules.md` to `CLAUDE.md`, and merges a set of `Bash`/`Edit`/`Write`
-deny entries into `.claude/settings.json`'s `permissions.deny` (covering
-`adr lock`, `adr approve`, `adr unban`, `adr serve`, and edits to
-`adrdom/state/` and `adrdom/rules.md`). `adr check`'s `install` check fails
-if any of the three is missing, naming `adr init` as the fix.
+`adr init` merges a set of `Bash`/`Edit`/`Write` deny entries into
+`.claude/settings.json`'s `permissions.deny` (covering `adr lock`,
+`adr approve`, `adr unban`, `adr serve`, and edits to `adrdom/state/`).
+`adr check`'s `install` check fails if any entry is missing, naming
+`adr init` as the fix.
 
 ## Ledger
 

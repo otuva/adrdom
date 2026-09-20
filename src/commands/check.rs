@@ -462,25 +462,6 @@ fn skip_path(p: &str) -> bool {
 fn check_install(root: &Path) -> Vec<Failure> {
     let mut out = Vec::new();
 
-    if !root.join("adrdom/rules.md").is_file() {
-        out.push(Failure {
-            check: "install".to_string(),
-            id: None,
-            message: "adrdom/rules.md missing; owner runs: adr init".to_string(),
-        });
-    }
-
-    let has_include = std::fs::read_to_string(root.join("CLAUDE.md"))
-        .map(|c| c.lines().any(|l| l == "@adrdom/rules.md"))
-        .unwrap_or(false);
-    if !has_include {
-        out.push(Failure {
-            check: "install".to_string(),
-            id: None,
-            message: "CLAUDE.md lacks @adrdom/rules.md; owner runs: adr init".to_string(),
-        });
-    }
-
     let settings_path = root.join(".claude/settings.json");
     let content = std::fs::read_to_string(&settings_path).unwrap_or_default();
     if content.trim().is_empty() {

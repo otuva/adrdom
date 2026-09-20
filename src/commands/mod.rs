@@ -22,6 +22,4 @@ pub const DENY_ENTRIES: &[&str] = &[
     "Bash(* adr serve*)",
     "Edit(adrdom/state/**)",
     "Write(adrdom/state/**)",
-    "Edit(adrdom/rules.md)",
-    "Write(adrdom/rules.md)",
 ];

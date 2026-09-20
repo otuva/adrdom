@@ -4,12 +4,6 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-const RULES_CONTENT: &str = "# adrdom rules\n\n\
-One line per rule agents follow that no gate enforces, each citing the decision it comes from.\n\
-Lines are added only when the decision exists.\n";
-
-const CLAUDE_MD_INCLUDE: &str = "@adrdom/rules.md";
-
 pub fn run() -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
@@ -49,8 +43,7 @@ pub fn run() -> i32 {
 
     update_editorconfig(&root.join(".editorconfig"));
 
-    let mut messages = vec![write_rules_file(&root)];
-    messages.push(update_claude_md(&root));
+    let mut messages = Vec::new();
     match merge_settings(&root) {
         Ok(mut msgs) => messages.append(&mut msgs),
         Err(e) => {
@@ -105,44 +98,6 @@ fn update_editorconfig(path: &Path) {
         }
     } else {
         fs::write(path, section.trim_start()).ok();
-    }
-}
-
-fn write_rules_file(root: &Path) -> String {
-    let path = root.join("adrdom/rules.md");
-    if path.exists() {
-        "init: adrdom/rules.md already present".to_string()
-    } else {
-        match fs::write(&path, RULES_CONTENT) {
-            Ok(()) => "init: adrdom/rules.md written".to_string(),
-            Err(e) => format!("init: failed to write adrdom/rules.md: {}", e),
-        }
-    }
-}
-
-fn update_claude_md(root: &Path) -> String {
-    let path = root.join("CLAUDE.md");
-    if path.exists() {
-        let content = fs::read_to_string(&path).unwrap_or_default();
-        if content.lines().any(|l| l == CLAUDE_MD_INCLUDE) {
-            return "init: CLAUDE.md already has @adrdom/rules.md".to_string();
-        }
-        let mut new_content = content;
-        if !new_content.is_empty() && !new_content.ends_with('\n') {
-            new_content.push('\n');
-        }
-        new_content.push('\n');
-        new_content.push_str(CLAUDE_MD_INCLUDE);
-        new_content.push('\n');
-        match fs::write(&path, new_content) {
-            Ok(()) => "init: CLAUDE.md: added @adrdom/rules.md".to_string(),
-            Err(e) => format!("init: failed to update CLAUDE.md: {}", e),
-        }
-    } else {
-        match fs::write(&path, format!("{}\n", CLAUDE_MD_INCLUDE)) {
-            Ok(()) => "init: CLAUDE.md: created with @adrdom/rules.md".to_string(),
-            Err(e) => format!("init: failed to write CLAUDE.md: {}", e),
-        }
     }
 }
 

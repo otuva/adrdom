@@ -184,18 +184,18 @@ fn check_ties_failure_when_no_tie_and_not_unchecked() {
 }
 
 #[test]
-fn check_install_fails_when_claude_md_line_removed_and_passes_after_init() {
+fn check_install_fails_when_settings_deny_entry_removed_and_passes_after_init() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
 
-    std::fs::write(dir.join("CLAUDE.md"), "# nothing here\n").unwrap();
+    std::fs::remove_file(dir.join(".claude/settings.json")).unwrap();
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let out_text = stdout(&out);
     assert!(out_text.contains("install:"), "{}", out_text);
     assert!(
-        out_text.contains("CLAUDE.md lacks @adrdom/rules.md"),
+        out_text.contains(".claude/settings.json lacks deny entry"),
         "{}",
         out_text
     );
