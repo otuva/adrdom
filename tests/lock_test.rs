@@ -25,6 +25,15 @@ const SECOND_QUESTION: &str = r#"
   Why: other reasons.
 "#;
 
+const THIRD_QUESTION: &str = r#"
+### 1.3 What is the third unit of authority called?
+
+- A) The third thing is a gizmo.
+  Why: reasons.
+- B) The third thing is a doohickey.
+  Why: other reasons.
+"#;
+
 #[test]
 fn lock_writes_answer_line_and_ledger_row() {
     let dir = init_repo();
@@ -167,5 +176,141 @@ fn lock_with_supersedes_writes_superseded_row_and_show_hides_old() {
         shown.contains("The second thing is a widget."),
         "new sentence missing: {}",
         shown
+    );
+}
+
+#[test]
+fn lock_with_two_id_supersedes_writes_a_row_per_id() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let old_id_1 = extract_ids(&content)[0].clone();
+    let lock_out = adr_owner(&dir, &["lock", &old_id_1, "A"], "");
+    assert!(lock_out.status.success(), "lock 1.1 failed: {}", stderr(&lock_out));
+
+    let mut content = std::fs::read_to_string(&record).unwrap();
+    content.push_str(SECOND_QUESTION);
+    std::fs::write(&record, content).unwrap();
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let old_id_2 = extract_ids(&content)
+        .into_iter()
+        .find(|id| id != &old_id_1)
+        .expect("second id assigned");
+    let lock_out = adr_owner(&dir, &["lock", &old_id_2, "A"], "");
+    assert!(lock_out.status.success(), "lock 1.2 failed: {}", stderr(&lock_out));
+
+    // Add a third question that supersedes both prior ids at once,
+    // comma-separated on a single `supersedes:` line (4.14).
+    let mut content = std::fs::read_to_string(&record).unwrap();
+    let third_with_supersedes = THIRD_QUESTION.replacen(
+        "### 1.3 What is the third unit of authority called?\n",
+        &format!(
+            "### 1.3 What is the third unit of authority called?\n\nsupersedes: {}, {}\n",
+            old_id_1, old_id_2
+        ),
+        1,
+    );
+    content.push_str(&third_with_supersedes);
+    std::fs::write(&record, content).unwrap();
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let new_id = extract_ids(&content)
+        .into_iter()
+        .find(|id| id != &old_id_1 && id != &old_id_2)
+        .expect("third id assigned");
+
+    let lock_out = adr_owner(&dir, &["lock", &new_id, "A"], "");
+    assert!(lock_out.status.success(), "lock 1.3 failed: {}", stderr(&lock_out));
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    for old in [&old_id_1, &old_id_2] {
+        assert!(
+            ledger
+                .lines()
+                .any(|l| l.contains("\tsuperseded\t") && l.contains(old.as_str())),
+            "ledger missing superseded row for {}: {}",
+            old,
+            ledger
+        );
+    }
+}
+
+#[test]
+fn lock_with_two_id_supersedes_refuses_when_one_is_not_in_force() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let old_id_1 = extract_ids(&content)[0].clone();
+    let lock_out = adr_owner(&dir, &["lock", &old_id_1, "A"], "");
+    assert!(lock_out.status.success(), "lock 1.1 failed: {}", stderr(&lock_out));
+
+    // 1.2 is asked but never locked, so it is not in force.
+    let mut content = std::fs::read_to_string(&record).unwrap();
+    content.push_str(SECOND_QUESTION);
+    std::fs::write(&record, content).unwrap();
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let old_id_2 = extract_ids(&content)
+        .into_iter()
+        .find(|id| id != &old_id_1)
+        .expect("second id assigned");
+
+    let mut content = std::fs::read_to_string(&record).unwrap();
+    let third_with_supersedes = THIRD_QUESTION.replacen(
+        "### 1.3 What is the third unit of authority called?\n",
+        &format!(
+            "### 1.3 What is the third unit of authority called?\n\nsupersedes: {}, {}\n",
+            old_id_1, old_id_2
+        ),
+        1,
+    );
+    content.push_str(&third_with_supersedes);
+    std::fs::write(&record, content).unwrap();
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let new_id = extract_ids(&content)
+        .into_iter()
+        .find(|id| id != &old_id_1 && id != &old_id_2)
+        .expect("third id assigned");
+
+    let lock_out = adr_owner(&dir, &["lock", &new_id, "A"], "");
+    assert!(
+        !lock_out.status.success(),
+        "lock should have refused: {}",
+        stdout(&lock_out)
+    );
+    assert!(stderr(&lock_out).contains(old_id_2.as_str()), "{}", stderr(&lock_out));
+
+    let after = std::fs::read_to_string(&record).unwrap();
+    assert_eq!(
+        after.matches("**Answer:**").count(),
+        1,
+        "lock must not have written an answer for 1.3: {}",
+        after
+    );
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        !ledger.lines().any(|l| l.contains("\tsuperseded\t")),
+        "lock must not have written any superseded rows: {}",
+        ledger
     );
 }

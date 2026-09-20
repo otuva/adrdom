@@ -72,7 +72,7 @@ pub fn run(id: String, letter: String) -> i32 {
             }
         }
         supersedes_val = sec.supersedes.clone();
-        if let Some(old) = &supersedes_val {
+        for old in &supersedes_val {
             match led.latest_state(old) {
                 Some(row) if row.event == "answered" => {}
                 _ => {
@@ -113,7 +113,7 @@ pub fn run(id: String, letter: String) -> i32 {
         hash: cur_hash,
         detail: letter_c.to_string(),
     }];
-    if let Some(old) = &supersedes_val {
+    for old in &supersedes_val {
         rows.push(ledger::Row {
             time: ledger::now_rfc3339(),
             event: "superseded".to_string(),
