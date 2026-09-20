@@ -1,3 +1,4 @@
+mod actions;
 mod banned;
 mod commands;
 mod ledger;
@@ -5,6 +6,7 @@ mod record;
 mod repo;
 mod state;
 mod terms;
+mod view;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -38,6 +40,11 @@ enum Command {
     /// Owner-only: read lines from stdin and remove them (and their tokens)
     /// from the ban list.
     Unban,
+    /// Owner-only: serve the owner's page on 127.0.0.1.
+    Serve {
+        #[arg(long, default_value_t = 7357)]
+        port: u16,
+    },
     /// Run all governance checks.
     Check {
         #[arg(long)]
@@ -57,6 +64,7 @@ fn main() {
         Command::Show { record } => commands::show::run(record),
         Command::Ban => commands::ban::run(),
         Command::Unban => commands::unban::run(),
+        Command::Serve { port } => commands::serve::run(port),
         Command::Check { staged, message } => commands::check::run(staged, message),
     };
     std::process::exit(code);

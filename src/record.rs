@@ -650,6 +650,37 @@ pub fn section_hash(lines: &[String], sec: &Section) -> String {
     sha256_hex(&text)
 }
 
+/// For each option in `sec`, its letter plus the `  Why: ` and `  Costs: `
+/// lines immediately following it (up to the next non-blank, non-matching
+/// line — typically the next option, the answer line, or the section end).
+pub fn option_details(lines: &[String], sec: &Section) -> Vec<(char, Option<String>, Option<String>)> {
+    let mut out = Vec::new();
+    for opt in &sec.options {
+        let mut why = None;
+        let mut costs = None;
+        for line in &lines[(opt.line + 1).min(lines.len())..sec.end.min(lines.len())] {
+            if let Some(v) = line.strip_prefix("  Why: ") {
+                if why.is_none() {
+                    why = Some(v.trim().to_string());
+                }
+                continue;
+            }
+            if let Some(v) = line.strip_prefix("  Costs: ") {
+                if costs.is_none() {
+                    costs = Some(v.trim().to_string());
+                }
+                continue;
+            }
+            if line.trim().is_empty() {
+                continue;
+            }
+            break;
+        }
+        out.push((opt.letter, why, costs));
+    }
+    out
+}
+
 pub fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }

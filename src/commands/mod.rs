@@ -4,6 +4,7 @@ pub mod ban;
 pub mod check;
 pub mod init;
 pub mod lock;
+pub mod serve;
 pub mod show;
 pub mod unban;
 

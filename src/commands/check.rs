@@ -3,6 +3,7 @@ use crate::ledger::{self, Ledger};
 use crate::record::{self, Kind, RecordFile};
 use crate::repo;
 use crate::terms;
+use crate::view;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
@@ -10,6 +11,69 @@ struct Failure {
     check: String,
     id: Option<String>,
     message: String,
+}
+
+fn push_failures(out: &mut Vec<String>, fs: Vec<Failure>) {
+    for f in fs {
+        out.push(format!("{}: {}", f.check, f.message));
+    }
+}
+
+/// Everything `check` reports, computed against `root` with the default
+/// (non-staged, no message file) banned-word scan. Used by `run` (which
+/// layers the CLI's `--staged`/`--message` modes on top) and by the `serve`
+/// page, which always wants the plain repo-wide scan.
+pub fn collect(root: &Path) -> view::CheckReport {
+    build(root, false, None)
+}
+
+fn build(root: &Path, staged: bool, message: Option<&Path>) -> view::CheckReport {
+    let ledger_path = root.join("adrdom/state/ledger.tsv");
+    let led = ledger::read(&ledger_path);
+
+    let files = repo::list_decision_files(root);
+    let mut records = Vec::new();
+    let mut notes: Vec<String> = Vec::new();
+    for f in &files {
+        match record::load(f) {
+            Ok(rf) => records.push(rf),
+            Err(e) => notes.push(format!("parse: {}: cannot read: {}", f.display(), e)),
+        }
+    }
+
+    let mut failures: Vec<String> = Vec::new();
+    push_failures(&mut failures, check_parse(&records));
+    push_failures(&mut failures, check_ids(&records, &led));
+    push_failures(&mut failures, check_ledger(&led, &records, root, &ledger_path));
+    push_failures(&mut failures, check_answers(&records, &led));
+    push_failures(&mut failures, check_banned(root, staged, message));
+    push_failures(&mut failures, check_install(root));
+    let (plan_failures, awaiting) = check_plan(root, &records, &led);
+    push_failures(&mut failures, plan_failures);
+    let (terms_failures, terms_awaiting) = check_terms(root, &records, &led);
+    push_failures(&mut failures, terms_failures);
+    let (tie_failures, tied_count, unchecked_count) = check_ties(root, &records, &led);
+    push_failures(&mut failures, tie_failures);
+
+    if !awaiting.is_empty() {
+        notes.push(format!(
+            "plan: {} file(s) awaiting approval: {}",
+            awaiting.len(),
+            awaiting.join(", ")
+        ));
+    }
+    if terms_awaiting {
+        notes.push("terms: awaiting approval".to_string());
+    }
+    for d in check_done(root, &records, &led) {
+        notes.push(format!("done: {}", d));
+    }
+    notes.push(format!(
+        "ties: {} tied, {} unchecked",
+        tied_count, unchecked_count
+    ));
+
+    view::CheckReport { failures, notes }
 }
 
 pub fn run(staged: bool, message: Option<PathBuf>) -> i32 {
@@ -20,53 +84,16 @@ pub fn run(staged: bool, message: Option<PathBuf>) -> i32 {
             return 1;
         }
     };
-    let ledger_path = root.join("adrdom/state/ledger.tsv");
-    let led = ledger::read(&ledger_path);
 
-    let files = repo::list_decision_files(&root);
-    let mut records = Vec::new();
-    for f in &files {
-        match record::load(f) {
-            Ok(rf) => records.push(rf),
-            Err(e) => println!("parse: {}: cannot read: {}", f.display(), e),
-        }
-    }
+    let report = build(&root, staged, message.as_deref());
+    let exit_code = if report.failures.is_empty() { 0 } else { 1 };
 
-    let mut failures = Vec::new();
-    failures.extend(check_parse(&records));
-    failures.extend(check_ids(&records, &led));
-    failures.extend(check_ledger(&led, &records, &root, &ledger_path));
-    failures.extend(check_answers(&records, &led));
-    failures.extend(check_banned(&root, staged, message.as_deref()));
-    failures.extend(check_install(&root));
-    let (plan_failures, awaiting) = check_plan(&root, &records, &led);
-    failures.extend(plan_failures);
-    let (terms_failures, terms_awaiting) = check_terms(&root, &records, &led);
-    failures.extend(terms_failures);
-    let (tie_failures, tied_count, unchecked_count) = check_ties(&root, &records, &led);
-    failures.extend(tie_failures);
-
-    let mut exit_code = 0;
-    for f in &failures {
-        println!("{}: {}", f.check, f.message);
-        exit_code = 1;
+    for f in &report.failures {
+        println!("{}", f);
     }
-
-    if !awaiting.is_empty() {
-        println!(
-            "plan: {} file(s) awaiting approval: {}",
-            awaiting.len(),
-            awaiting.join(", ")
-        );
+    for n in &report.notes {
+        println!("{}", n);
     }
-    if terms_awaiting {
-        println!("terms: awaiting approval");
-    }
-    for d in check_done(&root, &records, &led) {
-        println!("done: {}", d);
-    }
-
-    println!("ties: {} tied, {} unchecked", tied_count, unchecked_count);
 
     exit_code
 }
@@ -711,15 +738,11 @@ fn check_done(root: &Path, records: &[RecordFile], led: &Ledger) -> Vec<String> 
     out
 }
 
-fn check_ties(root: &Path, records: &[RecordFile], led: &Ledger) -> (Vec<Failure>, usize, usize) {
-    let mut out = Vec::new();
-
-    let in_force: HashSet<String> = records
-        .iter()
-        .flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.clone()))
-        .filter(|id| matches!(led.latest_state(id), Some(row) if row.event == "answered"))
-        .collect();
-
+/// Every id that appears after `adr: ` in a tracked, non-`adrdom/` file, as
+/// a full uuid token, mapped to every `path:line` location it was found at
+/// (4.10-adjacent bookkeeping used by both `check`'s `ties` check and the
+/// page's decision view for a ties count per id).
+pub fn tie_index(root: &Path) -> HashMap<String, Vec<String>> {
     let mut tie_ids: HashMap<String, Vec<String>> = HashMap::new();
     if let Some(list) = repo::git(root, &["ls-files"]) {
         for path in list.lines() {
@@ -744,6 +767,19 @@ fn check_ties(root: &Path, records: &[RecordFile], led: &Ledger) -> (Vec<Failure
             }
         }
     }
+    tie_ids
+}
+
+fn check_ties(root: &Path, records: &[RecordFile], led: &Ledger) -> (Vec<Failure>, usize, usize) {
+    let mut out = Vec::new();
+
+    let in_force: HashSet<String> = records
+        .iter()
+        .flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.clone()))
+        .filter(|id| matches!(led.latest_state(id), Some(row) if row.event == "answered"))
+        .collect();
+
+    let tie_ids = tie_index(root);
 
     let unchecked_path = root.join("adrdom/state/unchecked.tsv");
     let mut unchecked_ids: HashSet<String> = HashSet::new();

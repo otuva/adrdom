@@ -265,6 +265,47 @@ fn lock_with_two_id_supersedes_writes_a_row_per_id() {
 }
 
 #[test]
+fn lock_refuses_a_second_time_with_already_answered_message() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let question_id = extract_ids(&content)[0].clone();
+
+    let first = adr_owner(&dir, &["lock", &question_id, "A"], "");
+    assert!(first.status.success(), "first lock failed: {}", stderr(&first));
+
+    // Locking the same, now-answered id again must refuse with the same
+    // "already answered" message the pre-refactor command produced, and
+    // must not append a second `answered` row.
+    let second = adr_owner(&dir, &["lock", &question_id, "A"], "");
+    assert!(!second.status.success(), "second lock should have refused");
+    assert!(
+        stderr(&second).contains("is already answered"),
+        "{}",
+        stderr(&second)
+    );
+    assert!(
+        stderr(&second).starts_with("lock: "),
+        "refusal should keep the lock: prefix: {}",
+        stderr(&second)
+    );
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert_eq!(
+        ledger.lines().filter(|l| l.contains("\tanswered\t")).count(),
+        1,
+        "second lock must not have written another answered row: {}",
+        ledger
+    );
+}
+
+#[test]
 fn lock_with_two_id_supersedes_refuses_when_one_is_not_in_force() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
