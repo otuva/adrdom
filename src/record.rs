@@ -314,6 +314,9 @@ fn scan_body(lines: &[String], start: usize, end: usize) -> BodyScan {
     let mut stray_errors = Vec::new();
     let mut problem_count = 0;
     let mut standard_count = 0;
+    // True while the previous non-blank line was an option or one of its
+    // Why/Costs lines; a Why/Costs anywhere else is stray.
+    let mut under_option = false;
 
     for (j, line) in lines.iter().enumerate().take(end).skip(start + 1) {
         if line.trim().is_empty() {
@@ -360,11 +363,17 @@ fn scan_body(lines: &[String], start: usize, end: usize) -> BodyScan {
                 sentence,
                 line: j,
             });
+            under_option = true;
             continue;
         }
         if line.starts_with("  Why: ") || line.starts_with("  Costs: ") {
+            if under_option {
+                continue;
+            }
+            stray_errors.push(format!("stray line {}", j + 1));
             continue;
         }
+        under_option = false;
         if let Some(v) = answer_value(line) {
             answer_line = Some(j);
             answer_val = Some(v);
@@ -882,6 +891,24 @@ mod tests {
     fn a_lean_line_inside_a_question_is_a_shape_error() {
         let rf = rf_from(
             "# T\n\n## G\n\n### Q?\n\nProblem: p.\nStandard: s.\nLean: A.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n",
+        );
+        assert!(rf.sections[0]
+            .shape_errors
+            .iter()
+            .any(|e| e.starts_with("stray line")));
+    }
+
+    #[test]
+    fn a_why_line_before_any_option_is_stray() {
+        let rf = rf_from(
+            "# T\n\n## G\n\n### Q?\n\nProblem: p.\nStandard: s.\n  Why: early.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n",
+        );
+        assert!(rf.sections[0]
+            .shape_errors
+            .iter()
+            .any(|e| e == "stray line 9"));
+        let rf = rf_from(
+            "# T\n\n## G\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n  Costs: late.\n",
         );
         assert!(rf.sections[0]
             .shape_errors

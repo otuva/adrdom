@@ -240,7 +240,7 @@ pub fn snapshot(root: &Path) -> Snapshot {
         }
     });
 
-    let report = check::collect(root);
+    let report = check::collect_with_ties(root, &tie_idx);
     let check_report = CheckReport {
         failures: report.failures,
         notes: report.notes,

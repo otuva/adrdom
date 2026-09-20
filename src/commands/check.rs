@@ -2,6 +2,7 @@ use crate::banned;
 use crate::ledger::{self, Ledger};
 use crate::record::{self, Kind, RecordFile};
 use crate::repo;
+use crate::state::rel_path;
 use crate::terms;
 use crate::view;
 use std::collections::{HashMap, HashSet};
@@ -25,11 +26,18 @@ fn push_failures(out: &mut Vec<String>, fs: Vec<Failure>) {
 /// (non-staged, no message file) banned-word scan. Used by `run` (which
 /// layers the CLI's `--staged`/`--message` modes on top) and by the `serve`
 /// page, which always wants the plain repo-wide scan.
-pub fn collect(root: &Path) -> view::CheckReport {
-    build(root, false, None)
+/// The full check report for the owner's page, reusing a tie index the
+/// caller already computed so the repo's tracked files are scanned once.
+pub fn collect_with_ties(root: &Path, ties: &HashMap<String, Vec<String>>) -> view::CheckReport {
+    build(root, false, None, Some(ties))
 }
 
-fn build(root: &Path, staged: bool, message: Option<&Path>) -> view::CheckReport {
+fn build(
+    root: &Path,
+    staged: bool,
+    message: Option<&Path>,
+    ties: Option<&HashMap<String, Vec<String>>>,
+) -> view::CheckReport {
     let ledger_path = root.join("adrdom/state/ledger.tsv");
     let led = ledger::read(&ledger_path);
 
@@ -54,7 +62,7 @@ fn build(root: &Path, staged: bool, message: Option<&Path>) -> view::CheckReport
     push_failures(&mut failures, plan_failures);
     let (terms_failures, terms_awaiting) = check_terms(root, &records, &led);
     push_failures(&mut failures, terms_failures);
-    let (tie_failures, tied_count, unchecked_count) = check_ties(root, &records, &led);
+    let (tie_failures, tied_count, unchecked_count) = check_ties(root, &records, &led, ties);
     push_failures(&mut failures, tie_failures);
 
     if !awaiting.is_empty() {
@@ -87,7 +95,7 @@ pub fn run(staged: bool, message: Option<PathBuf>) -> i32 {
         }
     };
 
-    let report = build(&root, staged, message.as_deref());
+    let report = build(&root, staged, message.as_deref(), None);
     let exit_code = if report.failures.is_empty() { 0 } else { 1 };
 
     for f in &report.failures {
@@ -108,15 +116,6 @@ fn dropped_state(led: &Ledger, id: &str) -> bool {
         led.latest_state(id).map(|r| r.event.as_str()),
         Some("superseded") | Some("withdrawn")
     )
-}
-
-/// The path of a record file relative to the repo root, forward slashes,
-/// matching the ledger's `detail` convention for `approved`/`context` rows.
-fn rel_path(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .replace('\\', "/")
 }
 
 /// A file's plan/context approval state: its ledger-relative path, whether
@@ -757,7 +756,12 @@ pub fn tie_index(root: &Path) -> HashMap<String, Vec<String>> {
     tie_ids
 }
 
-fn check_ties(root: &Path, records: &[RecordFile], led: &Ledger) -> (Vec<Failure>, usize, usize) {
+fn check_ties(
+    root: &Path,
+    records: &[RecordFile],
+    led: &Ledger,
+    ties: Option<&HashMap<String, Vec<String>>>,
+) -> (Vec<Failure>, usize, usize) {
     let mut out = Vec::new();
 
     let in_force: HashSet<String> = records
@@ -766,7 +770,14 @@ fn check_ties(root: &Path, records: &[RecordFile], led: &Ledger) -> (Vec<Failure
         .filter(|id| matches!(led.latest_state(id), Some(row) if row.event == "answered"))
         .collect();
 
-    let tie_ids = tie_index(root);
+    let owned;
+    let tie_ids: &HashMap<String, Vec<String>> = match ties {
+        Some(t) => t,
+        None => {
+            owned = tie_index(root);
+            &owned
+        }
+    };
 
     let unchecked_path = root.join("adrdom/state/unchecked.tsv");
     let mut unchecked_ids: HashSet<String> = HashSet::new();

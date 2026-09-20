@@ -87,7 +87,7 @@ fn handle(mut request: Request, root: &Path, token: &str) {
     // same path with `t` stripped out of the query string.
     if method == Method::Get {
         if let Some(t) = query.get("t") {
-            if t == token {
+            if token_eq(t, token) {
                 let dest = strip_query_key(&path, &query_string, "t");
                 send(
                     request,
@@ -98,12 +98,12 @@ fn handle(mut request: Request, root: &Path, token: &str) {
         }
     }
 
-    let cookie_ok = cookie_token.as_deref() == Some(token);
+    let cookie_ok = cookie_token.as_deref().is_some_and(|c| token_eq(c, token));
     if !cookie_ok {
         send(request, Reply::Html(403, forbidden_page()));
         return;
     }
-    if method == Method::Post && form.get("t").map(String::as_str) != Some(token) {
+    if method == Method::Post && !form.get("t").is_some_and(|t| token_eq(t, token)) {
         send(request, Reply::Html(403, forbidden_page()));
         return;
     }
@@ -829,6 +829,21 @@ fn parse_form(s: &str) -> HashMap<String, String> {
     map
 }
 
+/// Constant-time equality for the owner token: every byte is compared
+/// regardless of where the first mismatch is, so response time does not
+/// leak how many leading bytes a guess got right.
+fn token_eq(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff: u8 = 0;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
 fn percent_decode(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
@@ -839,14 +854,14 @@ fn percent_decode(s: &str) -> String {
                 out.push(b' ');
                 i += 1;
             }
-            b'%' if i + 2 < bytes.len() => {
-                if let Ok(byte) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
-                    out.push(byte);
-                    i += 3;
-                } else {
-                    out.push(bytes[i]);
-                    i += 1;
-                }
+            b'%' if i + 2 < bytes.len()
+                && bytes[i + 1].is_ascii_hexdigit()
+                && bytes[i + 2].is_ascii_hexdigit() =>
+            {
+                let hi = (bytes[i + 1] as char).to_digit(16).unwrap_or(0) as u8;
+                let lo = (bytes[i + 2] as char).to_digit(16).unwrap_or(0) as u8;
+                out.push(hi * 16 + lo);
+                i += 3;
             }
             b => {
                 out.push(b);
@@ -900,4 +915,27 @@ fn esc(s: &str) -> String {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{percent_decode, token_eq};
+
+    #[test]
+    fn percent_decode_never_slices_inside_a_multibyte_char() {
+        // "%" directly followed by a three-byte character: the old code
+        // sliced the &str at byte 3, inside the character, and panicked.
+        assert_eq!(percent_decode("%€"), "%€");
+        assert_eq!(percent_decode("a%2Fb+c"), "a/b c");
+        assert_eq!(percent_decode("%zz"), "%zz");
+        assert_eq!(percent_decode("%2"), "%2");
+    }
+
+    #[test]
+    fn token_eq_compares_whole_strings() {
+        assert!(token_eq("abc", "abc"));
+        assert!(!token_eq("abc", "abd"));
+        assert!(!token_eq("abc", "ab"));
+        assert!(!token_eq("", "a"));
+    }
 }
