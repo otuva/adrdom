@@ -1,7 +1,7 @@
 //! The owner's page (7.x): served by the binary on loopback, token-gated.
 use crate::actions;
 use crate::repo;
-use crate::view::{self, QState, QuestionView, Snapshot};
+use crate::view::{self, FileView, QState, QuestionView, Snapshot};
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
@@ -215,21 +215,24 @@ fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> String {
     let mut body = String::new();
     body.push_str(&banner_html(m));
 
-    body.push_str("<h1>adrdom</h1>\n");
+    let open_count = view::open_questions(snap).len();
+    let topic_count = snap.files.len();
+    body.push_str("<header class=\"lead\">\n<h1>Overview</h1>\n");
     body.push_str(&format!(
-        "<p><a class=\"next-link\" href=\"/next\">Answer next &rarr;</a> &middot; <a href=\"/decisions\">Decisions</a> &middot; {} open</p>\n",
-        view::open_questions(snap).len()
+        "<p class=\"summary\">{} across {}.</p>\n",
+        plural(open_count, "open question", "open questions"),
+        plural(topic_count, "topic", "topics")
     ));
+    if open_count > 0 {
+        body.push_str("<p><a class=\"primary\" href=\"/next\">Answer the next question</a></p>\n");
+    }
+    body.push_str("</header>\n");
 
     for f in &snap.files {
-        body.push_str("<section class=\"file\">\n");
-        body.push_str(&format!(
-            "<h2>{} <span class=\"path\">{}</span></h2>\n",
-            esc(&f.topic),
-            esc(&f.path)
-        ));
+        body.push_str("<article class=\"topic\">\n");
+        body.push_str(&format!("<h2>{}</h2>\n", esc(&f.topic)));
+        body.push_str(&format!("<p class=\"path\">{}</p>\n", esc(&f.path)));
 
-        let mut status_parts: Vec<String> = Vec::new();
         let mut awaiting: Vec<&str> = Vec::new();
         if !f.plan_approved {
             awaiting.push("plan");
@@ -238,31 +241,27 @@ fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> String {
             awaiting.push("context");
         }
         if !awaiting.is_empty() {
-            status_parts.push(format!("awaiting approval: {}", awaiting.join("/")));
+            body.push_str(&format!(
+                "<p class=\"state waiting\">The {} of this file is not approved yet.</p>\n",
+                awaiting.join(" and ")
+            ));
+            body.push_str(&format!(
+                "<form method=\"post\" action=\"/approve\" class=\"inline\"><input type=\"hidden\" name=\"file\" value=\"{}\"><input type=\"hidden\" name=\"t\" value=\"{}\"><button type=\"submit\">Approve {}</button></form>\n",
+                esc(&f.path),
+                esc(token),
+                esc(&f.topic)
+            ));
         }
         if let Some(g) = &f.open_group {
-            let mut s = format!("open group {}", esc(g));
+            let mut s = format!("Group <q>{}</q> is open", esc(g));
             if let Some(w) = &f.waits_on {
-                s.push_str(&format!(" &mdash; waits on \"{}\"", esc(w)));
+                s.push_str(&format!(", waiting on <q>{}</q>", esc(w)));
             }
-            status_parts.push(s);
+            s.push('.');
+            body.push_str(&format!("<p class=\"state\">{}</p>\n", s));
         }
         if f.done {
-            status_parts.push("done".to_string());
-        }
-        if !status_parts.is_empty() {
-            body.push_str(&format!(
-                "<p class=\"status\">{}</p>\n",
-                status_parts.join(" &middot; ")
-            ));
-        }
-
-        if !awaiting.is_empty() {
-            body.push_str(&format!(
-                "<form method=\"post\" action=\"/approve\"><input type=\"hidden\" name=\"file\" value=\"{}\"><input type=\"hidden\" name=\"t\" value=\"{}\"><button type=\"submit\">Approve</button></form>\n",
-                esc(&f.path),
-                esc(token)
-            ));
+            body.push_str("<p class=\"state done\">Every approved heading is answered.</p>\n");
         }
 
         let open: Vec<&QuestionView> = f
@@ -271,7 +270,7 @@ fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> String {
             .filter(|q| q.state == QState::Open)
             .collect();
         if !open.is_empty() {
-            body.push_str("<ul class=\"open-list\">\n");
+            body.push_str("<ol class=\"open-list\">\n");
             for q in &open {
                 let id = q.id.clone().unwrap_or_default();
                 body.push_str(&format!(
@@ -280,7 +279,7 @@ fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> String {
                     esc(&q.heading)
                 ));
             }
-            body.push_str("</ul>\n");
+            body.push_str("</ol>\n");
         }
 
         let answered: Vec<&QuestionView> = f
@@ -289,39 +288,43 @@ fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> String {
             .filter(|q| q.state == QState::Answered)
             .collect();
         if !answered.is_empty() {
-            body.push_str("<details><summary>Answered</summary>\n<ul>\n");
+            body.push_str(&format!(
+                "<details class=\"answered\"><summary>{}</summary>\n<dl>\n",
+                plural(answered.len(), "answered question", "answered questions")
+            ));
             for q in &answered {
-                let sentence = q
-                    .options
-                    .iter()
-                    .find(|o| Some(o.letter) == q.answer)
-                    .map(|o| o.sentence.as_str())
-                    .unwrap_or("");
+                let sentence = chosen_sentence(q);
                 body.push_str(&format!(
-                    "<li>{} &mdash; {}</li>\n",
+                    "<dt>{}</dt><dd>{}</dd>\n",
                     esc(&q.heading),
                     esc(sentence)
                 ));
             }
-            body.push_str("</ul></details>\n");
+            body.push_str("</dl></details>\n");
         }
 
-        body.push_str("</section>\n");
+        body.push_str("</article>\n");
     }
 
     if let Some(t) = &snap.terms {
-        body.push_str("<section class=\"terms\">\n<h2>Terms</h2>\n");
-        body.push_str(&format!("<p>{}</p>\n", esc(&t.path)));
+        body.push_str("<article class=\"topic\">\n<h2>Terms</h2>\n");
+        body.push_str(&format!("<p class=\"path\">{}</p>\n", esc(&t.path)));
         if t.approved {
-            body.push_str("<p class=\"status\">approved</p>\n");
+            body.push_str(&format!(
+                "<p class=\"state done\">{}, approved.</p>\n",
+                plural(t.count, "term", "terms")
+            ));
         } else {
             body.push_str(&format!(
-                "<form method=\"post\" action=\"/approve\"><input type=\"hidden\" name=\"file\" value=\"{}\"><input type=\"hidden\" name=\"t\" value=\"{}\"><button type=\"submit\">Approve</button></form>\n",
+                "<p class=\"state waiting\">{}, not approved yet.</p>\n",
+                plural(t.count, "term", "terms")
+            ));
+            body.push_str(&format!(
+                "<form method=\"post\" action=\"/approve\" class=\"inline\"><input type=\"hidden\" name=\"file\" value=\"{}\"><input type=\"hidden\" name=\"t\" value=\"{}\"><button type=\"submit\">Approve terms</button></form>\n",
                 esc(&t.path),
                 esc(token)
             ));
         }
-        body.push_str(&format!("<p>{} term(s)</p>\n", t.count));
         if !t.errors.is_empty() {
             body.push_str("<ul class=\"failures\">\n");
             for e in &t.errors {
@@ -329,11 +332,17 @@ fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> String {
             }
             body.push_str("</ul>\n");
         }
-        body.push_str("</section>\n");
+        body.push_str("</article>\n");
     }
 
-    body.push_str("<section class=\"check\">\n<h2>Check</h2>\n");
-    if !snap.check.failures.is_empty() {
+    body.push_str("<article class=\"topic check\">\n<h2>Check</h2>\n");
+    if snap.check.failures.is_empty() {
+        body.push_str("<p class=\"state done\">Nothing failing.</p>\n");
+    } else {
+        body.push_str(&format!(
+            "<p class=\"state failing\">{}.</p>\n",
+            plural(snap.check.failures.len(), "failure", "failures")
+        ));
         body.push_str("<ul class=\"failures\">\n");
         for f in &snap.check.failures {
             body.push_str(&format!("<li>{}</li>\n", esc(f)));
@@ -347,16 +356,16 @@ fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> String {
         }
         body.push_str("</ul>\n");
     }
-    body.push_str("</section>\n");
+    body.push_str("</article>\n");
 
-    body.push_str("<section class=\"unban\">\n<h2>Unban</h2>\n");
+    body.push_str("<details class=\"unban\"><summary>Unban a phrase</summary>\n");
     body.push_str(&format!(
-        "<form method=\"post\" action=\"/unban\"><textarea name=\"lines\" rows=\"4\" placeholder=\"one line per phrase to unban\"></textarea><input type=\"hidden\" name=\"t\" value=\"{}\"><button type=\"submit\">Unban</button></form>\n",
+        "<form method=\"post\" action=\"/unban\"><textarea name=\"lines\" rows=\"4\" placeholder=\"One phrase per line\"></textarea><input type=\"hidden\" name=\"t\" value=\"{}\"><button type=\"submit\">Unban</button></form>\n",
         esc(token)
     ));
-    body.push_str("</section>\n");
+    body.push_str("</details>\n");
 
-    page("adrdom", &body)
+    page("Overview", "/", &body)
 }
 
 fn render_next(
@@ -373,24 +382,41 @@ fn render_next(
     let picked = pick_next(&all, after.map(String::as_str), show.map(String::as_str));
 
     let Some((file, q)) = picked else {
-        body.push_str("<h1>All decisions answered</h1>\n");
-        body.push_str("<p><a href=\"/\">Back</a></p>\n");
-        return page("Next", &body);
+        body.push_str("<header class=\"lead\">\n<h1>Every question is answered</h1>\n");
+        body.push_str("<p><a href=\"/\">Back to the overview</a></p>\n</header>\n");
+        return page("Answer", "/next", &body);
     };
 
     let id = q.id.clone().unwrap_or_default();
-    body.push_str("<div class=\"focus\">\n");
-    body.push_str(&format!(
-        "<p class=\"where\">{} &middot; {}</p>\n",
-        esc(file),
-        esc(&q.group)
-    ));
-    body.push_str(&format!("<h1>{}</h1>\n", esc(&q.heading)));
-    if let Some(p) = &q.problem {
-        body.push_str(&format!("<p class=\"problem\"><strong>Problem:</strong> {}</p>\n", esc(p)));
+    let open_ids: Vec<&str> = all
+        .iter()
+        .filter(|(_, x)| x.state == QState::Open)
+        .filter_map(|(_, x)| x.id.as_deref())
+        .collect();
+    let position = open_ids.iter().position(|x| *x == id).map(|p| p + 1);
+
+    body.push_str("<article class=\"focus\">\n");
+    body.push_str("<p class=\"where\">");
+    body.push_str(&format!("{}, {}", esc(&file.topic), esc(&q.group)));
+    if let Some(p) = position {
+        body.push_str(&format!(
+            ". Question {} of {} open",
+            p,
+            open_ids.len()
+        ));
     }
-    if let Some(s) = &q.standard {
-        body.push_str(&format!("<p class=\"standard\"><strong>Standard:</strong> {}</p>\n", esc(s)));
+    body.push_str(".</p>\n");
+    body.push_str(&format!("<h1>{}</h1>\n", esc(&q.heading)));
+
+    if q.problem.is_some() || q.standard.is_some() {
+        body.push_str("<dl class=\"framing\">\n");
+        if let Some(p) = &q.problem {
+            body.push_str(&format!("<dt>Problem</dt><dd>{}</dd>\n", esc(p)));
+        }
+        if let Some(s) = &q.standard {
+            body.push_str(&format!("<dt>Standard</dt><dd>{}</dd>\n", esc(s)));
+        }
+        body.push_str("</dl>\n");
     }
 
     body.push_str(&format!(
@@ -398,38 +424,50 @@ fn render_next(
         esc(&id),
         esc(token)
     ));
-    body.push_str("<div class=\"options\">\n");
+    body.push_str("<div class=\"options\" role=\"radiogroup\">\n");
     for (i, o) in q.options.iter().enumerate() {
         let input_id = format!("opt-{}", o.letter);
         body.push_str(&format!(
-            "<label class=\"card\" for=\"{iid}\"><input type=\"radio\" name=\"answer\" id=\"{iid}\" value=\"{letter}\"{checked}><span class=\"letter\">{letter}</span><span class=\"sentence\">{sentence}</span>",
+            "<label class=\"option\" for=\"{iid}\"><input type=\"radio\" name=\"answer\" id=\"{iid}\" value=\"{letter}\"{checked}><span class=\"key\">{letter}</span><span class=\"text\"><span class=\"sentence\">{sentence}</span>",
             iid = input_id,
             letter = o.letter,
             checked = if i == 0 { " checked" } else { "" },
             sentence = esc(&o.sentence),
         ));
-        if let Some(why) = &o.why {
-            body.push_str(&format!("<span class=\"why\">Why: {}</span>", esc(why)));
+        if o.why.is_some() || o.costs.is_some() {
+            body.push_str("<dl class=\"rationale\">");
+            if let Some(why) = &o.why {
+                body.push_str(&format!("<dt>Why</dt><dd>{}</dd>", esc(why)));
+            }
+            if let Some(costs) = &o.costs {
+                body.push_str(&format!("<dt>Costs</dt><dd>{}</dd>", esc(costs)));
+            }
+            body.push_str("</dl>");
         }
-        if let Some(costs) = &o.costs {
-            body.push_str(&format!("<span class=\"costs\">Costs: {}</span>", esc(costs)));
-        }
-        body.push_str("</label>\n");
+        body.push_str("</span></label>\n");
     }
     body.push_str("</div>\n");
-    body.push_str("<button type=\"submit\">Lock</button>\n");
-    body.push_str("</form>\n");
+    let first = q.options.first().map(|o| o.letter).unwrap_or('A');
     body.push_str(&format!(
-        "<p class=\"skip\"><a href=\"/next?after={}\">Skip &rarr;</a></p>\n",
+        "<p class=\"act\"><button type=\"submit\" class=\"lock\" id=\"lock-button\">Lock <span id=\"lock-letter\">{}</span></button> <a class=\"skip\" href=\"/next?after={}\">Skip this one</a></p>\n",
+        first,
         percent_encode(&id)
     ));
-    body.push_str("<p class=\"key-hint\"><kbd>A</kbd>&ndash;<kbd>E</kbd> pick an option, <kbd>Enter</kbd> submits, <kbd>S</kbd> skips.</p>\n");
-    body.push_str("</div>\n");
+    body.push_str("</form>\n");
+    body.push_str("<p class=\"key-hint\">Press a letter to choose, <kbd>Enter</kbd> to lock, <kbd>S</kbd> to skip.</p>\n");
+    body.push_str("</article>\n");
 
     body.push_str(&format!(
         r#"<script>
 (function() {{
   var form = document.getElementById('lock-form');
+  var letter = document.getElementById('lock-letter');
+  function sync() {{
+    var chosen = form.querySelector('input[name=answer]:checked');
+    if (chosen && letter) {{ letter.textContent = chosen.value; }}
+  }}
+  form.addEventListener('change', sync);
+  sync();
   document.addEventListener('keydown', function(e) {{
     if (e.altKey || e.ctrlKey || e.metaKey) return;
     var tag = (document.activeElement && document.activeElement.tagName) || '';
@@ -440,7 +478,7 @@ fn render_next(
     var key = e.key.toUpperCase();
     if (key.length === 1 && key >= 'A' && key <= 'E') {{
       var radio = document.getElementById('opt-' + key);
-      if (radio) {{ radio.checked = true; }}
+      if (radio) {{ radio.checked = true; sync(); }}
     }} else if (key === 'ENTER') {{
       form.submit();
     }} else if (key === 'S') {{
@@ -453,48 +491,83 @@ fn render_next(
         id = percent_encode(&id)
     ));
 
-    page("Next", &body)
+    page("Answer", "/next", &body)
 }
 
 fn render_decisions(snap: &Snapshot) -> String {
     let mut body = String::new();
-    body.push_str("<h1>Decisions</h1>\n<ul class=\"decisions\">\n");
+    let total: usize = snap
+        .files
+        .iter()
+        .map(|f| f.questions.iter().filter(|q| q.state == QState::Answered).count())
+        .sum();
+    body.push_str("<header class=\"lead\">\n<h1>Decisions in force</h1>\n");
+    body.push_str(&format!(
+        "<p class=\"summary\">{}.</p>\n</header>\n",
+        plural(total, "decision", "decisions")
+    ));
     for f in &snap.files {
-        for q in &f.questions {
-            if q.state != QState::Answered {
-                continue;
-            }
-            let sentence = q
-                .options
-                .iter()
-                .find(|o| Some(o.letter) == q.answer)
-                .map(|o| o.sentence.as_str())
-                .unwrap_or("");
-            let supersedes = if q.supersedes.is_empty() {
-                String::new()
-            } else {
-                format!(
-                    " <span class=\"supersedes\">(supersedes {})</span>",
-                    esc(&q.supersedes.join(", "))
-                )
+        let answered: Vec<&QuestionView> = f
+            .questions
+            .iter()
+            .filter(|q| q.state == QState::Answered)
+            .collect();
+        if answered.is_empty() {
+            continue;
+        }
+        body.push_str("<article class=\"topic\">\n");
+        body.push_str(&format!("<h2>{}</h2>\n", esc(&f.topic)));
+        body.push_str("<dl class=\"decisions\">\n");
+        for q in &answered {
+            let sentence = chosen_sentence(q);
+            let ties = match q.ties {
+                0 => "no tie".to_string(),
+                n => plural(n, "tie", "ties"),
             };
             body.push_str(&format!(
-                "<li><strong>{}</strong> &mdash; {} <span class=\"ties\">({} tie(s))</span>{}</li>\n",
+                "<dt>{}</dt><dd><span class=\"sentence\">{}</span><span class=\"meta\">{}",
                 esc(&q.heading),
                 esc(sentence),
-                q.ties,
-                supersedes
+                ties
             ));
+            if !q.supersedes.is_empty() {
+                body.push_str(&format!(
+                    ", supersedes {}",
+                    esc(&q.supersedes.join(", "))
+                ));
+            }
+            body.push_str("</span></dd>\n");
         }
+        body.push_str("</dl>\n</article>\n");
     }
-    body.push_str("</ul>\n<p><a href=\"/\">Back</a></p>\n");
-    page("Decisions", &body)
+    page("Decisions", "/decisions", &body)
+}
+
+fn chosen_sentence(q: &QuestionView) -> &str {
+    q.options
+        .iter()
+        .find(|o| Some(o.letter) == q.answer)
+        .map(|o| o.sentence.as_str())
+        .unwrap_or("")
+}
+
+fn plural(n: usize, one: &str, many: &str) -> String {
+    if n == 1 {
+        format!("1 {}", one)
+    } else {
+        format!("{} {}", n, many)
+    }
 }
 
 fn banner_html(m: Option<&String>) -> String {
     match m {
         Some(text) if !text.is_empty() => {
-            format!("<p class=\"banner\">{}</p>\n", esc(text))
+            let refused = text.contains("refusing") || text.contains("failed");
+            format!(
+                "<p class=\"banner{}\">{}</p>\n",
+                if refused { " refused" } else { "" },
+                esc(text)
+            )
         }
         _ => String::new(),
     }
@@ -503,65 +576,199 @@ fn banner_html(m: Option<&String>) -> String {
 fn forbidden_page() -> String {
     simple_page(
         "Forbidden",
-        "<p>This link is not valid. The server prints a new link every time it starts.</p>",
+        "<header class=\"lead\"><h1>This link is not valid</h1><p class=\"summary\">The server prints a new link every time it starts. Use the one from the terminal that started it.</p></header>",
     )
 }
 
 fn simple_page(title: &str, body: &str) -> String {
-    page(title, body)
+    page(title, "", body)
 }
 
-fn page(title: &str, body: &str) -> String {
+fn page(title: &str, current: &str, body: &str) -> String {
+    let nav = |href: &str, label: &str| {
+        if href == current {
+            format!("<a href=\"{}\" aria-current=\"page\">{}</a>", href, label)
+        } else {
+            format!("<a href=\"{}\">{}</a>", href, label)
+        }
+    };
     format!(
-        "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><title>{}</title><style>{}</style></head><body>{}</body></html>\n",
-        esc(title),
-        STYLE,
-        body
+        "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>{title}</title><style>{style}</style></head><body>\n<nav class=\"bar\"><span class=\"mark\">adr</span>{home}{next}{decisions}</nav>\n<main>\n{body}</main>\n</body></html>\n",
+        title = esc(title),
+        style = STYLE,
+        home = nav("/", "Overview"),
+        next = nav("/next", "Answer"),
+        decisions = nav("/decisions", "Decisions"),
+        body = body
     )
 }
 
 const STYLE: &str = r#"
-:root { color-scheme: light dark; }
-body { font: 18px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; }
-h1 { font-size: 2rem; }
-.path { color: #777; font-size: 0.8em; font-weight: normal; }
-.status { color: #555; }
-.banner { background: #eef; border: 1px solid #99c; padding: 0.6em 1em; border-radius: 6px; }
-.failures { color: #a00; }
-.notes { color: #555; }
-section { margin: 2rem 0; padding-bottom: 1rem; border-bottom: 1px solid #ddd; }
-.focus h1 { font-size: 2.4rem; }
-.focus .problem, .focus .standard { font-size: 1.1rem; }
-.options { display: flex; flex-direction: column; gap: 0.75rem; margin: 1rem 0; }
-.card { display: flex; flex-direction: column; gap: 0.2rem; border: 2px solid #ccc; border-radius: 10px; padding: 1rem; cursor: pointer; }
-.card:has(input:checked) { border-color: #36c; background: rgba(51, 102, 204, 0.08); }
-.card .letter { font-weight: bold; font-size: 1.2rem; }
-.card .why, .card .costs { color: #555; font-size: 0.95rem; }
-.card input { margin-right: 0.5rem; }
-button { font-size: 1.1rem; padding: 0.5em 1.2em; border-radius: 6px; border: 1px solid #888; cursor: pointer; }
-kbd { border: 1px solid #999; border-radius: 4px; padding: 0.1em 0.4em; font-family: monospace; background: #f4f4f4; }
-textarea { width: 100%; font: inherit; }
+:root {
+  color-scheme: light dark;
+  --paper: #f3f4f1;
+  --ink: #17191c;
+  --muted: #5f6570;
+  --rule: #cfd3d6;
+  --hold: #1e6b47;
+  --hold-soft: rgba(30, 107, 71, 0.10);
+  --refuse: #a32a22;
+  --refuse-soft: rgba(163, 42, 34, 0.08);
+  --key: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #15171a;
+    --ink: #e6e8ea;
+    --muted: #9aa1aa;
+    --rule: #33383e;
+    --hold: #5cc394;
+    --hold-soft: rgba(92, 195, 148, 0.12);
+    --refuse: #e0665c;
+    --refuse-soft: rgba(224, 102, 92, 0.12);
+    --key: #1f2226;
+  }
+}
+* { box-sizing: border-box; }
+html { background: var(--paper); color: var(--ink); }
+body {
+  margin: 0;
+  font-family: "Bitstream Charter", Charter, "Iowan Old Style", P052, "Palatino Linotype", Palatino, "Noto Serif", Georgia, serif;
+  font-size: 19px;
+  line-height: 1.55;
+}
+main { max-width: 42rem; margin: 0 auto; padding: 1.5rem 1rem 5rem; }
+a { color: inherit; text-decoration-color: var(--rule); text-decoration-thickness: 1px; text-underline-offset: 0.15em; }
+a:hover { text-decoration-color: currentColor; }
+q { quotes: "\201C" "\201D"; }
+
+.bar {
+  display: flex; align-items: baseline; gap: 1.4rem;
+  max-width: 42rem; margin: 0 auto; padding: 1rem 1rem 0;
+  font-size: 0.95rem; color: var(--muted);
+}
+.bar .mark { font-weight: 700; color: var(--ink); letter-spacing: 0.02em; margin-right: auto; }
+.bar a { text-decoration: none; }
+.bar a[aria-current] { color: var(--ink); border-bottom: 2px solid var(--hold); }
+
+h1 { font-size: 2.25rem; line-height: 1.15; font-weight: 700; margin: 1.6rem 0 0.6rem; letter-spacing: -0.01em; }
+h2 { font-size: 1.35rem; line-height: 1.25; font-weight: 700; margin: 0 0 0.2rem; }
+.lead .summary { font-size: 1.15rem; color: var(--muted); margin: 0 0 1rem; }
+.primary {
+  display: inline-block; text-decoration: none;
+  background: var(--hold); color: var(--paper);
+  padding: 0.55em 1.1em; border-radius: 4px; font-weight: 700;
+}
+.primary:hover { filter: brightness(1.08); }
+
+.topic { border-top: 1px solid var(--rule); padding: 1.4rem 0 1.1rem; }
+.topic .path { margin: 0 0 0.6rem; font-size: 0.85rem; color: var(--muted); }
+.state { margin: 0.3rem 0; }
+.state.waiting { color: var(--muted); }
+.state.done { color: var(--hold); }
+.state.failing { color: var(--refuse); }
+.inline { margin: 0.5rem 0 0.8rem; }
+.open-list { margin: 0.6rem 0 0.4rem; padding-left: 1.4rem; }
+.open-list li { margin: 0.2rem 0; }
 .open-list a { text-decoration: none; }
-.next-link { font-weight: bold; }
+.open-list a:hover { text-decoration: underline; }
+details.answered { margin-top: 0.6rem; color: var(--muted); }
+details summary { cursor: pointer; }
+details.answered dl { margin: 0.5rem 0 0; }
+details.answered dt { color: var(--muted); font-size: 0.95rem; }
+details.answered dd { margin: 0 0 0.6rem; color: var(--ink); }
+
+.failures { color: var(--refuse); padding-left: 1.2rem; margin: 0.4rem 0; }
+.failures li { margin: 0.15rem 0; }
+.notes { color: var(--muted); padding-left: 1.2rem; margin: 0.4rem 0; font-size: 0.95rem; }
+details.unban { margin-top: 2rem; color: var(--muted); font-size: 0.95rem; }
+details.unban form { margin-top: 0.6rem; }
+
+.banner {
+  margin: 1.2rem 0 0; padding: 0.7em 1em;
+  border-left: 4px solid var(--hold); background: var(--hold-soft);
+}
+.banner.refused { border-left-color: var(--refuse); background: var(--refuse-soft); }
+
+.focus .where { margin: 1.4rem 0 0; color: var(--muted); font-size: 0.95rem; }
+.focus h1 { font-size: 2.6rem; margin-top: 0.3rem; }
+dl.framing { margin: 1.2rem 0 1.8rem; display: grid; grid-template-columns: 6rem 1fr; column-gap: 1rem; row-gap: 0.5rem; }
+dl.framing dt { color: var(--muted); }
+dl.framing dd { margin: 0; }
+
+.options { display: flex; flex-direction: column; margin: 0 0 1.4rem; border-top: 1px solid var(--rule); }
+.option {
+  display: grid; grid-template-columns: 3.2rem 1fr; column-gap: 1rem;
+  padding: 1rem 0.6rem 1rem 0.6rem; border-bottom: 1px solid var(--rule);
+  cursor: pointer; position: relative;
+}
+.option input { position: absolute; opacity: 0; width: 0; height: 0; }
+.option .key {
+  align-self: start; justify-self: start;
+  width: 2.6rem; height: 2.6rem; display: grid; place-items: center;
+  font-weight: 700; font-size: 1.25rem;
+  background: var(--key); border: 1px solid var(--rule); border-bottom-width: 3px; border-radius: 6px;
+}
+.option .text { display: flex; flex-direction: column; gap: 0.45rem; }
+.option .sentence { font-size: 1.12rem; line-height: 1.45; }
+dl.rationale { margin: 0; display: grid; grid-template-columns: 3.6rem 1fr; column-gap: 0.8rem; row-gap: 0.2rem; font-size: 0.97rem; color: var(--muted); }
+dl.rationale dt { }
+dl.rationale dd { margin: 0; }
+.option:has(input:checked) { box-shadow: inset 4px 0 0 var(--hold); background: var(--hold-soft); }
+.option:has(input:checked) .key { background: var(--hold); color: var(--paper); border-color: var(--hold); }
+.option:has(input:focus-visible) { outline: 2px solid var(--hold); outline-offset: 2px; }
+
+.act { display: flex; align-items: center; gap: 1.2rem; margin: 0 0 0.6rem; }
+button {
+  font: inherit; font-weight: 700; font-size: 1.05rem;
+  padding: 0.55em 1.2em; border-radius: 4px; cursor: pointer;
+  background: var(--key); color: var(--ink); border: 1px solid var(--muted);
+}
+button.lock { background: var(--hold); color: var(--paper); border-color: var(--hold); min-width: 7.5rem; }
+button:hover { filter: brightness(1.08); }
+button:focus-visible { outline: 2px solid var(--hold); outline-offset: 2px; }
+.skip { color: var(--muted); }
+.key-hint { color: var(--muted); font-size: 0.92rem; }
+kbd { font-family: inherit; font-size: 0.9em; padding: 0.05em 0.45em; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; background: var(--key); }
+
+dl.decisions { margin: 0.6rem 0 0; }
+dl.decisions dt { color: var(--muted); margin-top: 0.8rem; }
+dl.decisions dd { margin: 0.1rem 0 0; }
+dl.decisions .sentence { display: block; font-size: 1.08rem; }
+dl.decisions .meta { display: block; color: var(--muted); font-size: 0.9rem; }
+
+textarea { width: 100%; font: inherit; font-size: 0.95rem; padding: 0.5em; background: var(--key); color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; }
+
+@media (max-width: 600px) {
+  body { font-size: 17px; }
+  h1, .focus h1 { font-size: 1.9rem; }
+  dl.framing { grid-template-columns: 1fr; row-gap: 0.1rem; }
+  dl.framing dt { margin-top: 0.5rem; }
+  .option { grid-template-columns: 2.6rem 1fr; padding-left: 0.2rem; padding-right: 0.2rem; }
+  .option .key { width: 2.2rem; height: 2.2rem; font-size: 1.05rem; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .option, .primary, button { transition: background-color 120ms ease, box-shadow 120ms ease; }
+}
 "#;
 
 // --- view helpers ------------------------------------------------------
 
-fn full_question_list(snap: &Snapshot) -> Vec<(&str, &QuestionView)> {
+fn full_question_list(snap: &Snapshot) -> Vec<(&FileView, &QuestionView)> {
     let mut out = Vec::new();
     for f in &snap.files {
         for q in &f.questions {
-            out.push((f.path.as_str(), q));
+            out.push((f, q));
         }
     }
     out
 }
 
 fn pick_next<'a>(
-    all: &[(&'a str, &'a QuestionView)],
+    all: &[(&'a FileView, &'a QuestionView)],
     after: Option<&str>,
     show: Option<&str>,
-) -> Option<(&'a str, &'a QuestionView)> {
+) -> Option<(&'a FileView, &'a QuestionView)> {
     if let Some(show_id) = show {
         if let Some(found) = all.iter().find(|(_, q)| q.id.as_deref() == Some(show_id)) {
             return Some(*found);
