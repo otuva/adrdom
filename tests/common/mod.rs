@@ -114,7 +114,11 @@ Standard: plain words.
   Costs: names a region.
 
 **P1. A decision is one commitment in one sentence.**
+
 Problem: two commitments could not change separately.
+
+Standard: one commitment per decision.
+
 **Answer:** yes
 "#;
 
@@ -141,4 +145,107 @@ pub fn write_unchecked(dir: &Path, id: &str, reason: &str) {
     let mut content = std::fs::read_to_string(&path).unwrap_or_default();
     content.push_str(&format!("{}\t{}\n", id, reason));
     std::fs::write(&path, content).unwrap();
+}
+
+// --- Plan/context approval, without depending on `adr approve` -----------
+//
+// The crate has no lib target, so this test binary can't call
+// `record::plan_hash`/`context_hash` directly; these mirror that logic
+// (see src/record.rs) closely enough to produce the same hashes for
+// well-formed fixture content, so tests can write `approved`/`context`
+// ledger rows straight into adrdom/state/ledger.tsv without needing the
+// `approve` command (being built concurrently in a separate slice).
+
+fn sha256_hex(text: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(text.as_bytes());
+    hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+fn is_principle_heading(line: &str) -> bool {
+    if !line.starts_with("**P") {
+        return false;
+    }
+    let rest = &line[3..];
+    let digits_len = rest.chars().take_while(|c| c.is_ascii_digit()).count();
+    if digits_len == 0 {
+        return false;
+    }
+    let after_digits = &rest[digits_len..];
+    if !after_digits.starts_with(". ") {
+        return false;
+    }
+    let after_dot = &after_digits[2..];
+    if after_dot.len() < 2 || !after_dot.ends_with("**") {
+        return false;
+    }
+    !after_dot[..after_dot.len() - 2].is_empty()
+}
+
+/// Mirrors `record::plan_hash`: sha256 of the trimmed h2/h3/principle
+/// heading lines, in file order, joined with `\n`.
+pub fn plan_hash(content: &str) -> String {
+    let mut heads: Vec<&str> = Vec::new();
+    for raw in content.split('\n') {
+        let line = raw.trim_end();
+        if line.starts_with("## ") {
+            heads.push(line);
+        } else if line.starts_with("### ") && line.ends_with('?') {
+            heads.push(line);
+        } else if is_principle_heading(line) {
+            heads.push(line);
+        }
+    }
+    sha256_hex(&heads.join("\n"))
+}
+
+/// Mirrors `record::context_hash`: sha256 of the context prose lines
+/// (between the h1 and the first h2) with leading/trailing blank lines
+/// trimmed, joined with `\n`; the empty string hashes when there is none.
+pub fn context_hash(content: &str) -> String {
+    let lines: Vec<&str> = content.split('\n').collect();
+    let h1_idx = lines.iter().position(|l| l.starts_with("# "));
+    let h2_idx = lines.iter().position(|l| l.starts_with("## "));
+    let start = h1_idx.map(|i| i + 1).unwrap_or(0);
+    let end = h2_idx.unwrap_or(lines.len());
+    let start = start.min(end);
+    let slice = &lines[start..end];
+
+    let mut from = 0;
+    while from < slice.len() && slice[from].trim().is_empty() {
+        from += 1;
+    }
+    let mut to = slice.len();
+    while to > from && slice[to - 1].trim().is_empty() {
+        to -= 1;
+    }
+    sha256_hex(&slice[from..to].join("\n"))
+}
+
+/// Writes `approved`/`context` ledger rows for `content` as if `adr
+/// approve` had just run on `rel` (path relative to `dir`, forward
+/// slashes). Call this with the record's as-written content before `ask`
+/// or `lock` touch it: neither changes headings or context prose, so the
+/// hashes stay valid afterward.
+pub fn approve_via_ledger(dir: &Path, rel: &str, content: &str) {
+    let plan = plan_hash(content);
+    let ctx = context_hash(content);
+    let ledger_path = dir.join("adrdom/state/ledger.tsv");
+    let mut existing = std::fs::read_to_string(&ledger_path).unwrap_or_default();
+    existing.push_str(&format!("2024-01-01T00:00:00Z\tapproved\t-\t{}\t{}\n", plan, rel));
+    existing.push_str(&format!("2024-01-01T00:00:00Z\tcontext\t-\t{}\t{}\n", ctx, rel));
+    std::fs::write(&ledger_path, existing).unwrap();
+}
+
+/// Appends a hand-crafted ledger row (bypassing every command): `event`,
+/// `id`, `hash`, `detail`, tab-separated with a fixed timestamp.
+pub fn append_ledger_row(dir: &Path, event: &str, id: &str, hash: &str, detail: &str) {
+    let ledger_path = dir.join("adrdom/state/ledger.tsv");
+    let mut existing = std::fs::read_to_string(&ledger_path).unwrap_or_default();
+    existing.push_str(&format!(
+        "2024-01-01T00:00:00Z\t{}\t{}\t{}\t{}\n",
+        event, id, hash, detail
+    ));
+    std::fs::write(&ledger_path, existing).unwrap();
 }

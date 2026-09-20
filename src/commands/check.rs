@@ -1,7 +1,8 @@
 use crate::banned;
 use crate::ledger::{self, Ledger};
-use crate::record::{self, RecordFile};
+use crate::record::{self, Kind, RecordFile};
 use crate::repo;
+use crate::terms;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
@@ -38,6 +39,10 @@ pub fn run(staged: bool, message: Option<PathBuf>) -> i32 {
     failures.extend(check_answers(&records, &led));
     failures.extend(check_banned(&root, staged, message.as_deref()));
     failures.extend(check_install(&root));
+    let (plan_failures, awaiting) = check_plan(&root, &records, &led);
+    failures.extend(plan_failures);
+    let (terms_failures, terms_awaiting) = check_terms(&root, &records, &led);
+    failures.extend(terms_failures);
     let (tie_failures, tied_count, unchecked_count) = check_ties(&root, &records, &led);
     failures.extend(tie_failures);
 
@@ -47,16 +52,81 @@ pub fn run(staged: bool, message: Option<PathBuf>) -> i32 {
         exit_code = 1;
     }
 
+    if !awaiting.is_empty() {
+        println!(
+            "plan: {} file(s) awaiting approval: {}",
+            awaiting.len(),
+            awaiting.join(", ")
+        );
+    }
+    if terms_awaiting {
+        println!("terms: awaiting approval");
+    }
+    for d in check_done(&root, &records, &led) {
+        println!("done: {}", d);
+    }
+
     println!("ties: {} tied, {} unchecked", tied_count, unchecked_count);
 
     exit_code
 }
 
+/// An id whose latest state is `superseded` or `withdrawn` is no longer
+/// demanded in any record (4.13/6.1): the record it once lived in was
+/// allowed to drop it.
+fn dropped_state(led: &Ledger, id: &str) -> bool {
+    matches!(
+        led.latest_state(id).map(|r| r.event.as_str()),
+        Some("superseded") | Some("withdrawn")
+    )
+}
+
+/// The path of a record file relative to the repo root, forward slashes,
+/// matching the ledger's `detail` convention for `approved`/`context` rows.
+fn rel_path(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+/// A file's plan/context approval state: its ledger-relative path, whether
+/// its current plan hash matches the latest `approved` row for that path,
+/// and likewise for context/`context`.
+fn file_approval(root: &Path, rf: &RecordFile, led: &Ledger) -> (String, bool, bool) {
+    let rel = rel_path(root, &rf.path);
+    let plan_h = record::plan_hash(rf);
+    let ctx_h = record::context_hash(rf);
+    let plan_ok = led
+        .latest_for_path("approved", &rel)
+        .map(|r| r.hash == plan_h)
+        .unwrap_or(false);
+    let ctx_ok = led
+        .latest_for_path("context", &rel)
+        .map(|r| r.hash == ctx_h)
+        .unwrap_or(false);
+    (rel, plan_ok, ctx_ok)
+}
+
 fn check_parse(records: &[RecordFile]) -> Vec<Failure> {
     let mut out = Vec::new();
     for rf in records {
+        for e in &rf.shape_errors {
+            out.push(Failure {
+                check: "parse".to_string(),
+                id: None,
+                message: format!("{}: {}", rf.path.display(), e),
+            });
+        }
         for sec in &rf.sections {
             for e in &sec.parse_errors {
+                out.push(Failure {
+                    check: "parse".to_string(),
+                    id: sec.id.clone(),
+                    message: format!("{}: {}: {}", rf.path.display(), sec.heading_text, e),
+                });
+            }
+            for e in &sec.shape_errors {
                 out.push(Failure {
                     check: "parse".to_string(),
                     id: sec.id.clone(),
@@ -73,6 +143,10 @@ fn check_ids(records: &[RecordFile], led: &Ledger) -> Vec<Failure> {
     let mut seen: HashMap<String, String> = HashMap::new();
     for rf in records {
         for sec in &rf.sections {
+            // Skeleton headings never fail anything, including ids.
+            if sec.is_skeleton {
+                continue;
+            }
             match &sec.id {
                 None => out.push(Failure {
                     check: "ids".to_string(),
@@ -114,6 +188,9 @@ fn check_ids(records: &[RecordFile], led: &Ledger) -> Vec<Failure> {
         }
     }
     for id in ledger_ids {
+        if dropped_state(led, &id) {
+            continue;
+        }
         if !seen.contains_key(&id) {
             out.push(Failure {
                 check: "ids".to_string(),
@@ -122,6 +199,26 @@ fn check_ids(records: &[RecordFile], led: &Ledger) -> Vec<Failure> {
             });
         }
     }
+
+    for rf in records {
+        for sec in &rf.sections {
+            let Some(id) = &sec.id else { continue };
+            if let Some(row) = led.latest_state(id) {
+                if row.event == "withdrawn" {
+                    out.push(Failure {
+                        check: "ids".to_string(),
+                        id: Some(id.clone()),
+                        message: format!(
+                            "withdrawn id {} still present in {}",
+                            id,
+                            rf.path.display()
+                        ),
+                    });
+                }
+            }
+        }
+    }
+
     out
 }
 
@@ -157,7 +254,7 @@ fn check_ledger(
         .collect();
 
     for row in &led.rows {
-        if row.event == "asked" && !all_ids.contains(&row.id) {
+        if row.event == "asked" && !all_ids.contains(&row.id) && !dropped_state(led, &row.id) {
             out.push(Failure {
                 check: "ledger".to_string(),
                 id: Some(row.id.clone()),
@@ -399,6 +496,219 @@ fn missing_deny_entry(entry: &str) -> Failure {
             entry
         ),
     }
+}
+
+/// `plan`: per file, compares the current plan/context hash against the
+/// latest `approved`/`context` ledger rows for that path. Returns the
+/// failures plus the sorted, deduped list of paths still awaiting approval
+/// (printed as a summary line by the caller, not a failure by itself).
+fn check_plan(root: &Path, records: &[RecordFile], led: &Ledger) -> (Vec<Failure>, Vec<String>) {
+    let mut out = Vec::new();
+    let mut awaiting: Vec<String> = Vec::new();
+    let mut heading_files: HashMap<String, Vec<String>> = HashMap::new();
+
+    for rf in records {
+        let (rel, plan_ok, ctx_ok) = file_approval(root, rf, led);
+        if !plan_ok || !ctx_ok {
+            awaiting.push(rel.clone());
+        }
+        if !plan_ok {
+            for sec in &rf.sections {
+                if !sec.is_skeleton {
+                    out.push(Failure {
+                        check: "plan".to_string(),
+                        id: sec.id.clone(),
+                        message: format!(
+                            "{}: body under unapproved heading \"{}\"",
+                            rel, sec.heading_text
+                        ),
+                    });
+                }
+            }
+        }
+        for sec in &rf.sections {
+            if sec.kind == Kind::Question {
+                heading_files
+                    .entry(sec.heading_text.clone())
+                    .or_default()
+                    .push(rel.clone());
+            }
+        }
+    }
+
+    let mut headings: Vec<&String> = heading_files.keys().collect();
+    headings.sort();
+    for heading in headings {
+        let mut paths = heading_files[heading].clone();
+        paths.sort();
+        paths.dedup();
+        if paths.len() > 1 {
+            out.push(Failure {
+                check: "plan".to_string(),
+                id: None,
+                message: format!(
+                    "duplicate heading \"{}\" in {} and {}",
+                    heading, paths[0], paths[1]
+                ),
+            });
+        }
+    }
+
+    awaiting.sort();
+    awaiting.dedup();
+    (out, awaiting)
+}
+
+/// `terms`: shape/owner errors on `adrdom/terms.md`, whether its hash
+/// matches the latest `terms` ledger row (awaiting, not a failure), every
+/// asked/answered section's `terms:` binding re-checked against today's
+/// resolution, retired bound terms, and a banned-word scan over every
+/// record file. Returns the failures plus whether the terms file itself is
+/// awaiting approval.
+fn check_terms(root: &Path, records: &[RecordFile], led: &Ledger) -> (Vec<Failure>, bool) {
+    let mut out = Vec::new();
+    let terms_path = root.join("adrdom/terms.md");
+    if !terms_path.is_file() {
+        return (out, false);
+    }
+
+    let tf = match terms::load(&terms_path) {
+        Ok(tf) => tf,
+        Err(e) => {
+            out.push(Failure {
+                check: "terms".to_string(),
+                id: None,
+                message: format!("adrdom/terms.md: cannot read: {}", e),
+            });
+            return (out, false);
+        }
+    };
+
+    for e in &tf.errors {
+        out.push(Failure {
+            check: "terms".to_string(),
+            id: None,
+            message: format!("adrdom/terms.md: {}", e),
+        });
+    }
+    for e in terms::check_owners(&tf, root) {
+        out.push(Failure {
+            check: "terms".to_string(),
+            id: None,
+            message: format!("adrdom/terms.md: {}", e),
+        });
+    }
+
+    let file_hash = terms::file_hash(&tf);
+    let awaiting = led
+        .latest_for_path("terms", "adrdom/terms.md")
+        .map(|r| r.hash != file_hash)
+        .unwrap_or(true);
+
+    for rf in records {
+        let rel = rel_path(root, &rf.path);
+        for sec in &rf.sections {
+            let (Some(tl), Some(id)) = (sec.terms_line, &sec.id) else {
+                continue;
+            };
+            let state = led.latest_state(id).map(|r| r.event.as_str());
+            if !matches!(state, Some("asked") | Some("answered")) {
+                continue;
+            }
+            let old_pairs = terms::parse_terms_line(rf.lines[tl].trim_end()).unwrap_or_default();
+
+            // Re-resolve the section text (heading through hash end),
+            // leaving out the `terms:` line itself: `ask` always
+            // (re)writes that line from a resolution computed before the
+            // line exists, so re-including it here would let a term whose
+            // own name is its key falsely "resolve" against itself.
+            let (s, e) = record::hash_range(&rf.lines, sec);
+            let mut text_lines: Vec<&str> = Vec::new();
+            for (offset, line) in rf.lines[s..e].iter().enumerate() {
+                if s + offset == tl {
+                    continue;
+                }
+                text_lines.push(line.as_str());
+            }
+            let text = text_lines.join("\n");
+            let new_pairs = terms::resolve(&text, &tf.terms);
+
+            let old_map: HashMap<&str, &str> = old_pairs
+                .iter()
+                .map(|(w, i)| (w.as_str(), i.as_str()))
+                .collect();
+            let new_map: HashMap<&str, &str> = new_pairs
+                .iter()
+                .map(|(w, i)| (w.as_str(), i.as_str()))
+                .collect();
+            let mut words: Vec<&str> = old_map.keys().chain(new_map.keys()).cloned().collect();
+            words.sort();
+            words.dedup();
+            for w in words {
+                if old_map.get(w) != new_map.get(w) {
+                    let now = new_map
+                        .get(w)
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| "none".to_string());
+                    out.push(Failure {
+                        check: "terms".to_string(),
+                        id: Some(id.clone()),
+                        message: format!(
+                            "{}: {}: binding changed ({} now {})",
+                            rel, sec.heading_text, w, now
+                        ),
+                    });
+                }
+            }
+
+            let mut retired_reported: HashSet<String> = HashSet::new();
+            for (_, tid) in &old_pairs {
+                if let Some(t) = tf.terms.iter().find(|t| t.id.as_deref() == Some(tid.as_str())) {
+                    if t.retired && retired_reported.insert(t.id.clone().unwrap_or_default()) {
+                        out.push(Failure {
+                            check: "terms".to_string(),
+                            id: Some(id.clone()),
+                            message: format!(
+                                "{}: {}: bound term \"{}\" is retired",
+                                rel, sec.heading_text, t.name
+                            ),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    for rf in records {
+        let rel = rel_path(root, &rf.path);
+        let full_text = rf.lines.join("\n");
+        for (line_no, word, name) in terms::banned_hits(&full_text, &tf.terms) {
+            out.push(Failure {
+                check: "terms".to_string(),
+                id: None,
+                message: format!("{}:{}: banned word \"{}\" (term {})", rel, line_no, word, name),
+            });
+        }
+    }
+
+    (out, awaiting)
+}
+
+/// `done`: every file whose plan and context are approved and whose every
+/// h3/principle section carries an answer line (4.15).
+fn check_done(root: &Path, records: &[RecordFile], led: &Ledger) -> Vec<String> {
+    let mut out = Vec::new();
+    for rf in records {
+        let (rel, plan_ok, ctx_ok) = file_approval(root, rf, led);
+        if !plan_ok || !ctx_ok {
+            continue;
+        }
+        if rf.sections.iter().all(|s| s.answer_line.is_some()) {
+            out.push(rel);
+        }
+    }
+    out.sort();
+    out
 }
 
 fn check_ties(root: &Path, records: &[RecordFile], led: &Ledger) -> (Vec<Failure>, usize, usize) {
