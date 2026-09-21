@@ -689,7 +689,11 @@ fn check_terms(
     let lines = record::split_lines(&content);
     let tf = terms::parse(&lines);
 
-    for e in &tf.errors {
+    // A missing id is not a shape error the agent can fix: only approve
+    // mints ids. It is reported once, as part of the approval state below,
+    // and only fails when a record exists.
+    let missing_ids = tf.errors.iter().any(|e| e.contains("missing id"));
+    for e in tf.errors.iter().filter(|e| !e.contains("missing id")) {
         out.push(Failure {
             check: "terms".to_string(),
             id: None,
@@ -703,7 +707,7 @@ fn check_terms(
         .map(|r| r.hash == file_hash)
         .unwrap_or(false);
     let mut awaiting = false;
-    if !approved {
+    if !approved || missing_ids {
         if has_records {
             out.push(Failure {
                 check: "terms".to_string(),
