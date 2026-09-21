@@ -4,9 +4,21 @@ use crate::ledger::{self, Ledger};
 use crate::record::{self, RecordFile, Section};
 use crate::repo;
 use crate::state;
-use crate::terms;
-use std::collections::HashMap;
+use crate::terms::{self, Term};
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use std::sync::OnceLock;
+
+/// The shipped list of common English words (`src/common_words.txt`, one
+/// word per line, lowercase): words that never need an entry to explain
+/// them, so the "No entry" line under a question only names words that
+/// might. Not governed data — it ships with the binary.
+static COMMON_WORDS: &str = include_str!("common_words.txt");
+
+fn common_words() -> &'static HashSet<&'static str> {
+    static SET: OnceLock<HashSet<&'static str>> = OnceLock::new();
+    SET.get_or_init(|| COMMON_WORDS.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect())
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QState {
@@ -25,6 +37,14 @@ pub struct OptionView {
     pub costs: Option<String>,
 }
 
+/// One word on a section's terms line (or its live resolution), paired
+/// with the entry it names.
+pub struct WordPair {
+    pub word: String,
+    pub term_name: String,
+    pub definition: String,
+}
+
 pub struct QuestionView {
     pub id: Option<String>,
     pub heading: String,
@@ -36,6 +56,13 @@ pub struct QuestionView {
     pub answer: Option<char>,
     pub supersedes: Vec<String>,
     pub ties: usize,
+    /// Every word=entry pairing on this section's terms line (locked or
+    /// asked), or computed live over the section text when it has none yet.
+    pub words: Vec<WordPair>,
+    /// Distinct words (lowercased) in the section text that pair no entry:
+    /// not common English, not a uuid or number, not shorter than three
+    /// letters, and not already covered (plural rule included) by `words`.
+    pub no_entry: Vec<String>,
 }
 
 pub struct FileView {
@@ -49,11 +76,39 @@ pub struct FileView {
     pub questions: Vec<QuestionView>,
 }
 
+/// One `## name` entry in `adrdom/terms.md`, as shown on the page.
+pub struct TermEntryView {
+    pub name: String,
+    pub retired: bool,
+    pub definition: String,
+    pub aliases: Vec<String>,
+    /// The number of in-force decisions whose terms line carries this
+    /// entry's uuid.
+    pub dependents: usize,
+}
+
+/// An entry whose definition or aliases differ from the last approved
+/// (HEAD) version of `adrdom/terms.md`, shown only while the working
+/// copy is unapproved.
+pub struct TermDiffView {
+    pub name: String,
+    pub before_definition: String,
+    pub after_definition: String,
+    pub before_aliases: Vec<String>,
+    pub after_aliases: Vec<String>,
+    /// "<path>: <heading>" for every in-force decision carrying this entry.
+    pub dependents: Vec<String>,
+}
+
 pub struct TermsView {
     pub path: String,
     pub approved: bool,
     pub count: usize,
+    /// Shape errors from parsing, plus one "circular definition: a -> b ->
+    /// a" line per cycle `terms::cycles` finds.
     pub errors: Vec<String>,
+    pub entries: Vec<TermEntryView>,
+    pub diffs: Vec<TermDiffView>,
 }
 
 pub struct CheckReport {
@@ -135,11 +190,113 @@ fn open_group_and_waits_on(rf: &RecordFile, led: &Ledger) -> (Option<String>, Op
     (open_group, waits_on)
 }
 
+/// Every word=entry pairing for `sec` (from its terms line if it has one,
+/// else computed live over its text) plus the distinct words in that text
+/// that pair no entry (7.9): not common English, not a uuid or number, not
+/// shorter than three letters, and not covered by a pairing (the plural
+/// rule applies: a word whose trailing "s"/"es" strips to a current name or
+/// alias counts as covered even if it isn't itself a pairing's word).
+fn section_words(rf: &RecordFile, sec: &Section, terms_list: &[Term]) -> (Vec<WordPair>, Vec<String>) {
+    let text = state::section_text_excluding_terms_line(&rf.lines, sec);
+    let pairs: Vec<(String, String)> = match sec.terms_line {
+        Some(tl) => terms::parse_terms_line(rf.lines[tl].trim_end()).unwrap_or_default(),
+        None => terms::resolve(&text, terms_list),
+    };
+
+    let mut words = Vec::new();
+    for (w, tid) in &pairs {
+        if let Some(t) = terms_list.iter().find(|t| t.id.as_deref() == Some(tid.as_str())) {
+            words.push(WordPair {
+                word: w.clone(),
+                term_name: t.name.clone(),
+                definition: t.definition.clone(),
+            });
+        }
+    }
+
+    let no_entry = no_entry_words(&text, &pairs, terms_list);
+    (words, no_entry)
+}
+
+fn tokenize(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    for c in text.chars() {
+        if c.is_alphanumeric() {
+            cur.push(c);
+        } else if !cur.is_empty() {
+            out.push(std::mem::take(&mut cur));
+        }
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
+fn looks_like_uuid_token(w: &str) -> bool {
+    w.len() == 32 && w.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+fn no_entry_words(text: &str, pairs: &[(String, String)], terms_list: &[Term]) -> Vec<String> {
+    let mut pair_words: HashSet<String> = HashSet::new();
+    for (w, _) in pairs {
+        for part in w.to_lowercase().split_whitespace() {
+            pair_words.insert(part.to_string());
+        }
+    }
+    let mut name_alias: HashSet<String> = HashSet::new();
+    for t in terms_list {
+        name_alias.insert(t.name.trim().to_lowercase());
+        for a in &t.aliases {
+            name_alias.insert(a.trim().to_lowercase());
+        }
+    }
+
+    let common = common_words();
+    let mut found: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for line in text.split('\n') {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("id:") || trimmed.starts_with("supersedes:") {
+            continue;
+        }
+        for tok in tokenize(line) {
+            let w = tok.to_lowercase();
+            if w.chars().count() < 3 {
+                continue;
+            }
+            if w.chars().all(|c| c.is_ascii_digit()) {
+                continue;
+            }
+            if looks_like_uuid_token(&w) {
+                continue;
+            }
+            if common.contains(w.as_str()) {
+                continue;
+            }
+            if pair_words.contains(&w) {
+                continue;
+            }
+            let plural_covered = w
+                .strip_suffix("es")
+                .map(|s| name_alias.contains(s))
+                .unwrap_or(false)
+                || w.strip_suffix('s').map(|s| name_alias.contains(s)).unwrap_or(false);
+            if plural_covered {
+                continue;
+            }
+            found.insert(w);
+        }
+    }
+    found.into_iter().collect()
+}
+
 fn build_question_view(
     rf: &RecordFile,
     sec: &Section,
     led: &Ledger,
     tie_idx: &HashMap<String, Vec<String>>,
+    terms_list: &[Term],
 ) -> QuestionView {
     let state = qstate(led, sec);
     let group = sec
@@ -172,6 +329,7 @@ fn build_question_view(
         .and_then(|id| tie_idx.get(id))
         .map(|v| v.len())
         .unwrap_or(0);
+    let (words, no_entry) = section_words(rf, sec, terms_list);
 
     QuestionView {
         id: sec.id.clone(),
@@ -184,6 +342,8 @@ fn build_question_view(
         answer: sec.answer_letter(),
         supersedes: sec.supersedes.clone(),
         ties,
+        words,
+        no_entry,
     }
 }
 
@@ -192,6 +352,7 @@ fn build_file_view(
     rf: &RecordFile,
     led: &Ledger,
     tie_idx: &HashMap<String, Vec<String>>,
+    terms_list: &[Term],
 ) -> FileView {
     let path = state::rel_path(root, &rf.path);
     let plan_approved = state::plan_approved(led, rf, &path);
@@ -202,7 +363,7 @@ fn build_file_view(
     let questions = rf
         .sections
         .iter()
-        .map(|sec| build_question_view(rf, sec, led, tie_idx))
+        .map(|sec| build_question_view(rf, sec, led, tie_idx, terms_list))
         .collect();
 
     FileView {
@@ -217,28 +378,137 @@ fn build_file_view(
     }
 }
 
+/// "circular definition: a -> b -> a" (the cycle's names, in traversal
+/// order, closed by repeating the first at the end).
+fn format_cycle(names: &[String]) -> String {
+    let mut chain = names.to_vec();
+    if let Some(first) = names.first() {
+        chain.push(first.clone());
+    }
+    format!("circular definition: {}", chain.join(" -> "))
+}
+
+/// Every in-force decision's terms-line pairing, id -> "<path>: <heading>"
+/// per decision that carries it (a decision counted once per entry even if
+/// its line pairs the entry through more than one word).
+fn dependents_by_entry(root: &Path, led: &Ledger) -> HashMap<String, Vec<String>> {
+    let mut dependents: HashMap<String, Vec<String>> = HashMap::new();
+    for f in repo::list_decision_files(root) {
+        let Ok(rf) = record::load(&f) else { continue };
+        let rel = state::rel_path(root, &rf.path);
+        for sec in &rf.sections {
+            let Some(id) = &sec.id else { continue };
+            if !state::is_in_force(led, id) {
+                continue;
+            }
+            let Some(tl) = sec.terms_line else { continue };
+            let pairs = terms::parse_terms_line(rf.lines[tl].trim_end()).unwrap_or_default();
+            let mut seen_here: HashSet<String> = HashSet::new();
+            for (_, tid) in pairs {
+                if seen_here.insert(tid.clone()) {
+                    dependents
+                        .entry(tid)
+                        .or_default()
+                        .push(format!("{}: {}", rel, sec.heading_text));
+                }
+            }
+        }
+    }
+    dependents
+}
+
+/// Entries, dependents-per-entry, and (while unapproved) before/after diffs
+/// against the last approved (HEAD) version of `adrdom/terms.md` (7.9).
+fn build_terms_view(root: &Path, led: &Ledger, tf: terms::TermsFile) -> TermsView {
+    let approved = state::terms_approved(led, &tf);
+    let dependents = dependents_by_entry(root, led);
+
+    let mut errors = tf.errors.clone();
+    for c in terms::cycles(&tf) {
+        errors.push(format_cycle(&c));
+    }
+
+    let entries: Vec<TermEntryView> = tf
+        .terms
+        .iter()
+        .map(|t| TermEntryView {
+            name: t.name.clone(),
+            retired: t.retired,
+            definition: t.definition.clone(),
+            aliases: t.aliases.clone(),
+            dependents: t
+                .id
+                .as_ref()
+                .and_then(|id| dependents.get(id))
+                .map(|v| v.len())
+                .unwrap_or(0),
+        })
+        .collect();
+
+    let mut diffs: Vec<TermDiffView> = Vec::new();
+    if !approved {
+        if let Some(latest) = led.latest_for_path("terms", "adrdom/terms.md") {
+            if let Some(head_content) = repo::git(root, &["show", "HEAD:adrdom/terms.md"]) {
+                let head_tf = terms::parse(&record::split_lines(&head_content));
+                if terms::file_hash(&head_tf) == latest.hash {
+                    for t in &tf.terms {
+                        let old = t
+                            .id
+                            .as_ref()
+                            .and_then(|id| {
+                                head_tf.terms.iter().find(|o| o.id.as_deref() == Some(id.as_str()))
+                            })
+                            .or_else(|| head_tf.terms.iter().find(|o| o.name == t.name));
+                        let Some(old_t) = old else { continue };
+                        if old_t.definition == t.definition && old_t.aliases == t.aliases {
+                            continue;
+                        }
+                        diffs.push(TermDiffView {
+                            name: t.name.clone(),
+                            before_definition: old_t.definition.clone(),
+                            after_definition: t.definition.clone(),
+                            before_aliases: old_t.aliases.clone(),
+                            after_aliases: t.aliases.clone(),
+                            dependents: t
+                                .id
+                                .as_ref()
+                                .and_then(|id| dependents.get(id))
+                                .cloned()
+                                .unwrap_or_default(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    let count = tf.terms.len();
+    TermsView {
+        path: "adrdom/terms.md".to_string(),
+        approved,
+        count,
+        errors,
+        entries,
+        diffs,
+    }
+}
+
 pub fn snapshot(root: &Path) -> Snapshot {
     let ledger_path = root.join("adrdom/state/ledger.tsv");
     let led = ledger::read(&ledger_path);
     let tie_idx = check::tie_index(root);
 
+    let terms_opt = state::load_terms(root);
+    let terms_list: Vec<Term> = terms_opt.as_ref().map(|tf| tf.terms.clone()).unwrap_or_default();
+
     let mut files: Vec<FileView> = Vec::new();
     for f in repo::list_decision_files(root) {
         if let Ok(rf) = record::load(&f) {
-            files.push(build_file_view(root, &rf, &led, &tie_idx));
+            files.push(build_file_view(root, &rf, &led, &tie_idx, &terms_list));
         }
     }
 
-    let terms = state::load_terms(root).map(|tf| {
-        let mut errors = tf.errors.clone();
-        errors.extend(terms::check_owners(&tf, root));
-        TermsView {
-            path: "adrdom/terms.md".to_string(),
-            approved: state::terms_approved(&led, &tf),
-            count: tf.terms.len(),
-            errors,
-        }
-    });
+    let terms = terms_opt.map(|tf| build_terms_view(root, &led, tf));
 
     let report = check::collect_with_ties(root, &tie_idx);
     let check_report = CheckReport {
@@ -502,7 +772,7 @@ Standard: s2.\n\n\
         let tie_idx = HashMap::new();
 
         // Nothing approved yet, nothing answered: not done.
-        let fv = build_file_view(&dir, &rf, &led, &tie_idx);
+        let fv = build_file_view(&dir, &rf, &led, &tie_idx, &[]);
         assert!(!fv.done);
 
         // Approve plan/context (hashes are computed from the unanswered
@@ -526,7 +796,7 @@ Standard: s2.\n\n\
             rf2.sections.iter().all(|s| s.answer_line.is_some()),
             "fixture should have every section answered"
         );
-        let fv2 = build_file_view(&dir, &rf2, &led2, &tie_idx);
+        let fv2 = build_file_view(&dir, &rf2, &led2, &tie_idx, &[]);
         assert!(fv2.plan_approved);
         assert!(fv2.context_approved);
         assert!(fv2.done);

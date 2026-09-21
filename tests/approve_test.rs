@@ -298,10 +298,7 @@ const TERMS_BASIC: &str = "# Terms\n\n\
 ## decision\n\
 id: 11111111-1111-1111-1111-111111111111\n\
 definition: A choice locked by the owner.\n\
-test: Does the owner have to choose among options?\n\
-owner: adrdom/decisions/example.md\n\
-aliases: \n\
-banned: \n";
+aliases: \n";
 
 #[test]
 fn ask_refuses_while_terms_unapproved() {
@@ -325,10 +322,7 @@ fn ask_refuses_while_terms_unapproved() {
 const TERMS_NO_IDS: &str = "# Terms\n\n\
 ## decision\n\
 definition: A choice locked by the owner.\n\
-test: Does the owner have to choose among options?\n\
-owner: adrdom/decisions/example.md\n\
-aliases: \n\
-banned: \n";
+aliases: \n";
 
 #[test]
 fn approve_fills_missing_term_ids() {
@@ -400,35 +394,23 @@ const TERMS_WITH_ALIAS: &str = "# Terms\n\n\
 ## decision\n\
 id: 11111111-1111-1111-1111-111111111111\n\
 definition: A choice locked by the owner.\n\
-test: Does the owner have to choose among options?\n\
-owner: adrdom/decisions/example.md\n\
 aliases: choice\n\
-banned: \n\
 \n\
 ## verdict\n\
 id: 22222222-2222-2222-2222-222222222222\n\
 definition: A ruling reached after deliberation.\n\
-test: Is it the outcome of a formal process?\n\
-owner: adrdom/decisions/example.md\n\
-aliases: \n\
-banned: \n";
+aliases: \n";
 
 const TERMS_ALIAS_MOVED: &str = "# Terms\n\n\
 ## decision\n\
 id: 11111111-1111-1111-1111-111111111111\n\
 definition: A choice locked by the owner.\n\
-test: Does the owner have to choose among options?\n\
-owner: adrdom/decisions/example.md\n\
 aliases: \n\
-banned: \n\
 \n\
 ## verdict\n\
 id: 22222222-2222-2222-2222-222222222222\n\
 definition: A ruling reached after deliberation.\n\
-test: Is it the outcome of a formal process?\n\
-owner: adrdom/decisions/example.md\n\
-aliases: choice\n\
-banned: \n";
+aliases: choice\n";
 
 const CHOICE_QUESTION_RECORD: &str = r#"# Topic
 
@@ -481,70 +463,13 @@ fn approve_refuses_a_terms_edit_that_moves_an_alias_bound_by_an_in_force_decisio
     assert_eq!(ledger.lines().filter(|l| l.contains("\tterms\t")).count(), 1);
 }
 
-// --- approve refuses a newly banned word appearing in a record ---------
-
-const TERMS_NO_BAN: &str = "# Terms\n\n\
-## decision\n\
-id: 11111111-1111-1111-1111-111111111111\n\
-definition: A choice locked by the owner.\n\
-test: Does the owner have to choose among options?\n\
-owner: adrdom/decisions/example.md\n\
-aliases: \n\
-banned: \n";
-
-const TERMS_BANS_VERDICT: &str = "# Terms\n\n\
-## decision\n\
-id: 11111111-1111-1111-1111-111111111111\n\
-definition: A choice locked by the owner.\n\
-test: Does the owner have to choose among options?\n\
-owner: adrdom/decisions/example.md\n\
-aliases: \n\
-banned: verdict\n";
-
-const RECORD_WITH_VERDICT: &str = r#"# Topic
-
-This is the verdict on naming.
-
-## Group One
-
-### 1.1 Q?
-
-Problem: p.
-
-Standard: s.
-
-- A) x.
-  Why: y.
-"#;
-
-#[test]
-fn approve_refuses_a_new_banned_word_appearing_in_a_record_naming_file_and_line() {
-    let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
-    write_record(&dir, "adrdom/decisions/example.md", RECORD_WITH_VERDICT);
-    let terms = write_record(&dir, "adrdom/terms.md", TERMS_NO_BAN);
-    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
-        .status
-        .success());
-
-    std::fs::write(&terms, TERMS_BANS_VERDICT).unwrap();
-    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
-    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
-    let err = stderr(&out);
-    assert!(err.contains("adrdom/decisions/example.md:3"), "{}", err);
-    assert!(err.contains("verdict"), "{}", err);
-}
-
 // --- approve writes a terms row on a clean edit -------------------------
 
 const TERMS_V2: &str = "# Terms\n\n\
 ## decision\n\
 id: 11111111-1111-1111-1111-111111111111\n\
 definition: A choice locked by the owner, in writing.\n\
-test: Does the owner have to choose among options?\n\
-owner: adrdom/decisions/example.md\n\
-aliases: \n\
-banned: \n";
+aliases: \n";
 
 #[test]
 fn approve_writes_a_terms_row_on_a_clean_edit() {

@@ -25,7 +25,6 @@ pub fn run(claude: bool) -> i32 {
 
     create_if_missing(&state.join("ledger.tsv"), "");
     create_if_missing(&state.join("banned.sha256"), "");
-    create_if_missing(&state.join("unchecked.tsv"), "");
 
     let hooks = root.join(".githooks");
     fs::create_dir_all(&hooks).ok();

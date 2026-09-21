@@ -48,6 +48,53 @@ fn unban_reports_nothing_to_remove() {
 }
 
 #[test]
+fn unban_rewrites_two_column_lines() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+
+    let term_id = "33333333-3333-3333-3333-333333333333";
+    let terms_content = format!(
+        "# Terms\n\n## widget\nid: {}\ndefinition: A small thing.\naliases: \n",
+        term_id
+    );
+    std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
+
+    assert!(adr(&dir, &["ban", "--term", "widget"], &[], "forbiddenword\n")
+        .status
+        .success());
+    assert!(adr(&dir, &["ban"], &[], "plainword\n").status.success());
+
+    let before = std::fs::read_to_string(dir.join("adrdom/state/banned.sha256")).unwrap();
+    assert_eq!(before.lines().count(), 2, "{}", before);
+    assert!(
+        before.lines().any(|l| l.ends_with(&format!(" {}", term_id))),
+        "expected a two-column line before unban: {}",
+        before
+    );
+    assert!(
+        before.lines().any(|l| !l.contains(' ')),
+        "expected a single-column line before unban: {}",
+        before
+    );
+
+    let out = adr_owner(&dir, &["unban"], "forbiddenword\n");
+    assert!(out.status.success(), "unban failed: {}", stderr(&out));
+
+    let after = std::fs::read_to_string(dir.join("adrdom/state/banned.sha256")).unwrap();
+    assert_eq!(after.lines().count(), 1, "{}", after);
+    assert!(
+        !after.contains(term_id),
+        "removed line's uuid must not remain: {}",
+        after
+    );
+    assert!(
+        !after.trim().contains(' '),
+        "remaining line should carry no uuid column: {}",
+        after
+    );
+}
+
+#[test]
 fn unban_refuses_when_claudecode_is_set() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
