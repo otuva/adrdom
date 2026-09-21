@@ -40,11 +40,11 @@ fn check_passes_on_a_clean_repo() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let (_record, id) = lock_one_question(&dir);
-    write_unchecked(&dir, &id, "not wired to a test yet");
+    write_tie(&dir, &id);
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "check should pass: {}", stdout(&out));
-    assert!(stdout(&out).contains("ties: 0 tied, 1 unchecked"));
+    assert!(stdout(&out).contains("ties: 1 tied"));
 }
 
 #[test]
@@ -121,7 +121,7 @@ fn check_answers_failure_hand_written_answer_line() {
 }
 
 #[test]
-fn check_banned_default_and_message_modes_never_print_the_text() {
+fn check_banned_default_and_message_modes_name_the_word() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
 
@@ -137,11 +137,9 @@ fn check_banned_default_and_message_modes_never_print_the_text() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let out_text = stdout(&out);
-    assert!(out_text.contains("banned:"), "{}", out_text);
-    assert!(out_text.contains("notes.txt:1"), "{}", out_text);
     assert!(
-        !out_text.to_lowercase().contains("forbiddenword"),
-        "leaked banned text: {}",
+        out_text.contains("banned: notes.txt:1: banned word \"forbiddenword\""),
+        "{}",
         out_text
     );
 
@@ -156,31 +154,25 @@ fn check_banned_default_and_message_modes_never_print_the_text() {
     );
     assert!(!out2.status.success());
     let out2_text = stdout(&out2);
-    assert!(out2_text.contains("banned:"), "{}", out2_text);
-    assert!(out2_text.contains("COMMIT_EDITMSG:1"), "{}", out2_text);
     assert!(
-        !out2_text.to_lowercase().contains("forbiddenword"),
-        "leaked banned text: {}",
+        out2_text.contains("COMMIT_EDITMSG:1: banned word \"forbiddenword\""),
+        "{}",
         out2_text
     );
 }
 
 #[test]
-fn check_ties_failure_when_no_tie_and_not_unchecked() {
+fn check_ties_failure_when_no_tie() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let (_record, _id) = lock_one_question(&dir);
-    // No tie line and no unchecked.tsv entry for `id`.
+    // No tie recorded anywhere for the id.
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let out_text = stdout(&out);
     assert!(out_text.contains("ties:"), "{}", out_text);
-    assert!(
-        out_text.contains("no tie and not listed as unchecked"),
-        "{}",
-        out_text
-    );
+    assert!(out_text.contains("no tie"), "{}", out_text);
 }
 
 #[test]
@@ -236,7 +228,7 @@ fn check_ties_ignores_adr_prefix_that_is_not_a_uuid() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let (_record, id) = lock_one_question(&dir);
-    write_unchecked(&dir, &id, "not wired to a test yet");
+    write_tie(&dir, &id);
     // Prose that happens to contain "adr:" followed by a non-uuid token,
     // like a doc comment in the tool's own source, is not a tie.
     std::fs::write(
@@ -248,7 +240,7 @@ fn check_ties_ignores_adr_prefix_that_is_not_a_uuid() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "check should pass: {}", stdout(&out));
-    assert!(stdout(&out).contains("ties: 0 tied, 1 unchecked"));
+    assert!(stdout(&out).contains("ties: 1 tied"));
 }
 
 #[test]
@@ -528,7 +520,7 @@ fn check_prints_done_for_a_fully_answered_approved_file() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let (_record, id) = lock_one_question(&dir);
-    write_unchecked(&dir, &id, "not wired to a test yet");
+    write_tie(&dir, &id);
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));

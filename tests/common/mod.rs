@@ -140,11 +140,15 @@ pub fn extract_ids(content: &str) -> Vec<String> {
         .collect()
 }
 
-pub fn write_unchecked(dir: &Path, id: &str, reason: &str) {
-    let path = dir.join("adrdom/state/unchecked.tsv");
+/// Records a genuine tie for `id`: appends `adr: <id>` to a tracked,
+/// non-`adrdom/` file and `git add`s it, the same shape `check`'s tie scan
+/// looks for (a full uuid right after `adr: ` in a tracked file).
+pub fn write_tie(dir: &Path, id: &str) {
+    let path = dir.join("tie.txt");
     let mut content = std::fs::read_to_string(&path).unwrap_or_default();
-    content.push_str(&format!("{}\t{}\n", id, reason));
+    content.push_str(&format!("adr: {}\n", id));
     std::fs::write(&path, content).unwrap();
+    run_git(dir, &["add", "tie.txt"]);
 }
 
 // --- Plan/context approval, without depending on `adr approve` -----------
