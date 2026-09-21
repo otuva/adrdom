@@ -162,6 +162,45 @@ fn check_fails_when_banned_file_and_ledger_disagree_both_ways() {
 }
 
 #[test]
+fn ban_ignores_a_word_present_only_in_a_ledger_row_detail() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+
+    // As `adr ask` would have written for a question heading that
+    // mentioned "gadgetword", followed by the row `adr lock` writes once
+    // that section is superseded (the section itself then deleted from
+    // the record, per the fixture's premise). The word now lives only in
+    // this `asked` row's detail column.
+    append_ledger_row(
+        &dir,
+        "asked",
+        "33333333-3333-3333-3333-333333333333",
+        "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        "1.1 What handles gadgetword?",
+    );
+    append_ledger_row(
+        &dir,
+        "superseded",
+        "33333333-3333-3333-3333-333333333333",
+        "-",
+        "44444444-4444-4444-4444-444444444444",
+    );
+
+    // history is not scanned: the ledger copy of the word never blocks `ban`.
+    let out = adr(&dir, &["ban"], &[], "gadgetword\n");
+    assert!(out.status.success(), "ban failed: {}", stderr(&out));
+
+    let banned = std::fs::read_to_string(dir.join("adrdom/state/banned.sha256")).unwrap();
+    assert!(!banned.trim().is_empty(), "{}", banned);
+
+    // ...nor does `check`'s scanner report it once banned.
+    let out2 = adr(&dir, &["check"], &[], "");
+    assert!(out2.status.success(), "check failed: {}", stdout(&out2));
+    let text = stdout(&out2);
+    assert!(!text.contains("banned word \"gadgetword\""), "{}", text);
+}
+
+#[test]
 fn check_passes_when_banned_file_and_ledger_agree() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());

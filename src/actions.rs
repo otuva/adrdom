@@ -163,7 +163,8 @@ pub fn do_approve(root: &Path, file: &Path) -> Result<Outcome, String> {
 /// where they were carried, for approve's step 4.
 struct Dependent {
     /// `<rel>: "<heading>"` for a decision, or `entry "<name>"` for an
-    /// entry's own (stale, machine-written) terms line.
+    /// entry's own definition pairs (freshly computed from the new file,
+    /// never read from a stale terms line).
     source: String,
     pairs: Vec<(String, String)>,
 }
@@ -216,8 +217,16 @@ fn do_approve_terms(
         return Err(msg);
     }
 
-    // Every in-force decision, and every non-retired entry's own
-    // (pre-existing, stale-until-step-6) terms line, is a dependent.
+    // Fresh definition pairs for every entry (the new file, after
+    // `mint_ids`, never re-derived from a stale terms line in the file).
+    // Computed once and reused for the dependents check below, the write
+    // in step 6, and step 7's entry-dependent print.
+    let pairs_per_entry: Vec<Vec<(String, String)>> = (0..tf.terms.len())
+        .map(|i| terms::definition_pairs(&tf, i))
+        .collect();
+
+    // Every in-force decision's terms line, and every non-retired entry's
+    // fresh definition pairs, is a dependent.
     let files = repo::list_decision_files(root);
     let mut loaded: Vec<(String, RecordFile)> = Vec::new();
     for f in &files {
@@ -242,17 +251,13 @@ fn do_approve_terms(
             });
         }
     }
-    for t in &tf.terms {
+    for (i, t) in tf.terms.iter().enumerate() {
         if t.retired {
             continue;
         }
-        let Some(line) = &t.terms_line else { continue };
-        let Some(pairs) = terms::parse_terms_line(line) else {
-            continue;
-        };
         dependents.push(Dependent {
             source: format!("entry \"{}\"", t.name),
-            pairs,
+            pairs: pairs_per_entry[i].clone(),
         });
     }
 
@@ -325,12 +330,8 @@ fn do_approve_terms(
         }
     }
 
-    // Step 6: write the file. `terms:` lines are computed fresh from each
-    // entry's current definition, one entry at a time, in the same order
-    // as `tf.terms`.
-    let pairs_per_entry: Vec<Vec<(String, String)>> = (0..tf.terms.len())
-        .map(|i| terms::definition_pairs(&tf, i))
-        .collect();
+    // Step 6: write the file. `terms:` lines use the fresh pairs computed
+    // above, one entry at a time, in the same order as `tf.terms`.
     let mut new_lines = tf.lines.clone();
     terms::write_terms_lines(&mut new_lines, &tf, &pairs_per_entry);
     tf.lines = new_lines;
@@ -392,15 +393,11 @@ fn do_approve_terms(
                             }
                         }
                     }
-                    for t2 in &tf.terms {
+                    for (i, t2) in tf.terms.iter().enumerate() {
                         if t2.retired {
                             continue;
                         }
-                        let Some(line) = &t2.terms_line else { continue };
-                        let Some(pairs) = terms::parse_terms_line(line) else {
-                            continue;
-                        };
-                        if pairs.iter().any(|(_, pid)| pid == tid) {
+                        if pairs_per_entry[i].iter().any(|(_, pid)| pid == tid) {
                             out.push(format!("  entry: {}", t2.name));
                         }
                     }

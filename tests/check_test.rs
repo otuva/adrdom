@@ -688,21 +688,46 @@ fn check_notes_an_entry_paired_by_nothing() {
     );
 }
 
+const GOOD_TERMS: &str = "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice.\naliases: \n";
+const BAD_TERMS: &str = "not a terms file at all\n";
+
 #[test]
 fn check_staged_reads_terms_from_the_index() {
-    let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    // A bad staged copy is caught even though the working tree looks
+    // fine: `check --staged` must read the index, not the working file.
+    {
+        let dir = init_repo();
+        assert!(adr(&dir, &["init"], &[], "").status.success());
 
-    let staged_content = "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice.\naliases: \n";
-    std::fs::write(dir.join("adrdom/terms.md"), staged_content).unwrap();
-    run_git(&dir, &["add", "adrdom/terms.md"]);
-    // The working tree copy now has a shape error the staged copy does
-    // not: `check --staged` must read the index, not this file.
-    std::fs::write(dir.join("adrdom/terms.md"), "not a terms file at all\n").unwrap();
+        std::fs::write(dir.join("adrdom/terms.md"), BAD_TERMS).unwrap();
+        run_git(&dir, &["add", "adrdom/terms.md"]);
+        // The working tree copy is fixed, but that fix was never staged.
+        std::fs::write(dir.join("adrdom/terms.md"), GOOD_TERMS).unwrap();
 
-    let out = adr(&dir, &["check", "--staged"], &[], "");
-    let text = stdout(&out);
-    assert!(!text.contains("missing h1"), "{}", text);
+        let out = adr(&dir, &["check", "--staged"], &[], "");
+        let text = stdout(&out);
+        assert!(text.contains("missing h1"), "{}", text);
+    }
+
+    // A good copy already committed -- not part of this commit's staged
+    // diff at all -- is still read from the index: a dirty, unstaged
+    // working-tree edit must not fail `check --staged` for a commit that
+    // does not include it.
+    {
+        let dir = init_repo();
+        assert!(adr(&dir, &["init"], &[], "").status.success());
+
+        std::fs::write(dir.join("adrdom/terms.md"), GOOD_TERMS).unwrap();
+        run_git(&dir, &["add", "adrdom/terms.md"]);
+        run_git(&dir, &["commit", "--no-verify", "-q", "-m", "approve terms"]);
+
+        // Dirty, unstaged edit: not part of any staged diff.
+        std::fs::write(dir.join("adrdom/terms.md"), BAD_TERMS).unwrap();
+
+        let out = adr(&dir, &["check", "--staged"], &[], "");
+        let text = stdout(&out);
+        assert!(!text.contains("missing h1"), "{}", text);
+    }
 }
 
 #[test]

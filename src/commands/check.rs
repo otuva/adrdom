@@ -537,7 +537,9 @@ pub(crate) fn collect_targets(
 }
 
 fn skip_path(p: &str) -> bool {
-    p == "adrdom/state/banned.sha256" || p.starts_with(".git/")
+    p == "adrdom/state/banned.sha256"
+        || p == "adrdom/state/ledger.tsv"
+        || p.starts_with(".git/")
 }
 
 fn check_install(root: &Path) -> Vec<Failure> {
@@ -846,15 +848,24 @@ fn check_terms(
     (out, awaiting, notes)
 }
 
-/// `adrdom/terms.md`'s content for `check`: from the index when `staged`
-/// and the file is staged there, otherwise the working tree. `None` when
+/// `adrdom/terms.md`'s content for `check`: when `staged`, the index copy
+/// whenever the file is tracked in the index at all (whether or not this
+/// commit changes it), so a dirty unstaged working-tree edit never leaks
+/// into a staged check; the working tree is used only when the path isn't
+/// in the index. When not `staged`, always the working tree. `None` when
 /// the file exists in neither place.
 fn read_terms_content(root: &Path, staged: bool) -> Option<String> {
     if staged {
-        if let Some(list) = repo::git(root, &["diff", "--cached", "--name-only"]) {
-            if list.lines().any(|p| p == "adrdom/terms.md") {
-                return repo::git(root, &["show", ":adrdom/terms.md"]);
-            }
+        let tracked = repo::git(
+            root,
+            &["ls-files", "--error-unmatch", "adrdom/terms.md"],
+        )
+        .is_some();
+        if tracked {
+            // In the index: the index copy is the answer either way -- a
+            // read failure here is not a reason to fall back to the
+            // (untrusted, possibly dirty) working tree.
+            return repo::git(root, &["show", ":adrdom/terms.md"]);
         }
     }
     std::fs::read_to_string(root.join("adrdom/terms.md")).ok()

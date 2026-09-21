@@ -867,3 +867,88 @@ fn approve_writes_a_terms_line_per_entry_from_its_definition() {
     let question_block = &content[content.find("## question").unwrap()..];
     assert!(!question_block.contains("terms: "), "{}", question_block);
 }
+
+// --- approve terms (4): an entry's own terms: line is machine state, not
+// prior state -- it is always overwritten from the fresh definition, never
+// read as a dependent in its own right.
+
+const TERMS_ENTRY_WITH_BOGUS_LINE: &str = "# Terms\n\n\
+## decision\n\
+id: 11111111-1111-1111-1111-111111111111\n\
+definition: A choice locked by the owner.\n\
+aliases: \n\
+\n\
+## question\n\
+id: 22222222-2222-2222-2222-222222222222\n\
+definition: A thing bound to a decision.\n\
+aliases: \n\
+terms: bogus=99999999-9999-9999-9999-999999999999\n";
+
+#[test]
+fn approve_overwrites_an_agent_written_bogus_terms_line_in_an_entry() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let terms = write_record(&dir, "adrdom/terms.md", TERMS_ENTRY_WITH_BOGUS_LINE);
+
+    // Under the old rule this line was read as prior state: entry
+    // 99999999-... doesn't exist, so approve refused with "removed but
+    // carried by entry \"question\"". It's agent-written, unapproved
+    // state; approve overwrites it from "question"'s actual definition
+    // (which pairs "decision") instead of refusing on it.
+    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    assert!(out.status.success(), "approve should have succeeded: {}", stderr(&out));
+
+    let content = std::fs::read_to_string(&terms).unwrap();
+    assert!(!content.contains("bogus=99999999"), "{}", content);
+    let question_block = &content[content.find("## question").unwrap()..];
+    assert!(
+        question_block.contains("terms: decision=11111111-1111-1111-1111-111111111111"),
+        "{}",
+        question_block
+    );
+}
+
+const TERMS_ENTRY_PAIRS_ANOTHER_V1: &str = "# Terms\n\n\
+## decision\n\
+id: 33333333-3333-3333-3333-333333333333\n\
+definition: A choice locked by the owner.\n\
+aliases: \n\
+\n\
+## question\n\
+id: 44444444-4444-4444-4444-444444444444\n\
+definition: A thing bound to a decision.\n\
+aliases: \n";
+
+const TERMS_ENTRY_PAIRS_ANOTHER_RETIRED: &str = "# Terms\n\n\
+## decision\n\
+id: 33333333-3333-3333-3333-333333333333\n\
+definition: A choice locked by the owner.\n\
+aliases: \n\
+retired: yes\n\
+\n\
+## question\n\
+id: 44444444-4444-4444-4444-444444444444\n\
+definition: A thing bound to a decision.\n\
+aliases: \n";
+
+#[test]
+fn approve_refuses_retiring_an_entry_carried_by_another_entrys_definition() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let terms = write_record(&dir, "adrdom/terms.md", TERMS_ENTRY_PAIRS_ANOTHER_V1);
+    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
+        .status
+        .success());
+
+    // "question"'s definition is untouched and still says "a decision";
+    // only "decision" is retired.
+    std::fs::write(&terms, TERMS_ENTRY_PAIRS_ANOTHER_RETIRED).unwrap();
+    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(
+        err.contains("entry \"decision\" retired but carried by entry \"question\"; owner supersedes first"),
+        "{}",
+        err
+    );
+}
