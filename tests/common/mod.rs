@@ -140,11 +140,15 @@ pub fn extract_ids(content: &str) -> Vec<String> {
         .collect()
 }
 
-pub fn write_unchecked(dir: &Path, id: &str, reason: &str) {
-    let path = dir.join("adrdom/state/unchecked.tsv");
+/// Records a genuine tie for `id`: appends `adr: <id>` to a tracked,
+/// non-`adrdom/` file and `git add`s it, the same shape `check`'s tie scan
+/// looks for (a full uuid right after `adr: ` in a tracked file).
+pub fn write_tie(dir: &Path, id: &str) {
+    let path = dir.join("tie.txt");
     let mut content = std::fs::read_to_string(&path).unwrap_or_default();
-    content.push_str(&format!("{}\t{}\n", id, reason));
+    content.push_str(&format!("adr: {}\n", id));
     std::fs::write(&path, content).unwrap();
+    run_git(dir, &["add", "tie.txt"]);
 }
 
 // --- Plan/context approval, without depending on `adr approve` -----------
@@ -246,6 +250,33 @@ pub fn append_ledger_row(dir: &Path, event: &str, id: &str, hash: &str, detail: 
     existing.push_str(&format!(
         "2024-01-01T00:00:00Z\t{}\t{}\t{}\t{}\n",
         event, id, hash, detail
+    ));
+    std::fs::write(&ledger_path, existing).unwrap();
+}
+
+/// Writes and approves an entry-less `adrdom/terms.md`. Since `check`
+/// (5) fails once any record exists and `adrdom/terms.md` is missing or
+/// unapproved, tests that write a record but don't care about terms at
+/// all call this to satisfy that gate without adding any actual entry.
+pub fn approve_empty_terms(dir: &Path) {
+    let content = "# Terms\n";
+    std::fs::write(dir.join("adrdom/terms.md"), content).unwrap();
+    approve_terms_via_ledger(dir, content);
+}
+
+/// Writes `adrdom/terms.md` with `content` and hand-writes a `terms`
+/// ledger row as if `adr approve adrdom/terms.md` had just run on exactly
+/// that content. Mirrors `terms::file_hash` (sha256 of the content with
+/// `\r\n` normalized to `\n`; the crate has no lib target for tests to
+/// call that directly).
+pub fn approve_terms_via_ledger(dir: &Path, content: &str) {
+    let normalized = content.replace("\r\n", "\n");
+    let hash = sha256_hex(&normalized);
+    let ledger_path = dir.join("adrdom/state/ledger.tsv");
+    let mut existing = std::fs::read_to_string(&ledger_path).unwrap_or_default();
+    existing.push_str(&format!(
+        "2024-01-01T00:00:00Z\tterms\t-\t{}\tadrdom/terms.md\n",
+        hash
     ));
     std::fs::write(&ledger_path, existing).unwrap();
 }

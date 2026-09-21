@@ -152,15 +152,6 @@ pub fn run(record_path: PathBuf) -> i32 {
 
         if terms_opt.is_some() {
             let text = state::section_text_excluding_terms_line(&rf.lines, sec);
-            if let Some((_, word, term_name)) =
-                terms::banned_hits(&text, &terms_list).into_iter().next()
-            {
-                eprintln!(
-                    "ask: {}: \"{}\" contains banned word \"{}\" (term {}); owner edits the record",
-                    rel, sec.heading_text, word, term_name
-                );
-                return 1;
-            }
             for (word, tid) in terms::resolve(&text, &terms_list) {
                 if let Some(t) = terms_list.iter().find(|t| t.id.as_deref() == Some(tid.as_str())) {
                     if t.retired {
