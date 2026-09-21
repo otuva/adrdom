@@ -163,7 +163,7 @@ fn get_root_with_cookie_shows_fixture_topic() {
 }
 
 #[test]
-fn post_lock_with_cookie_and_token_locks_and_redirects() {
+fn post_answer_with_cookie_and_token_answers_and_redirects() {
     let dir = setup_repo_with_open_question();
     let content = std::fs::read_to_string(dir.join("adrdom/decisions/example.md")).unwrap();
     let ids = extract_ids(&content);
@@ -177,7 +177,7 @@ fn post_lock_with_cookie_and_token_locks_and_redirects() {
         "id={}&answer=A&t={}",
         question_id, token
     );
-    let resp = post(port, "/lock", Some(&cookie), &form);
+    let resp = post(port, "/answer", Some(&cookie), &form);
     assert_eq!(resp.status, 302, "body: {}", resp.body);
     let location = header(&resp, "Location").expect("Location header");
     assert!(
@@ -200,7 +200,7 @@ fn post_lock_with_cookie_and_token_locks_and_redirects() {
 }
 
 #[test]
-fn post_lock_without_t_field_is_forbidden() {
+fn post_answer_without_t_field_is_forbidden() {
     let dir = setup_repo_with_open_question();
     let content = std::fs::read_to_string(dir.join("adrdom/decisions/example.md")).unwrap();
     let ids = extract_ids(&content);
@@ -211,13 +211,13 @@ fn post_lock_without_t_field_is_forbidden() {
     let cookie = format!("adr_t={}", token);
 
     let form = format!("id={}&answer=A", question_id);
-    let resp = post(port, "/lock", Some(&cookie), &form);
+    let resp = post(port, "/answer", Some(&cookie), &form);
     assert_eq!(resp.status, 403, "body: {}", resp.body);
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(
         !ledger.lines().any(|l| l.contains("\tanswered\t")),
-        "lock must not have run: {}",
+        "answer must not have run: {}",
         ledger
     );
 
@@ -244,12 +244,12 @@ fn get_next_with_cookie_shows_question_heading() {
     let _ = child.wait();
 }
 
-// --- terms fixtures (7.9: words, no-entry, entries, before/after) -------
+// --- terms fixtures (7.9: words, no-term, entries, before/after) -------
 
 const WORDS_TERMS_MD: &str = "# Terms\n\n\
 ## decision\n\
 id: 11111111-1111-1111-1111-111111111111\n\
-definition: A choice locked by the owner.\n\
+definition: A choice answered by the owner.\n\
 aliases: \n";
 
 const WORDS_RECORD: &str = r#"# Topic
@@ -293,26 +293,26 @@ fn get_next_shows_question_words_and_no_entry() {
     let resp = get(port, "/next", Some(&cookie));
     assert_eq!(resp.status, 200, "body: {}", resp.body);
 
-    // The word, the entry name, and its definition all appear.
+    // The word, the term name, and its definition all appear.
     assert!(resp.body.contains("decision"), "body: {}", resp.body);
     assert!(
-        resp.body.contains("A choice locked by the owner."),
+        resp.body.contains("A choice answered by the owner."),
         "body: {}",
         resp.body
     );
 
-    // A coined word with no entry shows up in the "No entry" line.
+    // A coined word with no term shows up in the "No term" line.
     assert!(resp.body.contains("frobnicate"), "body: {}", resp.body);
     // A common word never does.
-    let no_entry_start = resp.body.find("No entry:").expect("No entry line present");
+    let no_entry_start = resp.body.find("No term:").expect("No term line present");
     let no_entry_line = &resp.body[no_entry_start..];
     let no_entry_line = &no_entry_line[..no_entry_line.find("</p>").unwrap_or(no_entry_line.len())];
-    assert!(!no_entry_line.contains("the"), "no-entry line: {}", no_entry_line);
+    assert!(!no_entry_line.contains("the"), "no-term line: {}", no_entry_line);
     // Nor does a plural of a paired term ("decisions" resolves the same
-    // entry as "decision").
+    // term as "decision").
     assert!(
         !no_entry_line.contains("decisions"),
-        "no-entry line: {}",
+        "no-term line: {}",
         no_entry_line
     );
 
@@ -339,7 +339,7 @@ Standard: decisions must be recorded plainly.
 "#;
 
 /// A dashed uuid inline in option text must not leak hex fragments (split
-/// at the hyphens by tokenizing) into the "No entry" line.
+/// at the hyphens by tokenizing) into the "No term" line.
 #[test]
 fn get_next_no_entry_line_has_no_uuid_fragments() {
     let dir = init_repo();
@@ -363,13 +363,13 @@ fn get_next_no_entry_line_has_no_uuid_fragments() {
     let resp = get(port, "/next", Some(&cookie));
     assert_eq!(resp.status, 200, "body: {}", resp.body);
 
-    let no_entry_start = resp.body.find("No entry:").expect("No entry line present");
+    let no_entry_start = resp.body.find("No term:").expect("No term line present");
     let no_entry_line = &resp.body[no_entry_start..];
     let no_entry_line = &no_entry_line[..no_entry_line.find("</p>").unwrap_or(no_entry_line.len())];
     for fragment in ["a1b2c3d4", "e5f6", "4a1b", "9c3d", "112233445566"] {
         assert!(
             !no_entry_line.contains(fragment),
-            "no-entry line leaked uuid fragment \"{}\": {}",
+            "no-term line leaked uuid fragment \"{}\": {}",
             fragment,
             no_entry_line
         );
@@ -396,7 +396,7 @@ fn terms_article_lists_entries_with_dependents_count() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let question_id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["lock", &question_id, "A"], "")
+    assert!(adr_owner(&dir, &["answer", &question_id, "A"], "")
         .status
         .success());
 
@@ -408,12 +408,12 @@ fn terms_article_lists_entries_with_dependents_count() {
     assert_eq!(resp.status, 200, "body: {}", resp.body);
     assert!(resp.body.contains("decision"), "body: {}", resp.body);
     assert!(
-        resp.body.contains("A choice locked by the owner."),
+        resp.body.contains("A choice answered by the owner."),
         "body: {}",
         resp.body
     );
     assert!(
-        resp.body.contains("1 decision in force"),
+        resp.body.contains("1 current decision"),
         "body: {}",
         resp.body
     );
@@ -425,7 +425,7 @@ fn terms_article_lists_entries_with_dependents_count() {
 const WORDS_TERMS_MD_V2: &str = "# Terms\n\n\
 ## decision\n\
 id: 11111111-1111-1111-1111-111111111111\n\
-definition: A choice the owner locks in, once, in writing.\n\
+definition: A choice the owner answers in, once, in writing.\n\
 aliases: \n";
 
 #[test]
@@ -452,12 +452,12 @@ fn terms_article_shows_before_after_when_unapproved() {
     assert_eq!(resp.status, 200, "body: {}", resp.body);
     assert!(resp.body.contains("not approved"), "body: {}", resp.body);
     assert!(
-        resp.body.contains("A choice locked by the owner."),
+        resp.body.contains("A choice answered by the owner."),
         "before text missing: {}",
         resp.body
     );
     assert!(
-        resp.body.contains("A choice the owner locks in, once, in writing."),
+        resp.body.contains("A choice the owner answers in, once, in writing."),
         "after text missing: {}",
         resp.body
     );

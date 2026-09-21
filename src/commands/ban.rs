@@ -7,8 +7,8 @@ use crate::state;
 use std::collections::HashSet;
 use std::io::Read;
 
-/// Resolves `--term <name>` to that entry's uuid, matched case-insensitively
-/// by name or alias. Only `state::load_terms` plus the entry's `id`/`name`/
+/// Resolves `--term <name>` to that term's uuid, matched case-insensitively
+/// by name or alias. Only `state::load_terms` plus the term's `id`/`name`/
 /// `aliases` are used here, so this keeps working whatever else changes in
 /// the terms file's shape.
 fn resolve_term_uuid(root: &std::path::Path, name: &str) -> Option<String> {
@@ -40,7 +40,7 @@ pub fn run(term: Option<String>) -> i32 {
         Some(name) => match resolve_term_uuid(&root, name) {
             Some(u) => Some(u),
             None => {
-                eprintln!("ban: no entry named \"{}\" in adrdom/terms.md", name);
+                eprintln!("ban: no term named \"{}\" in adrdom/terms.md", name);
                 return 1;
             }
         },

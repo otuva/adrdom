@@ -1,4 +1,4 @@
-//! Conformance of this repository's own records to the decisions in force
+//! Conformance of this repository's own records to the current decisions
 //! about record text. These tests read the real files under
 //! `adrdom/decisions/`, not a fixture.
 

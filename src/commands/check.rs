@@ -26,17 +26,17 @@ fn push_failures(out: &mut Vec<String>, fs: Vec<Failure>) {
 /// (non-staged, no message file) banned-word scan. Used by `run` (which
 /// layers the CLI's `--staged`/`--message` modes on top) and by the `serve`
 /// page, which always wants the plain repo-wide scan.
-/// The full check report for the owner's page, reusing a tie index the
+/// The full check report for the owner's page, reusing a test index the
 /// caller already computed so the repo's tracked files are scanned once.
-pub fn collect_with_ties(root: &Path, ties: &HashMap<String, Vec<String>>) -> view::CheckReport {
-    build(root, false, None, Some(ties))
+pub fn collect_with_tests(root: &Path, tests: &HashMap<String, Vec<String>>) -> view::CheckReport {
+    build(root, false, None, Some(tests))
 }
 
 fn build(
     root: &Path,
     staged: bool,
     message: Option<&Path>,
-    ties: Option<&HashMap<String, Vec<String>>>,
+    tests: Option<&HashMap<String, Vec<String>>>,
 ) -> view::CheckReport {
     let ledger_path = root.join("adrdom/state/ledger.tsv");
     let led = ledger::read(&ledger_path);
@@ -63,8 +63,8 @@ fn build(
     push_failures(&mut failures, plan_failures);
     let (terms_failures, terms_awaiting, terms_notes) = check_terms(root, &records, &led, staged);
     push_failures(&mut failures, terms_failures);
-    let (tie_failures, tied_count) = check_ties(root, &records, &led, ties);
-    push_failures(&mut failures, tie_failures);
+    let (test_failures, tested_count) = check_tests(root, &records, &led, tests);
+    push_failures(&mut failures, test_failures);
 
     if !awaiting.is_empty() {
         notes.push(format!(
@@ -80,7 +80,7 @@ fn build(
     for d in check_done(root, &records, &led) {
         notes.push(format!("done: {}", d));
     }
-    notes.push(format!("ties: {} tied", tied_count));
+    notes.push(format!("tested: {}", tested_count));
 
     view::CheckReport { failures, notes }
 }
@@ -660,7 +660,7 @@ fn check_plan(root: &Path, records: &[RecordFile], led: &Ledger) -> (Vec<Failure
 /// index when `staged` and the file is staged there, otherwise the working
 /// tree). Missing or unapproved is a failure once any record file exists,
 /// and a note otherwise. Every asked/answered section's terms line, and
-/// every non-retired entry's own terms line, is checked for an existing,
+/// every non-retired term's own terms line, is checked for an existing,
 /// non-retired uuid on each pair -- never by re-resolving the underlying
 /// text. Circular definitions fail. Returns the failures, whether the
 /// terms file itself is still awaiting approval (only meaningful when no
@@ -721,7 +721,7 @@ fn check_terms(
     }
 
     // Every asked/answered section: must have a terms line; each uuid on
-    // it must name an entry that exists and is not retired. No
+    // it must name a term that exists and is not retired. No
     // re-resolution of the section text against today's terms.
     for rf in records {
         let rel = rel_path(root, &rf.path);
@@ -746,7 +746,7 @@ fn check_terms(
                         check: "terms".to_string(),
                         id: Some(id.clone()),
                         message: format!(
-                            "{}: {}: entry {} not found",
+                            "{}: {}: term {} not found",
                             rel, sec.heading_text, uuid
                         ),
                     }),
@@ -764,7 +764,7 @@ fn check_terms(
         }
     }
 
-    // Every non-retired entry's own terms line: the same two checks.
+    // Every non-retired term's own terms line: the same two checks.
     for t in &tf.terms {
         if t.retired {
             continue;
@@ -776,7 +776,7 @@ fn check_terms(
                 None => out.push(Failure {
                     check: "terms".to_string(),
                     id: None,
-                    message: format!("adrdom/terms.md: \"{}\": entry {} not found", t.name, uuid),
+                    message: format!("adrdom/terms.md: \"{}\": term {} not found", t.name, uuid),
                 }),
                 Some(o) if o.retired => out.push(Failure {
                     check: "terms".to_string(),
@@ -804,14 +804,14 @@ fn check_terms(
         });
     }
 
-    // Note (never a failure): every non-retired entry that no in-force
-    // decision's terms line, and no non-retired entry's own terms line,
+    // Note (never a failure): every non-retired term that no current
+    // decision's terms line, and no non-retired term's own terms line,
     // pairs against.
     let mut used: HashSet<String> = HashSet::new();
     for rf in records {
         for sec in &rf.sections {
             let Some(id) = &sec.id else { continue };
-            if !state::is_in_force(led, id) {
+            if !state::is_current(led, id) {
                 continue;
             }
             let Some(tl) = sec.terms_line else { continue };
@@ -843,7 +843,7 @@ fn check_terms(
     unused.sort();
     if !unused.is_empty() {
         notes.push(format!(
-            "terms: {} entries paired by nothing: {}",
+            "terms: {} terms paired by nothing: {}",
             unused.len(),
             unused.join(", ")
         ));
@@ -894,10 +894,10 @@ fn check_done(root: &Path, records: &[RecordFile], led: &Ledger) -> Vec<String> 
 
 /// Every id that appears after `adr: ` in a tracked, non-`adrdom/` file, as
 /// a full uuid token, mapped to every `path:line` location it was found at
-/// (4.10-adjacent bookkeeping used by both `check`'s `ties` check and the
-/// page's decision view for a ties count per id).
-pub fn tie_index(root: &Path) -> HashMap<String, Vec<String>> {
-    let mut tie_ids: HashMap<String, Vec<String>> = HashMap::new();
+/// (4.10-adjacent bookkeeping used by both `check`'s `tested` check and the
+/// page's decision view for a tested count per id).
+pub fn test_index(root: &Path) -> HashMap<String, Vec<String>> {
+    let mut test_ids: HashMap<String, Vec<String>> = HashMap::new();
     if let Some(list) = repo::git(root, &["ls-files"]) {
         for path in list.lines() {
             if path.starts_with("adrdom/") {
@@ -912,7 +912,7 @@ pub fn tie_index(root: &Path) -> HashMap<String, Vec<String>> {
                     let rest = &line[pos + 5..];
                     let id_tok: String = rest.chars().take_while(|c| !c.is_whitespace()).collect();
                     if is_uuid(&id_tok) {
-                        tie_ids
+                        test_ids
                             .entry(id_tok)
                             .or_default()
                             .push(format!("{}:{}", path, i + 1));
@@ -921,60 +921,60 @@ pub fn tie_index(root: &Path) -> HashMap<String, Vec<String>> {
             }
         }
     }
-    tie_ids
+    test_ids
 }
 
-fn check_ties(
+fn check_tests(
     root: &Path,
     records: &[RecordFile],
     led: &Ledger,
-    ties: Option<&HashMap<String, Vec<String>>>,
+    tests: Option<&HashMap<String, Vec<String>>>,
 ) -> (Vec<Failure>, usize) {
     let mut out = Vec::new();
 
-    let in_force: HashSet<String> = records
+    let current: HashSet<String> = records
         .iter()
         .flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.clone()))
         .filter(|id| matches!(led.latest_state(id), Some(row) if row.event == "answered"))
         .collect();
 
     let owned;
-    let tie_ids: &HashMap<String, Vec<String>> = match ties {
+    let test_ids: &HashMap<String, Vec<String>> = match tests {
         Some(t) => t,
         None => {
-            owned = tie_index(root);
+            owned = test_index(root);
             &owned
         }
     };
 
-    let mut tied_count = 0;
+    let mut tested_count = 0;
 
-    for id in &in_force {
-        if tie_ids.contains_key(id) {
-            tied_count += 1;
+    for id in &current {
+        if test_ids.contains_key(id) {
+            tested_count += 1;
         } else {
             out.push(Failure {
-                check: "ties".to_string(),
+                check: "tested".to_string(),
                 id: Some(id.clone()),
-                message: format!("{}: no tie", id),
+                message: format!("{}: untested", id),
             });
         }
     }
 
-    for id in tie_ids.keys() {
-        if !in_force.contains(id) {
+    for id in test_ids.keys() {
+        if !current.contains(id) {
             out.push(Failure {
-                check: "ties".to_string(),
+                check: "tested".to_string(),
                 id: Some(id.clone()),
-                message: format!("{}: stale (not an in-force decision)", id),
+                message: format!("{}: stale (not a current decision)", id),
             });
         }
     }
 
-    (out, tied_count)
+    (out, tested_count)
 }
 
-/// A tie only counts when the token after `adr: ` is a full uuid
+/// A test only counts when the token after `adr: ` is a full uuid
 /// (8-4-4-4-12 lowercase hex); any other text after `adr:` is prose.
 fn is_uuid(s: &str) -> bool {
     let parts: Vec<&str> = s.split('-').collect();

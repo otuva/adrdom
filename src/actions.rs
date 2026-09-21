@@ -11,7 +11,7 @@ pub struct Outcome {
     pub summary: String,
 }
 
-pub fn do_lock(root: &Path, id: &str, letter: char) -> Result<Outcome, String> {
+pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String> {
     let ledger_path = root.join("adrdom/state/ledger.tsv");
     let led = ledger::read(&ledger_path);
 
@@ -31,8 +31,8 @@ pub fn do_lock(root: &Path, id: &str, letter: char) -> Result<Outcome, String> {
     let rel = state::rel_path(root, &rf.path);
 
     // Refuse when terms.md is missing, has shape errors, or is not
-    // approved: the same messages `ask` uses, prefixed `lock:` by the
-    // caller in `commands::lock::run`. The loaded, approved terms file is
+    // approved: the same messages `ask` uses, prefixed `answer:` by the
+    // caller in `commands::answer::run`. The loaded, approved terms file is
     // kept for the terms-line validity check below.
     let tf = match state::load_terms_checked(root) {
         TermsLoad::Missing => {
@@ -97,13 +97,13 @@ pub fn do_lock(root: &Path, id: &str, letter: char) -> Result<Outcome, String> {
             match tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str())) {
                 None => {
                     return Err(format!(
-                        "{}: terms line names entry {} that no longer exists; agent re-asks",
+                        "{}: terms line names term {} that no longer exists; agent re-asks",
                         id, uuid
                     ));
                 }
                 Some(t) if t.retired => {
                     return Err(format!(
-                        "{}: terms line names retired entry \"{}\"; agent re-asks",
+                        "{}: terms line names retired term \"{}\"; agent re-asks",
                         id, t.name
                     ));
                 }
@@ -112,13 +112,13 @@ pub fn do_lock(root: &Path, id: &str, letter: char) -> Result<Outcome, String> {
         }
         supersedes_val = sec.supersedes.clone();
         for old in &supersedes_val {
-            // In force, or already superseded by an earlier lock: a later
-            // lock naming the same older id is accepted as lineage.
+            // Current, or already superseded by an earlier answer: a later
+            // answer naming the same older id is accepted as lineage.
             match led.latest_state(old) {
                 Some(row) if row.event == "answered" || row.event == "superseded" => {}
                 _ => {
                     return Err(format!(
-                        "supersedes target {} is not in force and was never superseded",
+                        "supersedes target {} is not current and was never superseded",
                         old
                     ));
                 }
@@ -165,7 +165,7 @@ pub fn do_lock(root: &Path, id: &str, letter: char) -> Result<Outcome, String> {
     ledger::append(&ledger_path, &rows).map_err(|e| format!("failed to update ledger: {}", e))?;
 
     Ok(Outcome {
-        summary: format!("locked: {}\n  {}", heading_for_print, sentence_for_print),
+        summary: format!("answered: {}\n  {}", heading_for_print, sentence_for_print),
     })
 }
 
@@ -184,8 +184,8 @@ pub fn do_approve(root: &Path, file: &Path) -> Result<Outcome, String> {
 /// One dependent's pairs (`word=uuid`), together with a description of
 /// where they were carried, for approve's step 4.
 struct Dependent {
-    /// `<rel>: "<heading>"` for a decision, or `entry "<name>"` for an
-    /// entry's own definition pairs (freshly computed from the new file,
+    /// `<rel>: "<heading>"` for a decision, or `term "<name>"` for a
+    /// term's own definition pairs (freshly computed from the new file,
     /// never read from a stale terms line).
     source: String,
     pairs: Vec<(String, String)>,
@@ -239,15 +239,15 @@ fn do_approve_terms(
         return Err(msg);
     }
 
-    // Fresh definition pairs for every entry (the new file, after
+    // Fresh definition pairs for every term (the new file, after
     // `mint_ids`, never re-derived from a stale terms line in the file).
     // Computed once and reused for the dependents check below, the write
-    // in step 6, and step 7's entry-dependent print.
+    // in step 6, and step 7's term-dependent print.
     let pairs_per_entry: Vec<Vec<(String, String)>> = (0..tf.terms.len())
         .map(|i| terms::definition_pairs(&tf, i))
         .collect();
 
-    // Every in-force decision's terms line, and every non-retired entry's
+    // Every current decision's terms line, and every non-retired term's
     // fresh definition pairs, is a dependent.
     let files = repo::list_decision_files(root);
     let mut loaded: Vec<(String, RecordFile)> = Vec::new();
@@ -260,7 +260,7 @@ fn do_approve_terms(
     for (frel, rf) in &loaded {
         for sec in &rf.sections {
             let Some(id) = &sec.id else { continue };
-            if !state::is_in_force(led, id) {
+            if !state::is_current(led, id) {
                 continue;
             }
             let Some(tl) = sec.terms_line else { continue };
@@ -278,7 +278,7 @@ fn do_approve_terms(
             continue;
         }
         dependents.push(Dependent {
-            source: format!("entry \"{}\"", t.name),
+            source: format!("term \"{}\"", t.name),
             pairs: pairs_per_entry[i].clone(),
         });
     }
@@ -293,14 +293,14 @@ fn do_approve_terms(
             let Some(target) = tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str()))
             else {
                 refusals.push(format!(
-                    "approve: adrdom/terms.md: entry {} removed but carried by {}; owner retires instead",
+                    "approve: adrdom/terms.md: term {} removed but carried by {}; owner retires instead",
                     uuid, dep.source
                 ));
                 continue;
             };
             if target.retired {
                 refusals.push(format!(
-                    "approve: adrdom/terms.md: entry \"{}\" retired but carried by {}; owner supersedes first",
+                    "approve: adrdom/terms.md: term \"{}\" retired but carried by {}; owner supersedes first",
                     target.name, dep.source
                 ));
                 continue;
@@ -308,7 +308,7 @@ fn do_approve_terms(
             let still_resolves = lookup.get(word) == Some(uuid);
             if !still_resolves {
                 refusals.push(format!(
-                    "approve: adrdom/terms.md: word \"{}\" moved off entry \"{}\", carried by {}",
+                    "approve: adrdom/terms.md: word \"{}\" moved off term \"{}\", carried by {}",
                     word, target.name, dep.source
                 ));
             }
@@ -354,7 +354,7 @@ fn do_approve_terms(
     }
 
     // Step 6: write the file. `terms:` lines use the fresh pairs computed
-    // above, one entry at a time, in the same order as `tf.terms`.
+    // above, one term at a time, in the same order as `tf.terms`.
     let mut new_lines = tf.lines.clone();
     terms::write_terms_lines(&mut new_lines, &tf, &pairs_per_entry);
     tf.lines = new_lines;
@@ -405,14 +405,14 @@ fn do_approve_terms(
                     for (frel, rf) in &loaded {
                         for sec in &rf.sections {
                             let Some(id) = &sec.id else { continue };
-                            if !state::is_in_force(led, id) {
+                            if !state::is_current(led, id) {
                                 continue;
                             }
                             let Some(tl) = sec.terms_line else { continue };
                             let pairs =
                                 terms::parse_terms_line(rf.lines[tl].trim_end()).unwrap_or_default();
                             if pairs.iter().any(|(_, pid)| pid == tid) {
-                                out.push(format!("  in force: {}: {}", frel, sec.heading_text));
+                                out.push(format!("  current: {}: {}", frel, sec.heading_text));
                             }
                         }
                     }
@@ -421,7 +421,7 @@ fn do_approve_terms(
                             continue;
                         }
                         if pairs_per_entry[i].iter().any(|(_, pid)| pid == tid) {
-                            out.push(format!("  entry: {}", t2.name));
+                            out.push(format!("  term: {}", t2.name));
                         }
                     }
                 }
@@ -437,7 +437,7 @@ fn do_approve_terms(
 /// A record file: parse, refuse on shape errors; compute plan hash and
 /// context hash; write an `approved` row if it differs from the latest for
 /// the path, a `context` row likewise; then for every ledger id that now
-/// appears in no record: withdraw an asked one, refuse on an in-force one,
+/// appears in no record: withdraw an asked one, refuse on a current one,
 /// allow a superseded one silently.
 fn do_approve_record(
     root: &Path,
@@ -510,7 +510,7 @@ fn do_approve_record(
         .map_err(|e| format!("approve: failed to update ledger: {}", e))?;
 
     // Ledger ids (asked/answered/superseded/withdrawn) that now appear in
-    // no record at all: withdraw the asked ones, refuse on an in-force
+    // no record at all: withdraw the asked ones, refuse on a current
     // (answered, not superseded) one, allow a superseded one silently.
     let all_files = repo::list_decision_files(root);
     let mut present_ids: HashSet<String> = HashSet::new();
@@ -556,7 +556,7 @@ fn do_approve_record(
                     .map(|a| a.detail.clone())
                     .unwrap_or_else(|| id.clone());
                 refusals.push(format!(
-                    "approve: id {} (\"{}\") is answered and in force but missing from every record; owner supersedes it or restores the heading",
+                    "approve: id {} (\"{}\") is answered and current but missing from every record; owner supersedes it or restores the heading",
                     id, heading
                 ));
             }

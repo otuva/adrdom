@@ -23,8 +23,8 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
         let Ok(rf) = record::load(f) else { continue };
         for sec in &rf.sections {
             let Some(id) = &sec.id else { continue };
-            let in_force = matches!(led.latest_state(id), Some(row) if row.event == "answered");
-            if !in_force {
+            let is_current = matches!(led.latest_state(id), Some(row) if row.event == "answered");
+            if !is_current {
                 continue;
             }
             let Some(sentence) = sec.chosen_sentence() else {

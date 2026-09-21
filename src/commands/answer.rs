@@ -3,14 +3,14 @@ use crate::repo;
 
 pub fn run(id: String, letter: String) -> i32 {
     if !repo::owner_authorized() {
-        eprintln!("lock: refusing: owner authorization required (interactive TTY, no CLAUDECODE)");
+        eprintln!("answer: refusing: owner authorization required (interactive TTY, no CLAUDECODE)");
         return 2;
     }
 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("lock: not inside a git repository");
+            eprintln!("answer: not inside a git repository");
             return 1;
         }
     };
@@ -18,19 +18,19 @@ pub fn run(id: String, letter: String) -> i32 {
     let letter_c = match parse_letter(&letter) {
         Some(c) => c,
         None => {
-            eprintln!("lock: invalid letter {}", letter);
+            eprintln!("answer: invalid letter {}", letter);
             return 1;
         }
     };
 
-    match actions::do_lock(&root, &id, letter_c) {
+    match actions::do_answer(&root, &id, letter_c) {
         Ok(outcome) => {
             println!("{}", outcome.summary);
             0
         }
         Err(e) => {
             for line in e.lines() {
-                eprintln!("lock: {}", line);
+                eprintln!("answer: {}", line);
             }
             1
         }

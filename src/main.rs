@@ -36,12 +36,12 @@ enum Command {
     /// Owner-only: approve a record's plan/context, or the terms file.
     Approve { file: PathBuf },
     /// Owner-only: answer a question by id with an option letter.
-    Lock { id: String, letter: String },
-    /// Print every decision currently in force.
+    Answer { id: String, letter: String },
+    /// Print every current decision.
     Show { record: Option<PathBuf> },
     /// Read lines from stdin and ban them (and their tokens) from the repo.
     Ban {
-        /// Carry an existing terms.md entry's uuid alongside each new hash,
+        /// Carry an existing terms.md term's uuid alongside each new hash,
         /// matched case-insensitively by name or alias.
         #[arg(long)]
         term: Option<String>,
@@ -69,7 +69,7 @@ fn main() {
         Command::Init { claude } => commands::init::run(claude),
         Command::Ask { record } => commands::ask::run(record),
         Command::Approve { file } => commands::approve::run(file),
-        Command::Lock { id, letter } => commands::lock::run(id, letter),
+        Command::Answer { id, letter } => commands::answer::run(id, letter),
         Command::Show { record } => commands::show::run(record),
         Command::Ban { term } => commands::ban::run(term),
         Command::Unban => commands::unban::run(),

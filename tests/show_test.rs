@@ -6,13 +6,13 @@ const RECORD: &str = r#"# Example
 
 ## Group
 
-### 1.1 Is this in force?
+### 1.1 Is this current?
 
-Problem: whether it is in force.
+Problem: whether it is current.
 
 Standard: clear yes or no.
 
-- A) Yes it is in force.
+- A) Yes it is current.
   Why: reasons.
 - B) No it is not.
   Why: other reasons.
@@ -30,7 +30,7 @@ Standard: clear yes or no.
 "#;
 
 #[test]
-fn show_prints_only_in_force_sentences() {
+fn show_prints_only_current_sentences() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     approve_minimal_terms(&dir, "reasons");
@@ -45,19 +45,19 @@ fn show_prints_only_in_force_sentences() {
     assert_eq!(ids.len(), 2);
     let answered_id = &ids[0];
 
-    let lock_out = adr_owner(&dir, &["lock", answered_id, "A"], "");
+    let answer_out = adr_owner(&dir, &["answer", answered_id, "A"], "");
     assert!(
-        lock_out.status.success(),
-        "lock failed: {}",
-        stderr(&lock_out)
+        answer_out.status.success(),
+        "answer failed: {}",
+        stderr(&answer_out)
     );
 
     let out = adr(&dir, &["show"], &[], "");
     assert!(out.status.success());
     let shown = stdout(&out);
 
-    assert!(shown.contains("1.1 Is this in force?"));
-    assert!(shown.contains("Yes it is in force."));
+    assert!(shown.contains("1.1 Is this current?"));
+    assert!(shown.contains("Yes it is current."));
     assert!(!shown.contains("1.2 Is this only asked?"));
     assert!(!shown.contains("Yes only asked."));
 }

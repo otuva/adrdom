@@ -10,8 +10,8 @@ use std::path::Path;
 use std::sync::OnceLock;
 
 /// The shipped list of common English words (`src/common_words.txt`, one
-/// word per line, lowercase): words that never need an entry to explain
-/// them, so the "No entry" line under a question only names words that
+/// word per line, lowercase): words that never need a term to explain
+/// them, so the "No term" line under a question only names words that
 /// might. Not governed data — it ships with the binary.
 static COMMON_WORDS: &str = include_str!("common_words.txt");
 
@@ -38,7 +38,7 @@ pub struct OptionView {
 }
 
 /// One word on a section's terms line (or its live resolution), paired
-/// with the entry it names.
+/// with the term it names.
 pub struct WordPair {
     pub word: String,
     pub term_name: String,
@@ -55,11 +55,11 @@ pub struct QuestionView {
     pub options: Vec<OptionView>,
     pub answer: Option<char>,
     pub supersedes: Vec<String>,
-    pub ties: usize,
-    /// Every word=entry pairing on this section's terms line (locked or
+    pub tests: usize,
+    /// Every word=term pairing on this section's terms line (answered or
     /// asked), or computed live over the section text when it has none yet.
     pub words: Vec<WordPair>,
-    /// Distinct words (lowercased) in the section text that pair no entry:
+    /// Distinct words (lowercased) in the section text that pair no term:
     /// not common English, not a uuid or number, not shorter than three
     /// letters, and not already covered (plural rule included) by `words`.
     pub no_entry: Vec<String>,
@@ -76,18 +76,18 @@ pub struct FileView {
     pub questions: Vec<QuestionView>,
 }
 
-/// One `## name` entry in `adrdom/terms.md`, as shown on the page.
+/// One `## name` term in `adrdom/terms.md`, as shown on the page.
 pub struct TermEntryView {
     pub name: String,
     pub retired: bool,
     pub definition: String,
     pub aliases: Vec<String>,
-    /// The number of in-force decisions whose terms line carries this
-    /// entry's uuid.
+    /// The number of current decisions whose terms line carries this
+    /// term's uuid.
     pub dependents: usize,
 }
 
-/// An entry whose definition or aliases differ from the last approved
+/// A term whose definition or aliases differ from the last approved
 /// (HEAD) version of `adrdom/terms.md`, shown only while the working
 /// copy is unapproved.
 pub struct TermDiffView {
@@ -96,7 +96,7 @@ pub struct TermDiffView {
     pub after_definition: String,
     pub before_aliases: Vec<String>,
     pub after_aliases: Vec<String>,
-    /// "<path>: <heading>" for every in-force decision carrying this entry.
+    /// "<path>: <heading>" for every current decision carrying this term.
     pub dependents: Vec<String>,
 }
 
@@ -190,9 +190,9 @@ fn open_group_and_waits_on(rf: &RecordFile, led: &Ledger) -> (Option<String>, Op
     (open_group, waits_on)
 }
 
-/// Every word=entry pairing for `sec` (from its terms line if it has one,
+/// Every word=term pairing for `sec` (from its terms line if it has one,
 /// else computed live over its text) plus the distinct words in that text
-/// that pair no entry (7.9): not common English, not a uuid or number, not
+/// that pair no term (7.9): not common English, not a uuid or number, not
 /// shorter than three letters, and not covered by a pairing (the plural
 /// rule applies: a word whose trailing "s"/"es" strips to a current name or
 /// alias counts as covered even if it isn't itself a pairing's word).
@@ -238,7 +238,7 @@ fn tokenize(text: &str) -> Vec<String> {
 /// non-alphanumeric boundary) from `text`, replacing each with a single
 /// space. `tokenize` splits a dashed uuid into hex fragments at the
 /// hyphens, so without this pass those fragments (not 32 characters long,
-/// and not necessarily all-digit) would otherwise show up as "no entry"
+/// and not necessarily all-digit) would otherwise show up as "no term"
 /// words.
 fn strip_uuid_tokens(text: &str) -> String {
     let chars: Vec<char> = text.chars().collect();
@@ -338,7 +338,7 @@ fn build_question_view(
     rf: &RecordFile,
     sec: &Section,
     led: &Ledger,
-    tie_idx: &HashMap<String, Vec<String>>,
+    test_idx: &HashMap<String, Vec<String>>,
     terms_list: &[Term],
 ) -> QuestionView {
     let state = qstate(led, sec);
@@ -366,10 +366,10 @@ fn build_question_view(
             }
         })
         .collect();
-    let ties = sec
+    let tests = sec
         .id
         .as_ref()
-        .and_then(|id| tie_idx.get(id))
+        .and_then(|id| test_idx.get(id))
         .map(|v| v.len())
         .unwrap_or(0);
     let (words, no_entry) = section_words(rf, sec, terms_list);
@@ -384,7 +384,7 @@ fn build_question_view(
         options,
         answer: sec.answer_letter(),
         supersedes: sec.supersedes.clone(),
-        ties,
+        tests,
         words,
         no_entry,
     }
@@ -394,7 +394,7 @@ fn build_file_view(
     root: &Path,
     rf: &RecordFile,
     led: &Ledger,
-    tie_idx: &HashMap<String, Vec<String>>,
+    test_idx: &HashMap<String, Vec<String>>,
     terms_list: &[Term],
 ) -> FileView {
     let path = state::rel_path(root, &rf.path);
@@ -406,7 +406,7 @@ fn build_file_view(
     let questions = rf
         .sections
         .iter()
-        .map(|sec| build_question_view(rf, sec, led, tie_idx, terms_list))
+        .map(|sec| build_question_view(rf, sec, led, test_idx, terms_list))
         .collect();
 
     FileView {
@@ -431,9 +431,9 @@ fn format_cycle(names: &[String]) -> String {
     format!("circular definition: {}", chain.join(" -> "))
 }
 
-/// Every in-force decision's terms-line pairing, id -> "<path>: <heading>"
-/// per decision that carries it (a decision counted once per entry even if
-/// its line pairs the entry through more than one word).
+/// Every current decision's terms-line pairing, id -> "<path>: <heading>"
+/// per decision that carries it (a decision counted once per term even if
+/// its line pairs the term through more than one word).
 fn dependents_by_entry(root: &Path, led: &Ledger) -> HashMap<String, Vec<String>> {
     let mut dependents: HashMap<String, Vec<String>> = HashMap::new();
     for f in repo::list_decision_files(root) {
@@ -441,7 +441,7 @@ fn dependents_by_entry(root: &Path, led: &Ledger) -> HashMap<String, Vec<String>
         let rel = state::rel_path(root, &rf.path);
         for sec in &rf.sections {
             let Some(id) = &sec.id else { continue };
-            if !state::is_in_force(led, id) {
+            if !state::is_current(led, id) {
                 continue;
             }
             let Some(tl) = sec.terms_line else { continue };
@@ -460,7 +460,7 @@ fn dependents_by_entry(root: &Path, led: &Ledger) -> HashMap<String, Vec<String>
     dependents
 }
 
-/// Entries, dependents-per-entry, and (while unapproved) before/after diffs
+/// Terms, dependents-per-term, and (while unapproved) before/after diffs
 /// against the last approved (HEAD) version of `adrdom/terms.md` (7.9).
 fn build_terms_view(root: &Path, led: &Ledger, tf: terms::TermsFile) -> TermsView {
     let approved = state::terms_approved(led, &tf);
@@ -539,7 +539,7 @@ fn build_terms_view(root: &Path, led: &Ledger, tf: terms::TermsFile) -> TermsVie
 pub fn snapshot(root: &Path) -> Snapshot {
     let ledger_path = root.join("adrdom/state/ledger.tsv");
     let led = ledger::read(&ledger_path);
-    let tie_idx = check::tie_index(root);
+    let test_idx = check::test_index(root);
 
     let terms_opt = state::load_terms(root);
     let terms_list: Vec<Term> = terms_opt.as_ref().map(|tf| tf.terms.clone()).unwrap_or_default();
@@ -547,13 +547,13 @@ pub fn snapshot(root: &Path) -> Snapshot {
     let mut files: Vec<FileView> = Vec::new();
     for f in repo::list_decision_files(root) {
         if let Ok(rf) = record::load(&f) {
-            files.push(build_file_view(root, &rf, &led, &tie_idx, &terms_list));
+            files.push(build_file_view(root, &rf, &led, &test_idx, &terms_list));
         }
     }
 
     let terms = terms_opt.map(|tf| build_terms_view(root, &led, tf));
 
-    let report = check::collect_with_ties(root, &tie_idx);
+    let report = check::collect_with_tests(root, &test_idx);
     let check_report = CheckReport {
         failures: report.failures,
         notes: report.notes,
@@ -812,10 +812,10 @@ Standard: s2.\n\n\
         let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP);
         let rf = record::load(&record).unwrap();
         let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
-        let tie_idx = HashMap::new();
+        let test_idx = HashMap::new();
 
         // Nothing approved yet, nothing answered: not done.
-        let fv = build_file_view(&dir, &rf, &led, &tie_idx, &[]);
+        let fv = build_file_view(&dir, &rf, &led, &test_idx, &[]);
         assert!(!fv.done);
 
         // Approve plan/context (hashes are computed from the unanswered
@@ -839,7 +839,7 @@ Standard: s2.\n\n\
             rf2.sections.iter().all(|s| s.answer_line.is_some()),
             "fixture should have every section answered"
         );
-        let fv2 = build_file_view(&dir, &rf2, &led2, &tie_idx, &[]);
+        let fv2 = build_file_view(&dir, &rf2, &led2, &test_idx, &[]);
         assert!(fv2.plan_approved);
         assert!(fv2.context_approved);
         assert!(fv2.done);

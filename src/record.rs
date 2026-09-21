@@ -665,7 +665,7 @@ pub fn hash_range(lines: &[String], sec: &Section) -> (usize, usize) {
     // The boundary to search backward from for the last non-blank line:
     // just before the Answer line when there is one, otherwise the end of
     // the section. Trailing blank lines are never hashed, so inserting the
-    // "blank line before the Answer line" (as `adr lock` does) can never
+    // "blank line before the Answer line" (as `adr answer` does) can never
     // change a section's hash out from under itself.
     let boundary = sec.answer_line.unwrap_or(sec.end);
     let mut last = sec.start;

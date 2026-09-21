@@ -125,7 +125,7 @@ fn handle(mut request: Request, root: &Path, token: &str) {
             Reply::Html(200, render_decisions(&snap))
         }
         (Method::Post, "/approve") => handle_approve(root, &form),
-        (Method::Post, "/lock") => handle_lock(root, &form),
+        (Method::Post, "/answer") => handle_answer(root, &form),
         (Method::Post, "/unban") => handle_unban(root, &form),
         _ => Reply::Html(404, simple_page("Not found", "<p>Not found.</p>")),
     };
@@ -173,7 +173,7 @@ fn handle_approve(root: &Path, form: &HashMap<String, String>) -> Reply {
     Reply::Redirect(format!("/?m={}", percent_encode(&banner)), None)
 }
 
-fn handle_lock(root: &Path, form: &HashMap<String, String>) -> Reply {
+fn handle_answer(root: &Path, form: &HashMap<String, String>) -> Reply {
     let id = form.get("id").cloned().unwrap_or_default();
     let letter = form
         .get("answer")
@@ -188,7 +188,7 @@ fn handle_lock(root: &Path, form: &HashMap<String, String>) -> Reply {
         );
     };
 
-    match actions::do_lock(root, &id, letter) {
+    match actions::do_answer(root, &id, letter) {
         Ok(o) => Reply::Redirect(
             format!("/next?after={}&m={}", percent_encode(&id), percent_encode(&o.summary)),
             None,
@@ -350,7 +350,7 @@ fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> String {
                 body.push_str(&format!(
                     "<span class=\"meta\">aliases: {} &middot; {}</span>",
                     esc(&aliases),
-                    plural(e.dependents, "decision in force", "decisions in force")
+                    plural(e.dependents, "current decision", "current decisions")
                 ));
                 body.push_str("</dd>\n");
             }
@@ -479,7 +479,7 @@ fn render_next(
 
     body.push_str("<div class=\"words\">\n<h2>Words</h2>\n");
     if q.words.is_empty() {
-        body.push_str("<p class=\"meta\">No words pair an entry.</p>\n");
+        body.push_str("<p class=\"meta\">No words pair a term.</p>\n");
     } else {
         body.push_str("<dl class=\"framing\">\n");
         for w in &q.words {
@@ -494,14 +494,14 @@ fn render_next(
     }
     if !q.no_entry.is_empty() {
         body.push_str(&format!(
-            "<p class=\"no-entry\">No entry: {}</p>\n",
+            "<p class=\"no-entry\">No term: {}</p>\n",
             esc(&q.no_entry.join(", "))
         ));
     }
     body.push_str("</div>\n");
 
     body.push_str(&format!(
-        "<form method=\"post\" action=\"/lock\" id=\"lock-form\">\n<input type=\"hidden\" name=\"id\" value=\"{}\">\n<input type=\"hidden\" name=\"t\" value=\"{}\">\n",
+        "<form method=\"post\" action=\"/answer\" id=\"answer-form\">\n<input type=\"hidden\" name=\"id\" value=\"{}\">\n<input type=\"hidden\" name=\"t\" value=\"{}\">\n",
         esc(&id),
         esc(token)
     ));
@@ -530,19 +530,19 @@ fn render_next(
     body.push_str("</div>\n");
     let first = q.options.first().map(|o| o.letter).unwrap_or('A');
     body.push_str(&format!(
-        "<p class=\"act\"><button type=\"submit\" class=\"lock\" id=\"lock-button\">Lock <span id=\"lock-letter\">{}</span></button> <a class=\"skip\" href=\"/next?after={}\">Skip this one</a></p>\n",
+        "<p class=\"act\"><button type=\"submit\" class=\"answer\" id=\"answer-button\">Answer <span id=\"answer-letter\">{}</span></button> <a class=\"skip\" href=\"/next?after={}\">Skip this one</a></p>\n",
         first,
         percent_encode(&id)
     ));
     body.push_str("</form>\n");
-    body.push_str("<p class=\"key-hint\">Press a letter to choose, <kbd>Enter</kbd> to lock, <kbd>S</kbd> to skip.</p>\n");
+    body.push_str("<p class=\"key-hint\">Press a letter to choose, <kbd>Enter</kbd> to answer, <kbd>S</kbd> to skip.</p>\n");
     body.push_str("</article>\n");
 
     body.push_str(&format!(
         r#"<script>
 (function() {{
-  var form = document.getElementById('lock-form');
-  var letter = document.getElementById('lock-letter');
+  var form = document.getElementById('answer-form');
+  var letter = document.getElementById('answer-letter');
   function sync() {{
     var chosen = form.querySelector('input[name=answer]:checked');
     if (chosen && letter) {{ letter.textContent = chosen.value; }}
@@ -582,7 +582,7 @@ fn render_decisions(snap: &Snapshot) -> String {
         .iter()
         .map(|f| f.questions.iter().filter(|q| q.state == QState::Answered).count())
         .sum();
-    body.push_str("<header class=\"lead\">\n<h1>Decisions in force</h1>\n");
+    body.push_str("<header class=\"lead\">\n<h1>Current decisions</h1>\n");
     body.push_str(&format!(
         "<p class=\"summary\">{}.</p>\n</header>\n",
         plural(total, "decision", "decisions")
@@ -601,15 +601,15 @@ fn render_decisions(snap: &Snapshot) -> String {
         body.push_str("<dl class=\"decisions\">\n");
         for q in &answered {
             let sentence = chosen_sentence(q);
-            let ties = match q.ties {
-                0 => "no tie".to_string(),
-                n => plural(n, "tie", "ties"),
+            let tests = match q.tests {
+                0 => "untested".to_string(),
+                n => plural(n, "test", "tests"),
             };
             body.push_str(&format!(
                 "<dt>{}</dt><dd><span class=\"sentence\">{}</span><span class=\"meta\">{}",
                 esc(&q.heading),
                 esc(sentence),
-                ties
+                tests
             ));
             if !q.supersedes.is_empty() {
                 body.push_str(&format!(
@@ -805,7 +805,7 @@ button {
   padding: 0.55em 1.2em; border-radius: 4px; cursor: pointer;
   background: var(--key); color: var(--ink); border: 1px solid var(--muted);
 }
-button.lock { background: var(--hold); color: var(--paper); border-color: var(--hold); min-width: 7.5rem; }
+button.answer { background: var(--hold); color: var(--paper); border-color: var(--hold); min-width: 7.5rem; }
 button:hover { filter: brightness(1.08); }
 button:focus-visible { outline: 2px solid var(--hold); outline-offset: 2px; }
 .skip { color: var(--muted); }

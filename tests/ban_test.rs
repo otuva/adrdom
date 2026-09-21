@@ -62,7 +62,7 @@ fn ban_writes_two_column_lines_with_term() {
         ledger
     );
 
-    // Matching by alias, case-insensitively, resolves to the same entry.
+    // Matching by alias, case-insensitively, resolves to the same term.
     let out2 = adr(&dir, &["ban", "--term", "GADGET"], &[], "anotherword\n");
     assert!(out2.status.success(), "ban failed: {}", stderr(&out2));
     let banned2 = std::fs::read_to_string(dir.join("adrdom/state/banned.sha256")).unwrap();
@@ -167,7 +167,7 @@ fn ban_ignores_a_word_present_only_in_a_ledger_row_detail() {
     assert!(adr(&dir, &["init"], &[], "").status.success());
 
     // As `adr ask` would have written for a question heading that
-    // mentioned "gadgetword", followed by the row `adr lock` writes once
+    // mentioned "gadgetword", followed by the row `adr answer` writes once
     // that section is superseded (the section itself then deleted from
     // the record, per the fixture's premise). The word now lives only in
     // this `asked` row's detail column.

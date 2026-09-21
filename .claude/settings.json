@@ -1,8 +1,8 @@
 {
   "permissions": {
     "deny": [
-      "Bash(adr lock*)",
-      "Bash(* adr lock*)",
+      "Bash(adr answer*)",
+      "Bash(* adr answer*)",
       "Bash(adr approve*)",
       "Bash(* adr approve*)",
       "Bash(adr unban*)",

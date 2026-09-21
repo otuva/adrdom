@@ -147,7 +147,7 @@ fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
 // --- tier rule: a later group waits on an earlier one ------------------
 
 #[test]
-fn ask_refuses_group_two_while_group_one_unanswered_then_passes_after_lock() {
+fn ask_refuses_group_two_while_group_one_unanswered_then_passes_after_answer() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     approve_minimal_terms(&dir, "question");
@@ -180,8 +180,8 @@ fn ask_refuses_group_two_while_group_one_unanswered_then_passes_after_lock() {
     assert_eq!(extract_ids(&after).len(), 1);
 
     // Answer group one, then ask succeeds for group two.
-    let lock_out = adr_owner(&dir, &["lock", &first_id, "A"], "");
-    assert!(lock_out.status.success(), "lock failed: {}", stderr(&lock_out));
+    let answer_out = adr_owner(&dir, &["answer", &first_id, "A"], "");
+    assert!(answer_out.status.success(), "answer failed: {}", stderr(&answer_out));
 
     let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out2.status.success(), "ask failed: {}", stderr(&out2));
@@ -219,7 +219,7 @@ fn approve_withdraws_a_struck_asked_heading() {
     );
 }
 
-// --- approve refuses when an in-force heading vanishes without a supersede --
+// --- approve refuses when a current heading vanishes without a supersede --
 
 #[test]
 fn approve_refuses_when_answered_heading_gone_and_not_superseded() {
@@ -235,7 +235,7 @@ fn approve_refuses_when_answered_heading_gone_and_not_superseded() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["lock", &id, "A"], "").status.success());
+    assert!(adr_owner(&dir, &["answer", &id, "A"], "").status.success());
 
     std::fs::write(&record, HEADING_REMOVED).unwrap();
 
@@ -264,7 +264,7 @@ fn approve_allows_a_vanished_heading_once_superseded() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["lock", &old_id, "A"], "").status.success());
+    assert!(adr_owner(&dir, &["answer", &old_id, "A"], "").status.success());
 
     let superseding = format!(
         "\n### 1.2 Replacement question?\n\nsupersedes: {}\n\nProblem: p2.\n\nStandard: s2.\n\n- A) New answer.\n  Why: reasons.\n",
@@ -284,7 +284,7 @@ fn approve_allows_a_vanished_heading_once_superseded() {
         .into_iter()
         .find(|i| i != &old_id)
         .expect("new id assigned");
-    assert!(adr_owner(&dir, &["lock", &new_id, "A"], "").status.success());
+    assert!(adr_owner(&dir, &["answer", &new_id, "A"], "").status.success());
 
     // Now drop the (superseded) 1.1 heading entirely, keeping only 1.2.
     let content4 = std::fs::read_to_string(&record).unwrap();
@@ -303,7 +303,7 @@ fn approve_allows_a_vanished_heading_once_superseded() {
 const TERMS_BASIC: &str = "# Terms\n\n\
 ## decision\n\
 id: 11111111-1111-1111-1111-111111111111\n\
-definition: A choice locked by the owner.\n\
+definition: A choice answered by the owner.\n\
 aliases: \n";
 
 #[test]
@@ -327,7 +327,7 @@ fn ask_refuses_while_terms_unapproved() {
 
 const TERMS_NO_IDS: &str = "# Terms\n\n\
 ## decision\n\
-definition: A choice locked by the owner.\n\
+definition: A choice answered by the owner.\n\
 aliases: \n";
 
 #[test]
@@ -394,16 +394,16 @@ fn ask_writes_terms_line_binding_word_to_term_id() {
     );
 }
 
-// --- approve refuses a terms edit that moves a bound word off an entry --
+// --- approve refuses a terms edit that moves a bound word off a term --
 
 // `decision`'s definition deliberately avoids the word "choice" itself
-// (its own alias): using it there would make the entry's definition pair
+// (its own alias): using it there would make the term's definition pair
 // with itself, a self-cycle refused by step 3, unrelated to what these
 // fixtures are testing.
 const TERMS_WITH_ALIAS: &str = "# Terms\n\n\
 ## decision\n\
 id: 11111111-1111-1111-1111-111111111111\n\
-definition: A pick locked by the owner.\n\
+definition: A pick answered by the owner.\n\
 aliases: choice\n\
 \n\
 ## verdict\n\
@@ -414,7 +414,7 @@ aliases: \n";
 const TERMS_ALIAS_MOVED: &str = "# Terms\n\n\
 ## decision\n\
 id: 11111111-1111-1111-1111-111111111111\n\
-definition: A pick locked by the owner.\n\
+definition: A pick answered by the owner.\n\
 aliases: \n\
 \n\
 ## verdict\n\
@@ -441,7 +441,7 @@ Standard: plain words.
 "#;
 
 #[test]
-fn approve_refuses_a_terms_edit_that_moves_a_word_off_an_entry_carried_by_an_in_force_decision() {
+fn approve_refuses_a_terms_edit_that_moves_a_word_off_a_term_carried_by_a_current_decision() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", CHOICE_QUESTION_RECORD);
@@ -459,7 +459,7 @@ fn approve_refuses_a_terms_edit_that_moves_a_word_off_an_entry_carried_by_an_in_
 
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["lock", &id, "A"], "").status.success());
+    assert!(adr_owner(&dir, &["answer", &id, "A"], "").status.success());
 
     // Move the "choice" alias from `decision` to `verdict`.
     std::fs::write(&terms, TERMS_ALIAS_MOVED).unwrap();
@@ -469,7 +469,7 @@ fn approve_refuses_a_terms_edit_that_moves_a_word_off_an_entry_carried_by_an_in_
     let err = stderr(&out);
     assert!(
         err.contains(
-            "word \"choice\" moved off entry \"decision\", carried by adrdom/decisions/example.md: \"1.1 What is the choice?\""
+            "word \"choice\" moved off term \"decision\", carried by adrdom/decisions/example.md: \"1.1 What is the choice?\""
         ),
         "{}",
         err
@@ -498,7 +498,7 @@ fn approve_allows_moving_a_word_that_nothing_carries() {
 const TERMS_V2: &str = "# Terms\n\n\
 ## decision\n\
 id: 11111111-1111-1111-1111-111111111111\n\
-definition: A choice locked by the owner, in writing.\n\
+definition: A choice answered by the owner, in writing.\n\
 aliases: \n";
 
 #[test]
@@ -542,7 +542,7 @@ fn approve_terms_refuses_before_writing_leaving_the_file_unchanged() {
     let after = std::fs::read_to_string(&terms).unwrap();
     assert_eq!(
         before, after,
-        "approve must not write anything to adrdom/terms.md on refusal, even though minting an id for the id-less entry above happens in memory"
+        "approve must not write anything to adrdom/terms.md on refusal, even though minting an id for the id-less term above happens in memory"
     );
 }
 
@@ -603,7 +603,7 @@ fn approve_terms_reruns_as_already_approved_with_no_new_row() {
 const TERMS_TWO_ENTRIES: &str = "# Terms\n\n\
 ## decision\n\
 id: 33333333-3333-3333-3333-333333333333\n\
-definition: A choice locked by the owner.\n\
+definition: A choice answered by the owner.\n\
 aliases: \n\
 \n\
 ## verdict\n\
@@ -620,7 +620,7 @@ aliases: \n";
 const TERMS_DECISION_RETIRED: &str = "# Terms\n\n\
 ## decision\n\
 id: 33333333-3333-3333-3333-333333333333\n\
-definition: A choice locked by the owner.\n\
+definition: A choice answered by the owner.\n\
 aliases: \n\
 retired: yes\n\
 \n\
@@ -648,7 +648,7 @@ Standard: plain words.
 "#;
 
 #[test]
-fn approve_refuses_removing_an_entry_carried_by_an_in_force_decision() {
+fn approve_refuses_removing_a_term_carried_by_a_current_decision() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", DECISION_RECORD_FOR_DEPENDENTS);
@@ -664,14 +664,14 @@ fn approve_refuses_removing_an_entry_carried_by_an_in_force_decision() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["lock", &id, "A"], "").status.success());
+    assert!(adr_owner(&dir, &["answer", &id, "A"], "").status.success());
 
     std::fs::write(&terms, TERMS_DECISION_REMOVED).unwrap();
     let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(
-        err.contains("entry 33333333-3333-3333-3333-333333333333 removed"),
+        err.contains("term 33333333-3333-3333-3333-333333333333 removed"),
         "{}",
         err
     );
@@ -680,7 +680,7 @@ fn approve_refuses_removing_an_entry_carried_by_an_in_force_decision() {
 }
 
 #[test]
-fn approve_refuses_retiring_an_entry_carried_by_an_in_force_decision() {
+fn approve_refuses_retiring_a_term_carried_by_a_current_decision() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", DECISION_RECORD_FOR_DEPENDENTS);
@@ -696,14 +696,14 @@ fn approve_refuses_retiring_an_entry_carried_by_an_in_force_decision() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["lock", &id, "A"], "").status.success());
+    assert!(adr_owner(&dir, &["answer", &id, "A"], "").status.success());
 
     std::fs::write(&terms, TERMS_DECISION_RETIRED).unwrap();
     let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(
-        err.contains("entry \"decision\" retired but carried by"),
+        err.contains("term \"decision\" retired but carried by"),
         "{}",
         err
     );
@@ -714,13 +714,13 @@ fn approve_refuses_retiring_an_entry_carried_by_an_in_force_decision() {
 const TERMS_BEFORE_RENAME: &str = "# Terms\n\n\
 ## decision\n\
 id: 55555555-5555-5555-5555-555555555555\n\
-definition: A choice locked by the owner.\n\
+definition: A choice answered by the owner.\n\
 aliases: \n";
 
 const TERMS_AFTER_RENAME_ALIAS_KEPT: &str = "# Terms\n\n\
 ## ruling\n\
 id: 55555555-5555-5555-5555-555555555555\n\
-definition: A choice locked by the owner.\n\
+definition: A choice answered by the owner.\n\
 aliases: decision\n";
 
 #[test]
@@ -740,7 +740,7 @@ fn approve_allows_a_rename_that_keeps_the_old_name_as_an_alias() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["lock", &id, "A"], "").status.success());
+    assert!(adr_owner(&dir, &["answer", &id, "A"], "").status.success());
 
     std::fs::write(&terms, TERMS_AFTER_RENAME_ALIAS_KEPT).unwrap();
     let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
@@ -778,16 +778,16 @@ fn approve_prints_dependents_when_a_definition_changes() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["lock", &id, "A"], "").status.success());
+    assert!(adr_owner(&dir, &["answer", &id, "A"], "").status.success());
 
-    let terms_v2 = "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice locked by the owner, revised.\naliases: \n";
+    let terms_v2 = "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice answered by the owner, revised.\naliases: \n";
     std::fs::write(&terms, terms_v2).unwrap();
     let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
     assert!(out.status.success(), "approve failed: {}", stderr(&out));
     let text = stdout(&out);
     assert!(text.contains("term \"decision\" definition changed"), "{}", text);
     assert!(
-        text.contains("in force: adrdom/decisions/example.md: 1.1 What is the decision?"),
+        text.contains("current: adrdom/decisions/example.md: 1.1 What is the decision?"),
         "{}",
         text
     );
@@ -796,7 +796,7 @@ fn approve_prints_dependents_when_a_definition_changes() {
 const TERMS_ENTRY_DEPENDENT_V1: &str = "# Terms\n\n\
 ## decision\n\
 id: 11111111-1111-1111-1111-111111111111\n\
-definition: A choice locked by the owner.\n\
+definition: A choice answered by the owner.\n\
 aliases: \n\
 \n\
 ## question\n\
@@ -804,12 +804,12 @@ id: 22222222-2222-2222-2222-222222222222\n\
 definition: A thing bound to a decision.\n\
 aliases: \n";
 
-/// The spec's dependents (step 7) also include a non-retired entry whose
-/// own terms line carries the changed entry's id, not only in-force
+/// The spec's dependents (step 7) also include a non-retired term whose
+/// own terms line carries the changed term's id, not only current
 /// decisions. Here "question"'s definition pairs "decision", so approving a
-/// changed "decision" definition should print an `entry: question` line.
+/// changed "decision" definition should print a `term: question` line.
 #[test]
-fn approve_prints_an_entry_dependent_when_a_definition_changes() {
+fn approve_prints_a_term_dependent_when_a_definition_changes() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_ENTRY_DEPENDENT_V1);
@@ -825,8 +825,8 @@ fn approve_prints_an_entry_dependent_when_a_definition_changes() {
     // (and its terms line) untouched, as an owner hand-edit would.
     let content = std::fs::read_to_string(&terms).unwrap();
     let terms_v2 = content.replace(
-        "definition: A choice locked by the owner.",
-        "definition: A choice locked by the owner, revised.",
+        "definition: A choice answered by the owner.",
+        "definition: A choice answered by the owner, revised.",
     );
     std::fs::write(&terms, &terms_v2).unwrap();
 
@@ -834,7 +834,7 @@ fn approve_prints_an_entry_dependent_when_a_definition_changes() {
     assert!(out.status.success(), "approve failed: {}", stderr(&out));
     let text = stdout(&out);
     assert!(text.contains("term \"decision\" definition changed"), "{}", text);
-    assert!(text.contains("  entry: question"), "{}", text);
+    assert!(text.contains("  term: question"), "{}", text);
 }
 
 const TERMS_CROSS_REF: &str = "# Terms\n\n\
@@ -849,7 +849,7 @@ definition: A thing the owner is asked to decide.\n\
 aliases: \n";
 
 #[test]
-fn approve_writes_a_terms_line_per_entry_from_its_definition() {
+fn approve_writes_a_terms_line_per_term_from_its_definition() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_CROSS_REF);
@@ -863,19 +863,19 @@ fn approve_writes_a_terms_line_per_entry_from_its_definition() {
         "{}",
         content
     );
-    // The entry whose definition pairs nothing gets no terms: line.
+    // The term whose definition pairs nothing gets no terms: line.
     let question_block = &content[content.find("## question").unwrap()..];
     assert!(!question_block.contains("terms: "), "{}", question_block);
 }
 
-// --- approve terms (4): an entry's own terms: line is machine state, not
+// --- approve terms (4): a term's own terms: line is machine state, not
 // prior state -- it is always overwritten from the fresh definition, never
 // read as a dependent in its own right.
 
 const TERMS_ENTRY_WITH_BOGUS_LINE: &str = "# Terms\n\n\
 ## decision\n\
 id: 11111111-1111-1111-1111-111111111111\n\
-definition: A choice locked by the owner.\n\
+definition: A choice answered by the owner.\n\
 aliases: \n\
 \n\
 ## question\n\
@@ -885,14 +885,14 @@ aliases: \n\
 terms: bogus=99999999-9999-9999-9999-999999999999\n";
 
 #[test]
-fn approve_overwrites_an_agent_written_bogus_terms_line_in_an_entry() {
+fn approve_overwrites_an_agent_written_bogus_terms_line_in_a_term() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_ENTRY_WITH_BOGUS_LINE);
 
-    // Under the old rule this line was read as prior state: entry
+    // Under the old rule this line was read as prior state: term
     // 99999999-... doesn't exist, so approve refused with "removed but
-    // carried by entry \"question\"". It's agent-written, unapproved
+    // carried by term \"question\"". It's agent-written, unapproved
     // state; approve overwrites it from "question"'s actual definition
     // (which pairs "decision") instead of refusing on it.
     let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
@@ -911,7 +911,7 @@ fn approve_overwrites_an_agent_written_bogus_terms_line_in_an_entry() {
 const TERMS_ENTRY_PAIRS_ANOTHER_V1: &str = "# Terms\n\n\
 ## decision\n\
 id: 33333333-3333-3333-3333-333333333333\n\
-definition: A choice locked by the owner.\n\
+definition: A choice answered by the owner.\n\
 aliases: \n\
 \n\
 ## question\n\
@@ -922,7 +922,7 @@ aliases: \n";
 const TERMS_ENTRY_PAIRS_ANOTHER_RETIRED: &str = "# Terms\n\n\
 ## decision\n\
 id: 33333333-3333-3333-3333-333333333333\n\
-definition: A choice locked by the owner.\n\
+definition: A choice answered by the owner.\n\
 aliases: \n\
 retired: yes\n\
 \n\
@@ -932,7 +932,7 @@ definition: A thing bound to a decision.\n\
 aliases: \n";
 
 #[test]
-fn approve_refuses_retiring_an_entry_carried_by_another_entrys_definition() {
+fn approve_refuses_retiring_a_term_carried_by_another_terms_definition() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_ENTRY_PAIRS_ANOTHER_V1);
@@ -947,7 +947,7 @@ fn approve_refuses_retiring_an_entry_carried_by_another_entrys_definition() {
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(
-        err.contains("entry \"decision\" retired but carried by entry \"question\"; owner supersedes first"),
+        err.contains("term \"decision\" retired but carried by term \"question\"; owner supersedes first"),
         "{}",
         err
     );

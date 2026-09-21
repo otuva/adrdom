@@ -11,7 +11,7 @@ use uuid::Uuid;
 /// The first banned-word hit in `text` against the ban list, tokenizing
 /// each line the way `ban`/`check` do: the word as `banned::tokenize`
 /// returns it (already lowercased), and the term name when the hash's
-/// entry carries a uuid that still names a current entry.
+/// entry carries a uuid that still names a current term.
 fn first_banned_hit(
     text: &str,
     hash_map: &HashMap<String, Option<String>>,
@@ -188,7 +188,7 @@ pub fn run(record_path: PathBuf) -> i32 {
                     let other = &rf.sections[qi];
                     if !other.is_skeleton && other.answer_line.is_none() {
                         eprintln!(
-                            "ask: {}: \"{}\" is blocked by unanswered \"{}\" in an earlier group; owner runs: adr lock {} <letter> on it first",
+                            "ask: {}: \"{}\" is blocked by unanswered \"{}\" in an earlier group; owner runs: adr answer {} <letter> on it first",
                             rel,
                             sec.heading_text,
                             other.heading_text,

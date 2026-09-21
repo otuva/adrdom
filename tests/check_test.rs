@@ -21,8 +21,8 @@ Standard: clear yes or no.
 /// Writes `ONE_QUESTION`, approves its plan/context via a hand-written
 /// ledger row (so `ask` succeeds even once that command starts refusing
 /// unapproved files, and so `check` doesn't flag its body as living under
-/// an unapproved heading), asks, then owner-locks answer A.
-fn lock_one_question(dir: &std::path::Path) -> (std::path::PathBuf, String) {
+/// an unapproved heading), asks, then owner-answers answer A.
+fn answer_one_question(dir: &std::path::Path) -> (std::path::PathBuf, String) {
     // A term named "pass" (matching the word already in ONE_QUESTION's
     // heading) so a real `adr ask` writes a genuine, non-empty terms line
     // -- required now that an asked/answered section must carry one.
@@ -37,8 +37,8 @@ fn lock_one_question(dir: &std::path::Path) -> (std::path::PathBuf, String) {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
-    let out = adr_owner(dir, &["lock", &id, "A"], "");
-    assert!(out.status.success(), "lock failed: {}", stderr(&out));
+    let out = adr_owner(dir, &["answer", &id, "A"], "");
+    assert!(out.status.success(), "answer failed: {}", stderr(&out));
     (record, id)
 }
 
@@ -46,12 +46,12 @@ fn lock_one_question(dir: &std::path::Path) -> (std::path::PathBuf, String) {
 fn check_passes_on_a_clean_repo() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
-    let (_record, id) = lock_one_question(&dir);
-    write_tie(&dir, &id);
+    let (_record, id) = answer_one_question(&dir);
+    write_test_comment(&dir, &id);
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "check should pass: {}", stdout(&out));
-    assert!(stdout(&out).contains("ties: 1 tied"));
+    assert!(stdout(&out).contains("tested: 1"));
 }
 
 #[test]
@@ -170,17 +170,17 @@ fn check_banned_default_and_message_modes_name_the_word() {
 }
 
 #[test]
-fn check_ties_failure_when_no_tie() {
+fn check_tests_failure_when_untested() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
-    let (_record, _id) = lock_one_question(&dir);
-    // No tie recorded anywhere for the id.
+    let (_record, _id) = answer_one_question(&dir);
+    // Nothing recorded anywhere for the id.
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let out_text = stdout(&out);
-    assert!(out_text.contains("ties:"), "{}", out_text);
-    assert!(out_text.contains("no tie"), "{}", out_text);
+    assert!(out_text.contains("tested:"), "{}", out_text);
+    assert!(out_text.contains("untested"), "{}", out_text);
 }
 
 #[test]
@@ -232,13 +232,13 @@ fn check_install_passes_when_no_claude_directory() {
 }
 
 #[test]
-fn check_ties_ignores_adr_prefix_that_is_not_a_uuid() {
+fn check_tests_ignores_adr_prefix_that_is_not_a_uuid() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
-    let (_record, id) = lock_one_question(&dir);
-    write_tie(&dir, &id);
+    let (_record, id) = answer_one_question(&dir);
+    write_test_comment(&dir, &id);
     // Prose that happens to contain "adr:" followed by a non-uuid token,
-    // like a doc comment in the tool's own source, is not a tie.
+    // like a doc comment in the tool's own source, is not a test.
     std::fs::write(
         dir.join("notes.txt"),
         "/// adr: a control layer\nsee adr: not-a-uuid here\n",
@@ -248,7 +248,7 @@ fn check_ties_ignores_adr_prefix_that_is_not_a_uuid() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "check should pass: {}", stdout(&out));
-    assert!(stdout(&out).contains("ties: 1 tied"));
+    assert!(stdout(&out).contains("tested: 1"));
 }
 
 #[test]
@@ -410,8 +410,8 @@ fn check_fails_a_withdrawn_id_still_present_in_a_record() {
 fn check_prints_done_for_a_fully_answered_approved_file() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
-    let (_record, id) = lock_one_question(&dir);
-    write_tie(&dir, &id);
+    let (_record, id) = answer_one_question(&dir);
+    write_test_comment(&dir, &id);
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
@@ -423,9 +423,9 @@ fn check_prints_done_for_a_fully_answered_approved_file() {
 }
 
 // ---------------------------------------------------------------------
-// terms (section 5): missing/unapproved-with-and-without-records, a
-// locked/asked section's terms line (missing uuid, retired uuid, absent
-// line), no re-lookup of the underlying text, the unused-entries note,
+// terms (section 5): missing/unapproved-with-and-without-records, an
+// answered/asked section's terms line (missing uuid, retired uuid, absent
+// line), no re-lookup of the underlying text, the unused-terms note,
 // staged reading, and circular definitions.
 // ---------------------------------------------------------------------
 
@@ -532,7 +532,7 @@ fn check_fails_an_asked_section_whose_terms_line_names_a_missing_uuid() {
 
     let term_id = "11111111-1111-1111-1111-111111111111";
     let terms_content = format!(
-        "# Terms\n\n## decision\nid: {}\ndefinition: A choice locked by the owner.\naliases: \n",
+        "# Terms\n\n## decision\nid: {}\ndefinition: A choice answered by the owner.\naliases: \n",
         term_id
     );
     std::fs::write(dir.join("adrdom/terms.md"), &terms_content).unwrap();
@@ -552,7 +552,7 @@ fn check_fails_an_asked_section_whose_terms_line_names_a_missing_uuid() {
     let text = stdout(&out);
     assert!(
         text.contains(&format!(
-            "adrdom/decisions/example.md: 1.1 Some question?: entry {} not found",
+            "adrdom/decisions/example.md: 1.1 Some question?: term {} not found",
             missing_uuid
         )),
         "{}",
@@ -567,7 +567,7 @@ fn check_fails_an_asked_section_bound_to_a_retired_term() {
 
     let term_id = "33333333-3333-3333-3333-333333333333";
     let terms_content = format!(
-        "# Terms\n\n## decision\nid: {}\ndefinition: A choice locked by the owner.\naliases: \nretired: yes\n",
+        "# Terms\n\n## decision\nid: {}\ndefinition: A choice answered by the owner.\naliases: \nretired: yes\n",
         term_id
     );
     std::fs::write(dir.join("adrdom/terms.md"), &terms_content).unwrap();
@@ -598,7 +598,7 @@ fn check_fails_an_asked_section_with_no_terms_line() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
 
-    let terms_content = "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice locked by the owner.\naliases: \n";
+    let terms_content = "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice answered by the owner.\naliases: \n";
     std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
     approve_terms_via_ledger(&dir, terms_content);
 
@@ -621,7 +621,7 @@ fn check_fails_an_asked_section_with_no_terms_line() {
 }
 
 #[test]
-fn check_passes_when_a_new_entry_would_now_match_words_already_locked_in_text() {
+fn check_passes_when_a_new_term_would_now_match_words_already_answered_in_text() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
 
@@ -641,20 +641,20 @@ fn check_passes_when_a_new_entry_would_now_match_words_already_locked_in_text() 
     write_record(&dir, "adrdom/decisions/example.md", &record_content);
     append_ledger_row(&dir, "asked", question_id, "deadbeef", "1.1 Some question?");
 
-    // A new entry "decision" would now match a word already sitting in
-    // the locked prose, but `check` never re-resolves that text against
+    // A new term "decision" would now match a word already sitting in
+    // the answered prose, but `check` never re-resolves that text against
     // today's terms, so this must not surface as a failure.
     let decision_id = "88888888-8888-8888-8888-888888888888";
     let terms_v2 = format!(
-        "{}\n## decision\nid: {}\ndefinition: A choice locked by the owner.\naliases: \n",
+        "{}\n## decision\nid: {}\ndefinition: A choice answered by the owner.\naliases: \n",
         terms_v1, decision_id
     );
     std::fs::write(dir.join("adrdom/terms.md"), &terms_v2).unwrap();
     approve_terms_via_ledger(&dir, &terms_v2);
 
-    // No re-lookup: the existing `terms: widget=<id>` line still names an
-    // entry that exists and is not retired, so the `terms` check reports
-    // nothing about this section, regardless of the new "decision" entry
+    // No re-lookup: the existing `terms: widget=<id>` line still names a
+    // term that exists and is not retired, so the `terms` check reports
+    // nothing about this section, regardless of the new "decision" term
     // now also matching a word already sitting in its (untouched) prose.
     // (Other checks, like `answers`/`plan`, still fire on this
     // hand-crafted fixture -- irrelevant to what this test is about.)
@@ -667,7 +667,7 @@ fn check_passes_when_a_new_entry_would_now_match_words_already_locked_in_text() 
 }
 
 #[test]
-fn check_notes_an_entry_paired_by_nothing() {
+fn check_notes_a_term_paired_by_nothing() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
 
@@ -682,7 +682,7 @@ fn check_notes_an_entry_paired_by_nothing() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
     assert!(
-        stdout(&out).contains("terms: 1 entries paired by nothing: orphan"),
+        stdout(&out).contains("terms: 1 terms paired by nothing: orphan"),
         "{}",
         stdout(&out)
     );

@@ -100,11 +100,11 @@ fn ask_refuses_to_edit_an_answered_section() {
     let ids = extract_ids(&content);
     let question_id = &ids[0];
 
-    let lock_out = adr_owner(&dir, &["lock", question_id, "A"], "");
+    let answer_out = adr_owner(&dir, &["answer", question_id, "A"], "");
     assert!(
-        lock_out.status.success(),
-        "lock failed: {}",
-        stderr(&lock_out)
+        answer_out.status.success(),
+        "answer failed: {}",
+        stderr(&answer_out)
     );
 
     // Now edit the answered question's Problem text.

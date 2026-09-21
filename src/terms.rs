@@ -302,11 +302,11 @@ enum MatchKind {
 }
 
 /// Every name and alias in `terms` (and its "s"/"es" plural forms),
-/// lowercased, mapped to the id of the entry that owns it. Built with the
+/// lowercased, mapped to the id of the term that owns it. Built with the
 /// same priority `resolve` uses when a string is a candidate match for more
-/// than one entry: exact beats the "es" plural beats the "s" plural, and
-/// among candidates of equal priority the first one built (entries in
-/// `terms` order, name before its aliases) wins. Entries without an id are
+/// than one term: exact beats the "es" plural beats the "s" plural, and
+/// among candidates of equal priority the first one built (terms in
+/// `terms` order, name before its aliases) wins. Terms without an id are
 /// skipped.
 ///
 /// A single lookup against this map answers whether a whole word/phrase
@@ -345,7 +345,7 @@ pub fn phrase_lookup(terms: &[Term]) -> HashMap<String, String> {
 
 /// Whole-word/phrase, case-insensitive, longest-phrase-first, non-overlapping
 /// resolution of every term name/alias in `text`. Retired terms are included;
-/// callers decide whether to refuse on a retired match. Entries without an id
+/// callers decide whether to refuse on a retired match. Terms without an id
 /// are skipped. Returned pairs are unique and sorted by matched word.
 ///
 /// A word also matches a name or alias when it equals that name/alias with a
@@ -409,7 +409,7 @@ pub fn resolve(text: &str, terms: &[Term]) -> Vec<(String, String)> {
     results.into_iter().collect()
 }
 
-/// Resolves entry `idx`'s definition text against every entry in `tf`
+/// Resolves term `idx`'s definition text against every term in `tf`
 /// (including itself, so a self-pairing can be detected).
 ///
 /// Used by `cycles` below and by approve's circular-definition check.
@@ -418,12 +418,12 @@ pub fn definition_pairs(tf: &TermsFile, idx: usize) -> Vec<(String, String)> {
 }
 
 /// One cycle per strongly connected component (Tarjan's algorithm) of the
-/// graph where an entry points at every entry its definition pairs (by
+/// graph where a term points at every term its definition pairs (by
 /// id); a component with only one node and no self-loop isn't a cycle and
 /// is skipped. Each reported cycle is one simple cycle found by a DFS
-/// restricted to that component, as the list of entry names in traversal
+/// restricted to that component, as the list of term names in traversal
 /// order starting from the component's lowest-index member; a self-cycle
-/// is a list of one name. Linear in the number of entries and pairings,
+/// is a list of one name. Linear in the number of terms and pairings,
 /// unlike enumerating every simple cycle (which is factorial in a dense
 /// graph).
 ///
@@ -590,9 +590,9 @@ fn find_cycle_dfs(
     on_stack_set.remove(&u);
 }
 
-/// Inserts, replaces, or removes each entry's `terms:` line right after its
+/// Inserts, replaces, or removes each term's `terms:` line right after its
 /// `id:` line, in `lines` (a working copy of `tf.lines`). `pairs_per_entry`
-/// gives each entry's pairs in the same order as `tf.terms`; an empty list
+/// gives each term's pairs in the same order as `tf.terms`; an empty list
 /// omits the line. Callers write `lines` to disk.
 ///
 /// Used by approve's write step.
@@ -679,7 +679,7 @@ mod tests {
 \n\
 ## decision\n\
 id: 11111111-1111-1111-1111-111111111111\n\
-definition: A choice locked by the owner.\n\
+definition: A choice answered by the owner.\n\
 aliases: choice\n\
 \n\
 ## question\n\
@@ -729,7 +729,7 @@ aliases: \n"
 
     #[test]
     fn missing_field_is_a_shape_error() {
-        let s = well_formed().replacen("definition: A choice locked by the owner.\n", "", 1);
+        let s = well_formed().replacen("definition: A choice answered by the owner.\n", "", 1);
         let tf = parse(&lines_of(&s));
         assert!(tf
             .errors
@@ -765,8 +765,8 @@ aliases: \n"
     #[test]
     fn duplicate_field_is_a_shape_error() {
         let s = well_formed().replacen(
-            "definition: A choice locked by the owner.\n",
-            "definition: A choice locked by the owner.\ndefinition: Something else.\n",
+            "definition: A choice answered by the owner.\n",
+            "definition: A choice answered by the owner.\ndefinition: Something else.\n",
             1,
         );
         let tf = parse(&lines_of(&s));
@@ -1029,8 +1029,8 @@ aliases: \n"
     fn file_hash_ignores_trailing_whitespace_on_a_line() {
         let base = well_formed();
         let with_trailing_ws = base.replacen(
-            "definition: A choice locked by the owner.\n",
-            "definition: A choice locked by the owner.   \n",
+            "definition: A choice answered by the owner.\n",
+            "definition: A choice answered by the owner.   \n",
             1,
         );
         let tf1 = parse(&lines_of(&base));
@@ -1117,7 +1117,7 @@ aliases: \n"
 
     #[test]
     fn cycles_handles_a_dense_complete_graph_quickly() {
-        // Every entry's definition pairs every other entry: one giant
+        // Every term's definition pairs every other term: one giant
         // strongly connected component. The old enumerate-every-cycle
         // approach is factorial here; the SCC approach is linear.
         let n = 40;

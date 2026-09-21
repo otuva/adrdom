@@ -3,8 +3,8 @@ mod common;
 use common::*;
 
 const ALL_DENY_ENTRIES: &[&str] = &[
-    "Bash(adr lock*)",
-    "Bash(* adr lock*)",
+    "Bash(adr answer*)",
+    "Bash(* adr answer*)",
     "Bash(adr approve*)",
     "Bash(* adr approve*)",
     "Bash(adr unban*)",

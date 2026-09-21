@@ -48,7 +48,7 @@ Standard: plain words.
 "#;
 
 #[test]
-fn lock_writes_answer_line_and_ledger_row() {
+fn answer_writes_answer_line_and_ledger_row() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -62,8 +62,8 @@ fn lock_writes_answer_line_and_ledger_row() {
     let ids = extract_ids(&content);
     let question_id = &ids[0];
 
-    let out = adr_owner(&dir, &["lock", question_id, "A"], "");
-    assert!(out.status.success(), "lock failed: {}", stderr(&out));
+    let out = adr_owner(&dir, &["answer", question_id, "A"], "");
+    assert!(out.status.success(), "answer failed: {}", stderr(&out));
     assert!(stdout(&out).contains("The authoritative sentence is a decision"));
 
     let after = std::fs::read_to_string(&record).unwrap();
@@ -80,7 +80,7 @@ fn lock_writes_answer_line_and_ledger_row() {
 }
 
 #[test]
-fn lock_refuses_when_claudecode_is_set() {
+fn answer_refuses_when_claudecode_is_set() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -98,7 +98,7 @@ fn lock_refuses_when_claudecode_is_set() {
     // nothing should be written.
     let out = adr(
         &dir,
-        &["lock", question_id, "A"],
+        &["answer", question_id, "A"],
         &[("CLAUDECODE", "1")],
         "",
     );
@@ -107,20 +107,20 @@ fn lock_refuses_when_claudecode_is_set() {
     let after = std::fs::read_to_string(&record).unwrap();
     assert!(
         !after.contains("**Answer:**"),
-        "lock must not have written anything: {}",
+        "answer must not have written anything: {}",
         after
     );
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(
         !ledger.contains("\tanswered\t"),
-        "lock must not have appended a ledger row: {}",
+        "answer must not have appended a ledger row: {}",
         ledger
     );
 }
 
 #[test]
-fn lock_with_supersedes_writes_superseded_row_and_show_hides_old() {
+fn answer_with_supersedes_writes_superseded_row_and_show_hides_old() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -134,11 +134,11 @@ fn lock_with_supersedes_writes_superseded_row_and_show_hides_old() {
     let ids = extract_ids(&content);
     let old_id = ids[0].clone();
 
-    let lock_out = adr_owner(&dir, &["lock", &old_id, "A"], "");
+    let answer_out = adr_owner(&dir, &["answer", &old_id, "A"], "");
     assert!(
-        lock_out.status.success(),
-        "lock A failed: {}",
-        stderr(&lock_out)
+        answer_out.status.success(),
+        "answer A failed: {}",
+        stderr(&answer_out)
     );
 
     // Add a second question that supersedes the first, with `supersedes:`
@@ -168,11 +168,11 @@ fn lock_with_supersedes_writes_superseded_row_and_show_hides_old() {
         .expect("new id assigned")
         .clone();
 
-    let lock_out = adr_owner(&dir, &["lock", &new_id, "A"], "");
+    let answer_out = adr_owner(&dir, &["answer", &new_id, "A"], "");
     assert!(
-        lock_out.status.success(),
-        "lock B failed: {}",
-        stderr(&lock_out)
+        answer_out.status.success(),
+        "answer B failed: {}",
+        stderr(&answer_out)
     );
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
@@ -200,7 +200,7 @@ fn lock_with_supersedes_writes_superseded_row_and_show_hides_old() {
 }
 
 #[test]
-fn lock_with_two_id_supersedes_writes_a_row_per_id() {
+fn answer_with_two_id_supersedes_writes_a_row_per_id() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -211,8 +211,8 @@ fn lock_with_two_id_supersedes_writes_a_row_per_id() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id_1 = extract_ids(&content)[0].clone();
-    let lock_out = adr_owner(&dir, &["lock", &old_id_1, "A"], "");
-    assert!(lock_out.status.success(), "lock 1.1 failed: {}", stderr(&lock_out));
+    let answer_out = adr_owner(&dir, &["answer", &old_id_1, "A"], "");
+    assert!(answer_out.status.success(), "answer 1.1 failed: {}", stderr(&answer_out));
 
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(SECOND_QUESTION);
@@ -226,8 +226,8 @@ fn lock_with_two_id_supersedes_writes_a_row_per_id() {
         .into_iter()
         .find(|id| id != &old_id_1)
         .expect("second id assigned");
-    let lock_out = adr_owner(&dir, &["lock", &old_id_2, "A"], "");
-    assert!(lock_out.status.success(), "lock 1.2 failed: {}", stderr(&lock_out));
+    let answer_out = adr_owner(&dir, &["answer", &old_id_2, "A"], "");
+    assert!(answer_out.status.success(), "answer 1.2 failed: {}", stderr(&answer_out));
 
     // Add a third question that supersedes both prior ids at once,
     // comma-separated on a single `supersedes:` line (4.14).
@@ -253,8 +253,8 @@ fn lock_with_two_id_supersedes_writes_a_row_per_id() {
         .find(|id| id != &old_id_1 && id != &old_id_2)
         .expect("third id assigned");
 
-    let lock_out = adr_owner(&dir, &["lock", &new_id, "A"], "");
-    assert!(lock_out.status.success(), "lock 1.3 failed: {}", stderr(&lock_out));
+    let answer_out = adr_owner(&dir, &["answer", &new_id, "A"], "");
+    assert!(answer_out.status.success(), "answer 1.3 failed: {}", stderr(&answer_out));
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     for old in [&old_id_1, &old_id_2] {
@@ -270,7 +270,7 @@ fn lock_with_two_id_supersedes_writes_a_row_per_id() {
 }
 
 #[test]
-fn lock_refuses_a_second_time_with_already_answered_message() {
+fn answer_refuses_a_second_time_with_already_answered_message() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -283,22 +283,22 @@ fn lock_refuses_a_second_time_with_already_answered_message() {
     let content = std::fs::read_to_string(&record).unwrap();
     let question_id = extract_ids(&content)[0].clone();
 
-    let first = adr_owner(&dir, &["lock", &question_id, "A"], "");
-    assert!(first.status.success(), "first lock failed: {}", stderr(&first));
+    let first = adr_owner(&dir, &["answer", &question_id, "A"], "");
+    assert!(first.status.success(), "first answer failed: {}", stderr(&first));
 
-    // Locking the same, now-answered id again must refuse with the same
+    // Answering the same, now-answered id again must refuse with the same
     // "already answered" message the pre-refactor command produced, and
     // must not append a second `answered` row.
-    let second = adr_owner(&dir, &["lock", &question_id, "A"], "");
-    assert!(!second.status.success(), "second lock should have refused");
+    let second = adr_owner(&dir, &["answer", &question_id, "A"], "");
+    assert!(!second.status.success(), "second answer should have refused");
     assert!(
         stderr(&second).contains("is already answered"),
         "{}",
         stderr(&second)
     );
     assert!(
-        stderr(&second).starts_with("lock: "),
-        "refusal should keep the lock: prefix: {}",
+        stderr(&second).starts_with("answer: "),
+        "refusal should keep the answer: prefix: {}",
         stderr(&second)
     );
 
@@ -306,13 +306,13 @@ fn lock_refuses_a_second_time_with_already_answered_message() {
     assert_eq!(
         ledger.lines().filter(|l| l.contains("\tanswered\t")).count(),
         1,
-        "second lock must not have written another answered row: {}",
+        "second answer must not have written another answered row: {}",
         ledger
     );
 }
 
 #[test]
-fn lock_with_two_id_supersedes_refuses_when_one_is_not_in_force() {
+fn answer_with_two_id_supersedes_refuses_when_one_is_not_current() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -323,10 +323,10 @@ fn lock_with_two_id_supersedes_refuses_when_one_is_not_in_force() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id_1 = extract_ids(&content)[0].clone();
-    let lock_out = adr_owner(&dir, &["lock", &old_id_1, "A"], "");
-    assert!(lock_out.status.success(), "lock 1.1 failed: {}", stderr(&lock_out));
+    let answer_out = adr_owner(&dir, &["answer", &old_id_1, "A"], "");
+    assert!(answer_out.status.success(), "answer 1.1 failed: {}", stderr(&answer_out));
 
-    // 1.2 is asked but never locked, so it is not in force.
+    // 1.2 is asked but never answered, so it is not current.
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(SECOND_QUESTION);
     std::fs::write(&record, &content).unwrap();
@@ -362,31 +362,31 @@ fn lock_with_two_id_supersedes_refuses_when_one_is_not_in_force() {
         .find(|id| id != &old_id_1 && id != &old_id_2)
         .expect("third id assigned");
 
-    let lock_out = adr_owner(&dir, &["lock", &new_id, "A"], "");
+    let answer_out = adr_owner(&dir, &["answer", &new_id, "A"], "");
     assert!(
-        !lock_out.status.success(),
-        "lock should have refused: {}",
-        stdout(&lock_out)
+        !answer_out.status.success(),
+        "answer should have refused: {}",
+        stdout(&answer_out)
     );
-    assert!(stderr(&lock_out).contains(old_id_2.as_str()), "{}", stderr(&lock_out));
+    assert!(stderr(&answer_out).contains(old_id_2.as_str()), "{}", stderr(&answer_out));
 
     let after = std::fs::read_to_string(&record).unwrap();
     assert_eq!(
         after.matches("**Answer:**").count(),
         1,
-        "lock must not have written an answer for 1.3: {}",
+        "answer must not have written an answer for 1.3: {}",
         after
     );
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(
         !ledger.lines().any(|l| l.contains("\tsuperseded\t")),
-        "lock must not have written any superseded rows: {}",
+        "answer must not have written any superseded rows: {}",
         ledger
     );
 }
 
 #[test]
-fn lock_accepts_a_supersedes_target_already_superseded_as_lineage() {
+fn answer_accepts_a_supersedes_target_already_superseded_as_lineage() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -397,11 +397,11 @@ fn lock_accepts_a_supersedes_target_already_superseded_as_lineage() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
-    let lock_out = adr_owner(&dir, &["lock", &old_id, "A"], "");
-    assert!(lock_out.status.success(), "lock 1.1 failed: {}", stderr(&lock_out));
+    let answer_out = adr_owner(&dir, &["answer", &old_id, "A"], "");
+    assert!(answer_out.status.success(), "answer 1.1 failed: {}", stderr(&answer_out));
 
-    // The second question supersedes the first and is locked: the first
-    // leaves force here.
+    // The second question supersedes the first and is answered: the first
+    // stops being current here.
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(&SECOND_QUESTION.replacen(
         "### 1.2 What is the second unit of authority called?\n",
@@ -421,11 +421,11 @@ fn lock_accepts_a_supersedes_target_already_superseded_as_lineage() {
         .into_iter()
         .find(|id| id != &old_id)
         .expect("second id assigned");
-    let lock_out = adr_owner(&dir, &["lock", &second_id, "A"], "");
-    assert!(lock_out.status.success(), "lock 1.2 failed: {}", stderr(&lock_out));
+    let answer_out = adr_owner(&dir, &["answer", &second_id, "A"], "");
+    assert!(answer_out.status.success(), "answer 1.2 failed: {}", stderr(&answer_out));
 
     // The third question names the same, now superseded, first id: the
-    // lock is accepted as lineage and writes a second superseded row.
+    // answer is accepted as lineage and writes a second superseded row.
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(&THIRD_QUESTION.replacen(
         "### 1.3 What is the third unit of authority called?\n",
@@ -445,8 +445,8 @@ fn lock_accepts_a_supersedes_target_already_superseded_as_lineage() {
         .into_iter()
         .find(|id| id != &old_id && id != &second_id)
         .expect("third id assigned");
-    let lock_out = adr_owner(&dir, &["lock", &third_id, "A"], "");
-    assert!(lock_out.status.success(), "lineage lock failed: {}", stderr(&lock_out));
+    let answer_out = adr_owner(&dir, &["answer", &third_id, "A"], "");
+    assert!(answer_out.status.success(), "lineage answer failed: {}", stderr(&answer_out));
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let rows = ledger
@@ -456,10 +456,10 @@ fn lock_accepts_a_supersedes_target_already_superseded_as_lineage() {
     assert_eq!(rows, 2, "expected two superseded rows for the first id: {}", ledger);
 }
 
-// --- lock's own terms.md gates (6) ---------------------------------------
+// --- answer's own terms.md gates (6) ---------------------------------------
 
 #[test]
-fn lock_refuses_when_terms_md_is_missing() {
+fn answer_refuses_when_terms_md_is_missing() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -474,16 +474,16 @@ fn lock_refuses_when_terms_md_is_missing() {
     // Remove terms.md entirely after the id was asked.
     std::fs::remove_file(dir.join("adrdom/terms.md")).unwrap();
 
-    let out = adr_owner(&dir, &["lock", &id, "A"], "");
-    assert!(!out.status.success(), "lock should have refused: {}", stdout(&out));
+    let out = adr_owner(&dir, &["answer", &id, "A"], "");
+    assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
-        "lock: adrdom/terms.md missing; agent writes it, owner runs: adr approve adrdom/terms.md"
+        "answer: adrdom/terms.md missing; agent writes it, owner runs: adr approve adrdom/terms.md"
     );
 }
 
 #[test]
-fn lock_refuses_when_terms_md_has_a_shape_error() {
+fn answer_refuses_when_terms_md_has_a_shape_error() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -500,15 +500,15 @@ fn lock_refuses_when_terms_md_has_a_shape_error() {
     terms.push_str("notes: extra\n");
     std::fs::write(dir.join("adrdom/terms.md"), terms).unwrap();
 
-    let out = adr_owner(&dir, &["lock", &id, "A"], "");
-    assert!(!out.status.success(), "lock should have refused: {}", stdout(&out));
+    let out = adr_owner(&dir, &["answer", &id, "A"], "");
+    assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     let err = stderr(&out);
-    assert!(err.starts_with("lock: adrdom/terms.md:"), "{}", err);
+    assert!(err.starts_with("answer: adrdom/terms.md:"), "{}", err);
     assert!(err.contains("unknown line"), "{}", err);
 }
 
 #[test]
-fn lock_refuses_when_terms_md_is_not_approved() {
+fn answer_refuses_when_terms_md_is_not_approved() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -526,15 +526,15 @@ fn lock_refuses_when_terms_md_is_not_approved() {
     let edited = terms.replace("A fixture term for tests.", "A fixture term, edited.");
     std::fs::write(&terms_path, edited).unwrap();
 
-    let out = adr_owner(&dir, &["lock", &id, "A"], "");
-    assert!(!out.status.success(), "lock should have refused: {}", stdout(&out));
+    let out = adr_owner(&dir, &["answer", &id, "A"], "");
+    assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(err.contains("terms not approved"), "{}", err);
     assert!(err.contains("adr approve adrdom/terms.md"), "{}", err);
 }
 
 #[test]
-fn lock_refuses_a_section_with_no_terms_line() {
+fn answer_refuses_a_section_with_no_terms_line() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let content = "# Topic\n\n## Group\n\n### 1.1 What is the authority?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n";
@@ -553,7 +553,7 @@ fn lock_refuses_a_section_with_no_terms_line() {
     // insertion leaves two blank lines where the original single blank
     // line was, so this is derived from the real file rather than
     // hand-assembled), and hand-write a matching `asked` row for that
-    // text so lock sees the id in the asked state at its current hash,
+    // text so answer sees the id in the asked state at its current hash,
     // but with no terms line at all.
     let without_terms: String = asked
         .lines()
@@ -568,17 +568,17 @@ fn lock_refuses_a_section_with_no_terms_line() {
     let new_hash = mirror_section_hash(section_text);
     append_ledger_row(&dir, "asked", &id, &new_hash, "1.1 What is the authority?");
 
-    let out = adr_owner(&dir, &["lock", &id, "A"], "");
-    assert!(!out.status.success(), "lock should have refused: {}", stdout(&out));
+    let out = adr_owner(&dir, &["answer", &id, "A"], "");
+    assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
-        format!("lock: {}: no terms line; agent re-asks", id)
+        format!("answer: {}: no terms line; agent re-asks", id)
     );
 }
 
 /// Replaces the `terms: ` line `ask` wrote with `new_terms_line`, then
 /// hand-writes a matching `asked` ledger row for the section's new hash
-/// (mirrors `lock_refuses_a_section_with_no_terms_line`'s approach, but
+/// (mirrors `answer_refuses_a_section_with_no_terms_line`'s approach, but
 /// keeps the terms line present instead of removing it).
 fn corrupt_terms_line(dir: &Path, record: &Path, heading: &str, new_terms_line: &str) {
     let asked = std::fs::read_to_string(record).unwrap();
@@ -599,7 +599,7 @@ fn corrupt_terms_line(dir: &Path, record: &Path, heading: &str, new_terms_line: 
 }
 
 #[test]
-fn lock_refuses_a_malformed_terms_line() {
+fn answer_refuses_a_malformed_terms_line() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -619,16 +619,16 @@ fn lock_refuses_a_malformed_terms_line() {
         "terms: authority",
     );
 
-    let out = adr_owner(&dir, &["lock", &id, "A"], "");
-    assert!(!out.status.success(), "lock should have refused: {}", stdout(&out));
+    let out = adr_owner(&dir, &["answer", &id, "A"], "");
+    assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
-        format!("lock: {}: malformed terms line; agent re-asks", id)
+        format!("answer: {}: malformed terms line; agent re-asks", id)
     );
 }
 
 #[test]
-fn lock_refuses_a_terms_line_naming_a_nonexistent_entry() {
+fn answer_refuses_a_terms_line_naming_a_nonexistent_term() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -640,7 +640,7 @@ fn lock_refuses_a_terms_line_naming_a_nonexistent_entry() {
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
 
-    // A well-formed pairing, but naming a uuid no entry in terms.md has.
+    // A well-formed pairing, but naming a uuid no term in terms.md has.
     corrupt_terms_line(
         &dir,
         &record,
@@ -648,19 +648,19 @@ fn lock_refuses_a_terms_line_naming_a_nonexistent_entry() {
         "terms: authority=00000000-0000-0000-0000-000000000000",
     );
 
-    let out = adr_owner(&dir, &["lock", &id, "A"], "");
-    assert!(!out.status.success(), "lock should have refused: {}", stdout(&out));
+    let out = adr_owner(&dir, &["answer", &id, "A"], "");
+    assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
         format!(
-            "lock: {}: terms line names entry 00000000-0000-0000-0000-000000000000 that no longer exists; agent re-asks",
+            "answer: {}: terms line names term 00000000-0000-0000-0000-000000000000 that no longer exists; agent re-asks",
             id
         )
     );
 }
 
 #[test]
-fn lock_refuses_a_terms_line_naming_a_retired_entry() {
+fn answer_refuses_a_terms_line_naming_a_retired_term() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -672,7 +672,7 @@ fn lock_refuses_a_terms_line_naming_a_retired_entry() {
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
 
-    // Retire the entry the record's terms line already names, and
+    // Retire the term the record's terms line already names, and
     // hand-approve that retired terms.md content: the record's terms line
     // and its ledger `asked` row are untouched, only terms.md changes.
     let retired_terms =
@@ -680,12 +680,12 @@ fn lock_refuses_a_terms_line_naming_a_retired_entry() {
     std::fs::write(dir.join("adrdom/terms.md"), retired_terms).unwrap();
     approve_terms_via_ledger(&dir, retired_terms);
 
-    let out = adr_owner(&dir, &["lock", &id, "A"], "");
-    assert!(!out.status.success(), "lock should have refused: {}", stdout(&out));
+    let out = adr_owner(&dir, &["answer", &id, "A"], "");
+    assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
         format!(
-            "lock: {}: terms line names retired entry \"authority\"; agent re-asks",
+            "answer: {}: terms line names retired term \"authority\"; agent re-asks",
             id
         )
     );
