@@ -23,6 +23,13 @@ Standard: clear yes or no.
 /// unapproved files, and so `check` doesn't flag its body as living under
 /// an unapproved heading), asks, then owner-locks answer A.
 fn lock_one_question(dir: &std::path::Path) -> (std::path::PathBuf, String) {
+    // A term named "pass" (matching the word already in ONE_QUESTION's
+    // heading) so a real `adr ask` writes a genuine, non-empty terms line
+    // -- required now that an asked/answered section must carry one.
+    let terms_content =
+        "# Terms\n\n## pass\nid: 11111111-1111-1111-1111-111111111111\ndefinition: Whether something is accepted.\naliases: \n";
+    std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
+    approve_terms_via_ledger(dir, terms_content);
     let record = write_record(dir, "adrdom/decisions/example.md", ONE_QUESTION);
     approve_via_ledger(dir, "adrdom/decisions/example.md", ONE_QUESTION);
     assert!(adr(dir, &["ask", record.to_str().unwrap()], &[], "")
@@ -265,6 +272,7 @@ fn check_parse_reports_a_file_shape_error() {
 fn check_passes_a_skeleton_heading_with_no_id_or_body() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_empty_terms(&dir);
     write_record(
         &dir,
         "adrdom/decisions/skeleton.md",
@@ -398,13 +406,36 @@ fn check_fails_a_withdrawn_id_still_present_in_a_record() {
 }
 
 #[test]
+fn check_prints_done_for_a_fully_answered_approved_file() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let (_record, id) = lock_one_question(&dir);
+    write_tie(&dir, &id);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains("done: adrdom/decisions/example.md"),
+        "{}",
+        stdout(&out)
+    );
+}
+
+// ---------------------------------------------------------------------
+// terms (section 5): missing/unapproved-with-and-without-records, a
+// locked/asked section's terms line (missing uuid, retired uuid, absent
+// line), no re-lookup of the underlying text, the unused-entries note,
+// staged reading, and circular definitions.
+// ---------------------------------------------------------------------
+
+#[test]
 fn check_fails_on_a_terms_file_shape_error() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     // Missing the "# Terms" h1: a shape error.
     std::fs::write(
         dir.join("adrdom/terms.md"),
-        "## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: x.\ntest: y?\nowner: adrdom/decisions/example.md\naliases: \nbanned: \n",
+        "## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: x.\naliases: \n",
     )
     .unwrap();
 
@@ -416,35 +447,58 @@ fn check_fails_on_a_terms_file_shape_error() {
 }
 
 #[test]
-fn check_fails_when_a_terms_binding_no_longer_resolves() {
+fn check_fails_when_terms_missing_and_a_record_exists() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
-
-    let term_id = "11111111-1111-1111-1111-111111111111";
-    let question_id = "22222222-2222-2222-2222-222222222222";
-
-    let terms_content = format!(
-        "# Terms\n\n## decision\nid: {}\ndefinition: A choice locked by the owner.\ntest: Does the owner have to choose among options?\nowner: adrdom/decisions/example.md\naliases: \nbanned: \n",
-        term_id
+    write_record(
+        &dir,
+        "adrdom/decisions/example.md",
+        "# Example\n\n## Group\n\n### 1.1 Some question?\n",
     );
-    std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
+    // No adrdom/terms.md at all.
 
-    // The `terms:` line claims a binding to "decision", but nothing in the
-    // heading/id/Problem/Standard/options text mentions it any more.
-    let record_content = format!(
-        "# Example\n\n## Group\n\n### 1.1 Some question?\n\nid: {}\n\nterms: decision={}\n\nProblem: nothing about the word here.\n\nStandard: still nothing about it.\n\n- A) fine.\n  Why: ok.\n",
-        question_id, term_id
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    assert!(
+        stdout(&out).contains("terms: adrdom/terms.md missing"),
+        "{}",
+        stdout(&out)
     );
-    write_record(&dir, "adrdom/decisions/example.md", &record_content);
-    append_ledger_row(&dir, "asked", question_id, "deadbeef", "1.1 Some question?");
+}
+
+#[test]
+fn check_passes_when_terms_missing_and_no_records_exist() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    // No records, no terms.md.
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "{}", stdout(&out));
+    assert!(!stdout(&out).contains("terms:"), "{}", stdout(&out));
+}
+
+#[test]
+fn check_fails_when_terms_unapproved_and_a_record_exists() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    write_record(
+        &dir,
+        "adrdom/decisions/example.md",
+        "# Example\n\n## Group\n\n### 1.1 Some question?\n",
+    );
+    std::fs::write(
+        dir.join("adrdom/terms.md"),
+        "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice.\naliases: \n",
+    )
+    .unwrap();
+    // No `terms` ledger row: unapproved.
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let text = stdout(&out);
-    assert!(text.contains("terms:"), "{}", text);
     assert!(
         text.contains(
-            "adrdom/decisions/example.md: 1.1 Some question?: binding changed (decision now none)"
+            "terms: adrdom/terms.md not approved; owner runs: adr approve adrdom/terms.md"
         ),
         "{}",
         text
@@ -452,23 +506,75 @@ fn check_fails_when_a_terms_binding_no_longer_resolves() {
 }
 
 #[test]
-fn check_fails_a_bound_term_that_is_retired() {
+fn check_notes_awaiting_approval_when_terms_unapproved_and_no_records() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    std::fs::write(
+        dir.join("adrdom/terms.md"),
+        "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice.\naliases: \n",
+    )
+    .unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains("terms: awaiting approval"),
+        "{}",
+        stdout(&out)
+    );
+}
+
+#[test]
+fn check_fails_an_asked_section_whose_terms_line_names_a_missing_uuid() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+
+    let term_id = "11111111-1111-1111-1111-111111111111";
+    let terms_content = format!(
+        "# Terms\n\n## decision\nid: {}\ndefinition: A choice locked by the owner.\naliases: \n",
+        term_id
+    );
+    std::fs::write(dir.join("adrdom/terms.md"), &terms_content).unwrap();
+    approve_terms_via_ledger(&dir, &terms_content);
+
+    let question_id = "22222222-2222-2222-2222-222222222222";
+    let missing_uuid = "99999999-9999-9999-9999-999999999999";
+    let record_content = format!(
+        "# Example\n\n## Group\n\n### 1.1 Some question?\n\nid: {}\n\nterms: decision={}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
+        question_id, missing_uuid
+    );
+    write_record(&dir, "adrdom/decisions/example.md", &record_content);
+    append_ledger_row(&dir, "asked", question_id, "deadbeef", "1.1 Some question?");
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(
+        text.contains(&format!(
+            "adrdom/decisions/example.md: 1.1 Some question?: entry {} not found",
+            missing_uuid
+        )),
+        "{}",
+        text
+    );
+}
+
+#[test]
+fn check_fails_an_asked_section_bound_to_a_retired_term() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
 
     let term_id = "33333333-3333-3333-3333-333333333333";
-    let question_id = "44444444-4444-4444-4444-444444444444";
-
     let terms_content = format!(
-        "# Terms\n\n## decision\nid: {}\ndefinition: A choice locked by the owner.\ntest: Does the owner have to choose among options?\nowner: adrdom/decisions/example.md\naliases: \nbanned: \nretired: yes\n",
+        "# Terms\n\n## decision\nid: {}\ndefinition: A choice locked by the owner.\naliases: \nretired: yes\n",
         term_id
     );
-    std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
+    std::fs::write(dir.join("adrdom/terms.md"), &terms_content).unwrap();
+    approve_terms_via_ledger(&dir, &terms_content);
 
-    // "decision" still appears in the Problem line, so the binding itself
-    // is unchanged; the term behind it is retired.
+    let question_id = "44444444-4444-4444-4444-444444444444";
     let record_content = format!(
-        "# Example\n\n## Group\n\n### 1.1 Some question?\n\nid: {}\n\nterms: decision={}\n\nProblem: the decision needs revisiting.\n\nStandard: still needs review.\n\n- A) fine.\n  Why: ok.\n",
+        "# Example\n\n## Group\n\n### 1.1 Some question?\n\nid: {}\n\nterms: decision={}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
         question_id, term_id
     );
     write_record(&dir, "adrdom/decisions/example.md", &record_content);
@@ -484,22 +590,142 @@ fn check_fails_a_bound_term_that_is_retired() {
         "{}",
         text
     );
-    assert!(!text.contains("binding changed (decision"), "{}", text);
 }
 
-
 #[test]
-fn check_prints_done_for_a_fully_answered_approved_file() {
+fn check_fails_an_asked_section_with_no_terms_line() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
-    let (_record, id) = lock_one_question(&dir);
-    write_tie(&dir, &id);
+
+    let terms_content = "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice locked by the owner.\naliases: \n";
+    std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
+    approve_terms_via_ledger(&dir, terms_content);
+
+    let question_id = "55555555-5555-5555-5555-555555555555";
+    let record_content = format!(
+        "# Example\n\n## Group\n\n### 1.1 Some question?\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
+        question_id
+    );
+    write_record(&dir, "adrdom/decisions/example.md", &record_content);
+    append_ledger_row(&dir, "asked", question_id, "deadbeef", "1.1 Some question?");
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(
+        text.contains("adrdom/decisions/example.md: 1.1 Some question?: no terms line"),
+        "{}",
+        text
+    );
+}
+
+#[test]
+fn check_passes_when_a_new_entry_would_now_match_words_already_locked_in_text() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+
+    let widget_id = "66666666-6666-6666-6666-666666666666";
+    let terms_v1 = format!(
+        "# Terms\n\n## widget\nid: {}\ndefinition: A small thing.\naliases: \n",
+        widget_id
+    );
+    std::fs::write(dir.join("adrdom/terms.md"), &terms_v1).unwrap();
+    approve_terms_via_ledger(&dir, &terms_v1);
+
+    let question_id = "77777777-7777-7777-7777-777777777777";
+    let record_content = format!(
+        "# Example\n\n## Group\n\n### 1.1 Some question?\n\nid: {}\n\nterms: widget={}\n\nProblem: the decision needs a widget.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
+        question_id, widget_id
+    );
+    write_record(&dir, "adrdom/decisions/example.md", &record_content);
+    append_ledger_row(&dir, "asked", question_id, "deadbeef", "1.1 Some question?");
+
+    // A new entry "decision" would now match a word already sitting in
+    // the locked prose, but `check` never re-resolves that text against
+    // today's terms, so this must not surface as a failure.
+    let decision_id = "88888888-8888-8888-8888-888888888888";
+    let terms_v2 = format!(
+        "{}\n## decision\nid: {}\ndefinition: A choice locked by the owner.\naliases: \n",
+        terms_v1, decision_id
+    );
+    std::fs::write(dir.join("adrdom/terms.md"), &terms_v2).unwrap();
+    approve_terms_via_ledger(&dir, &terms_v2);
+
+    // No re-lookup: the existing `terms: widget=<id>` line still names an
+    // entry that exists and is not retired, so the `terms` check reports
+    // nothing about this section, regardless of the new "decision" entry
+    // now also matching a word already sitting in its (untouched) prose.
+    // (Other checks, like `answers`/`plan`, still fire on this
+    // hand-crafted fixture -- irrelevant to what this test is about.)
+    let out = adr(&dir, &["check"], &[], "");
+    let text = stdout(&out);
+    let terms_failure_on_section = text
+        .lines()
+        .any(|l| l.starts_with("terms:") && l.contains("Some question?"));
+    assert!(!terms_failure_on_section, "{}", text);
+}
+
+#[test]
+fn check_notes_an_entry_paired_by_nothing() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+
+    let term_id = "99999999-1111-1111-1111-111111111111";
+    let terms_content = format!(
+        "# Terms\n\n## orphan\nid: {}\ndefinition: Nothing refers to this.\naliases: \n",
+        term_id
+    );
+    std::fs::write(dir.join("adrdom/terms.md"), &terms_content).unwrap();
+    approve_terms_via_ledger(&dir, &terms_content);
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
     assert!(
-        stdout(&out).contains("done: adrdom/decisions/example.md"),
+        stdout(&out).contains("terms: 1 entries paired by nothing: orphan"),
         "{}",
         stdout(&out)
+    );
+}
+
+#[test]
+fn check_staged_reads_terms_from_the_index() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+
+    let staged_content = "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice.\naliases: \n";
+    std::fs::write(dir.join("adrdom/terms.md"), staged_content).unwrap();
+    run_git(&dir, &["add", "adrdom/terms.md"]);
+    // The working tree copy now has a shape error the staged copy does
+    // not: `check --staged` must read the index, not this file.
+    std::fs::write(dir.join("adrdom/terms.md"), "not a terms file at all\n").unwrap();
+
+    let out = adr(&dir, &["check", "--staged"], &[], "");
+    let text = stdout(&out);
+    assert!(!text.contains("missing h1"), "{}", text);
+}
+
+#[test]
+fn check_fails_a_circular_definition() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let terms_content = "# Terms\n\n\
+## alpha\n\
+id: 11111111-1111-1111-1111-111111111111\n\
+definition: See beta.\n\
+aliases: \n\
+\n\
+## beta\n\
+id: 22222222-2222-2222-2222-222222222222\n\
+definition: See alpha.\n\
+aliases: \n";
+    std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(
+        text.contains("terms: adrdom/terms.md: circular definition: alpha -> beta -> alpha"),
+        "{}",
+        text
     );
 }

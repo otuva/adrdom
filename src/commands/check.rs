@@ -61,7 +61,7 @@ fn build(
     push_failures(&mut failures, check_install(root));
     let (plan_failures, awaiting) = check_plan(root, &records, &led);
     push_failures(&mut failures, plan_failures);
-    let (terms_failures, terms_awaiting) = check_terms(root, &records, &led);
+    let (terms_failures, terms_awaiting, terms_notes) = check_terms(root, &records, &led, staged);
     push_failures(&mut failures, terms_failures);
     let (tie_failures, tied_count) = check_ties(root, &records, &led, ties);
     push_failures(&mut failures, tie_failures);
@@ -76,6 +76,7 @@ fn build(
     if terms_awaiting {
         notes.push("terms: awaiting approval".to_string());
     }
+    notes.extend(terms_notes);
     for d in check_done(root, &records, &led) {
         notes.push(format!("done: {}", d));
     }
@@ -653,29 +654,38 @@ fn check_plan(root: &Path, records: &[RecordFile], led: &Ledger) -> (Vec<Failure
     (out, awaiting)
 }
 
-/// `terms`: shape errors on `adrdom/terms.md`, whether its hash matches the
-/// latest `terms` ledger row (awaiting, not a failure), and every
-/// asked/answered section's `terms:` binding re-checked against today's
-/// resolution, retired bound terms. Returns the failures plus whether the
-/// terms file itself is awaiting approval.
-fn check_terms(root: &Path, records: &[RecordFile], led: &Ledger) -> (Vec<Failure>, bool) {
+/// `terms`: shape/approval failures on `adrdom/terms.md` (read from the
+/// index when `staged` and the file is staged there, otherwise the working
+/// tree). Missing or unapproved is a failure once any record file exists,
+/// and a note otherwise. Every asked/answered section's terms line, and
+/// every non-retired entry's own terms line, is checked for an existing,
+/// non-retired uuid on each pair -- never by re-resolving the underlying
+/// text. Circular definitions fail. Returns the failures, whether the
+/// terms file itself is still awaiting approval (only meaningful when no
+/// record exists yet), and any notes ("paired by nothing").
+fn check_terms(
+    root: &Path,
+    records: &[RecordFile],
+    led: &Ledger,
+    staged: bool,
+) -> (Vec<Failure>, bool, Vec<String>) {
     let mut out = Vec::new();
-    let terms_path = root.join("adrdom/terms.md");
-    if !terms_path.is_file() {
-        return (out, false);
-    }
+    let mut notes = Vec::new();
+    let has_records = !repo::list_decision_files(root).is_empty();
 
-    let tf = match terms::load(&terms_path) {
-        Ok(tf) => tf,
-        Err(e) => {
+    let Some(content) = read_terms_content(root, staged) else {
+        if has_records {
             out.push(Failure {
                 check: "terms".to_string(),
                 id: None,
-                message: format!("adrdom/terms.md: cannot read: {}", e),
+                message: "adrdom/terms.md missing".to_string(),
             });
-            return (out, false);
         }
+        return (out, false, notes);
     };
+
+    let lines = record::split_lines(&content);
+    let tf = terms::parse(&lines);
 
     for e in &tf.errors {
         out.push(Failure {
@@ -684,87 +694,170 @@ fn check_terms(root: &Path, records: &[RecordFile], led: &Ledger) -> (Vec<Failur
             message: format!("adrdom/terms.md: {}", e),
         });
     }
-    let file_hash = terms::file_hash(&tf);
-    let awaiting = led
-        .latest_for_path("terms", "adrdom/terms.md")
-        .map(|r| r.hash != file_hash)
-        .unwrap_or(true);
 
+    let file_hash = terms::file_hash(&tf);
+    let approved = led
+        .latest_for_path("terms", "adrdom/terms.md")
+        .map(|r| r.hash == file_hash)
+        .unwrap_or(false);
+    let mut awaiting = false;
+    if !approved {
+        if has_records {
+            out.push(Failure {
+                check: "terms".to_string(),
+                id: None,
+                message: "adrdom/terms.md not approved; owner runs: adr approve adrdom/terms.md"
+                    .to_string(),
+            });
+        } else {
+            awaiting = true;
+        }
+    }
+
+    // Every asked/answered section: must have a terms line; each uuid on
+    // it must name an entry that exists and is not retired. No
+    // re-resolution of the section text against today's terms.
     for rf in records {
         let rel = rel_path(root, &rf.path);
         for sec in &rf.sections {
-            let (Some(tl), Some(id)) = (sec.terms_line, &sec.id) else {
+            let Some(id) = &sec.id else { continue };
+            let st = led.latest_state(id).map(|r| r.event.as_str());
+            if !matches!(st, Some("asked") | Some("answered")) {
+                continue;
+            }
+            let Some(tl) = sec.terms_line else {
+                out.push(Failure {
+                    check: "terms".to_string(),
+                    id: Some(id.clone()),
+                    message: format!("{}: {}: no terms line", rel, sec.heading_text),
+                });
                 continue;
             };
-            let state = led.latest_state(id).map(|r| r.event.as_str());
-            if !matches!(state, Some("asked") | Some("answered")) {
-                continue;
-            }
-            let old_pairs = terms::parse_terms_line(rf.lines[tl].trim_end()).unwrap_or_default();
-
-            // Re-resolve the section text (heading through hash end),
-            // leaving out the `terms:` line itself: `ask` always
-            // (re)writes that line from a resolution computed before the
-            // line exists, so re-including it here would let a term whose
-            // own name is its key falsely "resolve" against itself.
-            let (s, e) = record::hash_range(&rf.lines, sec);
-            let mut text_lines: Vec<&str> = Vec::new();
-            for (offset, line) in rf.lines[s..e].iter().enumerate() {
-                if s + offset == tl {
-                    continue;
-                }
-                text_lines.push(line.as_str());
-            }
-            let text = text_lines.join("\n");
-            let new_pairs = terms::resolve(&text, &tf.terms);
-
-            let old_map: HashMap<&str, &str> = old_pairs
-                .iter()
-                .map(|(w, i)| (w.as_str(), i.as_str()))
-                .collect();
-            let new_map: HashMap<&str, &str> = new_pairs
-                .iter()
-                .map(|(w, i)| (w.as_str(), i.as_str()))
-                .collect();
-            let mut words: Vec<&str> = old_map.keys().chain(new_map.keys()).cloned().collect();
-            words.sort();
-            words.dedup();
-            for w in words {
-                if old_map.get(w) != new_map.get(w) {
-                    let now = new_map
-                        .get(w)
-                        .map(|s| s.to_string())
-                        .unwrap_or_else(|| "none".to_string());
-                    out.push(Failure {
+            let pairs = terms::parse_terms_line(rf.lines[tl].trim_end()).unwrap_or_default();
+            for (_, uuid) in &pairs {
+                match tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str())) {
+                    None => out.push(Failure {
                         check: "terms".to_string(),
                         id: Some(id.clone()),
                         message: format!(
-                            "{}: {}: binding changed ({} now {})",
-                            rel, sec.heading_text, w, now
+                            "{}: {}: entry {} not found",
+                            rel, sec.heading_text, uuid
                         ),
-                    });
-                }
-            }
-
-            let mut retired_reported: HashSet<String> = HashSet::new();
-            for (_, tid) in &old_pairs {
-                if let Some(t) = tf.terms.iter().find(|t| t.id.as_deref() == Some(tid.as_str())) {
-                    if t.retired && retired_reported.insert(t.id.clone().unwrap_or_default()) {
-                        out.push(Failure {
-                            check: "terms".to_string(),
-                            id: Some(id.clone()),
-                            message: format!(
-                                "{}: {}: bound term \"{}\" is retired",
-                                rel, sec.heading_text, t.name
-                            ),
-                        });
-                    }
+                    }),
+                    Some(t) if t.retired => out.push(Failure {
+                        check: "terms".to_string(),
+                        id: Some(id.clone()),
+                        message: format!(
+                            "{}: {}: bound term \"{}\" is retired",
+                            rel, sec.heading_text, t.name
+                        ),
+                    }),
+                    Some(_) => {}
                 }
             }
         }
     }
 
-    (out, awaiting)
+    // Every non-retired entry's own terms line: the same two checks.
+    for t in &tf.terms {
+        if t.retired {
+            continue;
+        }
+        let Some(tl) = &t.terms_line else { continue };
+        let pairs = terms::parse_terms_line(tl).unwrap_or_default();
+        for (_, uuid) in &pairs {
+            match tf.terms.iter().find(|o| o.id.as_deref() == Some(uuid.as_str())) {
+                None => out.push(Failure {
+                    check: "terms".to_string(),
+                    id: None,
+                    message: format!("adrdom/terms.md: \"{}\": entry {} not found", t.name, uuid),
+                }),
+                Some(o) if o.retired => out.push(Failure {
+                    check: "terms".to_string(),
+                    id: None,
+                    message: format!(
+                        "adrdom/terms.md: \"{}\": bound term \"{}\" is retired",
+                        t.name, o.name
+                    ),
+                }),
+                Some(_) => {}
+            }
+        }
+    }
+
+    // Circular definitions.
+    for cycle in terms::cycles(&tf) {
+        let mut chain = cycle.clone();
+        if let Some(first) = cycle.first() {
+            chain.push(first.clone());
+        }
+        out.push(Failure {
+            check: "terms".to_string(),
+            id: None,
+            message: format!("adrdom/terms.md: circular definition: {}", chain.join(" -> ")),
+        });
+    }
+
+    // Note (never a failure): every non-retired entry that no in-force
+    // decision's terms line, and no non-retired entry's own terms line,
+    // pairs against.
+    let mut used: HashSet<String> = HashSet::new();
+    for rf in records {
+        for sec in &rf.sections {
+            let Some(id) = &sec.id else { continue };
+            if !state::is_in_force(led, id) {
+                continue;
+            }
+            let Some(tl) = sec.terms_line else { continue };
+            if let Some(pairs) = terms::parse_terms_line(rf.lines[tl].trim_end()) {
+                for (_, uuid) in pairs {
+                    used.insert(uuid);
+                }
+            }
+        }
+    }
+    for t in &tf.terms {
+        if t.retired {
+            continue;
+        }
+        let Some(tl) = &t.terms_line else { continue };
+        if let Some(pairs) = terms::parse_terms_line(tl) {
+            for (_, uuid) in pairs {
+                used.insert(uuid);
+            }
+        }
+    }
+    let mut unused: Vec<String> = tf
+        .terms
+        .iter()
+        .filter(|t| !t.retired)
+        .filter(|t| t.id.as_ref().map(|id| !used.contains(id)).unwrap_or(true))
+        .map(|t| t.name.clone())
+        .collect();
+    unused.sort();
+    if !unused.is_empty() {
+        notes.push(format!(
+            "terms: {} entries paired by nothing: {}",
+            unused.len(),
+            unused.join(", ")
+        ));
+    }
+
+    (out, awaiting, notes)
+}
+
+/// `adrdom/terms.md`'s content for `check`: from the index when `staged`
+/// and the file is staged there, otherwise the working tree. `None` when
+/// the file exists in neither place.
+fn read_terms_content(root: &Path, staged: bool) -> Option<String> {
+    if staged {
+        if let Some(list) = repo::git(root, &["diff", "--cached", "--name-only"]) {
+            if list.lines().any(|p| p == "adrdom/terms.md") {
+                return repo::git(root, &["show", ":adrdom/terms.md"]);
+            }
+        }
+    }
+    std::fs::read_to_string(root.join("adrdom/terms.md")).ok()
 }
 
 /// `done`: every file whose plan and context are approved and whose every

@@ -22,6 +22,9 @@ Standard: clear yes or no.
 fn ledger_append_only_violation_is_detected_after_a_commit() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
+    let terms = "# Terms\n\n## pass\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A clear yes.\naliases: passes\n";
+    std::fs::write(dir.join("adrdom/terms.md"), terms).unwrap();
+    approve_terms_via_ledger(&dir, terms);
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
