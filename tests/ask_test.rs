@@ -5,7 +5,7 @@ use common::*;
 #[test]
 fn example_record_round_trips_and_ask_assigns_ids() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
     let record = write_record(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
@@ -43,7 +43,7 @@ fn example_record_round_trips_and_ask_assigns_ids() {
 #[test]
 fn ask_reasks_on_edit() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
     let record = write_record(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
@@ -88,7 +88,7 @@ fn ask_reasks_on_edit() {
 #[test]
 fn ask_refuses_to_edit_an_answered_section() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
     let record = write_record(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
@@ -131,7 +131,7 @@ fn ask_refuses_to_edit_an_answered_section() {
 #[test]
 fn ask_leaves_a_skeleton_heading_without_id_or_row() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
     let content = format!("{}\n### 1.2 Where does the plan live?\n", EXAMPLE_RECORD);
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
@@ -171,7 +171,7 @@ Standard: plain words.
 #[test]
 fn ask_refuses_when_terms_md_is_missing() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
 
@@ -190,7 +190,7 @@ fn ask_refuses_when_terms_md_is_missing() {
 #[test]
 fn ask_refuses_on_a_terms_md_shape_error() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
     // Missing the "# Terms" h1: a shape error.
@@ -210,7 +210,7 @@ fn ask_refuses_on_a_terms_md_shape_error() {
 #[test]
 fn ask_refuses_on_a_banned_word_naming_the_word_and_term() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     // Ban the word before it appears anywhere: `ban` itself refuses an
     // already-in-use word, so the record has to come after.
@@ -233,7 +233,7 @@ fn ask_refuses_on_a_banned_word_naming_the_word_and_term() {
 #[test]
 fn ask_refuses_on_a_banned_word_with_no_term_name() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     assert!(adr(&dir, &["ban"], &[], "predecessors\n").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
@@ -249,7 +249,7 @@ fn ask_refuses_on_a_banned_word_with_no_term_name() {
 #[test]
 fn ask_refuses_a_retired_match() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
     let terms = "# Terms\n\n## authority\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A fixture term.\naliases: \nretired: yes\n";
@@ -286,7 +286,7 @@ fn ask_refuses_a_retired_match() {
 #[test]
 fn ask_refuses_a_candidate_that_pairs_no_term() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let content = "# Example\n\n## Group\n\n### 1.1 Does this pass?\n\nProblem: whether it passes.\n\nStandard: clear yes or no.\n\n- A) Yes it passes.\n  Why: reasons.\n- B) No it does not.\n  Why: other reasons.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", content);
@@ -310,7 +310,7 @@ fn ask_refuses_a_candidate_that_pairs_no_term() {
 #[test]
 fn ask_writes_the_terms_line_with_a_plural_word() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
     approve_minimal_terms(&dir, "decision");

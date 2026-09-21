@@ -32,7 +32,7 @@ Standard: clear yes or no.
 #[test]
 fn show_prints_only_current_sentences() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "reasons");
     let record = write_record(&dir, "adrdom/decisions/example.md", RECORD);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", RECORD);

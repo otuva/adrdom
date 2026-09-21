@@ -3,12 +3,13 @@ pub mod approve;
 pub mod ask;
 pub mod ban;
 pub mod check;
-pub mod init;
+pub mod install;
 pub mod serve;
 pub mod show;
 pub mod unban;
+pub mod uninstall;
 
-/// The deny entries `adr init` installs into `.claude/settings.json` and
+/// The deny entries `adr install` installs into `.claude/settings.json` and
 /// `adr check`'s `install` check verifies are present. Shared so the two
 /// stay in lockstep.
 pub const DENY_ENTRIES: &[&str] = &[
@@ -20,6 +21,8 @@ pub const DENY_ENTRIES: &[&str] = &[
     "Bash(* adr unban*)",
     "Bash(adr serve*)",
     "Bash(* adr serve*)",
+    "Bash(adr uninstall*)",
+    "Bash(* adr uninstall*)",
     "Edit(adrdom/state/**)",
     "Write(adrdom/state/**)",
 ];

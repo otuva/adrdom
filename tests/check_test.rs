@@ -45,7 +45,7 @@ fn answer_one_question(dir: &std::path::Path) -> (std::path::PathBuf, String) {
 #[test]
 fn check_passes_on_a_clean_repo() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let (_record, id) = answer_one_question(&dir);
     write_test_comment(&dir, &id);
 
@@ -57,7 +57,7 @@ fn check_passes_on_a_clean_repo() {
 #[test]
 fn check_parse_failure() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(
         &dir,
         "adrdom/decisions/bad.md",
@@ -77,7 +77,7 @@ fn check_parse_failure() {
 #[test]
 fn check_ids_failure_missing_id() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
     // No `adr ask` run, so the section has no id.
 
@@ -90,7 +90,7 @@ fn check_ids_failure_missing_id() {
 #[test]
 fn check_ledger_malformed_row() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let ledger_path = dir.join("adrdom/state/ledger.tsv");
     let mut content = std::fs::read_to_string(&ledger_path).unwrap();
@@ -106,7 +106,7 @@ fn check_ledger_malformed_row() {
 #[test]
 fn check_answers_failure_hand_written_answer_line() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "pass");
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
@@ -131,7 +131,7 @@ fn check_answers_failure_hand_written_answer_line() {
 #[test]
 fn check_banned_default_and_message_modes_name_the_word() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let ban_out = adr(&dir, &["ban"], &[], "forbiddenword\n");
     assert!(ban_out.status.success(), "ban failed: {}", stderr(&ban_out));
@@ -172,7 +172,7 @@ fn check_banned_default_and_message_modes_name_the_word() {
 #[test]
 fn check_tests_failure_when_untested() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let (_record, _id) = answer_one_question(&dir);
     // Nothing recorded anywhere for the id.
 
@@ -184,9 +184,9 @@ fn check_tests_failure_when_untested() {
 }
 
 #[test]
-fn check_install_fails_when_settings_deny_entry_removed_and_passes_after_init() {
+fn check_install_fails_when_settings_deny_entry_removed_and_passes_after_install() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init", "--claude"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
 
     std::fs::remove_file(dir.join(".claude/settings.json")).unwrap();
 
@@ -199,15 +199,15 @@ fn check_install_fails_when_settings_deny_entry_removed_and_passes_after_init() 
         "{}",
         out_text
     );
-    assert!(out_text.contains("adr init --claude"), "{}", out_text);
+    assert!(out_text.contains("adr install --claude"), "{}", out_text);
 
-    assert!(adr(&dir, &["init", "--claude"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
 
     let out2 = adr(&dir, &["check"], &[], "");
     let out2_text = stdout(&out2);
     assert!(
         !out2_text.contains("install:"),
-        "install check should pass after re-init: {}",
+        "install check should pass after re-install: {}",
         out2_text
     );
 }
@@ -215,11 +215,11 @@ fn check_install_fails_when_settings_deny_entry_removed_and_passes_after_init() 
 #[test]
 fn check_install_passes_when_no_claude_directory() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
 
     assert!(
         !dir.join(".claude").exists(),
-        "plain init must not create .claude"
+        "plain install must not create .claude"
     );
 
     let out = adr(&dir, &["check"], &[], "");
@@ -232,9 +232,92 @@ fn check_install_passes_when_no_claude_directory() {
 }
 
 #[test]
+fn check_install_fails_when_agents_md_is_missing() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    std::fs::remove_file(dir.join("AGENTS.md")).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    assert!(
+        stdout(&out).contains("install: AGENTS.md lacks the adrdom brief; run: adr install"),
+        "{}",
+        stdout(&out)
+    );
+}
+
+#[test]
+fn check_install_fails_when_agents_md_has_no_marked_section() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    std::fs::write(dir.join("AGENTS.md"), "# Notes\n\nNo markers here.\n").unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    assert!(
+        stdout(&out).contains("install: AGENTS.md lacks the adrdom brief; run: adr install"),
+        "{}",
+        stdout(&out)
+    );
+}
+
+#[test]
+fn check_install_fails_when_agents_md_brief_differs() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let content = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
+    let edited = content.replacen(
+        "This repository is governed by `adr`.",
+        "This repository is governed by adr, edited.",
+        1,
+    );
+    assert_ne!(content, edited, "fixture edit should have changed something");
+    std::fs::write(dir.join("AGENTS.md"), edited).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    assert!(
+        stdout(&out)
+            .contains("install: AGENTS.md brief differs from this binary's; run: adr install"),
+        "{}",
+        stdout(&out)
+    );
+}
+
+#[test]
+fn check_install_fails_when_claude_md_does_not_import_agents_md() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    std::fs::write(dir.join("CLAUDE.md"), "# Notes\n\nNo import here.\n").unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    assert!(
+        stdout(&out).contains("install: CLAUDE.md does not import AGENTS.md; run: adr install"),
+        "{}",
+        stdout(&out)
+    );
+}
+
+#[test]
+fn check_install_passes_right_after_install_with_a_claude_md_present() {
+    let dir = init_repo();
+    std::fs::write(dir.join("CLAUDE.md"), "# Notes\n\nOwner text.\n").unwrap();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(
+        !stdout(&out).contains("install:"),
+        "check should pass right after install: {}",
+        stdout(&out)
+    );
+}
+
+#[test]
 fn check_tests_ignores_adr_prefix_that_is_not_a_uuid() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let (_record, id) = answer_one_question(&dir);
     write_test_comment(&dir, &id);
     // Prose that happens to contain "adr:" followed by a non-uuid token,
@@ -254,7 +337,7 @@ fn check_tests_ignores_adr_prefix_that_is_not_a_uuid() {
 #[test]
 fn check_parse_reports_a_file_shape_error() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     // No h1 at all: a file-level shape error.
     write_record(
         &dir,
@@ -272,7 +355,7 @@ fn check_parse_reports_a_file_shape_error() {
 #[test]
 fn check_passes_a_skeleton_heading_with_no_id_or_body() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_empty_terms(&dir);
     write_record(
         &dir,
@@ -290,7 +373,7 @@ fn check_passes_a_skeleton_heading_with_no_id_or_body() {
 #[test]
 fn check_fails_a_body_under_an_unapproved_heading() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(
         &dir,
         "adrdom/decisions/example.md",
@@ -312,7 +395,7 @@ fn check_fails_a_body_under_an_unapproved_heading() {
 #[test]
 fn check_prints_awaiting_approval_line() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(
         &dir,
         "adrdom/decisions/skeleton.md",
@@ -331,7 +414,7 @@ fn check_prints_awaiting_approval_line() {
 #[test]
 fn check_fails_a_question_heading_duplicated_across_two_files() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(
         &dir,
         "adrdom/decisions/a.md",
@@ -358,7 +441,7 @@ fn check_fails_a_question_heading_duplicated_across_two_files() {
 #[test]
 fn check_passes_when_a_superseded_id_is_missing_from_every_record() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(
         &dir,
         "adrdom/decisions/example.md",
@@ -386,7 +469,7 @@ fn check_passes_when_a_superseded_id_is_missing_from_every_record() {
 #[test]
 fn check_fails_a_withdrawn_id_still_present_in_a_record() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let wd_id = "88888888-8888-8888-8888-888888888888";
     let content = format!(
         "# Example\n\n## Group\n\n### 1.1 Some question?\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
@@ -409,7 +492,7 @@ fn check_fails_a_withdrawn_id_still_present_in_a_record() {
 #[test]
 fn check_prints_done_for_a_fully_answered_approved_file() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let (_record, id) = answer_one_question(&dir);
     write_test_comment(&dir, &id);
 
@@ -432,7 +515,7 @@ fn check_prints_done_for_a_fully_answered_approved_file() {
 #[test]
 fn check_fails_on_a_terms_file_shape_error() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     // Missing the "# Terms" h1: a shape error.
     std::fs::write(
         dir.join("adrdom/terms.md"),
@@ -450,7 +533,7 @@ fn check_fails_on_a_terms_file_shape_error() {
 #[test]
 fn check_fails_when_terms_missing_and_a_record_exists() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(
         &dir,
         "adrdom/decisions/example.md",
@@ -470,7 +553,7 @@ fn check_fails_when_terms_missing_and_a_record_exists() {
 #[test]
 fn check_passes_when_terms_missing_and_no_records_exist() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     // No records, no terms.md.
 
     let out = adr(&dir, &["check"], &[], "");
@@ -481,7 +564,7 @@ fn check_passes_when_terms_missing_and_no_records_exist() {
 #[test]
 fn check_fails_when_terms_unapproved_and_a_record_exists() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(
         &dir,
         "adrdom/decisions/example.md",
@@ -509,7 +592,7 @@ fn check_fails_when_terms_unapproved_and_a_record_exists() {
 #[test]
 fn check_notes_awaiting_approval_when_terms_unapproved_and_no_records() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     std::fs::write(
         dir.join("adrdom/terms.md"),
         "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice.\naliases: \n",
@@ -528,7 +611,7 @@ fn check_notes_awaiting_approval_when_terms_unapproved_and_no_records() {
 #[test]
 fn check_fails_an_asked_section_whose_terms_line_names_a_missing_uuid() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let term_id = "11111111-1111-1111-1111-111111111111";
     let terms_content = format!(
@@ -563,7 +646,7 @@ fn check_fails_an_asked_section_whose_terms_line_names_a_missing_uuid() {
 #[test]
 fn check_fails_an_asked_section_bound_to_a_retired_term() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let term_id = "33333333-3333-3333-3333-333333333333";
     let terms_content = format!(
@@ -596,7 +679,7 @@ fn check_fails_an_asked_section_bound_to_a_retired_term() {
 #[test]
 fn check_fails_an_asked_section_with_no_terms_line() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let terms_content = "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice answered by the owner.\naliases: \n";
     std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
@@ -623,7 +706,7 @@ fn check_fails_an_asked_section_with_no_terms_line() {
 #[test]
 fn check_passes_when_a_new_term_would_now_match_words_already_answered_in_text() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let widget_id = "66666666-6666-6666-6666-666666666666";
     let terms_v1 = format!(
@@ -669,7 +752,7 @@ fn check_passes_when_a_new_term_would_now_match_words_already_answered_in_text()
 #[test]
 fn check_notes_a_term_paired_by_nothing() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let term_id = "99999999-1111-1111-1111-111111111111";
     let terms_content = format!(
@@ -697,7 +780,7 @@ fn check_staged_reads_terms_from_the_index() {
     // fine: `check --staged` must read the index, not the working file.
     {
         let dir = init_repo();
-        assert!(adr(&dir, &["init"], &[], "").status.success());
+        assert!(adr(&dir, &["install"], &[], "").status.success());
 
         std::fs::write(dir.join("adrdom/terms.md"), BAD_TERMS).unwrap();
         run_git(&dir, &["add", "adrdom/terms.md"]);
@@ -715,7 +798,7 @@ fn check_staged_reads_terms_from_the_index() {
     // does not include it.
     {
         let dir = init_repo();
-        assert!(adr(&dir, &["init"], &[], "").status.success());
+        assert!(adr(&dir, &["install"], &[], "").status.success());
 
         std::fs::write(dir.join("adrdom/terms.md"), GOOD_TERMS).unwrap();
         run_git(&dir, &["add", "adrdom/terms.md"]);
@@ -733,7 +816,7 @@ fn check_staged_reads_terms_from_the_index() {
 #[test]
 fn check_fails_a_circular_definition() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms_content = "# Terms\n\n\
 ## alpha\n\
 id: 11111111-1111-1111-1111-111111111111\n\

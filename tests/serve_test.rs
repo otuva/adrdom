@@ -111,11 +111,11 @@ fn post(port: u16, path: &str, cookie: Option<&str>, form: &str) -> HttpResponse
     raw_request(port, &req)
 }
 
-/// Sets up a repo with `adrdom/init`, the fixture record approved, one
+/// Sets up a repo with `adr install`, the fixture record approved, one
 /// `ask` run (so 1.1 is Open), and returns the repo dir.
 fn setup_repo_with_open_question() -> std::path::PathBuf {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
     let record = write_record(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
@@ -308,7 +308,7 @@ Standard: decisions must be recorded plainly.
 #[test]
 fn get_next_shows_question_words_and_no_entry() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", WORDS_RECORD);
     let terms = write_record(&dir, "adrdom/terms.md", WORDS_TERMS_MD);
     assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
@@ -367,7 +367,7 @@ fn get_next_shows_question_words_and_no_entry() {
 #[test]
 fn get_next_marks_term_words_in_text() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", WORDS_RECORD);
     let terms = write_record(&dir, "adrdom/terms.md", WORDS_TERMS_MD);
     assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
@@ -422,7 +422,7 @@ Standard: decisions must be recorded plainly.
 #[test]
 fn get_next_no_entry_line_has_no_uuid_fragments() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", UUID_INLINE_RECORD);
     let terms = write_record(&dir, "adrdom/terms.md", WORDS_TERMS_MD);
     assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
@@ -461,7 +461,7 @@ fn get_next_no_entry_line_has_no_uuid_fragments() {
 #[test]
 fn terms_article_lists_entries_with_dependents_count() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", WORDS_RECORD);
     let terms = write_record(&dir, "adrdom/terms.md", WORDS_TERMS_MD);
     assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
@@ -528,7 +528,7 @@ aliases: \n";
 #[test]
 fn terms_article_shows_before_after_when_unapproved() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms = write_record(&dir, "adrdom/terms.md", WORDS_TERMS_MD);
     assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
         .status

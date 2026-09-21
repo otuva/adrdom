@@ -25,12 +25,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Set up adrdom/ in the current repository.
-    Init {
+    /// Set up adrdom/ and AGENTS.md in the current repository.
+    Install {
         /// Also merge the deny entries into .claude/settings.json.
         #[arg(long)]
         claude: bool,
     },
+    /// Owner-only: remove what `adr install` wrote outside adrdom/.
+    Uninstall,
     /// Assign ids and record `asked` for every unasked/changed question in a topic file.
     Ask { topic_file: PathBuf },
     /// Owner-only: approve a topic file's plan/context, or the terms file.
@@ -66,7 +68,8 @@ enum Command {
 fn main() {
     let cli = Cli::parse();
     let code = match cli.command {
-        Command::Init { claude } => commands::init::run(claude),
+        Command::Install { claude } => commands::install::run(claude),
+        Command::Uninstall => commands::uninstall::run(),
         Command::Ask { topic_file } => commands::ask::run(topic_file),
         Command::Approve { file } => commands::approve::run(file),
         Command::Answer { id, letter } => commands::answer::run(id, letter),

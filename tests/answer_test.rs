@@ -50,7 +50,7 @@ Standard: plain words.
 #[test]
 fn answer_writes_answer_line_and_ledger_row() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
@@ -82,7 +82,7 @@ fn answer_writes_answer_line_and_ledger_row() {
 #[test]
 fn answer_refuses_when_claudecode_is_set() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
@@ -122,7 +122,7 @@ fn answer_refuses_when_claudecode_is_set() {
 #[test]
 fn answer_with_supersedes_writes_superseded_row_and_show_hides_old() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
@@ -202,7 +202,7 @@ fn answer_with_supersedes_writes_superseded_row_and_show_hides_old() {
 #[test]
 fn answer_with_two_id_supersedes_writes_a_row_per_id() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
@@ -272,7 +272,7 @@ fn answer_with_two_id_supersedes_writes_a_row_per_id() {
 #[test]
 fn answer_refuses_a_second_time_with_already_answered_message() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
@@ -314,7 +314,7 @@ fn answer_refuses_a_second_time_with_already_answered_message() {
 #[test]
 fn answer_with_two_id_supersedes_refuses_when_one_is_not_current() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
@@ -388,7 +388,7 @@ fn answer_with_two_id_supersedes_refuses_when_one_is_not_current() {
 #[test]
 fn answer_accepts_a_supersedes_target_already_superseded_as_lineage() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
@@ -461,7 +461,7 @@ fn answer_accepts_a_supersedes_target_already_superseded_as_lineage() {
 #[test]
 fn answer_refuses_when_terms_md_is_missing() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
@@ -485,7 +485,7 @@ fn answer_refuses_when_terms_md_is_missing() {
 #[test]
 fn answer_refuses_when_terms_md_has_a_shape_error() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
@@ -510,7 +510,7 @@ fn answer_refuses_when_terms_md_has_a_shape_error() {
 #[test]
 fn answer_refuses_when_terms_md_is_not_approved() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
@@ -536,7 +536,7 @@ fn answer_refuses_when_terms_md_is_not_approved() {
 #[test]
 fn answer_refuses_a_section_with_no_terms_line() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let content = "# Topic\n\n## Group\n\n### 1.1 What is the authority?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", content);
@@ -601,7 +601,7 @@ fn corrupt_terms_line(dir: &Path, record: &Path, heading: &str, new_terms_line: 
 #[test]
 fn answer_refuses_a_malformed_terms_line() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
@@ -630,7 +630,7 @@ fn answer_refuses_a_malformed_terms_line() {
 #[test]
 fn answer_refuses_a_terms_line_naming_a_nonexistent_term() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
@@ -662,7 +662,7 @@ fn answer_refuses_a_terms_line_naming_a_nonexistent_term() {
 #[test]
 fn answer_refuses_a_terms_line_naming_a_retired_term() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);

@@ -63,7 +63,7 @@ const HEADING_REMOVED: &str = "# Topic\n\nContext prose.\n\n## Group One\n";
 #[test]
 fn ask_refuses_an_unapproved_file_naming_adr_approve() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "question");
     let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP_RECORD);
 
@@ -83,7 +83,7 @@ fn ask_refuses_an_unapproved_file_naming_adr_approve() {
 #[test]
 fn approve_writes_approved_and_context_rows_then_is_idempotent() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP_RECORD);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -107,7 +107,7 @@ fn approve_writes_approved_and_context_rows_then_is_idempotent() {
 #[test]
 fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "question");
     let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP_RECORD);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
@@ -149,7 +149,7 @@ fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
 #[test]
 fn ask_refuses_group_two_while_group_one_unanswered_then_passes_after_answer() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "question");
     let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP_RECORD);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
@@ -194,7 +194,7 @@ fn ask_refuses_group_two_while_group_one_unanswered_then_passes_after_answer() {
 #[test]
 fn approve_withdraws_a_struck_asked_heading() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "question");
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
@@ -224,7 +224,7 @@ fn approve_withdraws_a_struck_asked_heading() {
 #[test]
 fn approve_refuses_when_answered_heading_gone_and_not_superseded() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "question");
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
@@ -253,7 +253,7 @@ fn approve_refuses_when_answered_heading_gone_and_not_superseded() {
 #[test]
 fn approve_allows_a_vanished_heading_once_superseded() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "question");
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
@@ -309,7 +309,7 @@ aliases: \n";
 #[test]
 fn ask_refuses_while_terms_unapproved() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
     write_record(&dir, "adrdom/terms.md", TERMS_BASIC);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
@@ -333,7 +333,7 @@ aliases: \n";
 #[test]
 fn approve_fills_missing_term_ids() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(&dir, "adrdom/decisions/example.md", "# Example\n");
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_NO_IDS);
 
@@ -370,7 +370,7 @@ Standard: plain words.
 #[test]
 fn ask_writes_terms_line_binding_word_to_term_id() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", DECISION_QUESTION_RECORD);
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_BASIC);
 
@@ -443,7 +443,7 @@ Standard: plain words.
 #[test]
 fn approve_refuses_a_terms_edit_that_moves_a_word_off_a_term_carried_by_a_current_decision() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", CHOICE_QUESTION_RECORD);
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_WITH_ALIAS);
 
@@ -482,7 +482,7 @@ fn approve_refuses_a_terms_edit_that_moves_a_word_off_a_term_carried_by_a_curren
 #[test]
 fn approve_allows_moving_a_word_that_nothing_carries() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_WITH_ALIAS);
     assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
         .status
@@ -504,7 +504,7 @@ aliases: \n";
 #[test]
 fn approve_writes_a_terms_row_on_a_clean_edit() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(&dir, "adrdom/decisions/example.md", "# Example\n");
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_BASIC);
     assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
@@ -527,7 +527,7 @@ const TERMS_MISSING_DEFINITION: &str = "# Terms\n\n## decision\naliases: \n";
 #[test]
 fn approve_terms_refuses_before_writing_leaving_the_file_unchanged() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_MISSING_DEFINITION);
     let before = std::fs::read_to_string(&terms).unwrap();
 
@@ -560,7 +560,7 @@ aliases: \n";
 #[test]
 fn approve_refuses_a_circular_definition() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_CIRCULAR);
     let before = std::fs::read_to_string(&terms).unwrap();
 
@@ -580,7 +580,7 @@ fn approve_refuses_a_circular_definition() {
 #[test]
 fn approve_terms_reruns_as_already_approved_with_no_new_row() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_BASIC);
     assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
         .status
@@ -650,7 +650,7 @@ Standard: plain words.
 #[test]
 fn approve_refuses_removing_a_term_carried_by_a_current_decision() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", DECISION_RECORD_FOR_DEPENDENTS);
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_TWO_ENTRIES);
     assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
@@ -682,7 +682,7 @@ fn approve_refuses_removing_a_term_carried_by_a_current_decision() {
 #[test]
 fn approve_refuses_retiring_a_term_carried_by_a_current_decision() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", DECISION_RECORD_FOR_DEPENDENTS);
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_TWO_ENTRIES);
     assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
@@ -726,7 +726,7 @@ aliases: decision\n";
 #[test]
 fn approve_allows_a_rename_that_keeps_the_old_name_as_an_alias() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", DECISION_RECORD_FOR_DEPENDENTS);
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_BEFORE_RENAME);
     assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
@@ -754,7 +754,7 @@ fn approve_allows_a_rename_that_keeps_the_old_name_as_an_alias() {
 #[test]
 fn approve_prints_dependents_when_a_definition_changes() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", DECISION_RECORD_FOR_DEPENDENTS);
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_BASIC);
     assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
@@ -811,7 +811,7 @@ aliases: \n";
 #[test]
 fn approve_prints_a_term_dependent_when_a_definition_changes() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_ENTRY_DEPENDENT_V1);
     assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
         .status
@@ -851,7 +851,7 @@ aliases: \n";
 #[test]
 fn approve_writes_a_terms_line_per_term_from_its_definition() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_CROSS_REF);
     assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
         .status
@@ -887,7 +887,7 @@ terms: bogus=99999999-9999-9999-9999-999999999999\n";
 #[test]
 fn approve_overwrites_an_agent_written_bogus_terms_line_in_a_term() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_ENTRY_WITH_BOGUS_LINE);
 
     // Under the old rule this line was read as prior state: term
@@ -934,7 +934,7 @@ aliases: \n";
 #[test]
 fn approve_refuses_retiring_a_term_carried_by_another_terms_definition() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_ENTRY_PAIRS_ANOTHER_V1);
     assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
         .status

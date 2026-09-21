@@ -17,10 +17,18 @@ runtime dependencies beyond `git` on `PATH`.
 
 ## Commands
 
-- `adr init` — set up `adrdom/decisions/`, `adrdom/state/`, and git hooks in
-  the current repository. Idempotent. `adr init --claude` additionally
-  merges a set of deny entries into `.claude/settings.json`'s
-  `permissions.deny`.
+- `adr install` — set up `adrdom/decisions/`, `adrdom/state/`, and git hooks
+  in the current repository, and write the agent brief into AGENTS.md (the
+  file agents read) between marker lines, refreshing it in place on a later
+  run. When CLAUDE.md already exists, adds a line importing AGENTS.md into
+  it. Idempotent. `adr install --claude` additionally merges a set of deny
+  entries into `.claude/settings.json`'s `permissions.deny`. Not owner-only.
+- `adr uninstall` — owner-only. Removes everything `adr install` wrote
+  outside `adrdom/`: the marked brief section from AGENTS.md (deleting the
+  file if nothing else is in it), the AGENTS.md import it added to
+  CLAUDE.md, the git hooks and `core.hooksPath` (only if unchanged since
+  install), and the deny entries from `.claude/settings.json`. Leaves
+  `adrdom/` untouched. Idempotent.
 - `adr ask <topic_file>` — assign ids to new questions, write their `terms:`
   binding line, and record them as asked (re-asking ones that changed since
   they were last asked); refuses on an unapproved plan/context/terms file, an
@@ -46,10 +54,10 @@ runtime dependencies beyond `git` on `PATH`.
 - `adr check [--staged] [--message <path>]` — run every governance check;
   used by `.githooks/pre-commit` and `.githooks/commit-msg`.
 
-`adr answer`, `adr approve`, `adr unban`, and `adr serve` refuse to run unless
-invoked interactively by a human (a real TTY, and no `CLAUDECODE` in the
-environment) — an AI agent cannot answer a question, approve anything, edit
-the ban list, or start the server.
+`adr answer`, `adr approve`, `adr unban`, `adr serve`, and `adr uninstall`
+refuse to run unless invoked interactively by a human (a real TTY, and no
+`CLAUDECODE` in the environment) — an AI agent cannot answer a question,
+approve anything, edit the ban list, start the server, or uninstall.
 
 ## Topic file shape
 
@@ -81,12 +89,15 @@ as `terms: <name>=<uuid>, <name>=<uuid>`.
 
 ## Install and check
 
-`adr init --claude` merges a set of `Bash`/`Edit`/`Write` deny entries into
-`.claude/settings.json`'s `permissions.deny` (covering `adr answer`,
-`adr approve`, `adr unban`, `adr serve`, and edits to `adrdom/state/`).
-`adr check`'s `install` check only runs when a `.claude` directory exists in
-the repository; when it does, the check fails if any entry is missing,
-naming `adr init --claude` as the fix.
+`adr install --claude` merges a set of `Bash`/`Edit`/`Write` deny entries
+into `.claude/settings.json`'s `permissions.deny` (covering `adr answer`,
+`adr approve`, `adr unban`, `adr serve`, `adr uninstall`, and edits to
+`adrdom/state/`). `adr check`'s `install` check always verifies that
+AGENTS.md holds the current brief between its marker lines, and that
+CLAUDE.md (when it exists) imports AGENTS.md; it fails naming `adr install`
+as the fix. The deny-entry part of the check only runs when a `.claude`
+directory exists in the repository; when it does, the check fails if any
+entry is missing, naming `adr install --claude` as the fix.
 
 ## Ledger
 

@@ -5,7 +5,7 @@ use common::*;
 #[test]
 fn unban_removes_hash_and_writes_row() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let ban_out = adr(&dir, &["ban"], &[], "forbiddenword\n");
     assert!(ban_out.status.success(), "ban failed: {}", stderr(&ban_out));
@@ -37,7 +37,7 @@ fn unban_removes_hash_and_writes_row() {
 #[test]
 fn unban_reports_nothing_to_remove() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let out = adr_owner(&dir, &["unban"], "neverbanned\n");
     assert!(out.status.success(), "unban failed: {}", stderr(&out));
@@ -50,7 +50,7 @@ fn unban_reports_nothing_to_remove() {
 #[test]
 fn unban_rewrites_two_column_lines() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let term_id = "33333333-3333-3333-3333-333333333333";
     let terms_content = format!(
@@ -97,7 +97,7 @@ fn unban_rewrites_two_column_lines() {
 #[test]
 fn unban_refuses_when_claudecode_is_set() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let ban_out = adr(&dir, &["ban"], &[], "forbiddenword\n");
     assert!(ban_out.status.success(), "ban failed: {}", stderr(&ban_out));

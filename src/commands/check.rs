@@ -545,6 +545,57 @@ fn skip_path(p: &str) -> bool {
 fn check_install(root: &Path) -> Vec<Failure> {
     let mut out = Vec::new();
 
+    // AGENTS.md and CLAUDE.md are checked unconditionally, regardless of
+    // whether .claude/ exists.
+    let agents_content = std::fs::read_to_string(root.join("AGENTS.md"));
+    match &agents_content {
+        Ok(content) => {
+            let parts: Vec<&str> = content.split('\n').collect();
+            match crate::commands::install::find_markers(&parts) {
+                Some((begin, end)) => {
+                    let section = &parts[begin + 1..end];
+                    let brief_lines: Vec<&str> = crate::commands::install::BRIEF.lines().collect();
+                    let matches = section.len() == brief_lines.len()
+                        && section
+                            .iter()
+                            .zip(brief_lines.iter())
+                            .all(|(a, b)| a.trim_end() == b.trim_end());
+                    if !matches {
+                        out.push(Failure {
+                            check: "install".to_string(),
+                            id: None,
+                            message: "AGENTS.md brief differs from this binary's; run: adr install"
+                                .to_string(),
+                        });
+                    }
+                }
+                None => out.push(Failure {
+                    check: "install".to_string(),
+                    id: None,
+                    message: "AGENTS.md lacks the adrdom brief; run: adr install".to_string(),
+                }),
+            }
+        }
+        Err(_) => out.push(Failure {
+            check: "install".to_string(),
+            id: None,
+            message: "AGENTS.md lacks the adrdom brief; run: adr install".to_string(),
+        }),
+    }
+
+    if let Ok(content) = std::fs::read_to_string(root.join("CLAUDE.md")) {
+        if !content
+            .lines()
+            .any(|l| l == crate::commands::install::CLAUDE_MD_IMPORT)
+        {
+            out.push(Failure {
+                check: "install".to_string(),
+                id: None,
+                message: "CLAUDE.md does not import AGENTS.md; run: adr install".to_string(),
+            });
+        }
+    }
+
     if !root.join(".claude").is_dir() {
         return out;
     }
@@ -575,7 +626,7 @@ fn check_install(root: &Path) -> Vec<Failure> {
             check: "install".to_string(),
             id: None,
             message: format!(
-                "{} cannot be parsed; owner runs: adr init --claude",
+                "{} cannot be parsed; owner runs: adr install --claude",
                 settings_path.display()
             ),
         }),
@@ -589,7 +640,7 @@ fn missing_deny_entry(entry: &str) -> Failure {
         check: "install".to_string(),
         id: None,
         message: format!(
-            ".claude/settings.json lacks deny entry {}; owner runs: adr init --claude",
+            ".claude/settings.json lacks deny entry {}; owner runs: adr install --claude",
             entry
         ),
     }

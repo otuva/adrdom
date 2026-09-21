@@ -5,7 +5,7 @@ use common::*;
 #[test]
 fn ban_refuses_on_a_word_already_in_use_and_writes_nothing() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
 
     std::fs::write(
         dir.join("notes.txt"),
@@ -34,7 +34,7 @@ fn ban_refuses_on_a_word_already_in_use_and_writes_nothing() {
 #[test]
 fn ban_writes_two_column_lines_with_term() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let term_id = "11111111-1111-1111-1111-111111111111";
     let terms_content = format!(
@@ -80,7 +80,7 @@ fn ban_writes_two_column_lines_with_term() {
 #[test]
 fn ban_refuses_unknown_term() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let out = adr(&dir, &["ban", "--term", "nosuchterm"], &[], "someword\n");
     assert!(!out.status.success());
@@ -96,7 +96,7 @@ fn ban_refuses_unknown_term() {
 #[test]
 fn check_banned_scanner_names_the_term() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let term_id = "22222222-2222-2222-2222-222222222222";
     let terms_content = format!(
@@ -128,7 +128,7 @@ fn check_banned_scanner_names_the_term() {
 #[test]
 fn check_fails_when_banned_file_and_ledger_disagree_both_ways() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
 
     // The ledger says a hash is currently banned; the file is missing it.
     append_ledger_row(
@@ -164,7 +164,7 @@ fn check_fails_when_banned_file_and_ledger_disagree_both_ways() {
 #[test]
 fn ban_ignores_a_word_present_only_in_a_ledger_row_detail() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
 
     // As `adr ask` would have written for a question heading that
     // mentioned "gadgetword", followed by the row `adr answer` writes once
@@ -203,7 +203,7 @@ fn ban_ignores_a_word_present_only_in_a_ledger_row_detail() {
 #[test]
 fn check_passes_when_banned_file_and_ledger_agree() {
     let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
+    assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let ban_out = adr(&dir, &["ban"], &[], "quietword\n");
     assert!(ban_out.status.success(), "ban failed: {}", stderr(&ban_out));
