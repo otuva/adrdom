@@ -9,11 +9,11 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::OnceLock;
 
-/// The shipped list of common English words (`src/common_words.txt`, one
-/// word per line, lowercase): words that never need a term to explain
+/// The shipped list of common English words (`assets/common_words.txt`,
+/// one word per line, lowercase): words that never need a term to explain
 /// them, so the "No term" line under a question only names words that
 /// might. Not governed data — it ships with the binary.
-static COMMON_WORDS: &str = include_str!("common_words.txt");
+static COMMON_WORDS: &str = include_str!("../assets/common_words.txt");
 
 fn common_words() -> &'static HashSet<&'static str> {
     static SET: OnceLock<HashSet<&'static str>> = OnceLock::new();
