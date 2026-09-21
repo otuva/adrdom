@@ -243,6 +243,169 @@ fn get_next_with_cookie_shows_question_heading() {
     let _ = child.wait();
 }
 
+// --- terms fixtures (7.9: words, no-entry, entries, before/after) -------
+
+const WORDS_TERMS_MD: &str = "# Terms\n\n\
+## decision\n\
+id: 11111111-1111-1111-1111-111111111111\n\
+definition: A choice locked by the owner.\n\
+aliases: \n";
+
+const WORDS_RECORD: &str = r#"# Topic
+
+Context prose.
+
+## Group One
+
+### 1.1 What counts as a decision?
+
+Problem: the decision about a frobnicate is unclear.
+
+Standard: decisions must be recorded plainly.
+
+- A) A decision is one commitment.
+  Why: reasons.
+- B) A decision is a block.
+  Why: other reasons.
+"#;
+
+#[test]
+fn get_next_shows_question_words_and_no_entry() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let record = write_record(&dir, "adrdom/decisions/example.md", WORDS_RECORD);
+    let terms = write_record(&dir, "adrdom/terms.md", WORDS_TERMS_MD);
+    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let resp = get(port, "/next", Some(&cookie));
+    assert_eq!(resp.status, 200, "body: {}", resp.body);
+
+    // The word, the entry name, and its definition all appear.
+    assert!(resp.body.contains("decision"), "body: {}", resp.body);
+    assert!(
+        resp.body.contains("A choice locked by the owner."),
+        "body: {}",
+        resp.body
+    );
+
+    // A coined word with no entry shows up in the "No entry" line.
+    assert!(resp.body.contains("frobnicate"), "body: {}", resp.body);
+    // A common word never does.
+    let no_entry_start = resp.body.find("No entry:").expect("No entry line present");
+    let no_entry_line = &resp.body[no_entry_start..];
+    let no_entry_line = &no_entry_line[..no_entry_line.find("</p>").unwrap_or(no_entry_line.len())];
+    assert!(!no_entry_line.contains("the"), "no-entry line: {}", no_entry_line);
+    // Nor does a plural of a paired term ("decisions" resolves the same
+    // entry as "decision").
+    assert!(
+        !no_entry_line.contains("decisions"),
+        "no-entry line: {}",
+        no_entry_line
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+#[test]
+fn terms_article_lists_entries_with_dependents_count() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let record = write_record(&dir, "adrdom/decisions/example.md", WORDS_RECORD);
+    let terms = write_record(&dir, "adrdom/terms.md", WORDS_TERMS_MD);
+    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let question_id = extract_ids(&content)[0].clone();
+    assert!(adr_owner(&dir, &["lock", &question_id, "A"], "")
+        .status
+        .success());
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let resp = get(port, "/", Some(&cookie));
+    assert_eq!(resp.status, 200, "body: {}", resp.body);
+    assert!(resp.body.contains("decision"), "body: {}", resp.body);
+    assert!(
+        resp.body.contains("A choice locked by the owner."),
+        "body: {}",
+        resp.body
+    );
+    assert!(
+        resp.body.contains("1 decision in force"),
+        "body: {}",
+        resp.body
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+const WORDS_TERMS_MD_V2: &str = "# Terms\n\n\
+## decision\n\
+id: 11111111-1111-1111-1111-111111111111\n\
+definition: A choice the owner locks in, once, in writing.\n\
+aliases: \n";
+
+#[test]
+fn terms_article_shows_before_after_when_unapproved() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let terms = write_record(&dir, "adrdom/terms.md", WORDS_TERMS_MD);
+    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
+        .status
+        .success());
+    run_git(&dir, &["add", "adrdom/terms.md", "adrdom/state/ledger.tsv"]);
+    let commit_out = run_git(&dir, &["commit", "-q", "-m", "approve terms v1"]);
+    assert!(commit_out.status.success(), "{:?}", commit_out);
+
+    // Edit the definition without re-approving: HEAD still matches the
+    // last `terms` ledger row, so the page can diff against it.
+    write_record(&dir, "adrdom/terms.md", WORDS_TERMS_MD_V2);
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let resp = get(port, "/", Some(&cookie));
+    assert_eq!(resp.status, 200, "body: {}", resp.body);
+    assert!(resp.body.contains("not approved"), "body: {}", resp.body);
+    assert!(
+        resp.body.contains("A choice locked by the owner."),
+        "before text missing: {}",
+        resp.body
+    );
+    assert!(
+        resp.body.contains("A choice the owner locks in, once, in writing."),
+        "after text missing: {}",
+        resp.body
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
 #[test]
 fn serve_refuses_when_claudecode_is_set() {
     let dir = setup_repo_with_open_question();

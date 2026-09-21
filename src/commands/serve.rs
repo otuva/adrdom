@@ -332,6 +332,64 @@ fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> String {
             }
             body.push_str("</ul>\n");
         }
+        if !t.entries.is_empty() {
+            body.push_str("<dl class=\"entries\">\n");
+            for e in &t.entries {
+                body.push_str("<dt>");
+                body.push_str(&esc(&e.name));
+                if e.retired {
+                    body.push_str(" <span class=\"retired\">(retired)</span>");
+                }
+                body.push_str("</dt><dd>");
+                body.push_str(&esc(&e.definition));
+                let aliases = if e.aliases.is_empty() {
+                    "none".to_string()
+                } else {
+                    e.aliases.join(", ")
+                };
+                body.push_str(&format!(
+                    "<span class=\"meta\">aliases: {} &middot; {}</span>",
+                    esc(&aliases),
+                    plural(e.dependents, "decision in force", "decisions in force")
+                ));
+                body.push_str("</dd>\n");
+            }
+            body.push_str("</dl>\n");
+        }
+        if !t.diffs.is_empty() {
+            body.push_str("<div class=\"diffs\">\n<h3>Changed since approval</h3>\n<dl>\n");
+            for d in &t.diffs {
+                let before_aliases = if d.before_aliases.is_empty() {
+                    "none".to_string()
+                } else {
+                    d.before_aliases.join(", ")
+                };
+                let after_aliases = if d.after_aliases.is_empty() {
+                    "none".to_string()
+                } else {
+                    d.after_aliases.join(", ")
+                };
+                body.push_str(&format!("<dt>{}</dt><dd>\n", esc(&d.name)));
+                body.push_str(&format!(
+                    "<p class=\"before\">Before: {} <span class=\"meta\">aliases: {}</span></p>\n",
+                    esc(&d.before_definition),
+                    esc(&before_aliases)
+                ));
+                body.push_str(&format!(
+                    "<p class=\"after\">After: {} <span class=\"meta\">aliases: {}</span></p>\n",
+                    esc(&d.after_definition),
+                    esc(&after_aliases)
+                ));
+                if !d.dependents.is_empty() {
+                    body.push_str(&format!(
+                        "<p class=\"meta\">Carried by: {}</p>\n",
+                        esc(&d.dependents.join(", "))
+                    ));
+                }
+                body.push_str("</dd>\n");
+            }
+            body.push_str("</dl>\n</div>\n");
+        }
         body.push_str("</article>\n");
     }
 
@@ -418,6 +476,29 @@ fn render_next(
         }
         body.push_str("</dl>\n");
     }
+
+    body.push_str("<div class=\"words\">\n<h2>Words</h2>\n");
+    if q.words.is_empty() {
+        body.push_str("<p class=\"meta\">No words pair an entry.</p>\n");
+    } else {
+        body.push_str("<dl class=\"framing\">\n");
+        for w in &q.words {
+            body.push_str(&format!(
+                "<dt>{}</dt><dd>{} &mdash; {}</dd>\n",
+                esc(&w.word),
+                esc(&w.term_name),
+                esc(&w.definition)
+            ));
+        }
+        body.push_str("</dl>\n");
+    }
+    if !q.no_entry.is_empty() {
+        body.push_str(&format!(
+            "<p class=\"no-entry\">No entry: {}</p>\n",
+            esc(&q.no_entry.join(", "))
+        ));
+    }
+    body.push_str("</div>\n");
 
     body.push_str(&format!(
         "<form method=\"post\" action=\"/lock\" id=\"lock-form\">\n<input type=\"hidden\" name=\"id\" value=\"{}\">\n<input type=\"hidden\" name=\"t\" value=\"{}\">\n",
@@ -736,6 +817,21 @@ dl.decisions dt { color: var(--muted); margin-top: 0.8rem; }
 dl.decisions dd { margin: 0.1rem 0 0; }
 dl.decisions .sentence { display: block; font-size: 1.08rem; }
 dl.decisions .meta { display: block; color: var(--muted); font-size: 0.9rem; }
+
+.words { margin: 0 0 1.4rem; }
+.words h2 { font-size: 1.1rem; }
+.no-entry { color: var(--muted); font-size: 0.92rem; margin: 0.4rem 0 0; }
+
+dl.entries { margin: 0.6rem 0 0; }
+dl.entries dt { color: var(--ink); font-weight: 700; margin-top: 0.8rem; }
+dl.entries dd { margin: 0.1rem 0 0; }
+dl.entries .meta { display: block; color: var(--muted); font-size: 0.9rem; }
+.retired { color: var(--refuse); font-weight: 400; font-size: 0.85em; }
+
+.diffs { margin-top: 1rem; }
+.diffs dt { font-weight: 700; margin-top: 0.8rem; }
+.diffs .before, .diffs .after { margin: 0.2rem 0; }
+.diffs .meta { display: block; color: var(--muted); font-size: 0.9rem; }
 
 textarea { width: 100%; font: inherit; font-size: 0.95rem; padding: 0.5em; background: var(--key); color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; }
 
