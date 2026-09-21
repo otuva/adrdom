@@ -301,6 +301,48 @@ enum MatchKind {
     S,
 }
 
+/// Every name and alias in `terms` (and its "s"/"es" plural forms),
+/// lowercased, mapped to the id of the entry that owns it. Built with the
+/// same priority `resolve` uses when a string is a candidate match for more
+/// than one entry: exact beats the "es" plural beats the "s" plural, and
+/// among candidates of equal priority the first one built (entries in
+/// `terms` order, name before its aliases) wins. Entries without an id are
+/// skipped.
+///
+/// A single lookup against this map answers whether a whole word/phrase
+/// still resolves to a given id exactly as `resolve(word, terms)` would
+/// (a stored pairing is always the whole matched text, so only a
+/// full-string candidate can produce it); built once and reused across
+/// many words instead of rebuilding `resolve`'s phrase list per word.
+pub fn phrase_lookup(terms: &[Term]) -> HashMap<String, String> {
+    let mut map: HashMap<String, (String, MatchKind)> = HashMap::new();
+    for t in terms {
+        let Some(id) = &t.id else { continue };
+        let mut names = vec![t.name.clone()];
+        names.extend(t.aliases.iter().cloned());
+        for n in names {
+            let nl = n.trim().to_lowercase();
+            if nl.is_empty() {
+                continue;
+            }
+            for (key, kind) in [
+                (nl.clone(), MatchKind::Exact),
+                (format!("{}es", nl), MatchKind::Es),
+                (format!("{}s", nl), MatchKind::S),
+            ] {
+                let should_insert = match map.get(&key) {
+                    None => true,
+                    Some((_, existing_kind)) => kind < *existing_kind,
+                };
+                if should_insert {
+                    map.insert(key, (id.clone(), kind));
+                }
+            }
+        }
+    }
+    map.into_iter().map(|(k, (id, _))| (k, id)).collect()
+}
+
 /// Whole-word/phrase, case-insensitive, longest-phrase-first, non-overlapping
 /// resolution of every term name/alias in `text`. Retired terms are included;
 /// callers decide whether to refuse on a retired match. Entries without an id

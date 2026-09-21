@@ -304,20 +304,7 @@ pub fn approve_minimal_terms(dir: &Path, word: &str) {
         word
     );
     std::fs::write(dir.join("adrdom/terms.md"), &content).unwrap();
-    let normalized = content.replace("\r\n", "\n");
-    let trimmed = normalized
-        .split('\n')
-        .map(|l| l.trim_end())
-        .collect::<Vec<_>>()
-        .join("\n");
-    let hash = sha256_hex(&trimmed);
-    let ledger_path = dir.join("adrdom/state/ledger.tsv");
-    let mut existing = std::fs::read_to_string(&ledger_path).unwrap_or_default();
-    existing.push_str(&format!(
-        "2024-01-01T00:00:00Z\tterms\t-\t{}\tadrdom/terms.md\n",
-        hash
-    ));
-    std::fs::write(&ledger_path, existing).unwrap();
+    approve_terms_via_ledger(dir, &content);
 }
 
 /// Mirrors `record::section_hash` for a caller that already has the exact

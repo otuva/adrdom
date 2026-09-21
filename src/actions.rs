@@ -32,8 +32,9 @@ pub fn do_lock(root: &Path, id: &str, letter: char) -> Result<Outcome, String> {
 
     // Refuse when terms.md is missing, has shape errors, or is not
     // approved: the same messages `ask` uses, prefixed `lock:` by the
-    // caller in `commands::lock::run`.
-    match state::load_terms_checked(root) {
+    // caller in `commands::lock::run`. The loaded, approved terms file is
+    // kept for the terms-line validity check below.
+    let tf = match state::load_terms_checked(root) {
         TermsLoad::Missing => {
             return Err(
                 "adrdom/terms.md missing; agent writes it, owner runs: adr approve adrdom/terms.md"
@@ -59,8 +60,9 @@ pub fn do_lock(root: &Path, id: &str, letter: char) -> Result<Outcome, String> {
                     rel
                 ));
             }
+            tf
         }
-    }
+    };
 
     let cur_hash;
     let supersedes_val;
@@ -85,8 +87,28 @@ pub fn do_lock(root: &Path, id: &str, letter: char) -> Result<Outcome, String> {
                 ));
             }
         }
-        if sec.terms_line.is_none() {
+        let Some(terms_line_idx) = sec.terms_line else {
             return Err(format!("{}: no terms line; agent re-asks", id));
+        };
+        let Some(pairs) = terms::parse_terms_line(rf.lines[terms_line_idx].trim_end()) else {
+            return Err(format!("{}: malformed terms line; agent re-asks", id));
+        };
+        for (_, uuid) in &pairs {
+            match tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str())) {
+                None => {
+                    return Err(format!(
+                        "{}: terms line names entry {} that no longer exists; agent re-asks",
+                        id, uuid
+                    ));
+                }
+                Some(t) if t.retired => {
+                    return Err(format!(
+                        "{}: terms line names retired entry \"{}\"; agent re-asks",
+                        id, t.name
+                    ));
+                }
+                _ => {}
+            }
         }
         supersedes_val = sec.supersedes.clone();
         for old in &supersedes_val {
@@ -262,6 +284,9 @@ fn do_approve_terms(
     }
 
     // Step 4: every pair on a dependent must still hold in the new file.
+    // `lookup` answers "what does this exact word/phrase resolve to" for
+    // every dependent pair, built once rather than once per pair.
+    let lookup = terms::phrase_lookup(&tf.terms);
     let mut refusals: Vec<String> = Vec::new();
     for dep in &dependents {
         for (word, uuid) in &dep.pairs {
@@ -280,9 +305,7 @@ fn do_approve_terms(
                 ));
                 continue;
             }
-            let still_resolves = terms::resolve(word, &tf.terms)
-                .iter()
-                .any(|(w, id)| w == word && id == uuid);
+            let still_resolves = lookup.get(word) == Some(uuid);
             if !still_resolves {
                 refusals.push(format!(
                     "approve: adrdom/terms.md: word \"{}\" moved off entry \"{}\", carried by {}",

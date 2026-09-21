@@ -1,6 +1,7 @@
 mod common;
 
 use common::*;
+use std::path::Path;
 
 const FIRST_QUESTION: &str = r#"# Example
 
@@ -572,5 +573,120 @@ fn lock_refuses_a_section_with_no_terms_line() {
     assert_eq!(
         stderr(&out).trim_end(),
         format!("lock: {}: no terms line; agent re-asks", id)
+    );
+}
+
+/// Replaces the `terms: ` line `ask` wrote with `new_terms_line`, then
+/// hand-writes a matching `asked` ledger row for the section's new hash
+/// (mirrors `lock_refuses_a_section_with_no_terms_line`'s approach, but
+/// keeps the terms line present instead of removing it).
+fn corrupt_terms_line(dir: &Path, record: &Path, heading: &str, new_terms_line: &str) {
+    let asked = std::fs::read_to_string(record).unwrap();
+    let id = extract_ids(&asked)[0].clone();
+    let edited: String = asked
+        .lines()
+        .map(|l| if l.starts_with("terms: ") { new_terms_line } else { l })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    std::fs::write(record, &edited).unwrap();
+
+    let heading_idx = edited.find(heading).unwrap();
+    let section_text = edited[heading_idx..].trim_end_matches('\n');
+    let new_hash = mirror_section_hash(section_text);
+    let detail = heading.trim_start_matches("### ");
+    append_ledger_row(dir, "asked", &id, &new_hash, detail);
+}
+
+#[test]
+fn lock_refuses_a_malformed_terms_line() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let id = extract_ids(&content)[0].clone();
+
+    // `terms: authority` with no `=uuid` at all: `parse_terms_line` rejects it.
+    corrupt_terms_line(
+        &dir,
+        &record,
+        "### 1.1 What is the unit of authority called?",
+        "terms: authority",
+    );
+
+    let out = adr_owner(&dir, &["lock", &id, "A"], "");
+    assert!(!out.status.success(), "lock should have refused: {}", stdout(&out));
+    assert_eq!(
+        stderr(&out).trim_end(),
+        format!("lock: {}: malformed terms line; agent re-asks", id)
+    );
+}
+
+#[test]
+fn lock_refuses_a_terms_line_naming_a_nonexistent_entry() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let id = extract_ids(&content)[0].clone();
+
+    // A well-formed pairing, but naming a uuid no entry in terms.md has.
+    corrupt_terms_line(
+        &dir,
+        &record,
+        "### 1.1 What is the unit of authority called?",
+        "terms: authority=00000000-0000-0000-0000-000000000000",
+    );
+
+    let out = adr_owner(&dir, &["lock", &id, "A"], "");
+    assert!(!out.status.success(), "lock should have refused: {}", stdout(&out));
+    assert_eq!(
+        stderr(&out).trim_end(),
+        format!(
+            "lock: {}: terms line names entry 00000000-0000-0000-0000-000000000000 that no longer exists; agent re-asks",
+            id
+        )
+    );
+}
+
+#[test]
+fn lock_refuses_a_terms_line_naming_a_retired_entry() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let id = extract_ids(&content)[0].clone();
+
+    // Retire the entry the record's terms line already names, and
+    // hand-approve that retired terms.md content: the record's terms line
+    // and its ledger `asked` row are untouched, only terms.md changes.
+    let retired_terms =
+        "# Terms\n\n## authority\nid: 99999999-9999-9999-9999-999999999999\ndefinition: A fixture term for tests.\naliases: \nretired: yes\n";
+    std::fs::write(dir.join("adrdom/terms.md"), retired_terms).unwrap();
+    approve_terms_via_ledger(&dir, retired_terms);
+
+    let out = adr_owner(&dir, &["lock", &id, "A"], "");
+    assert!(!out.status.success(), "lock should have refused: {}", stdout(&out));
+    assert_eq!(
+        stderr(&out).trim_end(),
+        format!(
+            "lock: {}: terms line names retired entry \"authority\"; agent re-asks",
+            id
+        )
     );
 }
