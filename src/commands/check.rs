@@ -2,7 +2,7 @@ use crate::banned;
 use crate::ledger::{self, Ledger};
 use crate::record::{self, Kind, RecordFile};
 use crate::repo;
-use crate::state::rel_path;
+use crate::state::{self, rel_path};
 use crate::terms;
 use crate::view;
 use std::collections::{HashMap, HashSet};
@@ -55,6 +55,7 @@ fn build(
     push_failures(&mut failures, check_parse(&records));
     push_failures(&mut failures, check_ids(&records, &led));
     push_failures(&mut failures, check_ledger(&led, &records, root, &ledger_path));
+    push_failures(&mut failures, check_banned_ledger(&led, root));
     push_failures(&mut failures, check_answers(&records, &led));
     push_failures(&mut failures, check_banned(root, staged, message));
     push_failures(&mut failures, check_install(root));
@@ -62,7 +63,7 @@ fn build(
     push_failures(&mut failures, plan_failures);
     let (terms_failures, terms_awaiting) = check_terms(root, &records, &led);
     push_failures(&mut failures, terms_failures);
-    let (tie_failures, tied_count, unchecked_count) = check_ties(root, &records, &led, ties);
+    let (tie_failures, tied_count) = check_ties(root, &records, &led, ties);
     push_failures(&mut failures, tie_failures);
 
     if !awaiting.is_empty() {
@@ -78,10 +79,7 @@ fn build(
     for d in check_done(root, &records, &led) {
         notes.push(format!("done: {}", d));
     }
-    notes.push(format!(
-        "ties: {} tied, {} unchecked",
-        tied_count, unchecked_count
-    ));
+    notes.push(format!("ties: {} tied", tied_count));
 
     view::CheckReport { failures, notes }
 }
@@ -383,21 +381,39 @@ fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure> {
 fn check_banned(root: &Path, staged: bool, message: Option<&Path>) -> Vec<Failure> {
     let mut out = Vec::new();
     let banned_path = root.join("adrdom/state/banned.sha256");
-    let set = banned::read_set(&banned_path);
-    if set.is_empty() {
+    let entries = banned::read_entries(&banned_path);
+    if entries.is_empty() {
         return out;
     }
+    let hash_map: HashMap<String, Option<String>> = entries.into_iter().collect();
+    let tf = state::load_terms(root);
 
     for (name, content) in collect_targets(root, staged, message) {
         for (i, line) in content.lines().enumerate() {
-            let hit = banned::tokenize(line)
-                .iter()
-                .any(|tok| set.contains(&record::sha256_hex(tok)));
-            if hit {
+            let mut seen: HashSet<String> = HashSet::new();
+            for tok in banned::tokenize(line) {
+                let h = record::sha256_hex(&tok);
+                let Some(uuid_opt) = hash_map.get(&h) else {
+                    continue;
+                };
+                if !seen.insert(tok.clone()) {
+                    continue;
+                }
+                let mut msg = format!("{}:{}: banned word \"{}\"", name, i + 1, tok);
+                if let Some(uuid) = uuid_opt {
+                    if let Some(term_name) = tf.as_ref().and_then(|f| {
+                        f.terms
+                            .iter()
+                            .find(|t| t.id.as_deref() == Some(uuid.as_str()))
+                            .map(|t| t.name.clone())
+                    }) {
+                        msg.push_str(&format!(" (term {})", term_name));
+                    }
+                }
                 out.push(Failure {
                     check: "banned".to_string(),
                     id: None,
-                    message: format!("{}:{}", name, i + 1),
+                    message: msg,
                 });
             }
         }
@@ -405,7 +421,72 @@ fn check_banned(root: &Path, staged: bool, message: Option<&Path>) -> Vec<Failur
     out
 }
 
-fn collect_targets(root: &Path, staged: bool, message: Option<&Path>) -> Vec<(String, String)> {
+/// The ban list against the ledger's `banned`/`unbanned` history: every
+/// hash the ledger currently considers banned (a `banned` row with no
+/// later `unbanned` row) must be in the file, and every hash in the file
+/// must trace back to some `banned` row (regardless of a later `unbanned`
+/// row, which would otherwise have removed it from the file already).
+fn check_banned_ledger(led: &Ledger, root: &Path) -> Vec<Failure> {
+    let mut out = Vec::new();
+    let banned_path = root.join("adrdom/state/banned.sha256");
+    let file_hashes = banned::read_set(&banned_path);
+
+    let mut ever_banned: HashSet<String> = HashSet::new();
+    let mut currently_banned: HashSet<String> = HashSet::new();
+    for row in &led.rows {
+        match row.event.as_str() {
+            "banned" => {
+                ever_banned.insert(row.hash.clone());
+                currently_banned.insert(row.hash.clone());
+            }
+            "unbanned" => {
+                currently_banned.remove(&row.hash);
+            }
+            _ => {}
+        }
+    }
+
+    let mut missing_from_file: Vec<&String> = currently_banned
+        .iter()
+        .filter(|h| !file_hashes.contains(*h))
+        .collect();
+    missing_from_file.sort();
+    for h in missing_from_file {
+        out.push(Failure {
+            check: "banned".to_string(),
+            id: None,
+            message: format!(
+                "{} in ledger, missing from adrdom/state/banned.sha256",
+                hash_prefix(h)
+            ),
+        });
+    }
+
+    let mut missing_from_ledger: Vec<&String> = file_hashes
+        .iter()
+        .filter(|h| !ever_banned.contains(*h))
+        .collect();
+    missing_from_ledger.sort();
+    for h in missing_from_ledger {
+        out.push(Failure {
+            check: "banned".to_string(),
+            id: None,
+            message: format!("{} in file, no ledger row", hash_prefix(h)),
+        });
+    }
+
+    out
+}
+
+fn hash_prefix(h: &str) -> &str {
+    &h[..h.len().min(12)]
+}
+
+pub(crate) fn collect_targets(
+    root: &Path,
+    staged: bool,
+    message: Option<&Path>,
+) -> Vec<(String, String)> {
     let mut out = Vec::new();
     if let Some(msg_path) = message {
         if let Ok(content) = std::fs::read_to_string(msg_path) {
@@ -740,7 +821,7 @@ fn check_ties(
     records: &[RecordFile],
     led: &Ledger,
     ties: Option<&HashMap<String, Vec<String>>>,
-) -> (Vec<Failure>, usize, usize) {
+) -> (Vec<Failure>, usize) {
     let mut out = Vec::new();
 
     let in_force: HashSet<String> = records
@@ -758,38 +839,17 @@ fn check_ties(
         }
     };
 
-    let unchecked_path = root.join("adrdom/state/unchecked.tsv");
-    let mut unchecked_ids: HashSet<String> = HashSet::new();
-    if let Ok(content) = std::fs::read_to_string(&unchecked_path) {
-        for line in content.lines() {
-            if line.is_empty() {
-                continue;
-            }
-            if let Some(id) = line.split('\t').next() {
-                unchecked_ids.insert(id.to_string());
-            }
-        }
-    }
-
     let mut tied_count = 0;
-    let mut unchecked_count = 0;
 
     for id in &in_force {
-        let has_tie = tie_ids.contains_key(id);
-        let has_unchecked = unchecked_ids.contains(id);
-        match (has_tie, has_unchecked) {
-            (true, true) => out.push(Failure {
+        if tie_ids.contains_key(id) {
+            tied_count += 1;
+        } else {
+            out.push(Failure {
                 check: "ties".to_string(),
                 id: Some(id.clone()),
-                message: format!("{}: both tied and listed as unchecked", id),
-            }),
-            (false, false) => out.push(Failure {
-                check: "ties".to_string(),
-                id: Some(id.clone()),
-                message: format!("{}: no tie and not listed as unchecked", id),
-            }),
-            (true, false) => tied_count += 1,
-            (false, true) => unchecked_count += 1,
+                message: format!("{}: no tie", id),
+            });
         }
     }
 
@@ -802,17 +862,8 @@ fn check_ties(
             });
         }
     }
-    for id in &unchecked_ids {
-        if !in_force.contains(id) {
-            out.push(Failure {
-                check: "ties".to_string(),
-                id: Some(id.clone()),
-                message: format!("{}: stale (not an in-force decision)", id),
-            });
-        }
-    }
 
-    (out, tied_count, unchecked_count)
+    (out, tied_count)
 }
 
 /// A tie only counts when the token after `adr: ` is a full uuid

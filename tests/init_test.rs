@@ -25,7 +25,10 @@ fn init_creates_layout_and_is_idempotent() {
     assert!(dir.join("adrdom/decisions").is_dir());
     assert!(dir.join("adrdom/state/ledger.tsv").is_file());
     assert!(dir.join("adrdom/state/banned.sha256").is_file());
-    assert!(dir.join("adrdom/state/unchecked.tsv").is_file());
+    assert!(
+        !dir.join("adrdom/state/unchecked.tsv").exists(),
+        "init must not create unchecked.tsv"
+    );
     assert!(dir.join(".githooks/pre-commit").is_file());
     assert!(dir.join(".githooks/commit-msg").is_file());
     assert!(dir.join(".claude/settings.json").is_file());

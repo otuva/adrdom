@@ -40,7 +40,12 @@ enum Command {
     /// Print every decision currently in force.
     Show { record: Option<PathBuf> },
     /// Read lines from stdin and ban them (and their tokens) from the repo.
-    Ban,
+    Ban {
+        /// Carry an existing terms.md entry's uuid alongside each new hash,
+        /// matched case-insensitively by name or alias.
+        #[arg(long)]
+        term: Option<String>,
+    },
     /// Owner-only: read lines from stdin and remove them (and their tokens)
     /// from the ban list.
     Unban,
@@ -66,7 +71,7 @@ fn main() {
         Command::Approve { file } => commands::approve::run(file),
         Command::Lock { id, letter } => commands::lock::run(id, letter),
         Command::Show { record } => commands::show::run(record),
-        Command::Ban => commands::ban::run(),
+        Command::Ban { term } => commands::ban::run(term),
         Command::Unban => commands::unban::run(),
         Command::Serve { port } => commands::serve::run(port),
         Command::Check { staged, message } => commands::check::run(staged, message),
