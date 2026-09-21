@@ -1,10 +1,38 @@
+use crate::banned;
 use crate::ledger;
 use crate::record;
 use crate::repo;
-use crate::state;
+use crate::state::{self, TermsLoad};
 use crate::terms;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use uuid::Uuid;
+
+/// The first banned-word hit in `text` against the ban list, tokenizing
+/// each line the way `ban`/`check` do: the word as `banned::tokenize`
+/// returns it (already lowercased), and the term name when the hash's
+/// entry carries a uuid that still names a current entry.
+fn first_banned_hit(
+    text: &str,
+    hash_map: &HashMap<String, Option<String>>,
+    terms_list: &[terms::Term],
+) -> Option<(String, Option<String>)> {
+    for line in text.split('\n') {
+        for tok in banned::tokenize(line) {
+            let h = record::sha256_hex(&tok);
+            if let Some(uuid_opt) = hash_map.get(&h) {
+                let name = uuid_opt.as_ref().and_then(|u| {
+                    terms_list
+                        .iter()
+                        .find(|t| t.id.as_deref() == Some(u.as_str()))
+                        .map(|t| t.name.clone())
+                });
+                return Some((tok, name));
+            }
+        }
+    }
+    None
+}
 
 pub fn run(record_path: PathBuf) -> i32 {
     let root = match repo::find_root() {
@@ -17,6 +45,39 @@ pub fn run(record_path: PathBuf) -> i32 {
     let ledger_path = root.join("adrdom/state/ledger.tsv");
     let led = ledger::read(&ledger_path);
     let rel = state::rel_path(&root, &record_path);
+
+    // Refusals 1-3: adrdom/terms.md missing, unreadable/shape errors, or
+    // not approved. These come before anything about the record itself is
+    // even loaded, since none of them depend on it.
+    let tf = match state::load_terms_checked(&root) {
+        TermsLoad::Missing => {
+            eprintln!(
+                "ask: adrdom/terms.md missing; agent writes it, owner runs: adr approve adrdom/terms.md"
+            );
+            return 1;
+        }
+        TermsLoad::LoadError(e) => {
+            eprintln!("ask: adrdom/terms.md: {}", e);
+            return 1;
+        }
+        TermsLoad::Ok(tf) => {
+            if !tf.errors.is_empty() {
+                for e in &tf.errors {
+                    eprintln!("ask: adrdom/terms.md: {}", e);
+                }
+                return 1;
+            }
+            tf
+        }
+    };
+    if !state::terms_approved(&led, &tf) {
+        eprintln!(
+            "ask: {}: terms not approved; owner runs: adr approve adrdom/terms.md",
+            rel
+        );
+        return 1;
+    }
+    let terms_list: Vec<terms::Term> = tf.terms.clone();
 
     let mut rf = match record::load(&record_path) {
         Ok(rf) => rf,
@@ -67,7 +128,7 @@ pub fn run(record_path: PathBuf) -> i32 {
         }
     }
 
-    // Plan / context / terms must be approved before ask will touch the
+    // Refusal 4: plan / context must be approved before ask will touch the
     // file at all.
     if !state::plan_approved(&led, &rf, &rel) {
         eprintln!(
@@ -82,16 +143,6 @@ pub fn run(record_path: PathBuf) -> i32 {
             rel, rel
         );
         return 1;
-    }
-    let terms_opt = state::load_terms(&root);
-    if let Some(tf) = &terms_opt {
-        if !state::terms_approved(&led, tf) {
-            eprintln!(
-                "ask: {}: terms not approved; owner runs: adr approve adrdom/terms.md",
-                rel
-            );
-            return 1;
-        }
     }
 
     // Sections that are about to be newly asked or re-asked this run: no
@@ -119,10 +170,9 @@ pub fn run(record_path: PathBuf) -> i32 {
         })
         .collect();
 
-    let terms_list: Vec<terms::Term> = terms_opt
-        .as_ref()
-        .map(|tf| tf.terms.clone())
-        .unwrap_or_default();
+    let banned_path = root.join("adrdom/state/banned.sha256");
+    let banned_entries: HashMap<String, Option<String>> =
+        banned::read_entries(&banned_path).into_iter().collect();
 
     for (i, sec) in rf.sections.iter().enumerate() {
         if !candidate[i] {
@@ -150,28 +200,43 @@ pub fn run(record_path: PathBuf) -> i32 {
             }
         }
 
-        if terms_opt.is_some() {
-            let text = state::section_text_excluding_terms_line(&rf.lines, sec);
-            if let Some((_, word, term_name)) =
-                terms::banned_hits(&text, &terms_list).into_iter().next()
-            {
-                eprintln!(
-                    "ask: {}: \"{}\" contains banned word \"{}\" (term {}); owner edits the record",
-                    rel, sec.heading_text, word, term_name
-                );
-                return 1;
-            }
-            for (word, tid) in terms::resolve(&text, &terms_list) {
-                if let Some(t) = terms_list.iter().find(|t| t.id.as_deref() == Some(tid.as_str())) {
-                    if t.retired {
-                        eprintln!(
-                            "ask: {}: \"{}\" resolves \"{}\" to retired term \"{}\"; owner edits the record or un-retires the term",
-                            rel, sec.heading_text, word, t.name
-                        );
-                        return 1;
-                    }
+        let text = state::section_text_excluding_terms_line(&rf.lines, sec);
+
+        // Refusal 5: a banned word in the candidate's own text, from the
+        // single hash-based ban list scanner.
+        if let Some((word, term_name)) = first_banned_hit(&text, &banned_entries, &terms_list) {
+            let suffix = term_name
+                .map(|n| format!(" (term {})", n))
+                .unwrap_or_default();
+            eprintln!(
+                "ask: {}: \"{}\": banned word \"{}\"{}",
+                rel, sec.heading_text, word, suffix
+            );
+            return 1;
+        }
+
+        let pairs = terms::resolve(&text, &terms_list);
+
+        // Refusal 6: a retired term match.
+        for (word, tid) in &pairs {
+            if let Some(t) = terms_list.iter().find(|t| t.id.as_deref() == Some(tid.as_str())) {
+                if t.retired {
+                    eprintln!(
+                        "ask: {}: \"{}\" resolves \"{}\" to retired term \"{}\"; owner edits the record or un-retires the term",
+                        rel, sec.heading_text, word, t.name
+                    );
+                    return 1;
                 }
             }
+        }
+
+        // Refusal 7: zero pairings.
+        if pairs.is_empty() {
+            eprintln!(
+                "ask: {}: \"{}\" pairs no term; agent adds the term to adrdom/terms.md or rewrites the question",
+                rel, sec.heading_text
+            );
+            return 1;
         }
     }
 
@@ -200,9 +265,13 @@ pub fn run(record_path: PathBuf) -> i32 {
         rf.sections = record::parse_sections(&rf.lines);
     }
 
-    // Write/replace/remove the `terms:` line directly under the `id:` line
-    // for every candidate, bottom-to-top so earlier sections' line numbers
-    // are unaffected by a section growing or shrinking by one line.
+    // Write/replace the `terms:` line directly under the `id:` line for
+    // every candidate, bottom-to-top so earlier sections' line numbers are
+    // unaffected by a section growing or shrinking by one line. Every
+    // candidate reaching this point paired at least one term (refusal 7
+    // above), so the pairings are never empty here: ask never deletes a
+    // terms line, and a candidate section whose id line cannot be found is
+    // an error, not a silent skip.
     let mut terms_touched = false;
     for i in (0..rf.sections.len()).rev() {
         if !candidate[i] {
@@ -211,25 +280,38 @@ pub fn run(record_path: PathBuf) -> i32 {
         let sec = rf.sections[i].clone();
         let text = state::section_text_excluding_terms_line(&rf.lines, &sec);
         let pairs = terms::resolve(&text, &terms_list);
-        let new_line = terms::format_terms_line(&pairs);
-        match (sec.terms_line, new_line) {
-            (Some(tl), Some(nl)) => {
-                if rf.lines[tl] != nl {
-                    rf.lines[tl] = nl;
+        let new_line = match terms::format_terms_line(&pairs) {
+            Some(nl) => nl,
+            None => {
+                // Unreachable given refusal 7 above, but never silently
+                // drop a binding if it somehow happens.
+                eprintln!(
+                    "ask: {}: \"{}\": pairs no term at write time; owner re-runs ask",
+                    rel, sec.heading_text
+                );
+                return 1;
+            }
+        };
+        match sec.terms_line {
+            Some(tl) => {
+                if rf.lines[tl] != new_line {
+                    rf.lines[tl] = new_line;
                     terms_touched = true;
                 }
             }
-            (Some(tl), None) => {
-                rf.lines.remove(tl);
-                terms_touched = true;
-            }
-            (None, Some(nl)) => {
-                if let Some(idx) = find_prefixed_line(&rf.lines, sec.start, sec.end, "id: ") {
-                    rf.lines.insert(idx + 1, nl);
+            None => match find_prefixed_line(&rf.lines, sec.start, sec.end, "id: ") {
+                Some(idx) => {
+                    rf.lines.insert(idx + 1, new_line);
                     terms_touched = true;
                 }
-            }
-            (None, None) => {}
+                None => {
+                    eprintln!(
+                        "ask: {}: \"{}\": no id line found to write the terms line after",
+                        rel, sec.heading_text
+                    );
+                    return 1;
+                }
+            },
         }
     }
     if terms_touched {

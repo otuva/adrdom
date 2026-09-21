@@ -29,7 +29,9 @@ pub fn run(id: String, letter: String) -> i32 {
             0
         }
         Err(e) => {
-            eprintln!("lock: {}", e);
+            for line in e.lines() {
+                eprintln!("lock: {}", line);
+            }
             1
         }
     }

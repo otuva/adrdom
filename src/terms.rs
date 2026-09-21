@@ -10,18 +10,19 @@ pub struct Term {
     pub name: String,
     pub id: Option<String>,
     pub definition: String,
-    /// Part of the file shape (parsed and required) but not read anywhere
-    /// yet; no view surfaces individual terms today.
-    #[allow(dead_code)]
-    pub test: String,
-    pub owner: String,
     pub aliases: Vec<String>,
-    pub banned: Vec<String>,
     pub retired: bool,
     /// 1-based line number of the `## name` heading.
     pub start_line: usize,
     /// 1-based line number of the `id: ` line, if present.
     pub id_line: Option<usize>,
+    /// The machine-written pairing line (`terms: word=uuid, ...`), if
+    /// present, exactly as it appears in the file.
+    ///
+    /// Read by `write_terms_lines` and by approve's dependents check.
+    pub terms_line: Option<String>,
+    /// 1-based line number of the `terms:` line, if present.
+    pub terms_line_idx: Option<usize>,
 }
 
 pub struct TermsFile {
@@ -56,7 +57,13 @@ pub fn save(tf: &TermsFile) -> io::Result<()> {
 }
 
 pub fn file_hash(tf: &TermsFile) -> String {
-    sha256_hex(&normalize(&tf.lines.join("\n")))
+    let text = tf
+        .lines
+        .iter()
+        .map(|l| l.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n");
+    sha256_hex(&normalize(&text))
 }
 
 pub fn parse(lines: &[String]) -> TermsFile {
@@ -98,15 +105,18 @@ pub fn parse(lines: &[String]) -> TermsFile {
     for (hi, &start) in heading_idxs.iter().enumerate() {
         let end = heading_idxs.get(hi + 1).copied().unwrap_or(lines.len());
         let name = lines[start]["## ".len()..].trim_end().to_string();
+        if name.trim().is_empty() {
+            errors.push(format!("line {}: empty name", start + 1));
+        }
 
         let mut id: Option<String> = None;
         let mut id_line: Option<usize> = None;
         let mut definition: Option<String> = None;
-        let mut test: Option<String> = None;
-        let mut owner: Option<String> = None;
         let mut aliases: Option<String> = None;
-        let mut banned: Option<String> = None;
+        let mut terms_line: Option<String> = None;
+        let mut terms_line_idx: Option<usize> = None;
         let mut retired = false;
+        let mut retired_seen = false;
 
         for (j, l) in lines.iter().enumerate().take(end).skip(start + 1) {
             if l.trim().is_empty() {
@@ -116,36 +126,42 @@ pub fn parse(lines: &[String]) -> TermsFile {
                 // Already reported as a duplicate h1 above.
                 continue;
             }
-            if let Some(v) = kv(l, "id") {
+            if kv(l, "id").is_some() {
                 if id.is_none() {
-                    id = Some(v);
+                    id = kv(l, "id");
                     id_line = Some(j);
+                } else {
+                    errors.push(format!("line {}: duplicate field \"id\"", j + 1));
                 }
-            } else if let Some(v) = kv(l, "definition") {
+            } else if kv(l, "definition").is_some() {
                 if definition.is_none() {
-                    definition = Some(v);
+                    definition = kv(l, "definition");
+                } else {
+                    errors.push(format!("line {}: duplicate field \"definition\"", j + 1));
                 }
-            } else if let Some(v) = kv(l, "test") {
-                if test.is_none() {
-                    test = Some(v);
-                }
-            } else if let Some(v) = kv(l, "owner") {
-                if owner.is_none() {
-                    owner = Some(v);
-                }
-            } else if let Some(v) = kv(l, "aliases") {
+            } else if kv(l, "aliases").is_some() {
                 if aliases.is_none() {
-                    aliases = Some(v);
+                    aliases = kv(l, "aliases");
+                } else {
+                    errors.push(format!("line {}: duplicate field \"aliases\"", j + 1));
                 }
-            } else if let Some(v) = kv(l, "banned") {
-                if banned.is_none() {
-                    banned = Some(v);
+            } else if kv(l, "terms").is_some() {
+                if terms_line.is_none() {
+                    terms_line = Some(l.trim_end().to_string());
+                    terms_line_idx = Some(j);
+                } else {
+                    errors.push(format!("line {}: duplicate field \"terms\"", j + 1));
                 }
             } else if let Some(v) = kv(l, "retired") {
-                if v == "yes" {
-                    retired = true;
+                if retired_seen {
+                    errors.push(format!("line {}: duplicate field \"retired\"", j + 1));
                 } else {
-                    errors.push(format!("line {}: unknown line", j + 1));
+                    retired_seen = true;
+                    if v == "yes" {
+                        retired = true;
+                    } else {
+                        errors.push(format!("line {}: unknown line", j + 1));
+                    }
                 }
             } else {
                 errors.push(format!("line {}: unknown line", j + 1));
@@ -161,30 +177,20 @@ pub fn parse(lines: &[String]) -> TermsFile {
         if definition.is_none() {
             errors.push(format!("line {}: missing field \"definition\"", start + 1));
         }
-        if test.is_none() {
-            errors.push(format!("line {}: missing field \"test\"", start + 1));
-        }
-        if owner.is_none() {
-            errors.push(format!("line {}: missing field \"owner\"", start + 1));
-        }
         if aliases.is_none() {
             errors.push(format!("line {}: missing field \"aliases\"", start + 1));
-        }
-        if banned.is_none() {
-            errors.push(format!("line {}: missing field \"banned\"", start + 1));
         }
 
         terms.push(Term {
             name,
             id,
             definition: definition.unwrap_or_default(),
-            test: test.unwrap_or_default(),
-            owner: owner.unwrap_or_default(),
             aliases: split_csv(aliases.as_deref().unwrap_or("")),
-            banned: split_csv(banned.as_deref().unwrap_or("")),
             retired,
             start_line: start + 1,
             id_line: id_line.map(|x| x + 1),
+            terms_line,
+            terms_line_idx: terms_line_idx.map(|x| x + 1),
         });
     }
 
@@ -213,14 +219,8 @@ pub fn parse(lines: &[String]) -> TermsFile {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum WordKind {
-    NameAlias,
-    Banned,
-}
-
 fn duplicate_word_errors(terms: &[Term]) -> Vec<String> {
-    let mut occ: HashMap<String, Vec<(usize, WordKind)>> = HashMap::new();
+    let mut occ: HashMap<String, Vec<usize>> = HashMap::new();
     for (idx, t) in terms.iter().enumerate() {
         let mut namealias = vec![t.name.clone()];
         namealias.extend(t.aliases.iter().cloned());
@@ -229,14 +229,7 @@ fn duplicate_word_errors(terms: &[Term]) -> Vec<String> {
             if wl.is_empty() {
                 continue;
             }
-            occ.entry(wl).or_default().push((idx, WordKind::NameAlias));
-        }
-        for w in &t.banned {
-            let wl = w.trim().to_lowercase();
-            if wl.is_empty() {
-                continue;
-            }
-            occ.entry(wl).or_default().push((idx, WordKind::Banned));
+            occ.entry(wl).or_default().push(idx);
         }
     }
 
@@ -245,8 +238,7 @@ fn duplicate_word_errors(terms: &[Term]) -> Vec<String> {
     let mut words: Vec<&String> = occ.keys().collect();
     words.sort();
     for word in words {
-        let occs = &occ[word];
-        let mut entries: Vec<usize> = occs.iter().map(|(i, _)| *i).collect();
+        let mut entries = occ[word].clone();
         entries.sort_unstable();
         entries.dedup();
 
@@ -269,38 +261,6 @@ fn duplicate_word_errors(terms: &[Term]) -> Vec<String> {
                     }
                 }
             }
-        } else if entries.len() == 1 {
-            let e = entries[0];
-            let has_namealias = occs
-                .iter()
-                .any(|(i, k)| *i == e && *k == WordKind::NameAlias);
-            let has_banned = occs.iter().any(|(i, k)| *i == e && *k == WordKind::Banned);
-            if has_namealias && has_banned {
-                errors.push(format!(
-                    "line {}: word \"{}\" used as both name/alias and banned in \"{}\"",
-                    terms[e].start_line, word, terms[e].name,
-                ));
-            }
-        }
-    }
-    errors
-}
-
-/// `owner` paths are checked separately from `parse` so parsing stays pure
-/// (no filesystem access) and testable without a repo root.
-pub fn check_owners(tf: &TermsFile, root: &Path) -> Vec<String> {
-    let mut errors = Vec::new();
-    for t in &tf.terms {
-        if t.owner.is_empty() {
-            // Already reported as a missing field.
-            continue;
-        }
-        let p = root.join(&t.owner);
-        if !p.exists() {
-            errors.push(format!(
-                "line {}: owner path \"{}\" does not exist",
-                t.start_line, t.owner
-            ));
         }
     }
     errors
@@ -308,7 +268,7 @@ pub fn check_owners(tf: &TermsFile, root: &Path) -> Vec<String> {
 
 /// Inserts `id: <uuid v4>` as the first line under each `## name` heading
 /// that has none. Returns the number of ids inserted.
-pub fn fill_missing_ids(tf: &mut TermsFile) -> usize {
+pub fn mint_ids(tf: &mut TermsFile) -> usize {
     let mut targets: Vec<usize> = tf
         .terms
         .iter()
@@ -334,12 +294,66 @@ fn is_boundary_ok(chars: &[char], start: usize, len: usize) -> bool {
     before_ok && after_ok
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum MatchKind {
+    Exact,
+    Es,
+    S,
+}
+
+/// Every name and alias in `terms` (and its "s"/"es" plural forms),
+/// lowercased, mapped to the id of the entry that owns it. Built with the
+/// same priority `resolve` uses when a string is a candidate match for more
+/// than one entry: exact beats the "es" plural beats the "s" plural, and
+/// among candidates of equal priority the first one built (entries in
+/// `terms` order, name before its aliases) wins. Entries without an id are
+/// skipped.
+///
+/// A single lookup against this map answers whether a whole word/phrase
+/// still resolves to a given id exactly as `resolve(word, terms)` would
+/// (a stored pairing is always the whole matched text, so only a
+/// full-string candidate can produce it); built once and reused across
+/// many words instead of rebuilding `resolve`'s phrase list per word.
+pub fn phrase_lookup(terms: &[Term]) -> HashMap<String, String> {
+    let mut map: HashMap<String, (String, MatchKind)> = HashMap::new();
+    for t in terms {
+        let Some(id) = &t.id else { continue };
+        let mut names = vec![t.name.clone()];
+        names.extend(t.aliases.iter().cloned());
+        for n in names {
+            let nl = n.trim().to_lowercase();
+            if nl.is_empty() {
+                continue;
+            }
+            for (key, kind) in [
+                (nl.clone(), MatchKind::Exact),
+                (format!("{}es", nl), MatchKind::Es),
+                (format!("{}s", nl), MatchKind::S),
+            ] {
+                let should_insert = match map.get(&key) {
+                    None => true,
+                    Some((_, existing_kind)) => kind < *existing_kind,
+                };
+                if should_insert {
+                    map.insert(key, (id.clone(), kind));
+                }
+            }
+        }
+    }
+    map.into_iter().map(|(k, (id, _))| (k, id)).collect()
+}
+
 /// Whole-word/phrase, case-insensitive, longest-phrase-first, non-overlapping
 /// resolution of every term name/alias in `text`. Retired terms are included;
 /// callers decide whether to refuse on a retired match. Entries without an id
 /// are skipped. Returned pairs are unique and sorted by matched word.
+///
+/// A word also matches a name or alias when it equals that name/alias with a
+/// trailing "s" or "es" appended (simple plural), tried in that order after
+/// the exact match; the matched text is stored as-is (e.g. `decisions=<id>`).
+/// Irregular plurals are ordinary aliases and match exactly.
 pub fn resolve(text: &str, terms: &[Term]) -> Vec<(String, String)> {
-    let mut phrases: Vec<(Vec<char>, String)> = Vec::new();
+    let mut phrases: Vec<(Vec<char>, String, MatchKind)> = Vec::new();
     for t in terms {
         let id = match &t.id {
             Some(i) => i.clone(),
@@ -352,12 +366,15 @@ pub fn resolve(text: &str, terms: &[Term]) -> Vec<(String, String)> {
             if nl.is_empty() {
                 continue;
             }
-            phrases.push((nl.chars().collect(), id.clone()));
+            phrases.push((nl.chars().collect(), id.clone(), MatchKind::Exact));
+            phrases.push((format!("{}es", nl).chars().collect(), id.clone(), MatchKind::Es));
+            phrases.push((format!("{}s", nl).chars().collect(), id.clone(), MatchKind::S));
         }
     }
-    // Longest phrase first; ties broken lexicographically for determinism.
+    // Longest phrase first; then exact over "es"-plural over "s"-plural;
+    // ties broken lexicographically for determinism.
     phrases.sort_by(|a, b| {
-        b.0.len().cmp(&a.0.len()).then_with(|| {
+        b.0.len().cmp(&a.0.len()).then_with(|| a.2.cmp(&b.2)).then_with(|| {
             let sa: String = a.0.iter().collect();
             let sb: String = b.0.iter().collect();
             sa.cmp(&sb)
@@ -371,7 +388,7 @@ pub fn resolve(text: &str, terms: &[Term]) -> Vec<(String, String)> {
     let mut i = 0;
     while i < n {
         let mut matched_len = 0;
-        for (phrase, id) in &phrases {
+        for (phrase, id, _kind) in &phrases {
             let plen = phrase.len();
             if plen == 0 || i + plen > n {
                 continue;
@@ -392,37 +409,235 @@ pub fn resolve(text: &str, terms: &[Term]) -> Vec<(String, String)> {
     results.into_iter().collect()
 }
 
-/// Every banned-word hit for every entry, whole word, case-insensitive:
-/// (1-based line number, banned word as it appears in `text` lowercased,
-/// term name).
-pub fn banned_hits(text: &str, terms: &[Term]) -> Vec<(usize, String, String)> {
-    let mut hits = Vec::new();
-    for (li, line) in text.split('\n').enumerate() {
-        let lower_line = line.to_lowercase();
-        let chars: Vec<char> = lower_line.chars().collect();
-        let n = chars.len();
-        for t in terms {
-            for w in &t.banned {
-                let wl = w.trim().to_lowercase();
-                let pchars: Vec<char> = wl.chars().collect();
-                let plen = pchars.len();
-                if plen == 0 {
-                    continue;
-                }
-                let mut i = 0;
-                while i + plen <= n {
-                    if chars[i..i + plen] == pchars[..] && is_boundary_ok(&chars, i, plen) {
-                        let word: String = chars[i..i + plen].iter().collect();
-                        hits.push((li + 1, word, t.name.clone()));
-                        i += plen;
-                    } else {
-                        i += 1;
-                    }
-                }
+/// Resolves entry `idx`'s definition text against every entry in `tf`
+/// (including itself, so a self-pairing can be detected).
+///
+/// Used by `cycles` below and by approve's circular-definition check.
+pub fn definition_pairs(tf: &TermsFile, idx: usize) -> Vec<(String, String)> {
+    resolve(&tf.terms[idx].definition, &tf.terms)
+}
+
+/// One cycle per strongly connected component (Tarjan's algorithm) of the
+/// graph where an entry points at every entry its definition pairs (by
+/// id); a component with only one node and no self-loop isn't a cycle and
+/// is skipped. Each reported cycle is one simple cycle found by a DFS
+/// restricted to that component, as the list of entry names in traversal
+/// order starting from the component's lowest-index member; a self-cycle
+/// is a list of one name. Linear in the number of entries and pairings,
+/// unlike enumerating every simple cycle (which is factorial in a dense
+/// graph).
+///
+/// Used by approve's and check's circular-definition refusal.
+pub fn cycles(tf: &TermsFile) -> Vec<Vec<String>> {
+    let n = tf.terms.len();
+    let mut id_to_idx: HashMap<&str, usize> = HashMap::new();
+    for (i, t) in tf.terms.iter().enumerate() {
+        if let Some(id) = &t.id {
+            id_to_idx.insert(id.as_str(), i);
+        }
+    }
+
+    let mut adj: Vec<BTreeSet<usize>> = vec![BTreeSet::new(); n];
+    for i in 0..n {
+        if tf.terms[i].id.is_none() {
+            continue;
+        }
+        for (_, id) in definition_pairs(tf, i) {
+            if let Some(&j) = id_to_idx.get(id.as_str()) {
+                adj[i].insert(j);
             }
         }
     }
-    hits
+
+    let mut out: Vec<(usize, Vec<String>)> = Vec::new();
+    for scc in tarjan_scc(&adj) {
+        let has_self_loop = scc.len() == 1 && adj[scc[0]].contains(&scc[0]);
+        if scc.len() <= 1 && !has_self_loop {
+            continue;
+        }
+        let start = *scc.iter().min().expect("scc is non-empty");
+        let cycle_idx = find_cycle_in_scc(&scc, &adj, start);
+        let names = cycle_idx.iter().map(|&i| tf.terms[i].name.clone()).collect();
+        out.push((start, names));
+    }
+    out.sort_by_key(|(start, _)| *start);
+    out.into_iter().map(|(_, names)| names).collect()
+}
+
+/// Tarjan's strongly connected components algorithm over `adj` (an
+/// adjacency list indexed by node). Returns each component as the list of
+/// its member indices, in no particular order.
+fn tarjan_scc(adj: &[BTreeSet<usize>]) -> Vec<Vec<usize>> {
+    let n = adj.len();
+    let mut index_counter = 0usize;
+    let mut indices: Vec<Option<usize>> = vec![None; n];
+    let mut lowlink: Vec<usize> = vec![0; n];
+    let mut on_stack: Vec<bool> = vec![false; n];
+    let mut stack: Vec<usize> = Vec::new();
+    let mut sccs: Vec<Vec<usize>> = Vec::new();
+
+    for u in 0..n {
+        if indices[u].is_none() {
+            tarjan_visit(
+                u,
+                adj,
+                &mut index_counter,
+                &mut indices,
+                &mut lowlink,
+                &mut on_stack,
+                &mut stack,
+                &mut sccs,
+            );
+        }
+    }
+    sccs
+}
+
+fn tarjan_visit(
+    u: usize,
+    adj: &[BTreeSet<usize>],
+    index_counter: &mut usize,
+    indices: &mut [Option<usize>],
+    lowlink: &mut [usize],
+    on_stack: &mut [bool],
+    stack: &mut Vec<usize>,
+    sccs: &mut Vec<Vec<usize>>,
+) {
+    indices[u] = Some(*index_counter);
+    lowlink[u] = *index_counter;
+    *index_counter += 1;
+    stack.push(u);
+    on_stack[u] = true;
+
+    for &v in &adj[u] {
+        if indices[v].is_none() {
+            tarjan_visit(v, adj, index_counter, indices, lowlink, on_stack, stack, sccs);
+            lowlink[u] = lowlink[u].min(lowlink[v]);
+        } else if on_stack[v] {
+            lowlink[u] = lowlink[u].min(indices[v].expect("visited node has an index"));
+        }
+    }
+
+    if lowlink[u] == indices[u].expect("u was just visited") {
+        let mut component = Vec::new();
+        loop {
+            let w = stack.pop().expect("u is still on the stack");
+            on_stack[w] = false;
+            component.push(w);
+            if w == u {
+                break;
+            }
+        }
+        sccs.push(component);
+    }
+}
+
+/// One simple cycle inside the strongly connected component `scc`, found by
+/// a DFS restricted to its members, starting from `start`. Every member of
+/// `scc` with more than one node (or a self-loop) reaches such a cycle by
+/// the component's definition, so this always finds one.
+fn find_cycle_in_scc(scc: &[usize], adj: &[BTreeSet<usize>], start: usize) -> Vec<usize> {
+    let members: BTreeSet<usize> = scc.iter().copied().collect();
+    let mut visited: BTreeSet<usize> = BTreeSet::new();
+    let mut on_stack: Vec<usize> = Vec::new();
+    let mut on_stack_set: BTreeSet<usize> = BTreeSet::new();
+    let mut found: Option<Vec<usize>> = None;
+    find_cycle_dfs(
+        start,
+        &members,
+        adj,
+        &mut visited,
+        &mut on_stack,
+        &mut on_stack_set,
+        &mut found,
+    );
+    found.expect("a component with >1 node or a self-loop contains a cycle")
+}
+
+fn find_cycle_dfs(
+    u: usize,
+    members: &BTreeSet<usize>,
+    adj: &[BTreeSet<usize>],
+    visited: &mut BTreeSet<usize>,
+    on_stack: &mut Vec<usize>,
+    on_stack_set: &mut BTreeSet<usize>,
+    found: &mut Option<Vec<usize>>,
+) {
+    if found.is_some() {
+        return;
+    }
+    visited.insert(u);
+    on_stack.push(u);
+    on_stack_set.insert(u);
+
+    for &v in &adj[u] {
+        if found.is_some() {
+            break;
+        }
+        if !members.contains(&v) {
+            continue;
+        }
+        if on_stack_set.contains(&v) {
+            let pos = on_stack.iter().position(|&x| x == v).expect("v is on the stack");
+            *found = Some(on_stack[pos..].to_vec());
+            break;
+        } else if !visited.contains(&v) {
+            find_cycle_dfs(v, members, adj, visited, on_stack, on_stack_set, found);
+        }
+    }
+
+    on_stack.pop();
+    on_stack_set.remove(&u);
+}
+
+/// Inserts, replaces, or removes each entry's `terms:` line right after its
+/// `id:` line, in `lines` (a working copy of `tf.lines`). `pairs_per_entry`
+/// gives each entry's pairs in the same order as `tf.terms`; an empty list
+/// omits the line. Callers write `lines` to disk.
+///
+/// Used by approve's write step.
+pub fn write_terms_lines(
+    lines: &mut Vec<String>,
+    tf: &TermsFile,
+    pairs_per_entry: &[Vec<(String, String)>],
+) {
+    enum Op {
+        Remove,
+        Insert(String),
+    }
+
+    let mut ops: Vec<(usize, u8, Op)> = Vec::new();
+    for (i, t) in tf.terms.iter().enumerate() {
+        let pairs = pairs_per_entry.get(i).map(|v| v.as_slice()).unwrap_or(&[]);
+        let new_line = format_terms_line(pairs);
+
+        if let Some(idx) = t.terms_line_idx {
+            // 1-based line number -> 0-based index.
+            ops.push((idx - 1, 0, Op::Remove));
+        }
+        if let (Some(new_line), Some(id_line)) = (new_line, t.id_line) {
+            // 1-based id line number is also the 0-based "insert right after" index.
+            ops.push((id_line, 1, Op::Insert(new_line)));
+        }
+    }
+
+    // Bottom-to-top (position descending) so earlier edits don't shift the
+    // indices later edits still need; a remove is applied before an insert
+    // at the same position so a "replace in place" lands correctly.
+    ops.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+    for (pos, _, op) in ops {
+        match op {
+            Op::Remove => {
+                if pos < lines.len() {
+                    lines.remove(pos);
+                }
+            }
+            Op::Insert(s) => {
+                let pos = pos.min(lines.len());
+                lines.insert(pos, s);
+            }
+        }
+    }
 }
 
 pub fn format_terms_line(pairs: &[(String, String)]) -> Option<String> {
@@ -465,20 +680,13 @@ mod tests {
 ## decision\n\
 id: 11111111-1111-1111-1111-111111111111\n\
 definition: A choice locked by the owner.\n\
-test: Does the owner have to choose among options?\n\
-owner: adrdom/decisions/plan.md\n\
 aliases: choice\n\
-banned: verdict\n\
 \n\
 ## question\n\
 id: 22222222-2222-2222-2222-222222222222\n\
 definition: A thing the owner is asked to decide.\n\
-test: Is it phrased as a question ending in a question mark?\n\
-owner: adrdom/decisions/plan.md\n\
-aliases: \n\
-banned: \n\
-"
-        .to_string()
+aliases: \n"
+            .to_string()
     }
 
     #[test]
@@ -492,20 +700,14 @@ banned: \n\
             Some("11111111-1111-1111-1111-111111111111")
         );
         assert_eq!(tf.terms[0].aliases, vec!["choice".to_string()]);
-        assert_eq!(tf.terms[0].banned, vec!["verdict".to_string()]);
         assert!(!tf.terms[0].retired);
         assert!(tf.terms[1].aliases.is_empty());
-        assert!(tf.terms[1].banned.is_empty());
     }
 
     #[test]
     fn retired_line_is_recognized() {
         let mut s = well_formed();
-        s = s.replacen(
-            "banned: verdict\n",
-            "banned: verdict\nretired: yes\n",
-            1,
-        );
+        s = s.replacen("aliases: choice\n", "aliases: choice\nretired: yes\n", 1);
         let tf = parse(&lines_of(&s));
         assert!(tf.errors.is_empty(), "unexpected errors: {:?}", tf.errors);
         assert!(tf.terms[0].retired);
@@ -537,25 +739,51 @@ banned: \n\
 
     #[test]
     fn unknown_line_is_a_shape_error() {
-        let s = well_formed().replacen(
-            "banned: verdict\n",
-            "banned: verdict\nnotes: extra\n",
-            1,
-        );
+        let s = well_formed().replacen("aliases: choice\n", "aliases: choice\nnotes: extra\n", 1);
         let tf = parse(&lines_of(&s));
         assert!(tf.errors.iter().any(|e| e.contains("unknown line")));
     }
 
     #[test]
-    fn missing_id_gets_the_owner_wording() {
+    fn removed_fields_are_unknown_lines() {
+        for field in ["test", "owner", "banned"] {
+            let s = well_formed().replacen(
+                "aliases: choice\n",
+                &format!("aliases: choice\n{}: x\n", field),
+                1,
+            );
+            let tf = parse(&lines_of(&s));
+            assert!(
+                tf.errors.iter().any(|e| e.contains("unknown line")),
+                "field \"{}\" not reported as unknown line: {:?}",
+                field,
+                tf.errors
+            );
+        }
+    }
+
+    #[test]
+    fn duplicate_field_is_a_shape_error() {
         let s = well_formed().replacen(
-            "id: 11111111-1111-1111-1111-111111111111\n",
-            "",
+            "definition: A choice locked by the owner.\n",
+            "definition: A choice locked by the owner.\ndefinition: Something else.\n",
             1,
         );
         let tf = parse(&lines_of(&s));
-        assert!(tf.errors.iter().any(|e| e
-            .contains("missing id; owner runs adr approve adrdom/terms.md")));
+        assert!(tf
+            .errors
+            .iter()
+            .any(|e| e.contains("duplicate field \"definition\"")));
+    }
+
+    #[test]
+    fn missing_id_gets_the_owner_wording() {
+        let s = well_formed().replacen("id: 11111111-1111-1111-1111-111111111111\n", "", 1);
+        let tf = parse(&lines_of(&s));
+        assert!(tf
+            .errors
+            .iter()
+            .any(|e| e.contains("missing id; owner runs adr approve adrdom/terms.md")));
     }
 
     #[test]
@@ -570,44 +798,19 @@ banned: \n\
     }
 
     #[test]
-    fn owner_path_that_does_not_exist_is_an_error() {
-        let dir = std::env::temp_dir().join(format!("adrdom-terms-test-{}", Uuid::new_v4()));
-        fs::create_dir_all(&dir).unwrap();
-        let tf = parse(&lines_of(&well_formed()));
-        let errs = check_owners(&tf, &dir);
-        assert!(errs.iter().any(|e| e.contains("does not exist")));
-        fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn owner_path_that_exists_is_fine() {
-        let dir = std::env::temp_dir().join(format!("adrdom-terms-test-{}", Uuid::new_v4()));
-        fs::create_dir_all(dir.join("adrdom/decisions")).unwrap();
-        fs::write(dir.join("adrdom/decisions/plan.md"), "# plan\n").unwrap();
-        let tf = parse(&lines_of(&well_formed()));
-        let errs = check_owners(&tf, &dir);
-        assert!(errs.is_empty(), "unexpected: {:?}", errs);
-        fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
     fn duplicate_word_across_two_entries_is_an_error() {
         let s = well_formed().replacen("aliases: choice\n", "aliases: question\n", 1);
         let tf = parse(&lines_of(&s));
-        assert!(tf
-            .errors
-            .iter()
-            .any(|e| e.contains("word \"question\"") && e.contains("decision") && e.contains("question")));
+        assert!(tf.errors.iter().any(
+            |e| e.contains("word \"question\"") && e.contains("decision") && e.contains("question")
+        ));
     }
 
     #[test]
-    fn duplicate_word_as_name_and_banned_in_same_entry_is_an_error() {
-        let s = well_formed().replacen("banned: verdict\n", "banned: decision\n", 1);
+    fn empty_name_is_a_shape_error() {
+        let s = well_formed().replacen("## decision\n", "## \n", 1);
         let tf = parse(&lines_of(&s));
-        assert!(tf
-            .errors
-            .iter()
-            .any(|e| e.contains("word \"decision\"") && e.contains("both name/alias and banned")));
+        assert!(tf.errors.iter().any(|e| e.contains("empty name")));
     }
 
     fn sample_terms() -> Vec<Term> {
@@ -616,37 +819,34 @@ banned: \n\
                 name: "terms file".to_string(),
                 id: Some("id-terms-file".to_string()),
                 definition: String::new(),
-                test: String::new(),
-                owner: String::new(),
                 aliases: vec![],
-                banned: vec!["verdict".to_string()],
                 retired: false,
                 start_line: 1,
                 id_line: Some(2),
+                terms_line: None,
+                terms_line_idx: None,
             },
             Term {
                 name: "terms".to_string(),
                 id: Some("id-terms".to_string()),
                 definition: String::new(),
-                test: String::new(),
-                owner: String::new(),
                 aliases: vec![],
-                banned: vec![],
                 retired: false,
                 start_line: 10,
                 id_line: Some(11),
+                terms_line: None,
+                terms_line_idx: None,
             },
             Term {
                 name: "decision".to_string(),
                 id: Some("id-decision".to_string()),
                 definition: String::new(),
-                test: String::new(),
-                owner: String::new(),
                 aliases: vec![],
-                banned: vec![],
                 retired: true,
                 start_line: 20,
                 id_line: Some(21),
+                terms_line: None,
+                terms_line_idx: None,
             },
         ]
     }
@@ -662,16 +862,81 @@ banned: \n\
     }
 
     #[test]
-    fn resolve_respects_word_boundaries_no_stemming() {
+    fn resolve_matches_simple_plural() {
         let terms = sample_terms();
         let pairs = resolve("the decisions were many", &terms);
-        assert!(pairs.is_empty(), "decisions must not match decision: {:?}", pairs);
+        assert!(
+            pairs
+                .iter()
+                .any(|(w, id)| w == "decisions" && id == "id-decision"),
+            "{:?}",
+            pairs
+        );
 
-        let pairs2 = resolve("the decision was final", &terms);
+        // Not a plural of anything registered: no arbitrary stemming.
+        let pairs2 = resolve("a decisional matter", &terms);
+        assert!(pairs2.iter().all(|(_, id)| id != "id-decision"));
+
+        // Exact singular still matches.
+        let pairs3 = resolve("the decision was final", &terms);
         assert_eq!(
-            pairs2,
+            pairs3,
             vec![("decision".to_string(), "id-decision".to_string())]
         );
+    }
+
+    #[test]
+    fn resolve_plural_does_not_shadow_a_longer_phrase() {
+        let terms = vec![
+            Term {
+                name: "cat".to_string(),
+                id: Some("id-cat".to_string()),
+                definition: String::new(),
+                aliases: vec![],
+                retired: false,
+                start_line: 1,
+                id_line: Some(2),
+                terms_line: None,
+                terms_line_idx: None,
+            },
+            Term {
+                name: "cats meow".to_string(),
+                id: Some("id-cats-meow".to_string()),
+                definition: String::new(),
+                aliases: vec![],
+                retired: false,
+                start_line: 10,
+                id_line: Some(11),
+                terms_line: None,
+                terms_line_idx: None,
+            },
+        ];
+        let pairs = resolve("the cats meow loudly", &terms);
+        assert_eq!(
+            pairs,
+            vec![("cats meow".to_string(), "id-cats-meow".to_string())]
+        );
+    }
+
+    #[test]
+    fn resolve_matches_irregular_plural_via_alias() {
+        let terms = vec![Term {
+            name: "mouse".to_string(),
+            id: Some("id-mouse".to_string()),
+            definition: String::new(),
+            aliases: vec!["mice".to_string()],
+            retired: false,
+            start_line: 1,
+            id_line: Some(2),
+            terms_line: None,
+            terms_line_idx: None,
+        }];
+        let pairs = resolve("the mice ran", &terms);
+        assert_eq!(pairs, vec![("mice".to_string(), "id-mouse".to_string())]);
+        // The auto-plural of "mouse" ("mouses") is not what appears in the
+        // text, and "mouse" itself doesn't appear either.
+        let pairs2 = resolve("a mouse ran", &terms);
+        assert_eq!(pairs2, vec![("mouse".to_string(), "id-mouse".to_string())]);
     }
 
     #[test]
@@ -693,25 +958,7 @@ banned: \n\
     }
 
     #[test]
-    fn banned_hits_finds_a_banned_word_with_its_line() {
-        let terms = sample_terms();
-        let text = "line one is fine\na verdict was reached\nline three";
-        let hits = banned_hits(text, &terms);
-        assert_eq!(
-            hits,
-            vec![(2, "verdict".to_string(), "terms file".to_string())]
-        );
-    }
-
-    #[test]
-    fn banned_hits_respects_word_boundaries() {
-        let terms = sample_terms();
-        let hits = banned_hits("the overdict is not a match", &terms);
-        assert!(hits.is_empty());
-    }
-
-    #[test]
-    fn fill_missing_ids_inserts_one_line_per_entry_then_nothing() {
+    fn mint_ids_inserts_one_line_per_entry_then_nothing() {
         let s = well_formed()
             .replacen("id: 11111111-1111-1111-1111-111111111111\n", "", 1)
             .replacen("id: 22222222-2222-2222-2222-222222222222\n", "", 1);
@@ -719,23 +966,26 @@ banned: \n\
         assert_eq!(tf.terms.len(), 2);
         assert!(tf.terms.iter().all(|t| t.id.is_none()));
 
-        let inserted = fill_missing_ids(&mut tf);
+        let inserted = mint_ids(&mut tf);
         assert_eq!(inserted, 2);
         assert!(tf.terms.iter().all(|t| t.id.is_some()));
-        assert!(tf
-            .errors
-            .iter()
-            .all(|e| !e.contains("missing id")));
+        assert!(tf.errors.iter().all(|e| !e.contains("missing id")));
 
-        let second = fill_missing_ids(&mut tf);
+        let second = mint_ids(&mut tf);
         assert_eq!(second, 0);
     }
 
     #[test]
     fn format_and_parse_terms_line_round_trip() {
         let pairs = vec![
-            ("decision".to_string(), "11111111-1111-1111-1111-111111111111".to_string()),
-            ("question".to_string(), "22222222-2222-2222-2222-222222222222".to_string()),
+            (
+                "decision".to_string(),
+                "11111111-1111-1111-1111-111111111111".to_string(),
+            ),
+            (
+                "question".to_string(),
+                "22222222-2222-2222-2222-222222222222".to_string(),
+            ),
         ];
         let line = format_terms_line(&pairs).unwrap();
         assert_eq!(
@@ -773,5 +1023,124 @@ banned: \n\
         assert_eq!(h1, h2);
 
         fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn file_hash_ignores_trailing_whitespace_on_a_line() {
+        let base = well_formed();
+        let with_trailing_ws = base.replacen(
+            "definition: A choice locked by the owner.\n",
+            "definition: A choice locked by the owner.   \n",
+            1,
+        );
+        let tf1 = parse(&lines_of(&base));
+        let tf2 = parse(&lines_of(&with_trailing_ws));
+        assert_eq!(file_hash(&tf1), file_hash(&tf2));
+    }
+
+    fn term_with_definition(
+        name: &str,
+        id: &str,
+        definition: &str,
+        start_line: usize,
+    ) -> Term {
+        Term {
+            name: name.to_string(),
+            id: Some(id.to_string()),
+            definition: definition.to_string(),
+            aliases: vec![],
+            retired: false,
+            start_line,
+            id_line: Some(start_line + 1),
+            terms_line: None,
+            terms_line_idx: None,
+        }
+    }
+
+    fn tf_of(terms: Vec<Term>) -> TermsFile {
+        TermsFile {
+            path: PathBuf::new(),
+            lines: Vec::new(),
+            terms,
+            errors: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn cycles_finds_a_self_cycle() {
+        let tf = tf_of(vec![term_with_definition(
+            "loop",
+            "id-loop",
+            "A loop that refers to loop.",
+            1,
+        )]);
+        let found = cycles(&tf);
+        assert_eq!(found, vec![vec!["loop".to_string()]]);
+    }
+
+    #[test]
+    fn cycles_finds_a_two_node_cycle() {
+        let tf = tf_of(vec![
+            term_with_definition("alpha", "id-alpha", "See beta.", 1),
+            term_with_definition("beta", "id-beta", "See alpha.", 10),
+        ]);
+        let found = cycles(&tf);
+        assert_eq!(found, vec![vec!["alpha".to_string(), "beta".to_string()]]);
+    }
+
+    #[test]
+    fn cycles_finds_a_three_node_cycle() {
+        let tf = tf_of(vec![
+            term_with_definition("alpha", "id-alpha", "See beta.", 1),
+            term_with_definition("beta", "id-beta", "See gamma.", 10),
+            term_with_definition("gamma", "id-gamma", "See alpha.", 20),
+        ]);
+        let found = cycles(&tf);
+        assert_eq!(
+            found,
+            vec![vec![
+                "alpha".to_string(),
+                "beta".to_string(),
+                "gamma".to_string()
+            ]]
+        );
+    }
+
+    #[test]
+    fn cycles_finds_none_when_the_graph_has_no_cycle() {
+        let tf = tf_of(vec![
+            term_with_definition("alpha", "id-alpha", "A plain first thing.", 1),
+            term_with_definition("beta", "id-beta", "See alpha.", 10),
+        ]);
+        assert!(cycles(&tf).is_empty());
+    }
+
+    #[test]
+    fn cycles_handles_a_dense_complete_graph_quickly() {
+        // Every entry's definition pairs every other entry: one giant
+        // strongly connected component. The old enumerate-every-cycle
+        // approach is factorial here; the SCC approach is linear.
+        let n = 40;
+        let names: Vec<String> = (0..n).map(|i| format!("term{}", i)).collect();
+        let terms: Vec<Term> = (0..n)
+            .map(|i| {
+                let definition = names
+                    .iter()
+                    .enumerate()
+                    .filter(|&(j, _)| j != i)
+                    .map(|(_, name)| format!("See {}.", name))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                term_with_definition(&names[i], &format!("id-{}", i), &definition, i * 10 + 1)
+            })
+            .collect();
+        let tf = tf_of(terms);
+
+        let start = std::time::Instant::now();
+        let found = cycles(&tf);
+        let elapsed = start.elapsed();
+
+        assert_eq!(found.len(), 1, "expected exactly one cycle, got {:?}", found);
+        assert!(elapsed.as_secs() < 1, "cycles took too long: {:?}", elapsed);
     }
 }
