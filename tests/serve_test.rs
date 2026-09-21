@@ -110,6 +110,7 @@ fn post(port: u16, path: &str, cookie: Option<&str>, form: &str) -> HttpResponse
 fn setup_repo_with_open_question() -> std::path::PathBuf {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
     let record = write_record(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
     let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");

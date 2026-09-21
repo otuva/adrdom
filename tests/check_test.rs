@@ -107,6 +107,7 @@ fn check_ledger_malformed_row() {
 fn check_answers_failure_hand_written_answer_line() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "pass");
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")

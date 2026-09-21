@@ -64,6 +64,7 @@ const HEADING_REMOVED: &str = "# Topic\n\nContext prose.\n\n## Group One\n";
 fn ask_refuses_an_unapproved_file_naming_adr_approve() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "question");
     let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP_RECORD);
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
@@ -107,6 +108,7 @@ fn approve_writes_approved_and_context_rows_then_is_idempotent() {
 fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "question");
     let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP_RECORD);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
@@ -148,6 +150,7 @@ fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
 fn ask_refuses_group_two_while_group_one_unanswered_then_passes_after_lock() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "question");
     let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP_RECORD);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
@@ -192,6 +195,7 @@ fn ask_refuses_group_two_while_group_one_unanswered_then_passes_after_lock() {
 fn approve_withdraws_a_struck_asked_heading() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "question");
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
@@ -221,6 +225,7 @@ fn approve_withdraws_a_struck_asked_heading() {
 fn approve_refuses_when_answered_heading_gone_and_not_superseded() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "question");
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
@@ -249,6 +254,7 @@ fn approve_refuses_when_answered_heading_gone_and_not_superseded() {
 fn approve_allows_a_vanished_heading_once_superseded() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "question");
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
@@ -349,7 +355,7 @@ Context prose.
 
 ## Group One
 
-### 1.1 What counts as a decision?
+### 1.1 What is the decision?
 
 Problem: whether a decision is well defined.
 
@@ -388,12 +394,16 @@ fn ask_writes_terms_line_binding_word_to_term_id() {
     );
 }
 
-// --- approve refuses a terms edit that moves an alias bound in force ----
+// --- approve refuses a terms edit that moves a bound word off an entry --
 
+// `decision`'s definition deliberately avoids the word "choice" itself
+// (its own alias): using it there would make the entry's definition pair
+// with itself, a self-cycle refused by step 3, unrelated to what these
+// fixtures are testing.
 const TERMS_WITH_ALIAS: &str = "# Terms\n\n\
 ## decision\n\
 id: 11111111-1111-1111-1111-111111111111\n\
-definition: A choice locked by the owner.\n\
+definition: A pick locked by the owner.\n\
 aliases: choice\n\
 \n\
 ## verdict\n\
@@ -404,7 +414,7 @@ aliases: \n";
 const TERMS_ALIAS_MOVED: &str = "# Terms\n\n\
 ## decision\n\
 id: 11111111-1111-1111-1111-111111111111\n\
-definition: A choice locked by the owner.\n\
+definition: A pick locked by the owner.\n\
 aliases: \n\
 \n\
 ## verdict\n\
@@ -431,7 +441,7 @@ Standard: plain words.
 "#;
 
 #[test]
-fn approve_refuses_a_terms_edit_that_moves_an_alias_bound_by_an_in_force_decision() {
+fn approve_refuses_a_terms_edit_that_moves_a_word_off_an_entry_carried_by_an_in_force_decision() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", CHOICE_QUESTION_RECORD);
@@ -457,10 +467,30 @@ fn approve_refuses_a_terms_edit_that_moves_an_alias_bound_by_an_in_force_decisio
     let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
-    assert!(err.contains("What is the choice?"), "{}", err);
+    assert!(
+        err.contains(
+            "word \"choice\" moved off entry \"decision\", carried by adrdom/decisions/example.md: \"1.1 What is the choice?\""
+        ),
+        "{}",
+        err
+    );
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert_eq!(ledger.lines().filter(|l| l.contains("\tterms\t")).count(), 1);
+}
+
+#[test]
+fn approve_allows_moving_a_word_that_nothing_carries() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let terms = write_record(&dir, "adrdom/terms.md", TERMS_WITH_ALIAS);
+    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
+        .status
+        .success());
+
+    std::fs::write(&terms, TERMS_ALIAS_MOVED).unwrap();
+    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    assert!(out.status.success(), "approve should have allowed it: {}", stderr(&out));
 }
 
 // --- approve writes a terms row on a clean edit -------------------------
@@ -488,4 +518,308 @@ fn approve_writes_a_terms_row_on_a_clean_edit() {
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert_eq!(ledger.lines().filter(|l| l.contains("\tterms\t")).count(), 2);
+}
+
+// --- approve terms (4): refuses before writing, circular, already approved
+
+const TERMS_MISSING_DEFINITION: &str = "# Terms\n\n## decision\naliases: \n";
+
+#[test]
+fn approve_terms_refuses_before_writing_leaving_the_file_unchanged() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let terms = write_record(&dir, "adrdom/terms.md", TERMS_MISSING_DEFINITION);
+    let before = std::fs::read_to_string(&terms).unwrap();
+
+    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    assert!(
+        stderr(&out).contains("missing field \"definition\""),
+        "{}",
+        stderr(&out)
+    );
+
+    let after = std::fs::read_to_string(&terms).unwrap();
+    assert_eq!(
+        before, after,
+        "approve must not write anything to adrdom/terms.md on refusal, even though minting an id for the id-less entry above happens in memory"
+    );
+}
+
+const TERMS_CIRCULAR: &str = "# Terms\n\n\
+## alpha\n\
+id: 11111111-1111-1111-1111-111111111111\n\
+definition: See beta.\n\
+aliases: \n\
+\n\
+## beta\n\
+id: 22222222-2222-2222-2222-222222222222\n\
+definition: See alpha.\n\
+aliases: \n";
+
+#[test]
+fn approve_refuses_a_circular_definition() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let terms = write_record(&dir, "adrdom/terms.md", TERMS_CIRCULAR);
+    let before = std::fs::read_to_string(&terms).unwrap();
+
+    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(
+        err.contains("circular definition: alpha -> beta -> alpha"),
+        "{}",
+        err
+    );
+
+    let after = std::fs::read_to_string(&terms).unwrap();
+    assert_eq!(before, after, "approve must not write anything on refusal");
+}
+
+#[test]
+fn approve_terms_reruns_as_already_approved_with_no_new_row() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let terms = write_record(&dir, "adrdom/terms.md", TERMS_BASIC);
+    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
+        .status
+        .success());
+    let ledger_before = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+
+    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    assert!(out.status.success(), "approve failed: {}", stderr(&out));
+    assert!(stdout(&out).contains("already approved"), "{}", stdout(&out));
+
+    let ledger_after = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert_eq!(
+        ledger_before, ledger_after,
+        "an already-approved rerun must not append a ledger row"
+    );
+}
+
+// --- approve terms (4): dependents ---------------------------------------
+
+const TERMS_TWO_ENTRIES: &str = "# Terms\n\n\
+## decision\n\
+id: 33333333-3333-3333-3333-333333333333\n\
+definition: A choice locked by the owner.\n\
+aliases: \n\
+\n\
+## verdict\n\
+id: 44444444-4444-4444-4444-444444444444\n\
+definition: A ruling reached after deliberation.\n\
+aliases: \n";
+
+const TERMS_DECISION_REMOVED: &str = "# Terms\n\n\
+## verdict\n\
+id: 44444444-4444-4444-4444-444444444444\n\
+definition: A ruling reached after deliberation.\n\
+aliases: \n";
+
+const TERMS_DECISION_RETIRED: &str = "# Terms\n\n\
+## decision\n\
+id: 33333333-3333-3333-3333-333333333333\n\
+definition: A choice locked by the owner.\n\
+aliases: \n\
+retired: yes\n\
+\n\
+## verdict\n\
+id: 44444444-4444-4444-4444-444444444444\n\
+definition: A ruling reached after deliberation.\n\
+aliases: \n";
+
+const DECISION_RECORD_FOR_DEPENDENTS: &str = r#"# Topic
+
+Context prose.
+
+## Group One
+
+### 1.1 What is the decision?
+
+Problem: the decision is unclear.
+
+Standard: plain words.
+
+- A) The decision is final.
+  Why: reasons.
+- B) The decision is provisional.
+  Why: other reasons.
+"#;
+
+#[test]
+fn approve_refuses_removing_an_entry_carried_by_an_in_force_decision() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let record = write_record(&dir, "adrdom/decisions/example.md", DECISION_RECORD_FOR_DEPENDENTS);
+    let terms = write_record(&dir, "adrdom/terms.md", TERMS_TWO_ENTRIES);
+    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let id = extract_ids(&content)[0].clone();
+    assert!(adr_owner(&dir, &["lock", &id, "A"], "").status.success());
+
+    std::fs::write(&terms, TERMS_DECISION_REMOVED).unwrap();
+    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(
+        err.contains("entry 33333333-3333-3333-3333-333333333333 removed"),
+        "{}",
+        err
+    );
+    assert!(err.contains("What is the decision?"), "{}", err);
+    assert!(err.contains("owner retires instead"), "{}", err);
+}
+
+#[test]
+fn approve_refuses_retiring_an_entry_carried_by_an_in_force_decision() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let record = write_record(&dir, "adrdom/decisions/example.md", DECISION_RECORD_FOR_DEPENDENTS);
+    let terms = write_record(&dir, "adrdom/terms.md", TERMS_TWO_ENTRIES);
+    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let id = extract_ids(&content)[0].clone();
+    assert!(adr_owner(&dir, &["lock", &id, "A"], "").status.success());
+
+    std::fs::write(&terms, TERMS_DECISION_RETIRED).unwrap();
+    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(
+        err.contains("entry \"decision\" retired but carried by"),
+        "{}",
+        err
+    );
+    assert!(err.contains("What is the decision?"), "{}", err);
+    assert!(err.contains("owner supersedes first"), "{}", err);
+}
+
+const TERMS_BEFORE_RENAME: &str = "# Terms\n\n\
+## decision\n\
+id: 55555555-5555-5555-5555-555555555555\n\
+definition: A choice locked by the owner.\n\
+aliases: \n";
+
+const TERMS_AFTER_RENAME_ALIAS_KEPT: &str = "# Terms\n\n\
+## ruling\n\
+id: 55555555-5555-5555-5555-555555555555\n\
+definition: A choice locked by the owner.\n\
+aliases: decision\n";
+
+#[test]
+fn approve_allows_a_rename_that_keeps_the_old_name_as_an_alias() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let record = write_record(&dir, "adrdom/decisions/example.md", DECISION_RECORD_FOR_DEPENDENTS);
+    let terms = write_record(&dir, "adrdom/terms.md", TERMS_BEFORE_RENAME);
+    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let id = extract_ids(&content)[0].clone();
+    assert!(adr_owner(&dir, &["lock", &id, "A"], "").status.success());
+
+    std::fs::write(&terms, TERMS_AFTER_RENAME_ALIAS_KEPT).unwrap();
+    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    assert!(
+        out.status.success(),
+        "approve should have allowed the rename: {}",
+        stderr(&out)
+    );
+}
+
+#[test]
+fn approve_prints_dependents_when_a_definition_changes() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let record = write_record(&dir, "adrdom/decisions/example.md", DECISION_RECORD_FOR_DEPENDENTS);
+    let terms = write_record(&dir, "adrdom/terms.md", TERMS_BASIC);
+    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
+        .status
+        .success());
+    // Commit the approved terms.md so HEAD matches the ledger's latest
+    // terms row: only then does approve have a trustworthy "before" text
+    // to diff definitions against.
+    // `--no-verify`: the repo's own pre-commit hook runs `adr check
+    // --staged`, which would fail here purely because the record hasn't
+    // been asked yet at this point in the test; that governance gate is
+    // not what this test is about.
+    run_git(&dir, &["add", "adrdom/terms.md"]);
+    run_git(&dir, &["commit", "--no-verify", "-q", "-m", "approve terms"]);
+
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let id = extract_ids(&content)[0].clone();
+    assert!(adr_owner(&dir, &["lock", &id, "A"], "").status.success());
+
+    let terms_v2 = "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice locked by the owner, revised.\naliases: \n";
+    std::fs::write(&terms, terms_v2).unwrap();
+    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    assert!(out.status.success(), "approve failed: {}", stderr(&out));
+    let text = stdout(&out);
+    assert!(text.contains("term \"decision\" definition changed"), "{}", text);
+    assert!(
+        text.contains("in force: adrdom/decisions/example.md: 1.1 What is the decision?"),
+        "{}",
+        text
+    );
+}
+
+const TERMS_CROSS_REF: &str = "# Terms\n\n\
+## decision\n\
+id: 66666666-6666-6666-6666-666666666666\n\
+definition: A choice bound by a question.\n\
+aliases: \n\
+\n\
+## question\n\
+id: 77777777-7777-7777-7777-777777777777\n\
+definition: A thing the owner is asked to decide.\n\
+aliases: \n";
+
+#[test]
+fn approve_writes_a_terms_line_per_entry_from_its_definition() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let terms = write_record(&dir, "adrdom/terms.md", TERMS_CROSS_REF);
+    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
+        .status
+        .success());
+
+    let content = std::fs::read_to_string(&terms).unwrap();
+    assert!(
+        content.contains("terms: question=77777777-7777-7777-7777-777777777777"),
+        "{}",
+        content
+    );
+    // The entry whose definition pairs nothing gets no terms: line.
+    let question_block = &content[content.find("## question").unwrap()..];
+    assert!(!question_block.contains("terms: "), "{}", question_block);
 }

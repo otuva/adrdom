@@ -33,6 +33,7 @@ Standard: clear yes or no.
 fn show_prints_only_in_force_sentences() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "reasons");
     let record = write_record(&dir, "adrdom/decisions/example.md", RECORD);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", RECORD);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")

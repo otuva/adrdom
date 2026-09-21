@@ -280,3 +280,47 @@ pub fn approve_terms_via_ledger(dir: &Path, content: &str) {
     ));
     std::fs::write(&ledger_path, existing).unwrap();
 }
+
+// --- Terms approval, without depending on `adr approve` -------------------
+//
+// `ask` now refuses a candidate section unless adrdom/terms.md exists, is
+// approved, and the section's text pairs at least one entry. Most tests
+// that only care about plan/context/lock behavior need a minimal, already
+// approved terms.md with a single entry whose name appears somewhere in
+// the fixture text; this mirrors `terms::file_hash` (sha256 of the file's
+// text with line endings normalized) the same way `approve_via_ledger`
+// mirrors the plan/context hashes, so tests don't have to route through
+// the `approve` command (being built as the same slice, but kept
+// independent so a bug in one doesn't mask a bug in the other).
+pub fn approve_minimal_terms(dir: &Path, word: &str) {
+    let content = format!(
+        "# Terms\n\n## {}\nid: 99999999-9999-9999-9999-999999999999\ndefinition: A fixture term for tests.\naliases: \n",
+        word
+    );
+    std::fs::write(dir.join("adrdom/terms.md"), &content).unwrap();
+    let hash = sha256_hex(&content.replace("\r\n", "\n"));
+    let ledger_path = dir.join("adrdom/state/ledger.tsv");
+    let mut existing = std::fs::read_to_string(&ledger_path).unwrap_or_default();
+    existing.push_str(&format!(
+        "2024-01-01T00:00:00Z\tterms\t-\t{}\tadrdom/terms.md\n",
+        hash
+    ));
+    std::fs::write(&ledger_path, existing).unwrap();
+}
+
+/// Mirrors `record::section_hash` for a caller that already has the exact
+/// block of lines making up one section (from its heading through its
+/// last content line, no trailing blank, no `**Answer:**`): each line
+/// right-trimmed, joined with `\n`, sha256 hex. Lets a test hand-craft an
+/// `asked` ledger row matching a record it edited directly (e.g. after
+/// stripping a `terms:` line `ask` wrote), without reimplementing
+/// `record::hash_range`.
+pub fn mirror_section_hash(section_text: &str) -> String {
+    let text: String = section_text
+        .trim_end_matches('\n')
+        .split('\n')
+        .map(|l| l.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n");
+    sha256_hex(&text)
+}
