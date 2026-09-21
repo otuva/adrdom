@@ -17,7 +17,13 @@ static COMMON_WORDS: &str = include_str!("common_words.txt");
 
 fn common_words() -> &'static HashSet<&'static str> {
     static SET: OnceLock<HashSet<&'static str>> = OnceLock::new();
-    SET.get_or_init(|| COMMON_WORDS.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect())
+    SET.get_or_init(|| {
+        COMMON_WORDS
+            .lines()
+            .map(|l| l.trim())
+            .filter(|l| !l.is_empty())
+            .collect()
+    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -166,9 +172,10 @@ fn open_group_and_waits_on(rf: &RecordFile, led: &Ledger) -> (Option<String>, Op
         }
     }
 
-    let open_group_idx = group_states
-        .iter()
-        .position(|qs| qs.iter().any(|(_, s)| matches!(s, QState::Open | QState::Unasked)));
+    let open_group_idx = group_states.iter().position(|qs| {
+        qs.iter()
+            .any(|(_, s)| matches!(s, QState::Open | QState::Unasked))
+    });
     let open_group = open_group_idx.map(|gi| rf.groups[gi].heading_text.clone());
 
     let waiting_group_idx = group_states.iter().position(|qs| {
@@ -196,7 +203,11 @@ fn open_group_and_waits_on(rf: &RecordFile, led: &Ledger) -> (Option<String>, Op
 /// shorter than three letters, and not covered by a pairing (the plural
 /// rule applies: a word whose trailing "s"/"es" strips to a current name or
 /// alias counts as covered even if it isn't itself a pairing's word).
-fn section_words(rf: &RecordFile, sec: &Section, terms_list: &[Term]) -> (Vec<WordPair>, Vec<String>) {
+fn section_words(
+    rf: &RecordFile,
+    sec: &Section,
+    terms_list: &[Term],
+) -> (Vec<WordPair>, Vec<String>) {
     let text = state::section_text_excluding_terms_line(&rf.lines, sec);
     let pairs: Vec<(String, String)> = match sec.terms_line {
         Some(tl) => terms::parse_terms_line(rf.lines[tl].trim_end()).unwrap_or_default(),
@@ -205,7 +216,10 @@ fn section_words(rf: &RecordFile, sec: &Section, terms_list: &[Term]) -> (Vec<Wo
 
     let mut words = Vec::new();
     for (w, tid) in &pairs {
-        if let Some(t) = terms_list.iter().find(|t| t.id.as_deref() == Some(tid.as_str())) {
+        if let Some(t) = terms_list
+            .iter()
+            .find(|t| t.id.as_deref() == Some(tid.as_str()))
+        {
             words.push(WordPair {
                 word: w.clone(),
                 term_name: t.name.clone(),
@@ -283,6 +297,36 @@ fn match_uuid_at(chars: &[char], start: usize) -> Option<usize> {
     Some(pos)
 }
 
+/// A word counts as common (and so never shows up as "No term") when it
+/// is in `common_words()` itself, or becomes a listed word once one of
+/// these trailing suffixes is stripped: "s" (accepts -> accept, stays ->
+/// stay, shapes -> shape, leaves -> leave), "es", "ed" (picked -> pick),
+/// "d", or "ing" (staying -> stay, picking -> pick). For "ed" and "ing"
+/// only, if stripping the suffix doesn't land on a listed word, trying
+/// again with an "e" appended does (shaped/shaping -> "shap" + "e" ->
+/// shape). This keeps the shipped word list to base forms instead of
+/// spelling out every inflection.
+fn is_common_word(w: &str) -> bool {
+    let common = common_words();
+    if common.contains(w) {
+        return true;
+    }
+    for suf in ["s", "es", "ed", "d", "ing"] {
+        if let Some(stripped) = w.strip_suffix(suf) {
+            if common.contains(stripped) {
+                return true;
+            }
+            if suf == "ed" || suf == "ing" {
+                let with_e = format!("{}e", stripped);
+                if common.contains(with_e.as_str()) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 fn no_entry_words(text: &str, pairs: &[(String, String)], terms_list: &[Term]) -> Vec<String> {
     let mut pair_words: HashSet<String> = HashSet::new();
     for (w, _) in pairs {
@@ -298,7 +342,6 @@ fn no_entry_words(text: &str, pairs: &[(String, String)], terms_list: &[Term]) -
         }
     }
 
-    let common = common_words();
     let stripped = strip_uuid_tokens(text);
     let mut found: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for line in stripped.split('\n') {
@@ -314,7 +357,7 @@ fn no_entry_words(text: &str, pairs: &[(String, String)], terms_list: &[Term]) -
             if w.chars().all(|c| c.is_ascii_digit()) {
                 continue;
             }
-            if common.contains(w.as_str()) {
+            if is_common_word(&w) {
                 continue;
             }
             if pair_words.contains(&w) {
@@ -324,7 +367,9 @@ fn no_entry_words(text: &str, pairs: &[(String, String)], terms_list: &[Term]) -
                 .strip_suffix("es")
                 .map(|s| name_alias.contains(s))
                 .unwrap_or(false)
-                || w.strip_suffix('s').map(|s| name_alias.contains(s)).unwrap_or(false);
+                || w.strip_suffix('s')
+                    .map(|s| name_alias.contains(s))
+                    .unwrap_or(false);
             if plural_covered {
                 continue;
             }
@@ -495,13 +540,15 @@ fn build_terms_view(root: &Path, led: &Ledger, tf: terms::TermsFile) -> TermsVie
                 let head_tf = terms::parse(&record::split_lines(&head_content));
                 if terms::file_hash(&head_tf) == latest.hash {
                     for t in &tf.terms {
-                        let old = t
-                            .id
-                            .as_ref()
-                            .and_then(|id| {
-                                head_tf.terms.iter().find(|o| o.id.as_deref() == Some(id.as_str()))
-                            })
-                            .or_else(|| head_tf.terms.iter().find(|o| o.name == t.name));
+                        let old =
+                            t.id.as_ref()
+                                .and_then(|id| {
+                                    head_tf
+                                        .terms
+                                        .iter()
+                                        .find(|o| o.id.as_deref() == Some(id.as_str()))
+                                })
+                                .or_else(|| head_tf.terms.iter().find(|o| o.name == t.name));
                         let Some(old_t) = old else { continue };
                         if old_t.definition == t.definition && old_t.aliases == t.aliases {
                             continue;
@@ -542,7 +589,10 @@ pub fn snapshot(root: &Path) -> Snapshot {
     let test_idx = check::test_index(root);
 
     let terms_opt = state::load_terms(root);
-    let terms_list: Vec<Term> = terms_opt.as_ref().map(|tf| tf.terms.clone()).unwrap_or_default();
+    let terms_list: Vec<Term> = terms_opt
+        .as_ref()
+        .map(|tf| tf.terms.clone())
+        .unwrap_or_default();
 
     let mut files: Vec<FileView> = Vec::new();
     for f in repo::list_decision_files(root) {
@@ -585,6 +635,21 @@ mod tests {
     use std::path::PathBuf;
     use std::process::Command;
     use std::sync::atomic::{AtomicU64, Ordering};
+
+    #[test]
+    fn is_common_word_covers_inflected_common_words() {
+        assert!(is_common_word("accepts"), "accepts -> accept");
+        assert!(is_common_word("picked"), "picked -> pick");
+        assert!(is_common_word("stays"), "stays -> stay");
+        assert!(is_common_word("shapes"), "shapes -> shape");
+        assert!(is_common_word("beside"), "beside is a plain base word");
+    }
+
+    #[test]
+    fn is_common_word_does_not_swallow_real_no_term_words() {
+        assert!(!is_common_word("principle"));
+        assert!(!is_common_word("constraint"));
+    }
 
     static COUNTER: AtomicU64 = AtomicU64::new(0);
 

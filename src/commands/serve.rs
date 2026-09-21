@@ -9,9 +9,7 @@ use tiny_http::{Header, Method, Request, Response, Server};
 
 pub fn run(port: u16) -> i32 {
     if !repo::owner_authorized() {
-        eprintln!(
-            "serve: refusing: owner authorization required (interactive TTY, no CLAUDECODE)"
-        );
+        eprintln!("serve: refusing: owner authorization required (interactive TTY, no CLAUDECODE)");
         return 2;
     }
 
@@ -117,12 +115,22 @@ fn handle(mut request: Request, root: &Path, token: &str) {
             let snap = view::snapshot(root);
             Reply::Html(
                 200,
-                render_next(&snap, query.get("after"), query.get("show"), query.get("m"), token),
+                render_next(
+                    &snap,
+                    query.get("after"),
+                    query.get("show"),
+                    query.get("m"),
+                    token,
+                ),
             )
         }
         (Method::Get, "/decisions") => {
             let snap = view::snapshot(root);
             Reply::Html(200, render_decisions(&snap))
+        }
+        (Method::Get, "/terms") => {
+            let snap = view::snapshot(root);
+            Reply::Html(200, render_terms(&snap, query.get("m"), token))
         }
         (Method::Post, "/approve") => handle_approve(root, &form),
         (Method::Post, "/answer") => handle_answer(root, &form),
@@ -183,18 +191,30 @@ fn handle_answer(root: &Path, form: &HashMap<String, String>) -> Reply {
     let Some(letter) = letter else {
         let banner = "serve: missing answer selection";
         return Reply::Redirect(
-            format!("/next?show={}&m={}", percent_encode(&id), percent_encode(banner)),
+            format!(
+                "/next?show={}&m={}",
+                percent_encode(&id),
+                percent_encode(banner)
+            ),
             None,
         );
     };
 
     match actions::do_answer(root, &id, letter) {
         Ok(o) => Reply::Redirect(
-            format!("/next?after={}&m={}", percent_encode(&id), percent_encode(&o.summary)),
+            format!(
+                "/next?after={}&m={}",
+                percent_encode(&id),
+                percent_encode(&o.summary)
+            ),
             None,
         ),
         Err(e) => Reply::Redirect(
-            format!("/next?show={}&m={}", percent_encode(&id), percent_encode(&e)),
+            format!(
+                "/next?show={}&m={}",
+                percent_encode(&id),
+                percent_encode(&e)
+            ),
             None,
         ),
     }
@@ -309,16 +329,28 @@ fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> String {
     if let Some(t) = &snap.terms {
         body.push_str("<article class=\"topic\">\n<h2>Terms</h2>\n");
         body.push_str(&format!("<p class=\"path\">{}</p>\n", esc(&t.path)));
+        body.push_str("<div class=\"summary-card\">");
+        body.push_str(&format!(
+            "<span class=\"count\">{}</span>",
+            plural(t.count, "term", "terms")
+        ));
         if t.approved {
-            body.push_str(&format!(
-                "<p class=\"state done\">{}, approved.</p>\n",
-                plural(t.count, "term", "terms")
-            ));
+            body.push_str("<span class=\"state done\" style=\"margin:0\">approved</span>");
         } else {
+            body.push_str(
+                "<span class=\"state waiting\" style=\"margin:0\">not approved yet</span>",
+            );
+        }
+        let unpaired = unpaired_count(t);
+        if unpaired > 0 {
             body.push_str(&format!(
-                "<p class=\"state waiting\">{}, not approved yet.</p>\n",
-                plural(t.count, "term", "terms")
+                "<span class=\"muted\">{} paired by nothing</span>",
+                unpaired
             ));
+        }
+        body.push_str("<a class=\"more\" href=\"/terms\">Open the terms &rarr;</a>");
+        body.push_str("</div>\n");
+        if !t.approved {
             body.push_str(&format!(
                 "<form method=\"post\" action=\"/approve\" class=\"inline\"><input type=\"hidden\" name=\"file\" value=\"{}\"><input type=\"hidden\" name=\"t\" value=\"{}\"><button type=\"submit\">Approve terms</button></form>\n",
                 esc(&t.path),
@@ -331,64 +363,6 @@ fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> String {
                 body.push_str(&format!("<li>{}</li>\n", esc(e)));
             }
             body.push_str("</ul>\n");
-        }
-        if !t.entries.is_empty() {
-            body.push_str("<dl class=\"entries\">\n");
-            for e in &t.entries {
-                body.push_str("<dt>");
-                body.push_str(&esc(&e.name));
-                if e.retired {
-                    body.push_str(" <span class=\"retired\">(retired)</span>");
-                }
-                body.push_str("</dt><dd>");
-                body.push_str(&esc(&e.definition));
-                let aliases = if e.aliases.is_empty() {
-                    "none".to_string()
-                } else {
-                    e.aliases.join(", ")
-                };
-                body.push_str(&format!(
-                    "<span class=\"meta\">aliases: {} &middot; {}</span>",
-                    esc(&aliases),
-                    plural(e.dependents, "current decision", "current decisions")
-                ));
-                body.push_str("</dd>\n");
-            }
-            body.push_str("</dl>\n");
-        }
-        if !t.diffs.is_empty() {
-            body.push_str("<div class=\"diffs\">\n<h3>Changed since approval</h3>\n<dl>\n");
-            for d in &t.diffs {
-                let before_aliases = if d.before_aliases.is_empty() {
-                    "none".to_string()
-                } else {
-                    d.before_aliases.join(", ")
-                };
-                let after_aliases = if d.after_aliases.is_empty() {
-                    "none".to_string()
-                } else {
-                    d.after_aliases.join(", ")
-                };
-                body.push_str(&format!("<dt>{}</dt><dd>\n", esc(&d.name)));
-                body.push_str(&format!(
-                    "<p class=\"before\">Before: {} <span class=\"meta\">aliases: {}</span></p>\n",
-                    esc(&d.before_definition),
-                    esc(&before_aliases)
-                ));
-                body.push_str(&format!(
-                    "<p class=\"after\">After: {} <span class=\"meta\">aliases: {}</span></p>\n",
-                    esc(&d.after_definition),
-                    esc(&after_aliases)
-                ));
-                if !d.dependents.is_empty() {
-                    body.push_str(&format!(
-                        "<p class=\"meta\">Carried by: {}</p>\n",
-                        esc(&d.dependents.join(", "))
-                    ));
-                }
-                body.push_str("</dd>\n");
-            }
-            body.push_str("</dl>\n</div>\n");
         }
         body.push_str("</article>\n");
     }
@@ -423,7 +397,7 @@ fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> String {
     ));
     body.push_str("</details>\n");
 
-    page("Overview", "/", &body)
+    page("Overview", "/", &body, false)
 }
 
 fn render_next(
@@ -442,7 +416,7 @@ fn render_next(
     let Some((file, q)) = picked else {
         body.push_str("<header class=\"lead\">\n<h1>Every question is answered</h1>\n");
         body.push_str("<p><a href=\"/\">Back to the overview</a></p>\n</header>\n");
-        return page("Answer", "/next", &body);
+        return page("Answer", "/next", &body, true);
     };
 
     let id = q.id.clone().unwrap_or_default();
@@ -457,48 +431,66 @@ fn render_next(
     body.push_str("<p class=\"where\">");
     body.push_str(&format!("{}, {}", esc(&file.topic), esc(&q.group)));
     if let Some(p) = position {
-        body.push_str(&format!(
-            ". Question {} of {} open",
-            p,
-            open_ids.len()
-        ));
+        body.push_str(&format!(". Question {} of {} open", p, open_ids.len()));
     }
     body.push_str(".</p>\n");
-    body.push_str(&format!("<h1>{}</h1>\n", esc(&q.heading)));
+    body.push_str(&format!("<h1>{}</h1>\n", mark_terms(&q.heading, &q.words)));
 
     if q.problem.is_some() || q.standard.is_some() {
         body.push_str("<dl class=\"framing\">\n");
         if let Some(p) = &q.problem {
-            body.push_str(&format!("<dt>Problem</dt><dd>{}</dd>\n", esc(p)));
+            body.push_str(&format!(
+                "<dt>Problem</dt><dd>{}</dd>\n",
+                mark_terms(p, &q.words)
+            ));
         }
         if let Some(s) = &q.standard {
-            body.push_str(&format!("<dt>Standard</dt><dd>{}</dd>\n", esc(s)));
+            body.push_str(&format!(
+                "<dt>Standard</dt><dd>{}</dd>\n",
+                mark_terms(s, &q.words)
+            ));
         }
         body.push_str("</dl>\n");
     }
 
-    body.push_str("<div class=\"words\">\n<h2>Words</h2>\n");
+    body.push_str("<aside class=\"tq\">\n<h2>Terms in this question</h2>\n");
     if q.words.is_empty() {
         body.push_str("<p class=\"meta\">No words pair a term.</p>\n");
     } else {
-        body.push_str("<dl class=\"framing\">\n");
+        // Group by term name, first-seen order (q.words is already sorted
+        // by word, so the first occurrence of a term name is stable).
+        let mut order: Vec<&str> = Vec::new();
+        let mut groups: HashMap<&str, (&str, Vec<&str>)> = HashMap::new();
         for w in &q.words {
-            body.push_str(&format!(
-                "<dt>{}</dt><dd>{} &mdash; {}</dd>\n",
-                esc(&w.word),
-                esc(&w.term_name),
-                esc(&w.definition)
-            ));
+            let entry = groups.entry(w.term_name.as_str()).or_insert_with(|| {
+                order.push(w.term_name.as_str());
+                (w.definition.as_str(), Vec::new())
+            });
+            if w.word != w.term_name {
+                entry.1.push(w.word.as_str());
+            }
+        }
+        body.push_str("<dl>\n");
+        for name in &order {
+            let (def, forms) = &groups[name];
+            body.push_str(&format!("<dt>{}", esc(name)));
+            if !forms.is_empty() {
+                body.push_str(&format!(
+                    "<span class=\"forms\">{}</span>",
+                    esc(&forms.join(", "))
+                ));
+            }
+            body.push_str(&format!("</dt><dd>{}</dd>\n", esc(def)));
         }
         body.push_str("</dl>\n");
     }
     if !q.no_entry.is_empty() {
         body.push_str(&format!(
-            "<p class=\"no-entry\">No term: {}</p>\n",
+            "<p class=\"none\"><b>No term:</b> {}</p>\n",
             esc(&q.no_entry.join(", "))
         ));
     }
-    body.push_str("</div>\n");
+    body.push_str("</aside>\n");
 
     body.push_str(&format!(
         "<form method=\"post\" action=\"/answer\" id=\"answer-form\">\n<input type=\"hidden\" name=\"id\" value=\"{}\">\n<input type=\"hidden\" name=\"t\" value=\"{}\">\n",
@@ -513,15 +505,21 @@ fn render_next(
             iid = input_id,
             letter = o.letter,
             checked = if i == 0 { " checked" } else { "" },
-            sentence = esc(&o.sentence),
+            sentence = mark_terms(&o.sentence, &q.words),
         ));
         if o.why.is_some() || o.costs.is_some() {
             body.push_str("<dl class=\"rationale\">");
             if let Some(why) = &o.why {
-                body.push_str(&format!("<dt>Why</dt><dd>{}</dd>", esc(why)));
+                body.push_str(&format!(
+                    "<dt>Why</dt><dd>{}</dd>",
+                    mark_terms(why, &q.words)
+                ));
             }
             if let Some(costs) = &o.costs {
-                body.push_str(&format!("<dt>Costs</dt><dd>{}</dd>", esc(costs)));
+                body.push_str(&format!(
+                    "<dt>Costs</dt><dd>{}</dd>",
+                    mark_terms(costs, &q.words)
+                ));
             }
             body.push_str("</dl>");
         }
@@ -572,7 +570,7 @@ fn render_next(
         id = percent_encode(&id)
     ));
 
-    page("Answer", "/next", &body)
+    page("Answer", "/next", &body, true)
 }
 
 fn render_decisions(snap: &Snapshot) -> String {
@@ -580,7 +578,12 @@ fn render_decisions(snap: &Snapshot) -> String {
     let total: usize = snap
         .files
         .iter()
-        .map(|f| f.questions.iter().filter(|q| q.state == QState::Answered).count())
+        .map(|f| {
+            f.questions
+                .iter()
+                .filter(|q| q.state == QState::Answered)
+                .count()
+        })
         .sum();
     body.push_str("<header class=\"lead\">\n<h1>Current decisions</h1>\n");
     body.push_str(&format!(
@@ -612,16 +615,146 @@ fn render_decisions(snap: &Snapshot) -> String {
                 tests
             ));
             if !q.supersedes.is_empty() {
-                body.push_str(&format!(
-                    ", supersedes {}",
-                    esc(&q.supersedes.join(", "))
-                ));
+                body.push_str(&format!(", supersedes {}", esc(&q.supersedes.join(", "))));
             }
             body.push_str("</span></dd>\n");
         }
         body.push_str("</dl>\n</article>\n");
     }
-    page("Decisions", "/decisions", &body)
+    page("Decisions", "/decisions", &body, false)
+}
+
+/// The number of current entries paired by no current decision: not
+/// retired, and with a dependents count of zero.
+fn unpaired_count(t: &view::TermsView) -> usize {
+    t.entries
+        .iter()
+        .filter(|e| !e.retired && e.dependents == 0)
+        .count()
+}
+
+fn render_terms(snap: &Snapshot, m: Option<&String>, token: &str) -> String {
+    let mut body = String::new();
+    body.push_str(&banner_html(m));
+    body.push_str("<header class=\"lead\">\n<h1>Terms</h1>\n");
+
+    let Some(t) = &snap.terms else {
+        body.push_str("<p class=\"state waiting\">No terms file yet.</p>\n</header>\n");
+        return page("Terms", "/terms", &body, false);
+    };
+
+    let unpaired = unpaired_count(t);
+    let mut extra: Vec<String> = Vec::new();
+    if !t.approved && !t.diffs.is_empty() {
+        extra.push(format!("{} changed since approval", t.diffs.len()));
+    }
+    if unpaired > 0 {
+        extra.push(format!("{} paired by nothing", unpaired));
+    }
+    let mut summary = format!("{} in {}.", plural(t.count, "term", "terms"), esc(&t.path));
+    if !extra.is_empty() {
+        summary.push(' ');
+        summary.push_str(&extra.join(", "));
+        summary.push('.');
+    }
+    body.push_str(&format!("<p class=\"summary\">{}</p>\n", summary));
+
+    body.push_str("<div class=\"tools\">");
+    body.push_str(
+        "<input class=\"filter\" type=\"search\" placeholder=\"Filter by word, alias, or definition\" aria-label=\"Filter terms\">",
+    );
+    if !t.approved {
+        body.push_str(&format!(
+            "<form method=\"post\" action=\"/approve\" class=\"inline\" style=\"margin:0\"><input type=\"hidden\" name=\"file\" value=\"{}\"><input type=\"hidden\" name=\"t\" value=\"{}\"><button type=\"submit\" class=\"answer\">Approve the terms</button></form>",
+            esc(&t.path),
+            esc(token)
+        ));
+    }
+    body.push_str("</div>\n");
+    body.push_str("</header>\n");
+
+    if !t.approved && !t.diffs.is_empty() {
+        body.push_str("<div class=\"changed-box\">\n<h2>Changed since approval</h2>\n");
+        for d in &t.diffs {
+            body.push_str(&format!(
+                "<div class=\"row\"><span class=\"k\">{}</span><span class=\"before\">{}</span><span class=\"k\">now</span><span>{}</span></div>\n",
+                esc(&d.name),
+                esc(&d.before_definition),
+                esc(&d.after_definition)
+            ));
+            if d.before_aliases != d.after_aliases {
+                let before_aliases = d.before_aliases.join(", ");
+                let after_aliases = d.after_aliases.join(", ");
+                body.push_str(&format!(
+                    "<div class=\"row\"><span class=\"k\">aliases</span><span class=\"before\">{}</span><span class=\"k\">now</span><span>{}</span></div>\n",
+                    esc(&before_aliases),
+                    esc(&after_aliases)
+                ));
+            }
+            if !d.dependents.is_empty() {
+                body.push_str(&format!(
+                    "<p class=\"carried\">Carried by {}: {}</p>\n",
+                    plural(d.dependents.len(), "current decision", "current decisions"),
+                    esc(&d.dependents.join(", "))
+                ));
+            }
+        }
+        body.push_str("</div>\n");
+    }
+
+    if !t.errors.is_empty() {
+        body.push_str("<ul class=\"failures\">\n");
+        for e in &t.errors {
+            body.push_str(&format!("<li>{}</li>\n", esc(e)));
+        }
+        body.push_str("</ul>\n");
+    }
+
+    let changed_names: std::collections::HashSet<&str> =
+        t.diffs.iter().map(|d| d.name.as_str()).collect();
+
+    body.push_str("<ul class=\"terms-list\" id=\"terms\">\n");
+    for e in &t.entries {
+        let aliases = e.aliases.join(", ");
+        let data_k = format!("{} {} {}", e.name, aliases, e.definition).to_lowercase();
+        body.push_str(&format!(
+            "<li{} data-k=\"{}\"><div class=\"name\">{}",
+            if e.retired { " class=\"retired\"" } else { "" },
+            esc(&data_k),
+            esc(&e.name)
+        ));
+        if changed_names.contains(e.name.as_str()) {
+            body.push_str("<span class=\"badge changed\">changed</span>");
+        }
+        if e.retired {
+            body.push_str("<span class=\"badge retired\">retired</span>");
+        }
+        if !e.aliases.is_empty() {
+            body.push_str(&format!("<span class=\"forms\">{}</span>", esc(&aliases)));
+        }
+        body.push_str("</div><div>");
+        body.push_str(&format!("<p class=\"def\">{}</p>", esc(&e.definition)));
+        if e.dependents > 0 {
+            body.push_str(&format!(
+                "<p class=\"use\">Paired by <a href=\"/decisions\">{}</a></p>",
+                plural(e.dependents, "decision", "decisions")
+            ));
+        } else {
+            body.push_str("<p class=\"use\">Paired by nothing yet</p>");
+        }
+        body.push_str("</div></li>\n");
+    }
+    body.push_str("</ul>\n");
+    body.push_str("<p class=\"no-match\" id=\"no-match\" hidden>No term matches.</p>\n");
+    body.push_str(
+        r#"<script>
+(function(){var f=document.querySelector('input.filter'),items=[].slice.call(document.querySelectorAll('#terms li')),none=document.getElementById('no-match');
+f.addEventListener('input',function(){var q=f.value.trim().toLowerCase(),n=0;items.forEach(function(li){var hit=!q||li.dataset.k.indexOf(q)>=0;li.hidden=!hit;if(hit)n++;});none.hidden=n>0;});})();
+</script>
+"#,
+    );
+
+    page("Terms", "/terms", &body, false)
 }
 
 fn chosen_sentence(q: &QuestionView) -> &str {
@@ -662,10 +795,10 @@ fn forbidden_page() -> String {
 }
 
 fn simple_page(title: &str, body: &str) -> String {
-    page(title, "", body)
+    page(title, "", body, false)
 }
 
-fn page(title: &str, current: &str, body: &str) -> String {
+fn page(title: &str, current: &str, body: &str, wide: bool) -> String {
     let nav = |href: &str, label: &str| {
         if href == current {
             format!("<a href=\"{}\" aria-current=\"page\">{}</a>", href, label)
@@ -673,13 +806,16 @@ fn page(title: &str, current: &str, body: &str) -> String {
             format!("<a href=\"{}\">{}</a>", href, label)
         }
     };
+    let wide_class = if wide { " class=\"wide\"" } else { "" };
     format!(
-        "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>{title}</title><style>{style}</style></head><body>\n<nav class=\"bar\"><span class=\"mark\">adr</span>{home}{next}{decisions}</nav>\n<main>\n{body}</main>\n</body></html>\n",
+        "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>{title}</title><style>{style}</style></head><body{wide_class}>\n<nav class=\"bar\"><span class=\"mark\">adr</span>{home}{next}{decisions}{terms}</nav>\n<main{wide_class}>\n{body}</main>\n</body></html>\n",
         title = esc(title),
         style = STYLE,
+        wide_class = wide_class,
         home = nav("/", "Overview"),
         next = nav("/next", "Answer"),
         decisions = nav("/decisions", "Decisions"),
+        terms = nav("/terms", "Terms"),
         body = body
     )
 }
@@ -846,6 +982,62 @@ textarea { width: 100%; font: inherit; font-size: 0.95rem; padding: 0.5em; backg
 @media (prefers-reduced-motion: no-preference) {
   .option, .primary, button { transition: background-color 120ms ease, box-shadow 120ms ease; }
 }
+/* --- redesign additions --- */
+.bar { gap: 1.2rem; }
+.summary-card { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 1rem; margin: 0.3rem 0 0; }
+.summary-card .count { font-size: 1.15rem; }
+.summary-card .muted { color: var(--muted); }
+.summary-card a.more { margin-left: auto; text-decoration: none; color: var(--hold); font-weight: 700; }
+.summary-card a.more:hover { text-decoration: underline; }
+.chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.35rem 0 0; }
+.chip { font-size: 0.8rem; line-height: 1.3; padding: 0.1em 0.55em; border: 1px solid var(--rule); border-radius: 999px; color: var(--muted); background: var(--key); white-space: nowrap; }
+.chip.warn { border-color: var(--refuse); color: var(--refuse); }
+.chip.use { border-color: var(--hold); color: var(--hold); }
+
+/* terms page */
+.lead .tools { display: flex; flex-wrap: wrap; gap: 0.8rem 1.2rem; align-items: center; margin: 0.6rem 0 0; }
+input.filter { flex: 1 1 14rem; font: inherit; font-size: 1rem; padding: 0.5em 0.8em; border: 1px solid var(--rule); border-radius: 6px; background: var(--key); color: var(--ink); }
+input.filter:focus-visible { outline: 2px solid var(--hold); outline-offset: 1px; }
+.terms-list { list-style: none; margin: 1.2rem 0 0; padding: 0; border-top: 1px solid var(--rule); }
+.terms-list li { display: grid; grid-template-columns: 9rem 1fr; column-gap: 1.2rem; padding: 0.85rem 0; border-bottom: 1px solid var(--rule); }
+.terms-list li[hidden] { display: none; }
+.terms-list .name { font-weight: 700; }
+.terms-list .name .forms { display: block; font-weight: 400; font-size: 0.85rem; color: var(--muted); margin-top: 0.15rem; }
+.terms-list .def { margin: 0; }
+.terms-list .use { margin: 0.25rem 0 0; font-size: 0.85rem; color: var(--muted); }
+.terms-list .use a { text-decoration: none; }
+.terms-list .use a:hover { text-decoration: underline; }
+.terms-list li.retired .name { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+.terms-list .badge { display: inline-block; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; padding: 0.05em 0.5em; border-radius: 4px; margin-left: 0.4rem; vertical-align: middle; }
+.badge.retired { color: var(--refuse); border: 1px solid var(--refuse); text-decoration: none; }
+.badge.changed { color: var(--paper); background: var(--hold); }
+.changed-box { margin: 1.4rem 0 0; padding: 0.9rem 1.1rem; border-left: 4px solid var(--hold); background: var(--hold-soft); }
+.changed-box h2 { font-size: 1.15rem; margin-bottom: 0.4rem; }
+.changed-box .row { display: grid; grid-template-columns: 4rem 1fr; column-gap: 0.8rem; row-gap: 0.15rem; margin: 0.5rem 0; font-size: 0.97rem; }
+.changed-box .row .k { color: var(--muted); }
+.changed-box .before { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+.changed-box .carried { font-size: 0.9rem; color: var(--muted); margin: 0.2rem 0 0; }
+.no-match { color: var(--muted); margin: 1rem 0; }
+
+/* answer page: terms in text and aside */
+.focus { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 2.5rem; }
+.focus > * { grid-column: 1; }
+.t { text-decoration: underline dotted var(--muted); text-decoration-thickness: 1px; text-underline-offset: 0.2em; cursor: help; }
+.t:hover { text-decoration-color: var(--hold); }
+.tq { margin: 1.2rem 0 1.4rem; padding: 0.8rem 1rem; border: 1px solid var(--rule); border-radius: 8px; background: var(--key); font-size: 0.92rem; line-height: 1.45; }
+.tq h2 { font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0 0 0.5rem; font-weight: 700; }
+.tq dl { margin: 0; display: grid; grid-template-columns: auto 1fr; column-gap: 0.8rem; row-gap: 0.45rem; }
+.tq dt { font-weight: 700; white-space: nowrap; }
+.tq dt .forms { display: block; font-weight: 400; color: var(--muted); font-size: 0.8rem; }
+.tq dd { margin: 0; }
+.tq .none { margin: 0.7rem 0 0; padding-top: 0.6rem; border-top: 1px solid var(--rule); color: var(--muted); }
+.tq .none b { font-weight: 700; color: var(--muted); }
+@media (min-width: 1180px) {
+  main.wide { max-width: 64rem; }
+  body.wide .bar { max-width: 64rem; }
+  .focus { grid-template-columns: minmax(0, 42rem) 18rem; }
+  .focus .tq { grid-column: 2; grid-row: 1 / span 6; align-self: start; position: sticky; top: 1rem; margin-top: 4.6rem; }
+}
 "#;
 
 // --- view helpers ------------------------------------------------------
@@ -871,7 +1063,10 @@ fn pick_next<'a>(
         }
     }
     if let Some(after_id) = after {
-        if let Some(pos) = all.iter().position(|(_, q)| q.id.as_deref() == Some(after_id)) {
+        if let Some(pos) = all
+            .iter()
+            .position(|(_, q)| q.id.as_deref() == Some(after_id))
+        {
             return all[pos + 1..]
                 .iter()
                 .find(|(_, q)| q.state == QState::Open)
@@ -1013,9 +1208,197 @@ fn esc(s: &str) -> String {
     out
 }
 
+/// A word, for `mark_terms`: a maximal run of alphabetic characters and
+/// apostrophes. Everything else (digits, punctuation, whitespace) is not
+/// part of a word.
+fn is_word_char(c: char) -> bool {
+    c.is_alphabetic() || c == '\''
+}
+
+/// Wraps every whole-word (case-insensitive) occurrence of a paired word
+/// in `text` with `<span class="t" title="<term name>: <definition>">
+/// ...</span>`, preserving the text's original casing inside the span. A
+/// multi-word pairing (e.g. "topic file") wins over a shorter one that
+/// starts the same way (e.g. "topic") when both match at a position.
+/// Every piece of `text` is HTML-escaped; the `<span>` wrapper itself
+/// never is.
+fn mark_terms(text: &str, words: &[view::WordPair]) -> String {
+    if words.is_empty() {
+        return esc(text);
+    }
+
+    let mut by_phrase: HashMap<String, &view::WordPair> = HashMap::new();
+    let mut max_len = 1usize;
+    for w in words {
+        let key = w.word.to_lowercase();
+        max_len = max_len.max(key.split_whitespace().count().max(1));
+        by_phrase.insert(key, w);
+    }
+
+    enum Piece {
+        Word(String),
+        Other(String),
+    }
+
+    let mut pieces: Vec<Piece> = Vec::new();
+    let mut cur = String::new();
+    let mut cur_is_word = false;
+    let mut started = false;
+    for c in text.chars() {
+        let is_word = is_word_char(c);
+        if started && is_word != cur_is_word {
+            let taken = std::mem::take(&mut cur);
+            pieces.push(if cur_is_word {
+                Piece::Word(taken)
+            } else {
+                Piece::Other(taken)
+            });
+        }
+        cur.push(c);
+        cur_is_word = is_word;
+        started = true;
+    }
+    if !cur.is_empty() {
+        pieces.push(if cur_is_word {
+            Piece::Word(cur)
+        } else {
+            Piece::Other(cur)
+        });
+    }
+
+    let mut out = String::new();
+    let mut i = 0;
+    while i < pieces.len() {
+        let is_word_piece = matches!(pieces[i], Piece::Word(_));
+        if !is_word_piece {
+            if let Piece::Other(o) = &pieces[i] {
+                out.push_str(&esc(o));
+            }
+            i += 1;
+            continue;
+        }
+
+        let mut matched: Option<(usize, &view::WordPair)> = None;
+        let mut len = max_len;
+        while len >= 1 {
+            let mut ok = true;
+            let mut phrase_words: Vec<&str> = Vec::new();
+            for k in 0..len {
+                let idx = i + 2 * k;
+                match pieces.get(idx) {
+                    Some(Piece::Word(w)) => phrase_words.push(w.as_str()),
+                    _ => {
+                        ok = false;
+                        break;
+                    }
+                }
+                if k + 1 < len {
+                    match pieces.get(idx + 1) {
+                        Some(Piece::Other(o)) if o == " " => {}
+                        _ => {
+                            ok = false;
+                            break;
+                        }
+                    }
+                }
+            }
+            if ok {
+                let phrase = phrase_words.join(" ").to_lowercase();
+                if let Some(wp) = by_phrase.get(&phrase) {
+                    matched = Some((len, wp));
+                    break;
+                }
+            }
+            len -= 1;
+        }
+
+        if let Some((len, wp)) = matched {
+            let end = i + 2 * (len - 1) + 1;
+            let mut inner = String::new();
+            for piece in &pieces[i..end] {
+                match piece {
+                    Piece::Word(w) => inner.push_str(&esc(w)),
+                    Piece::Other(o) => inner.push_str(&esc(o)),
+                }
+            }
+            out.push_str(&format!(
+                "<span class=\"t\" title=\"{}: {}\">{}</span>",
+                esc(&wp.term_name),
+                esc(&wp.definition),
+                inner
+            ));
+            i = end;
+        } else {
+            if let Piece::Word(w) = &pieces[i] {
+                out.push_str(&esc(w));
+            }
+            i += 1;
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{percent_decode, token_eq};
+    use super::{mark_terms, percent_decode, token_eq};
+    use crate::view::WordPair;
+
+    fn wp(word: &str, term_name: &str, definition: &str) -> WordPair {
+        WordPair {
+            word: word.to_string(),
+            term_name: term_name.to_string(),
+            definition: definition.to_string(),
+        }
+    }
+
+    #[test]
+    fn mark_terms_leaves_a_plain_word_untouched() {
+        assert_eq!(mark_terms("hello world", &[]), "hello world");
+    }
+
+    #[test]
+    fn mark_terms_wraps_a_paired_word() {
+        let words = [wp("decision", "decision", "The choice.")];
+        let out = mark_terms("a decision was made", &words);
+        assert!(
+            out.contains(r#"<span class="t" title="decision: The choice.">decision</span>"#),
+            "{}",
+            out
+        );
+    }
+
+    #[test]
+    fn mark_terms_preserves_case() {
+        let words = [wp("decision", "decision", "The choice.")];
+        let out = mark_terms("Decision", &words);
+        assert!(
+            out.contains(r#"<span class="t" title="decision: The choice.">Decision</span>"#),
+            "{}",
+            out
+        );
+    }
+
+    #[test]
+    fn mark_terms_prefers_the_longer_pairing() {
+        let words = [
+            wp("topic", "topic", "One subject."),
+            wp("topic file", "topic file", "A markdown file."),
+        ];
+        let out = mark_terms("read the topic file today", &words);
+        assert!(
+            out.contains(
+                r#"<span class="t" title="topic file: A markdown file.">topic file</span>"#
+            ),
+            "{}",
+            out
+        );
+        assert!(!out.contains("title=\"topic:"), "{}", out);
+    }
+
+    #[test]
+    fn mark_terms_escapes_html_in_text() {
+        assert_eq!(mark_terms("A & B", &[]), "A &amp; B");
+    }
 
     #[test]
     fn percent_decode_never_slices_inside_a_multibyte_char() {

@@ -41,8 +41,8 @@ runtime dependencies beyond `git` on `PATH`.
   heading and the sentence of the chosen option).
 - `adr serve [--port N]` — owner-only. Serve the owner's page on
   `127.0.0.1` (default port 7357), gated by a per-start token printed to
-  stdout; shows status, open questions, and decisions, with forms to
-  approve, answer, and unban.
+  stdout; shows status, open questions, decisions, and a `/terms` page
+  listing every term, with forms to approve, answer, and unban.
 - `adr check [--staged] [--message <path>]` — run every governance check;
   used by `.githooks/pre-commit` and `.githooks/commit-msg`.
 

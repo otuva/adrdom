@@ -86,7 +86,10 @@ fn header<'a>(resp: &'a HttpResponse, name: &str) -> Option<&'a str> {
 }
 
 fn get(port: u16, path: &str, cookie: Option<&str>) -> HttpResponse {
-    let mut req = format!("GET {} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n", path);
+    let mut req = format!(
+        "GET {} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n",
+        path
+    );
     if let Some(c) = cookie {
         req.push_str(&format!("Cookie: {}\r\n", c));
     }
@@ -95,7 +98,10 @@ fn get(port: u16, path: &str, cookie: Option<&str>) -> HttpResponse {
 }
 
 fn post(port: u16, path: &str, cookie: Option<&str>, form: &str) -> HttpResponse {
-    let mut req = format!("POST {} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n", path);
+    let mut req = format!(
+        "POST {} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n",
+        path
+    );
     if let Some(c) = cookie {
         req.push_str(&format!("Cookie: {}\r\n", c));
     }
@@ -163,6 +169,38 @@ fn get_root_with_cookie_shows_fixture_topic() {
 }
 
 #[test]
+fn get_terms_without_cookie_is_forbidden() {
+    let dir = setup_repo_with_open_question();
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, _token) = read_open_line(&mut child);
+
+    let resp = get(port, "/terms", None);
+    assert_eq!(resp.status, 403, "body: {}", resp.body);
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+#[test]
+fn nav_has_terms_link() {
+    let dir = setup_repo_with_open_question();
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let resp = get(port, "/", Some(&cookie));
+    assert_eq!(resp.status, 200, "body: {}", resp.body);
+    assert!(
+        resp.body.contains("<a href=\"/terms\">Terms</a>"),
+        "body: {}",
+        resp.body
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+#[test]
 fn post_answer_with_cookie_and_token_answers_and_redirects() {
     let dir = setup_repo_with_open_question();
     let content = std::fs::read_to_string(dir.join("adrdom/decisions/example.md")).unwrap();
@@ -173,10 +211,7 @@ fn post_answer_with_cookie_and_token_answers_and_redirects() {
     let (port, token) = read_open_line(&mut child);
     let cookie = format!("adr_t={}", token);
 
-    let form = format!(
-        "id={}&answer=A&t={}",
-        question_id, token
-    );
+    let form = format!("id={}&answer=A&t={}", question_id, token);
     let resp = post(port, "/answer", Some(&cookie), &form);
     assert_eq!(resp.status, 302, "body: {}", resp.body);
     let location = header(&resp, "Location").expect("Location header");
@@ -293,8 +328,13 @@ fn get_next_shows_question_words_and_no_entry() {
     let resp = get(port, "/next", Some(&cookie));
     assert_eq!(resp.status, 200, "body: {}", resp.body);
 
-    // The word, the term name, and its definition all appear.
-    assert!(resp.body.contains("decision"), "body: {}", resp.body);
+    // The aside groups the word under its term name, with the definition.
+    assert!(
+        resp.body.contains("Terms in this question"),
+        "body: {}",
+        resp.body
+    );
+    assert!(resp.body.contains("<dt>decision"), "body: {}", resp.body);
     assert!(
         resp.body.contains("A choice answered by the owner."),
         "body: {}",
@@ -307,13 +347,52 @@ fn get_next_shows_question_words_and_no_entry() {
     let no_entry_start = resp.body.find("No term:").expect("No term line present");
     let no_entry_line = &resp.body[no_entry_start..];
     let no_entry_line = &no_entry_line[..no_entry_line.find("</p>").unwrap_or(no_entry_line.len())];
-    assert!(!no_entry_line.contains("the"), "no-term line: {}", no_entry_line);
+    assert!(
+        !no_entry_line.contains("the"),
+        "no-term line: {}",
+        no_entry_line
+    );
     // Nor does a plural of a paired term ("decisions" resolves the same
     // term as "decision").
     assert!(
         !no_entry_line.contains("decisions"),
         "no-term line: {}",
         no_entry_line
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+#[test]
+fn get_next_marks_term_words_in_text() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let record = write_record(&dir, "adrdom/decisions/example.md", WORDS_RECORD);
+    let terms = write_record(&dir, "adrdom/terms.md", WORDS_TERMS_MD);
+    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let resp = get(port, "/next", Some(&cookie));
+    assert_eq!(resp.status, 200, "body: {}", resp.body);
+
+    // "decision" pairs a term everywhere it appears (heading and Problem),
+    // wrapped as a titled span rather than plain text.
+    assert!(
+        resp.body.contains("<span class=\"t\" title=\"decision:"),
+        "body: {}",
+        resp.body
     );
 
     let _ = child.kill();
@@ -404,7 +483,24 @@ fn terms_article_lists_entries_with_dependents_count() {
     let (port, token) = read_open_line(&mut child);
     let cookie = format!("adr_t={}", token);
 
-    let resp = get(port, "/", Some(&cookie));
+    // The overview shows only the summary card, with a link to /terms.
+    let overview = get(port, "/", Some(&cookie));
+    assert_eq!(overview.status, 200, "body: {}", overview.body);
+    assert!(
+        overview
+            .body
+            .contains("<span class=\"count\">1 term</span>"),
+        "body: {}",
+        overview.body
+    );
+    assert!(
+        overview.body.contains("Open the terms"),
+        "body: {}",
+        overview.body
+    );
+
+    // /terms lists the full entry: name, definition, and dependents.
+    let resp = get(port, "/terms", Some(&cookie));
     assert_eq!(resp.status, 200, "body: {}", resp.body);
     assert!(resp.body.contains("decision"), "body: {}", resp.body);
     assert!(
@@ -413,7 +509,8 @@ fn terms_article_lists_entries_with_dependents_count() {
         resp.body
     );
     assert!(
-        resp.body.contains("1 current decision"),
+        resp.body
+            .contains("Paired by <a href=\"/decisions\">1 decision</a>"),
         "body: {}",
         resp.body
     );
@@ -448,16 +545,35 @@ fn terms_article_shows_before_after_when_unapproved() {
     let (port, token) = read_open_line(&mut child);
     let cookie = format!("adr_t={}", token);
 
-    let resp = get(port, "/", Some(&cookie));
+    // The overview shows the terms as not approved.
+    let overview = get(port, "/", Some(&cookie));
+    assert_eq!(overview.status, 200, "body: {}", overview.body);
+    assert!(
+        overview.body.contains("not approved"),
+        "body: {}",
+        overview.body
+    );
+
+    let resp = get(port, "/terms", Some(&cookie));
     assert_eq!(resp.status, 200, "body: {}", resp.body);
-    assert!(resp.body.contains("not approved"), "body: {}", resp.body);
+    assert!(
+        resp.body.contains("class=\"changed-box\""),
+        "changed-box missing: {}",
+        resp.body
+    );
+    assert!(
+        resp.body.contains("Approve the terms"),
+        "approve button missing: {}",
+        resp.body
+    );
     assert!(
         resp.body.contains("A choice answered by the owner."),
         "before text missing: {}",
         resp.body
     );
     assert!(
-        resp.body.contains("A choice the owner answers in, once, in writing."),
+        resp.body
+            .contains("A choice the owner answers in, once, in writing."),
         "after text missing: {}",
         resp.body
     );
