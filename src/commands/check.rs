@@ -572,12 +572,11 @@ fn check_plan(root: &Path, records: &[RecordFile], led: &Ledger) -> (Vec<Failure
     (out, awaiting)
 }
 
-/// `terms`: shape/owner errors on `adrdom/terms.md`, whether its hash
-/// matches the latest `terms` ledger row (awaiting, not a failure), every
+/// `terms`: shape errors on `adrdom/terms.md`, whether its hash matches the
+/// latest `terms` ledger row (awaiting, not a failure), and every
 /// asked/answered section's `terms:` binding re-checked against today's
-/// resolution, retired bound terms, and a banned-word scan over every
-/// record file. Returns the failures plus whether the terms file itself is
-/// awaiting approval.
+/// resolution, retired bound terms. Returns the failures plus whether the
+/// terms file itself is awaiting approval.
 fn check_terms(root: &Path, records: &[RecordFile], led: &Ledger) -> (Vec<Failure>, bool) {
     let mut out = Vec::new();
     let terms_path = root.join("adrdom/terms.md");
@@ -604,14 +603,6 @@ fn check_terms(root: &Path, records: &[RecordFile], led: &Ledger) -> (Vec<Failur
             message: format!("adrdom/terms.md: {}", e),
         });
     }
-    for e in terms::check_owners(&tf, root) {
-        out.push(Failure {
-            check: "terms".to_string(),
-            id: None,
-            message: format!("adrdom/terms.md: {}", e),
-        });
-    }
-
     let file_hash = terms::file_hash(&tf);
     let awaiting = led
         .latest_for_path("terms", "adrdom/terms.md")
@@ -689,18 +680,6 @@ fn check_terms(root: &Path, records: &[RecordFile], led: &Ledger) -> (Vec<Failur
                     }
                 }
             }
-        }
-    }
-
-    for rf in records {
-        let rel = rel_path(root, &rf.path);
-        let full_text = rf.lines.join("\n");
-        for (line_no, word, name) in terms::banned_hits(&full_text, &tf.terms) {
-            out.push(Failure {
-                check: "terms".to_string(),
-                id: None,
-                message: format!("{}:{}: banned word \"{}\" (term {})", rel, line_no, word, name),
-            });
         }
     }
 

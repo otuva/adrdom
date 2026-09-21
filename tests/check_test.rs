@@ -495,33 +495,6 @@ fn check_fails_a_bound_term_that_is_retired() {
     assert!(!text.contains("binding changed (decision"), "{}", text);
 }
 
-#[test]
-fn check_fails_a_banned_word_in_context_prose_naming_the_line() {
-    let dir = init_repo();
-    assert!(adr(&dir, &["init"], &[], "").status.success());
-
-    let term_id = "55555555-5555-5555-5555-555555555555";
-    let terms_content = format!(
-        "# Terms\n\n## watchword\nid: {}\ndefinition: A word the owner tracks.\ntest: Is it a tracked word?\nowner: adrdom/decisions/example.md\naliases: \nbanned: forbiddenword\n",
-        term_id
-    );
-    std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
-
-    // Line 3: "This context mentions forbiddenword right here."
-    let content = "# Example\n\nThis context mentions forbiddenword right here.\n\n## Group\n\n### 1.1 Some question?\n";
-    write_record(&dir, "adrdom/decisions/example.md", content);
-
-    let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
-    let text = stdout(&out);
-    assert!(
-        text.contains(
-            "terms: adrdom/decisions/example.md:3: banned word \"forbiddenword\" (term watchword)"
-        ),
-        "{}",
-        text
-    );
-}
 
 #[test]
 fn check_prints_done_for_a_fully_answered_approved_file() {

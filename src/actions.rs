@@ -140,15 +140,13 @@ fn do_approve_terms(
     let mut tf =
         terms::load(file).map_err(|e| format!("approve: cannot read {}: {}", file.display(), e))?;
 
-    let inserted = terms::fill_missing_ids(&mut tf);
+    let inserted = terms::mint_ids(&mut tf);
     terms::save(&tf).map_err(|e| format!("approve: failed to write {}: {}", file.display(), e))?;
 
-    let owner_errors = terms::check_owners(&tf, root);
-    if !tf.errors.is_empty() || !owner_errors.is_empty() {
+    if !tf.errors.is_empty() {
         let msg = tf
             .errors
             .iter()
-            .chain(owner_errors.iter())
             .map(|e| format!("approve: adrdom/terms.md: {}; owner fixes adrdom/terms.md", e))
             .collect::<Vec<_>>()
             .join("\n");
@@ -195,14 +193,6 @@ fn do_approve_terms(
                     }
                 }
             }
-        }
-
-        let full_text = record::join_lines(&rf.lines);
-        for (line_no, word, term_name) in terms::banned_hits(&full_text, &tf.terms) {
-            refusals.push(format!(
-                "approve: {}:{}: banned word \"{}\" (term {}); owner edits the record to remove it",
-                frel, line_no, word, term_name
-            ));
         }
     }
 
