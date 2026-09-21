@@ -31,14 +31,14 @@ enum Command {
         #[arg(long)]
         claude: bool,
     },
-    /// Assign ids and record `asked` for every unasked/changed question in a record.
-    Ask { record: PathBuf },
-    /// Owner-only: approve a record's plan/context, or the terms file.
+    /// Assign ids and record `asked` for every unasked/changed question in a topic file.
+    Ask { topic_file: PathBuf },
+    /// Owner-only: approve a topic file's plan/context, or the terms file.
     Approve { file: PathBuf },
     /// Owner-only: answer a question by id with an option letter.
     Answer { id: String, letter: String },
     /// Print every current decision.
-    Show { record: Option<PathBuf> },
+    Show { topic_file: Option<PathBuf> },
     /// Read lines from stdin and ban them (and their tokens) from the repo.
     Ban {
         /// Carry an existing terms.md term's uuid alongside each new hash,
@@ -67,10 +67,10 @@ fn main() {
     let cli = Cli::parse();
     let code = match cli.command {
         Command::Init { claude } => commands::init::run(claude),
-        Command::Ask { record } => commands::ask::run(record),
+        Command::Ask { topic_file } => commands::ask::run(topic_file),
         Command::Approve { file } => commands::approve::run(file),
         Command::Answer { id, letter } => commands::answer::run(id, letter),
-        Command::Show { record } => commands::show::run(record),
+        Command::Show { topic_file } => commands::show::run(topic_file),
         Command::Ban { term } => commands::ban::run(term),
         Command::Unban => commands::unban::run(),
         Command::Serve { port } => commands::serve::run(port),

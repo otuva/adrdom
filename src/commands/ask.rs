@@ -47,7 +47,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     let rel = state::rel_path(&root, &record_path);
 
     // Refusals 1-3: adrdom/terms.md missing, unreadable/shape errors, or
-    // not approved. These come before anything about the record itself is
+    // not approved. These come before anything about the topic file itself is
     // even loaded, since none of them depend on it.
     let tf = match state::load_terms_checked(&root) {
         TermsLoad::Missing => {
@@ -91,12 +91,12 @@ pub fn run(record_path: PathBuf) -> i32 {
     let mut shape_msgs: Vec<String> = rf
         .shape_errors
         .iter()
-        .map(|e| format!("ask: {}: {}; owner fixes the record", rel, e))
+        .map(|e| format!("ask: {}: {}; owner fixes the topic file", rel, e))
         .collect();
     for sec in &rf.sections {
         for e in &sec.shape_errors {
             shape_msgs.push(format!(
-                "ask: {}: \"{}\": {}; owner fixes the record",
+                "ask: {}: \"{}\": {}; owner fixes the topic file",
                 rel, sec.heading_text, e
             ));
         }
@@ -179,7 +179,7 @@ pub fn run(record_path: PathBuf) -> i32 {
             continue;
         }
 
-        // Tier rule: every group before this section's group must have all
+        // Tier rule: every tier before this section's tier must have all
         // of its non-skeleton questions answered.
         if let Some(n) = sec.group {
             for gi in 0..n {
@@ -188,7 +188,7 @@ pub fn run(record_path: PathBuf) -> i32 {
                     let other = &rf.sections[qi];
                     if !other.is_skeleton && other.answer_line.is_none() {
                         eprintln!(
-                            "ask: {}: \"{}\" is blocked by unanswered \"{}\" in an earlier group; owner runs: adr answer {} <letter> on it first",
+                            "ask: {}: \"{}\" is blocked by unanswered \"{}\" in an earlier tier; owner runs: adr answer {} <letter> on it first",
                             rel,
                             sec.heading_text,
                             other.heading_text,
@@ -222,7 +222,7 @@ pub fn run(record_path: PathBuf) -> i32 {
             if let Some(t) = terms_list.iter().find(|t| t.id.as_deref() == Some(tid.as_str())) {
                 if t.retired {
                     eprintln!(
-                        "ask: {}: \"{}\" resolves \"{}\" to retired term \"{}\"; owner edits the record or un-retires the term",
+                        "ask: {}: \"{}\" resolves \"{}\" to retired term \"{}\"; owner edits the topic file or un-retires the term",
                         rel, sec.heading_text, word, t.name
                     );
                     return 1;

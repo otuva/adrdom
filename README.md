@@ -1,7 +1,7 @@
 # adr
 
 A control layer between AI coding agents and a repository. Decisions are
-questions in markdown records under `adrdom/decisions/`, answered only by the
+questions in markdown topic files under `adrdom/decisions/`, answered only by the
 repository's owner, and recorded in an append-only ledger at
 `adrdom/state/ledger.tsv`; a separate check requires every current decision
 to be tested by an `adr: <uuid>` reference in the code.
@@ -21,23 +21,23 @@ runtime dependencies beyond `git` on `PATH`.
   the current repository. Idempotent. `adr init --claude` additionally
   merges a set of deny entries into `.claude/settings.json`'s
   `permissions.deny`.
-- `adr ask <record>` — assign ids to new questions, write their `terms:`
+- `adr ask <topic_file>` — assign ids to new questions, write their `terms:`
   binding line, and record them as asked (re-asking ones that changed since
   they were last asked); refuses on an unapproved plan/context/terms file, an
-  unanswered question in an earlier group, a banned word, or a retired term.
+  unanswered question in an earlier tier, a banned word, or a retired term.
 - `adr answer <id> <letter>` — owner-only. Answer a question by id and letter;
   writes the `**Answer:**` line and an `answered` ledger row, plus one
   `superseded` row per id named in the question's `supersedes:` line.
-- `adr approve <file>` — owner-only. For a record: approve its current plan
+- `adr approve <file>` — owner-only. For a topic file: approve its current plan
   and/or context (an `approved`/`context` ledger row each). For
   `adrdom/terms.md`: fill in missing term ids and approve it (a `terms` row),
   refusing first on a shape error, a binding that would resolve differently,
-  or a newly banned word appearing in a record.
+  or a newly banned word appearing in a topic file.
 - `adr unban` — owner-only. Read lines from stdin and remove them (and
   their tokens) from the ban list.
 - `adr ban` — read lines from stdin and ban them (and their tokens) from
   ever appearing in the repository or a commit message.
-- `adr show [record]` — print every current decision (its
+- `adr show [topic_file]` — print every current decision (its
   heading and the sentence of the chosen option).
 - `adr serve [--port N]` — owner-only. Serve the owner's page on
   `127.0.0.1` (default port 7357), gated by a per-start token printed to
@@ -51,7 +51,7 @@ invoked interactively by a human (a real TTY, and no `CLAUDECODE` in the
 environment) — an AI agent cannot answer a question, approve anything, edit
 the ban list, or start the server.
 
-## Record shape
+## Topic file shape
 
 A file under `adrdom/decisions/` starts with a first non-blank line `# <topic>`
 (exactly one h1), followed by context prose (any text) up to the first `## `
@@ -93,7 +93,7 @@ naming `adr init --claude` as the fix.
 `adrdom/state/ledger.tsv` is append-only, one tab-separated
 `time, event, id, hash, detail` row per event: `asked`, `answered`,
 `superseded`, and `withdrawn` track a question; `approved` and `context`
-track a record's plan and context prose; `terms` tracks the terms file;
+track a topic file's plan and context prose; `terms` tracks the terms file;
 `banned` and `unbanned` track the ban list.
 
 ## Tests

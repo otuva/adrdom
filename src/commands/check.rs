@@ -108,7 +108,7 @@ pub fn run(staged: bool, message: Option<PathBuf>) -> i32 {
 }
 
 /// An id whose latest state is `superseded` or `withdrawn` is no longer
-/// demanded in any record (4.13/6.1): the record it once lived in was
+/// demanded in any topic file (4.13/6.1): the topic file it once lived in was
 /// allowed to drop it.
 fn dropped_state(led: &Ledger, id: &str) -> bool {
     matches!(
@@ -222,7 +222,7 @@ fn check_ids(records: &[RecordFile], led: &Ledger) -> Vec<Failure> {
             out.push(Failure {
                 check: "ids".to_string(),
                 id: Some(id.clone()),
-                message: format!("ledger id {} not found in any record", id),
+                message: format!("ledger id {} not found in any topic file", id),
             });
         }
     }
@@ -285,7 +285,7 @@ fn check_ledger(
             out.push(Failure {
                 check: "ledger".to_string(),
                 id: Some(row.id.clone()),
-                message: format!("asked row id {} not found in any record", row.id),
+                message: format!("asked row id {} not found in any topic file", row.id),
             });
         }
     }
@@ -658,13 +658,13 @@ fn check_plan(root: &Path, records: &[RecordFile], led: &Ledger) -> (Vec<Failure
 
 /// `terms`: shape/approval failures on `adrdom/terms.md` (read from the
 /// index when `staged` and the file is staged there, otherwise the working
-/// tree). Missing or unapproved is a failure once any record file exists,
+/// tree). Missing or unapproved is a failure once any topic file exists,
 /// and a note otherwise. Every asked/answered section's terms line, and
 /// every non-retired term's own terms line, is checked for an existing,
 /// non-retired uuid on each pair -- never by re-resolving the underlying
 /// text. Circular definitions fail. Returns the failures, whether the
 /// terms file itself is still awaiting approval (only meaningful when no
-/// record exists yet), and any notes ("paired by nothing").
+/// topic file exists yet), and any notes ("paired by nothing").
 fn check_terms(
     root: &Path,
     records: &[RecordFile],
@@ -691,7 +691,7 @@ fn check_terms(
 
     // A missing id is not a shape error the agent can fix: only approve
     // mints ids. It is reported once, as part of the approval state below,
-    // and only fails when a record exists.
+    // and only fails when a topic file exists.
     let missing_ids = tf.errors.iter().any(|e| e.contains("missing id"));
     for e in tf.errors.iter().filter(|e| !e.contains("missing id")) {
         out.push(Failure {

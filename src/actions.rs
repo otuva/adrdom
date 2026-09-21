@@ -26,7 +26,7 @@ pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String>
         }
     }
     let Some((mut rf, idx)) = found else {
-        return Err(format!("id {} not found in any record", id));
+        return Err(format!("id {} not found in any topic file", id));
     };
     let rel = state::rel_path(root, &rf.path);
 
@@ -144,7 +144,7 @@ pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String>
         );
     }
 
-    record::save(&rf).map_err(|e| format!("failed to write record: {}", e))?;
+    record::save(&rf).map_err(|e| format!("failed to write topic file: {}", e))?;
 
     let mut rows = vec![ledger::Row {
         time: ledger::now_rfc3339(),
@@ -434,10 +434,10 @@ fn do_approve_terms(
     })
 }
 
-/// A record file: parse, refuse on shape errors; compute plan hash and
+/// A topic file: parse, refuse on shape errors; compute plan hash and
 /// context hash; write an `approved` row if it differs from the latest for
 /// the path, a `context` row likewise; then for every ledger id that now
-/// appears in no record: withdraw an asked one, refuse on a current one,
+/// appears in no topic file: withdraw an asked one, refuse on a current one,
 /// allow a superseded one silently.
 fn do_approve_record(
     root: &Path,
@@ -452,12 +452,12 @@ fn do_approve_record(
     let mut shape_msgs: Vec<String> = rf
         .shape_errors
         .iter()
-        .map(|e| format!("approve: {}: {}; owner fixes the record", rel, e))
+        .map(|e| format!("approve: {}: {}; owner fixes the topic file", rel, e))
         .collect();
     for sec in &rf.sections {
         for e in &sec.shape_errors {
             shape_msgs.push(format!(
-                "approve: {}: \"{}\": {}; owner fixes the record",
+                "approve: {}: \"{}\": {}; owner fixes the topic file",
                 rel, sec.heading_text, e
             ));
         }
@@ -510,7 +510,7 @@ fn do_approve_record(
         .map_err(|e| format!("approve: failed to update ledger: {}", e))?;
 
     // Ledger ids (asked/answered/superseded/withdrawn) that now appear in
-    // no record at all: withdraw the asked ones, refuse on a current
+    // no topic file at all: withdraw the asked ones, refuse on a current
     // (answered, not superseded) one, allow a superseded one silently.
     let all_files = repo::list_decision_files(root);
     let mut present_ids: HashSet<String> = HashSet::new();
@@ -556,7 +556,7 @@ fn do_approve_record(
                     .map(|a| a.detail.clone())
                     .unwrap_or_else(|| id.clone());
                 refusals.push(format!(
-                    "approve: id {} (\"{}\") is answered and current but missing from every record; owner supersedes it or restores the heading",
+                    "approve: id {} (\"{}\") is answered and current but missing from every topic file; owner supersedes it or restores the heading",
                     id, heading
                 ));
             }

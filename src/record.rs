@@ -34,7 +34,7 @@ pub struct Section {
     /// syntax). Unchanged in meaning and still what `check`'s `parse` check
     /// reads today.
     pub parse_errors: Vec<String>,
-    /// Errors from the record-shape rules (4.9/4.7/3.4): stray lines in a
+    /// Errors from the topic-file-shape rules (4.9/4.7/3.4): stray lines in a
     /// body, and a non-skeleton question missing its Problem/Standard
     /// lines. Kept separate from `parse_errors` so today's `check_parse`
     /// (which reads only `parse_errors`) is unaffected by this slice; the
@@ -46,7 +46,7 @@ pub struct Section {
     /// heading: no id, no body, never a failure (spec point 6).
     #[allow(dead_code)]
     pub is_skeleton: bool,
-    /// Index into `RecordFile::groups` of the h2 group this section falls
+    /// Index into `RecordFile::groups` of the h2 tier this section falls
     /// under, or `None` if it precedes the first h2 (a file-level shape
     /// error in that case).
     #[allow(dead_code)]
@@ -89,7 +89,7 @@ impl Section {
 }
 
 /// A `## ` heading and the questions/principles under it. File order is
-/// the tier order (group 0 is lowest) — see spec point 3.
+/// the tier order (tier 0 is lowest) — see spec point 3.
 #[derive(Debug, Clone)]
 pub struct Group {
     #[allow(dead_code)]
@@ -512,7 +512,7 @@ fn parse_principle(
     }
 }
 
-/// Computes topic, context range, h2 groups (with sections assigned to
+/// Computes topic, context range, h2 tiers (with sections assigned to
 /// them), and file-level shape errors, given the lines and the already
 /// heading-parsed `sections` (mutated in place to set `group`).
 fn analyze_shape(
@@ -588,7 +588,7 @@ fn analyze_shape(
             None => {
                 sec.group = None;
                 shape_errors.push(format!(
-                    "question before first group heading, line {}",
+                    "question before first tier heading, line {}",
                     sec.start + 1
                 ));
             }

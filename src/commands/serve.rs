@@ -253,7 +253,7 @@ fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> String {
             ));
         }
         if let Some(g) = &f.open_group {
-            let mut s = format!("Group <q>{}</q> is open", esc(g));
+            let mut s = format!("Tier <q>{}</q> is open", esc(g));
             if let Some(w) = &f.waits_on {
                 s.push_str(&format!(", waiting on <q>{}</q>", esc(w)));
             }

@@ -152,12 +152,12 @@ fn body_field(lines: &[String], sec: &Section, prefix: &str) -> Option<String> {
         .find_map(|l| l.strip_prefix(prefix).map(|v| v.trim().to_string()))
 }
 
-/// `open_group`: the heading of the lowest-tier group that still has an
+/// `open_group`: the heading of the lowest tier that still has an
 /// Open or Unasked question in it. `waits_on`: the heading of the first
-/// Open/Unasked question in a lower-tier group than the lowest group that
+/// Open/Unasked question in an earlier tier than the lowest tier that
 /// has an Unasked/Skeleton question waiting to be asked — i.e. the heading
 /// `ask` would name in its tier refusal — or `None` when nothing is
-/// waiting on an earlier group.
+/// waiting on an earlier tier.
 fn open_group_and_waits_on(rf: &RecordFile, led: &Ledger) -> (Option<String>, Option<String>) {
     let mut group_states: Vec<Vec<(String, QState)>> = vec![Vec::new(); rf.groups.len()];
     for sec in &rf.sections {

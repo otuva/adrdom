@@ -21,8 +21,8 @@ pub fn rel_path(root: &Path, path: &Path) -> String {
     parts.join("/")
 }
 
-/// True when the record's current plan hash matches the latest `approved`
-/// ledger row for `rel` (the record's path relative to the repo root).
+/// True when the topic file's current plan hash matches the latest `approved`
+/// ledger row for `rel` (the topic file's path relative to the repo root).
 pub fn plan_approved(led: &Ledger, rf: &RecordFile, rel: &str) -> bool {
     match led.latest_for_path("approved", rel) {
         Some(row) => row.hash == record::plan_hash(rf),
@@ -30,7 +30,7 @@ pub fn plan_approved(led: &Ledger, rf: &RecordFile, rel: &str) -> bool {
     }
 }
 
-/// True when the record's current context hash matches the latest
+/// True when the topic file's current context hash matches the latest
 /// `context` ledger row for `rel`.
 pub fn context_approved(led: &Ledger, rf: &RecordFile, rel: &str) -> bool {
     match led.latest_for_path("context", rel) {
