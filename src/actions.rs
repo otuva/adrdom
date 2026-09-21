@@ -2,7 +2,7 @@
 use crate::ledger::{self, Ledger};
 use crate::record::{self, RecordFile};
 use crate::repo;
-use crate::state;
+use crate::state::{self, TermsLoad};
 use crate::terms;
 use std::collections::{BTreeSet, HashSet};
 use std::path::Path;
@@ -28,6 +28,39 @@ pub fn do_lock(root: &Path, id: &str, letter: char) -> Result<Outcome, String> {
     let Some((mut rf, idx)) = found else {
         return Err(format!("id {} not found in any record", id));
     };
+    let rel = state::rel_path(root, &rf.path);
+
+    // Refuse when terms.md is missing, has shape errors, or is not
+    // approved: the same messages `ask` uses, prefixed `lock:` by the
+    // caller in `commands::lock::run`.
+    match state::load_terms_checked(root) {
+        TermsLoad::Missing => {
+            return Err(
+                "adrdom/terms.md missing; agent writes it, owner runs: adr approve adrdom/terms.md"
+                    .to_string(),
+            );
+        }
+        TermsLoad::LoadError(e) => {
+            return Err(format!("adrdom/terms.md: {}", e));
+        }
+        TermsLoad::Ok(tf) => {
+            if !tf.errors.is_empty() {
+                let msg = tf
+                    .errors
+                    .iter()
+                    .map(|e| format!("adrdom/terms.md: {}", e))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                return Err(msg);
+            }
+            if !state::terms_approved(&led, &tf) {
+                return Err(format!(
+                    "{}: terms not approved; owner runs: adr approve adrdom/terms.md",
+                    rel
+                ));
+            }
+        }
+    }
 
     let cur_hash;
     let supersedes_val;
@@ -51,6 +84,9 @@ pub fn do_lock(root: &Path, id: &str, letter: char) -> Result<Outcome, String> {
                     sec.heading_text
                 ));
             }
+        }
+        if sec.terms_line.is_none() {
+            return Err(format!("{}: no terms line; agent re-asks", id));
         }
         supersedes_val = sec.supersedes.clone();
         for old in &supersedes_val {
@@ -123,51 +159,73 @@ pub fn do_approve(root: &Path, file: &Path) -> Result<Outcome, String> {
     }
 }
 
-/// `adrdom/terms.md`: fill missing ids, parse, refuse on shape errors,
-/// refuse if any in-force decision's `terms:` line would no longer resolve
-/// identically, refuse if a newly banned word appears in any record naming
-/// those locations, print in-force decisions bound to any term whose
-/// definition changed, write a `terms` row. Messages keep their original
-/// `approve: ...` embedded prefix (some lines, like the "in force: ..."
-/// continuation, never had one) so the printed output stays byte-identical
-/// to what the command used to print directly.
+/// One dependent's pairs (`word=uuid`), together with a description of
+/// where they were carried, for approve's step 4.
+struct Dependent {
+    /// `<rel>: "<heading>"` for a decision, or `entry "<name>"` for an
+    /// entry's own (stale, machine-written) terms line.
+    source: String,
+    pairs: Vec<(String, String)>,
+}
+
+/// `adrdom/terms.md`: the seven steps of 4 in the spec, in order, nothing
+/// written to disk before step 6 (a shape/cycle/dependent/banned refusal
+/// leaves the file byte-identical to what was on disk before the call).
 fn do_approve_terms(
     root: &Path,
     file: &Path,
     led: &Ledger,
     ledger_path: &Path,
 ) -> Result<Outcome, String> {
+    // Step 1: parse.
     let mut tf =
         terms::load(file).map_err(|e| format!("approve: cannot read {}: {}", file.display(), e))?;
 
-    let inserted = terms::fill_missing_ids(&mut tf);
-    terms::save(&tf).map_err(|e| format!("approve: failed to write {}: {}", file.display(), e))?;
+    // The pre-existing latest `terms` row, captured before anything below
+    // can change what "latest" means, for step 7's before/after compare.
+    let prev_terms_row = led.latest_for_path("terms", "adrdom/terms.md").cloned();
 
-    let owner_errors = terms::check_owners(&tf, root);
-    if !tf.errors.is_empty() || !owner_errors.is_empty() {
+    // Step 2: mint ids in memory only; nothing is written to disk yet.
+    let inserted = terms::mint_ids(&mut tf);
+
+    if !tf.errors.is_empty() {
         let msg = tf
             .errors
             .iter()
-            .chain(owner_errors.iter())
             .map(|e| format!("approve: adrdom/terms.md: {}; owner fixes adrdom/terms.md", e))
             .collect::<Vec<_>>()
             .join("\n");
         return Err(msg);
     }
 
-    let files = repo::list_decision_files(root);
+    // Step 3: definition pairings; a self-pairing or any cycle refuses.
+    let cycles = terms::cycles(&tf);
+    if !cycles.is_empty() {
+        let msg = cycles
+            .iter()
+            .map(|cycle| {
+                let mut chain = cycle.clone();
+                chain.push(cycle[0].clone());
+                format!(
+                    "approve: adrdom/terms.md: circular definition: {}; agent defines one of them from plainer words",
+                    chain.join(" -> ")
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        return Err(msg);
+    }
 
-    // Refusals: a `terms:` line on an in-force decision that no longer
-    // resolves the same way against the new terms (moved alias, retired
-    // term), and any newly-banned word appearing anywhere in a record.
-    let mut refusals: Vec<String> = Vec::new();
-    let mut retired_reported: HashSet<(String, String)> = HashSet::new();
+    // Every in-force decision, and every non-retired entry's own
+    // (pre-existing, stale-until-step-6) terms line, is a dependent.
+    let files = repo::list_decision_files(root);
     let mut loaded: Vec<(String, RecordFile)> = Vec::new();
     for f in &files {
         let Ok(rf) = record::load(f) else { continue };
         loaded.push((state::rel_path(root, f), rf));
     }
 
+    let mut dependents: Vec<Dependent> = Vec::new();
     for (frel, rf) in &loaded {
         for sec in &rf.sections {
             let Some(id) = &sec.id else { continue };
@@ -175,74 +233,111 @@ fn do_approve_terms(
                 continue;
             }
             let Some(tl) = sec.terms_line else { continue };
-            let old_pairs = terms::parse_terms_line(&rf.lines[tl]).unwrap_or_default();
-            let text = state::section_text_excluding_terms_line(&rf.lines, sec);
-            let new_pairs = terms::resolve(&text, &tf.terms);
-            if new_pairs != old_pairs {
-                refusals.push(format!(
-                    "approve: adrdom/terms.md: \"{}\" in {} no longer resolves the same terms; owner fixes adrdom/terms.md or the record",
-                    sec.heading_text, frel
-                ));
-            }
-            for (_, tid) in &new_pairs {
-                if let Some(t) = tf.terms.iter().find(|t| t.id.as_deref() == Some(tid.as_str())) {
-                    if t.retired && retired_reported.insert((frel.clone(), sec.heading_text.clone()))
-                    {
-                        refusals.push(format!(
-                            "approve: adrdom/terms.md: \"{}\" in {} is bound to retired term \"{}\"; owner fixes adrdom/terms.md or the record",
-                            sec.heading_text, frel, t.name
-                        ));
-                    }
-                }
-            }
-        }
-
-        let full_text = record::join_lines(&rf.lines);
-        for (line_no, word, term_name) in terms::banned_hits(&full_text, &tf.terms) {
-            refusals.push(format!(
-                "approve: {}:{}: banned word \"{}\" (term {}); owner edits the record to remove it",
-                frel, line_no, word, term_name
-            ));
+            let Some(pairs) = terms::parse_terms_line(rf.lines[tl].trim_end()) else {
+                continue;
+            };
+            dependents.push(Dependent {
+                source: format!("{}: \"{}\"", frel, sec.heading_text),
+                pairs,
+            });
         }
     }
+    for t in &tf.terms {
+        if t.retired {
+            continue;
+        }
+        let Some(line) = &t.terms_line else { continue };
+        let Some(pairs) = terms::parse_terms_line(line) else {
+            continue;
+        };
+        dependents.push(Dependent {
+            source: format!("entry \"{}\"", t.name),
+            pairs,
+        });
+    }
 
+    // Step 4: every pair on a dependent must still hold in the new file.
+    let mut refusals: Vec<String> = Vec::new();
+    for dep in &dependents {
+        for (word, uuid) in &dep.pairs {
+            let Some(target) = tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str()))
+            else {
+                refusals.push(format!(
+                    "approve: adrdom/terms.md: entry {} removed but carried by {}; owner retires instead",
+                    uuid, dep.source
+                ));
+                continue;
+            };
+            if target.retired {
+                refusals.push(format!(
+                    "approve: adrdom/terms.md: entry \"{}\" retired but carried by {}; owner supersedes first",
+                    target.name, dep.source
+                ));
+                continue;
+            }
+            let still_resolves = terms::resolve(word, &tf.terms)
+                .iter()
+                .any(|(w, id)| w == word && id == uuid);
+            if !still_resolves {
+                refusals.push(format!(
+                    "approve: adrdom/terms.md: word \"{}\" moved off entry \"{}\", carried by {}",
+                    word, target.name, dep.source
+                ));
+            }
+        }
+    }
     if !refusals.is_empty() {
         return Err(refusals.join("\n"));
     }
 
-    let mut out: Vec<String> = Vec::new();
-
-    // Terms whose definition changed since the last committed version:
-    // print every in-force decision still bound to them.
-    if let Some(old_content) = repo::git(root, &["show", "HEAD:adrdom/terms.md"]) {
-        let old_lines = record::split_lines(&old_content);
-        let old_tf = terms::parse(&old_lines);
-        for t in &tf.terms {
-            let Some(tid) = &t.id else { continue };
-            let Some(old_t) = old_tf.terms.iter().find(|o| o.id.as_deref() == Some(tid.as_str()))
-            else {
-                continue;
-            };
-            if old_t.definition == t.definition {
-                continue;
-            }
-            out.push(format!("approve: term \"{}\" definition changed", t.name));
-            for (frel, rf) in &loaded {
-                for sec in &rf.sections {
-                    let Some(id) = &sec.id else { continue };
-                    if !state::is_in_force(led, id) {
-                        continue;
-                    }
-                    let Some(tl) = sec.terms_line else { continue };
-                    let pairs = terms::parse_terms_line(&rf.lines[tl]).unwrap_or_default();
-                    if pairs.iter().any(|(_, pid)| pid == tid) {
-                        out.push(format!("  in force: {}: {}", frel, sec.heading_text));
-                    }
+    // Step 5: banned hits in terms.md's own text, from the single ban list.
+    let banned_path = root.join("adrdom/state/banned.sha256");
+    let banned_entries = crate::banned::read_entries(&banned_path);
+    if !banned_entries.is_empty() {
+        let hash_map: std::collections::HashMap<String, Option<String>> =
+            banned_entries.into_iter().collect();
+        let mut banned_refusals: Vec<String> = Vec::new();
+        for (i, line) in tf.lines.iter().enumerate() {
+            for tok in crate::banned::tokenize(line) {
+                let h = record::sha256_hex(&tok);
+                if let Some(uuid_opt) = hash_map.get(&h) {
+                    let suffix = uuid_opt
+                        .as_ref()
+                        .and_then(|u| {
+                            tf.terms
+                                .iter()
+                                .find(|t| t.id.as_deref() == Some(u.as_str()))
+                                .map(|t| t.name.clone())
+                        })
+                        .map(|n| format!(" (term {})", n))
+                        .unwrap_or_default();
+                    banned_refusals.push(format!(
+                        "approve: adrdom/terms.md:{}: banned word \"{}\"{}; owner edits adrdom/terms.md to remove it",
+                        i + 1,
+                        tok,
+                        suffix
+                    ));
                 }
             }
         }
+        if !banned_refusals.is_empty() {
+            return Err(banned_refusals.join("\n"));
+        }
     }
 
+    // Step 6: write the file. `terms:` lines are computed fresh from each
+    // entry's current definition, one entry at a time, in the same order
+    // as `tf.terms`.
+    let pairs_per_entry: Vec<Vec<(String, String)>> = (0..tf.terms.len())
+        .map(|i| terms::definition_pairs(&tf, i))
+        .collect();
+    let mut new_lines = tf.lines.clone();
+    terms::write_terms_lines(&mut new_lines, &tf, &pairs_per_entry);
+    tf.lines = new_lines;
+
+    terms::save(&tf).map_err(|e| format!("approve: failed to write {}: {}", file.display(), e))?;
+
+    let mut out: Vec<String> = Vec::new();
     if inserted > 0 {
         out.push(format!(
             "approve: adrdom/terms.md: {} missing id(s) filled",
@@ -252,21 +347,56 @@ fn do_approve_terms(
 
     if state::terms_approved(led, &tf) {
         out.push("approve: adrdom/terms.md: already approved".to_string());
-        return Ok(Outcome {
-            summary: out.join("\n"),
-        });
+    } else {
+        let row = ledger::Row {
+            time: ledger::now_rfc3339(),
+            event: "terms".to_string(),
+            id: "-".to_string(),
+            hash: terms::file_hash(&tf),
+            detail: "adrdom/terms.md".to_string(),
+        };
+        ledger::append(ledger_path, &[row])
+            .map_err(|e| format!("approve: failed to update ledger: {}", e))?;
+        out.push("approve: adrdom/terms.md: approved".to_string());
     }
 
-    let row = ledger::Row {
-        time: ledger::now_rfc3339(),
-        event: "terms".to_string(),
-        id: "-".to_string(),
-        hash: terms::file_hash(&tf),
-        detail: "adrdom/terms.md".to_string(),
-    };
-    ledger::append(ledger_path, &[row])
-        .map_err(|e| format!("approve: failed to update ledger: {}", e))?;
-    out.push("approve: adrdom/terms.md: approved".to_string());
+    // Step 7: informational, never a refusal. Only when the version on
+    // HEAD is genuinely the one just superseded (its hash matches the
+    // ledger row that was latest before this call) do we have anything
+    // trustworthy to diff definitions against.
+    if let Some(prev_row) = &prev_terms_row {
+        if let Some(head_content) = repo::git(root, &["show", "HEAD:adrdom/terms.md"]) {
+            let old_tf = terms::parse(&record::split_lines(&head_content));
+            if terms::file_hash(&old_tf) == prev_row.hash {
+                for t in &tf.terms {
+                    let Some(tid) = &t.id else { continue };
+                    let Some(old_t) = old_tf.terms.iter().find(|o| o.id.as_deref() == Some(tid.as_str()))
+                    else {
+                        continue;
+                    };
+                    if old_t.definition == t.definition {
+                        continue;
+                    }
+                    out.push(format!("approve: term \"{}\" definition changed", t.name));
+                    for (frel, rf) in &loaded {
+                        for sec in &rf.sections {
+                            let Some(id) = &sec.id else { continue };
+                            if !state::is_in_force(led, id) {
+                                continue;
+                            }
+                            let Some(tl) = sec.terms_line else { continue };
+                            let pairs =
+                                terms::parse_terms_line(rf.lines[tl].trim_end()).unwrap_or_default();
+                            if pairs.iter().any(|(_, pid)| pid == tid) {
+                                out.push(format!("  in force: {}: {}", frel, sec.heading_text));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     Ok(Outcome {
         summary: out.join("\n"),
     })
@@ -433,8 +563,12 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
         }
     }
 
-    let existing = crate::banned::read_set(&banned_path);
-    let mut removed: Vec<String> = existing.intersection(&to_remove).cloned().collect();
+    let existing = crate::banned::read_entries(&banned_path);
+    let mut removed: Vec<String> = existing
+        .iter()
+        .filter(|(h, _)| to_remove.contains(h))
+        .map(|(h, _)| h.clone())
+        .collect();
     removed.sort();
 
     if removed.is_empty() {
@@ -443,11 +577,14 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
         });
     }
 
-    let mut remaining: Vec<&String> = existing.iter().filter(|h| !to_remove.contains(*h)).collect();
-    remaining.sort();
+    let mut remaining: Vec<(String, Option<String>)> = existing
+        .into_iter()
+        .filter(|(h, _)| !to_remove.contains(h))
+        .collect();
+    remaining.sort_by(|a, b| a.0.cmp(&b.0));
     let mut content = String::new();
-    for h in &remaining {
-        content.push_str(h);
+    for (h, u) in &remaining {
+        content.push_str(&crate::banned::format_line(h, u));
         content.push('\n');
     }
     std::fs::write(&banned_path, content)

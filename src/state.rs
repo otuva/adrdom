@@ -58,6 +58,30 @@ pub fn load_terms(root: &Path) -> Option<TermsFile> {
     terms::load(&path).ok()
 }
 
+/// The three ways a caller that requires `adrdom/terms.md` (`ask`, `lock`)
+/// can find it: missing outright, present but unreadable/shape-invalid, or
+/// loaded cleanly.
+pub enum TermsLoad {
+    Missing,
+    LoadError(String),
+    Ok(TermsFile),
+}
+
+/// Loads `adrdom/terms.md` under `root`, distinguishing "the file does not
+/// exist" from "it exists but failed to read" so callers that must refuse
+/// differently on each (`ask` 3.1/3.2, `lock` 6) don't have to duplicate
+/// the `Path::exists` check `load_terms` collapses away.
+pub fn load_terms_checked(root: &Path) -> TermsLoad {
+    let path = root.join("adrdom/terms.md");
+    if !path.exists() {
+        return TermsLoad::Missing;
+    }
+    match terms::load(&path) {
+        Ok(tf) => TermsLoad::Ok(tf),
+        Err(e) => TermsLoad::LoadError(e.to_string()),
+    }
+}
+
 /// True when `id`'s latest state row in the ledger is `answered` (in
 /// force). `superseded`/`withdrawn`/`asked`/never-asked are all false.
 pub fn is_in_force(led: &Ledger, id: &str) -> bool {

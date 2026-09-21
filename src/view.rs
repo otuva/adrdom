@@ -4,7 +4,6 @@ use crate::ledger::{self, Ledger};
 use crate::record::{self, RecordFile, Section};
 use crate::repo;
 use crate::state;
-use crate::terms;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -230,8 +229,7 @@ pub fn snapshot(root: &Path) -> Snapshot {
     }
 
     let terms = state::load_terms(root).map(|tf| {
-        let mut errors = tf.errors.clone();
-        errors.extend(terms::check_owners(&tf, root));
+        let errors = tf.errors.clone();
         TermsView {
             path: "adrdom/terms.md".to_string(),
             approved: state::terms_approved(&led, &tf),

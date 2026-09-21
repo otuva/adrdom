@@ -50,6 +50,7 @@ Standard: plain words.
 fn lock_writes_answer_line_and_ledger_row() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
@@ -81,6 +82,7 @@ fn lock_writes_answer_line_and_ledger_row() {
 fn lock_refuses_when_claudecode_is_set() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
@@ -120,6 +122,7 @@ fn lock_refuses_when_claudecode_is_set() {
 fn lock_with_supersedes_writes_superseded_row_and_show_hides_old() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
@@ -199,6 +202,7 @@ fn lock_with_supersedes_writes_superseded_row_and_show_hides_old() {
 fn lock_with_two_id_supersedes_writes_a_row_per_id() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
@@ -268,6 +272,7 @@ fn lock_with_two_id_supersedes_writes_a_row_per_id() {
 fn lock_refuses_a_second_time_with_already_answered_message() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
@@ -309,6 +314,7 @@ fn lock_refuses_a_second_time_with_already_answered_message() {
 fn lock_with_two_id_supersedes_refuses_when_one_is_not_in_force() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
@@ -382,6 +388,7 @@ fn lock_with_two_id_supersedes_refuses_when_one_is_not_in_force() {
 fn lock_accepts_a_supersedes_target_already_superseded_as_lineage() {
     let dir = init_repo();
     assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
@@ -446,4 +453,124 @@ fn lock_accepts_a_supersedes_target_already_superseded_as_lineage() {
         .filter(|l| l.contains("\tsuperseded\t") && l.contains(old_id.as_str()))
         .count();
     assert_eq!(rows, 2, "expected two superseded rows for the first id: {}", ledger);
+}
+
+// --- lock's own terms.md gates (6) ---------------------------------------
+
+#[test]
+fn lock_refuses_when_terms_md_is_missing() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let id = extract_ids(&content)[0].clone();
+
+    // Remove terms.md entirely after the id was asked.
+    std::fs::remove_file(dir.join("adrdom/terms.md")).unwrap();
+
+    let out = adr_owner(&dir, &["lock", &id, "A"], "");
+    assert!(!out.status.success(), "lock should have refused: {}", stdout(&out));
+    assert_eq!(
+        stderr(&out).trim_end(),
+        "lock: adrdom/terms.md missing; agent writes it, owner runs: adr approve adrdom/terms.md"
+    );
+}
+
+#[test]
+fn lock_refuses_when_terms_md_has_a_shape_error() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let id = extract_ids(&content)[0].clone();
+
+    // Corrupt terms.md with an unknown line after it was approved.
+    let mut terms = std::fs::read_to_string(dir.join("adrdom/terms.md")).unwrap();
+    terms.push_str("notes: extra\n");
+    std::fs::write(dir.join("adrdom/terms.md"), terms).unwrap();
+
+    let out = adr_owner(&dir, &["lock", &id, "A"], "");
+    assert!(!out.status.success(), "lock should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(err.starts_with("lock: adrdom/terms.md:"), "{}", err);
+    assert!(err.contains("unknown line"), "{}", err);
+}
+
+#[test]
+fn lock_refuses_when_terms_md_is_not_approved() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let id = extract_ids(&content)[0].clone();
+
+    // Edit terms.md's definition without re-approving it.
+    let terms_path = dir.join("adrdom/terms.md");
+    let terms = std::fs::read_to_string(&terms_path).unwrap();
+    let edited = terms.replace("A fixture term for tests.", "A fixture term, edited.");
+    std::fs::write(&terms_path, edited).unwrap();
+
+    let out = adr_owner(&dir, &["lock", &id, "A"], "");
+    assert!(!out.status.success(), "lock should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(err.contains("terms not approved"), "{}", err);
+    assert!(err.contains("adr approve adrdom/terms.md"), "{}", err);
+}
+
+#[test]
+fn lock_refuses_a_section_with_no_terms_line() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let content = "# Topic\n\n## Group\n\n### 1.1 What is the authority?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n";
+    let record = write_record(&dir, "adrdom/decisions/example.md", content);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", content);
+    approve_minimal_terms(&dir, "authority");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let asked = std::fs::read_to_string(&record).unwrap();
+    let id = extract_ids(&asked)[0].clone();
+
+    // Strip the `terms:` line ask just wrote, restoring the section's text
+    // to exactly what it was before that line existed (`ask`'s id
+    // insertion leaves two blank lines where the original single blank
+    // line was, so this is derived from the real file rather than
+    // hand-assembled), and hand-write a matching `asked` row for that
+    // text so lock sees the id in the asked state at its current hash,
+    // but with no terms line at all.
+    let without_terms: String = asked
+        .lines()
+        .filter(|l| !l.starts_with("terms: "))
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    std::fs::write(&record, &without_terms).unwrap();
+
+    let heading_idx = without_terms.find("### 1.1 What is the authority?").unwrap();
+    let section_text = without_terms[heading_idx..].trim_end_matches('\n');
+    let new_hash = mirror_section_hash(section_text);
+    append_ledger_row(&dir, "asked", &id, &new_hash, "1.1 What is the authority?");
+
+    let out = adr_owner(&dir, &["lock", &id, "A"], "");
+    assert!(!out.status.success(), "lock should have refused: {}", stdout(&out));
+    assert_eq!(
+        stderr(&out).trim_end(),
+        format!("lock: {}: no terms line; agent re-asks", id)
+    );
 }
