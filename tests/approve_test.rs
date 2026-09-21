@@ -793,6 +793,50 @@ fn approve_prints_dependents_when_a_definition_changes() {
     );
 }
 
+const TERMS_ENTRY_DEPENDENT_V1: &str = "# Terms\n\n\
+## decision\n\
+id: 11111111-1111-1111-1111-111111111111\n\
+definition: A choice locked by the owner.\n\
+aliases: \n\
+\n\
+## question\n\
+id: 22222222-2222-2222-2222-222222222222\n\
+definition: A thing bound to a decision.\n\
+aliases: \n";
+
+/// The spec's dependents (step 7) also include a non-retired entry whose
+/// own terms line carries the changed entry's id, not only in-force
+/// decisions. Here "question"'s definition pairs "decision", so approving a
+/// changed "decision" definition should print an `entry: question` line.
+#[test]
+fn approve_prints_an_entry_dependent_when_a_definition_changes() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let terms = write_record(&dir, "adrdom/terms.md", TERMS_ENTRY_DEPENDENT_V1);
+    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
+        .status
+        .success());
+    // Commit the approved terms.md (with its machine-written "question"
+    // terms line intact) so HEAD matches the ledger's latest terms row.
+    run_git(&dir, &["add", "adrdom/terms.md"]);
+    run_git(&dir, &["commit", "--no-verify", "-q", "-m", "approve terms"]);
+
+    // Revise only "decision"'s definition text; leave "question"'s block
+    // (and its terms line) untouched, as an owner hand-edit would.
+    let content = std::fs::read_to_string(&terms).unwrap();
+    let terms_v2 = content.replace(
+        "definition: A choice locked by the owner.",
+        "definition: A choice locked by the owner, revised.",
+    );
+    std::fs::write(&terms, &terms_v2).unwrap();
+
+    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    assert!(out.status.success(), "approve failed: {}", stderr(&out));
+    let text = stdout(&out);
+    assert!(text.contains("term \"decision\" definition changed"), "{}", text);
+    assert!(text.contains("  entry: question"), "{}", text);
+}
+
 const TERMS_CROSS_REF: &str = "# Terms\n\n\
 ## decision\n\
 id: 66666666-6666-6666-6666-666666666666\n\

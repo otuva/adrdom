@@ -256,10 +256,17 @@ fn ask_refuses_a_retired_match() {
     write_record(&dir, "adrdom/terms.md", terms);
     let ledger_path = dir.join("adrdom/state/ledger.tsv");
     let hash = {
-        // Mirror terms::file_hash for this fixed content.
+        // Mirror terms::file_hash for this fixed content: each line
+        // right-trimmed before joining (e.g. the "aliases: " line's
+        // trailing space is dropped).
         use sha2::{Digest, Sha256};
+        let trimmed = terms
+            .split('\n')
+            .map(|l| l.trim_end())
+            .collect::<Vec<_>>()
+            .join("\n");
         let mut h = Sha256::new();
-        h.update(terms.as_bytes());
+        h.update(trimmed.as_bytes());
         h.finalize().iter().map(|b| format!("{:02x}", b)).collect::<String>()
     };
     let mut existing = std::fs::read_to_string(&ledger_path).unwrap();

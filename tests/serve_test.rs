@@ -320,6 +320,65 @@ fn get_next_shows_question_words_and_no_entry() {
     let _ = child.wait();
 }
 
+const UUID_INLINE_RECORD: &str = r#"# Topic
+
+Context prose.
+
+## Group One
+
+### 1.1 What counts as a decision?
+
+Problem: the decision about a frobnicate is unclear.
+
+Standard: decisions must be recorded plainly.
+
+- A) A decision naming a1b2c3d4-e5f6-4a1b-9c3d-112233445566 is one commitment.
+  Why: reasons.
+- B) A decision is a block.
+  Why: other reasons.
+"#;
+
+/// A dashed uuid inline in option text must not leak hex fragments (split
+/// at the hyphens by tokenizing) into the "No entry" line.
+#[test]
+fn get_next_no_entry_line_has_no_uuid_fragments() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["init"], &[], "").status.success());
+    let record = write_record(&dir, "adrdom/decisions/example.md", UUID_INLINE_RECORD);
+    let terms = write_record(&dir, "adrdom/terms.md", WORDS_TERMS_MD);
+    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let resp = get(port, "/next", Some(&cookie));
+    assert_eq!(resp.status, 200, "body: {}", resp.body);
+
+    let no_entry_start = resp.body.find("No entry:").expect("No entry line present");
+    let no_entry_line = &resp.body[no_entry_start..];
+    let no_entry_line = &no_entry_line[..no_entry_line.find("</p>").unwrap_or(no_entry_line.len())];
+    for fragment in ["a1b2c3d4", "e5f6", "4a1b", "9c3d", "112233445566"] {
+        assert!(
+            !no_entry_line.contains(fragment),
+            "no-entry line leaked uuid fragment \"{}\": {}",
+            fragment,
+            no_entry_line
+        );
+    }
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
 #[test]
 fn terms_article_lists_entries_with_dependents_count() {
     let dir = init_repo();

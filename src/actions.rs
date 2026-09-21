@@ -392,6 +392,18 @@ fn do_approve_terms(
                             }
                         }
                     }
+                    for t2 in &tf.terms {
+                        if t2.retired {
+                            continue;
+                        }
+                        let Some(line) = &t2.terms_line else { continue };
+                        let Some(pairs) = terms::parse_terms_line(line) else {
+                            continue;
+                        };
+                        if pairs.iter().any(|(_, pid)| pid == tid) {
+                            out.push(format!("  entry: {}", t2.name));
+                        }
+                    }
                 }
             }
         }

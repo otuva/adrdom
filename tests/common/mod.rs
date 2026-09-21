@@ -267,11 +267,16 @@ pub fn approve_empty_terms(dir: &Path) {
 /// Writes `adrdom/terms.md` with `content` and hand-writes a `terms`
 /// ledger row as if `adr approve adrdom/terms.md` had just run on exactly
 /// that content. Mirrors `terms::file_hash` (sha256 of the content with
-/// `\r\n` normalized to `\n`; the crate has no lib target for tests to
-/// call that directly).
+/// `\r\n` normalized to `\n`, each line right-trimmed; the crate has no
+/// lib target for tests to call that directly).
 pub fn approve_terms_via_ledger(dir: &Path, content: &str) {
     let normalized = content.replace("\r\n", "\n");
-    let hash = sha256_hex(&normalized);
+    let trimmed = normalized
+        .split('\n')
+        .map(|l| l.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let hash = sha256_hex(&trimmed);
     let ledger_path = dir.join("adrdom/state/ledger.tsv");
     let mut existing = std::fs::read_to_string(&ledger_path).unwrap_or_default();
     existing.push_str(&format!(
@@ -288,7 +293,8 @@ pub fn approve_terms_via_ledger(dir: &Path, content: &str) {
 // that only care about plan/context/lock behavior need a minimal, already
 // approved terms.md with a single entry whose name appears somewhere in
 // the fixture text; this mirrors `terms::file_hash` (sha256 of the file's
-// text with line endings normalized) the same way `approve_via_ledger`
+// text with line endings normalized and each line right-trimmed) the same
+// way `approve_via_ledger`
 // mirrors the plan/context hashes, so tests don't have to route through
 // the `approve` command (being built as the same slice, but kept
 // independent so a bug in one doesn't mask a bug in the other).
@@ -298,7 +304,13 @@ pub fn approve_minimal_terms(dir: &Path, word: &str) {
         word
     );
     std::fs::write(dir.join("adrdom/terms.md"), &content).unwrap();
-    let hash = sha256_hex(&content.replace("\r\n", "\n"));
+    let normalized = content.replace("\r\n", "\n");
+    let trimmed = normalized
+        .split('\n')
+        .map(|l| l.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let hash = sha256_hex(&trimmed);
     let ledger_path = dir.join("adrdom/state/ledger.tsv");
     let mut existing = std::fs::read_to_string(&ledger_path).unwrap_or_default();
     existing.push_str(&format!(

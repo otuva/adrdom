@@ -234,8 +234,53 @@ fn tokenize(text: &str) -> Vec<String> {
     out
 }
 
-fn looks_like_uuid_token(w: &str) -> bool {
-    w.len() == 32 && w.chars().all(|c| c.is_ascii_hexdigit())
+/// Removes every dashed uuid (8-4-4-4-12 hex, case-insensitive, on a
+/// non-alphanumeric boundary) from `text`, replacing each with a single
+/// space. `tokenize` splits a dashed uuid into hex fragments at the
+/// hyphens, so without this pass those fragments (not 32 characters long,
+/// and not necessarily all-digit) would otherwise show up as "no entry"
+/// words.
+fn strip_uuid_tokens(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let n = chars.len();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < n {
+        if let Some(end) = match_uuid_at(&chars, i) {
+            let before_ok = i == 0 || !chars[i - 1].is_alphanumeric();
+            let after_ok = end == n || !chars[end].is_alphanumeric();
+            if before_ok && after_ok {
+                out.push(' ');
+                i = end;
+                continue;
+            }
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    out
+}
+
+/// If a uuid (8-4-4-4-12 hex groups separated by `-`) starts at `start`,
+/// returns the index just past it.
+fn match_uuid_at(chars: &[char], start: usize) -> Option<usize> {
+    const GROUP_LENS: [usize; 5] = [8, 4, 4, 4, 12];
+    let mut pos = start;
+    for (gi, &len) in GROUP_LENS.iter().enumerate() {
+        for _ in 0..len {
+            if pos >= chars.len() || !chars[pos].is_ascii_hexdigit() {
+                return None;
+            }
+            pos += 1;
+        }
+        if gi < GROUP_LENS.len() - 1 {
+            if pos >= chars.len() || chars[pos] != '-' {
+                return None;
+            }
+            pos += 1;
+        }
+    }
+    Some(pos)
 }
 
 fn no_entry_words(text: &str, pairs: &[(String, String)], terms_list: &[Term]) -> Vec<String> {
@@ -254,8 +299,9 @@ fn no_entry_words(text: &str, pairs: &[(String, String)], terms_list: &[Term]) -
     }
 
     let common = common_words();
+    let stripped = strip_uuid_tokens(text);
     let mut found: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    for line in text.split('\n') {
+    for line in stripped.split('\n') {
         let trimmed = line.trim_start();
         if trimmed.starts_with("id:") || trimmed.starts_with("supersedes:") {
             continue;
@@ -266,9 +312,6 @@ fn no_entry_words(text: &str, pairs: &[(String, String)], terms_list: &[Term]) -
                 continue;
             }
             if w.chars().all(|c| c.is_ascii_digit()) {
-                continue;
-            }
-            if looks_like_uuid_token(&w) {
                 continue;
             }
             if common.contains(w.as_str()) {
