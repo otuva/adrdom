@@ -108,6 +108,58 @@ fn approve_writes_approved_and_context_rows_then_is_idempotent() {
     assert!(stdout(&out2).contains("context unchanged"), "{}", stdout(&out2));
 }
 
+// --- approve refuses on an option-count shape error --------------------
+
+#[test]
+fn approve_refuses_a_question_with_one_option() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let content = "# Example\n\n## Group\n\n### 1.1 One option?\n\nProblem: p.\n\nStandard: s.\n\n- A) Only choice.\n  Why: w.\n  Costs: c.\n";
+    let record = write_record(&dir, "adrdom/decisions/example.md", content);
+
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(err.contains("1 options; at least two"), "{}", err);
+    assert!(err.contains("owner fixes the topic file"), "{}", err);
+
+    let after = std::fs::read_to_string(&record).unwrap();
+    assert_eq!(after, content, "approve must not modify the file when it refuses");
+    assert!(extract_ids(&after).is_empty(), "no id should have been assigned: {}", after);
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        !ledger.lines().any(|l| l.contains("\tapproved\t") || l.contains("\tcontext\t")),
+        "no approved/context row should have been written: {}",
+        ledger
+    );
+}
+
+#[test]
+fn approve_refuses_a_question_with_four_options() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let content = "# Example\n\n## Group\n\n### 1.1 Four options?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n- D) Four.\n  Why: w.\n  Costs: c.\n";
+    let record = write_record(&dir, "adrdom/decisions/example.md", content);
+
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(err.contains("4 options; at most three"), "{}", err);
+    assert!(err.contains("owner fixes the topic file"), "{}", err);
+
+    let after = std::fs::read_to_string(&record).unwrap();
+    assert_eq!(after, content, "approve must not modify the file when it refuses");
+    assert!(extract_ids(&after).is_empty(), "no id should have been assigned: {}", after);
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        !ledger.lines().any(|l| l.contains("\tapproved\t") || l.contains("\tcontext\t")),
+        "no approved/context row should have been written: {}",
+        ledger
+    );
+}
+
 // --- editing context prose requires re-approval -----------------------
 
 #[test]

@@ -123,6 +123,50 @@ fn ask_refuses_to_edit_an_answered_section() {
 }
 
 #[test]
+fn ask_refuses_a_question_with_one_option() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+    let content = "# Example\n\n## Group\n\n### 1.1 One option?\n\nProblem: p.\n\nStandard: s.\n\n- A) Only choice.\n  Why: w.\n  Costs: c.\n";
+    let record = write_record(&dir, "adrdom/decisions/example.md", content);
+
+    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(err.contains("1 options; at least two"), "{}", err);
+    assert!(err.contains("owner fixes the topic file"), "{}", err);
+
+    let after = std::fs::read_to_string(&record).unwrap();
+    assert_eq!(after, content, "ask must not modify the file when it refuses");
+    assert!(extract_ids(&after).is_empty(), "no id should have been assigned: {}", after);
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(!ledger.contains("\tasked\t"), "no asked row should have been written: {}", ledger);
+}
+
+#[test]
+fn ask_refuses_a_question_with_four_options() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+    let content = "# Example\n\n## Group\n\n### 1.1 Four options?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n- D) Four.\n  Why: w.\n  Costs: c.\n";
+    let record = write_record(&dir, "adrdom/decisions/example.md", content);
+
+    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(err.contains("4 options; at most three"), "{}", err);
+    assert!(err.contains("owner fixes the topic file"), "{}", err);
+
+    let after = std::fs::read_to_string(&record).unwrap();
+    assert_eq!(after, content, "ask must not modify the file when it refuses");
+    assert!(extract_ids(&after).is_empty(), "no id should have been assigned: {}", after);
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(!ledger.contains("\tasked\t"), "no asked row should have been written: {}", ledger);
+}
+
+#[test]
 fn ask_leaves_a_skeleton_heading_without_id_or_row() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());

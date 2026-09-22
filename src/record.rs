@@ -23,16 +23,19 @@ pub struct Section {
     pub options: Vec<OptionRec>,
     pub answer_line: Option<usize>,
     pub answer_value: Option<String>,
-    /// Errors from the pre-existing parser (duplicate id, bad option/answer
-    /// syntax). Unchanged in meaning and still what `check`'s `parse` check
-    /// reads today.
+    /// Errors from the pre-existing parser: duplicate id line, an option
+    /// with no decision sentence, and an answer naming a missing option.
+    /// The option-count rules ("at most three" / "at least two") live in
+    /// `shape_errors` instead, since `ask` and `approve` must refuse on
+    /// them before ever touching the file, same as every other shape rule.
     pub parse_errors: Vec<String>,
     /// Errors from the topic-file-shape rules (4.9/4.7/3.4): stray lines in a
-    /// body, and a non-skeleton question missing its Problem/Standard
-    /// lines. Kept separate from `parse_errors` so today's `check_parse`
-    /// (which reads only `parse_errors`) is unaffected by this slice; the
-    /// agent that builds the new `check` behaviour is expected to fold
-    /// these in under the `parse` check name, per the spec.
+    /// body, a non-skeleton question missing its Problem/Standard lines,
+    /// an option count outside two-to-three, and an option missing its
+    /// Why/Costs line. `ask` and `approve` both refuse on this slice
+    /// (plus the file-level `RecordFile::shape_errors`) before doing
+    /// anything else; `check`'s `parse` check reads this and
+    /// `parse_errors` together.
     #[allow(dead_code)]
     pub shape_errors: Vec<String>,
     /// True when the heading has no non-blank line before the next
@@ -197,6 +200,27 @@ fn extract_sentence(rest: &str) -> Option<String> {
     None
 }
 
+/// Which of the two option-detail lines a body line is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Detail {
+    Why,
+    Costs,
+}
+
+/// Recognizes a `  Why: ` or `  Costs: ` line and returns which kind it is
+/// plus the text after the prefix. The one place both `scan_body` (which
+/// counts these under each option) and `option_details` (which extracts
+/// their text) recognize the prefix, so the two stay in sync.
+fn detail_line(line: &str) -> Option<(Detail, &str)> {
+    if let Some(v) = line.strip_prefix("  Why: ") {
+        return Some((Detail::Why, v));
+    }
+    if let Some(v) = line.strip_prefix("  Costs: ") {
+        return Some((Detail::Costs, v));
+    }
+    None
+}
+
 fn kv(line: &str, key: &str) -> Option<String> {
     let prefix = format!("{}: ", key);
     line.strip_prefix(&prefix).map(|v| v.trim().to_string())
@@ -324,22 +348,14 @@ fn scan_body(lines: &[String], start: usize, end: usize) -> BodyScan {
             under_option = true;
             continue;
         }
-        if let Some(v) = line.strip_prefix("  Why: ") {
+        if let Some((kind, v)) = detail_line(line) {
             if under_option {
                 if !v.trim().is_empty() {
-                    if let Some(c) = why_counts.last_mut() {
-                        *c += 1;
-                    }
-                }
-                continue;
-            }
-            stray_errors.push(format!("stray line {}", j + 1));
-            continue;
-        }
-        if let Some(v) = line.strip_prefix("  Costs: ") {
-            if under_option {
-                if !v.trim().is_empty() {
-                    if let Some(c) = costs_counts.last_mut() {
+                    let counts = match kind {
+                        Detail::Why => &mut why_counts,
+                        Detail::Costs => &mut costs_counts,
+                    };
+                    if let Some(c) = counts.last_mut() {
                         *c += 1;
                     }
                 }
@@ -360,13 +376,13 @@ fn scan_body(lines: &[String], start: usize, end: usize) -> BodyScan {
     // A fourth option is a shape error; the minimum (two, unless the
     // heading is a skeleton) is enforced by the caller, which alone knows
     // whether the body is a skeleton.
+    let mut option_shape_errors = Vec::new();
     if options.len() > 3 {
-        option_errors.push(format!("{} options; at most three", options.len()));
+        option_shape_errors.push(format!("{} options; at most three", options.len()));
     }
 
     // Every option carries exactly one non-empty Why line and exactly one
     // non-empty Costs line.
-    let mut option_shape_errors = Vec::new();
     for (i, opt) in options.iter().enumerate() {
         match why_counts[i] {
             0 => option_shape_errors.push(format!("option {} missing Why", opt.letter)),
@@ -406,11 +422,6 @@ fn parse_question(lines: &[String], start: usize, end: usize) -> Section {
     let scan = scan_body(lines, start, end);
 
     let mut parse_errors = scan.option_errors;
-    // A skeleton heading (empty body) is exempt; a real body needs two or
-    // three options.
-    if !is_skeleton && scan.options.len() < 2 {
-        parse_errors.push(format!("{} options; at least two", scan.options.len()));
-    }
     if scan.id_count > 1 {
         parse_errors.push("duplicate id line".to_string());
     }
@@ -433,6 +444,11 @@ fn parse_question(lines: &[String], start: usize, end: usize) -> Section {
         }
         if scan.standard_count != 1 {
             shape_errors.push("missing Standard line".to_string());
+        }
+        // A skeleton heading (empty body) is exempt; a real body needs two
+        // or three options.
+        if scan.options.len() < 2 {
+            shape_errors.push(format!("{} options; at least two", scan.options.len()));
         }
     }
     shape_errors.extend(scan.option_shape_errors);
@@ -639,15 +655,11 @@ pub fn option_details(lines: &[String], sec: &Section) -> Vec<(char, Option<Stri
         let mut why = None;
         let mut costs = None;
         for line in &lines[(opt.line + 1).min(lines.len())..sec.end.min(lines.len())] {
-            if let Some(v) = line.strip_prefix("  Why: ") {
-                if why.is_none() {
-                    why = Some(v.trim().to_string());
-                }
-                continue;
-            }
-            if let Some(v) = line.strip_prefix("  Costs: ") {
-                if costs.is_none() {
-                    costs = Some(v.trim().to_string());
+            if let Some((kind, v)) = detail_line(line) {
+                match kind {
+                    Detail::Why if why.is_none() => why = Some(v.trim().to_string()),
+                    Detail::Costs if costs.is_none() => costs = Some(v.trim().to_string()),
+                    _ => {}
                 }
                 continue;
             }
@@ -864,12 +876,24 @@ mod tests {
             "# T\n\n## G\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n- D) Four.\n  Why: w.\n  Costs: c.\n",
         );
         assert!(rf.sections[0]
-            .parse_errors
+            .shape_errors
             .iter()
             .any(|e| e == "4 options; at most three"));
         let ok = rf_from(
             "# T\n\n## G\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n",
         );
-        assert!(ok.sections[0].parse_errors.is_empty());
+        assert!(ok.sections[0].shape_errors.is_empty());
+    }
+
+    #[test]
+    fn one_option_is_a_shape_error() {
+        let rf = rf_from(
+            "# T\n\n## G\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) Only choice.\n  Why: w.\n  Costs: c.\n",
+        );
+        assert!(rf.sections[0]
+            .shape_errors
+            .iter()
+            .any(|e| e == "1 options; at least two"));
+        assert!(rf.sections[0].parse_errors.is_empty(), "{:?}", rf.sections[0].parse_errors);
     }
 }
