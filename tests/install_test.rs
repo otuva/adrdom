@@ -188,6 +188,27 @@ fn install_appends_to_an_existing_agents_md_without_touching_owner_text() {
 }
 
 #[test]
+fn install_appends_a_single_blank_line_when_owner_file_already_ends_with_one() {
+    let dir = init_repo();
+    // Owner-written AGENTS.md that already ends with a blank line: install
+    // must not add a second one on top of it.
+    std::fs::write(
+        dir.join("AGENTS.md"),
+        "# My repo\n\nSome owner-written notes.\n\n",
+    )
+    .unwrap();
+
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let content = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
+    assert!(
+        content.starts_with("# My repo\n\nSome owner-written notes.\n\n<!-- adrdom brief begin -->"),
+        "expected exactly one blank line before the brief, got: {:?}",
+        &content[..content.len().min(120)]
+    );
+}
+
+#[test]
 fn install_replaces_a_stale_brief_section_in_place() {
     let dir = init_repo();
     std::fs::write(

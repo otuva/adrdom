@@ -167,12 +167,14 @@ fn install_agents_md(root: &Path) -> Result<String, String> {
             Ok("install: AGENTS.md: replaced the stale brief section".to_string())
         }
         None => {
-            let mut new_content = existing.clone();
+            let mut new_content = existing;
             if !new_content.is_empty() {
                 if !new_content.ends_with('\n') {
                     new_content.push('\n');
                 }
-                new_content.push('\n');
+                if !new_content.ends_with("\n\n") {
+                    new_content.push('\n');
+                }
             }
             new_content.push_str(&section_lines().join("\n"));
             new_content.push('\n');
@@ -196,7 +198,7 @@ fn install_claude_md(root: &Path) -> Result<Option<String>, String> {
         return Ok(None);
     }
 
-    let mut new_content = existing.clone();
+    let mut new_content = existing;
     if !new_content.is_empty() {
         if !new_content.ends_with('\n') {
             new_content.push('\n');

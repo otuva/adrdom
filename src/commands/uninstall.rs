@@ -100,9 +100,13 @@ fn remove_agents_md_section(root: &Path) -> Result<Option<String>, String> {
 
 /// Removes the marker comment line and the `@AGENTS.md` line right after
 /// it from CLAUDE.md, plus the one blank line install put before it if
-/// present, so a plain install/uninstall round-trip byte-reverts the
-/// file. A bare `@AGENTS.md` line with no marker above it is the owner's
-/// own and is left alone.
+/// present. This byte-reverts the file when it already ended with a
+/// single trailing newline (the common case); a file install found with
+/// no trailing newline, or with more than one blank line at the end,
+/// canonicalizes to a single trailing newline instead of restoring
+/// exactly, because install's blank-line insertion collapses those cases
+/// to the same on-disk text. A bare `@AGENTS.md` line with no marker
+/// above it is the owner's own and is left alone.
 fn remove_claude_md_import(root: &Path) -> Result<Option<String>, String> {
     let path = root.join("CLAUDE.md");
     let existing = match fs::read_to_string(&path) {
