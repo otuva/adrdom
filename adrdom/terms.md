@@ -136,3 +136,11 @@ aliases: retires, retired, retiring
 id: ef83beae-6857-4200-b251-a0fcc3c72f9d
 definition: Adding the hash of a word to the list nothing in the repository may contain.
 aliases: bans, banned, banning
+
+## install
+definition: The act that puts the tool's hooks and brief into a repository.
+aliases: installs, installed, installing
+
+## ui
+definition: The part of the tool the owner sees and uses in a browser.
+aliases: user interface, web ui
