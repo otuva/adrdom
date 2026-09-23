@@ -320,6 +320,17 @@ pub fn approve_terms_with(dir: &Path, words: &[&str]) {
     approve_terms_via_ledger(dir, &content);
 }
 
+/// Mirrors an `assumes` row's hash (see src/commands/check/answers.rs,
+/// spec §2): sha256 of `<dependent heading>=<set>`. `set` is the answer-set
+/// text as `check` renders it: a single letter, letters joined by `|` in
+/// sorted order, or `*` for "any". Lets a test hand-write an `assumes` row
+/// that either matches or deliberately mismatches a depends line's current
+/// set, without depending on `adr ask` (built concurrently in a separate
+/// slice).
+pub fn assumes_hash(dependent_heading: &str, set: &str) -> String {
+    sha256_hex(&format!("{}={}", dependent_heading, set))
+}
+
 /// Mirrors `record::section_hash` for a caller that already has the exact
 /// block of lines making up one section (from its heading through its
 /// last content line, no trailing blank, no `**Answer:**`): each line

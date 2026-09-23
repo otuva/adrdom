@@ -189,10 +189,28 @@ fn handle_approve(root: &Path, form: &HashMap<String, String>) -> Reply {
 
 fn handle_answer(root: &Path, form: &HashMap<String, String>) -> Reply {
     let id = form.get("id").cloned().unwrap_or_default();
-    let letter = form
-        .get("answer")
-        .and_then(|s| s.trim().chars().next())
-        .map(|c| c.to_ascii_uppercase());
+    let value = form.get("answer").map(|s| s.trim().to_string()).unwrap_or_default();
+
+    // The Refuse button posts `answer=refuse`; everything else is a letter.
+    let outcome = if value == "refuse" {
+        Some(actions::do_refuse(root, &id))
+    } else {
+        None
+    };
+    if let Some(result) = outcome {
+        return match result {
+            Ok(o) => Reply::Redirect(
+                format!("/next?after={}&m={}", percent_encode(&id), percent_encode(&o.summary)),
+                None,
+            ),
+            Err(e) => Reply::Redirect(
+                format!("/next?show={}&m={}", percent_encode(&id), percent_encode(&e)),
+                None,
+            ),
+        };
+    }
+
+    let letter = value.chars().next().map(|c| c.to_ascii_uppercase());
 
     let Some(letter) = letter else {
         let banner = "serve: missing answer selection";

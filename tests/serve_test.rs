@@ -292,6 +292,7 @@ const WORDS_RECORD: &str = r#"# Topic
 Context prose.
 
 ### 1.1 What counts as a decision?
+depends: decision
 
 Problem: the decision about a frobnicate is unclear.
 
@@ -404,6 +405,7 @@ const UUID_INLINE_RECORD: &str = r#"# Topic
 Context prose.
 
 ### 1.1 What counts as a decision?
+depends: decision
 
 Problem: the decision about a frobnicate is unclear.
 
@@ -600,4 +602,155 @@ fn serve_refuses_when_claudecode_is_set() {
         "stderr: {}",
         stderr(&out)
     );
+}
+
+// --- tiers, "stands on", refuse, refused, moot (spec §7) -----------------
+
+#[test]
+fn get_next_shows_tier_and_stands_on_and_a_refuse_button() {
+    let dir = setup_repo_with_open_question();
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let resp = get(port, "/next", Some(&cookie));
+    assert_eq!(resp.status, 200, "body: {}", resp.body);
+
+    // "<topic>, tier N. Question p of n open." — EXAMPLE_RECORD's only
+    // question has no heading dep, so it is tier 1.
+    assert!(resp.body.contains("Example, tier 1"), "body: {}", resp.body);
+    assert!(
+        resp.body.contains("Question 1 of 1 open"),
+        "body: {}",
+        resp.body
+    );
+
+    // "Stands on:" lists the entries as written: EXAMPLE_RECORD's question
+    // carries `depends: example` (a term entry).
+    assert!(
+        resp.body.contains("Stands on: example"),
+        "body: {}",
+        resp.body
+    );
+
+    // A Refuse button beside the Answer button, posting `answer=refuse` to
+    // the same route.
+    assert!(
+        resp.body
+            .contains("name=\"answer\" value=\"refuse\" class=\"refuse\""),
+        "body: {}",
+        resp.body
+    );
+    assert!(resp.body.contains(">Refuse<"), "body: {}", resp.body);
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+#[test]
+fn overview_shows_tier_n_is_open() {
+    let dir = setup_repo_with_open_question();
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let resp = get(port, "/", Some(&cookie));
+    assert_eq!(resp.status, 200, "body: {}", resp.body);
+    assert!(resp.body.contains("Tier 1 is open"), "body: {}", resp.body);
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+const REFUSED_RECORD: &str = "# Refused Topic\n\n\
+### 1.1 Root?\n\n\
+id: 11111111-1111-1111-1111-111111111111\n\n\
+Problem: p.\n\n\
+Standard: s.\n\n\
+- A) x.\n  Why: w.\n  Costs: c.\n\
+- B) y.\n  Why: w.\n  Costs: c.\n\n\
+**Answer:** refused\n";
+
+/// The refused state is set by hand — a ledger row plus the `**Answer:**
+/// refused` line — rather than through `adr answer <id> refuse`, which is
+/// being built on this same branch by another agent (see the wave-2
+/// report).
+#[test]
+fn overview_lists_a_refused_question_with_the_label() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    write_record(&dir, "adrdom/decisions/refused.md", REFUSED_RECORD);
+    append_ledger_row(
+        &dir,
+        "asked",
+        "11111111-1111-1111-1111-111111111111",
+        "h",
+        "1.1 Root?",
+    );
+    append_ledger_row(
+        &dir,
+        "refused",
+        "11111111-1111-1111-1111-111111111111",
+        "h",
+        "1.1 Root?",
+    );
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let resp = get(port, "/", Some(&cookie));
+    assert_eq!(resp.status, 200, "body: {}", resp.body);
+    assert!(
+        resp.body.contains("<span class=\"label refused\">refused</span>"),
+        "body: {}",
+        resp.body
+    );
+    assert!(resp.body.contains("1.1 Root?"), "body: {}", resp.body);
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+const MOOT_ROOT_ANSWER_B: &str = "# Moot Topic\n\n\
+### 1.1 Root?\n\n\
+id: id-root\n\n\
+Problem: p.\n\n\
+Standard: s.\n\n\
+- A) First choice.\n  Why: w.\n  Costs: c.\n\
+- B) Second choice.\n  Why: w.\n  Costs: c.\n\n\
+**Answer:** B\n\n\
+### 1.2 Dependent?\n\
+depends: 1.1 Root?=A\n\n\
+id: id-dep\n\n\
+Problem: p2.\n\n\
+Standard: s2.\n\n\
+- A) x.\n  Why: w.\n  Costs: c.\n\
+- B) y.\n  Why: w.\n  Costs: c.\n";
+
+/// A moot note (8.7 A) is shown alongside the topic on the overview, next
+/// to the check notes.
+#[test]
+fn overview_shows_a_moot_note_for_an_excluded_answer() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    write_record(&dir, "adrdom/decisions/moot.md", MOOT_ROOT_ANSWER_B);
+    append_ledger_row(&dir, "asked", "id-root", "h", "1.1 Root?");
+    append_ledger_row(&dir, "answered", "id-root", "h", "B");
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let resp = get(port, "/", Some(&cookie));
+    assert_eq!(resp.status, 200, "body: {}", resp.body);
+    assert!(
+        resp.body
+            .contains("moot: &quot;1.2 Dependent?&quot; stands on &quot;1.1 Root?&quot;=A, answered B"),
+        "body: {}",
+        resp.body
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
 }

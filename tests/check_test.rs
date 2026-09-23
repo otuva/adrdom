@@ -5,6 +5,7 @@ use common::*;
 const ONE_QUESTION: &str = r#"# Example
 
 ### 3.1 Does this pass?
+depends: pass
 
 Problem: whether it passes.
 
@@ -356,11 +357,11 @@ fn check_parse_reports_a_file_shape_error() {
 fn check_passes_a_skeleton_heading_with_no_id_or_body() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_empty_terms(&dir);
+    approve_minimal_terms(&dir, "widget");
     write_record(
         &dir,
         "adrdom/decisions/skeleton.md",
-        "# Skeleton\n\n### 1.1 Not written yet?\n",
+        "# Skeleton\n\n### 1.1 Not written yet?\ndepends: widget\n",
     );
 
     let out = adr(&dir, &["check"], &[], "");

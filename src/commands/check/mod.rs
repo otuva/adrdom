@@ -4,6 +4,7 @@ mod done;
 mod ids;
 mod install;
 mod ledger;
+mod moot;
 mod parse;
 mod plan;
 mod terms;
@@ -77,6 +78,19 @@ fn build(
     push_failures(&mut failures, terms_failures);
     let (test_failures, tested_count) = tests::check_tests(root, &records, &led, tests);
     push_failures(&mut failures, test_failures);
+
+    notes.extend(moot::check_moot(&records));
+
+    for rf in &records {
+        if let Some(tiers) = &rf.tiers {
+            let sizes = record::tier_sizes(tiers)
+                .into_iter()
+                .map(|(t, n)| format!("{} ({})", t, n))
+                .collect::<Vec<_>>()
+                .join(" ");
+            notes.push(format!("tiers: {}: {}", rf.rel, sizes));
+        }
+    }
 
     if !awaiting.is_empty() {
         notes.push(format!(

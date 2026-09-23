@@ -120,9 +120,14 @@ button {
   background: var(--key); color: var(--ink); border: 1px solid var(--muted);
 }
 button.answer { background: var(--hold); color: var(--paper); border-color: var(--hold); min-width: 7.5rem; }
+button.refuse { background: var(--paper); color: var(--refuse); border-color: var(--refuse); }
 button:hover { filter: brightness(1.08); }
 button:focus-visible { outline: 2px solid var(--hold); outline-offset: 2px; }
 .skip { color: var(--muted); }
+.stands-on { color: var(--muted); font-size: 0.92rem; margin: -0.3rem 0 0.8rem; }
+ul.refused-list { list-style: none; margin: 0.4rem 0; padding: 0; }
+ul.refused-list li { padding: 0.2rem 0; }
+.label.refused { color: var(--refuse); font-weight: 700; text-transform: uppercase; font-size: 0.78rem; letter-spacing: 0.03em; margin-right: 0.5rem; }
 .key-hint { color: var(--muted); font-size: 0.92rem; }
 kbd { font-family: inherit; font-size: 0.9em; padding: 0.05em 0.45em; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; background: var(--key); }
 
