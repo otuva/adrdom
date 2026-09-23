@@ -138,9 +138,12 @@ definition: Adding the hash of a word to the list nothing in the repository may 
 aliases: bans, banned, banning
 
 ## install
+id: 1b98cdea-dc1b-4789-8f67-68d130d7a49d
 definition: The act that puts the tool's hooks and brief into a repository.
 aliases: installs, installed, installing
 
 ## ui
+id: 7127ab1e-c313-4c51-9134-c09d551682cf
+terms: owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d
 definition: The part of the tool the owner sees and uses in a browser.
 aliases: user interface, web ui
