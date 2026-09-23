@@ -41,7 +41,7 @@ aliases: decisions
 
 ## answer
 id: b36113a1-1384-4e4c-a798-8399f4181366
-terms: option=43778946-d44c-4acf-a766-0a4915fce199, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a
+terms: option=43778946-d44c-4acf-a766-0a4915fce199, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, refusal=0942e445-0163-423e-8ba7-84dd8ac07045, refusing=0942e445-0163-423e-8ba7-84dd8ac07045
 definition: The owner's act of picking one option of a question or refusing it, and the line under the question that names the pick or the refusal.
 aliases: answers, answered, answering
 
@@ -77,7 +77,7 @@ aliases: topic files
 
 ## tier
 id: f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
-terms: asked=3c8d4c9c-abca-4faa-b7c1-aae39951376c, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
+terms: asks=3c8d4c9c-abca-4faa-b7c1-aae39951376c, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, stands on=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
 definition: The questions the tool asks together, one above the highest question each of them stands on in its topic file.
 aliases: tiers
 
@@ -94,7 +94,7 @@ aliases: approves, approved, approving, approval
 
 ## plan
 id: 94677ed8-eaf6-46e2-bc71-7392fa0805bf
-terms: approved=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, asking=3c8d4c9c-abca-4faa-b7c1-aae39951376c, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
+terms: approved=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, stands on=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
 definition: The approved headings of a topic file and what each stands on.
 aliases: plans
 
@@ -106,7 +106,7 @@ aliases: withdraws, withdrawn, withdrawing
 
 ## check
 id: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de
-terms: answered=b36113a1-1384-4e4c-a798-8399f4181366, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d
+terms: answered=b36113a1-1384-4e4c-a798-8399f4181366, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, refuses=0942e445-0163-423e-8ba7-84dd8ac07045
 definition: The command that reads the repository against the ledger and refuses what breaks a rule the owner answered.
 aliases: checks, checked, checking
 
@@ -149,13 +149,19 @@ definition: The part of the tool the owner sees and uses in a browser.
 aliases: user interface, web ui
 
 ## depends
+id: aef1b384-2b33-47a2-92a8-ec7f8fb258ef
+terms: current=e2533580-1486-4dc9-8697-e6c53605fe72, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, term=f590059d-b681-40ec-8a1c-c8916d71f6bb, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
 definition: The line under a question heading naming what the question rests on: a term, a question in the same topic file, or a current decision.
 aliases: stands on
 
 ## refusal
+id: 0942e445-0163-423e-8ba7-84dd8ac07045
+terms: asked=3c8d4c9c-abca-4faa-b7c1-aae39951376c, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a
 definition: The owner's ruling that a question cannot be settled as asked.
 aliases: refuse, refused, refusing
 
 ## answer set
+id: 9d634996-475e-4ddc-8113-05c404ad9d5c
+terms: asked=3c8d4c9c-abca-4faa-b7c1-aae39951376c, options=43778946-d44c-4acf-a766-0a4915fce199, question=277a8338-c57a-43cc-8b28-6b42e9347f6a
 definition: The letters of a question's options under which a question standing on it is asked.
 aliases: answer sets
