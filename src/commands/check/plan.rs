@@ -1,6 +1,6 @@
 use super::{file_approval, Failure};
 use crate::ledger::Ledger;
-use crate::record::{self, Dep, RecordFile};
+use crate::record::{self, AnswerSet, Dep, RecordFile};
 use crate::state;
 use crate::terms;
 use std::collections::HashMap;
@@ -93,6 +93,33 @@ pub(super) fn check_plan(root: &Path, records: &[RecordFile], led: &Ledger) -> (
                             });
                         }
                     }
+                    Dep::Heading { text, set: Some(AnswerSet::Letters(letters)) } => {
+                        // 8.7 A, checked here unconditionally (ask.rs only
+                        // checks this once the target's tier opens): once
+                        // the target already has options, every letter in
+                        // the set must be one of them.
+                        let target_text = text.trim();
+                        if let Some(target) =
+                            rf.sections.iter().find(|s| s.heading_text.trim() == target_text)
+                        {
+                            if !target.options.is_empty() {
+                                for l in letters {
+                                    if !target.options.iter().any(|o| o.letter == *l) {
+                                        out.push(Failure {
+                                            check: "plan".to_string(),
+                                            id: sec.id.clone(),
+                                            message: record::bad_option_letter_text(
+                                                &rel,
+                                                &sec.heading_text,
+                                                &target.heading_text,
+                                                *l,
+                                            ),
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
                     Dep::Heading { .. } => {}
                 }
             }
@@ -118,11 +145,31 @@ pub(super) fn check_plan(root: &Path, records: &[RecordFile], led: &Ledger) -> (
             }
         }
 
+        // Same heading twice in one file (8.3-adjacent): the cross-file
+        // dedup below only reports a heading once per distinct path, so two
+        // identical `### ` headings inside this one file would otherwise
+        // never surface (and `derive_tiers`' heading index binds a depends
+        // line to the first of the two only, silently).
+        let mut local_counts: HashMap<&str, usize> = HashMap::new();
         for sec in &rf.sections {
+            *local_counts.entry(sec.heading_text.as_str()).or_insert(0) += 1;
             heading_files
                 .entry(sec.heading_text.clone())
                 .or_default()
                 .push(rel.clone());
+        }
+        let mut dup_headings: Vec<&str> = local_counts
+            .into_iter()
+            .filter(|(_, count)| *count > 1)
+            .map(|(h, _)| h)
+            .collect();
+        dup_headings.sort();
+        for heading in dup_headings {
+            out.push(Failure {
+                check: "plan".to_string(),
+                id: None,
+                message: format!("duplicate heading \"{}\" twice in {}", heading, rel),
+            });
         }
     }
 

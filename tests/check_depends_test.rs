@@ -252,6 +252,49 @@ fn check_fails_a_self_dep() {
 }
 
 #[test]
+fn check_fails_a_depends_set_naming_an_option_the_target_does_not_have() {
+    // 8.7 A: `ask` already refuses this once the target's tier opens
+    // (ask_tiers_test.rs's `ask_refuses_a_set_naming_an_option_the_target_does_not_have`),
+    // but `check`'s `plan` check must catch it unconditionally, the moment
+    // the target already has options, without waiting for that tier.
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let content = "# Topic\n\n\
+### A?\ndepends: widget\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+### B?\ndepends: A?=C\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    write_record(&dir, "adrdom/decisions/badset.md", content);
+    approve_via_ledger(&dir, "adrdom/decisions/badset.md", content);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(
+        text.contains(
+            "plan: adrdom/decisions/badset.md: \"B?\" depends on \"A?\" names option C which \"A?\" does not have"
+        ),
+        "{}",
+        text
+    );
+}
+
+#[test]
+fn check_passes_a_depends_set_whose_letters_are_all_options_the_target_has() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let content = "# Topic\n\n\
+### A?\ndepends: widget\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+### B?\ndepends: A?=A\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    write_record(&dir, "adrdom/decisions/goodset.md", content);
+    approve_via_ledger(&dir, "adrdom/decisions/goodset.md", content);
+
+    let out = adr(&dir, &["check"], &[], "");
+    let text = stdout(&out);
+    assert!(!text.contains("does not have"), "{}", text);
+}
+
+#[test]
 fn check_fails_a_tier_over_the_cap() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());

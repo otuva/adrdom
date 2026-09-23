@@ -440,6 +440,32 @@ fn check_fails_a_question_heading_duplicated_across_two_files() {
 }
 
 #[test]
+fn check_fails_a_question_heading_duplicated_within_one_file() {
+    // Regression: the cross-file dedup above only compares paths, so two
+    // identical `### ` headings inside the SAME file collapsed to one path
+    // and never surfaced -- and `derive_tiers`' heading index binds a
+    // depends line to the first of the two only (`.or_insert`), silently.
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    write_record(
+        &dir,
+        "adrdom/decisions/dup.md",
+        "# File\n\n### 9.9 Same heading?\n\n### 9.9 Same heading?\n",
+    );
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(
+        text.contains(
+            "plan: duplicate heading \"9.9 Same heading?\" twice in adrdom/decisions/dup.md"
+        ),
+        "{}",
+        text
+    );
+}
+
+#[test]
 fn check_passes_when_a_superseded_id_is_missing_from_every_record() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());

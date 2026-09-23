@@ -598,7 +598,11 @@ fn scan_body(lines: &[String], start: usize, end: usize) -> BodyScan {
 fn is_skeleton_range(lines: &[String], start: usize, end: usize) -> bool {
     ((start + 1)..end).all(|j| {
         let t = lines[j].trim();
-        t.is_empty() || t.starts_with("depends:")
+        // Same prefix `kv` requires (line 299): "depends:" with no space
+        // after the colon is a typo, not a depends line, so it must not be
+        // silently swallowed as skeleton -- it falls through and
+        // `scan_body` reports it as a stray line instead.
+        t.is_empty() || t.starts_with("depends: ")
     })
 }
 
@@ -987,6 +991,21 @@ pub fn derive_error_text(rel: &str, e: &DeriveError, tail: Option<&str>) -> Stri
     }
 }
 
+/// The shared core of the "answer set names an option the target doesn't
+/// have" message (8.7 A): a heading `depends:` entry's `=A|B` set must only
+/// name letters the target question actually has. `ask` reports this once
+/// the target's tier opens (`commands/ask.rs`); `check`'s `plan` check
+/// reports it unconditionally, whenever the target already has options, so
+/// the mismatch is caught before that tier ever opens. Callers add their
+/// own prefix (`ask: ` or `plan: `, the latter added by `check`'s failure
+/// formatting rather than here), the same split `derive_error_text` uses.
+pub fn bad_option_letter_text(rel: &str, dependent: &str, target: &str, letter: char) -> String {
+    format!(
+        "{}: \"{}\" depends on \"{}\" names option {} which \"{}\" does not have",
+        rel, dependent, target, letter, target
+    )
+}
+
 pub fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }
@@ -1071,6 +1090,24 @@ mod tests {
         assert!(sk.id.is_none());
         assert_eq!(sk.depends.len(), 2);
         assert!(sk.shape_errors.is_empty(), "{:?}", sk.shape_errors);
+    }
+
+    #[test]
+    fn depends_typo_missing_the_space_is_not_a_skeleton_line() {
+        // `kv` only recognizes "depends: " (with the space, line 299); a
+        // heading whose only body line is the typo "depends:widget" (no
+        // space) must not be silently accepted as a skeleton -- it falls
+        // through `scan_body` and is reported as a stray line instead, so
+        // the owner sees the typo rather than the line vanishing.
+        let content = "# Topic\n\n### 1.1 Q?\ndepends:widget\n";
+        let rf = rf_from(content);
+        let sec = &rf.sections[0];
+        assert!(!sec.is_skeleton, "{:?}", sec);
+        assert!(
+            sec.shape_errors.iter().any(|e| e == "stray line 4"),
+            "{:?}",
+            sec.shape_errors
+        );
     }
 
     #[test]

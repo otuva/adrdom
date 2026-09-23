@@ -1,38 +1,24 @@
-use crate::record::{AnswerSet, Dep, RecordFile};
+use crate::ledger::Ledger;
+use crate::record::RecordFile;
+use crate::view;
 
 /// `moot` (8.7 A): a note, never a failure -- one line for every section
 /// whose heading `depends:` entry carries an answer set that excludes the
 /// letter the target question was actually answered with. The plan still
 /// asks the agent to look, but it is not wrong on its own: the owner may
 /// simply not have re-planned yet.
-pub(super) fn check_moot(records: &[RecordFile]) -> Vec<String> {
+///
+/// Shares `view::moot_notes` with the owner's page (rather than
+/// recomputing the same note from the file's `**Answer:**` letter alone)
+/// so the two cannot diverge on what counts as answered: both gate on the
+/// ledger's `qstate`, not the raw text in the file, since a body can be
+/// edited to show a letter that was never actually asked/answered through
+/// the ledger.
+pub(super) fn check_moot(records: &[RecordFile], led: &Ledger) -> Vec<String> {
     let mut out = Vec::new();
     for rf in records {
-        for sec in &rf.sections {
-            for d in &sec.depends {
-                let Dep::Heading {
-                    text,
-                    set: Some(AnswerSet::Letters(letters)),
-                } = d
-                else {
-                    continue;
-                };
-                let target_text = text.trim();
-                let Some(target) = rf.sections.iter().find(|s| s.heading_text.trim() == target_text) else {
-                    continue;
-                };
-                let Some(answered) = target.answer_letter() else {
-                    continue;
-                };
-                if letters.contains(&answered) {
-                    continue;
-                }
-                let set_str = letters.iter().map(|c| c.to_string()).collect::<Vec<_>>().join("|");
-                out.push(format!(
-                    "moot: {}: \"{}\" stands on \"{}\"={}, answered {}",
-                    rf.rel, sec.heading_text, target_text, set_str, answered
-                ));
-            }
+        for note in view::moot_notes(rf, led) {
+            out.push(format!("moot: {}: {}", rf.rel, note));
         }
     }
     out

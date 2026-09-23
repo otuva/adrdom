@@ -79,7 +79,7 @@ fn build(
     let (test_failures, tested_count) = tests::check_tests(root, &records, &led, tests);
     push_failures(&mut failures, test_failures);
 
-    notes.extend(moot::check_moot(&records));
+    notes.extend(moot::check_moot(&records, &led));
 
     for rf in &records {
         if let Some(tiers) = &rf.tiers {

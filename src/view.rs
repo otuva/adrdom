@@ -199,7 +199,7 @@ pub fn format_dep(d: &record::Dep) -> String {
 /// no ledger access): `"<h>" stands on "<other>"=A|B, answered C`, `<h>`
 /// the dependent's heading and `<other>` the target's. A target that is
 /// unanswered, or a set of `=*`, never produces a note.
-fn moot_notes(rf: &RecordFile, led: &Ledger) -> Vec<String> {
+pub(crate) fn moot_notes(rf: &RecordFile, led: &Ledger) -> Vec<String> {
     let mut out = Vec::new();
     for sec in &rf.sections {
         for d in &sec.depends {

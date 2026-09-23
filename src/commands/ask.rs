@@ -247,8 +247,13 @@ pub fn run(record_path: PathBuf) -> i32 {
                             for l in letters {
                                 if !target.options.iter().any(|o| o.letter == *l) {
                                     eprintln!(
-                                        "ask: {}: \"{}\" depends on \"{}\" names option {} which \"{}\" does not have",
-                                        rel, dependent.heading_text, target.heading_text, l, target.heading_text
+                                        "ask: {}",
+                                        record::bad_option_letter_text(
+                                            &rel,
+                                            &dependent.heading_text,
+                                            &target.heading_text,
+                                            *l
+                                        )
                                     );
                                     return 1;
                                 }
