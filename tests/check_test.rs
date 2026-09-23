@@ -316,6 +316,20 @@ fn check_install_passes_right_after_install_with_a_claude_md_present() {
 }
 
 #[test]
+fn check_install_passes_right_after_install_claude_created_claude_md() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    assert!(dir.join("CLAUDE.md").is_file());
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(
+        !stdout(&out).contains("install:"),
+        "check should pass right after install --claude: {}",
+        stdout(&out)
+    );
+}
+
+#[test]
 fn check_tests_ignores_adr_prefix_that_is_not_a_uuid() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());

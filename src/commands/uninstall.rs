@@ -100,7 +100,8 @@ fn remove_agents_md_section(root: &Path) -> Result<Option<String>, String> {
 
 /// Removes the marker comment line and the `@AGENTS.md` line right after
 /// it from CLAUDE.md, plus the one blank line install put before it if
-/// present. This byte-reverts the file when it already ended with a
+/// present, and deletes the file when nothing else is in it (the case
+/// where `adr install --claude` created it). This byte-reverts the file when it already ended with a
 /// single trailing newline (the common case); a file install found with
 /// no trailing newline, or with more than one blank line at the end,
 /// canonicalizes to a single trailing newline instead of restoring
@@ -131,6 +132,13 @@ fn remove_claude_md_import(root: &Path) -> Result<Option<String>, String> {
     new_parts.extend_from_slice(&parts[..remove_from]);
     new_parts.extend_from_slice(&parts[marker_idx + 2..]);
     let new_content = new_parts.join("\n");
+
+    if new_content.trim().is_empty() {
+        fs::remove_file(&path).map_err(|e| e.to_string())?;
+        return Ok(Some(
+            "uninstall: CLAUDE.md: deleted (held only the AGENTS.md import)".to_string(),
+        ));
+    }
 
     fs::write(&path, &new_content).map_err(|e| e.to_string())?;
     Ok(Some(

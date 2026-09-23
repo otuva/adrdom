@@ -35,9 +35,10 @@ fn install_creates_layout_and_is_idempotent() {
     assert!(dir.join(".githooks/commit-msg").is_file());
     assert!(dir.join(".claude/settings.json").is_file());
     assert!(dir.join("AGENTS.md").is_file());
-    assert!(
-        !dir.join("CLAUDE.md").exists(),
-        "install must never create CLAUDE.md"
+    assert_eq!(
+        std::fs::read_to_string(dir.join("CLAUDE.md")).unwrap(),
+        "<!-- adrdom: the next line imports the agent brief; adr uninstall removes both lines -->\n@AGENTS.md\n",
+        "install --claude must create CLAUDE.md holding only the import"
     );
 
     let hooks_cfg = run_git(&dir, &["config", "core.hooksPath"]);
@@ -234,7 +235,7 @@ fn install_appends_import_to_an_existing_claude_md_and_is_idempotent() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     assert!(
         !dir.join("CLAUDE.md").exists(),
-        "install must never create CLAUDE.md"
+        "install without --claude must not create CLAUDE.md"
     );
 
     std::fs::write(dir.join("CLAUDE.md"), "# Notes\n\nSome text.\n").unwrap();
@@ -263,6 +264,33 @@ fn install_does_nothing_when_claude_md_already_imports_agents_md() {
 
     let content = std::fs::read_to_string(dir.join("CLAUDE.md")).unwrap();
     assert_eq!(content, "# Notes\n\n@AGENTS.md\n");
+}
+
+#[test]
+fn install_claude_creates_claude_md_and_uninstall_deletes_it() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    let created = std::fs::read(dir.join("CLAUDE.md")).unwrap();
+
+    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    assert_eq!(
+        std::fs::read(dir.join("CLAUDE.md")).unwrap(),
+        created,
+        "second install --claude must leave CLAUDE.md unchanged"
+    );
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    assert_eq!(
+        std::fs::read(dir.join("CLAUDE.md")).unwrap(),
+        created,
+        "plain install must leave the created CLAUDE.md unchanged"
+    );
+
+    let out = adr_owner(&dir, &["uninstall"], "");
+    assert!(out.status.success(), "uninstall failed: {}", stderr(&out));
+    assert!(
+        !dir.join("CLAUDE.md").exists(),
+        "CLAUDE.md should be deleted once it holds only the import"
+    );
 }
 
 // --- uninstall -------------------------------------------------------------

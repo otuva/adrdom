@@ -29,7 +29,7 @@ struct Cli {
 enum Command {
     /// Set up adrdom/ and AGENTS.md in the current repository.
     Install {
-        /// Also merge the deny entries into .claude/settings.json.
+        /// Also create CLAUDE.md with the AGENTS.md import when it is missing, and merge the deny entries into .claude/settings.json.
         #[arg(long)]
         claude: bool,
     },

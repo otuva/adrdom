@@ -21,12 +21,13 @@ runtime dependencies beyond `git` on `PATH`.
   in the current repository, and write the agent brief into AGENTS.md (the
   file agents read) between marker lines, refreshing it in place on a later
   run. When CLAUDE.md already exists, adds a line importing AGENTS.md into
-  it. Idempotent. `adr install --claude` additionally merges a set of deny
+  it. Idempotent. `adr install --claude` additionally creates CLAUDE.md
+  holding that import when the file is missing, and merges a set of deny
   entries into `.claude/settings.json`'s `permissions.deny`. Not owner-only.
 - `adr uninstall` — owner-only. Removes everything `adr install` wrote
   outside `adrdom/`: the marked brief section from AGENTS.md (deleting the
   file if nothing else is in it), the AGENTS.md import it added to
-  CLAUDE.md, the git hooks and `core.hooksPath` (only if unchanged since
+  CLAUDE.md (deleting that file too if nothing else is in it), the git hooks and `core.hooksPath` (only if unchanged since
   install), and the deny entries from `.claude/settings.json`. Leaves
   `adrdom/` untouched. Idempotent.
 - `adr ask <topic_file>` — assign ids to new questions, write their `terms:`

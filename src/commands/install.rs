@@ -58,7 +58,7 @@ pub fn run(claude: bool) -> i32 {
         }
     }
 
-    match install_claude_md(&root) {
+    match install_claude_md(&root, claude) {
         Ok(Some(m)) => messages.push(m),
         Ok(None) => {}
         Err(e) => {
@@ -184,16 +184,22 @@ fn install_agents_md(root: &Path) -> Result<String, String> {
     }
 }
 
-/// Adds the `@AGENTS.md` import to CLAUDE.md at the repo root, only when
-/// that file already exists and doesn't already have a line equal to
-/// `@AGENTS.md`. Never creates the file.
-fn install_claude_md(root: &Path) -> Result<Option<String>, String> {
+/// Adds the `@AGENTS.md` import to CLAUDE.md at the repo root when that
+/// file exists and doesn't already have a line equal to `@AGENTS.md`.
+/// With `--claude` a missing CLAUDE.md is created holding only the marker
+/// and the import; without the flag a missing file is left missing.
+fn install_claude_md(root: &Path, create: bool) -> Result<Option<String>, String> {
     let path = root.join("CLAUDE.md");
-    if !path.exists() {
+    let created = !path.exists();
+    if created && !create {
         return Ok(None);
     }
 
-    let existing = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let existing = if created {
+        String::new()
+    } else {
+        fs::read_to_string(&path).map_err(|e| e.to_string())?
+    };
     if existing.lines().any(|l| l == CLAUDE_MD_IMPORT) {
         return Ok(None);
     }
@@ -213,9 +219,11 @@ fn install_claude_md(root: &Path) -> Result<Option<String>, String> {
     new_content.push('\n');
 
     fs::write(&path, &new_content).map_err(|e| e.to_string())?;
-    Ok(Some(
-        "install: CLAUDE.md: added the AGENTS.md import".to_string(),
-    ))
+    Ok(Some(if created {
+        "install: CLAUDE.md: created with the AGENTS.md import".to_string()
+    } else {
+        "install: CLAUDE.md: added the AGENTS.md import".to_string()
+    }))
 }
 
 /// Merges `DENY_ENTRIES` into `.claude/settings.json`'s
