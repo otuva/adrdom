@@ -11,6 +11,40 @@ pub struct Outcome {
     pub summary: String,
 }
 
+/// The terms.md gates shared by `do_answer` and `do_refuse` (5): missing,
+/// present but unreadable/shape-invalid, or not approved, each refusing with
+/// the same message either caller would print. `rel` is the topic file's
+/// path, named in the not-approved message exactly as both callers already
+/// print it. On success, the loaded, approved terms file is returned (only
+/// `do_answer` has further use for it).
+fn require_terms(root: &Path, led: &Ledger, rel: &str) -> Result<terms::TermsFile, String> {
+    match state::load_terms_checked(root) {
+        TermsLoad::Missing => Err(
+            "adrdom/terms.md missing; agent writes it, owner runs: adr approve adrdom/terms.md"
+                .to_string(),
+        ),
+        TermsLoad::LoadError(e) => Err(format!("adrdom/terms.md: {}", e)),
+        TermsLoad::Ok(tf) => {
+            if !tf.errors.is_empty() {
+                let msg = tf
+                    .errors
+                    .iter()
+                    .map(|e| format!("adrdom/terms.md: {}", e))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                return Err(msg);
+            }
+            if !state::terms_approved(led, &tf) {
+                return Err(format!(
+                    "{}: terms not approved; owner runs: adr approve adrdom/terms.md",
+                    rel
+                ));
+            }
+            Ok(tf)
+        }
+    }
+}
+
 pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String> {
     let ledger_path = root.join("adrdom/state/ledger.tsv");
     let led = ledger::read(&ledger_path);
@@ -34,35 +68,7 @@ pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String>
     // approved: the same messages `ask` uses, prefixed `answer:` by the
     // caller in `commands::answer::run`. The loaded, approved terms file is
     // kept for the terms-line validity check below.
-    let tf = match state::load_terms_checked(root) {
-        TermsLoad::Missing => {
-            return Err(
-                "adrdom/terms.md missing; agent writes it, owner runs: adr approve adrdom/terms.md"
-                    .to_string(),
-            );
-        }
-        TermsLoad::LoadError(e) => {
-            return Err(format!("adrdom/terms.md: {}", e));
-        }
-        TermsLoad::Ok(tf) => {
-            if !tf.errors.is_empty() {
-                let msg = tf
-                    .errors
-                    .iter()
-                    .map(|e| format!("adrdom/terms.md: {}", e))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                return Err(msg);
-            }
-            if !state::terms_approved(&led, &tf) {
-                return Err(format!(
-                    "{}: terms not approved; owner runs: adr approve adrdom/terms.md",
-                    rel
-                ));
-            }
-            tf
-        }
-    };
+    let tf = require_terms(root, &led, &rel)?;
 
     let cur_hash;
     let supersedes_val;
@@ -204,39 +210,15 @@ pub fn do_refuse(root: &Path, id: &str) -> Result<Outcome, String> {
 
     // Same terms.md gates as the letter path (missing/shape/not approved);
     // the section's own terms-line/pairing checks are not shared (5).
-    match state::load_terms_checked(root) {
-        TermsLoad::Missing => {
-            return Err(
-                "adrdom/terms.md missing; agent writes it, owner runs: adr approve adrdom/terms.md"
-                    .to_string(),
-            );
-        }
-        TermsLoad::LoadError(e) => {
-            return Err(format!("adrdom/terms.md: {}", e));
-        }
-        TermsLoad::Ok(tf) => {
-            if !tf.errors.is_empty() {
-                let msg = tf
-                    .errors
-                    .iter()
-                    .map(|e| format!("adrdom/terms.md: {}", e))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                return Err(msg);
-            }
-            if !state::terms_approved(&led, &tf) {
-                return Err(format!(
-                    "{}: terms not approved; owner runs: adr approve adrdom/terms.md",
-                    rel
-                ));
-            }
-        }
-    }
+    require_terms(root, &led, &rel)?;
 
     let cur_hash;
     let supersedes_val;
     {
         let sec = &rf.sections[idx];
+        if sec.is_refused() {
+            return Err(format!("\"{}\" is already refused", sec.heading_text));
+        }
         if sec.answer_line.is_some() {
             return Err(format!("\"{}\" is already answered", sec.heading_text));
         }
@@ -648,31 +630,10 @@ fn do_approve_record(
         }
     }
     if let Some(err) = &rf.derive_error {
-        resolve_msgs.push(match err {
-            record::DeriveError::Dangling { section, entry } => format!(
-                "approve: {}: \"{}\" depends on \"{}\" which is no heading in this file; agent adds the heading or fixes the text",
-                rel, section, entry
-            ),
-            record::DeriveError::Cycle(names) => {
-                let mut chain: Vec<String> = names.clone();
-                if let Some(first) = names.first() {
-                    chain.push(first.clone());
-                }
-                format!(
-                    "approve: {}: cycle: {}; agent breaks it",
-                    rel,
-                    chain
-                        .iter()
-                        .map(|n| format!("\"{}\"", n))
-                        .collect::<Vec<_>>()
-                        .join(" -> ")
-                )
-            }
-            record::DeriveError::SelfDep(h) => format!(
-                "approve: {}: \"{}\" depends on itself; agent removes the line or names something else",
-                rel, h
-            ),
-        });
+        resolve_msgs.push(format!(
+            "approve: {}",
+            record::derive_error_text(rel, err, None)
+        ));
     }
     if !resolve_msgs.is_empty() {
         return Err(resolve_msgs.join("\n"));

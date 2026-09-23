@@ -603,7 +603,11 @@ fn is_skeleton_range(lines: &[String], start: usize, end: usize) -> bool {
 }
 
 fn parse_question(lines: &[String], start: usize, end: usize) -> Section {
-    let heading_text = lines[start]["### ".len()..].trim_end().to_string();
+    // Fully trimmed (not just `trim_end`): every consumer that compares or
+    // hashes `heading_text` (a depends line's target text, an `assumes`
+    // row's detail, `check`'s frozen-set comparison) must agree on the same
+    // string regardless of extra whitespace right after `### `.
+    let heading_text = lines[start]["### ".len()..].trim().to_string();
     let is_skeleton = is_skeleton_range(lines, start, end);
     let scan = scan_body(lines, start, end);
 
@@ -776,6 +780,29 @@ pub fn hash_range(lines: &[String], sec: &Section) -> (usize, usize) {
     (sec.start, last + 1)
 }
 
+/// The set on a `depends:` entry, canonicalized for hashing and printing:
+/// `*` for `Any`, or its letters sorted and joined with `|` for `Letters`
+/// (so `=B|A` and `=A|B` hash and print the same). The one place both
+/// `ask` (writing an `assumes` row) and `check` (recomputing it to compare)
+/// turn a set into text.
+pub fn canonical_set(set: &AnswerSet) -> String {
+    match set {
+        AnswerSet::Any => "*".to_string(),
+        AnswerSet::Letters(letters) => {
+            let mut sorted = letters.clone();
+            sorted.sort_unstable();
+            sorted.into_iter().map(|c| c.to_string()).collect::<Vec<_>>().join("|")
+        }
+    }
+}
+
+/// sha256 of `<dependent heading>=<canonical set>` (spec §2): an `assumes`
+/// row's hash, and what `check`'s frozen-set comparison recomputes against
+/// the depends line as currently written.
+pub fn assumes_hash(dependent_heading: &str, set: &AnswerSet) -> String {
+    sha256_hex(&format!("{}={}", dependent_heading, canonical_set(set)))
+}
+
 pub fn section_hash(lines: &[String], sec: &Section) -> String {
     let (s, e) = hash_range(lines, sec);
     let text = lines[s..e]
@@ -917,6 +944,47 @@ pub fn tier_sizes(tiers: &[usize]) -> Vec<(usize, usize)> {
 /// if any (8.8 A).
 pub fn over_cap(tiers: &[usize]) -> Option<(usize, usize)> {
     tier_sizes(tiers).into_iter().find(|&(_, count)| count > TIER_CAP)
+}
+
+/// The shared core of a `derive_tiers` failure message: `<rel>: ...; <tail>`.
+/// `approve` and `plan` report the same wording (a per-variant "agent ..."
+/// clause) and pass `tail: None` to get it; `ask` ends every variant with
+/// its own single instruction instead (fix the file, then re-approve), and
+/// passes that text as `Some(tail)` to use in the agent clause's place.
+/// Callers add only their own prefix (`approve: `, `ask: `, or `plan: `,
+/// the last added by `check`'s failure formatting rather than here).
+pub fn derive_error_text(rel: &str, e: &DeriveError, tail: Option<&str>) -> String {
+    match e {
+        DeriveError::Dangling { section, entry } => format!(
+            "{}: \"{}\" depends on \"{}\" which is no heading in this file; {}",
+            rel,
+            section,
+            entry,
+            tail.unwrap_or("agent adds the heading or fixes the text")
+        ),
+        DeriveError::Cycle(names) => {
+            let mut chain: Vec<String> = names.clone();
+            if let Some(first) = names.first() {
+                chain.push(first.clone());
+            }
+            format!(
+                "{}: cycle: {}; {}",
+                rel,
+                chain
+                    .iter()
+                    .map(|n| format!("\"{}\"", n))
+                    .collect::<Vec<_>>()
+                    .join(" -> "),
+                tail.unwrap_or("agent breaks it")
+            )
+        }
+        DeriveError::SelfDep(h) => format!(
+            "{}: \"{}\" depends on itself; {}",
+            rel,
+            h,
+            tail.unwrap_or("agent removes the line or names something else")
+        ),
+    }
 }
 
 pub fn hex(bytes: &[u8]) -> String {

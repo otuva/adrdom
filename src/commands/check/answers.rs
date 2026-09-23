@@ -1,6 +1,6 @@
 use super::Failure;
 use crate::ledger::Ledger;
-use crate::record::{self, AnswerSet, RecordFile};
+use crate::record::{self, RecordFile};
 
 pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure> {
     let mut out = Vec::new();
@@ -135,7 +135,14 @@ fn check_frozen_sets(
             // Disappeared dependent heading: fine, the plan changed.
             continue;
         };
-        let expected = assumes_hash(dep_heading, *set);
+        // No set at all (the depends line lost its `=...` suffix since
+        // asking) hashes the same empty-set text `set_text`/`canonical_set`
+        // used to: never a match against a recorded `assumes` hash, which
+        // is always written for a determined set.
+        let expected = match set {
+            Some(s) => record::assumes_hash(dep_heading, s),
+            None => record::sha256_hex(&format!("{}=", dep_heading)),
+        };
         if expected != row.hash {
             out.push(Failure {
                 check: "answers".to_string(),
@@ -148,22 +155,4 @@ fn check_frozen_sets(
         }
     }
     out
-}
-
-/// Mirrors the `assumes` row's hash (spec §2): sha256 of `<dependent
-/// heading>=<set as written, letters sorted, or *>`.
-fn assumes_hash(dependent_heading: &str, set: Option<&AnswerSet>) -> String {
-    record::sha256_hex(&format!("{}={}", dependent_heading, set_text(set)))
-}
-
-fn set_text(set: Option<&AnswerSet>) -> String {
-    match set {
-        None => String::new(),
-        Some(AnswerSet::Any) => "*".to_string(),
-        Some(AnswerSet::Letters(letters)) => {
-            let mut sorted = letters.clone();
-            sorted.sort();
-            sorted.into_iter().map(|c| c.to_string()).collect::<Vec<_>>().join("|")
-        }
-    }
 }

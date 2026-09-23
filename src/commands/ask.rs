@@ -108,8 +108,8 @@ pub fn run(record_path: PathBuf) -> i32 {
         return 1;
     }
 
-    // Refuse (and change nothing) if any answered section was edited since
-    // it was answered.
+    // Refuse (and change nothing) if any answered or refused section was
+    // edited since it was answered/refused.
     for sec in &rf.sections {
         if let Some(id) = &sec.id {
             if let Some(row) = led.latest_state(id) {
@@ -118,6 +118,16 @@ pub fn run(record_path: PathBuf) -> i32 {
                     if cur != row.hash {
                         eprintln!(
                             "ask: {}: \"{}\" was edited after being answered; refusing",
+                            record_path.display(),
+                            sec.heading_text
+                        );
+                        return 1;
+                    }
+                } else if row.event == "refused" && sec.is_refused() {
+                    let cur = record::section_hash(&rf.lines, sec);
+                    if cur != row.hash {
+                        eprintln!(
+                            "ask: {}: \"{}\" was edited after being refused; refusing",
                             record_path.display(),
                             sec.heading_text
                         );
@@ -175,7 +185,8 @@ pub fn run(record_path: PathBuf) -> i32 {
     // either command can move: point the owner at the topic file first, the
     // re-approval second.
     if let Some(err) = &rf.derive_error {
-        eprintln!("{}", derive_error_message(&rel, err));
+        let tail = format!("agent fixes the topic file, owner runs: adr approve {}", rel);
+        eprintln!("ask: {}", record::derive_error_text(&rel, err, Some(&tail)));
         return 1;
     }
 
@@ -328,10 +339,9 @@ pub fn run(record_path: PathBuf) -> i32 {
                 {
                     if let Some(c) = target.answer_letter() {
                         if !letters.contains(&c) {
-                            let set_str = canonical_set(Some(&record::AnswerSet::Letters(
+                            let set_str = record::canonical_set(&record::AnswerSet::Letters(
                                 letters.clone(),
-                            )))
-                            .unwrap_or_default();
+                            ));
                             eprintln!(
                                 "ask: {}: \"{}\" is moot: stands on \"{}\"={}, answered {}; agent drops or replaces the heading, owner runs: adr approve {}",
                                 rel, sec.heading_text, target.heading_text, set_str, c, rel
@@ -488,7 +498,7 @@ pub fn run(record_path: PathBuf) -> i32 {
         // dependent currently declares on this question, frozen at ask
         // time so `check`'s `answers.rs` can later catch it moving.
         for (di, set) in rf.dependents_of(i) {
-            let Some(set_str) = canonical_set(set) else {
+            let Some(set) = set else {
                 // Guaranteed not to happen: the sets-mandatory gate above
                 // already refused before any row was written if a
                 // dependent in this tier carried no set. Skip rather than
@@ -496,11 +506,12 @@ pub fn run(record_path: PathBuf) -> i32 {
                 continue;
             };
             let dependent = &rf.sections[di];
+            let set_str = record::canonical_set(set);
             new_rows.push(ledger::Row {
                 time: ledger::now_rfc3339(),
                 event: "assumes".to_string(),
                 id: id.clone(),
-                hash: record::sha256_hex(&format!("{}={}", dependent.heading_text, set_str)),
+                hash: record::assumes_hash(&dependent.heading_text, set),
                 detail: dependent.heading_text.clone(),
                 version: crate::version::VERSION.to_string(),
             });
@@ -529,53 +540,6 @@ pub fn run(record_path: PathBuf) -> i32 {
         println!("{}", s);
     }
     0
-}
-
-/// The set on a `depends:` entry, canonicalized for both the `assumes` row
-/// hash and its printed/moot-message form: `*` for `Any`, or its letters
-/// sorted and joined with `|` for `Letters` (so `=B|A` and `=A|B` hash and
-/// print the same). `None` when there is no set at all.
-fn canonical_set(set: Option<&record::AnswerSet>) -> Option<String> {
-    match set {
-        None => None,
-        Some(record::AnswerSet::Any) => Some("*".to_string()),
-        Some(record::AnswerSet::Letters(letters)) => {
-            let mut sorted = letters.clone();
-            sorted.sort_unstable();
-            Some(
-                sorted
-                    .into_iter()
-                    .map(|c| c.to_string())
-                    .collect::<Vec<_>>()
-                    .join("|"),
-            )
-        }
-    }
-}
-
-/// The message for a `derive_tiers` failure (record.rs's §1), reworded for
-/// `ask`: the same shape approve reports (prefix `ask:` instead of
-/// `approve:`), but ending in a fix-then-approve instruction rather than
-/// approve's own repair suggestion, since a derive error means the plan
-/// can't be approved either until the topic file is fixed.
-fn derive_error_message(rel: &str, err: &record::DeriveError) -> String {
-    let tail = format!("agent fixes the topic file, owner runs: adr approve {}", rel);
-    match err {
-        record::DeriveError::Dangling { section, entry } => format!(
-            "ask: {}: \"{}\" depends on \"{}\" which is no heading in this file; {}",
-            rel, section, entry, tail
-        ),
-        record::DeriveError::Cycle(names) => {
-            let mut chain: Vec<String> = names.iter().map(|n| format!("\"{}\"", n)).collect();
-            if let Some(first) = names.first() {
-                chain.push(format!("\"{}\"", first));
-            }
-            format!("ask: {}: cycle: {}; {}", rel, chain.join(" -> "), tail)
-        }
-        record::DeriveError::SelfDep(h) => {
-            format!("ask: {}: \"{}\" depends on itself; {}", rel, h, tail)
-        }
-    }
 }
 
 /// The line index of the first line in `[start+1, end)` that starts with

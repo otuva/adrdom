@@ -543,8 +543,9 @@ fn build_file_view(
     let path = state::rel_path(root, &rf.path);
     let plan_approved = state::plan_approved(led, rf, &path);
     let context_approved = state::context_approved(led, rf, &path);
-    let done =
-        plan_approved && context_approved && rf.sections.iter().all(|s| s.answer_line.is_some());
+    let done = plan_approved
+        && context_approved
+        && rf.sections.iter().all(|s| s.answer_letter().is_some());
     let (open_tier, waits_on) = open_tier_and_waits_on(rf, led);
     let moot = moot_notes(rf, led);
     let questions = rf
@@ -1053,6 +1054,64 @@ Standard: s2.\n\n\
         assert!(fv2.plan_approved);
         assert!(fv2.context_approved);
         assert!(fv2.done);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    const TWO_GROUP_ONE_REFUSED: &str = "# Topic\n\n\
+Context prose.\n\n\
+### 1.1 First question?\n\n\
+id: id-1\n\n\
+Problem: p1.\n\n\
+Standard: s1.\n\n\
+- A) Answer one.\n  Why: reason one.\n  Costs: cost one.\n\
+- B) Answer two.\n  Why: reason two.\n\n\
+**Answer:** A\n\n\
+### 2.1 Second question?\n\
+depends: 1.1 First question?\n\n\
+id: id-2\n\n\
+Problem: p2.\n\n\
+Standard: s2.\n\n\
+- A) Second answer.\n  Why: reasons.\n\n\
+**Answer:** refused\n";
+
+    #[test]
+    fn done_is_false_when_a_question_is_refused_not_answered() {
+        let dir = temp_repo();
+        let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP);
+        let rf = record::load(&record).unwrap();
+        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let test_idx = HashMap::new();
+
+        // Approve plan/context from the unanswered fixture (an answer or
+        // refusal line never moves either hash), then rewrite the file with
+        // one question answered and the other refused.
+        let plan_h = record::plan_hash(&rf);
+        let ctx_h = record::context_hash(&rf);
+        append_row(
+            &dir,
+            "approved",
+            "-",
+            &plan_h,
+            "adrdom/decisions/example.md",
+        );
+        append_row(&dir, "context", "-", &ctx_h, "adrdom/decisions/example.md");
+
+        std::fs::write(&record, TWO_GROUP_ONE_REFUSED).unwrap();
+        let rf2 = record::load(&record).unwrap();
+        let led2 = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        assert!(
+            rf2.sections.iter().all(|s| s.answer_line.is_some()),
+            "fixture should have every section carrying an Answer line (one letter, one refused)"
+        );
+
+        let fv = build_file_view(&dir, &rf2, &led2, &test_idx, &[]);
+        assert!(fv.plan_approved);
+        assert!(fv.context_approved);
+        assert!(
+            !fv.done,
+            "a refused question must not count as answered for done"
+        );
 
         std::fs::remove_dir_all(&dir).ok();
     }

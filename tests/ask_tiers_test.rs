@@ -426,3 +426,54 @@ fn ask_prints_the_tier_and_writes_an_assumes_row_per_dependent() {
     assert_eq!(fields[3], expected_hash, "row: {}", row);
     assert_eq!(fields[4], "1.2 Does the widget's paint match its color?");
 }
+
+// --- edited-after-refused (mirrors the pre-existing edited-after-answered
+// guard) -------------------------------------------------------------------
+
+#[test]
+fn ask_refuses_when_a_refused_section_was_edited_since_refusal() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let record = write_record(&dir, "adrdom/decisions/example.md", Q1);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", Q1);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let id = extract_ids(&content)[0].clone();
+    assert!(adr_owner(&dir, &["answer", &id, "refuse"], "").status.success());
+
+    // Edit the section's body after it was refused: the Problem line's text
+    // moves the section hash while `**Answer:** refused` stays untouched.
+    // Neither heading nor context prose changed, so plan/context approval
+    // (recorded from Q1 above) still holds.
+    let refused_content = std::fs::read_to_string(&record).unwrap();
+    let edited = refused_content.replace(
+        "Problem: the widget's color is undecided.",
+        "Problem: the widget's color is still undecided, reworded.",
+    );
+    assert_ne!(refused_content, edited, "the fixture should have that Problem line");
+    std::fs::write(&record, &edited).unwrap();
+
+    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
+    assert_eq!(
+        stderr(&out).trim_end(),
+        format!(
+            "ask: {}: \"1.1 What color is the widget?\" was edited after being refused; refusing",
+            record.display()
+        )
+    );
+
+    // Nothing changed: the file is exactly as edited, no new ledger rows.
+    let after = std::fs::read_to_string(&record).unwrap();
+    assert_eq!(after, edited);
+    let ledger_before = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert_eq!(
+        ledger_before.lines().filter(|l| l.contains("\trefused\t")).count(),
+        1,
+        "{}",
+        ledger_before
+    );
+}

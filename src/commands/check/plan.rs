@@ -1,6 +1,6 @@
 use super::{file_approval, Failure};
 use crate::ledger::Ledger;
-use crate::record::{self, Dep, DeriveError, RecordFile};
+use crate::record::{self, Dep, RecordFile};
 use crate::state;
 use crate::terms;
 use std::collections::HashMap;
@@ -101,7 +101,7 @@ pub(super) fn check_plan(root: &Path, records: &[RecordFile], led: &Ledger) -> (
             out.push(Failure {
                 check: "plan".to_string(),
                 id: None,
-                message: derive_error_message(&rel, err),
+                message: record::derive_error_text(&rel, err, None),
             });
         } else if let Some(tiers) = &rf.tiers {
             // Cap (8.8 A): no derived tier may hold more than `TIER_CAP`
@@ -147,31 +147,4 @@ pub(super) fn check_plan(root: &Path, records: &[RecordFile], led: &Ledger) -> (
     awaiting.sort();
     awaiting.dedup();
     (out, awaiting)
-}
-
-/// The rest of a derive-error failure message after `"<rel>: "` (spec §6:
-/// "dangling/cycle/no-term/not-current-decision as in approve"), matching
-/// `do_approve_record`'s wording so the agent sees the same fix either way.
-fn derive_error_message(rel: &str, err: &DeriveError) -> String {
-    match err {
-        DeriveError::Dangling { section, entry } => format!(
-            "{}: \"{}\" depends on \"{}\" which is no heading in this file; agent adds the heading or fixes the text",
-            rel, section, entry
-        ),
-        DeriveError::Cycle(names) => {
-            let mut chain: Vec<String> = names.clone();
-            if let Some(first) = names.first() {
-                chain.push(first.clone());
-            }
-            format!(
-                "{}: cycle: {}; agent breaks it",
-                rel,
-                chain.iter().map(|n| format!("\"{}\"", n)).collect::<Vec<_>>().join(" -> ")
-            )
-        }
-        DeriveError::SelfDep(h) => format!(
-            "{}: \"{}\" depends on itself; agent removes the line or names something else",
-            rel, h
-        ),
-    }
 }

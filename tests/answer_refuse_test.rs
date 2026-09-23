@@ -110,6 +110,40 @@ fn answer_letter_after_refused_refuses() {
 }
 
 #[test]
+fn answer_refuse_twice_gives_the_already_refused_message() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let record = write_record(&dir, "adrdom/decisions/example.md", Q1);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", Q1);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let id = extract_ids(&content)[0].clone();
+    assert!(adr_owner(&dir, &["answer", &id, "refuse"], "").status.success());
+
+    let out = adr_owner(&dir, &["answer", &id, "refuse"], "");
+    assert!(!out.status.success(), "second refuse should have refused: {}", stdout(&out));
+    assert_eq!(
+        stderr(&out).trim_end(),
+        "answer: \"1.1 What color is the widget?\" is already refused"
+    );
+
+    // Nothing changed: still exactly one Answer line, unmodified, and no
+    // second `refused` row.
+    let after = std::fs::read_to_string(&record).unwrap();
+    assert_eq!(after.matches("**Answer:**").count(), 1, "{}", after);
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert_eq!(
+        ledger.lines().filter(|l| l.contains("\trefused\t")).count(),
+        1,
+        "{}",
+        ledger
+    );
+}
+
+#[test]
 fn answer_refuse_ignores_supersedes_with_a_printed_note_and_writes_no_superseded_row() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
