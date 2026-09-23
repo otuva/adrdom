@@ -116,7 +116,7 @@ fn post(port: u16, path: &str, cookie: Option<&str>, form: &str) -> HttpResponse
 fn setup_repo_with_open_question() -> std::path::PathBuf {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "decision");
+    approve_terms_with(&dir, &["decision", "example"]);
     let record = write_record(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
     let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
@@ -291,8 +291,6 @@ const WORDS_RECORD: &str = r#"# Topic
 
 Context prose.
 
-## Group One
-
 ### 1.1 What counts as a decision?
 
 Problem: the decision about a frobnicate is unclear.
@@ -404,8 +402,6 @@ fn get_next_marks_term_words_in_text() {
 const UUID_INLINE_RECORD: &str = r#"# Topic
 
 Context prose.
-
-## Group One
 
 ### 1.1 What counts as a decision?
 

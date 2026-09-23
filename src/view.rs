@@ -54,6 +54,9 @@ pub struct WordPair {
 pub struct QuestionView {
     pub id: Option<String>,
     pub heading: String,
+    /// The section's derived tier, printed as a plain number (or empty
+    /// when derivation failed). Temporary: wave 2's view.rs (spec §7)
+    /// replaces this field with `tier: Option<usize>`.
     pub group: String,
     pub state: QState,
     pub problem: Option<String>,
@@ -158,34 +161,44 @@ fn body_field(lines: &[String], sec: &Section, prefix: &str) -> Option<String> {
         .find_map(|l| l.strip_prefix(prefix).map(|v| v.trim().to_string()))
 }
 
-/// `open_group`: the heading of the lowest tier that still has an
-/// Open or Unasked question in it. `waits_on`: the heading of the first
-/// Open/Unasked question in an earlier tier than the lowest tier that
-/// has an Unasked/Skeleton question waiting to be asked — i.e. the heading
-/// `ask` would name in its tier refusal — or `None` when nothing is
-/// waiting on an earlier tier.
+/// `open_group`: the derived tier number (as a string) of the lowest tier
+/// that still has an Open or Unasked question in it. `waits_on`: the
+/// heading of the first Open/Unasked question in an earlier tier than the
+/// lowest tier that has an Unasked/Skeleton question waiting to be asked —
+/// i.e. the heading `ask` would name in its tier refusal — or `None` when
+/// nothing is waiting on an earlier tier.
+///
+/// Temporary: derived via `rf.tiers`/`rf.tier_of` (record.rs's §1) instead
+/// of the removed h2 groups; wave 2's view.rs (spec §7) replaces
+/// `open_group: Option<String>` with `open_tier: Option<usize>` and gives
+/// this its proper "Tier N" treatment (including the derive-error case).
 fn open_group_and_waits_on(rf: &RecordFile, led: &Ledger) -> (Option<String>, Option<String>) {
-    let mut group_states: Vec<Vec<(String, QState)>> = vec![Vec::new(); rf.groups.len()];
-    for sec in &rf.sections {
-        if let Some(gi) = sec.group {
-            group_states[gi].push((sec.heading_text.clone(), qstate(led, sec)));
-        }
+    let Some(tiers) = &rf.tiers else {
+        return (None, None);
+    };
+    let max_tier = tiers.iter().copied().max().unwrap_or(0);
+    let mut tier_states: Vec<Vec<(String, QState)>> = vec![Vec::new(); max_tier + 1];
+    for (i, sec) in rf.sections.iter().enumerate() {
+        let t = tiers[i];
+        tier_states[t].push((sec.heading_text.clone(), qstate(led, sec)));
     }
 
-    let open_group_idx = group_states.iter().position(|qs| {
-        qs.iter()
+    let open_tier = (1..=max_tier).find(|&t| {
+        tier_states[t]
+            .iter()
             .any(|(_, s)| matches!(s, QState::Open | QState::Unasked))
     });
-    let open_group = open_group_idx.map(|gi| rf.groups[gi].heading_text.clone());
+    let open_group = open_tier.map(|t| t.to_string());
 
-    let waiting_group_idx = group_states.iter().position(|qs| {
-        qs.iter()
+    let waiting_tier = (1..=max_tier).find(|&t| {
+        tier_states[t]
+            .iter()
             .any(|(_, s)| matches!(s, QState::Unasked | QState::Skeleton))
     });
 
-    let waits_on = waiting_group_idx.and_then(|g_idx| {
-        for states in &group_states[..g_idx] {
-            for (heading, s) in states {
+    let waits_on = waiting_tier.and_then(|wt| {
+        for t in 1..wt {
+            for (heading, s) in &tier_states[t] {
                 if matches!(s, QState::Open | QState::Unasked) {
                     return Some(heading.clone());
                 }
@@ -381,16 +394,16 @@ fn no_entry_words(text: &str, pairs: &[(String, String)], terms_list: &[Term]) -
 
 fn build_question_view(
     rf: &RecordFile,
+    idx: usize,
     sec: &Section,
     led: &Ledger,
     test_idx: &HashMap<String, Vec<String>>,
     terms_list: &[Term],
 ) -> QuestionView {
     let state = qstate(led, sec);
-    let group = sec
-        .group
-        .and_then(|gi| rf.groups.get(gi))
-        .map(|g| g.heading_text.clone())
+    let group = rf
+        .tier_of(idx)
+        .map(|t| t.to_string())
         .unwrap_or_default();
     let problem = body_field(&rf.lines, sec, "Problem: ");
     let standard = body_field(&rf.lines, sec, "Standard: ");
@@ -451,7 +464,8 @@ fn build_file_view(
     let questions = rf
         .sections
         .iter()
-        .map(|sec| build_question_view(rf, sec, led, test_idx, terms_list))
+        .enumerate()
+        .map(|(idx, sec)| build_question_view(rf, idx, sec, led, test_idx, terms_list))
         .collect();
 
     FileView {
@@ -703,15 +717,14 @@ mod tests {
 
     const TWO_GROUP: &str = "# Topic\n\n\
 Context prose.\n\n\
-## Group One\n\n\
 ### 1.1 First question?\n\n\
 id: id-1\n\n\
 Problem: p1.\n\n\
 Standard: s1.\n\n\
 - A) Answer one.\n  Why: reason one.\n  Costs: cost one.\n\
 - B) Answer two.\n  Why: reason two.\n\n\
-## Group Two\n\n\
-### 2.1 Second question?\n\n\
+### 2.1 Second question?\n\
+depends: 1.1 First question?\n\n\
 Problem: p2.\n\n\
 Standard: s2.\n\n\
 - A) Second answer.\n  Why: reasons.\n";
@@ -764,13 +777,13 @@ Standard: s2.\n\n\
             id: Some(id.to_string()),
             id_dup: false,
             supersedes: vec![],
+            depends: vec![],
             options: vec![],
             answer_line: None,
             answer_value: None,
             parse_errors: vec![],
             shape_errors: vec![],
             is_skeleton: false,
-            group: None,
             terms_line: None,
         };
 
@@ -784,7 +797,7 @@ Standard: s2.\n\n\
     #[test]
     fn skeleton_heading_has_no_id_maps_to_skeleton() {
         let dir = temp_repo();
-        let content = "# Topic\n\n## Group\n\n### 1.1 Not written yet?\n";
+        let content = "# Topic\n\n### 1.1 Not written yet?\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
         let rf = record::load(&record).unwrap();
         let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
@@ -802,11 +815,11 @@ Standard: s2.\n\n\
         let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
 
         let (open_group, waits_on) = open_group_and_waits_on(&rf, &led);
-        // Group One's question is Open, so it is the lowest open group.
-        assert_eq!(open_group.as_deref(), Some("Group One"));
-        // Group Two's question is Unasked (waiting), and group one's
-        // question is Open (unanswered) and in a lower group: that is what
-        // `ask` would name.
+        // Tier 1's question is Open, so it is the lowest open tier.
+        assert_eq!(open_group.as_deref(), Some("1"));
+        // Tier 2's question is Unasked (waiting), and tier 1's question is
+        // Open (unanswered) and in an earlier tier: that is what `ask`
+        // would name.
         assert_eq!(waits_on.as_deref(), Some("1.1 First question?"));
 
         std::fs::remove_dir_all(&dir).ok();
@@ -823,10 +836,10 @@ Standard: s2.\n\n\
         let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
 
         let (open_group, waits_on) = open_group_and_waits_on(&rf, &led);
-        // Group one is fully answered; group two (Unasked) is now the
-        // lowest group with an open/unasked question.
-        assert_eq!(open_group.as_deref(), Some("Group Two"));
-        // Nothing earlier than group two is unanswered any more.
+        // Tier one is fully answered; tier two (Unasked) is now the lowest
+        // tier with an open/unasked question.
+        assert_eq!(open_group.as_deref(), Some("2"));
+        // Nothing earlier than tier two is unanswered any more.
         assert_eq!(waits_on, None);
 
         std::fs::remove_dir_all(&dir).ok();
@@ -854,7 +867,6 @@ Standard: s2.\n\n\
 
     const TWO_GROUP_ANSWERED: &str = "# Topic\n\n\
 Context prose.\n\n\
-## Group One\n\n\
 ### 1.1 First question?\n\n\
 id: id-1\n\n\
 Problem: p1.\n\n\
@@ -862,8 +874,8 @@ Standard: s1.\n\n\
 - A) Answer one.\n  Why: reason one.\n  Costs: cost one.\n\
 - B) Answer two.\n  Why: reason two.\n\n\
 **Answer:** A\n\n\
-## Group Two\n\n\
-### 2.1 Second question?\n\n\
+### 2.1 Second question?\n\
+depends: 1.1 First question?\n\n\
 id: id-2\n\n\
 Problem: p2.\n\n\
 Standard: s2.\n\n\

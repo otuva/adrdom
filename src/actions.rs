@@ -152,6 +152,7 @@ pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String>
         id: id.to_string(),
         hash: cur_hash,
         detail: letter.to_string(),
+        version: crate::version::VERSION.to_string(),
     }];
     for old in &supersedes_val {
         rows.push(ledger::Row {
@@ -160,6 +161,7 @@ pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String>
             id: old.clone(),
             hash: "-".to_string(),
             detail: id.to_string(),
+            version: crate::version::VERSION.to_string(),
         });
     }
     ledger::append(&ledger_path, &rows).map_err(|e| format!("failed to update ledger: {}", e))?;
@@ -378,6 +380,7 @@ fn do_approve_terms(
             id: "-".to_string(),
             hash: terms::file_hash(&tf),
             detail: "adrdom/terms.md".to_string(),
+            version: crate::version::VERSION.to_string(),
         };
         ledger::append(ledger_path, &[row])
             .map_err(|e| format!("approve: failed to update ledger: {}", e))?;
@@ -483,6 +486,7 @@ fn do_approve_record(
             id: "-".to_string(),
             hash: plan_hash.clone(),
             detail: rel.to_string(),
+            version: crate::version::VERSION.to_string(),
         });
         messages.push(format!("approve: {}: plan approved", rel));
     } else {
@@ -500,6 +504,7 @@ fn do_approve_record(
             id: "-".to_string(),
             hash: context_hash.clone(),
             detail: rel.to_string(),
+            version: crate::version::VERSION.to_string(),
         });
         messages.push(format!("approve: {}: context approved", rel));
     } else {
@@ -548,6 +553,7 @@ fn do_approve_record(
                     id: id.clone(),
                     hash: "-".to_string(),
                     detail: r.detail.clone(),
+                    version: crate::version::VERSION.to_string(),
                 });
             }
             Some(r) if r.event == "answered" => {
@@ -630,6 +636,7 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
             id: "-".to_string(),
             hash: h.clone(),
             detail: String::new(),
+            version: crate::version::VERSION.to_string(),
         })
         .collect();
     ledger::append(&ledger_path, &rows).map_err(|e| format!("failed to update ledger: {}", e))?;

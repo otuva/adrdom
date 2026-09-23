@@ -1,4 +1,5 @@
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -8,6 +9,41 @@ pub struct OptionRec {
     pub sentence: Option<String>,
     #[allow(dead_code)]
     pub line: usize,
+}
+
+/// A `depends:` entry's answer-set suffix (`=A`, `=A|B`, `=*`): the letters
+/// of the target question's options under which the dependent is asked
+/// (8.7 A). `Any` is `=*`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AnswerSet {
+    Any,
+    Letters(Vec<char>),
+}
+
+/// One `depends:` line, classified by shape (spec point 1): a uuid is a
+/// decision, text ending in `?` is a heading in the same file (optionally
+/// carrying an answer set), anything else is a term name or alias. Term and
+/// decision resolution happens in the commands (`approve`/`ask`), not here:
+/// record.rs has no ledger or terms access.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Dep {
+    Term(String),
+    Heading { text: String, set: Option<AnswerSet> },
+    Decision(String),
+}
+
+/// Why `derive_tiers` could not assign every section a tier.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeriveError {
+    /// A heading `depends:` entry (`entry`) named no heading in the file,
+    /// found on the section whose heading text is `section`.
+    Dangling { section: String, entry: String },
+    /// The heading texts of a cycle, in traversal order (not closed: the
+    /// first name is not repeated at the end).
+    Cycle(Vec<String>),
+    /// A section's own heading text, found as one of its own heading
+    /// `depends:` entries.
+    SelfDep(String),
 }
 
 #[derive(Debug, Clone)]
@@ -20,6 +56,8 @@ pub struct Section {
     pub id_dup: bool,
     /// `supersedes: ` ids, comma-separated in the source, in file order (4.14).
     pub supersedes: Vec<String>,
+    /// `depends: ` entries, in file order (8.3/8.4).
+    pub depends: Vec<Dep>,
     pub options: Vec<OptionRec>,
     pub answer_line: Option<usize>,
     pub answer_value: Option<String>,
@@ -29,24 +67,20 @@ pub struct Section {
     /// `shape_errors` instead, since `ask` and `approve` must refuse on
     /// them before ever touching the file, same as every other shape rule.
     pub parse_errors: Vec<String>,
-    /// Errors from the topic-file-shape rules (4.9/4.7/3.4): stray lines in a
-    /// body, a non-skeleton question missing its Problem/Standard lines,
-    /// an option count outside two-to-three, and an option missing its
-    /// Why/Costs line. `ask` and `approve` both refuse on this slice
-    /// (plus the file-level `RecordFile::shape_errors`) before doing
-    /// anything else; `check`'s `parse` check reads this and
-    /// `parse_errors` together.
+    /// Errors from the topic-file-shape rules (4.9/4.7/3.4/8.3): stray
+    /// lines in a body, a non-skeleton question missing its
+    /// Problem/Standard lines, an option count outside two-to-three, an
+    /// option missing its Why/Costs line, and a malformed `depends:` line.
+    /// `ask` and `approve` both refuse on this slice (plus the file-level
+    /// `RecordFile::shape_errors`) before doing anything else; `check`'s
+    /// `parse` check reads this and `parse_errors` together.
     #[allow(dead_code)]
     pub shape_errors: Vec<String>,
     /// True when the heading has no non-blank line before the next
-    /// heading: no id, no body, never a failure (spec point 6).
+    /// heading other than `depends:` lines: no id, no body, never a
+    /// failure (4.7 A, updated by 8.3).
     #[allow(dead_code)]
     pub is_skeleton: bool,
-    /// Index into `RecordFile::groups` of the h2 tier this section falls
-    /// under, or `None` if it precedes the first h2 (a file-level shape
-    /// error in that case).
-    #[allow(dead_code)]
-    pub group: Option<usize>,
     /// Line index of this section's `terms: ` line, if any.
     #[allow(dead_code)]
     pub terms_line: Option<usize>,
@@ -64,6 +98,16 @@ impl Section {
         None
     }
 
+    /// True when `**Answer:** refused` (8.1 A): answered for hashing and
+    /// editing purposes (the text is frozen), unanswered for the tier rule
+    /// and for `done`.
+    pub fn is_refused(&self) -> bool {
+        self.answer_value
+            .as_deref()
+            .map(|v| v.trim() == "refused")
+            .unwrap_or(false)
+    }
+
     pub fn chosen_sentence(&self) -> Option<&str> {
         let c = self.answer_letter()?;
         self.options
@@ -71,17 +115,6 @@ impl Section {
             .find(|o| o.letter == c)
             .and_then(|o| o.sentence.as_deref())
     }
-}
-
-/// A `## ` heading and the questions under it. File order is
-/// the tier order (tier 0 is lowest) — see spec point 3.
-#[derive(Debug, Clone)]
-pub struct Group {
-    #[allow(dead_code)]
-    pub heading_text: String,
-    pub start: usize,
-    pub end: usize,
-    pub question_idx: Vec<usize>,
 }
 
 pub struct RecordFile {
@@ -95,16 +128,48 @@ pub struct RecordFile {
     #[allow(dead_code)]
     pub topic: Option<String>,
     /// [start, end) line range of the context prose: everything between
-    /// the h1 and the first `## ` line (or end of file, if no h1/h2).
+    /// the h1 and the first `### ` question heading (or end of file, if no
+    /// h1/questions).
     #[allow(dead_code)]
     pub context_range: (usize, usize),
-    #[allow(dead_code)]
-    pub groups: Vec<Group>,
     /// File-level shape errors (spec point: missing/duplicate h1, text
-    /// before h1, a question before the first h2, stray text between an
-    /// h2 and its first h3).
+    /// before h1, a `## ` tier heading — tiers are derived now, never
+    /// written by hand).
     #[allow(dead_code)]
     pub shape_errors: Vec<String>,
+    /// Each section's 1-based tier (index-aligned with `sections`), filled
+    /// when `derive_tiers` succeeds; `None` when `derive_error` is set
+    /// instead. Mutually exclusive with `derive_error`.
+    pub tiers: Option<Vec<usize>>,
+    /// Why tier derivation failed, when it did.
+    pub derive_error: Option<DeriveError>,
+}
+
+impl RecordFile {
+    pub fn tier_of(&self, idx: usize) -> Option<usize> {
+        self.tiers.as_ref().and_then(|t| t.get(idx).copied())
+    }
+
+    /// Sections whose heading `depends:` entry names section `idx`'s
+    /// heading text (exact match after trim), paired with the set they
+    /// declare on that entry, if any.
+    pub fn dependents_of(&self, idx: usize) -> Vec<(usize, Option<&AnswerSet>)> {
+        let mut out = Vec::new();
+        let Some(target) = self.sections.get(idx) else {
+            return out;
+        };
+        let target_text = target.heading_text.trim();
+        for (i, sec) in self.sections.iter().enumerate() {
+            for d in &sec.depends {
+                if let Dep::Heading { text, set } = d {
+                    if text.trim() == target_text {
+                        out.push((i, set.as_ref()));
+                    }
+                }
+            }
+        }
+        out
+    }
 }
 
 pub fn normalize(content: &str) -> String {
@@ -141,18 +206,24 @@ pub fn load_in(root: &Path, path: &Path) -> std::io::Result<RecordFile> {
 }
 
 fn build(path: PathBuf, rel: String, lines: Vec<String>) -> RecordFile {
-    let mut sections = parse_sections(&lines);
-    let (topic, context_range, groups, shape_errors) = analyze_shape(&lines, &mut sections);
-    RecordFile {
+    let sections = parse_sections(&lines);
+    let (topic, context_range, shape_errors) = analyze_shape(&lines, &sections);
+    let mut rf = RecordFile {
         path,
         rel,
         lines,
         sections,
         topic,
         context_range,
-        groups,
         shape_errors,
+        tiers: None,
+        derive_error: None,
+    };
+    match derive_tiers(&rf) {
+        Ok(t) => rf.tiers = Some(t),
+        Err(e) => rf.derive_error = Some(e),
     }
+    rf
 }
 
 pub fn save(rf: &RecordFile) -> std::io::Result<()> {
@@ -167,6 +238,10 @@ fn is_h1(line: &str) -> bool {
     line.starts_with("# ")
 }
 
+/// A `## ` line: no longer a valid tier heading (spec point 1 — tiers are
+/// derived from `depends:` lines), but still recognized so it can be
+/// reported as a shape error instead of silently becoming stray text or
+/// (worse) being mistaken for something else.
 fn is_h2(line: &str) -> bool {
     line.starts_with("## ")
 }
@@ -231,6 +306,91 @@ fn answer_value(line: &str) -> Option<String> {
         .map(|v| v.trim().to_string())
 }
 
+/// True when `s` (already trimmed) is a uuid: 8-4-4-4-12 hex, dashed.
+fn is_uuid(s: &str) -> bool {
+    let bytes: Vec<char> = s.chars().collect();
+    if bytes.len() != 36 {
+        return false;
+    }
+    const DASH_POS: [usize; 4] = [8, 13, 18, 23];
+    for (i, c) in bytes.iter().enumerate() {
+        if DASH_POS.contains(&i) {
+            if *c != '-' {
+                return false;
+            }
+        } else if !c.is_ascii_hexdigit() {
+            return false;
+        }
+    }
+    true
+}
+
+/// `=A`, `=A|B`, `=*` after the `=`. `None` on anything else (bad set
+/// syntax): an empty string, a part longer than one character, a
+/// lowercase letter, or an empty part from `||` or a trailing `|`.
+fn parse_answer_set(s: &str) -> Option<AnswerSet> {
+    if s == "*" {
+        return Some(AnswerSet::Any);
+    }
+    if s.is_empty() {
+        return None;
+    }
+    let mut letters = Vec::new();
+    for part in s.split('|') {
+        let mut chars = part.chars();
+        let c = chars.next()?;
+        if chars.next().is_some() || !c.is_ascii_uppercase() {
+            return None;
+        }
+        letters.push(c);
+    }
+    Some(AnswerSet::Letters(letters))
+}
+
+/// Classifies one `depends:` entry (the trimmed text after `depends: `) by
+/// shape (spec point 1). `Err` names why the entry is malformed, without
+/// the "depends: " prefix or line number (the caller adds those).
+fn parse_depends_entry(raw: &str) -> Result<Dep, String> {
+    if raw.is_empty() {
+        return Err("empty entry".to_string());
+    }
+    if is_uuid(raw) {
+        return Ok(Dep::Decision(raw.to_string()));
+    }
+    if let Some(eq_idx) = raw.rfind('=') {
+        let base = raw[..eq_idx].trim_end();
+        if base.ends_with('?') {
+            let set_str = &raw[eq_idx + 1..];
+            return match parse_answer_set(set_str) {
+                Some(set) => Ok(Dep::Heading {
+                    text: base.to_string(),
+                    set: Some(set),
+                }),
+                None => Err("bad set syntax".to_string()),
+            };
+        }
+    }
+    if raw.ends_with('?') {
+        return Ok(Dep::Heading {
+            text: raw.to_string(),
+            set: None,
+        });
+    }
+    Ok(Dep::Term(raw.to_string()))
+}
+
+/// Whether two successfully-parsed deps name the same target (ignoring any
+/// answer set on a heading dep): used to catch a `depends:` line repeated
+/// under one heading.
+fn dep_identity_eq(a: &Dep, b: &Dep) -> bool {
+    match (a, b) {
+        (Dep::Term(x), Dep::Term(y)) => x == y,
+        (Dep::Decision(x), Dep::Decision(y)) => x == y,
+        (Dep::Heading { text: x, .. }, Dep::Heading { text: y, .. }) => x == y,
+        _ => false,
+    }
+}
+
 pub fn parse_sections(lines: &[String]) -> Vec<Section> {
     let mut sections = Vec::new();
     let mut i = 0;
@@ -259,12 +419,14 @@ fn find_end(lines: &[String], from: usize) -> usize {
 
 /// Everything a heading's body scan produces: the pre-existing bits
 /// (id/supersedes/options/answer) plus the shape-rule bits (terms line,
-/// stray lines, Problem/Standard counts, and each option's Why/Costs
-/// completeness).
+/// depends entries, stray lines, Problem/Standard counts, and each
+/// option's Why/Costs completeness).
 struct BodyScan {
     id: Option<String>,
     id_count: usize,
     supersedes: Vec<String>,
+    depends: Vec<Dep>,
+    depends_errors: Vec<String>,
     terms_line: Option<usize>,
     options: Vec<OptionRec>,
     answer_line: Option<usize>,
@@ -282,6 +444,8 @@ fn scan_body(lines: &[String], start: usize, end: usize) -> BodyScan {
     let mut id = None;
     let mut id_count = 0;
     let mut supersedes: Vec<String> = Vec::new();
+    let mut depends: Vec<Dep> = Vec::new();
+    let mut depends_errors: Vec<String> = Vec::new();
     let mut terms_line = None;
     let mut options: Vec<OptionRec> = Vec::new();
     let mut answer_line = None;
@@ -300,6 +464,21 @@ fn scan_body(lines: &[String], start: usize, end: usize) -> BodyScan {
 
     for (j, line) in lines.iter().enumerate().take(end).skip(start + 1) {
         if line.trim().is_empty() {
+            continue;
+        }
+        if let Some(v) = kv(line, "depends") {
+            match parse_depends_entry(&v) {
+                Ok(d) => {
+                    if depends.iter().any(|existing| dep_identity_eq(existing, &d)) {
+                        depends_errors.push(format!("depends: duplicate entry, line {}", j + 1));
+                    } else {
+                        depends.push(d);
+                    }
+                }
+                Err(why) => {
+                    depends_errors.push(format!("depends: {}, line {}", why, j + 1));
+                }
+            }
             continue;
         }
         if let Some(v) = kv(line, "id") {
@@ -400,6 +579,8 @@ fn scan_body(lines: &[String], start: usize, end: usize) -> BodyScan {
         id,
         id_count,
         supersedes,
+        depends,
+        depends_errors,
         terms_line,
         options,
         answer_line,
@@ -412,8 +593,13 @@ fn scan_body(lines: &[String], start: usize, end: usize) -> BodyScan {
     }
 }
 
+/// A heading whose body holds only blank lines and `depends:` lines (4.7 A,
+/// updated by 8.3): needs no id, never a failure.
 fn is_skeleton_range(lines: &[String], start: usize, end: usize) -> bool {
-    ((start + 1)..end).all(|j| lines[j].trim().is_empty())
+    ((start + 1)..end).all(|j| {
+        let t = lines[j].trim();
+        t.is_empty() || t.starts_with("depends:")
+    })
 }
 
 fn parse_question(lines: &[String], start: usize, end: usize) -> Section {
@@ -427,17 +613,19 @@ fn parse_question(lines: &[String], start: usize, end: usize) -> Section {
     }
     if let Some(v) = &scan.answer_value {
         let v = v.trim();
-        let valid = v.chars().count() == 1
-            && scan
-                .options
-                .iter()
-                .any(|o| o.letter == v.chars().next().unwrap());
+        let valid = v == "refused"
+            || (v.chars().count() == 1
+                && scan
+                    .options
+                    .iter()
+                    .any(|o| o.letter == v.chars().next().unwrap()));
         if !valid {
             parse_errors.push(format!("answer names missing option {}", v));
         }
     }
 
     let mut shape_errors = scan.stray_errors;
+    shape_errors.extend(scan.depends_errors);
     if !is_skeleton {
         if scan.problem_count != 1 {
             shape_errors.push("missing Problem line".to_string());
@@ -460,24 +648,20 @@ fn parse_question(lines: &[String], start: usize, end: usize) -> Section {
         id: scan.id,
         id_dup: scan.id_count > 1,
         supersedes: scan.supersedes,
+        depends: scan.depends,
         options: scan.options,
         answer_line: scan.answer_line,
         answer_value: scan.answer_value,
         parse_errors,
         shape_errors,
         is_skeleton,
-        group: None,
         terms_line: scan.terms_line,
     }
 }
 
-/// Computes topic, context range, h2 tiers (with sections assigned to
-/// them), and file-level shape errors, given the lines and the already
-/// heading-parsed `sections` (mutated in place to set `group`).
-fn analyze_shape(
-    lines: &[String],
-    sections: &mut [Section],
-) -> (Option<String>, (usize, usize), Vec<Group>, Vec<String>) {
+/// Computes topic, context range, and file-level shape errors, given the
+/// lines and the already heading-parsed `sections`.
+fn analyze_shape(lines: &[String], sections: &[Section]) -> (Option<String>, (usize, usize), Vec<String>) {
     let mut shape_errors = Vec::new();
 
     let h1_indices: Vec<usize> = lines
@@ -510,86 +694,42 @@ fn analyze_shape(
         h1_idx = Some(first_h1);
     }
 
-    let h2_indices: Vec<usize> = lines
-        .iter()
-        .enumerate()
-        .filter(|(_, l)| is_h2(l))
-        .map(|(i, _)| i)
-        .collect();
+    // 8.3 A: tiers are derived from `depends:` lines, never written by
+    // hand; a `## ` line left over from the old format is a shape error.
+    for (i, l) in lines.iter().enumerate() {
+        if is_h2(l) {
+            shape_errors.push(format!("tier heading, line {}; tiers are derived", i + 1));
+        }
+    }
 
     let context_start = h1_idx.map(|i| i + 1).unwrap_or(0);
-    let context_end = h2_indices.first().copied().unwrap_or(lines.len());
+    let context_end = sections.first().map(|s| s.start).unwrap_or(lines.len());
     let context_range = (context_start.min(context_end), context_end);
 
-    let mut groups: Vec<Group> = h2_indices
-        .iter()
-        .enumerate()
-        .map(|(gi, &gstart)| {
-            let gend = h2_indices.get(gi + 1).copied().unwrap_or(lines.len());
-            Group {
-                heading_text: lines[gstart]["## ".len()..].trim_end().to_string(),
-                start: gstart,
-                end: gend,
-                question_idx: Vec::new(),
-            }
-        })
-        .collect();
-
-    for (si, sec) in sections.iter_mut().enumerate() {
-        let gi = groups
-            .iter()
-            .position(|g| sec.start > g.start && sec.start < g.end);
-        match gi {
-            Some(gi) => {
-                sec.group = Some(gi);
-                groups[gi].question_idx.push(si);
-            }
-            None => {
-                sec.group = None;
-                shape_errors.push(format!(
-                    "question before first tier heading, line {}",
-                    sec.start + 1
-                ));
-            }
-        }
-    }
-
-    for g in &groups {
-        let first_q_start = g
-            .question_idx
-            .iter()
-            .map(|&si| sections[si].start)
-            .min()
-            .unwrap_or(g.end);
-        for j in (g.start + 1)..first_q_start {
-            if !lines[j].trim().is_empty() {
-                shape_errors.push(format!("stray line {}", j + 1));
-            }
-        }
-    }
-
-    (topic, context_range, groups, shape_errors)
+    (topic, context_range, shape_errors)
 }
 
-/// sha256 of the h2 and h3 heading lines (trimmed text incl. the `## `/
-/// `### ` prefix), joined with `\n`, in file order (spec point 8). Changes
-/// on an added, reordered, or renamed heading; unaffected by body edits.
+/// sha256 of the question heading lines (trimmed text incl. the `### `
+/// prefix) in file order, each followed by its `depends:` lines with any
+/// `=set` suffix stripped (8.7 A: approve hashes the target, not the set),
+/// joined with `\n`. Changes on an added, reordered, or renamed heading, or
+/// a changed/added/removed depends target; unaffected by a body edit or a
+/// depends entry's answer set.
 #[allow(dead_code)]
 pub fn plan_hash(rf: &RecordFile) -> String {
-    let mut items: Vec<(usize, &str)> = Vec::new();
-    for g in &rf.groups {
-        items.push((g.start, rf.lines[g.start].trim_end()));
-    }
+    let mut out: Vec<String> = Vec::new();
     for s in &rf.sections {
-        items.push((s.start, rf.lines[s.start].trim_end()));
+        out.push(rf.lines[s.start].trim_end().to_string());
+        for d in &s.depends {
+            let entry_text: &str = match d {
+                Dep::Term(t) => t.as_str(),
+                Dep::Decision(id) => id.as_str(),
+                Dep::Heading { text, .. } => text.as_str(),
+            };
+            out.push(format!("depends: {}", entry_text).trim_end().to_string());
+        }
     }
-    items.sort_by_key(|(i, _)| *i);
-    let text = items
-        .into_iter()
-        .map(|(_, t)| t)
-        .collect::<Vec<_>>()
-        .join("\n");
-    sha256_hex(&text)
+    sha256_hex(&out.join("\n"))
 }
 
 /// sha256 of the context prose lines with leading/trailing blank lines
@@ -673,6 +813,112 @@ pub fn option_details(lines: &[String], sec: &Section) -> Vec<(char, Option<Stri
     out
 }
 
+/// The owner-settable cap on how many questions one derived tier may hold
+/// (8.5 A, 8.8 A). The owner may ask to change this later; the setting
+/// mechanism is deferred until then, so today this constant is the whole
+/// implementation.
+pub const TIER_CAP: usize = 4;
+
+/// Assigns every section a 1-based tier: a section with no heading
+/// `depends:` entry is tier 1 (a root); otherwise its tier is one more than
+/// the highest tier among the sections its heading entries name. Term and
+/// decision entries never affect tier (their resolution is checked by the
+/// commands, not here).
+///
+/// Self-dep and dangling entries are found and reported (in file order)
+/// before any tier is computed; a cycle is found by the recursive descent
+/// below and reports the headings on the cycle in traversal order.
+pub fn derive_tiers(rf: &RecordFile) -> Result<Vec<usize>, DeriveError> {
+    let n = rf.sections.len();
+
+    let mut heading_idx: HashMap<&str, usize> = HashMap::new();
+    for (i, sec) in rf.sections.iter().enumerate() {
+        heading_idx.entry(sec.heading_text.trim()).or_insert(i);
+    }
+
+    let mut deps: Vec<Vec<usize>> = vec![Vec::new(); n];
+    for (i, sec) in rf.sections.iter().enumerate() {
+        for d in &sec.depends {
+            if let Dep::Heading { text, .. } = d {
+                let trimmed = text.trim();
+                if trimmed == sec.heading_text.trim() {
+                    return Err(DeriveError::SelfDep(sec.heading_text.clone()));
+                }
+                match heading_idx.get(trimmed) {
+                    Some(&j) => deps[i].push(j),
+                    None => {
+                        return Err(DeriveError::Dangling {
+                            section: sec.heading_text.clone(),
+                            entry: text.clone(),
+                        })
+                    }
+                }
+            }
+        }
+    }
+
+    let mut tier: Vec<Option<usize>> = vec![None; n];
+    let mut state: Vec<u8> = vec![0; n];
+    let mut path: Vec<usize> = Vec::new();
+    for i in 0..n {
+        if state[i] == 0 {
+            derive_visit(i, rf, &deps, &mut tier, &mut state, &mut path)?;
+        }
+    }
+    Ok(tier.into_iter().map(|t| t.unwrap_or(1)).collect())
+}
+
+fn derive_visit(
+    i: usize,
+    rf: &RecordFile,
+    deps: &[Vec<usize>],
+    tier: &mut [Option<usize>],
+    state: &mut [u8],
+    path: &mut Vec<usize>,
+) -> Result<usize, DeriveError> {
+    if let Some(t) = tier[i] {
+        return Ok(t);
+    }
+    if state[i] == 1 {
+        let pos = path.iter().position(|&x| x == i).expect("i is on the path");
+        let cycle_headings: Vec<String> = path[pos..]
+            .iter()
+            .map(|&x| rf.sections[x].heading_text.clone())
+            .collect();
+        return Err(DeriveError::Cycle(cycle_headings));
+    }
+    state[i] = 1;
+    path.push(i);
+    let mut max_dep_tier = 0usize;
+    for &j in &deps[i] {
+        let t = derive_visit(j, rf, deps, tier, state, path)?;
+        if t > max_dep_tier {
+            max_dep_tier = t;
+        }
+    }
+    path.pop();
+    state[i] = 2;
+    let t = if deps[i].is_empty() { 1 } else { max_dep_tier + 1 };
+    tier[i] = Some(t);
+    Ok(t)
+}
+
+/// `(tier, count)` for every tier that has at least one section, sorted by
+/// tier.
+pub fn tier_sizes(tiers: &[usize]) -> Vec<(usize, usize)> {
+    let mut counts: std::collections::BTreeMap<usize, usize> = std::collections::BTreeMap::new();
+    for &t in tiers {
+        *counts.entry(t).or_insert(0) += 1;
+    }
+    counts.into_iter().collect()
+}
+
+/// The first (lowest-numbered) tier holding more than `TIER_CAP` sections,
+/// if any (8.8 A).
+pub fn over_cap(tiers: &[usize]) -> Option<(usize, usize)> {
+    tier_sizes(tiers).into_iter().find(|&(_, count)| count > TIER_CAP)
+}
+
 pub fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }
@@ -692,24 +938,36 @@ mod tests {
         build(PathBuf::from("test.md"), "test.md".to_string(), lines)
     }
 
-    const SHAPED: &str = "# Topic\n\ncontext prose line one.\ncontext prose line two.\n\n## Group A\n\n### 1.1 First question?\n\nProblem: p.\n\nStandard: s.\n\n- A) Do the thing.\n  Why: reasons.\n  Costs: costs.\n- B) Do the other thing.\n  Why: other reasons.\n  Costs: other costs.\n";
+    const SHAPED: &str = "# Topic\n\ncontext prose line one.\ncontext prose line two.\n\n### 1.1 First question?\n\nProblem: p.\n\nStandard: s.\n\n- A) Do the thing.\n  Why: reasons.\n  Costs: costs.\n- B) Do the other thing.\n  Why: other reasons.\n  Costs: other costs.\n";
 
     #[test]
     fn h1_required_and_first() {
-        let rf = rf_from("no h1 here\n\n## Group\n\n### 1.1 Q?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
+        let rf = rf_from("no h1 here\n\n### 1.1 Q?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
         assert!(rf.topic.is_none());
         assert!(rf.shape_errors.iter().any(|e| e.contains("missing h1")));
 
-        let rf2 = rf_from("stray text\n# Topic\n\n## Group\n");
+        let rf2 = rf_from("stray text\n# Topic\n");
         assert_eq!(rf2.topic.as_deref(), Some("Topic"));
         assert!(rf2.shape_errors.iter().any(|e| e.contains("text before h1")));
 
-        let rf3 = rf_from("# Topic\n\n# Second Topic\n\n## Group\n");
+        let rf3 = rf_from("# Topic\n\n# Second Topic\n");
         assert!(rf3.shape_errors.iter().any(|e| e.contains("duplicate h1")));
 
         let rf4 = rf_from(SHAPED);
         assert_eq!(rf4.topic.as_deref(), Some("Topic"));
         assert!(rf4.shape_errors.is_empty(), "{:?}", rf4.shape_errors);
+    }
+
+    #[test]
+    fn a_h2_line_is_a_tier_heading_shape_error() {
+        let rf = rf_from("# Topic\n\n## Old Group\n\n### 1.1 Q?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
+        assert!(
+            rf.shape_errors
+                .iter()
+                .any(|e| e.starts_with("tier heading, line 3")),
+            "{:?}",
+            rf.shape_errors
+        );
     }
 
     #[test]
@@ -727,7 +985,7 @@ mod tests {
 
     #[test]
     fn skeleton_heading_has_no_id_and_is_skeleton() {
-        let rf = rf_from("# Topic\n\n## Group\n\n### 1.1 Skeleton?\n\n### 1.2 Real question?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
+        let rf = rf_from("# Topic\n\n### 1.1 Skeleton?\n\n### 1.2 Real question?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
         let skeleton = &rf.sections[0];
         assert!(skeleton.is_skeleton);
         assert!(skeleton.id.is_none());
@@ -738,8 +996,18 @@ mod tests {
     }
 
     #[test]
+    fn skeleton_with_only_depends_lines_is_skeleton() {
+        let rf = rf_from("# Topic\n\n### 1.1 Skeleton?\ndepends: widget\ndepends: 1.2 Other?\n\n### 1.2 Other?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
+        let sk = &rf.sections[0];
+        assert!(sk.is_skeleton);
+        assert!(sk.id.is_none());
+        assert_eq!(sk.depends.len(), 2);
+        assert!(sk.shape_errors.is_empty(), "{:?}", sk.shape_errors);
+    }
+
+    #[test]
     fn stray_line_in_body_is_a_shape_error_naming_the_line() {
-        let content = "# Topic\n\n## Group\n\n### 1.1 Q?\n\nProblem: p.\n\nStandard: s.\n\nthis line is not allowed\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+        let content = "# Topic\n\n### 1.1 Q?\n\nProblem: p.\n\nStandard: s.\n\nthis line is not allowed\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
         let rf = rf_from(content);
         let sec = &rf.sections[0];
         let stray_line_no = content
@@ -758,7 +1026,7 @@ mod tests {
 
     #[test]
     fn missing_problem_or_standard_only_fails_non_skeleton_questions() {
-        let rf = rf_from("# Topic\n\n## Group\n\n### 1.1 Skeleton?\n\n### 1.2 Has a body but no Problem/Standard?\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
+        let rf = rf_from("# Topic\n\n### 1.1 Skeleton?\n\n### 1.2 Has a body but no Problem/Standard?\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
         let skeleton = &rf.sections[0];
         assert!(skeleton.shape_errors.is_empty());
 
@@ -796,15 +1064,40 @@ mod tests {
         let rf_renamed = rf_from(&renamed);
         assert_ne!(base_hash, plan_hash(&rf_renamed), "renaming a heading must move plan hash");
 
-        // Headings reordered: two groups, each with one question, swapped.
-        let two_groups = "# Topic\n\n## Group A\n\n### 1.1 Question A?\n\nProblem: pa.\n\nStandard: sa.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) x2.\n  Why: w.\n  Costs: c.\n\n## Group B\n\n### 1.2 Question B?\n\nProblem: pb.\n\nStandard: sb.\n\n- A) y.\n  Why: w.\n  Costs: c.\n- B) y2.\n  Why: w.\n  Costs: c.\n";
-        let swapped = "# Topic\n\n## Group B\n\n### 1.2 Question B?\n\nProblem: pb.\n\nStandard: sb.\n\n- A) y.\n  Why: w.\n  Costs: c.\n- B) y2.\n  Why: w.\n  Costs: c.\n\n## Group A\n\n### 1.1 Question A?\n\nProblem: pa.\n\nStandard: sa.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) x2.\n  Why: w.\n  Costs: c.\n";
-        let rf_two = rf_from(two_groups);
+        // Headings reordered: two questions, swapped.
+        let two_questions = "# Topic\n\n### 1.1 Question A?\n\nProblem: pa.\n\nStandard: sa.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) x2.\n  Why: w.\n  Costs: c.\n\n### 1.2 Question B?\n\nProblem: pb.\n\nStandard: sb.\n\n- A) y.\n  Why: w.\n  Costs: c.\n- B) y2.\n  Why: w.\n  Costs: c.\n";
+        let swapped = "# Topic\n\n### 1.2 Question B?\n\nProblem: pb.\n\nStandard: sb.\n\n- A) y.\n  Why: w.\n  Costs: c.\n- B) y2.\n  Why: w.\n  Costs: c.\n\n### 1.1 Question A?\n\nProblem: pa.\n\nStandard: sa.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) x2.\n  Why: w.\n  Costs: c.\n";
+        let rf_two = rf_from(two_questions);
         let rf_swapped = rf_from(swapped);
         assert_ne!(
             plan_hash(&rf_two),
             plan_hash(&rf_swapped),
             "reordering headings must move plan hash"
+        );
+    }
+
+    #[test]
+    fn plan_hash_covers_depends_targets_but_not_sets() {
+        let make = |set_suffix: &str| {
+            format!(
+                "# Topic\n\n### 1.1 Q?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n### 1.2 R?\ndepends: 1.1 Q?{}\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+                set_suffix
+            )
+        };
+        let with_a = rf_from(&make("=A"));
+        let with_b = rf_from(&make("=B"));
+        assert_eq!(
+            plan_hash(&with_a),
+            plan_hash(&with_b),
+            "the answer set on a depends entry must not move the plan hash"
+        );
+
+        let retargeted = make("=A").replace("depends: 1.1 Q?=A", "depends: 1.1 Q renamed?=A");
+        let rf_retargeted = rf_from(&retargeted);
+        assert_ne!(
+            plan_hash(&with_a),
+            plan_hash(&rf_retargeted),
+            "changing the depends target's text must move the plan hash"
         );
     }
 
@@ -825,7 +1118,7 @@ mod tests {
 
     #[test]
     fn supersedes_line_parses_multiple_comma_separated_ids() {
-        let rf = rf_from("# Topic\n\n## Group\n\n### 1.1 Q?\n\nid: new-id\n\nsupersedes: old-1, old-2\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
+        let rf = rf_from("# Topic\n\n### 1.1 Q?\n\nid: new-id\n\nsupersedes: old-1, old-2\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
         assert_eq!(
             rf.sections[0].supersedes,
             vec!["old-1".to_string(), "old-2".to_string()]
@@ -844,7 +1137,7 @@ mod tests {
     #[test]
     fn a_lean_line_inside_a_question_is_a_shape_error() {
         let rf = rf_from(
-            "# T\n\n## G\n\n### Q?\n\nProblem: p.\nStandard: s.\nLean: A.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n",
+            "# T\n\n### Q?\n\nProblem: p.\nStandard: s.\nLean: A.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n",
         );
         assert!(rf.sections[0]
             .shape_errors
@@ -855,14 +1148,14 @@ mod tests {
     #[test]
     fn a_why_line_before_any_option_is_stray() {
         let rf = rf_from(
-            "# T\n\n## G\n\n### Q?\n\nProblem: p.\nStandard: s.\n  Why: early.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n",
+            "# T\n\n### Q?\n\nProblem: p.\nStandard: s.\n  Why: early.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n",
         );
         assert!(rf.sections[0]
             .shape_errors
             .iter()
-            .any(|e| e == "stray line 9"));
+            .any(|e| e == "stray line 7"));
         let rf = rf_from(
-            "# T\n\n## G\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n  Costs: late.\n",
+            "# T\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n  Costs: late.\n",
         );
         assert!(rf.sections[0]
             .shape_errors
@@ -873,14 +1166,14 @@ mod tests {
     #[test]
     fn a_fourth_option_is_a_shape_error() {
         let rf = rf_from(
-            "# T\n\n## G\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n- D) Four.\n  Why: w.\n  Costs: c.\n",
+            "# T\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n- D) Four.\n  Why: w.\n  Costs: c.\n",
         );
         assert!(rf.sections[0]
             .shape_errors
             .iter()
             .any(|e| e == "4 options; at most three"));
         let ok = rf_from(
-            "# T\n\n## G\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n",
+            "# T\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n",
         );
         assert!(ok.sections[0].shape_errors.is_empty());
     }
@@ -888,12 +1181,218 @@ mod tests {
     #[test]
     fn one_option_is_a_shape_error() {
         let rf = rf_from(
-            "# T\n\n## G\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) Only choice.\n  Why: w.\n  Costs: c.\n",
+            "# T\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) Only choice.\n  Why: w.\n  Costs: c.\n",
         );
         assert!(rf.sections[0]
             .shape_errors
             .iter()
             .any(|e| e == "1 options; at least two"));
         assert!(rf.sections[0].parse_errors.is_empty(), "{:?}", rf.sections[0].parse_errors);
+    }
+
+    #[test]
+    fn answer_refused_is_recognized() {
+        let content = "# Topic\n\n### 1.1 Q?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** refused\n";
+        let rf = rf_from(content);
+        let sec = &rf.sections[0];
+        assert!(sec.is_refused());
+        assert_eq!(sec.answer_letter(), None);
+        assert!(sec.parse_errors.is_empty(), "{:?}", sec.parse_errors);
+    }
+
+    #[test]
+    fn depends_parses_all_three_entry_forms_and_sets() {
+        let rf = rf_from(
+            "# Topic\n\n\
+             ### 1.1 First question?\n\n\
+             Problem: p.\n\n\
+             Standard: s.\n\n\
+             - A) x.\n  Why: w.\n  Costs: c.\n\
+             - B) y.\n  Why: w.\n  Costs: c.\n\n\
+             ### 1.2 Second question?\n\
+             depends: widget\n\
+             depends: 1.1 First question?=A\n\
+             depends: 11111111-1111-1111-1111-111111111111\n\n\
+             Problem: p2.\n\n\
+             Standard: s2.\n\n\
+             - A) x.\n  Why: w.\n  Costs: c.\n\
+             - B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        let sec = &rf.sections[1];
+        assert_eq!(sec.shape_errors, Vec::<String>::new(), "{:?}", sec.shape_errors);
+        assert_eq!(sec.depends.len(), 3);
+        assert_eq!(sec.depends[0], Dep::Term("widget".to_string()));
+        assert_eq!(
+            sec.depends[1],
+            Dep::Heading {
+                text: "1.1 First question?".to_string(),
+                set: Some(AnswerSet::Letters(vec!['A']))
+            }
+        );
+        assert_eq!(
+            sec.depends[2],
+            Dep::Decision("11111111-1111-1111-1111-111111111111".to_string())
+        );
+    }
+
+    #[test]
+    fn depends_set_suffixes_parse_letters_and_star() {
+        let rf = rf_from(
+            "# Topic\n\n\
+             ### 1.1 Q?\n\n\
+             Problem: p.\n\n\
+             Standard: s.\n\n\
+             - A) x.\n  Why: w.\n  Costs: c.\n\
+             - B) y.\n  Why: w.\n  Costs: c.\n\n\
+             ### 1.2 R?\n\
+             depends: 1.1 Q?=A|B\n\n\
+             Problem: p2.\n\n\
+             Standard: s2.\n\n\
+             - A) x.\n  Why: w.\n  Costs: c.\n\
+             - B) y.\n  Why: w.\n  Costs: c.\n\n\
+             ### 1.3 S?\n\
+             depends: 1.1 Q?=*\n\n\
+             Problem: p3.\n\n\
+             Standard: s3.\n\n\
+             - A) x.\n  Why: w.\n  Costs: c.\n\
+             - B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        assert_eq!(
+            rf.sections[1].depends[0],
+            Dep::Heading {
+                text: "1.1 Q?".to_string(),
+                set: Some(AnswerSet::Letters(vec!['A', 'B']))
+            }
+        );
+        assert_eq!(
+            rf.sections[2].depends[0],
+            Dep::Heading {
+                text: "1.1 Q?".to_string(),
+                set: Some(AnswerSet::Any)
+            }
+        );
+    }
+
+    #[test]
+    fn depends_malformed_lines_are_shape_errors() {
+        let rf = rf_from(
+            "# Topic\n\n\
+             ### 1.1 Q?\n\
+             depends: \n\
+             depends: 1.1 Q?=a\n\
+             depends: widget\n\
+             depends: widget\n\n\
+             Problem: p.\n\n\
+             Standard: s.\n\n\
+             - A) x.\n  Why: w.\n  Costs: c.\n\
+             - B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        let sec = &rf.sections[0];
+        assert!(
+            sec.shape_errors.iter().any(|e| e == "depends: empty entry, line 4"),
+            "{:?}",
+            sec.shape_errors
+        );
+        assert!(
+            sec.shape_errors
+                .iter()
+                .any(|e| e == "depends: bad set syntax, line 5"),
+            "{:?}",
+            sec.shape_errors
+        );
+        assert!(
+            sec.shape_errors
+                .iter()
+                .any(|e| e == "depends: duplicate entry, line 7"),
+            "{:?}",
+            sec.shape_errors
+        );
+    }
+
+    #[test]
+    fn derive_tiers_roots_and_chain() {
+        let rf = rf_from(
+            "# Topic\n\n\
+             ### A?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+             ### B?\ndepends: A?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+             ### C?\ndepends: B?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        assert_eq!(rf.tiers, Some(vec![1, 2, 3]));
+        assert_eq!(rf.tier_of(0), Some(1));
+        assert_eq!(rf.tier_of(2), Some(3));
+        assert!(rf.derive_error.is_none());
+    }
+
+    #[test]
+    fn derive_tiers_dangling_entry_errors() {
+        let rf = rf_from(
+            "# Topic\n\n### A?\ndepends: Missing?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        assert!(rf.tiers.is_none());
+        match &rf.derive_error {
+            Some(DeriveError::Dangling { section, entry }) => {
+                assert_eq!(section, "A?");
+                assert_eq!(entry, "Missing?");
+            }
+            other => panic!("expected Dangling, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn derive_tiers_cycle_errors() {
+        let rf = rf_from(
+            "# Topic\n\n\
+             ### A?\ndepends: B?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+             ### B?\ndepends: A?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        match &rf.derive_error {
+            Some(DeriveError::Cycle(names)) => {
+                assert!(names.contains(&"A?".to_string()), "{:?}", names);
+                assert!(names.contains(&"B?".to_string()), "{:?}", names);
+            }
+            other => panic!("expected Cycle, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn derive_tiers_self_dep_errors() {
+        let rf = rf_from(
+            "# Topic\n\n### A?\ndepends: A?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        match &rf.derive_error {
+            Some(DeriveError::SelfDep(h)) => assert_eq!(h, "A?"),
+            other => panic!("expected SelfDep, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn over_cap_finds_the_first_tier_past_the_cap() {
+        assert_eq!(TIER_CAP, 4);
+        let tiers = vec![1, 1, 1, 1, 1];
+        assert_eq!(over_cap(&tiers), Some((1, 5)));
+        assert_eq!(tier_sizes(&tiers), vec![(1, 5)]);
+
+        let ok = vec![1, 1, 1, 1];
+        assert_eq!(over_cap(&ok), None);
+
+        let mixed = vec![1, 1, 2, 2, 2, 2, 2];
+        assert_eq!(over_cap(&mixed), Some((2, 5)));
+        assert_eq!(tier_sizes(&mixed), vec![(1, 2), (2, 5)]);
+    }
+
+    #[test]
+    fn dependents_of_lists_heading_deps_with_their_sets() {
+        let rf = rf_from(
+            "# Topic\n\n\
+             ### A?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+             ### B?\ndepends: A?=A\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+             ### C?\ndepends: A?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        let deps = rf.dependents_of(0);
+        assert_eq!(deps.len(), 2, "{:?}", deps.iter().map(|(i, _)| i).collect::<Vec<_>>());
+        assert!(deps
+            .iter()
+            .any(|(i, set)| *i == 1 && *set == Some(&AnswerSet::Letters(vec!['A']))));
+        assert!(deps.iter().any(|(i, set)| *i == 2 && set.is_none()));
     }
 }

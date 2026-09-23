@@ -9,8 +9,6 @@ const TWO_GROUP_RECORD: &str = r#"# Topic
 Context prose line one.
 Context prose line two.
 
-## Group One
-
 ### 1.1 First question?
 
 Problem: p1.
@@ -26,9 +24,8 @@ Standard: s1.
 "#;
 
 const GROUP_TWO_ADDITION: &str = r#"
-## Group Two
-
 ### 2.1 Second question?
+depends: 1.1 First question?
 
 Problem: p2.
 
@@ -46,8 +43,6 @@ const ONE_QUESTION_RECORD: &str = r#"# Topic
 
 Context prose.
 
-## Group One
-
 ### 1.1 Only question?
 
 Problem: p.
@@ -62,7 +57,7 @@ Standard: s.
   Costs: other costs.
 "#;
 
-const HEADING_REMOVED: &str = "# Topic\n\nContext prose.\n\n## Group One\n";
+const HEADING_REMOVED: &str = "# Topic\n\nContext prose.\n";
 
 // --- ask refusals naming `adr approve` -------------------------------
 
@@ -114,7 +109,7 @@ fn approve_writes_approved_and_context_rows_then_is_idempotent() {
 fn approve_refuses_a_question_with_one_option() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    let content = "# Example\n\n## Group\n\n### 1.1 One option?\n\nProblem: p.\n\nStandard: s.\n\n- A) Only choice.\n  Why: w.\n  Costs: c.\n";
+    let content = "# Example\n\n### 1.1 One option?\n\nProblem: p.\n\nStandard: s.\n\n- A) Only choice.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -139,7 +134,7 @@ fn approve_refuses_a_question_with_one_option() {
 fn approve_refuses_a_question_with_four_options() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    let content = "# Example\n\n## Group\n\n### 1.1 Four options?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n- D) Four.\n  Why: w.\n  Costs: c.\n";
+    let content = "# Example\n\n### 1.1 Four options?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n- D) Four.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -347,7 +342,7 @@ fn approve_allows_a_vanished_heading_once_superseded() {
     // Now drop the (superseded) 1.1 heading entirely, keeping only 1.2.
     let content4 = std::fs::read_to_string(&record).unwrap();
     let idx = content4.find("### 1.2").expect("1.2 present");
-    let rebuilt = format!("# Topic\n\nContext prose.\n\n## Group One\n\n{}", &content4[idx..]);
+    let rebuilt = format!("# Topic\n\nContext prose.\n\n{}", &content4[idx..]);
     std::fs::write(&record, &rebuilt).unwrap();
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -410,8 +405,6 @@ fn approve_fills_missing_term_ids() {
 const DECISION_QUESTION_RECORD: &str = r#"# Topic
 
 Context prose.
-
-## Group One
 
 ### 1.1 What is the decision?
 
@@ -485,8 +478,6 @@ aliases: choice\n";
 const CHOICE_QUESTION_RECORD: &str = r#"# Topic
 
 Context prose.
-
-## Group One
 
 ### 1.1 What is the choice?
 
@@ -694,8 +685,6 @@ aliases: \n";
 const DECISION_RECORD_FOR_DEPENDENTS: &str = r#"# Topic
 
 Context prose.
-
-## Group One
 
 ### 1.1 What is the decision?
 

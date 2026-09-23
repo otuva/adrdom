@@ -4,8 +4,6 @@ use common::*;
 
 const ONE_QUESTION: &str = r#"# Example
 
-## Group
-
 ### 5.1 Does this pass?
 
 Problem: whether it passes.

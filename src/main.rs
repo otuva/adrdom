@@ -6,17 +6,19 @@ mod record;
 mod repo;
 mod state;
 mod terms;
+mod version;
 mod view;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
+use version::VERSION;
 
 /// adr: a control layer between AI coding agents and a repository.
 #[derive(Parser)]
 #[command(
     name = "adr",
     about = "A control layer between AI coding agents and a repository",
-    version
+    version = VERSION
 )]
 struct Cli {
     #[command(subcommand)]

@@ -116,6 +116,7 @@ pub fn run(term: Option<String>) -> i32 {
             id: "-".to_string(),
             hash: h.clone(),
             detail: uuid.clone().unwrap_or_default(),
+            version: crate::version::VERSION.to_string(),
         })
         .collect();
     if let Err(e) = ledger::append(&ledger_path, &rows) {

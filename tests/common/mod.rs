@@ -98,9 +98,8 @@ pub fn stderr(out: &Output) -> String {
 
 pub const EXAMPLE_RECORD: &str = r#"# Example
 
-## Batch 1
-
 ### 1.1 What is the unit of authority called?
+depends: example
 
 Problem: names leaked into decisions.
 
@@ -160,30 +159,57 @@ fn sha256_hex(text: &str) -> String {
     hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect()
 }
 
-/// Mirrors `record::plan_hash`: sha256 of the trimmed h2/h3 heading lines,
-/// in file order, joined with `\n`.
-pub fn plan_hash(content: &str) -> String {
-    let mut heads: Vec<&str> = Vec::new();
-    for raw in content.split('\n') {
-        let line = raw.trim_end();
-        if line.starts_with("## ") {
-            heads.push(line);
-        } else if line.starts_with("### ") && line.ends_with('?') {
-            heads.push(line);
+/// If `entry` (a `depends:` line's value, trimmed) carries an `=A`/`=A|B`/
+/// `=*` answer-set suffix on a heading target (the text before the `=`
+/// ends with `?`), returns the entry with that suffix stripped; otherwise
+/// returns it unchanged. Mirrors the set-stripping half of `record::Dep`
+/// parsing (see src/record.rs) closely enough for well-formed fixture
+/// content.
+fn strip_answer_set_suffix(entry: &str) -> String {
+    if let Some(eq_idx) = entry.rfind('=') {
+        let base = entry[..eq_idx].trim_end();
+        if base.ends_with('?') {
+            return base.to_string();
         }
     }
-    sha256_hex(&heads.join("\n"))
+    entry.to_string()
+}
+
+/// Mirrors `record::plan_hash` (see src/record.rs): sha256 of the trimmed
+/// `### ` question heading lines in file order, each followed by its
+/// `depends:` lines with any `=set` suffix stripped, joined with `\n`. No
+/// `## ` tier headings any more (8.3 A): tiers are derived, not written.
+pub fn plan_hash(content: &str) -> String {
+    let mut items: Vec<String> = Vec::new();
+    let mut seen_heading = false;
+    for raw in content.split('\n') {
+        let line = raw.trim_end();
+        if line.starts_with("### ") && line.ends_with('?') {
+            items.push(line.to_string());
+            seen_heading = true;
+            continue;
+        }
+        if seen_heading {
+            if let Some(v) = line.trim_start().strip_prefix("depends: ") {
+                items.push(format!("depends: {}", strip_answer_set_suffix(v.trim())));
+            }
+        }
+    }
+    sha256_hex(&items.join("\n"))
 }
 
 /// Mirrors `record::context_hash`: sha256 of the context prose lines
-/// (between the h1 and the first h2) with leading/trailing blank lines
-/// trimmed, joined with `\n`; the empty string hashes when there is none.
+/// (between the h1 and the first `### ` question heading) with
+/// leading/trailing blank lines trimmed, joined with `\n`; the empty string
+/// hashes when there is none.
 pub fn context_hash(content: &str) -> String {
     let lines: Vec<&str> = content.split('\n').collect();
     let h1_idx = lines.iter().position(|l| l.starts_with("# "));
-    let h2_idx = lines.iter().position(|l| l.starts_with("## "));
+    let q_idx = lines
+        .iter()
+        .position(|l| l.starts_with("### ") && l.trim_end().ends_with('?'));
     let start = h1_idx.map(|i| i + 1).unwrap_or(0);
-    let end = h2_idx.unwrap_or(lines.len());
+    let end = q_idx.unwrap_or(lines.len());
     let start = start.min(end);
     let slice = &lines[start..end];
 
@@ -274,6 +300,22 @@ pub fn approve_minimal_terms(dir: &Path, word: &str) {
         "# Terms\n\n## {}\nid: 99999999-9999-9999-9999-999999999999\ndefinition: A fixture term for tests.\naliases: \n",
         word
     );
+    std::fs::write(dir.join("adrdom/terms.md"), &content).unwrap();
+    approve_terms_via_ledger(dir, &content);
+}
+
+/// Like `approve_minimal_terms`, for more than one word at once (e.g.
+/// `EXAMPLE_RECORD`, which carries a `depends: example` line alongside its
+/// `decision` mention): one fixture term per word in `words`, each with its
+/// own uuid.
+pub fn approve_terms_with(dir: &Path, words: &[&str]) {
+    let mut content = String::from("# Terms\n");
+    for (i, word) in words.iter().enumerate() {
+        content.push_str(&format!(
+            "\n## {}\nid: 9999999{}-9999-9999-9999-999999999999\ndefinition: A fixture term for tests.\naliases: \n",
+            word, i
+        ));
+    }
     std::fs::write(dir.join("adrdom/terms.md"), &content).unwrap();
     approve_terms_via_ledger(dir, &content);
 }

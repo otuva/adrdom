@@ -12,7 +12,7 @@ fn principle_block_is_gone_a_p1_line_inside_a_body_is_stray_and_gets_no_id() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
 
-    let content = "# Example\n\n## Group\n\n### 1.1 Is a decision one commitment?\n\nProblem: p.\n\nStandard: s.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n\n**P1. Every decision is a question.**\n";
+    let content = "# Example\n\n### 1.1 Is a decision one commitment?\n\nProblem: p.\n\nStandard: s.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n\n**P1. Every decision is a question.**\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let stray_line_no = content
@@ -51,7 +51,7 @@ fn a_question_needs_two_or_three_options() {
     {
         let dir = init_repo();
         assert!(adr(&dir, &["install"], &[], "").status.success());
-        let content = "# Example\n\n## Group\n\n### 1.1 One option?\n\nProblem: p.\n\nStandard: s.\n\n- A) Only choice.\n  Why: w.\n  Costs: c.\n";
+        let content = "# Example\n\n### 1.1 One option?\n\nProblem: p.\n\nStandard: s.\n\n- A) Only choice.\n  Why: w.\n  Costs: c.\n";
         write_record(&dir, "adrdom/decisions/example.md", content);
 
         let out = adr(&dir, &["check"], &[], "");
@@ -65,7 +65,7 @@ fn a_question_needs_two_or_three_options() {
     {
         let dir = init_repo();
         assert!(adr(&dir, &["install"], &[], "").status.success());
-        let content = "# Example\n\n## Group\n\n### 1.1 Four options?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n- D) Four.\n  Why: w.\n  Costs: c.\n";
+        let content = "# Example\n\n### 1.1 Four options?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n- D) Four.\n  Why: w.\n  Costs: c.\n";
         write_record(&dir, "adrdom/decisions/example.md", content);
 
         let out = adr(&dir, &["check"], &[], "");
@@ -80,7 +80,7 @@ fn a_question_needs_two_or_three_options() {
         let dir = init_repo();
         assert!(adr(&dir, &["install"], &[], "").status.success());
         approve_minimal_terms(&dir, "options");
-        let content = "# Example\n\n## Group\n\n### 1.1 Two options?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
+        let content = "# Example\n\n### 1.1 Two options?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
         approve_via_ledger(&dir, "adrdom/decisions/example.md", content);
 
@@ -93,7 +93,7 @@ fn a_question_needs_two_or_three_options() {
         let dir = init_repo();
         assert!(adr(&dir, &["install"], &[], "").status.success());
         approve_minimal_terms(&dir, "options");
-        let content = "# Example\n\n## Group\n\n### 1.1 Three options?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n";
+        let content = "# Example\n\n### 1.1 Three options?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
         approve_via_ledger(&dir, "adrdom/decisions/example.md", content);
 
@@ -110,7 +110,7 @@ fn a_question_needs_a_problem_line_and_a_standard_line() {
         let dir = init_repo();
         assert!(adr(&dir, &["install"], &[], "").status.success());
         approve_minimal_terms(&dir, "decision");
-        let content = "# Example\n\n## Group\n\n### 1.1 What is a decision?\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
+        let content = "# Example\n\n### 1.1 What is a decision?\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
@@ -123,7 +123,7 @@ fn a_question_needs_a_problem_line_and_a_standard_line() {
         let dir = init_repo();
         assert!(adr(&dir, &["install"], &[], "").status.success());
         approve_minimal_terms(&dir, "decision");
-        let content = "# Example\n\n## Group\n\n### 1.1 What is a decision?\n\nProblem: p.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
+        let content = "# Example\n\n### 1.1 What is a decision?\n\nProblem: p.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
@@ -136,7 +136,7 @@ fn a_question_needs_a_problem_line_and_a_standard_line() {
         let dir = init_repo();
         assert!(adr(&dir, &["install"], &[], "").status.success());
         approve_minimal_terms(&dir, "decision");
-        let content = "# Example\n\n## Group\n\n### 1.1 What is a decision?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
+        let content = "# Example\n\n### 1.1 What is a decision?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
         approve_via_ledger(&dir, "adrdom/decisions/example.md", content);
 
@@ -153,7 +153,7 @@ fn every_option_needs_a_why_line_and_a_costs_line() {
         let dir = init_repo();
         assert!(adr(&dir, &["install"], &[], "").status.success());
         approve_minimal_terms(&dir, "decision");
-        let content = "# Example\n\n## Group\n\n### 1.1 What is a decision?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
+        let content = "# Example\n\n### 1.1 What is a decision?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
@@ -166,7 +166,7 @@ fn every_option_needs_a_why_line_and_a_costs_line() {
         let dir = init_repo();
         assert!(adr(&dir, &["install"], &[], "").status.success());
         approve_minimal_terms(&dir, "decision");
-        let content = "# Example\n\n## Group\n\n### 1.1 What is a decision?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
+        let content = "# Example\n\n### 1.1 What is a decision?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
@@ -179,7 +179,7 @@ fn every_option_needs_a_why_line_and_a_costs_line() {
         let dir = init_repo();
         assert!(adr(&dir, &["install"], &[], "").status.success());
         approve_minimal_terms(&dir, "decision");
-        let content = "# Example\n\n## Group\n\n### 1.1 What is a decision?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
+        let content = "# Example\n\n### 1.1 What is a decision?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
         approve_via_ledger(&dir, "adrdom/decisions/example.md", content);
 
@@ -196,7 +196,7 @@ fn a_lean_line_in_the_topic_file_is_stray() {
 
     // The topic file carries no agent lean; a `Lean: ` line under a
     // heading is not a recognized field, so it is a stray line.
-    let content = "# Example\n\n## Group\n\n### 1.1 What is a decision?\n\nProblem: p.\n\nStandard: s.\nLean: A.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
+    let content = "# Example\n\n### 1.1 What is a decision?\n\nProblem: p.\n\nStandard: s.\nLean: A.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let stray_line_no = content.lines().position(|l| l == "Lean: A.").unwrap() + 1;

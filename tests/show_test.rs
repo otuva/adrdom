@@ -4,8 +4,6 @@ use common::*;
 
 const RECORD: &str = r#"# Example
 
-## Group
-
 ### 1.1 Is this current?
 
 Problem: whether it is current.

@@ -180,22 +180,25 @@ pub fn run(record_path: PathBuf) -> i32 {
         }
 
         // Tier rule: every tier before this section's tier must have all
-        // of its non-skeleton questions answered.
-        if let Some(n) = sec.group {
-            for gi in 0..n {
-                let Some(g) = rf.groups.get(gi) else { continue };
-                for &qi in &g.question_idx {
-                    let other = &rf.sections[qi];
-                    if !other.is_skeleton && other.answer_line.is_none() {
-                        eprintln!(
-                            "ask: {}: \"{}\" is blocked by unanswered \"{}\" in an earlier tier; owner runs: adr answer {} <letter> on it first",
-                            rel,
-                            sec.heading_text,
-                            other.heading_text,
-                            other.id.as_deref().unwrap_or("<id>")
-                        );
-                        return 1;
-                    }
+        // of its non-skeleton questions answered. Temporary: derived via
+        // `rf.tier_of` (record.rs's §1); wave 2's ask.rs (spec §4) replaces
+        // this with the full derived rule, including the derive-error, set,
+        // and moot refusals.
+        if let Some(n) = rf.tier_of(i) {
+            for (oi, other) in rf.sections.iter().enumerate() {
+                if oi == i {
+                    continue;
+                }
+                let Some(on) = rf.tier_of(oi) else { continue };
+                if on < n && !other.is_skeleton && other.answer_line.is_none() {
+                    eprintln!(
+                        "ask: {}: \"{}\" is blocked by unanswered \"{}\" in an earlier tier; owner runs: adr answer {} <letter> on it first",
+                        rel,
+                        sec.heading_text,
+                        other.heading_text,
+                        other.id.as_deref().unwrap_or("<id>")
+                    );
+                    return 1;
                 }
             }
         }
@@ -335,6 +338,7 @@ pub fn run(record_path: PathBuf) -> i32 {
                 id: id.clone(),
                 hash: cur,
                 detail: sec.heading_text.clone(),
+                version: crate::version::VERSION.to_string(),
             });
             summary.push(format!("{}: {}", label, sec.heading_text));
         }
