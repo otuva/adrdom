@@ -10,7 +10,9 @@
       "Bash(adr serve*)",
       "Bash(* adr serve*)",
       "Edit(adrdom/state/**)",
-      "Write(adrdom/state/**)"
+      "Write(adrdom/state/**)",
+      "Bash(adr uninstall*)",
+      "Bash(* adr uninstall*)"
     ]
   }
 }
