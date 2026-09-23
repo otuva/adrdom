@@ -108,8 +108,8 @@ pub fn run(record_path: PathBuf) -> i32 {
         return 1;
     }
 
-    // Refuse (and change nothing) if any answered section was edited since
-    // it was answered.
+    // Refuse (and change nothing) if any answered or refused section was
+    // edited since it was answered/refused.
     for sec in &rf.sections {
         if let Some(id) = &sec.id {
             if let Some(row) = led.latest_state(id) {
@@ -118,6 +118,16 @@ pub fn run(record_path: PathBuf) -> i32 {
                     if cur != row.hash {
                         eprintln!(
                             "ask: {}: \"{}\" was edited after being answered; refusing",
+                            record_path.display(),
+                            sec.heading_text
+                        );
+                        return 1;
+                    }
+                } else if row.event == "refused" && sec.is_refused() {
+                    let cur = record::section_hash(&rf.lines, sec);
+                    if cur != row.hash {
+                        eprintln!(
+                            "ask: {}: \"{}\" was edited after being refused; refusing",
                             record_path.display(),
                             sec.heading_text
                         );
@@ -170,6 +180,86 @@ pub fn run(record_path: PathBuf) -> i32 {
         })
         .collect();
 
+    // Derive-error refusal (8.4/8.7): a derivation failure means `approve`
+    // would also refuse on this same file, so the fix has to happen before
+    // either command can move: point the owner at the topic file first, the
+    // re-approval second.
+    if let Some(err) = &rf.derive_error {
+        let tail = format!("agent fixes the topic file, owner runs: adr approve {}", rel);
+        eprintln!("ask: {}", record::derive_error_text(&rel, err, Some(&tail)));
+        return 1;
+    }
+
+    // Cap refusal (8.8 A): any derived tier over `TIER_CAP`, file-wide
+    // (mirrors approve's cap check, prefixed `ask:`).
+    if let Some(tiers) = &rf.tiers {
+        if let Some((n, m)) = record::over_cap(tiers) {
+            eprintln!(
+                "ask: {}: tier {} holds {} questions, the cap is {}; agent moves questions under a higher heading or splits the topic",
+                rel, n, m, record::TIER_CAP
+            );
+            return 1;
+        }
+    }
+
+    // The open tier (8.4 A): the lowest tier holding a non-skeleton
+    // question without a letter answer (a refused question counts as
+    // without one). Every candidate is non-skeleton and has no letter
+    // answer by construction, so whenever any candidate exists, it names a
+    // tier in this set and `open_tier` is never `None`.
+    let open_tier: Option<usize> = rf
+        .sections
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| !s.is_skeleton && s.answer_letter().is_none())
+        .filter_map(|(i, _)| rf.tier_of(i))
+        .min();
+
+    // Answer sets mandatory (8.7 A): before asking any candidate in the
+    // open tier, every section in the file with a heading dep pointing at
+    // an open-tier section must carry an explicit set on that entry, and
+    // every set's letters must be options the target actually has. Runs
+    // once, ahead of the per-candidate loop, and only when there is
+    // something new to ask in the open tier this run.
+    if let Some(n) = open_tier {
+        let asking_in_open_tier = rf
+            .sections
+            .iter()
+            .enumerate()
+            .any(|(i, _)| candidate[i] && rf.tier_of(i) == Some(n));
+        if asking_in_open_tier {
+            for (ti, target) in rf.sections.iter().enumerate() {
+                if rf.tier_of(ti) != Some(n) {
+                    continue;
+                }
+                for (di, set) in rf.dependents_of(ti) {
+                    let dependent = &rf.sections[di];
+                    match set {
+                        None => {
+                            eprintln!(
+                                "ask: {}: \"{}\" depends on \"{}\" without an answer set; agent writes =A, =A|B or =* on that depends line",
+                                rel, dependent.heading_text, target.heading_text
+                            );
+                            return 1;
+                        }
+                        Some(record::AnswerSet::Any) => {}
+                        Some(record::AnswerSet::Letters(letters)) => {
+                            for l in letters {
+                                if !target.options.iter().any(|o| o.letter == *l) {
+                                    eprintln!(
+                                        "ask: {}: \"{}\" depends on \"{}\" names option {} which \"{}\" does not have",
+                                        rel, dependent.heading_text, target.heading_text, l, target.heading_text
+                                    );
+                                    return 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     let banned_path = root.join("adrdom/state/banned.sha256");
     let banned_entries: HashMap<String, Option<String>> =
         banned::read_entries(&banned_path).into_iter().collect();
@@ -179,22 +269,85 @@ pub fn run(record_path: PathBuf) -> i32 {
             continue;
         }
 
-        // Tier rule: every tier before this section's tier must have all
-        // of its non-skeleton questions answered.
-        if let Some(n) = sec.group {
-            for gi in 0..n {
-                let Some(g) = rf.groups.get(gi) else { continue };
-                for &qi in &g.question_idx {
-                    let other = &rf.sections[qi];
-                    if !other.is_skeleton && other.answer_line.is_none() {
+        // A candidate that directly stands on a refused question refuses
+        // with the specific dependency named, ahead of the generic tier
+        // rule below (whose "waiting on" blocker, chosen by file order
+        // within the open tier, need not be this candidate's own
+        // dependency even when the generic rule would also fire).
+        for d in &sec.depends {
+            if let record::Dep::Heading { text, .. } = d {
+                if let Some(target) = rf
+                    .sections
+                    .iter()
+                    .find(|s| s.heading_text.trim() == text.trim())
+                {
+                    if target.is_refused() {
                         eprintln!(
-                            "ask: {}: \"{}\" is blocked by unanswered \"{}\" in an earlier tier; owner runs: adr answer {} <letter> on it first",
-                            rel,
-                            sec.heading_text,
-                            other.heading_text,
-                            other.id.as_deref().unwrap_or("<id>")
+                            "ask: {}: \"{}\" stands on refused \"{}\"; agent re-plans, owner runs: adr approve {}",
+                            rel, sec.heading_text, target.heading_text, rel
                         );
                         return 1;
+                    }
+                }
+            }
+        }
+
+        // Tier rule (8.4/8.5 A): a candidate outside the open tier
+        // refuses, naming the tier's blocker (the first non-skeleton,
+        // unanswered section in the open tier, by file order) and whether
+        // that blocker is refused.
+        let cand_tier = rf.tier_of(i).unwrap_or(1);
+        if let Some(open_n) = open_tier {
+            if cand_tier != open_n {
+                let blocker = rf.sections.iter().enumerate().find(|(bi, s)| {
+                    !s.is_skeleton && s.answer_letter().is_none() && rf.tier_of(*bi) == Some(open_n)
+                }).map(|(_, s)| s);
+                if let Some(blocker) = blocker {
+                    if blocker.is_refused() {
+                        eprintln!(
+                            "ask: {}: \"{}\" is in tier {}; tier {} is open, waiting on refused \"{}\"; agent re-plans, owner runs: adr approve {}",
+                            rel, sec.heading_text, cand_tier, open_n, blocker.heading_text, rel
+                        );
+                    } else {
+                        eprintln!(
+                            "ask: {}: \"{}\" is in tier {}; tier {} is open, waiting on \"{}\"; owner runs: adr answer {} <letter> on it first",
+                            rel,
+                            sec.heading_text,
+                            cand_tier,
+                            open_n,
+                            blocker.heading_text,
+                            blocker.id.as_deref().unwrap_or("<id>")
+                        );
+                    }
+                    return 1;
+                }
+            }
+        }
+
+        // Moot refusal (8.7 A): a heading dep carrying a set whose target
+        // is now answered with a letter outside that set.
+        for d in &sec.depends {
+            if let record::Dep::Heading {
+                text,
+                set: Some(record::AnswerSet::Letters(letters)),
+            } = d
+            {
+                if let Some(target) = rf
+                    .sections
+                    .iter()
+                    .find(|s| s.heading_text.trim() == text.trim())
+                {
+                    if let Some(c) = target.answer_letter() {
+                        if !letters.contains(&c) {
+                            let set_str = record::canonical_set(&record::AnswerSet::Letters(
+                                letters.clone(),
+                            ));
+                            eprintln!(
+                                "ask: {}: \"{}\" is moot: stands on \"{}\"={}, answered {}; agent drops or replaces the heading, owner runs: adr approve {}",
+                                rel, sec.heading_text, target.heading_text, set_str, c, rel
+                            );
+                            return 1;
+                        }
                     }
                 }
             }
@@ -319,24 +472,53 @@ pub fn run(record_path: PathBuf) -> i32 {
     }
 
     let mut new_rows = Vec::new();
-    let mut summary = Vec::new();
-    for sec in &rf.sections {
-        let Some(id) = &sec.id else { continue };
+    let mut summary: Vec<String> = Vec::new();
+    for i in 0..rf.sections.len() {
+        let sec = &rf.sections[i];
+        let Some(id) = sec.id.clone() else { continue };
         let cur = record::section_hash(&rf.lines, sec);
-        let label = match led.latest_state(id) {
+        let label = match led.latest_state(&id) {
             None => Some("asked"),
             Some(row) if row.event == "asked" && row.hash != cur => Some("re-asked"),
             _ => None,
         };
-        if let Some(label) = label {
+        let Some(label) = label else { continue };
+        let tier = rf.tier_of(i).unwrap_or(1);
+        new_rows.push(ledger::Row {
+            time: ledger::now_rfc3339(),
+            event: "asked".to_string(),
+            id: id.clone(),
+            hash: cur,
+            detail: sec.heading_text.clone(),
+            version: crate::version::VERSION.to_string(),
+        });
+        summary.push(format!("{}: \"{}\" (tier {})", label, sec.heading_text, tier));
+
+        // One `assumes` row per dependent (8.1/8.7 A): what set the
+        // dependent currently declares on this question, frozen at ask
+        // time so `check`'s `answers.rs` can later catch it moving.
+        for (di, set) in rf.dependents_of(i) {
+            let Some(set) = set else {
+                // Guaranteed not to happen: the sets-mandatory gate above
+                // already refused before any row was written if a
+                // dependent in this tier carried no set. Skip rather than
+                // panic if it somehow does.
+                continue;
+            };
+            let dependent = &rf.sections[di];
+            let set_str = record::canonical_set(set);
             new_rows.push(ledger::Row {
                 time: ledger::now_rfc3339(),
-                event: "asked".to_string(),
+                event: "assumes".to_string(),
                 id: id.clone(),
-                hash: cur,
-                detail: sec.heading_text.clone(),
+                hash: record::assumes_hash(&dependent.heading_text, set),
+                detail: dependent.heading_text.clone(),
+                version: crate::version::VERSION.to_string(),
             });
-            summary.push(format!("{}: {}", label, sec.heading_text));
+            summary.push(format!(
+                "  assumes: \"{}\"={}",
+                dependent.heading_text, set_str
+            ));
         }
     }
 

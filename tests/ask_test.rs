@@ -6,7 +6,7 @@ use common::*;
 fn example_record_round_trips_and_ask_assigns_ids() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "decision");
+    approve_terms_with(&dir, &["decision", "example"]);
     let record = write_record(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
 
@@ -38,7 +38,7 @@ fn example_record_round_trips_and_ask_assigns_ids() {
 fn ask_reasks_on_edit() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "decision");
+    approve_terms_with(&dir, &["decision", "example"]);
     let record = write_record(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
@@ -83,7 +83,7 @@ fn ask_reasks_on_edit() {
 fn ask_refuses_to_edit_an_answered_section() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "decision");
+    approve_terms_with(&dir, &["decision", "example"]);
     let record = write_record(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
@@ -127,7 +127,7 @@ fn ask_refuses_a_question_with_one_option() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
-    let content = "# Example\n\n## Group\n\n### 1.1 One option?\n\nProblem: p.\n\nStandard: s.\n\n- A) Only choice.\n  Why: w.\n  Costs: c.\n";
+    let content = "# Example\n\n### 1.1 One option?\n\nProblem: p.\n\nStandard: s.\n\n- A) Only choice.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
@@ -149,7 +149,7 @@ fn ask_refuses_a_question_with_four_options() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
-    let content = "# Example\n\n## Group\n\n### 1.1 Four options?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n- D) Four.\n  Why: w.\n  Costs: c.\n";
+    let content = "# Example\n\n### 1.1 Four options?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n- D) Four.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
@@ -170,7 +170,7 @@ fn ask_refuses_a_question_with_four_options() {
 fn ask_leaves_a_skeleton_heading_without_id_or_row() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "decision");
+    approve_terms_with(&dir, &["decision", "example"]);
     let content = format!("{}\n### 1.2 Where does the plan live?\n", EXAMPLE_RECORD);
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
@@ -191,8 +191,6 @@ fn ask_leaves_a_skeleton_heading_without_id_or_row() {
 // zero pairings, and the plural terms-line write --------------------------
 
 const AUTHORITY_QUESTION: &str = r#"# Example
-
-## Group
 
 ### 1.1 What is the unit of authority called?
 
@@ -327,7 +325,7 @@ fn ask_refuses_a_retired_match() {
 fn ask_refuses_a_candidate_that_pairs_no_term() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    let content = "# Example\n\n## Group\n\n### 1.1 Does this pass?\n\nProblem: whether it passes.\n\nStandard: clear yes or no.\n\n- A) Yes it passes.\n  Why: reasons.\n  Costs: costs.\n- B) No it does not.\n  Why: other reasons.\n  Costs: other costs.\n";
+    let content = "# Example\n\n### 1.1 Does this pass?\n\nProblem: whether it passes.\n\nStandard: clear yes or no.\n\n- A) Yes it passes.\n  Why: reasons.\n  Costs: costs.\n- B) No it does not.\n  Why: other reasons.\n  Costs: other costs.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", content);
     approve_minimal_terms(&dir, "authority");

@@ -32,6 +32,10 @@ pub enum QState {
     Unasked,
     Open,
     Answered,
+    /// The owner's answer that the question cannot be answered as asked
+    /// (8.1 A `**Answer:** refused`): answered for hashing/editing, but
+    /// unanswered for the tier rule and for `done`.
+    Refused,
     Superseded,
     Withdrawn,
 }
@@ -54,7 +58,13 @@ pub struct WordPair {
 pub struct QuestionView {
     pub id: Option<String>,
     pub heading: String,
-    pub group: String,
+    /// The section's derived tier (8.3 A), or `None` when tier derivation
+    /// failed for the file (`RecordFile::derive_error`).
+    pub tier: Option<usize>,
+    /// This section's `depends:` entries, each formatted as written in the
+    /// file (a term name, a uuid, or a heading with its `=set` suffix
+    /// restored — see `format_dep`), in file order.
+    pub depends: Vec<String>,
     pub state: QState,
     pub problem: Option<String>,
     pub standard: Option<String>,
@@ -77,8 +87,14 @@ pub struct FileView {
     pub plan_approved: bool,
     pub context_approved: bool,
     pub done: bool,
-    pub open_group: Option<String>,
+    pub open_tier: Option<usize>,
     pub waits_on: Option<String>,
+    /// One note per heading dep whose set excludes the answer its target
+    /// was given (8.7 A "moot", §6's `moot.rs`), formatted `"<h>" stands
+    /// on "<other>"=A|B, answered C` — the file-scoped counterpart to
+    /// `check`'s `moot: <rel>: ...` lines, shown alongside this file on
+    /// the overview page.
+    pub moot: Vec<String>,
     pub questions: Vec<QuestionView>,
 }
 
@@ -131,9 +147,10 @@ pub struct Snapshot {
 /// The state a question heading is in, from the ledger's latest
 /// state row for its id: no id and a skeleton heading is `Skeleton`; no id
 /// with a body is `Unasked`; otherwise the id's latest ledger event maps
-/// straight across (`asked` -> `Open`, `answered` -> `Answered`,
-/// `superseded`/`withdrawn` accordingly).
-fn qstate(led: &Ledger, sec: &Section) -> QState {
+/// straight across (`asked` -> `Open`, `answered` -> `Answered`, `refused`
+/// -> `Refused`, `superseded`/`withdrawn` accordingly). `pub(crate)` so
+/// `commands::show` (spec §7) can reuse it instead of re-deriving state.
+pub(crate) fn qstate(led: &Ledger, sec: &Section) -> QState {
     let Some(id) = &sec.id else {
         return if sec.is_skeleton {
             QState::Skeleton
@@ -144,10 +161,82 @@ fn qstate(led: &Ledger, sec: &Section) -> QState {
     match led.latest_state(id).map(|r| r.event.as_str()) {
         Some("asked") => QState::Open,
         Some("answered") => QState::Answered,
+        Some("refused") => QState::Refused,
         Some("superseded") => QState::Superseded,
         Some("withdrawn") => QState::Withdrawn,
         _ => QState::Unasked,
     }
+}
+
+/// A `depends:` entry's text as originally written in the file (spec §7):
+/// a term name and a decision's uuid are printed as-is; a heading dep's
+/// text has its `=set` suffix restored (`=A`, `=A|B`, `=*`) when it
+/// carries one. Shared by `show` (the "stands on:" line) and `/next` (the
+/// "Stands on:" line).
+pub fn format_dep(d: &record::Dep) -> String {
+    match d {
+        record::Dep::Term(t) => t.clone(),
+        record::Dep::Decision(id) => id.clone(),
+        record::Dep::Heading { text, set } => match set {
+            None => text.clone(),
+            Some(record::AnswerSet::Any) => format!("{}=*", text),
+            Some(record::AnswerSet::Letters(letters)) => format!(
+                "{}={}",
+                text,
+                letters
+                    .iter()
+                    .map(|c| c.to_string())
+                    .collect::<Vec<_>>()
+                    .join("|")
+            ),
+        },
+    }
+}
+
+/// One note per heading dep in `rf` whose declared answer set excludes the
+/// letter its target was actually answered with (8.7 A "moot"; mirrors
+/// `check`'s `moot.rs`, computed independently here since `record.rs` has
+/// no ledger access): `"<h>" stands on "<other>"=A|B, answered C`, `<h>`
+/// the dependent's heading and `<other>` the target's. A target that is
+/// unanswered, or a set of `=*`, never produces a note.
+fn moot_notes(rf: &RecordFile, led: &Ledger) -> Vec<String> {
+    let mut out = Vec::new();
+    for sec in &rf.sections {
+        for d in &sec.depends {
+            let record::Dep::Heading {
+                text,
+                set: Some(record::AnswerSet::Letters(letters)),
+            } = d
+            else {
+                continue;
+            };
+            let Some(target) = rf
+                .sections
+                .iter()
+                .find(|t| t.heading_text.trim() == text.trim())
+            else {
+                continue;
+            };
+            // `Answered` implies a real id (qstate only reaches it via an
+            // id's ledger row), so `target.answer_letter()` below is safe.
+            if qstate(led, target) != QState::Answered {
+                continue;
+            }
+            let Some(c) = target.answer_letter() else {
+                continue;
+            };
+            if !letters.contains(&c) {
+                out.push(format!(
+                    "\"{}\" stands on \"{}\"={}, answered {}",
+                    sec.heading_text,
+                    target.heading_text,
+                    letters.iter().map(|c| c.to_string()).collect::<Vec<_>>().join("|"),
+                    c
+                ));
+            }
+        }
+    }
+    out
 }
 
 /// The text following `prefix` (e.g. `"Problem: "`) on the first matching
@@ -158,35 +247,45 @@ fn body_field(lines: &[String], sec: &Section, prefix: &str) -> Option<String> {
         .find_map(|l| l.strip_prefix(prefix).map(|v| v.trim().to_string()))
 }
 
-/// `open_group`: the heading of the lowest tier that still has an
-/// Open or Unasked question in it. `waits_on`: the heading of the first
-/// Open/Unasked question in an earlier tier than the lowest tier that
-/// has an Unasked/Skeleton question waiting to be asked — i.e. the heading
-/// `ask` would name in its tier refusal — or `None` when nothing is
-/// waiting on an earlier tier.
-fn open_group_and_waits_on(rf: &RecordFile, led: &Ledger) -> (Option<String>, Option<String>) {
-    let mut group_states: Vec<Vec<(String, QState)>> = vec![Vec::new(); rf.groups.len()];
-    for sec in &rf.sections {
-        if let Some(gi) = sec.group {
-            group_states[gi].push((sec.heading_text.clone(), qstate(led, sec)));
-        }
+/// `open_tier`: the lowest derived tier that still has a non-skeleton
+/// question without a letter answer — Open, Unasked, or Refused all count
+/// (8.1 A: a refusal is unanswered for the tier rule) — or `None` when
+/// every tier is clear or tier derivation failed
+/// (`RecordFile::derive_error`; `check`/`approve`/`ask` report why). This
+/// is the "Tier N is open" tier the overview names (spec §7).
+///
+/// `waits_on`: the heading of the first Open/Unasked/Refused question in a
+/// tier earlier than the lowest tier that has an Unasked/Skeleton question
+/// waiting to be asked — i.e. the heading `ask` would name in its tier
+/// refusal — or `None` when nothing is waiting on an earlier tier.
+fn open_tier_and_waits_on(rf: &RecordFile, led: &Ledger) -> (Option<usize>, Option<String>) {
+    let Some(tiers) = &rf.tiers else {
+        return (None, None);
+    };
+    let max_tier = tiers.iter().copied().max().unwrap_or(0);
+    let mut tier_states: Vec<Vec<(String, QState)>> = vec![Vec::new(); max_tier + 1];
+    for (i, sec) in rf.sections.iter().enumerate() {
+        let t = tiers[i];
+        tier_states[t].push((sec.heading_text.clone(), qstate(led, sec)));
     }
 
-    let open_group_idx = group_states.iter().position(|qs| {
-        qs.iter()
-            .any(|(_, s)| matches!(s, QState::Open | QState::Unasked))
-    });
-    let open_group = open_group_idx.map(|gi| rf.groups[gi].heading_text.clone());
+    // "Without a letter answer": Open, Unasked, and Refused all block a
+    // later tier from being the open one; Skeleton, Answered, Superseded,
+    // and Withdrawn don't.
+    let unresolved = |s: &QState| matches!(s, QState::Open | QState::Unasked | QState::Refused);
 
-    let waiting_group_idx = group_states.iter().position(|qs| {
-        qs.iter()
+    let open_tier = (1..=max_tier).find(|&t| tier_states[t].iter().any(|(_, s)| unresolved(s)));
+
+    let waiting_tier = (1..=max_tier).find(|&t| {
+        tier_states[t]
+            .iter()
             .any(|(_, s)| matches!(s, QState::Unasked | QState::Skeleton))
     });
 
-    let waits_on = waiting_group_idx.and_then(|g_idx| {
-        for states in &group_states[..g_idx] {
-            for (heading, s) in states {
-                if matches!(s, QState::Open | QState::Unasked) {
+    let waits_on = waiting_tier.and_then(|wt| {
+        for t in 1..wt {
+            for (heading, s) in &tier_states[t] {
+                if unresolved(s) {
                     return Some(heading.clone());
                 }
             }
@@ -194,7 +293,7 @@ fn open_group_and_waits_on(rf: &RecordFile, led: &Ledger) -> (Option<String>, Op
         None
     });
 
-    (open_group, waits_on)
+    (open_tier, waits_on)
 }
 
 /// Every word=term pairing for `sec` (from its terms line if it has one,
@@ -381,17 +480,15 @@ fn no_entry_words(text: &str, pairs: &[(String, String)], terms_list: &[Term]) -
 
 fn build_question_view(
     rf: &RecordFile,
+    idx: usize,
     sec: &Section,
     led: &Ledger,
     test_idx: &HashMap<String, Vec<String>>,
     terms_list: &[Term],
 ) -> QuestionView {
     let state = qstate(led, sec);
-    let group = sec
-        .group
-        .and_then(|gi| rf.groups.get(gi))
-        .map(|g| g.heading_text.clone())
-        .unwrap_or_default();
+    let tier = rf.tier_of(idx);
+    let depends: Vec<String> = sec.depends.iter().map(format_dep).collect();
     let problem = body_field(&rf.lines, sec, "Problem: ");
     let standard = body_field(&rf.lines, sec, "Standard: ");
     let options = record::option_details(&rf.lines, sec)
@@ -422,7 +519,8 @@ fn build_question_view(
     QuestionView {
         id: sec.id.clone(),
         heading: sec.heading_text.clone(),
-        group,
+        tier,
+        depends,
         state,
         problem,
         standard,
@@ -445,13 +543,16 @@ fn build_file_view(
     let path = state::rel_path(root, &rf.path);
     let plan_approved = state::plan_approved(led, rf, &path);
     let context_approved = state::context_approved(led, rf, &path);
-    let done =
-        plan_approved && context_approved && rf.sections.iter().all(|s| s.answer_line.is_some());
-    let (open_group, waits_on) = open_group_and_waits_on(rf, led);
+    let done = plan_approved
+        && context_approved
+        && rf.sections.iter().all(|s| s.answer_letter().is_some());
+    let (open_tier, waits_on) = open_tier_and_waits_on(rf, led);
+    let moot = moot_notes(rf, led);
     let questions = rf
         .sections
         .iter()
-        .map(|sec| build_question_view(rf, sec, led, test_idx, terms_list))
+        .enumerate()
+        .map(|(idx, sec)| build_question_view(rf, idx, sec, led, test_idx, terms_list))
         .collect();
 
     FileView {
@@ -460,8 +561,9 @@ fn build_file_view(
         plan_approved,
         context_approved,
         done,
-        open_group,
+        open_tier,
         waits_on,
+        moot,
         questions,
     }
 }
@@ -703,15 +805,14 @@ mod tests {
 
     const TWO_GROUP: &str = "# Topic\n\n\
 Context prose.\n\n\
-## Group One\n\n\
 ### 1.1 First question?\n\n\
 id: id-1\n\n\
 Problem: p1.\n\n\
 Standard: s1.\n\n\
 - A) Answer one.\n  Why: reason one.\n  Costs: cost one.\n\
 - B) Answer two.\n  Why: reason two.\n\n\
-## Group Two\n\n\
-### 2.1 Second question?\n\n\
+### 2.1 Second question?\n\
+depends: 1.1 First question?\n\n\
 Problem: p2.\n\n\
 Standard: s2.\n\n\
 - A) Second answer.\n  Why: reasons.\n";
@@ -764,13 +865,13 @@ Standard: s2.\n\n\
             id: Some(id.to_string()),
             id_dup: false,
             supersedes: vec![],
+            depends: vec![],
             options: vec![],
             answer_line: None,
             answer_value: None,
             parse_errors: vec![],
             shape_errors: vec![],
             is_skeleton: false,
-            group: None,
             terms_line: None,
         };
 
@@ -782,9 +883,37 @@ Standard: s2.\n\n\
     }
 
     #[test]
+    fn qstate_maps_refused() {
+        let dir = temp_repo();
+        append_row(&dir, "asked", "id-r", "h", "R?");
+        append_row(&dir, "refused", "id-r", "h", "R?");
+        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+
+        let sec = Section {
+            start: 0,
+            end: 1,
+            heading_text: "x".to_string(),
+            id: Some("id-r".to_string()),
+            id_dup: false,
+            supersedes: vec![],
+            depends: vec![],
+            options: vec![],
+            answer_line: None,
+            answer_value: None,
+            parse_errors: vec![],
+            shape_errors: vec![],
+            is_skeleton: false,
+            terms_line: None,
+        };
+        assert_eq!(qstate(&led, &sec), QState::Refused);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
     fn skeleton_heading_has_no_id_maps_to_skeleton() {
         let dir = temp_repo();
-        let content = "# Topic\n\n## Group\n\n### 1.1 Not written yet?\n";
+        let content = "# Topic\n\n### 1.1 Not written yet?\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
         let rf = record::load(&record).unwrap();
         let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
@@ -793,7 +922,7 @@ Standard: s2.\n\n\
     }
 
     #[test]
-    fn open_group_and_waits_on_for_unanswered_group_one() {
+    fn open_tier_and_waits_on_for_unanswered_tier_one() {
         let dir = temp_repo();
         let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP);
         append_row(&dir, "asked", "id-1", "hash-1", "1.1 First question?");
@@ -801,19 +930,19 @@ Standard: s2.\n\n\
         let rf = record::load(&record).unwrap();
         let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
 
-        let (open_group, waits_on) = open_group_and_waits_on(&rf, &led);
-        // Group One's question is Open, so it is the lowest open group.
-        assert_eq!(open_group.as_deref(), Some("Group One"));
-        // Group Two's question is Unasked (waiting), and group one's
-        // question is Open (unanswered) and in a lower group: that is what
-        // `ask` would name.
+        let (open_tier, waits_on) = open_tier_and_waits_on(&rf, &led);
+        // Tier 1's question is Open, so it is the lowest open tier.
+        assert_eq!(open_tier, Some(1));
+        // Tier 2's question is Unasked (waiting), and tier 1's question is
+        // Open (unanswered) and in an earlier tier: that is what `ask`
+        // would name.
         assert_eq!(waits_on.as_deref(), Some("1.1 First question?"));
 
         std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
-    fn waits_on_is_none_once_group_one_is_answered() {
+    fn waits_on_is_none_once_tier_one_is_answered() {
         let dir = temp_repo();
         let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP);
         append_row(&dir, "asked", "id-1", "hash-1", "1.1 First question?");
@@ -822,12 +951,31 @@ Standard: s2.\n\n\
         let rf = record::load(&record).unwrap();
         let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
 
-        let (open_group, waits_on) = open_group_and_waits_on(&rf, &led);
-        // Group one is fully answered; group two (Unasked) is now the
-        // lowest group with an open/unasked question.
-        assert_eq!(open_group.as_deref(), Some("Group Two"));
-        // Nothing earlier than group two is unanswered any more.
+        let (open_tier, waits_on) = open_tier_and_waits_on(&rf, &led);
+        // Tier one is fully answered; tier two (Unasked) is now the lowest
+        // tier with an open/unasked question.
+        assert_eq!(open_tier, Some(2));
+        // Nothing earlier than tier two is unanswered any more.
         assert_eq!(waits_on, None);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn open_tier_counts_a_refused_question_as_unresolved() {
+        let dir = temp_repo();
+        let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP);
+        append_row(&dir, "asked", "id-1", "hash-1", "1.1 First question?");
+        append_row(&dir, "refused", "id-1", "hash-1", "1.1 First question?");
+
+        let rf = record::load(&record).unwrap();
+        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+
+        let (open_tier, waits_on) = open_tier_and_waits_on(&rf, &led);
+        // Tier 1's question is Refused, not answered: tier 1 still counts
+        // as the open (stuck) tier, and it still blocks tier 2 by name.
+        assert_eq!(open_tier, Some(1));
+        assert_eq!(waits_on.as_deref(), Some("1.1 First question?"));
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -854,7 +1002,6 @@ Standard: s2.\n\n\
 
     const TWO_GROUP_ANSWERED: &str = "# Topic\n\n\
 Context prose.\n\n\
-## Group One\n\n\
 ### 1.1 First question?\n\n\
 id: id-1\n\n\
 Problem: p1.\n\n\
@@ -862,8 +1009,8 @@ Standard: s1.\n\n\
 - A) Answer one.\n  Why: reason one.\n  Costs: cost one.\n\
 - B) Answer two.\n  Why: reason two.\n\n\
 **Answer:** A\n\n\
-## Group Two\n\n\
-### 2.1 Second question?\n\n\
+### 2.1 Second question?\n\
+depends: 1.1 First question?\n\n\
 id: id-2\n\n\
 Problem: p2.\n\n\
 Standard: s2.\n\n\
@@ -907,6 +1054,179 @@ Standard: s2.\n\n\
         assert!(fv2.plan_approved);
         assert!(fv2.context_approved);
         assert!(fv2.done);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    const TWO_GROUP_ONE_REFUSED: &str = "# Topic\n\n\
+Context prose.\n\n\
+### 1.1 First question?\n\n\
+id: id-1\n\n\
+Problem: p1.\n\n\
+Standard: s1.\n\n\
+- A) Answer one.\n  Why: reason one.\n  Costs: cost one.\n\
+- B) Answer two.\n  Why: reason two.\n\n\
+**Answer:** A\n\n\
+### 2.1 Second question?\n\
+depends: 1.1 First question?\n\n\
+id: id-2\n\n\
+Problem: p2.\n\n\
+Standard: s2.\n\n\
+- A) Second answer.\n  Why: reasons.\n\n\
+**Answer:** refused\n";
+
+    #[test]
+    fn done_is_false_when_a_question_is_refused_not_answered() {
+        let dir = temp_repo();
+        let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP);
+        let rf = record::load(&record).unwrap();
+        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let test_idx = HashMap::new();
+
+        // Approve plan/context from the unanswered fixture (an answer or
+        // refusal line never moves either hash), then rewrite the file with
+        // one question answered and the other refused.
+        let plan_h = record::plan_hash(&rf);
+        let ctx_h = record::context_hash(&rf);
+        append_row(
+            &dir,
+            "approved",
+            "-",
+            &plan_h,
+            "adrdom/decisions/example.md",
+        );
+        append_row(&dir, "context", "-", &ctx_h, "adrdom/decisions/example.md");
+
+        std::fs::write(&record, TWO_GROUP_ONE_REFUSED).unwrap();
+        let rf2 = record::load(&record).unwrap();
+        let led2 = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        assert!(
+            rf2.sections.iter().all(|s| s.answer_line.is_some()),
+            "fixture should have every section carrying an Answer line (one letter, one refused)"
+        );
+
+        let fv = build_file_view(&dir, &rf2, &led2, &test_idx, &[]);
+        assert!(fv.plan_approved);
+        assert!(fv.context_approved);
+        assert!(
+            !fv.done,
+            "a refused question must not count as answered for done"
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn format_dep_restores_term_uuid_and_set_suffix() {
+        assert_eq!(format_dep(&record::Dep::Term("widget".to_string())), "widget");
+        assert_eq!(
+            format_dep(&record::Dep::Decision(
+                "11111111-1111-1111-1111-111111111111".to_string()
+            )),
+            "11111111-1111-1111-1111-111111111111"
+        );
+        assert_eq!(
+            format_dep(&record::Dep::Heading {
+                text: "1.1 Q?".to_string(),
+                set: None
+            }),
+            "1.1 Q?"
+        );
+        assert_eq!(
+            format_dep(&record::Dep::Heading {
+                text: "1.1 Q?".to_string(),
+                set: Some(record::AnswerSet::Letters(vec!['A', 'B']))
+            }),
+            "1.1 Q?=A|B"
+        );
+        assert_eq!(
+            format_dep(&record::Dep::Heading {
+                text: "1.1 Q?".to_string(),
+                set: Some(record::AnswerSet::Any)
+            }),
+            "1.1 Q?=*"
+        );
+    }
+
+    #[test]
+    fn question_view_carries_tier_and_depends_as_written() {
+        let dir = temp_repo();
+        let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP);
+        let rf = record::load(&record).unwrap();
+        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let test_idx = HashMap::new();
+
+        let fv = build_file_view(&dir, &rf, &led, &test_idx, &[]);
+        let q1 = fv
+            .questions
+            .iter()
+            .find(|q| q.heading == "1.1 First question?")
+            .unwrap();
+        assert_eq!(q1.tier, Some(1));
+        assert!(q1.depends.is_empty());
+
+        let q2 = fv
+            .questions
+            .iter()
+            .find(|q| q.heading == "2.1 Second question?")
+            .unwrap();
+        assert_eq!(q2.tier, Some(2));
+        assert_eq!(q2.depends, vec!["1.1 First question?".to_string()]);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    const MOOT_FIXTURE: &str = "# Topic\n\n\
+### 1.1 Root?\n\n\
+id: id-root\n\n\
+Problem: p.\n\n\
+Standard: s.\n\n\
+- A) First choice.\n  Why: w.\n  Costs: c.\n\
+- B) Second choice.\n  Why: w.\n  Costs: c.\n\n\
+**Answer:** B\n\n\
+### 1.2 Dependent?\n\
+depends: 1.1 Root?=A\n\n\
+id: id-dep\n\n\
+Problem: p2.\n\n\
+Standard: s2.\n\n\
+- A) x.\n  Why: w.\n  Costs: c.\n\
+- B) y.\n  Why: w.\n  Costs: c.\n";
+
+    #[test]
+    fn moot_notes_and_file_view_moot_name_the_excluded_answer() {
+        let dir = temp_repo();
+        let record = write_record(&dir, "adrdom/decisions/example.md", MOOT_FIXTURE);
+        append_row(&dir, "asked", "id-root", "h", "1.1 Root?");
+        append_row(&dir, "answered", "id-root", "h", "B");
+
+        let rf = record::load(&record).unwrap();
+        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+
+        let notes = moot_notes(&rf, &led);
+        assert_eq!(
+            notes,
+            vec!["\"1.2 Dependent?\" stands on \"1.1 Root?\"=A, answered B".to_string()]
+        );
+
+        let test_idx = HashMap::new();
+        let fv = build_file_view(&dir, &rf, &led, &test_idx, &[]);
+        assert_eq!(fv.moot, notes);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn moot_notes_silent_when_the_answer_is_in_the_set() {
+        let dir = temp_repo();
+        let content = MOOT_FIXTURE.replace("**Answer:** B", "**Answer:** A");
+        let record = write_record(&dir, "adrdom/decisions/example.md", &content);
+        append_row(&dir, "asked", "id-root", "h", "1.1 Root?");
+        append_row(&dir, "answered", "id-root", "h", "A");
+
+        let rf = record::load(&record).unwrap();
+        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+
+        assert!(moot_notes(&rf, &led).is_empty());
 
         std::fs::remove_dir_all(&dir).ok();
     }

@@ -9,9 +9,8 @@ const TWO_GROUP_RECORD: &str = r#"# Topic
 Context prose line one.
 Context prose line two.
 
-## Group One
-
 ### 1.1 First question?
+depends: decision
 
 Problem: p1.
 
@@ -26,9 +25,9 @@ Standard: s1.
 "#;
 
 const GROUP_TWO_ADDITION: &str = r#"
-## Group Two
-
 ### 2.1 Second question?
+depends: 1.1 First question?
+depends: decision
 
 Problem: p2.
 
@@ -46,9 +45,8 @@ const ONE_QUESTION_RECORD: &str = r#"# Topic
 
 Context prose.
 
-## Group One
-
 ### 1.1 Only question?
+depends: decision
 
 Problem: p.
 
@@ -62,7 +60,7 @@ Standard: s.
   Costs: other costs.
 "#;
 
-const HEADING_REMOVED: &str = "# Topic\n\nContext prose.\n\n## Group One\n";
+const HEADING_REMOVED: &str = "# Topic\n\nContext prose.\n";
 
 // --- ask refusals naming `adr approve` -------------------------------
 
@@ -90,6 +88,7 @@ fn ask_refuses_an_unapproved_file_naming_adr_approve() {
 fn approve_writes_approved_and_context_rows_then_is_idempotent() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
     let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP_RECORD);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -114,7 +113,7 @@ fn approve_writes_approved_and_context_rows_then_is_idempotent() {
 fn approve_refuses_a_question_with_one_option() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    let content = "# Example\n\n## Group\n\n### 1.1 One option?\n\nProblem: p.\n\nStandard: s.\n\n- A) Only choice.\n  Why: w.\n  Costs: c.\n";
+    let content = "# Example\n\n### 1.1 One option?\n\nProblem: p.\n\nStandard: s.\n\n- A) Only choice.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -139,7 +138,7 @@ fn approve_refuses_a_question_with_one_option() {
 fn approve_refuses_a_question_with_four_options() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    let content = "# Example\n\n## Group\n\n### 1.1 Four options?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n- D) Four.\n  Why: w.\n  Costs: c.\n";
+    let content = "# Example\n\n### 1.1 Four options?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n- D) Four.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -166,7 +165,7 @@ fn approve_refuses_a_question_with_four_options() {
 fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "question");
+    approve_minimal_terms(&dir, "decision");
     let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP_RECORD);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
@@ -208,7 +207,7 @@ fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
 fn ask_refuses_group_two_while_group_one_unanswered_then_passes_after_answer() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "question");
+    approve_minimal_terms(&dir, "decision");
     let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP_RECORD);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
@@ -253,7 +252,7 @@ fn ask_refuses_group_two_while_group_one_unanswered_then_passes_after_answer() {
 fn approve_withdraws_a_struck_asked_heading() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "question");
+    approve_minimal_terms(&dir, "decision");
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
@@ -283,7 +282,7 @@ fn approve_withdraws_a_struck_asked_heading() {
 fn approve_refuses_when_answered_heading_gone_and_not_superseded() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "question");
+    approve_minimal_terms(&dir, "decision");
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
@@ -312,7 +311,7 @@ fn approve_refuses_when_answered_heading_gone_and_not_superseded() {
 fn approve_allows_a_vanished_heading_once_superseded() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "question");
+    approve_minimal_terms(&dir, "decision");
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
@@ -325,7 +324,7 @@ fn approve_allows_a_vanished_heading_once_superseded() {
     assert!(adr_owner(&dir, &["answer", &old_id, "A"], "").status.success());
 
     let superseding = format!(
-        "\n### 1.2 Replacement question?\n\nsupersedes: {}\n\nProblem: p2.\n\nStandard: s2.\n\n- A) New answer.\n  Why: reasons.\n  Costs: costs.\n- B) Other new answer.\n  Why: other reasons.\n  Costs: other costs.\n",
+        "\n### 1.2 Replacement question?\ndepends: decision\n\nsupersedes: {}\n\nProblem: p2.\n\nStandard: s2.\n\n- A) New answer.\n  Why: reasons.\n  Costs: costs.\n- B) Other new answer.\n  Why: other reasons.\n  Costs: other costs.\n",
         old_id
     );
     let mut content2 = std::fs::read_to_string(&record).unwrap();
@@ -347,7 +346,7 @@ fn approve_allows_a_vanished_heading_once_superseded() {
     // Now drop the (superseded) 1.1 heading entirely, keeping only 1.2.
     let content4 = std::fs::read_to_string(&record).unwrap();
     let idx = content4.find("### 1.2").expect("1.2 present");
-    let rebuilt = format!("# Topic\n\nContext prose.\n\n## Group One\n\n{}", &content4[idx..]);
+    let rebuilt = format!("# Topic\n\nContext prose.\n\n{}", &content4[idx..]);
     std::fs::write(&record, &rebuilt).unwrap();
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -411,9 +410,8 @@ const DECISION_QUESTION_RECORD: &str = r#"# Topic
 
 Context prose.
 
-## Group One
-
 ### 1.1 What is the decision?
+depends: decision
 
 Problem: whether a decision is well defined.
 
@@ -486,9 +484,8 @@ const CHOICE_QUESTION_RECORD: &str = r#"# Topic
 
 Context prose.
 
-## Group One
-
 ### 1.1 What is the choice?
+depends: decision
 
 Problem: the choice is unclear.
 
@@ -695,9 +692,8 @@ const DECISION_RECORD_FOR_DEPENDENTS: &str = r#"# Topic
 
 Context prose.
 
-## Group One
-
 ### 1.1 What is the decision?
+depends: decision
 
 Problem: the decision is unclear.
 

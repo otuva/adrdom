@@ -34,12 +34,22 @@ pub(super) fn render_next(
 
     body.push_str("<article class=\"focus\">\n");
     body.push_str("<p class=\"where\">");
-    body.push_str(&format!("{}, {}", esc(&file.topic), esc(&q.group)));
+    let tier = q
+        .tier
+        .map(|t| t.to_string())
+        .unwrap_or_else(|| "?".to_string());
+    body.push_str(&format!("{}, tier {}", esc(&file.topic), esc(&tier)));
     if let Some(p) = position {
         body.push_str(&format!(". Question {} of {} open", p, open_ids.len()));
     }
     body.push_str(".</p>\n");
     body.push_str(&format!("<h1>{}</h1>\n", mark_terms(&q.heading, &q.words)));
+    if !q.depends.is_empty() {
+        body.push_str(&format!(
+            "<p class=\"stands-on\">Stands on: {}</p>\n",
+            esc(&q.depends.join(", "))
+        ));
+    }
 
     if q.problem.is_some() || q.standard.is_some() {
         body.push_str("<dl class=\"framing\">\n");
@@ -132,8 +142,14 @@ pub(super) fn render_next(
     }
     body.push_str("</div>\n");
     let first = q.options.first().map(|o| o.letter).unwrap_or('A');
+    // The Refuse button shares the `answer` form field with the letter
+    // radios, submitting `answer=refuse` when it (not a radio) is the
+    // control that submits the form (spec §7). `actions::do_answer` takes
+    // this the same way it takes a letter today: see the wave-2 report for
+    // the follow-up once `do_answer`/`do_refuse` (§5, built in parallel)
+    // lands its own handling of the value "refuse".
     body.push_str(&format!(
-        "<p class=\"act\"><button type=\"submit\" class=\"answer\" id=\"answer-button\">Answer <span id=\"answer-letter\">{}</span></button> <a class=\"skip\" href=\"/next?after={}\">Skip this one</a></p>\n",
+        "<p class=\"act\"><button type=\"submit\" class=\"answer\" id=\"answer-button\">Answer <span id=\"answer-letter\">{}</span></button> <button type=\"submit\" name=\"answer\" value=\"refuse\" class=\"refuse\" id=\"refuse-button\">Refuse</button> <a class=\"skip\" href=\"/next?after={}\">Skip this one</a></p>\n",
         first,
         percent_encode(&id)
     ));

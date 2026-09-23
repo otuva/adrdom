@@ -15,15 +15,22 @@ pub fn run(id: String, letter: String) -> i32 {
         }
     };
 
-    let letter_c = match parse_letter(&letter) {
-        Some(c) => c,
-        None => {
-            eprintln!("answer: invalid letter {}", letter);
-            return 1;
+    // `adr answer <id> refuse` (8.1 A) shares this command's owner gate and
+    // dispatch with the letter path; only `do_answer`/`do_refuse` in
+    // src/actions.rs differ.
+    let outcome = if letter == "refuse" {
+        actions::do_refuse(&root, &id)
+    } else {
+        match parse_letter(&letter) {
+            Some(c) => actions::do_answer(&root, &id, c),
+            None => {
+                eprintln!("answer: invalid letter {}", letter);
+                return 1;
+            }
         }
     };
 
-    match actions::do_answer(&root, &id, letter_c) {
+    match outcome {
         Ok(outcome) => {
             println!("{}", outcome.summary);
             0

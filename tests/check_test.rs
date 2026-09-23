@@ -4,9 +4,8 @@ use common::*;
 
 const ONE_QUESTION: &str = r#"# Example
 
-## Group
-
 ### 3.1 Does this pass?
+depends: pass
 
 Problem: whether it passes.
 
@@ -358,11 +357,11 @@ fn check_parse_reports_a_file_shape_error() {
 fn check_passes_a_skeleton_heading_with_no_id_or_body() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_empty_terms(&dir);
+    approve_minimal_terms(&dir, "widget");
     write_record(
         &dir,
         "adrdom/decisions/skeleton.md",
-        "# Skeleton\n\n## Group\n\n### 1.1 Not written yet?\n",
+        "# Skeleton\n\n### 1.1 Not written yet?\ndepends: widget\n",
     );
 
     let out = adr(&dir, &["check"], &[], "");
@@ -379,7 +378,7 @@ fn check_fails_a_body_under_an_unapproved_heading() {
     write_record(
         &dir,
         "adrdom/decisions/example.md",
-        "# Example\n\n## Group\n\n### 1.1 Does this need approval?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
+        "# Example\n\n### 1.1 Does this need approval?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
     );
     // No `approved` ledger row written: the plan is unapproved.
 
@@ -401,7 +400,7 @@ fn check_prints_awaiting_approval_line() {
     write_record(
         &dir,
         "adrdom/decisions/skeleton.md",
-        "# Skeleton\n\n## Group\n\n### 1.1 Not written yet?\n",
+        "# Skeleton\n\n### 1.1 Not written yet?\n",
     );
 
     let out = adr(&dir, &["check"], &[], "");
@@ -420,12 +419,12 @@ fn check_fails_a_question_heading_duplicated_across_two_files() {
     write_record(
         &dir,
         "adrdom/decisions/a.md",
-        "# File A\n\n## Group\n\n### 9.9 Same heading?\n",
+        "# File A\n\n### 9.9 Same heading?\n",
     );
     write_record(
         &dir,
         "adrdom/decisions/b.md",
-        "# File B\n\n## Group\n\n### 9.9 Same heading?\n",
+        "# File B\n\n### 9.9 Same heading?\n",
     );
 
     let out = adr(&dir, &["check"], &[], "");
@@ -447,7 +446,7 @@ fn check_passes_when_a_superseded_id_is_missing_from_every_record() {
     write_record(
         &dir,
         "adrdom/decisions/example.md",
-        "# Example\n\n## Group\n\n### 1.1 Some question?\n",
+        "# Example\n\n### 1.1 Some question?\n",
     );
     let sup_id = "99999999-9999-9999-9999-999999999999";
     append_ledger_row(&dir, "asked", sup_id, "abc123", "old heading");
@@ -474,7 +473,7 @@ fn check_fails_a_withdrawn_id_still_present_in_a_record() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let wd_id = "88888888-8888-8888-8888-888888888888";
     let content = format!(
-        "# Example\n\n## Group\n\n### 1.1 Some question?\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
+        "# Example\n\n### 1.1 Some question?\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
         wd_id
     );
     write_record(&dir, "adrdom/decisions/example.md", &content);
@@ -539,7 +538,7 @@ fn check_fails_when_terms_missing_and_a_record_exists() {
     write_record(
         &dir,
         "adrdom/decisions/example.md",
-        "# Example\n\n## Group\n\n### 1.1 Some question?\n",
+        "# Example\n\n### 1.1 Some question?\n",
     );
     // No adrdom/terms.md at all.
 
@@ -570,7 +569,7 @@ fn check_fails_when_terms_unapproved_and_a_record_exists() {
     write_record(
         &dir,
         "adrdom/decisions/example.md",
-        "# Example\n\n## Group\n\n### 1.1 Some question?\n",
+        "# Example\n\n### 1.1 Some question?\n",
     );
     std::fs::write(
         dir.join("adrdom/terms.md"),
@@ -626,7 +625,7 @@ fn check_fails_an_asked_section_whose_terms_line_names_a_missing_uuid() {
     let question_id = "22222222-2222-2222-2222-222222222222";
     let missing_uuid = "99999999-9999-9999-9999-999999999999";
     let record_content = format!(
-        "# Example\n\n## Group\n\n### 1.1 Some question?\n\nid: {}\n\nterms: decision={}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
+        "# Example\n\n### 1.1 Some question?\n\nid: {}\n\nterms: decision={}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
         question_id, missing_uuid
     );
     write_record(&dir, "adrdom/decisions/example.md", &record_content);
@@ -660,7 +659,7 @@ fn check_fails_an_asked_section_bound_to_a_retired_term() {
 
     let question_id = "44444444-4444-4444-4444-444444444444";
     let record_content = format!(
-        "# Example\n\n## Group\n\n### 1.1 Some question?\n\nid: {}\n\nterms: decision={}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
+        "# Example\n\n### 1.1 Some question?\n\nid: {}\n\nterms: decision={}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
         question_id, term_id
     );
     write_record(&dir, "adrdom/decisions/example.md", &record_content);
@@ -689,7 +688,7 @@ fn check_fails_an_asked_section_with_no_terms_line() {
 
     let question_id = "55555555-5555-5555-5555-555555555555";
     let record_content = format!(
-        "# Example\n\n## Group\n\n### 1.1 Some question?\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
+        "# Example\n\n### 1.1 Some question?\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
         question_id
     );
     write_record(&dir, "adrdom/decisions/example.md", &record_content);
@@ -720,7 +719,7 @@ fn check_passes_when_a_new_term_would_now_match_words_already_answered_in_text()
 
     let question_id = "77777777-7777-7777-7777-777777777777";
     let record_content = format!(
-        "# Example\n\n## Group\n\n### 1.1 Some question?\n\nid: {}\n\nterms: widget={}\n\nProblem: the decision needs a widget.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
+        "# Example\n\n### 1.1 Some question?\n\nid: {}\n\nterms: widget={}\n\nProblem: the decision needs a widget.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
         question_id, widget_id
     );
     write_record(&dir, "adrdom/decisions/example.md", &record_content);

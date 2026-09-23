@@ -4,7 +4,8 @@ use crate::record::RecordFile;
 use std::path::Path;
 
 /// `done`: every file whose plan and context are approved and whose every
-/// h3 section carries an answer line (4.15).
+/// h3 section carries a letter answer (4.15, updated by 8.1 A: a refused
+/// section is unanswered for `done`, same as an unasked one).
 pub(super) fn check_done(root: &Path, records: &[RecordFile], led: &Ledger) -> Vec<String> {
     let mut out = Vec::new();
     for rf in records {
@@ -12,7 +13,7 @@ pub(super) fn check_done(root: &Path, records: &[RecordFile], led: &Ledger) -> V
         if !plan_ok || !ctx_ok {
             continue;
         }
-        if rf.sections.iter().all(|s| s.answer_line.is_some()) {
+        if rf.sections.iter().all(|s| s.answer_letter().is_some()) {
             out.push(rel);
         }
     }

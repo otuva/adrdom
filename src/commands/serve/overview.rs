@@ -46,8 +46,8 @@ pub(super) fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> 
                 esc(&f.topic)
             ));
         }
-        if let Some(g) = &f.open_group {
-            let mut s = format!("Tier <q>{}</q> is open", esc(g));
+        if let Some(t) = f.open_tier {
+            let mut s = format!("Tier {} is open", t);
             if let Some(w) = &f.waits_on {
                 s.push_str(&format!(", waiting on <q>{}</q>", esc(w)));
             }
@@ -56,6 +56,13 @@ pub(super) fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> 
         }
         if f.done {
             body.push_str("<p class=\"state done\">Every approved heading is answered.</p>\n");
+        }
+        if !f.moot.is_empty() {
+            body.push_str("<ul class=\"notes\">\n");
+            for n in &f.moot {
+                body.push_str(&format!("<li>moot: {}</li>\n", esc(n)));
+            }
+            body.push_str("</ul>\n");
         }
 
         let open: Vec<&QuestionView> = f
@@ -74,6 +81,22 @@ pub(super) fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> 
                 ));
             }
             body.push_str("</ol>\n");
+        }
+
+        let refused: Vec<&QuestionView> = f
+            .questions
+            .iter()
+            .filter(|q| q.state == QState::Refused)
+            .collect();
+        if !refused.is_empty() {
+            body.push_str("<ul class=\"refused-list\">\n");
+            for q in &refused {
+                body.push_str(&format!(
+                    "<li><span class=\"label refused\">refused</span> {}</li>\n",
+                    esc(&q.heading)
+                ));
+            }
+            body.push_str("</ul>\n");
         }
 
         let answered: Vec<&QuestionView> = f
