@@ -42,7 +42,7 @@ aliases: decisions
 ## answer
 id: b36113a1-1384-4e4c-a798-8399f4181366
 terms: option=43778946-d44c-4acf-a766-0a4915fce199, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a
-definition: The owner's act of picking one option of a question, and the line under the question that names it.
+definition: The owner's act of picking one option of a question or refusing it, and the line under the question that names the pick or the refusal.
 aliases: answers, answered, answering
 
 ## ask
@@ -78,7 +78,7 @@ aliases: topic files
 ## tier
 id: f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
 terms: asked=3c8d4c9c-abca-4faa-b7c1-aae39951376c, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
-definition: A second-level heading in a topic file holding the questions asked together, before the ones below it.
+definition: The questions the tool asks together, one above the highest question each of them stands on in its topic file.
 aliases: tiers
 
 ## terms file
@@ -95,7 +95,7 @@ aliases: approves, approved, approving, approval
 ## plan
 id: 94677ed8-eaf6-46e2-bc71-7392fa0805bf
 terms: approved=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, asking=3c8d4c9c-abca-4faa-b7c1-aae39951376c, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
-definition: The approved list of headings in a topic file, in asking order.
+definition: The approved headings of a topic file and what each stands on.
 aliases: plans
 
 ## withdraw
@@ -147,3 +147,15 @@ id: 7127ab1e-c313-4c51-9134-c09d551682cf
 terms: owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d
 definition: The part of the tool the owner sees and uses in a browser.
 aliases: user interface, web ui
+
+## depends
+definition: The line under a question heading naming what the question rests on: a term, a question in the same topic file, or a current decision.
+aliases: stands on
+
+## refusal
+definition: The owner's ruling that a question cannot be settled as asked.
+aliases: refuse, refused, refusing
+
+## answer set
+definition: The letters of a question's options under which a question standing on it is asked.
+aliases: answer sets
