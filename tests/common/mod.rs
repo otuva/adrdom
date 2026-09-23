@@ -112,14 +112,6 @@ Standard: plain words.
 - B) The whole unit is a block.
   Why: matches predecessors.
   Costs: names a region.
-
-**P1. A decision is one commitment in one sentence.**
-
-Problem: two commitments could not change separately.
-
-Standard: one commitment per decision.
-
-**Answer:** yes
 "#;
 
 pub fn write_record(dir: &Path, rel: &str, content: &str) -> PathBuf {
@@ -168,28 +160,8 @@ fn sha256_hex(text: &str) -> String {
     hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect()
 }
 
-fn is_principle_heading(line: &str) -> bool {
-    if !line.starts_with("**P") {
-        return false;
-    }
-    let rest = &line[3..];
-    let digits_len = rest.chars().take_while(|c| c.is_ascii_digit()).count();
-    if digits_len == 0 {
-        return false;
-    }
-    let after_digits = &rest[digits_len..];
-    if !after_digits.starts_with(". ") {
-        return false;
-    }
-    let after_dot = &after_digits[2..];
-    if after_dot.len() < 2 || !after_dot.ends_with("**") {
-        return false;
-    }
-    !after_dot[..after_dot.len() - 2].is_empty()
-}
-
-/// Mirrors `record::plan_hash`: sha256 of the trimmed h2/h3/principle
-/// heading lines, in file order, joined with `\n`.
+/// Mirrors `record::plan_hash`: sha256 of the trimmed h2/h3 heading lines,
+/// in file order, joined with `\n`.
 pub fn plan_hash(content: &str) -> String {
     let mut heads: Vec<&str> = Vec::new();
     for raw in content.split('\n') {
@@ -197,8 +169,6 @@ pub fn plan_hash(content: &str) -> String {
         if line.starts_with("## ") {
             heads.push(line);
         } else if line.starts_with("### ") && line.ends_with('?') {
-            heads.push(line);
-        } else if is_principle_heading(line) {
             heads.push(line);
         }
     }

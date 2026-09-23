@@ -128,7 +128,7 @@ pub struct Snapshot {
     pub check: CheckReport,
 }
 
-/// The state a question/principle heading is in, from the ledger's latest
+/// The state a question heading is in, from the ledger's latest
 /// state row for its id: no id and a skeleton heading is `Skeleton`; no id
 /// with a body is `Unasked`; otherwise the id's latest ledger event maps
 /// straight across (`asked` -> `Open`, `answered` -> `Answered`,
@@ -758,7 +758,6 @@ Standard: s2.\n\n\
         let led = ledger::read(&led_path);
 
         let mk = |id: &str| Section {
-            kind: record::Kind::Question,
             start: 0,
             end: 1,
             heading_text: "x".to_string(),

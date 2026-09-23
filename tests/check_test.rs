@@ -14,8 +14,10 @@ Standard: clear yes or no.
 
 - A) Yes it passes.
   Why: reasons.
+  Costs: costs.
 - B) No it does not.
   Why: other reasons.
+  Costs: other costs.
 "#;
 
 /// Writes `ONE_QUESTION`, approves its plan/context via a hand-written

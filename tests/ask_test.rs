@@ -15,17 +15,11 @@ fn example_record_round_trips_and_ask_assigns_ids() {
 
     let content = std::fs::read_to_string(&record).unwrap();
     let ids = extract_ids(&content);
-    assert_eq!(
-        ids.len(),
-        2,
-        "expected an id for the question and the principle: {}",
-        content
-    );
-    assert_ne!(ids[0], ids[1]);
+    assert_eq!(ids.len(), 1, "expected an id for the question: {}", content);
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let asked_rows: Vec<&str> = ledger.lines().filter(|l| l.contains("\tasked\t")).collect();
-    assert_eq!(asked_rows.len(), 2, "ledger: {}", ledger);
+    assert_eq!(asked_rows.len(), 1, "ledger: {}", ledger);
     for id in &ids {
         assert!(asked_rows.iter().any(|r| r.contains(id.as_str())));
     }
@@ -164,8 +158,10 @@ Standard: plain words.
 
 - A) The authoritative sentence is a decision.
   Why: plainest word.
+  Costs: two nouns.
 - B) The whole unit is a block.
   Why: matches predecessors.
+  Costs: names a region.
 "#;
 
 #[test]
@@ -287,7 +283,7 @@ fn ask_refuses_a_retired_match() {
 fn ask_refuses_a_candidate_that_pairs_no_term() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    let content = "# Example\n\n## Group\n\n### 1.1 Does this pass?\n\nProblem: whether it passes.\n\nStandard: clear yes or no.\n\n- A) Yes it passes.\n  Why: reasons.\n- B) No it does not.\n  Why: other reasons.\n";
+    let content = "# Example\n\n## Group\n\n### 1.1 Does this pass?\n\nProblem: whether it passes.\n\nStandard: clear yes or no.\n\n- A) Yes it passes.\n  Why: reasons.\n  Costs: costs.\n- B) No it does not.\n  Why: other reasons.\n  Costs: other costs.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", content);
     approve_minimal_terms(&dir, "authority");

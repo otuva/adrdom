@@ -2,12 +2,6 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Kind {
-    Question,
-    Principle,
-}
-
 #[derive(Debug, Clone)]
 pub struct OptionRec {
     pub letter: char,
@@ -18,7 +12,6 @@ pub struct OptionRec {
 
 #[derive(Debug, Clone)]
 pub struct Section {
-    pub kind: Kind,
     pub start: usize,
     pub end: usize,
     pub heading_text: String,
@@ -59,24 +52,13 @@ pub struct Section {
 impl Section {
     pub fn answer_letter(&self) -> Option<char> {
         let v = self.answer_value.as_ref()?.trim();
-        match self.kind {
-            Kind::Question => {
-                if v.chars().count() == 1 {
-                    let c = v.chars().next().unwrap();
-                    if self.options.iter().any(|o| o.letter == c) {
-                        return Some(c);
-                    }
-                }
-                None
-            }
-            Kind::Principle => {
-                if v == "yes" {
-                    Some('A')
-                } else {
-                    None
-                }
+        if v.chars().count() == 1 {
+            let c = v.chars().next().unwrap();
+            if self.options.iter().any(|o| o.letter == c) {
+                return Some(c);
             }
         }
+        None
     }
 
     pub fn chosen_sentence(&self) -> Option<&str> {
@@ -88,7 +70,7 @@ impl Section {
     }
 }
 
-/// A `## ` heading and the questions/principles under it. File order is
+/// A `## ` heading and the questions under it. File order is
 /// the tier order (tier 0 is lowest) — see spec point 3.
 #[derive(Debug, Clone)]
 pub struct Group {
@@ -186,32 +168,6 @@ fn is_h2(line: &str) -> bool {
     line.starts_with("## ")
 }
 
-fn parse_principle_heading(line: &str) -> Option<(String, String)> {
-    let l = line.trim_end();
-    if !l.starts_with("**P") {
-        return None;
-    }
-    let rest = &l[3..];
-    let digits_len = rest.chars().take_while(|c| c.is_ascii_digit()).count();
-    if digits_len == 0 {
-        return None;
-    }
-    let digits = &rest[..digits_len];
-    let after_digits = &rest[digits_len..];
-    if !after_digits.starts_with(". ") {
-        return None;
-    }
-    let after_dot = &after_digits[2..];
-    if after_dot.len() < 2 || !after_dot.ends_with("**") {
-        return None;
-    }
-    let sentence = &after_dot[..after_dot.len() - 2];
-    if sentence.is_empty() {
-        return None;
-    }
-    Some((format!("P{}", digits), sentence.to_string()))
-}
-
 fn parse_option_line(line: &str) -> Option<(char, String)> {
     if !line.starts_with("- ") {
         return None;
@@ -261,11 +217,6 @@ pub fn parse_sections(lines: &[String]) -> Vec<Section> {
             let end = find_end(lines, i + 1);
             sections.push(parse_question(lines, start, end));
             i = end;
-        } else if let Some((heading, sentence)) = parse_principle_heading(line) {
-            let start = i;
-            let end = find_end(lines, i + 1);
-            sections.push(parse_principle(lines, start, end, heading, sentence));
-            i = end;
         } else {
             i += 1;
         }
@@ -275,7 +226,7 @@ pub fn parse_sections(lines: &[String]) -> Vec<Section> {
 
 fn find_end(lines: &[String], from: usize) -> usize {
     for (j, line) in lines.iter().enumerate().skip(from) {
-        if is_question_heading(line) || is_h2(line) || parse_principle_heading(line).is_some() {
+        if is_question_heading(line) || is_h2(line) {
             return j;
         }
     }
@@ -283,11 +234,9 @@ fn find_end(lines: &[String], from: usize) -> usize {
 }
 
 /// Everything a heading's body scan produces: the pre-existing bits
-/// (id/supersedes/options/answer) plus the new shape-rule bits (terms
-/// line, stray lines, Problem/Standard counts). Shared by
-/// `parse_question` and `parse_principle` so both kinds get the same
-/// allowed-line-types treatment (spec point 5 applies "where questions
-/// are", which includes principle blocks).
+/// (id/supersedes/options/answer) plus the shape-rule bits (terms line,
+/// stray lines, Problem/Standard counts, and each option's Why/Costs
+/// completeness).
 struct BodyScan {
     id: Option<String>,
     id_count: usize,
@@ -300,6 +249,9 @@ struct BodyScan {
     stray_errors: Vec<String>,
     problem_count: usize,
     standard_count: usize,
+    /// "option A missing Why" / "option B has two Costs lines", one entry
+    /// per option that lacks exactly one non-empty Why/Costs line under it.
+    option_shape_errors: Vec<String>,
 }
 
 fn scan_body(lines: &[String], start: usize, end: usize) -> BodyScan {
@@ -314,6 +266,10 @@ fn scan_body(lines: &[String], start: usize, end: usize) -> BodyScan {
     let mut stray_errors = Vec::new();
     let mut problem_count = 0;
     let mut standard_count = 0;
+    // Parallel to `options`: how many non-empty `  Why: `/`  Costs: ` lines
+    // have been seen directly under each option so far.
+    let mut why_counts: Vec<usize> = Vec::new();
+    let mut costs_counts: Vec<usize> = Vec::new();
     // True while the previous non-blank line was an option or one of its
     // Why/Costs lines; a Why/Costs anywhere else is stray.
     let mut under_option = false;
@@ -363,11 +319,30 @@ fn scan_body(lines: &[String], start: usize, end: usize) -> BodyScan {
                 sentence,
                 line: j,
             });
+            why_counts.push(0);
+            costs_counts.push(0);
             under_option = true;
             continue;
         }
-        if line.starts_with("  Why: ") || line.starts_with("  Costs: ") {
+        if let Some(v) = line.strip_prefix("  Why: ") {
             if under_option {
+                if !v.trim().is_empty() {
+                    if let Some(c) = why_counts.last_mut() {
+                        *c += 1;
+                    }
+                }
+                continue;
+            }
+            stray_errors.push(format!("stray line {}", j + 1));
+            continue;
+        }
+        if let Some(v) = line.strip_prefix("  Costs: ") {
+            if under_option {
+                if !v.trim().is_empty() {
+                    if let Some(c) = costs_counts.last_mut() {
+                        *c += 1;
+                    }
+                }
                 continue;
             }
             stray_errors.push(format!("stray line {}", j + 1));
@@ -382,9 +357,27 @@ fn scan_body(lines: &[String], start: usize, end: usize) -> BodyScan {
         stray_errors.push(format!("stray line {}", j + 1));
     }
 
-    // Two or three options; a fourth is a shape error.
+    // A fourth option is a shape error; the minimum (two, unless the
+    // heading is a skeleton) is enforced by the caller, which alone knows
+    // whether the body is a skeleton.
     if options.len() > 3 {
         option_errors.push(format!("{} options; at most three", options.len()));
+    }
+
+    // Every option carries exactly one non-empty Why line and exactly one
+    // non-empty Costs line.
+    let mut option_shape_errors = Vec::new();
+    for (i, opt) in options.iter().enumerate() {
+        match why_counts[i] {
+            0 => option_shape_errors.push(format!("option {} missing Why", opt.letter)),
+            1 => {}
+            _ => option_shape_errors.push(format!("option {} has two Why lines", opt.letter)),
+        }
+        match costs_counts[i] {
+            0 => option_shape_errors.push(format!("option {} missing Costs", opt.letter)),
+            1 => {}
+            _ => option_shape_errors.push(format!("option {} has two Costs lines", opt.letter)),
+        }
     }
 
     BodyScan {
@@ -399,6 +392,7 @@ fn scan_body(lines: &[String], start: usize, end: usize) -> BodyScan {
         stray_errors,
         problem_count,
         standard_count,
+        option_shape_errors,
     }
 }
 
@@ -412,6 +406,11 @@ fn parse_question(lines: &[String], start: usize, end: usize) -> Section {
     let scan = scan_body(lines, start, end);
 
     let mut parse_errors = scan.option_errors;
+    // A skeleton heading (empty body) is exempt; a real body needs two or
+    // three options.
+    if !is_skeleton && scan.options.len() < 2 {
+        parse_errors.push(format!("{} options; at least two", scan.options.len()));
+    }
     if scan.id_count > 1 {
         parse_errors.push("duplicate id line".to_string());
     }
@@ -436,9 +435,9 @@ fn parse_question(lines: &[String], start: usize, end: usize) -> Section {
             shape_errors.push("missing Standard line".to_string());
         }
     }
+    shape_errors.extend(scan.option_shape_errors);
 
     Section {
-        kind: Kind::Question,
         start,
         end,
         heading_text,
@@ -446,62 +445,6 @@ fn parse_question(lines: &[String], start: usize, end: usize) -> Section {
         id_dup: scan.id_count > 1,
         supersedes: scan.supersedes,
         options: scan.options,
-        answer_line: scan.answer_line,
-        answer_value: scan.answer_value,
-        parse_errors,
-        shape_errors,
-        is_skeleton,
-        group: None,
-        terms_line: scan.terms_line,
-    }
-}
-
-fn parse_principle(
-    lines: &[String],
-    start: usize,
-    end: usize,
-    heading: String,
-    sentence: String,
-) -> Section {
-    let is_skeleton = is_skeleton_range(lines, start, end);
-    let scan = scan_body(lines, start, end);
-
-    let mut parse_errors = Vec::new();
-    if scan.id_count > 1 {
-        parse_errors.push("duplicate id line".to_string());
-    }
-
-    let options = vec![OptionRec {
-        letter: 'A',
-        sentence: Some(sentence),
-        line: start,
-    }];
-
-    if let Some(v) = &scan.answer_value {
-        if v.trim() != "yes" {
-            parse_errors.push(format!("answer names missing option {}", v.trim()));
-        }
-    }
-
-    let mut shape_errors = scan.stray_errors;
-    if !is_skeleton {
-        if scan.problem_count != 1 {
-            shape_errors.push("missing Problem line".to_string());
-        }
-        if scan.standard_count != 1 {
-            shape_errors.push("missing Standard line".to_string());
-        }
-    }
-
-    Section {
-        kind: Kind::Principle,
-        start,
-        end,
-        heading_text: heading,
-        id: scan.id,
-        id_dup: scan.id_count > 1,
-        supersedes: scan.supersedes,
-        options,
         answer_line: scan.answer_line,
         answer_value: scan.answer_value,
         parse_errors,
@@ -612,10 +555,9 @@ fn analyze_shape(
     (topic, context_range, groups, shape_errors)
 }
 
-/// sha256 of the h2 and h3/principle heading lines (trimmed text incl.
-/// the `## `/`### `/`**Pn.` prefix), joined with `\n`, in file order
-/// (spec point 8). Changes on an added, reordered, or renamed heading;
-/// unaffected by body edits.
+/// sha256 of the h2 and h3 heading lines (trimmed text incl. the `## `/
+/// `### ` prefix), joined with `\n`, in file order (spec point 8). Changes
+/// on an added, reordered, or renamed heading; unaffected by body edits.
 #[allow(dead_code)]
 pub fn plan_hash(rf: &RecordFile) -> String {
     let mut items: Vec<(usize, &str)> = Vec::new();
@@ -738,11 +680,11 @@ mod tests {
         build(PathBuf::from("test.md"), "test.md".to_string(), lines)
     }
 
-    const SHAPED: &str = "# Topic\n\ncontext prose line one.\ncontext prose line two.\n\n## Group A\n\n### 1.1 First question?\n\nProblem: p.\n\nStandard: s.\n\n- A) Do the thing.\n  Why: reasons.\n";
+    const SHAPED: &str = "# Topic\n\ncontext prose line one.\ncontext prose line two.\n\n## Group A\n\n### 1.1 First question?\n\nProblem: p.\n\nStandard: s.\n\n- A) Do the thing.\n  Why: reasons.\n  Costs: costs.\n- B) Do the other thing.\n  Why: other reasons.\n  Costs: other costs.\n";
 
     #[test]
     fn h1_required_and_first() {
-        let rf = rf_from("no h1 here\n\n## Group\n\n### 1.1 Q?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n");
+        let rf = rf_from("no h1 here\n\n## Group\n\n### 1.1 Q?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
         assert!(rf.topic.is_none());
         assert!(rf.shape_errors.iter().any(|e| e.contains("missing h1")));
 
@@ -773,7 +715,7 @@ mod tests {
 
     #[test]
     fn skeleton_heading_has_no_id_and_is_skeleton() {
-        let rf = rf_from("# Topic\n\n## Group\n\n### 1.1 Skeleton?\n\n### 1.2 Real question?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n");
+        let rf = rf_from("# Topic\n\n## Group\n\n### 1.1 Skeleton?\n\n### 1.2 Real question?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
         let skeleton = &rf.sections[0];
         assert!(skeleton.is_skeleton);
         assert!(skeleton.id.is_none());
@@ -785,7 +727,7 @@ mod tests {
 
     #[test]
     fn stray_line_in_body_is_a_shape_error_naming_the_line() {
-        let content = "# Topic\n\n## Group\n\n### 1.1 Q?\n\nProblem: p.\n\nStandard: s.\n\nthis line is not allowed\n\n- A) x.\n";
+        let content = "# Topic\n\n## Group\n\n### 1.1 Q?\n\nProblem: p.\n\nStandard: s.\n\nthis line is not allowed\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
         let rf = rf_from(content);
         let sec = &rf.sections[0];
         let stray_line_no = content
@@ -804,7 +746,7 @@ mod tests {
 
     #[test]
     fn missing_problem_or_standard_only_fails_non_skeleton_questions() {
-        let rf = rf_from("# Topic\n\n## Group\n\n### 1.1 Skeleton?\n\n### 1.2 Has a body but no Problem/Standard?\n\n- A) x.\n");
+        let rf = rf_from("# Topic\n\n## Group\n\n### 1.1 Skeleton?\n\n### 1.2 Has a body but no Problem/Standard?\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
         let skeleton = &rf.sections[0];
         assert!(skeleton.shape_errors.is_empty());
 
@@ -833,7 +775,7 @@ mod tests {
         assert_eq!(base_hash, plan_hash(&rf_body), "body edit must not move plan hash");
 
         // Heading added.
-        let added = format!("{}\n### 1.2 A second question?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) y.\n", SHAPED);
+        let added = format!("{}\n### 1.2 A second question?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) y.\n  Why: w.\n  Costs: c.\n- B) z.\n  Why: w.\n  Costs: c.\n", SHAPED);
         let rf_added = rf_from(&added);
         assert_ne!(base_hash, plan_hash(&rf_added), "adding a heading must move plan hash");
 
@@ -843,8 +785,8 @@ mod tests {
         assert_ne!(base_hash, plan_hash(&rf_renamed), "renaming a heading must move plan hash");
 
         // Headings reordered: two groups, each with one question, swapped.
-        let two_groups = "# Topic\n\n## Group A\n\n### 1.1 Question A?\n\nProblem: pa.\n\nStandard: sa.\n\n- A) x.\n\n## Group B\n\n### 1.2 Question B?\n\nProblem: pb.\n\nStandard: sb.\n\n- A) y.\n";
-        let swapped = "# Topic\n\n## Group B\n\n### 1.2 Question B?\n\nProblem: pb.\n\nStandard: sb.\n\n- A) y.\n\n## Group A\n\n### 1.1 Question A?\n\nProblem: pa.\n\nStandard: sa.\n\n- A) x.\n";
+        let two_groups = "# Topic\n\n## Group A\n\n### 1.1 Question A?\n\nProblem: pa.\n\nStandard: sa.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) x2.\n  Why: w.\n  Costs: c.\n\n## Group B\n\n### 1.2 Question B?\n\nProblem: pb.\n\nStandard: sb.\n\n- A) y.\n  Why: w.\n  Costs: c.\n- B) y2.\n  Why: w.\n  Costs: c.\n";
+        let swapped = "# Topic\n\n## Group B\n\n### 1.2 Question B?\n\nProblem: pb.\n\nStandard: sb.\n\n- A) y.\n  Why: w.\n  Costs: c.\n- B) y2.\n  Why: w.\n  Costs: c.\n\n## Group A\n\n### 1.1 Question A?\n\nProblem: pa.\n\nStandard: sa.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) x2.\n  Why: w.\n  Costs: c.\n";
         let rf_two = rf_from(two_groups);
         let rf_swapped = rf_from(swapped);
         assert_ne!(
@@ -871,7 +813,7 @@ mod tests {
 
     #[test]
     fn supersedes_line_parses_multiple_comma_separated_ids() {
-        let rf = rf_from("# Topic\n\n## Group\n\n### 1.1 Q?\n\nid: new-id\n\nsupersedes: old-1, old-2\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n");
+        let rf = rf_from("# Topic\n\n## Group\n\n### 1.1 Q?\n\nid: new-id\n\nsupersedes: old-1, old-2\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
         assert_eq!(
             rf.sections[0].supersedes,
             vec!["old-1".to_string(), "old-2".to_string()]

@@ -14,8 +14,10 @@ Standard: clear yes or no.
 
 - A) Yes it is current.
   Why: reasons.
+  Costs: costs.
 - B) No it is not.
   Why: other reasons.
+  Costs: other costs.
 
 ### 1.2 Is this only asked?
 
@@ -25,8 +27,10 @@ Standard: clear yes or no.
 
 - A) Yes only asked.
   Why: reasons.
+  Costs: costs.
 - B) No.
   Why: other reasons.
+  Costs: other costs.
 "#;
 
 #[test]

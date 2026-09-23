@@ -4,7 +4,7 @@ use crate::record::RecordFile;
 use std::path::Path;
 
 /// `done`: every file whose plan and context are approved and whose every
-/// h3/principle section carries an answer line (4.15).
+/// h3 section carries an answer line (4.15).
 pub(super) fn check_done(root: &Path, records: &[RecordFile], led: &Ledger) -> Vec<String> {
     let mut out = Vec::new();
     for rf in records {

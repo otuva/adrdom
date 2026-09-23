@@ -1,6 +1,6 @@
 use super::{file_approval, Failure};
 use crate::ledger::Ledger;
-use crate::record::{Kind, RecordFile};
+use crate::record::RecordFile;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -33,12 +33,10 @@ pub(super) fn check_plan(root: &Path, records: &[RecordFile], led: &Ledger) -> (
             }
         }
         for sec in &rf.sections {
-            if sec.kind == Kind::Question {
-                heading_files
-                    .entry(sec.heading_text.clone())
-                    .or_default()
-                    .push(rel.clone());
-            }
+            heading_files
+                .entry(sec.heading_text.clone())
+                .or_default()
+                .push(rel.clone());
         }
     }
 

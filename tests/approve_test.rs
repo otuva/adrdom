@@ -19,8 +19,10 @@ Standard: s1.
 
 - A) Answer one.
   Why: reasons.
+  Costs: costs.
 - B) Answer two.
   Why: other reasons.
+  Costs: other costs.
 "#;
 
 const GROUP_TWO_ADDITION: &str = r#"
@@ -34,8 +36,10 @@ Standard: s2.
 
 - A) Second answer one.
   Why: reasons.
+  Costs: costs.
 - B) Second answer two.
   Why: other reasons.
+  Costs: other costs.
 "#;
 
 const ONE_QUESTION_RECORD: &str = r#"# Topic
@@ -52,8 +56,10 @@ Standard: s.
 
 - A) Answer A.
   Why: reasons.
+  Costs: costs.
 - B) Answer B.
   Why: other reasons.
+  Costs: other costs.
 "#;
 
 const HEADING_REMOVED: &str = "# Topic\n\nContext prose.\n\n## Group One\n";
@@ -267,7 +273,7 @@ fn approve_allows_a_vanished_heading_once_superseded() {
     assert!(adr_owner(&dir, &["answer", &old_id, "A"], "").status.success());
 
     let superseding = format!(
-        "\n### 1.2 Replacement question?\n\nsupersedes: {}\n\nProblem: p2.\n\nStandard: s2.\n\n- A) New answer.\n  Why: reasons.\n",
+        "\n### 1.2 Replacement question?\n\nsupersedes: {}\n\nProblem: p2.\n\nStandard: s2.\n\n- A) New answer.\n  Why: reasons.\n  Costs: costs.\n- B) Other new answer.\n  Why: other reasons.\n  Costs: other costs.\n",
         old_id
     );
     let mut content2 = std::fs::read_to_string(&record).unwrap();
@@ -363,8 +369,10 @@ Standard: plain words.
 
 - A) A decision is one commitment.
   Why: reasons.
+  Costs: costs.
 - B) A decision is a block.
   Why: other reasons.
+  Costs: other costs.
 "#;
 
 #[test]
@@ -436,8 +444,10 @@ Standard: plain words.
 
 - A) The choice is final.
   Why: reasons.
+  Costs: costs.
 - B) The choice is provisional.
   Why: other reasons.
+  Costs: other costs.
 "#;
 
 #[test]
@@ -643,8 +653,10 @@ Standard: plain words.
 
 - A) The decision is final.
   Why: reasons.
+  Costs: costs.
 - B) The decision is provisional.
   Why: other reasons.
+  Costs: other costs.
 "#;
 
 #[test]

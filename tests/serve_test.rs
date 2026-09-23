@@ -301,8 +301,10 @@ Standard: decisions must be recorded plainly.
 
 - A) A decision is one commitment.
   Why: reasons.
+  Costs: costs.
 - B) A decision is a block.
   Why: other reasons.
+  Costs: other costs.
 "#;
 
 #[test]
@@ -413,8 +415,10 @@ Standard: decisions must be recorded plainly.
 
 - A) A decision naming a1b2c3d4-e5f6-4a1b-9c3d-112233445566 is one commitment.
   Why: reasons.
+  Costs: costs.
 - B) A decision is a block.
   Why: other reasons.
+  Costs: other costs.
 "#;
 
 /// A dashed uuid inline in option text must not leak hex fragments (split

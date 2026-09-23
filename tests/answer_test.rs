@@ -30,8 +30,10 @@ Standard: plain words.
 
 - A) The second thing is a widget.
   Why: reasons.
+  Costs: costs.
 - B) The second thing is a gadget.
   Why: other reasons.
+  Costs: other costs.
 "#;
 
 const THIRD_QUESTION: &str = r#"
@@ -43,8 +45,10 @@ Standard: plain words.
 
 - A) The third thing is a gizmo.
   Why: reasons.
+  Costs: costs.
 - B) The third thing is a doohickey.
   Why: other reasons.
+  Costs: other costs.
 "#;
 
 #[test]
@@ -537,7 +541,7 @@ fn answer_refuses_when_terms_md_is_not_approved() {
 fn answer_refuses_a_section_with_no_terms_line() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    let content = "# Topic\n\n## Group\n\n### 1.1 What is the authority?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n";
+    let content = "# Topic\n\n## Group\n\n### 1.1 What is the authority?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n  Costs: z.\n- B) w.\n  Why: y.\n  Costs: z.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", content);
     approve_minimal_terms(&dir, "authority");
