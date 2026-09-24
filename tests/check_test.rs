@@ -730,6 +730,11 @@ fn check_passes_when_a_superseded_id_is_missing_from_every_record() {
     );
 }
 
+// adr: 21ae8ae0-6884-4d3c-8464-024a8a5aae2d
+//
+// "a withdrawn identifier never returns": once `wd_id` carries a
+// `withdrawn` ledger row, its reappearing in a topic file's `id:` line is
+// itself a failure, not a tolerated reuse.
 #[test]
 fn check_fails_a_withdrawn_id_still_present_in_a_record() {
     let dir = init_repo();

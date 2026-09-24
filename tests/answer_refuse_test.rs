@@ -36,6 +36,11 @@ Standard: plain words.
   Costs: other costs.
 "#;
 
+// adr: b782664f-7465-4e1e-99e0-13f6dd2de774
+//
+// "the owner answers with a letter or a refusal": `adr answer <id> refuse`
+// closes the question with `**Answer:** refused` and a `refused` ledger
+// row, not a lettered decision.
 #[test]
 fn answer_refuse_writes_the_line_and_the_refused_row() {
     let dir = init_repo();

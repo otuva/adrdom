@@ -112,6 +112,12 @@ fn check_done_excludes_a_refused_file() {
     );
 }
 
+// adr: b782664f-7465-4e1e-99e0-13f6dd2de774
+//
+// "a refused question closes with no decision and no test (check does not
+// demand a tie for it)": `check` never reports the refused id as
+// `untested`, even though nothing ties to it -- and a tie somebody wrote
+// anyway is reported `stale`, since there is no decision left to test.
 #[test]
 fn check_a_refused_id_is_never_untested_but_a_tie_to_it_is_stale() {
     let dir = init_repo();

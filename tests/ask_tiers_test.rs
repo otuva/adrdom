@@ -499,6 +499,12 @@ fn ask_prints_the_tier_and_writes_an_assumes_row_per_dependent() {
 // --- edited-after-refused (mirrors the pre-existing edited-after-answered
 // guard) -------------------------------------------------------------------
 
+// adr: b782664f-7465-4e1e-99e0-13f6dd2de774
+//
+// "its identifier never returns, and a replacement is a new question":
+// rewording the refused section under its own id does not bring it back
+// askable -- `ask` refuses and points the agent at reverting the edit or
+// writing a new question (a new id), never at re-asking the old one.
 #[test]
 fn ask_refuses_when_a_refused_section_was_edited_since_refusal() {
     let dir = init_repo();

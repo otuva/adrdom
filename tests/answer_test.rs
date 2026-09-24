@@ -88,14 +88,10 @@ fn answer_writes_answer_line_and_ledger_row() {
     );
 }
 
-// adr: 98d5d389-8315-41da-9970-666e31f3a94d
-//
-// core (0): "the tool guards against an agent that runs an owner command
-// because it looks helpful", not one that works to get past it. `answer` is
-// an owner command; this test runs it the way an agent runs it -- no
-// interactive terminal, through the plain `adr(...)` helper rather than
-// `adr_owner` -- and shows it is refused and writes nothing (no `**Answer:**`
-// line, no `answered` ledger row).
+// `answer` is an owner command; this test runs it the way an agent runs it
+// -- no interactive terminal, through the plain `adr(...)` helper rather
+// than `adr_owner` -- and shows it is refused and writes nothing (no
+// `**Answer:**` line, no `answered` ledger row).
 #[test]
 fn answer_refuses_without_an_interactive_terminal() {
     let dir = init_repo();
@@ -333,6 +329,11 @@ fn answered_question_text_is_immutable_until_a_later_decision_supersedes_it() {
     );
 }
 
+// adr: f4f667ad-8714-4e65-897b-c7002e423c28
+//
+// "a supersedes line may name several decisions": the third question's
+// single `supersedes:` line names both old_id_1 and old_id_2, and
+// answering it writes one `superseded` row per named id.
 #[test]
 fn answer_with_two_id_supersedes_writes_a_row_per_id() {
     let dir = init_repo();
@@ -450,6 +451,13 @@ fn answer_refuses_a_second_time_with_already_answered_message() {
 // candidate outright, since a supersedes target must be current the
 // moment the question naming it is asked. This used to be caught by
 // `answer`; the gate moved to `ask`.
+//
+// adr: f4f667ad-8714-4e65-897b-c7002e423c28
+//
+// "each target must be current when the question is asked (ask stops a
+// non-current target)": 1.2 is only ever asked, never answered, so it is
+// not current when 1.3's supersedes line names it -- `ask` refuses the
+// whole candidate rather than letting the current target alone through.
 #[test]
 fn ask_refuses_a_two_id_supersedes_when_one_target_is_not_current() {
     let dir = init_repo();
@@ -643,6 +651,16 @@ fn answer_refuses_a_supersedes_target_already_superseded() {
 // since X was current when both were asked -- the freeze is at ask time,
 // not answer time -- and each answer writes its own `superseded` row for
 // X (one per answer, never merged).
+//
+// adr: f4f667ad-8714-4e65-897b-c7002e423c28
+//
+// "several newer decisions may name the same older one ... the older one
+// leaves force when the first replacement is answered (a second
+// replacement asked before that is still accepted at answer)": second_id
+// and third_id both name old_id and were both asked while it was still
+// current; answering second_id first makes old_id leave force, and
+// answering third_id afterward -- asked before that, at a time old_id was
+// current -- is still accepted, not refused as stale.
 #[test]
 fn answer_accepts_a_split_where_two_questions_asked_together_name_the_same_target() {
     let dir = init_repo();
@@ -1086,6 +1104,11 @@ fn answer_refuses_a_terms_line_naming_a_retired_term() {
 }
 
 // adr: aa275fac-def5-42a2-8a61-660142acad8e
+// adr: 98d5d389-8315-41da-9970-666e31f3a94d
+//
+// The tool guards against an agent that runs an owner command because it
+// looks helpful, not one that works to get past it: the plain agent run is
+// stopped, and a run that opens a terminal on purpose goes through.
 //
 // "a sign of a person at the keyboard, an interactive terminal; without it
 // the command stops, whatever the agent" is what every owner command
@@ -1151,37 +1174,27 @@ fn owner_commands_refuse_without_a_tty_and_run_with_one() {
 
     // A real interactive terminal -- via `script`, which allocates a pty
     // for the child's stdin -- is not an agent env var and is not
-    // `ADR_OWNER_BYPASS`: the same gate lets `approve` run for real. Skips
-    // this half rather than failing the test when `script` isn't on the
-    // machine running it.
+    // `ADR_OWNER_BYPASS`: the same gate lets `approve` run for real. A
+    // machine without `script` fails the test, so this half is never skipped.
     let cmd = format!(
         "env -u CLAUDECODE {} approve {}",
         adr_bin().display(),
         record.to_str().unwrap()
     );
-    match std::process::Command::new("script")
+    let out = std::process::Command::new("script")
         .current_dir(&dir)
         .args(["-q", "-e", "-c", &cmd, "/dev/null"])
         .output()
-    {
-        Ok(out) => {
-            assert!(
-                out.status.success(),
-                "approve should run under a real tty: stdout={} stderr={}",
-                stdout(&out),
-                stderr(&out)
-            );
-            assert!(
-                stdout(&out).contains("approved"),
-                "expected approve's own output under a real tty: {}",
-                stdout(&out)
-            );
-        }
-        Err(e) => {
-            eprintln!(
-                "owner_commands_refuse_without_a_tty_and_run_with_one: `script` unavailable ({}), skipping the real-tty half",
-                e
-            );
-        }
-    }
+        .expect("`script` (util-linux) is needed to open a real terminal");
+    assert!(
+        out.status.success(),
+        "approve should run under a real tty: stdout={} stderr={}",
+        stdout(&out),
+        stderr(&out)
+    );
+    assert!(
+        stdout(&out).contains("approved"),
+        "expected approve's own output under a real tty: {}",
+        stdout(&out)
+    );
 }

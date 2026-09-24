@@ -266,6 +266,12 @@ fn ask_refuses_group_two_while_group_one_unanswered_then_passes_after_answer() {
 
 // --- a struck asked heading is withdrawn on approve ---------------------
 
+// adr: 21ae8ae0-6884-4d3c-8464-024a8a5aae2d
+//
+// "when the owner approves a plan that no longer holds an asked question,
+// approve writes a withdrawn event for it": the heading naming `id` is
+// struck from the file (never answered, never superseded), and the very
+// `approve` that accepts the edit writes the `withdrawn` row for it.
 #[test]
 fn approve_withdraws_a_struck_asked_heading() {
     let dir = init_repo();
@@ -296,6 +302,12 @@ fn approve_withdraws_a_struck_asked_heading() {
 
 // --- approve refuses when a current heading vanishes without a supersede --
 
+// adr: 21ae8ae0-6884-4d3c-8464-024a8a5aae2d
+//
+// "approve stops when an answered question is missing from every topic
+// file": `id` is answered and current, never superseded, yet its heading
+// is struck; `approve` refuses (naming `id`) instead of withdrawing it,
+// and writes no `withdrawn` row.
 #[test]
 fn approve_refuses_when_answered_heading_gone_and_not_superseded() {
     let dir = init_repo();
@@ -369,6 +381,17 @@ fn approve_leaves_file_and_ledger_unchanged_when_missing_answered_id_refuses() {
 
 // --- approve allows a vanished heading once it is superseded ------------
 
+// adr: 1b181f10-97f4-4bbe-8939-d5842192126c
+//
+// "once superseded, a question's section may leave the file as a plan
+// change the owner approves, and approve allows that only for superseded
+// questions": old_id's section is dropped from the file entirely once it
+// is superseded, and `approve` accepts the edit (contrast
+// `approve_refuses_when_answered_heading_gone_and_not_superseded`, where
+// the same removal on a current, non-superseded id refuses). "the old
+// text stays in git history and its hash in the ledger": old_id's
+// `answered` row, carrying the section's hash, is still in the ledger
+// after its text has left the file.
 #[test]
 fn approve_allows_a_vanished_heading_once_superseded() {
     let dir = init_repo();
@@ -384,6 +407,14 @@ fn approve_allows_a_vanished_heading_once_superseded() {
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
     assert!(adr_owner(&dir, &["answer", &old_id, "A"], "").status.success());
+    let old_answered_row = {
+        let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+        ledger
+            .lines()
+            .find(|l| l.contains("\tanswered\t") && l.contains(old_id.as_str()))
+            .expect("answered row for old_id")
+            .to_string()
+    };
 
     let superseding = format!(
         "\n### 1.2 Replacement question?\ndepends: decision\n\nsupersedes: {}\n\nProblem: the decision needs revisiting.\n\nStandard: s2.\n\n- A) New answer.\n  Why: reasons.\n  Costs: costs.\n- B) Other new answer.\n  Why: other reasons.\n  Costs: other costs.\n",
@@ -415,6 +446,101 @@ fn approve_allows_a_vanished_heading_once_superseded() {
     assert!(out.status.success(), "approve should have allowed it: {}", stderr(&out));
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(!ledger.lines().any(|l| l.contains("\twithdrawn\t") && l.contains(old_id.as_str())));
+    // The old text is gone from the file, but its ledger row -- hash and
+    // all -- is untouched: nothing rewrites or drops a ledger row when the
+    // section it describes leaves the file.
+    assert!(
+        ledger.lines().any(|l| l == old_answered_row),
+        "old_id's answered row must still be in the ledger unchanged: {}",
+        ledger
+    );
+}
+
+// --- a topic file with nothing current or open left may be deleted -------
+
+// adr: 1b181f10-97f4-4bbe-8939-d5842192126c
+//
+// "a topic file with no current or open question left may be deleted the
+// same way": once `a.md`'s only question is superseded and its section
+// removed by an approved edit, the file holds no current or open question
+// at all; deleting it outright leaves `check` clean, exactly as removing
+// just the section did above -- no special act beyond the plan change
+// already approved.
+#[test]
+fn check_stays_clean_once_an_emptied_topic_file_is_deleted() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+
+    let record_a = write_record(&dir, "adrdom/decisions/a.md", ONE_QUESTION_RECORD);
+    assert!(adr_owner(&dir, &["approve", record_a.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record_a.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content_a = std::fs::read_to_string(&record_a).unwrap();
+    let old_id = extract_ids(&content_a)[0].clone();
+    assert!(adr_owner(&dir, &["answer", &old_id, "A"], "").status.success());
+    let old_answered_row = {
+        let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+        ledger
+            .lines()
+            .find(|l| l.contains("\tanswered\t") && l.contains(old_id.as_str()))
+            .expect("answered row for old_id")
+            .to_string()
+    };
+
+    // A second, unrelated topic file supersedes old_id: a.md's only
+    // question is now superseded, not answered by anything a.md still
+    // holds.
+    let superseding = format!(
+        "# Other Topic\n\n### 2.1 Replacement in another file?\ndepends: decision\n\nsupersedes: {}\n\nProblem: the decision needs revisiting from elsewhere.\n\nStandard: s2.\n\n- A) New answer.\n  Why: reasons.\n  Costs: costs.\n- B) Other new answer.\n  Why: other reasons.\n  Costs: other costs.\n",
+        old_id
+    );
+    let record_b = write_record(&dir, "adrdom/decisions/b.md", &superseding);
+    assert!(adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record_b.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content_b = std::fs::read_to_string(&record_b).unwrap();
+    let new_id = extract_ids(&content_b)[0].clone();
+    assert!(adr_owner(&dir, &["answer", &new_id, "A"], "").status.success());
+
+    // a.md's only heading is superseded now: an approved edit may drop it,
+    // leaving a.md with no current or open question left at all.
+    std::fs::write(&record_a, HEADING_REMOVED).unwrap();
+    assert!(adr_owner(&dir, &["approve", record_a.to_str().unwrap()], "")
+        .status
+        .success());
+
+    // Delete the emptied file outright.
+    std::fs::remove_file(&record_a).unwrap();
+
+    // Tie new_id so the only thing left for `check` to possibly complain
+    // about is old_id and the deleted file, not an unrelated "untested"
+    // note on b.md's own, still-current decision.
+    write_test_comment(&dir, &new_id);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "check should stay clean: {}", stdout(&out));
+    let text = stdout(&out);
+    assert!(
+        !text.contains(old_id.as_str()),
+        "a deleted, fully-superseded file's id must earn no failure: {}",
+        text
+    );
+
+    // The old text is gone from disk entirely, but its hash lives on in
+    // the ledger, unaffected by the file's deletion.
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        ledger.lines().any(|l| l == old_answered_row),
+        "old_id's answered row must survive the file's deletion: {}",
+        ledger
+    );
 }
 
 // --- the frozen-depends check also covers a superseded section ----------

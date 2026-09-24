@@ -18,6 +18,8 @@ Standard: architecture decision records let a new record supersede an earlier on
   Why: every link reads alone.
   Costs: replacing a topic of ten decisions is ten questions, and a split has no route.
 
+**Answer:** A
+
 ### Does the owner answer a question with a refusal?
 depends: b36113a1-1384-4e4c-a798-8399f4181366, 0942e445-0163-423e-8ba7-84dd8ac07045, 277a8338-c57a-43cc-8b28-6b42e9347f6a
 id: b782664f-7465-4e1e-99e0-13f6dd2de774
@@ -35,6 +37,8 @@ Standard: review tools let a reviewer reject a change without editing it.
 - C) Yes, and the refused question stays open for the agent to rewrite under the same identifier.
   Why: the identifier and its place in the plan survive.
   Costs: an asked question's text moves under its identifier after the owner read it.
+
+**Answer:** A
 
 ### Does approve withdraw an asked question struck from the plan?
 depends: da59b448-1afb-4469-b40e-69eda8f253c2, e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, e4a2ef0c-3354-4c9b-a8d9-9e204e544d85
@@ -54,6 +58,8 @@ Standard: issue trackers record a closed item as closed by the person who closed
   Why: an explicit act.
   Costs: a second owner move for one change.
 
+**Answer:** A
+
 ### Does a superseded question leave its topic file?
 depends: dad5273c-afe2-4ab1-a451-e2a5d4d9a26d, 2bae531b-c4df-48a0-89a0-3d52726741ea, 08193e75-dd89-4857-8e9f-b19e1a9e75e6
 id: 1b181f10-97f4-4bbe-8939-d5842192126c
@@ -72,10 +78,35 @@ Standard: version control keeps old text; a working document drops what is repla
   Why: out of the way and still in the tree.
   Costs: a second copy of what git keeps.
 
+**Answer:** A
+
 ### Does a refused question stay in its topic file?
 depends: b782664f-7465-4e1e-99e0-13f6dd2de774=A, 08193e75-dd89-4857-8e9f-b19e1a9e75e6, 94677ed8-eaf6-46e2-bc71-7392fa0805bf
 id: 6b3d8e59-e145-49e1-860d-a79d753d745c
 
+Problem: a refused question has a body, a ledger event and no decision; if it leaves at once the file loses what was turned away, and if it never leaves the file carries it for good.
+Standard: issue trackers keep a closed item visible until a deliberate act archives it.
+
+- A) Yes, until the next plan change: the section stays, marked refused, and when the owner approves a plan that drops it, the section is gone.
+  Why: the file shows what was turned away until the plan moves on, and removal stays the owner's act.
+  Costs: a refused section sits in the file between the refusal and the next plan change.
+- B) Yes, for good: no plan change may drop a refused section.
+  Why: the file is a full record of what was asked.
+  Costs: dead sections pile up with no way out.
+- C) No: the agent removes the section at its next commit, and the ledger event is the only record.
+  Why: the file holds only live questions.
+  Costs: an agent edit removes an asked heading from an approved plan, and the plan fails until the owner approves again.
+
 ### Does a refused question hold the tiers above it?
 depends: b782664f-7465-4e1e-99e0-13f6dd2de774=A, f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
 id: 506b3c6d-3d0a-4a02-98de-3b8a573d2fe9
+
+Problem: a question above a refused one was written on the assumption the refused one would be answered; asking it anyway puts a question before the owner whose ground is gone.
+Standard: dependency-ordered work stops at the unmet prerequisite and names it; nothing proceeds on a placeholder.
+
+- A) Yes: a refused question counts as unanswered for its tier, so the next tier waits until the owner approves a plan change that drops or replaces it.
+  Why: nothing is asked on ground the owner turned away, and the refusal sends the plan back through the one gate.
+  Costs: one refusal holds every tier above it until a plan change.
+- B) No: a refused question counts as settled, and the next tier opens.
+  Why: a refusal never stalls the topic.
+  Costs: questions standing on the refused one reach the owner with their ground gone.

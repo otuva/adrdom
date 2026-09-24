@@ -114,6 +114,13 @@ Standard: s4.\n\n\
 // "show prints the tiers": the fixture below states no tier anywhere in
 // its text (only `depends:` lines and hand-written ledger rows), yet
 // `show` prints "tier 1" and "tier 2" derived from those depends lines.
+//
+// adr: b782664f-7465-4e1e-99e0-13f6dd2de774
+//
+// "show prints no decision" for a refused question: `id-refused` carries
+// `**Answer:** refused`, and the expected output below lists it as
+// `[refused] 2.2 Also depends?` with no chosen-sentence line under it,
+// unlike `id-root`'s `[answered A]` line, which does print one.
 #[test]
 fn show_prints_tiers_states_stands_on_and_chosen_sentence() {
     let dir = init_repo();
