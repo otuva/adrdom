@@ -44,6 +44,62 @@ fn approve_refuses_a_heading_with_no_depends_line() {
     );
 }
 
+// adr: ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf
+//
+// "every question carries a depends line naming a term, a question in the
+// same topic file, or a current decision; approve and ask stop a line that
+// is missing or names anything that does not resolve". A heading with no
+// depends line at all refuses (the "missing" half, also covered on its own
+// by `approve_refuses_a_heading_with_no_depends_line` below); a heading
+// whose depends line names a real term, a heading elsewhere in the same
+// file, and a current decision (an id answered before this file even
+// existed) all resolve, and approve accepts every one of the three kinds.
+#[test]
+fn approve_accepts_all_three_depends_target_kinds_and_refuses_a_missing_line() {
+    let dir = init_repo();
+    setup(&dir);
+
+    let missing = "# Missing\n\n### 1.1 No depends?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let missing_record = write_record(&dir, "adrdom/decisions/missing.md", missing);
+    let out = adr_owner(&dir, &["approve", missing_record.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    assert!(
+        stderr(&out).contains("\"1.1 No depends?\" has no depends line"),
+        "{}",
+        stderr(&out)
+    );
+
+    // A current decision: an id answered before this topic file existed,
+    // living in a topic file of its own (approve refuses an answered id
+    // that appears in no topic file at all -- a different rule from the
+    // one this test is about -- so it needs a home).
+    let decided_id = "66666666-6666-6666-6666-666666666666";
+    append_ledger_row(&dir, "asked", decided_id, "h1", "Some earlier heading?");
+    append_ledger_row(&dir, "answered", decided_id, "h1", "A");
+    let earlier = format!(
+        "# Earlier\n\n### 1.1 Some earlier heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        decided_id
+    );
+    write_record(&dir, "adrdom/decisions/earlier.md", &earlier);
+
+    // One file naming all three kinds: a term ("decision"), a heading in
+    // the same file ("First?"), and the current decision above.
+    let content = format!(
+        "# Example\n\n\
+        ### First?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+        ### Second?\ndepends: First?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+        ### Third?\ndepends: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        decided_id
+    );
+    let record = write_record(&dir, "adrdom/decisions/example.md", &content);
+    let out2 = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(
+        out2.status.success(),
+        "approve should accept a term, an in-file heading, and a current decision: {}",
+        stderr(&out2)
+    );
+}
+
 // --- term entry resolution ------------------------------------------------
 
 #[test]

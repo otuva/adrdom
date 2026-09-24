@@ -234,6 +234,106 @@ fn check_tests_failure_when_untested() {
     assert!(stdout(&out).contains("tested: 1"), "{}", stdout(&out));
 }
 
+// adr: cd83e277-ebf0-4458-a77a-c526ab4cfeca
+//
+// "the ledger holds a hash of each answered question's text, and check
+// fails any answered question whose text no longer matches it". Answers a
+// question for real, so the `answered` ledger row carries a real sha256
+// hash of the text as answered (not a placeholder), then edits the
+// section's Problem line afterward: the section's current hash no longer
+// matches the hash the ledger recorded, and check fails naming it.
+#[test]
+fn check_fails_an_answered_question_whose_text_changed_since_answering() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let (record, id) = answer_one_question(&dir);
+    write_test_comment(&dir, &id);
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    let answered_row = ledger
+        .lines()
+        .find(|l| l.contains("\tanswered\t") && l.contains(id.as_str()))
+        .unwrap_or_else(|| panic!("no answered row for {}: {}", id, ledger));
+    let hash_field = answered_row.split('\t').nth(3).unwrap();
+    assert_ne!(
+        hash_field, "-",
+        "the answered row should carry a real hash of the text: {}",
+        answered_row
+    );
+    assert_eq!(
+        hash_field.len(),
+        64,
+        "expected a sha256 hex hash on the answered row: {}",
+        answered_row
+    );
+
+    // Untouched, check still passes.
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "check should pass before any edit: {}", stdout(&out));
+
+    // Edit the answered section's Problem line after the fact -- the
+    // `**Answer:** A` line and the id are left alone.
+    let content = std::fs::read_to_string(&record).unwrap();
+    let edited = content.replacen(
+        "Problem: whether it passes.",
+        "Problem: whether it truly passes.",
+        1,
+    );
+    assert_ne!(content, edited, "fixture edit should have changed something");
+    std::fs::write(&record, &edited).unwrap();
+
+    let out2 = adr(&dir, &["check"], &[], "");
+    assert!(!out2.status.success());
+    let text = stdout(&out2);
+    assert!(text.contains("answers:"), "{}", text);
+    assert!(text.contains("answer line without ledger row"), "{}", text);
+    assert!(text.contains("3.1 Does this pass?"), "{}", text);
+}
+
+// adr: 0b962bc8-05a8-48da-9fe8-bf77c7aa6e4a
+//
+// "a comment `adr: <id>` inside the test, found by text search in every
+// tracked file outside adrdom, ties a test to a decision". A tie written
+// in a tracked, non-Rust file outside adrdom/ counts (also relied on by
+// every other test here through `write_test_comment`); the same comment
+// placed under adrdom/, or left untracked, does not, so `check` still
+// names the decision untested until it is tracked outside adrdom/.
+#[test]
+fn check_tests_ignores_a_tie_under_adrdom_and_an_untracked_tie() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let (_record, id) = answer_one_question(&dir);
+
+    // Tracked, but under adrdom/: the scan skips it.
+    std::fs::write(dir.join("adrdom/note.txt"), format!("adr: {}\n", id)).unwrap();
+    run_git(&dir, &["add", "adrdom/note.txt"]);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    assert!(
+        stdout(&out).contains(&format!("{}: untested", id)),
+        "a tie under adrdom/ must not count: {}",
+        stdout(&out)
+    );
+
+    // The same comment outside adrdom/, but not yet tracked.
+    std::fs::write(dir.join("outside.txt"), format!("adr: {}\n", id)).unwrap();
+
+    let out2 = adr(&dir, &["check"], &[], "");
+    assert!(!out2.status.success());
+    assert!(
+        stdout(&out2).contains(&format!("{}: untested", id)),
+        "an untracked tie must not count: {}",
+        stdout(&out2)
+    );
+
+    // Tracking a non-Rust file outside adrdom/ is what makes it count.
+    run_git(&dir, &["add", "outside.txt"]);
+    let out3 = adr(&dir, &["check"], &[], "");
+    assert!(out3.status.success(), "{}", stdout(&out3));
+    assert!(stdout(&out3).contains("tested: 1"), "{}", stdout(&out3));
+}
+
 #[test]
 fn check_install_fails_when_settings_deny_entry_removed_and_passes_after_install() {
     let dir = init_repo();

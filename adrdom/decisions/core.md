@@ -92,6 +92,8 @@ Standard: tamper-evident logs store a hash of each record and verify it on every
   Why: nothing new in the tool.
   Costs: the catch depends on someone reading the diff.
 
+**Answer:** A
+
 ### What does an owner command look for before it runs?
 depends: 98d5d389-8315-41da-9970-666e31f3a94d=*, 1d7e59ea-99e3-4d4b-9928-5dabca62723d, f90dbd5b-8fbe-4899-8588-f8762795c2e2
 id: aa275fac-def5-42a2-8a61-660142acad8e
@@ -109,6 +111,8 @@ Standard: allowlist over denylist; recognise the known principal instead of list
 - C) A secret the owner types on every owner command, such as a password.
   Why: holds even when an agent opens a terminal.
   Costs: the owner types it on every approve and answer, against a threat the tool does not guard against.
+
+**Answer:** A
 
 ### What does a depends line name?
 depends: da59b448-1afb-4469-b40e-69eda8f253c2=A|C, aef1b384-2b33-47a2-92a8-ec7f8fb258ef
@@ -128,6 +132,8 @@ Standard: dependency-ordered task lists carry a prerequisite field per item and 
   Why: the agent states the assumption in its own words.
   Costs: the tool checks nothing, and no order can be derived from it.
 
+**Answer:** A
+
 ### What ties a test to a decision?
 depends: 33a45b9e-8150-488e-be70-7ab2ca9adaa6=*, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f
 id: 0b962bc8-05a8-48da-9fe8-bf77c7aa6e4a
@@ -146,18 +152,43 @@ Standard: cross-language tools mark a file with a comment carrying an identifier
   Why: one place to look.
   Costs: a test rename breaks a decision that never changes.
 
+**Answer:** A
+
 ### Does the tool derive tiers from the depends lines?
 depends: ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf=A|B, f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
 id: aec860fd-22ad-44a7-99f7-222ea19537e7
+
+Problem: when the agent writes the tiers and fills them, it fills them by subject, and questions that assume each other's answers sit side by side and reach the owner together.
+Standard: build systems derive execution order from declared dependencies and stop on a cycle; nobody writes the order by hand.
+
+- A) Yes: the tool derives the tiers from the depends lines and nothing in the topic file states them; a question standing on no other question in its file is in the first tier, any other one tier above the highest question it stands on; approve stops a cycle, ask asks the lowest tier with an unanswered question, and show and the page print the tiers.
+  Why: the agent never places a question, so a question cannot sit beside one it stands on.
+  Costs: the raw file does not show the order without show or the page.
+- B) No: the agent writes the tier headings, and check fails a file where a question sits in the same tier as a question it stands on, or below it.
+  Why: the raw file shows the order.
+  Costs: two sources for one order, and every mismatch is a failure the agent fixes by hand.
+- C) No: the agent writes the tier headings, and nothing compares them with the depends lines.
+  Why: nothing new in the tool.
+  Costs: the depends line orders nothing.
 
 ### Does a reference in a topic file carry the identifier of what it names?
 depends: ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf=A|B, e877e4a9-2caf-4fe6-9f82-5476a2abb00b, 08193e75-dd89-4857-8e9f-b19e1a9e75e6
 id: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
 
+Problem: when a heading is reworded or a term renamed, every reference that names it by its text breaks, and each one is fixed by hand.
+Standard: reference by a stable identifier; the reference points at a value that never changes, and the name is only shown to people.
+
+- A) Yes: every reference carries the identifier of what it names; the agent writes the name, approve turns it into the identifier, and show and the page turn it back into the name.
+  Why: a rename breaks no reference, and terms, decisions and questions follow one rule.
+  Costs: the raw file does not say what a reference points at without show or the page.
+- B) No: a reference carries the text of what it names; a rename breaks it and the agent fixes it by hand.
+  Why: the raw file reads on its own.
+  Costs: every rename is an edit on every line that points at the target, and a second rule beside the identifier rule for the same job.
+
 ### Does the tool cap the questions in a tier?
-depends: aec860fd-22ad-44a7-99f7-222ea19537e7, f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
+depends: aec860fd-22ad-44a7-99f7-222ea19537e7=*, f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
 id: 15d82e53-e344-4347-b639-3bf6eb9ef1b4
 
 ### Does a depends entry carry the answers it holds under?
-depends: aec860fd-22ad-44a7-99f7-222ea19537e7, 9d634996-475e-4ddc-8113-05c404ad9d5c
+depends: aec860fd-22ad-44a7-99f7-222ea19537e7=*, 9d634996-475e-4ddc-8113-05c404ad9d5c
 id: fa90692a-150e-4a89-91e2-1d575cb59d0f

@@ -1084,3 +1084,104 @@ fn answer_refuses_a_terms_line_naming_a_retired_term() {
         )
     );
 }
+
+// adr: aa275fac-def5-42a2-8a61-660142acad8e
+//
+// "a sign of a person at the keyboard, an interactive terminal; without it
+// the command stops, whatever the agent" is what every owner command
+// (`approve`, `answer`, `unban`, `uninstall`) looks for before it runs.
+// Shows both halves: with no interactive terminal on stdin -- and no agent
+// env var set either, since the gate reads none of them -- every one of
+// those commands refuses without writing anything, and the refusal names
+// the command as the owner's, never the terminal it is actually keyed on;
+// then, with a real interactive terminal (a pty allocated by `script`, no
+// `ADR_OWNER_BYPASS` or test feature involved), the same gate lets
+// `approve` run for real.
+#[test]
+fn owner_commands_refuse_without_a_tty_and_run_with_one() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let content = "# Example\n\n### 1.1 Q?\ndepends: widget\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let record = write_record(&dir, "adrdom/decisions/example.md", content);
+
+    // No TTY (the test harness always pipes stdin) and CLAUDECODE cleared
+    // (the `adr` helper already removes it): every owner command refuses,
+    // exit code 2, and none of the refusals mention "terminal".
+    let approve_out = adr(&dir, &["approve", record.to_str().unwrap()], &[], "");
+    assert_eq!(approve_out.status.code(), Some(2), "{}", stderr(&approve_out));
+    let approve_err = stderr(&approve_out);
+    assert!(approve_err.contains("this is the owner's command"), "{}", approve_err);
+    assert!(!approve_err.to_lowercase().contains("terminal"), "{}", approve_err);
+
+    let answer_out = adr(
+        &dir,
+        &["answer", "11111111-1111-1111-1111-111111111111", "A"],
+        &[],
+        "",
+    );
+    assert_eq!(answer_out.status.code(), Some(2), "{}", stderr(&answer_out));
+    let answer_err = stderr(&answer_out);
+    assert!(answer_err.contains("this is the owner's command"), "{}", answer_err);
+    assert!(!answer_err.to_lowercase().contains("terminal"), "{}", answer_err);
+
+    let unban_out = adr(&dir, &["unban"], &[], "somebannedword\n");
+    assert_eq!(unban_out.status.code(), Some(2), "{}", stderr(&unban_out));
+    let unban_err = stderr(&unban_out);
+    assert!(unban_err.contains("this is the owner's command"), "{}", unban_err);
+    assert!(!unban_err.to_lowercase().contains("terminal"), "{}", unban_err);
+
+    let uninstall_out = adr(&dir, &["uninstall"], &[], "");
+    assert_eq!(uninstall_out.status.code(), Some(2), "{}", stderr(&uninstall_out));
+    let uninstall_err = stderr(&uninstall_out);
+    assert!(
+        uninstall_err.contains("this is the owner's command"),
+        "{}",
+        uninstall_err
+    );
+    assert!(!uninstall_err.to_lowercase().contains("terminal"), "{}", uninstall_err);
+
+    // Nothing any of the refused commands could have written landed.
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        !ledger.lines().any(|l| l.contains("\tapproved\t") || l.contains("\tcontext\t")),
+        "no approve row should have been written on refusal: {}",
+        ledger
+    );
+
+    // A real interactive terminal -- via `script`, which allocates a pty
+    // for the child's stdin -- is not an agent env var and is not
+    // `ADR_OWNER_BYPASS`: the same gate lets `approve` run for real. Skips
+    // this half rather than failing the test when `script` isn't on the
+    // machine running it.
+    let cmd = format!(
+        "env -u CLAUDECODE {} approve {}",
+        adr_bin().display(),
+        record.to_str().unwrap()
+    );
+    match std::process::Command::new("script")
+        .current_dir(&dir)
+        .args(["-q", "-e", "-c", &cmd, "/dev/null"])
+        .output()
+    {
+        Ok(out) => {
+            assert!(
+                out.status.success(),
+                "approve should run under a real tty: stdout={} stderr={}",
+                stdout(&out),
+                stderr(&out)
+            );
+            assert!(
+                stdout(&out).contains("approved"),
+                "expected approve's own output under a real tty: {}",
+                stdout(&out)
+            );
+        }
+        Err(e) => {
+            eprintln!(
+                "owner_commands_refuse_without_a_tty_and_run_with_one: `script` unavailable ({}), skipping the real-tty half",
+                e
+            );
+        }
+    }
+}
