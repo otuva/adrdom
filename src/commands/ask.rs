@@ -292,6 +292,23 @@ pub fn run(record_path: PathBuf) -> i32 {
             }
         }
 
+        // Supersedes target must be current (E3, founding 1.3 A/4.14 A,
+        // owner note 2026-09-24): the supersedes line freezes at ask, so a
+        // candidate naming a target that is not current right now -- never
+        // answered, refused, withdrawn, or already superseded -- refuses
+        // here; `answer` later accepts a target that was superseded after
+        // this question's own `asked` row (a split), but never one that was
+        // already stale before it was ever asked.
+        for old in &sec.supersedes {
+            if !state::is_current(&led, old) {
+                eprintln!(
+                    "ask: {}: \"{}\": supersedes {}, which is not a current decision; agent fixes the supersedes line",
+                    rel, sec.heading_text, old
+                );
+                return 1;
+            }
+        }
+
         // Tier rule (8.4/8.5 A): a candidate outside the open tier
         // refuses, naming the tier's blocker (the first non-skeleton,
         // unanswered section in the open tier, by file order) and whether

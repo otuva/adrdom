@@ -321,8 +321,13 @@ fn answer_refuses_a_second_time_with_already_answered_message() {
     );
 }
 
+// (E3) A `supersedes:` naming two ids, one current and one merely asked
+// (never answered, so never current at all): `ask` now refuses the
+// candidate outright, since a supersedes target must be current the
+// moment the question naming it is asked. This used to be caught by
+// `answer`; the gate moved to `ask`.
 #[test]
-fn answer_with_two_id_supersedes_refuses_when_one_is_not_current() {
+fn ask_refuses_a_two_id_supersedes_when_one_target_is_not_current() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -362,39 +367,46 @@ fn answer_with_two_id_supersedes_refuses_when_one_is_not_current() {
     content.push_str(&third_with_supersedes);
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
+    let before_ask = std::fs::read_to_string(&record).unwrap();
 
-    let content = std::fs::read_to_string(&record).unwrap();
-    let new_id = extract_ids(&content)
-        .into_iter()
-        .find(|id| id != &old_id_1 && id != &old_id_2)
-        .expect("third id assigned");
-
-    let answer_out = adr_owner(&dir, &["answer", &new_id, "A"], "");
+    let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(
-        !answer_out.status.success(),
-        "answer should have refused: {}",
-        stdout(&answer_out)
+        !ask_out.status.success(),
+        "ask should have refused: {}",
+        stdout(&ask_out)
     );
-    assert!(stderr(&answer_out).contains(old_id_2.as_str()), "{}", stderr(&answer_out));
+    let err = stderr(&ask_out);
+    assert!(err.contains(old_id_2.as_str()), "{}", err);
+    assert!(err.contains("which is not a current decision"), "{}", err);
+    assert!(err.contains("agent fixes the supersedes line"), "{}", err);
 
     let after = std::fs::read_to_string(&record).unwrap();
     assert_eq!(
-        after.matches("**Answer:**").count(),
-        1,
-        "answer must not have written an answer for 1.3: {}",
-        after
+        after, before_ask,
+        "a refused ask must change nothing in the topic file"
     );
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(
         !ledger.lines().any(|l| l.contains("\tsuperseded\t")),
-        "answer must not have written any superseded rows: {}",
+        "ask must not have written any superseded rows: {}",
         ledger
     );
 }
 
+// (E3) `ask` now refuses a candidate whose `supersedes:` names an id that
+// is not current at ask time, so a target already stale by the time a
+// question is asked can no longer be driven through a real `ask` call the
+// way this test used to reach `answer`'s own refusal. That "stale at ask"
+// path is covered directly against `ask` below
+// (`ask_refuses_a_candidate_whose_supersedes_target_is_stale`). This test
+// keeps its original meaning -- a supersedes target already superseded
+// *before* the question naming it was asked still refuses at `answer` --
+// by asking the third question for real without `supersedes:` (so `ask`'s
+// new gate has nothing to refuse), then hand-editing the file to add the
+// `supersedes:` line and hand-writing the matching `asked` ledger row
+// after old_id's `superseded` row, the way
+// `answer_refuses_a_section_with_no_terms_line` bypasses `ask` for a
+// hand-crafted ledger state elsewhere in this file.
 #[test]
 fn answer_refuses_a_supersedes_target_already_superseded() {
     let dir = init_repo();
@@ -434,18 +446,12 @@ fn answer_refuses_a_supersedes_target_already_superseded() {
     let answer_out = adr_owner(&dir, &["answer", &second_id, "A"], "");
     assert!(answer_out.status.success(), "answer 1.2 failed: {}", stderr(&answer_out));
 
-    // The third question names the same, now superseded, first id: a
-    // supersedes target must be current (4.14 A), so this refuses instead
-    // of being accepted as lineage.
+    // Add and really ask the third question with no `supersedes:` line yet
+    // -- old_id is already superseded, so a real ask naming it here would
+    // now be refused by `ask`'s own gate; that is exactly what the next
+    // test below checks. This test is about `answer`'s side of the freeze.
     let mut content = std::fs::read_to_string(&record).unwrap();
-    content.push_str(&THIRD_QUESTION.replacen(
-        "### 1.3 What is the third unit of authority called?\n",
-        &format!(
-            "### 1.3 What is the third unit of authority called?\n\nsupersedes: {}\n",
-            old_id
-        ),
-        1,
-    ));
+    content.push_str(THIRD_QUESTION);
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
@@ -456,6 +462,32 @@ fn answer_refuses_a_supersedes_target_already_superseded() {
         .into_iter()
         .find(|id| id != &old_id && id != &second_id)
         .expect("third id assigned");
+
+    // Hand-add the `supersedes:` line naming the already-superseded old_id,
+    // and hand-write a matching `asked` row for the edited section -- its
+    // position lands after old_id's existing `superseded` row, so the
+    // target was superseded *before* this (hand-crafted) `asked` row, not
+    // after.
+    let edited = content.replacen(
+        "### 1.3 What is the third unit of authority called?\n",
+        &format!(
+            "### 1.3 What is the third unit of authority called?\n\nsupersedes: {}\n",
+            old_id
+        ),
+        1,
+    );
+    std::fs::write(&record, &edited).unwrap();
+    let heading_idx = edited.find("### 1.3 What is the third unit of authority called?").unwrap();
+    let section_text = edited[heading_idx..].trim_end_matches('\n');
+    let new_hash = mirror_section_hash(section_text);
+    append_ledger_row(
+        &dir,
+        "asked",
+        &third_id,
+        &new_hash,
+        "1.3 What is the third unit of authority called?",
+    );
+
     let answer_out = adr_owner(&dir, &["answer", &third_id, "A"], "");
     assert!(
         !answer_out.status.success(),
@@ -479,6 +511,170 @@ fn answer_refuses_a_supersedes_target_already_superseded() {
         .filter(|l| l.contains("\tsuperseded\t") && l.contains(old_id.as_str()))
         .count();
     assert_eq!(rows, 1, "expected exactly one superseded row for the first id: {}", ledger);
+}
+
+// (E3) A split: two questions asked together (same `ask` call), both
+// naming the same current target X in `supersedes:`. Answering one
+// supersedes X; answering the other afterward must still be accepted,
+// since X was current when both were asked -- the freeze is at ask time,
+// not answer time -- and each answer writes its own `superseded` row for
+// X (one per answer, never merged).
+#[test]
+fn answer_accepts_a_split_where_two_questions_asked_together_name_the_same_target() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let old_id = extract_ids(&content)[0].clone();
+    let answer_out = adr_owner(&dir, &["answer", &old_id, "A"], "");
+    assert!(answer_out.status.success(), "answer 1.1 failed: {}", stderr(&answer_out));
+
+    // Both the second and third questions supersede old_id while it is
+    // still current, and both get asked in the same `ask` run.
+    let mut content = std::fs::read_to_string(&record).unwrap();
+    content.push_str(&SECOND_QUESTION.replacen(
+        "### 1.2 What is the second unit of authority called?\n",
+        &format!(
+            "### 1.2 What is the second unit of authority called?\n\nsupersedes: {}\n",
+            old_id
+        ),
+        1,
+    ));
+    content.push_str(&THIRD_QUESTION.replacen(
+        "### 1.3 What is the third unit of authority called?\n",
+        &format!(
+            "### 1.3 What is the third unit of authority called?\n\nsupersedes: {}\n",
+            old_id
+        ),
+        1,
+    ));
+    std::fs::write(&record, &content).unwrap();
+    approve_record(&dir, "adrdom/decisions/example.md");
+    let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(ask_out.status.success(), "ask failed: {}", stderr(&ask_out));
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let ids: Vec<String> = extract_ids(&content).into_iter().filter(|id| id != &old_id).collect();
+    assert_eq!(ids.len(), 2, "expected the second and third ids: {:?}", ids);
+    let second_id = ids[0].clone();
+    let third_id = ids[1].clone();
+
+    let first_answer = adr_owner(&dir, &["answer", &second_id, "A"], "");
+    assert!(
+        first_answer.status.success(),
+        "first half of the split failed: {}",
+        stderr(&first_answer)
+    );
+    let second_answer = adr_owner(&dir, &["answer", &third_id, "A"], "");
+    assert!(
+        second_answer.status.success(),
+        "second half of the split failed: {}",
+        stderr(&second_answer)
+    );
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    let superseded_rows: Vec<&str> = ledger
+        .lines()
+        .filter(|l| l.contains("\tsuperseded\t") && l.contains(old_id.as_str()))
+        .collect();
+    assert_eq!(
+        superseded_rows.len(),
+        2,
+        "expected one superseded row per answer naming old_id: {:?}",
+        superseded_rows
+    );
+    assert!(superseded_rows.iter().any(|l| l.contains(second_id.as_str())));
+    assert!(superseded_rows.iter().any(|l| l.contains(third_id.as_str())));
+}
+
+// (E3) A stale target: X is superseded, then a later question Z names X
+// in `supersedes:`. `ask` refuses Z outright, since the target is not
+// current at the moment Z is asked.
+#[test]
+fn ask_refuses_a_candidate_whose_supersedes_target_is_stale() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let old_id = extract_ids(&content)[0].clone();
+    let answer_out = adr_owner(&dir, &["answer", &old_id, "A"], "");
+    assert!(answer_out.status.success(), "answer 1.1 failed: {}", stderr(&answer_out));
+
+    // The second question supersedes old_id and is answered: old_id is
+    // now superseded, no longer current.
+    let mut content = std::fs::read_to_string(&record).unwrap();
+    content.push_str(&SECOND_QUESTION.replacen(
+        "### 1.2 What is the second unit of authority called?\n",
+        &format!(
+            "### 1.2 What is the second unit of authority called?\n\nsupersedes: {}\n",
+            old_id
+        ),
+        1,
+    ));
+    std::fs::write(&record, &content).unwrap();
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let second_id = extract_ids(&content)
+        .into_iter()
+        .find(|id| id != &old_id)
+        .expect("second id assigned");
+    let answer_out = adr_owner(&dir, &["answer", &second_id, "A"], "");
+    assert!(answer_out.status.success(), "answer 1.2 failed: {}", stderr(&answer_out));
+
+    // The third question names the already-superseded old_id: `ask`
+    // refuses it directly, before it ever becomes askable.
+    let mut content = std::fs::read_to_string(&record).unwrap();
+    content.push_str(&THIRD_QUESTION.replacen(
+        "### 1.3 What is the third unit of authority called?\n",
+        &format!(
+            "### 1.3 What is the third unit of authority called?\n\nsupersedes: {}\n",
+            old_id
+        ),
+        1,
+    ));
+    std::fs::write(&record, &content).unwrap();
+    approve_record(&dir, "adrdom/decisions/example.md");
+    // Re-read: approve minted the third heading's id and rewrote its
+    // depends entry, so this is the exact pre-ask content `ask` must leave
+    // untouched below.
+    let before_ask = std::fs::read_to_string(&record).unwrap();
+
+    let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(
+        !ask_out.status.success(),
+        "ask should have refused: {}",
+        stdout(&ask_out)
+    );
+    let err = stderr(&ask_out);
+    assert!(err.contains("1.3 What is the third unit of authority called?"), "{}", err);
+    assert!(err.contains(old_id.as_str()), "{}", err);
+    assert!(err.contains("which is not a current decision"), "{}", err);
+    assert!(err.contains("agent fixes the supersedes line"), "{}", err);
+
+    let after = std::fs::read_to_string(&record).unwrap();
+    assert_eq!(
+        after, before_ask,
+        "a refused ask must change nothing in the topic file"
+    );
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        !ledger.lines().any(|l| l.contains("\tasked\t") && l.contains("1.3 What is the third unit of authority called?")),
+        "ask must not have written an asked row for the refused third question: {}",
+        ledger
+    );
 }
 
 #[test]
