@@ -156,7 +156,11 @@ fn sha256_hex(text: &str) -> String {
     use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(text.as_bytes());
-    hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect()
+    hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{:02x}", b))
+        .collect()
 }
 
 /// If `entry` (a `depends:` line's value, trimmed) carries an `=A`/`=A|B`/
@@ -196,7 +200,10 @@ pub fn plan_hash(content: &str) -> String {
         if seen_heading {
             if let Some(v) = line.trim_start().strip_prefix("depends: ") {
                 for entry in v.split(',') {
-                    items.push(format!("depends: {}", strip_answer_set_suffix(entry.trim())));
+                    items.push(format!(
+                        "depends: {}",
+                        strip_answer_set_suffix(entry.trim())
+                    ));
                 }
             }
         }
@@ -246,8 +253,14 @@ pub fn approve_via_ledger(dir: &Path, rel: &str, content: &str) {
     let ctx = context_hash(content);
     let ledger_path = dir.join("adrdom/state/ledger.tsv");
     let mut existing = std::fs::read_to_string(&ledger_path).unwrap_or_default();
-    existing.push_str(&format!("2024-01-01T00:00:00Z\tapproved\t-\t{}\t{}\n", plan, rel));
-    existing.push_str(&format!("2024-01-01T00:00:00Z\tcontext\t-\t{}\t{}\n", ctx, rel));
+    existing.push_str(&format!(
+        "2024-01-01T00:00:00Z\tapproved\t-\t{}\t{}\n",
+        plan, rel
+    ));
+    existing.push_str(&format!(
+        "2024-01-01T00:00:00Z\tcontext\t-\t{}\t{}\n",
+        ctx, rel
+    ));
     std::fs::write(&ledger_path, existing).unwrap();
 }
 
