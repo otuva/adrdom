@@ -123,6 +123,102 @@ fn ask_refuses_to_edit_an_answered_section() {
     );
 }
 
+const Q1_ONLY: &str = r#"# Example
+
+### 1.1 What color is the widget?
+depends: widget
+
+Problem: the widget's color is undecided.
+
+Standard: plain words.
+
+- A) The widget is red.
+  Why: reasons.
+  Costs: costs.
+- B) The widget is blue.
+  Why: other reasons.
+  Costs: other costs.
+"#;
+
+const Q2_ADDED_AFTER_APPROVAL: &str = r#"
+### 1.2 What color is the second widget?
+depends: widget
+
+Problem: the second widget's color is undecided.
+
+Standard: plain words.
+
+- A) The second widget is red.
+  Why: reasons.
+  Costs: costs.
+- B) The second widget is blue.
+  Why: other reasons.
+  Costs: other costs.
+"#;
+
+// adr: da59b448-1afb-4469-b40e-69eda8f253c2
+//
+// core (0): "ask stops any question whose heading is not in the plan the
+// owner approved". Two ways a heading ends up outside the approved plan:
+// the file was never approved at all, and a heading appended after an
+// approval that covered only the headings before it. In both, `ask`
+// refuses "plan not approved" and writes nothing -- no id minted, no
+// `asked` ledger row -- rather than asking the heading that was in the
+// approved plan and silently ignoring the one that was not.
+#[test]
+fn ask_refuses_a_heading_added_after_approval_and_a_never_approved_file() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+
+    // A file never approved at all.
+    let never_approved = write_record(&dir, "adrdom/decisions/never.md", Q1_ONLY);
+    let out = adr(&dir, &["ask", never_approved.to_str().unwrap()], &[], "");
+    assert!(
+        !out.status.success(),
+        "ask should refuse an unapproved file: {}",
+        stdout(&out)
+    );
+    assert_eq!(
+        stderr(&out).trim_end(),
+        "ask: adrdom/decisions/never.md: plan not approved; owner runs: adr approve adrdom/decisions/never.md"
+    );
+
+    // A heading added after approval: the owner approved only 1.1, then the
+    // agent appends 1.2 without asking the owner to re-approve.
+    let record = write_record(&dir, "adrdom/decisions/example.md", Q1_ONLY);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    let approved = std::fs::read_to_string(&record).unwrap();
+
+    let mut with_new_heading = approved.clone();
+    with_new_heading.push_str(Q2_ADDED_AFTER_APPROVAL);
+    std::fs::write(&record, &with_new_heading).unwrap();
+
+    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(
+        !out.status.success(),
+        "ask should refuse a heading outside the approved plan: {}",
+        stdout(&out)
+    );
+    assert_eq!(
+        stderr(&out).trim_end(),
+        "ask: adrdom/decisions/example.md: plan not approved; owner runs: adr approve adrdom/decisions/example.md"
+    );
+
+    // Nothing written: no id minted for the new heading, no ledger row.
+    let after = std::fs::read_to_string(&record).unwrap();
+    assert_eq!(
+        after, with_new_heading,
+        "ask must not modify the file when it refuses"
+    );
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        !ledger.lines().any(|l| l.contains("\tasked\t")),
+        "ask must not have asked anything: {}",
+        ledger
+    );
+}
+
 #[test]
 fn ask_refuses_a_question_with_one_option() {
     let dir = init_repo();

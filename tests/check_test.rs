@@ -199,11 +199,17 @@ fn check_banned_default_and_message_modes_name_the_word() {
     );
 }
 
+// adr: 33a45b9e-8150-488e-be70-7ab2ca9adaa6
+//
+// core (0): "check fails while any current decision has no test tied to
+// it". Shows both halves: check exits non-zero and names the untested
+// decision by id while nothing ties it to a test, then passes once an
+// `adr: <id>` comment exists for it.
 #[test]
 fn check_tests_failure_when_untested() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    let (_record, _id) = answer_one_question(&dir);
+    let (_record, id) = answer_one_question(&dir);
     // Nothing recorded anywhere for the id.
 
     let out = adr(&dir, &["check"], &[], "");
@@ -211,6 +217,21 @@ fn check_tests_failure_when_untested() {
     let out_text = stdout(&out);
     assert!(out_text.contains("tested:"), "{}", out_text);
     assert!(out_text.contains("untested"), "{}", out_text);
+    assert!(
+        out_text.contains(&format!("{}: untested", id)),
+        "check must name the untested decision by id: {}",
+        out_text
+    );
+
+    write_test_comment(&dir, &id);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(
+        out.status.success(),
+        "check should pass once the decision is tied to a test: {}",
+        stdout(&out)
+    );
+    assert!(stdout(&out).contains("tested: 1"), "{}", stdout(&out));
 }
 
 #[test]
