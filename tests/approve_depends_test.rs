@@ -273,7 +273,18 @@ fn approve_plan_hash_is_unaffected_by_changing_only_an_answer_set() {
     let approved_count1 = ledger1.lines().filter(|l| l.contains("\tapproved\t")).count();
 
     // Only the answer set changes (A -> B); the depends target is the same.
-    let changed = content.replace("depends: 1.1 A?=A", "depends: 1.1 A?=B");
+    // Edited on the file as `approve` actually left it (with 1.2's depends
+    // line already rewritten to 1.1's id) -- not the original text-form
+    // content, which would make `approve` mint fresh ids all over again and
+    // move the plan hash for an unrelated reason (9.1 A: an id is part of
+    // the plan).
+    let approved_content = std::fs::read_to_string(&record).unwrap();
+    assert!(
+        approved_content.contains("=A\n"),
+        "expected the depends line to still carry the =A suffix after id rewrite: {}",
+        approved_content
+    );
+    let changed = approved_content.replacen("=A\n", "=B\n", 1);
     std::fs::write(&record, &changed).unwrap();
 
     let out2 = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");

@@ -88,17 +88,26 @@ pub fn is_current(led: &Ledger, id: &str) -> bool {
     matches!(led.latest_state(id), Some(row) if row.event == "answered")
 }
 
-/// The text a section's `terms:` line is (re)computed from: the section's
-/// hashed range (heading through the hash end, see `record::hash_range`)
-/// with the `terms:` line itself left out, so re-resolving never matches
-/// against a term's own previous resolution rather than the prose that
-/// produced it.
+/// The text a section's `terms:` line is (re)computed from, and what the
+/// banned-word scan reads (9.1 A): the section's hashed range (heading
+/// through the hash end, see `record::hash_range`) with the `terms:` line
+/// itself left out (so re-resolving never matches against a term's own
+/// previous resolution rather than the prose that produced it), and with
+/// `id:`, `depends:`, and `supersedes:` lines left out too, since those hold
+/// ids and references, not prose, once a plan is approved.
 pub fn section_text_excluding_terms_line(lines: &[String], sec: &Section) -> String {
     let (s, e) = record::hash_range(lines, sec);
     lines[s..e]
         .iter()
         .enumerate()
-        .filter(|&(j, _)| Some(s + j) != sec.terms_line)
+        .filter(|&(j, l)| {
+            let idx = s + j;
+            if Some(idx) == sec.terms_line {
+                return false;
+            }
+            let t = l.trim_start();
+            !(t.starts_with("id: ") || t.starts_with("depends: ") || t.starts_with("supersedes: "))
+        })
         .map(|(_, l)| l.as_str())
         .collect::<Vec<_>>()
         .join("\n")

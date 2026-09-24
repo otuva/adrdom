@@ -12,7 +12,7 @@ Context prose line two.
 ### 1.1 First question?
 depends: decision
 
-Problem: p1.
+Problem: the decision is unclear.
 
 Standard: s1.
 
@@ -29,7 +29,7 @@ const GROUP_TWO_ADDITION: &str = r#"
 depends: 1.1 First question?
 depends: decision
 
-Problem: p2.
+Problem: p2, another decision.
 
 Standard: s2.
 
@@ -48,7 +48,7 @@ Context prose.
 ### 1.1 Only question?
 depends: decision
 
-Problem: p.
+Problem: the decision at hand.
 
 Standard: s.
 
@@ -171,7 +171,12 @@ fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
         .status
         .success());
 
-    let edited = TWO_GROUP_RECORD.replace(
+    // Edited on the file as `approve` actually left it (with the heading's
+    // id already minted) -- not the original text-form constant, which
+    // would wipe that id back out and make the *plan* look unapproved too
+    // (9.1 A: an id is part of the plan).
+    let approved_content = std::fs::read_to_string(&record).unwrap();
+    let edited = approved_content.replace(
         "Context prose line one.",
         "Context prose line one, edited.",
     );
@@ -232,9 +237,16 @@ fn ask_refuses_group_two_while_group_one_unanswered_then_passes_after_answer() {
     let err = stderr(&out);
     assert!(err.contains("First question?"), "{}", err);
 
-    // Nothing changed: group two got no id.
-    let after = std::fs::read_to_string(&record).unwrap();
-    assert_eq!(extract_ids(&after).len(), 1);
+    // Nothing newly asked: `approve` already gave group two's heading an
+    // id too (9.1 A), so `extract_ids` no longer tells asked apart from
+    // merely approved -- the ledger's `asked` row count does.
+    let ledger_still = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert_eq!(
+        ledger_still.lines().filter(|l| l.contains("\tasked\t")).count(),
+        1,
+        "{}",
+        ledger_still
+    );
 
     // Answer group one, then ask succeeds for group two.
     let answer_out = adr_owner(&dir, &["answer", &first_id, "A"], "");
@@ -242,8 +254,13 @@ fn ask_refuses_group_two_while_group_one_unanswered_then_passes_after_answer() {
 
     let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out2.status.success(), "ask failed: {}", stderr(&out2));
-    let after2 = std::fs::read_to_string(&record).unwrap();
-    assert_eq!(extract_ids(&after2).len(), 2);
+    let ledger_final = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert_eq!(
+        ledger_final.lines().filter(|l| l.contains("\tasked\t")).count(),
+        2,
+        "{}",
+        ledger_final
+    );
 }
 
 // --- a struck asked heading is withdrawn on approve ---------------------
@@ -324,7 +341,7 @@ fn approve_allows_a_vanished_heading_once_superseded() {
     assert!(adr_owner(&dir, &["answer", &old_id, "A"], "").status.success());
 
     let superseding = format!(
-        "\n### 1.2 Replacement question?\ndepends: decision\n\nsupersedes: {}\n\nProblem: p2.\n\nStandard: s2.\n\n- A) New answer.\n  Why: reasons.\n  Costs: costs.\n- B) Other new answer.\n  Why: other reasons.\n  Costs: other costs.\n",
+        "\n### 1.2 Replacement question?\ndepends: decision\n\nsupersedes: {}\n\nProblem: the decision needs revisiting.\n\nStandard: s2.\n\n- A) New answer.\n  Why: reasons.\n  Costs: costs.\n- B) Other new answer.\n  Why: other reasons.\n  Costs: other costs.\n",
         old_id
     );
     let mut content2 = std::fs::read_to_string(&record).unwrap();

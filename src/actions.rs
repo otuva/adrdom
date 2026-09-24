@@ -4,8 +4,9 @@ use crate::record::{self, RecordFile};
 use crate::repo;
 use crate::state::{self, TermsLoad};
 use crate::terms;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::Path;
+use uuid::Uuid;
 
 pub struct Outcome {
     pub summary: String,
@@ -543,11 +544,15 @@ fn do_approve_terms(
     })
 }
 
-/// A topic file: parse, refuse on shape errors; compute plan hash and
-/// context hash; write an `approved` row if it differs from the latest for
-/// the path, a `context` row likewise; then for every ledger id that now
-/// appears in no topic file: withdraw an asked one, refuse on a current one,
-/// allow a superseded one silently.
+/// A topic file: parse, refuse on shape errors; resolve every `depends:`
+/// entry and mint an id for every heading that lacks one (9.1 A: the file
+/// holds ids, the agent writes words, and `approve` is what turns one into
+/// the other); compute plan hash and context hash over the rewritten file;
+/// write an `approved` row if it differs from the latest for the path, a
+/// `context` row likewise; then for every ledger id that now appears in no
+/// topic file: withdraw an asked one, refuse on a current one, allow a
+/// superseded one silently. Nothing is written to disk when any check
+/// refuses.
 fn do_approve_record(
     root: &Path,
     file: &Path,
@@ -591,41 +596,72 @@ fn do_approve_record(
         return Err(depends_msgs.join("\n"));
     }
 
-    // Resolve every entry (8.3 A): a term entry must resolve to exactly one
-    // non-retired term; a decision entry must be a current decision (latest
-    // state `answered`); a heading entry's dangling/cycle/self-dep is
-    // `derive_tiers`'s single error (computed at parse time into
-    // `rf.derive_error`), folded into the same refusal list.
+    // Resolve every entry (8.3/9.1 A). An `Id` entry is kept as written and
+    // must already be a heading id in this file, a non-retired term id, or a
+    // current decision. A `Text` entry ending in `?` is a heading reference,
+    // whose dangling/cycle/self-dep is `derive_tiers`'s single error
+    // (computed at parse time into `rf.derive_error`); any other `Text`
+    // entry must resolve to exactly one non-retired term. A `Text` entry
+    // (of either shape) found inside a section whose latest ledger state is
+    // `answered`/`refused` refuses instead of being silently rewritten
+    // (9.1 A point 5): that section is frozen, and an edit there is the
+    // agent's to remove, not approve's to carry forward.
     let terms_list: Vec<terms::Term> =
         state::load_terms(root).map(|tf| tf.terms).unwrap_or_default();
     let mut resolve_msgs: Vec<String> = Vec::new();
     for sec in &rf.sections {
+        let frozen = sec
+            .id
+            .as_ref()
+            .map(|id| {
+                matches!(
+                    led.latest_state(id).map(|r| r.event.as_str()),
+                    Some("answered") | Some("refused")
+                )
+            })
+            .unwrap_or(false);
         for d in &sec.depends {
             match d {
-                record::Dep::Term(w) => {
-                    let pairs = terms::resolve(w, &terms_list);
+                record::Dep::Id { id, .. } => {
+                    let is_heading = rf.sections.iter().any(|s| s.id.as_deref() == Some(id.as_str()));
+                    let is_term = terms_list
+                        .iter()
+                        .any(|t| t.id.as_deref() == Some(id.as_str()) && !t.retired);
+                    if !is_heading && !is_term && !state::is_current(led, id) {
+                        resolve_msgs.push(format!(
+                            "approve: {}: \"{}\" depends on {} which is not a current decision; agent names a current decision or removes the line",
+                            rel, sec.heading_text, id
+                        ));
+                    }
+                }
+                record::Dep::Text { text, .. } => {
+                    if frozen {
+                        resolve_msgs.push(format!(
+                            "approve: {}: \"{}\": answered; agent removes the edit",
+                            rel, sec.heading_text
+                        ));
+                        continue;
+                    }
+                    let t = text.trim();
+                    if t.ends_with('?') {
+                        // Dangling/cycle/self-dep is reported once, below,
+                        // via `rf.derive_error`.
+                        continue;
+                    }
+                    let pairs = terms::resolve(t, &terms_list);
                     let resolved_ok = pairs.len() == 1
                         && terms_list
                             .iter()
-                            .find(|t| t.id.as_deref() == Some(pairs[0].1.as_str()))
-                            .map(|t| !t.retired)
+                            .find(|tm| tm.id.as_deref() == Some(pairs[0].1.as_str()))
+                            .map(|tm| !tm.retired)
                             .unwrap_or(false);
                     if !resolved_ok {
                         resolve_msgs.push(format!(
                             "approve: {}: \"{}\" depends on \"{}\" which is no term; agent adds the term or names another",
-                            rel, sec.heading_text, w
+                            rel, sec.heading_text, t
                         ));
                     }
                 }
-                record::Dep::Decision(uuid) => {
-                    if !state::is_current(led, uuid) {
-                        resolve_msgs.push(format!(
-                            "approve: {}: \"{}\" depends on {} which is not a current decision; agent names a current decision or removes the line",
-                            rel, sec.heading_text, uuid
-                        ));
-                    }
-                }
-                record::Dep::Heading { .. } => {}
             }
         }
     }
@@ -653,8 +689,65 @@ fn do_approve_record(
         ));
     }
 
-    let plan_hash = record::plan_hash(&rf);
-    let context_hash = record::context_hash(&rf);
+    // Every check above passed: mint an id for every heading that lacks one
+    // (skeletons included, same insertion shape `ask` used to write: blank,
+    // `id:` line, blank), reparse so every heading's id is available, then
+    // rewrite every `Text` depends entry to the id it resolves to, keeping
+    // any `=set` suffix, in place (a single-line replace, never a shift).
+    let mut work_lines = rf.lines.clone();
+    let needs_id: Vec<bool> = rf.sections.iter().map(|s| s.id.is_none()).collect();
+    for i in (0..rf.sections.len()).rev() {
+        if needs_id[i] {
+            let start = rf.sections[i].start;
+            let new_id = Uuid::new_v4().to_string();
+            work_lines.splice(
+                start + 1..start + 1,
+                [String::new(), format!("id: {}", new_id), String::new()],
+            );
+        }
+    }
+    let mut work_rf = record::build(rf.path.clone(), rel.to_string(), work_lines);
+
+    let mut heading_id: HashMap<String, String> = HashMap::new();
+    for s in &work_rf.sections {
+        if let Some(id) = &s.id {
+            heading_id.insert(s.heading_text.trim().to_string(), id.clone());
+        }
+    }
+    let sections_snapshot = work_rf.sections.clone();
+    for sec in &sections_snapshot {
+        let mut dep_i = 0;
+        for j in sec.start + 1..sec.end {
+            if !work_rf.lines[j].starts_with("depends: ") {
+                continue;
+            }
+            let d = &sec.depends[dep_i];
+            dep_i += 1;
+            if let record::Dep::Text { text, set } = d {
+                let t = text.trim();
+                let resolved = if t.ends_with('?') {
+                    heading_id.get(t).cloned()
+                } else {
+                    terms::resolve_word(t, &terms_list)
+                };
+                if let Some(id) = resolved {
+                    let suffix = set
+                        .as_ref()
+                        .map(|s| format!("={}", record::canonical_set(s)))
+                        .unwrap_or_default();
+                    work_rf.lines[j] = format!("depends: {}{}", id, suffix);
+                }
+            }
+        }
+    }
+    // Reparse once more so `plan_hash`/`context_hash` and everything below
+    // sees the file exactly as it will be written.
+    let work_rf = record::build(work_rf.path.clone(), rel.to_string(), work_rf.lines.clone());
+
+    let plan_hash = record::plan_hash(&work_rf);
+    let context_hash = record::context_hash(&work_rf);
+
+    record::save(&work_rf).map_err(|e| format!("approve: failed to write {}: {}", file.display(), e))?;
 
     let mut rows: Vec<ledger::Row> = Vec::new();
     let mut messages: Vec<String> = Vec::new();

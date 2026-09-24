@@ -11,6 +11,12 @@ mod common;
 use common::*;
 
 const TARGET_ID: &str = "44444444-4444-4444-4444-444444444444";
+// 9.1 A point 3: an `assumes` row keys on the dependent's own heading id,
+// not its heading text -- so a fixture that hand-writes such a row (rather
+// than going through real `ask`) needs the dependent heading to carry a
+// fixed id of its own, used as that key.
+const DEPENDENT_ID: &str = "55555555-5555-5555-5555-555555555555";
+const REMOVED_DEPENDENT_ID: &str = "66666666-6666-6666-6666-666666666666";
 
 fn target_section(answer: Option<&str>) -> String {
     let mut s = format!(
@@ -29,15 +35,16 @@ fn check_fails_when_a_dependents_answer_set_changed_after_ask() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     let content = format!(
-        "# Colors\n\n{}\n\n### 1.2 Depends on color?\ndepends: 1.1 Which color?=A\n",
-        target_section(None)
+        "# Colors\n\n{}\n\n### 1.2 Depends on color?\n\nid: {}\n\ndepends: 1.1 Which color?=A\n",
+        target_section(None),
+        DEPENDENT_ID
     );
     write_record(&dir, "adrdom/decisions/colors.md", &content);
     append_ledger_row(&dir, "asked", TARGET_ID, "anyhash", "1.1 Which color?");
     // Recorded at ask time with set B; the file's current depends line
     // reads =A: the set moved after asking.
-    let stale_hash = assumes_hash("1.2 Depends on color?", "B");
-    append_ledger_row(&dir, "assumes", TARGET_ID, &stale_hash, "1.2 Depends on color?");
+    let stale_hash = assumes_hash(DEPENDENT_ID, "B");
+    append_ledger_row(&dir, "assumes", TARGET_ID, &stale_hash, DEPENDENT_ID);
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
@@ -57,13 +64,14 @@ fn check_passes_when_a_dependents_answer_set_is_unchanged() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     let content = format!(
-        "# Colors\n\n{}\n\n### 1.2 Depends on color?\ndepends: 1.1 Which color?=A\n",
-        target_section(None)
+        "# Colors\n\n{}\n\n### 1.2 Depends on color?\n\nid: {}\n\ndepends: 1.1 Which color?=A\n",
+        target_section(None),
+        DEPENDENT_ID
     );
     write_record(&dir, "adrdom/decisions/colors.md", &content);
     append_ledger_row(&dir, "asked", TARGET_ID, "anyhash", "1.1 Which color?");
-    let matching_hash = assumes_hash("1.2 Depends on color?", "A");
-    append_ledger_row(&dir, "assumes", TARGET_ID, &matching_hash, "1.2 Depends on color?");
+    let matching_hash = assumes_hash(DEPENDENT_ID, "A");
+    append_ledger_row(&dir, "assumes", TARGET_ID, &matching_hash, DEPENDENT_ID);
 
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
@@ -80,13 +88,13 @@ fn check_passes_when_the_dependent_heading_vanished() {
     let content = format!("# Colors\n\n{}\n", target_section(None));
     write_record(&dir, "adrdom/decisions/colors.md", &content);
     append_ledger_row(&dir, "asked", TARGET_ID, "anyhash", "1.1 Which color?");
-    let old_hash = assumes_hash("1.2 Depends on color, now removed?", "A");
+    let old_hash = assumes_hash(REMOVED_DEPENDENT_ID, "A");
     append_ledger_row(
         &dir,
         "assumes",
         TARGET_ID,
         &old_hash,
-        "1.2 Depends on color, now removed?",
+        REMOVED_DEPENDENT_ID,
     );
 
     let out = adr(&dir, &["check"], &[], "");
@@ -167,17 +175,20 @@ fn check_passes_when_the_dependents_heading_has_extra_leading_whitespace() {
     // must not itself become a candidate blocked by the tier rule, but it
     // still counts as a dependent of "Which color?" for the assumes row
     // this ask writes.
+    // 9.1 A point 8: the term-pairing scan now leaves out `depends:` lines
+    // (they hold references, not prose), so "widget" has to appear in the
+    // heading/Problem/Standard/option text itself for this to pair the term.
     let content = "# Colors\n\n\
-### 1.1 Which color?\n\n\
+### 1.1 Which color is the widget?\n\n\
 depends: widget\n\n\
 Problem: p.\n\n\
 Standard: s.\n\n\
 - A) Red.\n  Why: w.\n  Costs: c.\n\
 - B) Blue.\n  Why: w.\n  Costs: c.\n\n\
 ###   Extra space?\n\
-depends: 1.1 Which color?=A\n";
+depends: 1.1 Which color is the widget?=A\n";
     let record = write_record(&dir, "adrdom/decisions/colors.md", content);
-    approve_via_ledger(&dir, "adrdom/decisions/colors.md", content);
+    approve_record(&dir, "adrdom/decisions/colors.md");
 
     let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(

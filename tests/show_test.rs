@@ -44,7 +44,7 @@ fn show_lists_every_question_with_its_state_and_tier() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "reasons");
     let record = write_record(&dir, "adrdom/decisions/example.md", RECORD);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", RECORD);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
