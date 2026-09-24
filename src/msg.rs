@@ -678,17 +678,16 @@ pub fn duplicate_id(id: &str, prev: &str, rel: &str, heading: &str) -> String {
     )
 }
 
-/// An asked/refused/superseded id missing from every current topic file.
-/// `removed_file` is the file whose plan most recently dropped it, when
-/// one can be named.
+/// An asked/refused id missing from every current topic file, where at
+/// least one currently-unapproved file was previously approved.
+/// `removed_file` names that file when exactly one such file exists; when
+/// more than one does, which one dropped this id can't be told apart, so
+/// the owner is pointed at the generic fix instead of a guessed file.
 pub fn removed_from_plan(id: &str, heading: &str, event: &str, removed_file: Option<&str>) -> String {
     let what = format!("{} (\"{}\", {}) was removed from the plan", id, heading, event);
     match removed_file {
         Some(rel) => refuse(what, Next::owner_runs(format!("adr approve {} again", rel))),
-        None => refuse(
-            what,
-            Next::agent("checks which topic file dropped this heading and re-adds it or supersedes the id"),
-        ),
+        None => refuse(what, Next::owner_runs("adr approve <the edited topic file>")),
     }
 }
 
@@ -702,7 +701,10 @@ pub fn ledger_id_not_found(id: &str) -> String {
 pub fn withdrawn_id_present(id: &str, rel: &str) -> String {
     refuse(
         format!("withdrawn id {} still present in {}", id, rel),
-        Next::agent("removes the heading, or re-approves so it is no longer withdrawn"),
+        Next::agent("removes the heading").and_owner_runs(format!(
+            "adr approve {} if it should come back",
+            rel
+        )),
     )
 }
 
@@ -765,7 +767,7 @@ pub fn banned_missing_from_file(hash_prefix: &str) -> String {
             hash_prefix
         ),
         Next::owner_runs(
-            "git checkout -- adrdom/state/banned.sha256 and adrdom/state/ledger.tsv so they agree",
+            "git diff adrdom/state/banned.sha256 adrdom/state/ledger.tsv; restore by hand whatever is not real",
         ),
     )
 }
@@ -774,7 +776,7 @@ pub fn banned_missing_from_ledger(hash_prefix: &str) -> String {
     refuse(
         format!("{} in file, no ledger row", hash_prefix),
         Next::owner_runs(
-            "git checkout -- adrdom/state/banned.sha256 and adrdom/state/ledger.tsv so they agree",
+            "git diff adrdom/state/banned.sha256 adrdom/state/ledger.tsv; restore by hand whatever is not real",
         ),
     )
 }

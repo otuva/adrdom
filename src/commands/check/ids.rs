@@ -48,6 +48,22 @@ pub(super) fn check_ids(records: &[RecordFile], led: &Ledger, missing_answered: 
             ledger_ids.insert(row.id.clone());
         }
     }
+
+    // Every currently-unapproved topic file that was once approved: a plan
+    // change awaiting re-approval. This doesn't depend on which id is being
+    // looked at, so it's computed once for the whole loop below rather than
+    // per id.
+    let stale: Vec<(usize, &str)> = records
+        .iter()
+        .filter(|rf| !state::plan_approved(led, rf, &rf.rel))
+        .filter_map(|rf| {
+            led.rows
+                .iter()
+                .rposition(|r| r.event == "approved" && r.detail == rf.rel)
+                .map(|pos| (pos, rf.rel.as_str()))
+        })
+        .collect();
+
     for id in ledger_ids {
         if seen.contains_key(&id) {
             continue;
@@ -65,43 +81,38 @@ pub(super) fn check_ids(records: &[RecordFile], led: &Ledger, missing_answered: 
         if event == Some("answered") {
             continue;
         }
+        // A superseded id outside a stale edit is its ordinary, permanent
+        // end state (`approve`'s "allow a superseded one silently") and
+        // earns nothing at all -- checked before `stale` is consulted, so
+        // an unrelated unapproved edit elsewhere never turns this into a
+        // "removed from the plan" failure.
+        if event == Some("superseded") {
+            continue;
+        }
 
-        // asked / refused / superseded, missing from every current topic
-        // file: when a file that was once approved now has a stale, still
-        // unapproved plan, the heading was very likely just edited out of
-        // it, so say what happened and point at the fix instead of the
-        // bare "not found" line. Name the file from whichever such file's
-        // own latest `approved` row is most recent; several equally
-        // plausible candidates just leave the file out. A file that was
-        // never approved at all names nothing here -- there is no earlier
-        // approved plan for this id to have dropped out of. A superseded
-        // id outside a stale edit is its ordinary, permanent end state
-        // (`approve`'s "allow a superseded one silently") and earns
-        // nothing at all.
-        let stale: Vec<(usize, &str)> = records
-            .iter()
-            .filter(|rf| !state::plan_approved(led, rf, &rf.rel))
-            .filter_map(|rf| {
-                led.rows
-                    .iter()
-                    .rposition(|r| r.event == "approved" && r.detail == rf.rel)
-                    .map(|pos| (pos, rf.rel.as_str()))
-            })
-            .collect();
+        // asked / refused, missing from every current topic file: when a
+        // file that was once approved now has a stale, still unapproved
+        // plan, the heading was very likely just edited out of it, so say
+        // what happened and point at the fix instead of the bare "not
+        // found" line. Name the file only when exactly one such file
+        // exists; with more than one, which one dropped this id can't be
+        // told apart, so nothing is named. A file that was never approved
+        // at all names nothing here -- there is no earlier approved plan
+        // for this id to have dropped out of.
         if !stale.is_empty() {
             let heading = led
                 .latest_asked(&id)
                 .map(|r| r.detail.clone())
                 .unwrap_or_else(|| id.clone());
-            let removed_file = stale.iter().max_by_key(|&&(pos, _)| pos).map(|&(_, rel)| rel);
+            let removed_file = match stale.as_slice() {
+                [(_, rel)] => Some(*rel),
+                _ => None,
+            };
             out.push(Failure {
                 check: "ids".to_string(),
                 id: Some(id.clone()),
                 message: msg::removed_from_plan(&id, &heading, event.unwrap_or("unknown"), removed_file),
             });
-            continue;
-        }
-        if event == Some("superseded") {
             continue;
         }
         out.push(Failure {

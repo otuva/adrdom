@@ -232,3 +232,42 @@ fn check_stays_silent_on_a_superseded_id_once_the_file_is_reapproved() {
         text
     );
 }
+
+#[test]
+fn check_stays_silent_on_a_superseded_id_despite_an_unrelated_stale_file() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+
+    let rel_a = "adrdom/decisions/a.md";
+    let content_a = refusable_content(None);
+    write_record(&dir, rel_a, &content_a);
+    approve_via_ledger(&dir, rel_a, &content_a);
+    let hash = mirror_section_hash(&refusable_section(None));
+    append_ledger_row(&dir, "asked", REFUSABLE_ID, &hash, "1.1 Q?");
+    append_ledger_row(&dir, "superseded", REFUSABLE_ID, "-", "new-id");
+
+    // A's heading is gone and A is re-approved without it: the ordinary,
+    // finished state after a supersede.
+    let after_a = "# Topic\n\nContext prose.\n";
+    write_record(&dir, rel_a, after_a);
+    approve_via_ledger(&dir, rel_a, after_a);
+
+    // B has nothing to do with A's id, but is itself a stale, unapproved
+    // plan edit: approved once, then edited again without re-approving.
+    // Its mere presence must not turn A's superseded id into a
+    // "removed from the plan" failure.
+    let rel_b = "adrdom/decisions/b.md";
+    let content_b = "# Other\n\nContext prose.\n";
+    write_record(&dir, rel_b, content_b);
+    approve_via_ledger(&dir, rel_b, content_b);
+    write_record(&dir, rel_b, "# Other\n\nEdited prose.\n");
+
+    let out = adr(&dir, &["check"], &[], "");
+    let text = stdout(&out);
+    assert!(
+        !text.contains(REFUSABLE_ID),
+        "an unrelated stale file must not turn a superseded id into a removed-from-plan failure: {}",
+        text
+    );
+}

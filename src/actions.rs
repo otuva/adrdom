@@ -1112,7 +1112,7 @@ fn do_approve_record(
         .map(|(t, c)| format!("{} ({})", t, c))
         .collect::<Vec<_>>()
         .join(" ");
-    messages.push(msg::tiers_note_approve(tiers_str.trim_end()));
+    messages.push(msg::tiers_note_approve(&tiers_str).trim_end().to_string());
 
     Ok(Outcome {
         summary: messages.join("\n"),
