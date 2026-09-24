@@ -172,6 +172,8 @@ Standard: build systems derive execution order from declared dependencies and st
   Why: nothing new in the tool.
   Costs: the depends line orders nothing.
 
+**Answer:** A
+
 ### Does a reference in a topic file carry the identifier of what it names?
 depends: ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf=A|B, e877e4a9-2caf-4fe6-9f82-5476a2abb00b, 08193e75-dd89-4857-8e9f-b19e1a9e75e6
 id: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
@@ -187,10 +189,38 @@ Standard: reference by a stable identifier; the reference points at a value that
   Why: the raw file reads on its own.
   Costs: every rename is an edit on every line that points at the target, and a second rule beside the identifier rule for the same job.
 
+**Answer:** A
+
 ### Does the tool cap the questions in a tier?
 depends: aec860fd-22ad-44a7-99f7-222ea19537e7=*, f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
 id: 15d82e53-e344-4347-b639-3bf6eb9ef1b4
 
+Problem: nothing bounds a tier; a large tier puts many questions before the owner at once, and a bad question found late in it costs every answer around it its context.
+Standard: kanban caps work in progress at every column and stops a pull past the cap.
+
+- A) Yes: four questions per tier, a value set in the tool; approve and ask stop a plan with a tier over four, and a different value is a new question and a new release of the tool.
+  Why: the harm of one bad question is bounded, and a large plan passes only by being deep.
+  Costs: a topic with more than four questions that stand on nothing but terms needs a higher question or a split.
+- B) Yes: four per tier unless the owner sets another value with an owner command the ledger records.
+  Why: the value moves without a question or a release.
+  Costs: one more owner command and one more ledger event to guard, for a value no plan has pushed against.
+- C) No: the owner declines to answer a tier that is too large.
+  Why: nothing new in the tool.
+  Costs: the pile of questions returns as one large tier.
+
 ### Does a depends entry carry the answers it holds under?
 depends: aec860fd-22ad-44a7-99f7-222ea19537e7=*, 9d634996-475e-4ddc-8113-05c404ad9d5c
 id: fa90692a-150e-4a89-91e2-1d575cb59d0f
+
+Problem: an answer in one tier can make a question in the next tier moot or false; a moot question that reaches the owner costs a refusal, or, answered, plants a decision inconsistent with the one that made it moot.
+Standard: a dependency graph records which outcome each node needs and drops the nodes whose outcome did not happen.
+
+- A) Yes: when a tier's bodies are written, every depends entry naming one of its questions gets the letters it holds under (=A, =A|B or =*); ask stops the tier until every such set is written and freezes the sets with the bodies; once the tier is answered, a question whose set lacks the answer is moot, ask stops it, check reports it, and it leaves at the next plan change.
+  Why: the assumption is declared before the answer exists and frozen with the question the owner reads, so a moot question never reaches the owner.
+  Costs: one more thing the agent writes per dependent question, and a wrong set drops a live question until the owner sees it named at the plan change.
+- B) No: the agent re-reads the remaining headings when it writes the next tier's bodies and proposes changes in conversation.
+  Why: nothing new in the tool.
+  Costs: a moot question the agent misses reaches the owner.
+- C) No: the owner refuses a moot question when it arrives.
+  Why: nothing for the agent to remember.
+  Costs: every moot question costs the owner a move.

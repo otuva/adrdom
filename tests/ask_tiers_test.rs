@@ -72,6 +72,12 @@ Standard: plain words.
 
 // --- tier order: blocked, then allowed once the blocker is answered -------
 
+// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
+//
+// "ask asks the lowest tier with an unanswered question (and stops a
+// higher one)": Q2 (tier 2, derived from its `depends:` line, never
+// written as a tier by hand) is refused while Q1's tier is still open, and
+// only succeeds once Q1 is answered.
 #[test]
 fn ask_blocks_a_higher_tier_candidate_naming_the_open_tier_blocker() {
     let dir = init_repo();

@@ -191,6 +191,11 @@ fn approve_refuses_a_dangling_heading_dependency() {
     );
 }
 
+// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
+//
+// "approve stops a cycle": a tier can only be derived when the depends
+// graph has no cycle, so approve refuses outright rather than print a
+// tier order it cannot compute.
 #[test]
 fn approve_refuses_a_cycle_between_two_headings() {
     let dir = init_repo();
@@ -318,6 +323,15 @@ fn approve_accepts_four_root_questions_in_one_tier() {
 
 // --- the tiers print --------------------------------------------------------
 
+// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
+//
+// "the tool derives the tiers from the depends lines and nothing in the
+// topic file states them; a question standing on no other question in its
+// file is in the first tier, any other one tier above the highest question
+// it stands on". Neither heading below carries a written tier of any kind
+// -- only a `depends:` line -- yet `approve` reports "A?" in tier 1 (it
+// stands on nothing in this file, only the `decision` term) and "B?" in
+// tier 2 (one above "A?", the only thing it stands on).
 #[test]
 fn approve_prints_tiers_across_a_chain() {
     let dir = init_repo();
@@ -400,4 +414,84 @@ fn approve_plan_hash_is_unaffected_by_changing_only_an_answer_set() {
         approved_count1, approved_count2,
         "changing only the answer set must not move the plan hash"
     );
+}
+
+// --- a reference carries an identifier, not the words it was written with -
+
+// adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
+//
+// "every reference carries the identifier of what it names; the agent
+// writes the name, approve turns it into the identifier, and show turns it
+// back into the name". B's `depends:` line is written by hand as the
+// heading text "1.1 Is the widget red?"; after `approve` that line holds
+// A's freshly minted uuid, not the words -- and `show`, which only ever
+// reads the file back, prints the words again. Renaming A's heading text
+// afterward (its `id:` line, and B's depends line, both untouched) still
+// approves clean and `show` now prints B as standing on the *new* wording,
+// proving the depends line was never the text at all.
+#[test]
+fn approve_turns_a_depends_name_into_an_id_and_show_turns_it_back_into_words() {
+    let dir = init_repo();
+    setup(&dir);
+    let content = "# Example\n\n\
+        ### 1.1 Is the widget red?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+        ### 1.2 Does the paint match?\ndepends: 1.1 Is the widget red?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let record = write_record(&dir, "adrdom/decisions/example.md", content);
+
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(out.status.success(), "approve failed: {}", stderr(&out));
+    let approved = std::fs::read_to_string(&record).unwrap();
+    let a_id = approved
+        .lines()
+        .skip_while(|l| !l.starts_with("### 1.1 Is the widget red?"))
+        .find_map(|l| l.strip_prefix("id: "))
+        .unwrap()
+        .to_string();
+    // B's depends line now holds A's uuid, not the words it was written
+    // with.
+    assert!(
+        approved.contains(&format!("### 1.2 Does the paint match?\ndepends: {}\n", a_id)),
+        "expected B's depends line rewritten to A's id: {}",
+        approved
+    );
+    assert!(
+        !approved.contains("depends: 1.1 Is the widget red?"),
+        "the written words must not survive approve: {}",
+        approved
+    );
+
+    // `show` reads that same id back and prints the words, unprompted.
+    let show1 = adr(&dir, &["show"], &[], "");
+    assert!(show1.status.success(), "{}", stderr(&show1));
+    assert!(
+        stdout(&show1).contains("stands on: 1.1 Is the widget red?"),
+        "{}",
+        stdout(&show1)
+    );
+
+    // Rename A's heading text only -- its `id:` line and B's depends line
+    // (already an id) are untouched.
+    let renamed = approved.replace(
+        "### 1.1 Is the widget red?",
+        "### 1.1 Is the gadget red?",
+    );
+    assert_ne!(renamed, approved, "the fixture should still have that heading");
+    std::fs::write(&record, &renamed).unwrap();
+
+    let out2 = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(
+        out2.status.success(),
+        "a heading rename must break no reference: {}",
+        stderr(&out2)
+    );
+    assert!(stdout(&out2).contains("plan approved"), "{}", stdout(&out2));
+
+    // B's dependency still resolves -- and now prints the *new* wording,
+    // proving the depends line was never the text.
+    let show2 = adr(&dir, &["show"], &[], "");
+    assert!(show2.status.success(), "{}", stderr(&show2));
+    let shown2 = stdout(&show2);
+    assert!(shown2.contains("[unasked] 1.1 Is the gadget red?"), "{}", shown2);
+    assert!(shown2.contains("stands on: 1.1 Is the gadget red?"), "{}", shown2);
+    assert!(!shown2.contains("Is the widget red?"), "{}", shown2);
 }
