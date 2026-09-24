@@ -157,6 +157,7 @@ Standard: cross-language tools mark a file with a comment carrying an identifier
 ### Does the tool derive tiers from the depends lines?
 depends: ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf=A|B, f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
 id: aec860fd-22ad-44a7-99f7-222ea19537e7
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answers=b36113a1-1384-4e4c-a798-8399f4181366, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, asks=3c8d4c9c-abca-4faa-b7c1-aae39951376c, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, depends=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, stands on=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, tier=f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, tiers=f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
 
 Problem: when the agent writes the tiers and fills them, it fills them by subject, and questions that assume each other's answers sit side by side and reach the owner together.
 Standard: build systems derive execution order from declared dependencies and stop on a cycle; nobody writes the order by hand.
@@ -174,6 +175,7 @@ Standard: build systems derive execution order from declared dependencies and st
 ### Does a reference in a topic file carry the identifier of what it names?
 depends: ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf=A|B, e877e4a9-2caf-4fe6-9f82-5476a2abb00b, 08193e75-dd89-4857-8e9f-b19e1a9e75e6
 id: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, decisions=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, identifier=e877e4a9-2caf-4fe6-9f82-5476a2abb00b, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, term=f590059d-b681-40ec-8a1c-c8916d71f6bb, terms=f590059d-b681-40ec-8a1c-c8916d71f6bb, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
 
 Problem: when a heading is reworded or a term renamed, every reference that names it by its text breaks, and each one is fixed by hand.
 Standard: reference by a stable identifier; the reference points at a value that never changes, and the name is only shown to people.
