@@ -1,5 +1,6 @@
 use crate::banned;
 use crate::ledger;
+use crate::msg::{self, Actor, Next};
 use crate::record;
 use crate::repo;
 use crate::state::{self, TermsLoad};
@@ -38,7 +39,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("ask: not inside a git repository");
+            eprintln!("{}", msg::not_a_repo("ask", Actor::Agent));
             return 1;
         }
     };
@@ -51,19 +52,20 @@ pub fn run(record_path: PathBuf) -> i32 {
     // even loaded, since none of them depend on it.
     let tf = match state::load_terms_checked(&root) {
         TermsLoad::Missing => {
-            eprintln!(
-                "ask: adrdom/terms.md missing; agent writes it, owner runs: adr approve adrdom/terms.md"
-            );
+            eprintln!("ask: {}", msg::terms_missing());
             return 1;
         }
         TermsLoad::LoadError(e) => {
-            eprintln!("ask: adrdom/terms.md: {}", e);
+            eprintln!(
+                "ask: {}",
+                msg::terms_load_error(&e, Next::agent("fixes adrdom/terms.md and retries"))
+            );
             return 1;
         }
         TermsLoad::Ok(tf) => {
             if !tf.errors.is_empty() {
                 for e in &tf.errors {
-                    eprintln!("ask: adrdom/terms.md: {}", e);
+                    eprintln!("ask: {}", msg::terms_shape_error(e));
                 }
                 return 1;
             }
@@ -71,10 +73,7 @@ pub fn run(record_path: PathBuf) -> i32 {
         }
     };
     if !state::terms_approved(&led, &tf) {
-        eprintln!(
-            "ask: {}: terms not approved; owner runs: adr approve adrdom/terms.md",
-            rel
-        );
+        eprintln!("ask: {}", msg::terms_not_approved(&rel));
         return 1;
     }
     let terms_list: Vec<terms::Term> = tf.terms.clone();
@@ -82,7 +81,14 @@ pub fn run(record_path: PathBuf) -> i32 {
     let mut rf = match record::load(&record_path) {
         Ok(rf) => rf,
         Err(e) => {
-            eprintln!("ask: cannot read {}: {}", record_path.display(), e);
+            eprintln!(
+                "ask: {}",
+                msg::read_failed(
+                    &record_path.display().to_string(),
+                    e,
+                    Next::agent("checks the error and retries"),
+                )
+            );
             return 1;
         }
     };
@@ -91,13 +97,13 @@ pub fn run(record_path: PathBuf) -> i32 {
     let mut shape_msgs: Vec<String> = rf
         .shape_errors
         .iter()
-        .map(|e| format!("ask: {}: {}; agent fixes the topic file", rel, e))
+        .map(|e| format!("ask: {}", msg::shape_error(&rel, e)))
         .collect();
     for sec in &rf.sections {
         for e in &sec.shape_errors {
             shape_msgs.push(format!(
-                "ask: {}: \"{}\": {}; agent fixes the topic file",
-                rel, sec.heading_text, e
+                "ask: {}",
+                msg::section_shape_error(&rel, &sec.heading_text, e)
             ));
         }
     }
@@ -117,9 +123,8 @@ pub fn run(record_path: PathBuf) -> i32 {
                     let cur = record::section_hash(&rf.lines, sec);
                     if cur != row.hash {
                         eprintln!(
-                            "ask: {}: \"{}\" was edited after being answered; refusing",
-                            record_path.display(),
-                            sec.heading_text
+                            "ask: {}",
+                            msg::edited_after_answered(&record_path.display().to_string(), &sec.heading_text)
                         );
                         return 1;
                     }
@@ -127,9 +132,8 @@ pub fn run(record_path: PathBuf) -> i32 {
                     let cur = record::section_hash(&rf.lines, sec);
                     if cur != row.hash {
                         eprintln!(
-                            "ask: {}: \"{}\" was edited after being refused; refusing",
-                            record_path.display(),
-                            sec.heading_text
+                            "ask: {}",
+                            msg::edited_after_refused(&record_path.display().to_string(), &sec.heading_text)
                         );
                         return 1;
                     }
@@ -141,17 +145,11 @@ pub fn run(record_path: PathBuf) -> i32 {
     // Refusal 4: plan / context must be approved before ask will touch the
     // file at all.
     if !state::plan_approved(&led, &rf, &rel) {
-        eprintln!(
-            "ask: {}: plan not approved; owner runs: adr approve {}",
-            rel, rel
-        );
+        eprintln!("ask: {}", msg::plan_not_approved(&rel));
         return 1;
     }
     if !state::context_approved(&led, &rf, &rel) {
-        eprintln!(
-            "ask: {}: context not approved; owner runs: adr approve {}",
-            rel, rel
-        );
+        eprintln!("ask: {}", msg::context_not_approved(&rel));
         return 1;
     }
 
@@ -185,8 +183,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     // either command can move: point the owner at the topic file first, the
     // re-approval second.
     if let Some(err) = &rf.derive_error {
-        let tail = format!("agent fixes the topic file, owner runs: adr approve {}", rel);
-        eprintln!("ask: {}", record::derive_error_text(&rel, err, Some(&tail)));
+        eprintln!("ask: {}", msg::derive_error_ask(&rel, err));
         return 1;
     }
 
@@ -196,10 +193,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     if let Some(tiers) = &rf.tiers {
         let live = state::live_tiers(&led, &rf, tiers);
         if let Some((n, m)) = record::over_cap(&live) {
-            eprintln!(
-                "ask: {}: tier {} holds {} questions, the cap is {}; agent moves questions under a higher heading or splits the topic",
-                rel, n, m, record::TIER_CAP
-            );
+            eprintln!("ask: {}", msg::tier_cap_exceeded(&rel, n, m, record::TIER_CAP));
             return 1;
         }
     }
@@ -239,8 +233,8 @@ pub fn run(record_path: PathBuf) -> i32 {
                     match set {
                         None => {
                             eprintln!(
-                                "ask: {}: \"{}\" depends on \"{}\" without an answer set; agent writes =A, =A|B or =* on that depends line",
-                                rel, dependent.heading_text, target.heading_text
+                                "ask: {}",
+                                msg::missing_answer_set(&rel, &dependent.heading_text, &target.heading_text)
                             );
                             return 1;
                         }
@@ -250,7 +244,7 @@ pub fn run(record_path: PathBuf) -> i32 {
                                 if !target.options.iter().any(|o| o.letter == *l) {
                                     eprintln!(
                                         "ask: {}",
-                                        record::bad_option_letter_text(
+                                        msg::bad_option_letter(
                                             &rel,
                                             &dependent.heading_text,
                                             &target.heading_text,
@@ -286,8 +280,8 @@ pub fn run(record_path: PathBuf) -> i32 {
                 let target = &rf.sections[ti];
                 if target.is_refused() {
                     eprintln!(
-                        "ask: {}: \"{}\" stands on refused \"{}\"; agent re-plans, owner runs: adr approve {}",
-                        rel, sec.heading_text, target.heading_text, rel
+                        "ask: {}",
+                        msg::depends_on_refused(&rel, &sec.heading_text, &target.heading_text)
                     );
                     return 1;
                 }
@@ -303,10 +297,7 @@ pub fn run(record_path: PathBuf) -> i32 {
         // already stale before it was ever asked.
         for old in &sec.supersedes {
             if !state::is_current(&led, old) {
-                eprintln!(
-                    "ask: {}: \"{}\": supersedes {}, which is not a current decision; agent fixes the supersedes line",
-                    rel, sec.heading_text, old
-                );
+                eprintln!("ask: {}", msg::ask_supersedes_not_current(&rel, &sec.heading_text, old));
                 return 1;
             }
         }
@@ -324,18 +315,26 @@ pub fn run(record_path: PathBuf) -> i32 {
                 if let Some(blocker) = blocker {
                     if blocker.is_refused() {
                         eprintln!(
-                            "ask: {}: \"{}\" is in tier {}; tier {} is open, waiting on refused \"{}\"; agent re-plans, owner runs: adr approve {}",
-                            rel, sec.heading_text, cand_tier, open_n, blocker.heading_text, rel
+                            "ask: {}",
+                            msg::tier_blocked_refused(
+                                &rel,
+                                &sec.heading_text,
+                                cand_tier,
+                                open_n,
+                                &blocker.heading_text,
+                            )
                         );
                     } else {
                         eprintln!(
-                            "ask: {}: \"{}\" is in tier {}; tier {} is open, waiting on \"{}\"; owner runs: adr answer {} <letter> on it first",
-                            rel,
-                            sec.heading_text,
-                            cand_tier,
-                            open_n,
-                            blocker.heading_text,
-                            blocker.id.as_deref().unwrap_or("<id>")
+                            "ask: {}",
+                            msg::tier_blocked_waiting(
+                                &rel,
+                                &sec.heading_text,
+                                cand_tier,
+                                open_n,
+                                &blocker.heading_text,
+                                blocker.id.as_deref().unwrap_or("<id>"),
+                            )
                         );
                     }
                     return 1;
@@ -355,8 +354,8 @@ pub fn run(record_path: PathBuf) -> i32 {
                                 letters.clone(),
                             ));
                             eprintln!(
-                                "ask: {}: \"{}\" is moot: stands on \"{}\"={}, answered {}; agent drops or replaces the heading, owner runs: adr approve {}",
-                                rel, sec.heading_text, target.heading_text, set_str, c, rel
+                                "ask: {}",
+                                msg::moot_candidate(&rel, &sec.heading_text, &target.heading_text, &set_str, c)
                             );
                             return 1;
                         }
@@ -373,10 +372,7 @@ pub fn run(record_path: PathBuf) -> i32 {
             if let Some((line, phrase, what)) =
                 tells::prose_tells_in(&rf.lines, s, e).into_iter().next()
             {
-                eprintln!(
-                    "ask: {}",
-                    tells::tell_text(&rel, line, &sec.heading_text, &phrase, what)
-                );
+                eprintln!("ask: {}", msg::tell(&rel, line, &sec.heading_text, &phrase, what));
                 return 1;
             }
         }
@@ -390,8 +386,8 @@ pub fn run(record_path: PathBuf) -> i32 {
                 .map(|n| format!(" (term {})", n))
                 .unwrap_or_default();
             eprintln!(
-                "ask: {}: \"{}\": banned word \"{}\"{}",
-                rel, sec.heading_text, word, suffix
+                "ask: {}",
+                msg::banned_word_in_candidate(&rel, &sec.heading_text, &word, &suffix)
             );
             return 1;
         }
@@ -404,10 +400,7 @@ pub fn run(record_path: PathBuf) -> i32 {
 
         // Refusal 6: zero pairings.
         if pairs.is_empty() {
-            eprintln!(
-                "ask: {}: \"{}\" pairs no term; agent adds the term to adrdom/terms.md or rewrites the question",
-                rel, sec.heading_text
-            );
+            eprintln!("ask: {}", msg::pairs_no_term(&rel, &sec.heading_text));
             return 1;
         }
     }
@@ -438,10 +431,7 @@ pub fn run(record_path: PathBuf) -> i32 {
             None => {
                 // Unreachable given refusal 6 above, but never silently
                 // drop a binding if it somehow happens.
-                eprintln!(
-                    "ask: {}: \"{}\": pairs no term at write time; owner re-runs ask",
-                    rel, sec.heading_text
-                );
+                eprintln!("ask: {}", msg::pairs_no_term_at_write(&rel, &sec.heading_text));
                 return 1;
             }
         };
@@ -458,10 +448,7 @@ pub fn run(record_path: PathBuf) -> i32 {
                     terms_touched = true;
                 }
                 None => {
-                    eprintln!(
-                        "ask: {}: \"{}\": no id line found to write the terms line after",
-                        rel, sec.heading_text
-                    );
+                    eprintln!("ask: {}", msg::no_id_line(&rel, &sec.heading_text));
                     return 1;
                 }
             },
@@ -538,16 +525,26 @@ pub fn run(record_path: PathBuf) -> i32 {
     }
 
     if new_rows.is_empty() {
-        println!("ask: nothing to do in {}", record_path.display());
+        println!("ask: {}", msg::nothing_to_ask(&record_path.display().to_string()));
         return 0;
     }
 
     if let Err(e) = record::save(&rf) {
-        eprintln!("ask: failed to write {}: {}", record_path.display(), e);
+        eprintln!(
+            "ask: {}",
+            msg::write_failed(
+                &record_path.display().to_string(),
+                e,
+                Next::agent("checks the error and retries"),
+            )
+        );
         return 1;
     }
     if let Err(e) = ledger::append(&ledger_path, &new_rows) {
-        eprintln!("ask: failed to update ledger: {}", e);
+        eprintln!(
+            "ask: {}",
+            msg::update_failed("ledger", e, Next::agent("checks the error and retries"))
+        );
         return 1;
     }
 

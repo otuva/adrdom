@@ -1,6 +1,7 @@
 //! One code path for every owner act: the CLI and the page both call these (7.2 A).
 use crate::depends::{self, DepTarget};
 use crate::ledger::{self, Ledger};
+use crate::msg::{self, Next};
 use crate::record::{self, RecordFile};
 use crate::repo;
 use crate::state::{self, TermsLoad};
@@ -34,26 +35,23 @@ pub struct Refusal {
 /// `do_answer` has further use for it).
 fn require_terms(root: &Path, led: &Ledger, rel: &str) -> Result<terms::TermsFile, String> {
     match state::load_terms_checked(root) {
-        TermsLoad::Missing => Err(
-            "adrdom/terms.md missing; agent writes it, owner runs: adr approve adrdom/terms.md"
-                .to_string(),
-        ),
-        TermsLoad::LoadError(e) => Err(format!("adrdom/terms.md: {}", e)),
+        TermsLoad::Missing => Err(msg::terms_missing()),
+        TermsLoad::LoadError(e) => Err(msg::terms_load_error(
+            &e,
+            Next::owner_runs("the same command again once adrdom/terms.md can be read"),
+        )),
         TermsLoad::Ok(tf) => {
             if !tf.errors.is_empty() {
-                let msg = tf
+                let out = tf
                     .errors
                     .iter()
-                    .map(|e| format!("adrdom/terms.md: {}", e))
+                    .map(|e| msg::terms_shape_error(e))
                     .collect::<Vec<_>>()
                     .join("\n");
-                return Err(msg);
+                return Err(out);
             }
             if !state::terms_approved(led, &tf) {
-                return Err(format!(
-                    "{}: terms not approved; owner runs: adr approve adrdom/terms.md",
-                    rel
-                ));
+                return Err(msg::terms_not_approved(rel));
             }
             Ok(tf)
         }
@@ -75,7 +73,7 @@ pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String>
         }
     }
     let Some((mut rf, idx)) = found else {
-        return Err(format!("id {} not found in any topic file", id));
+        return Err(msg::id_not_found(id));
     };
     let rel = state::rel_path(root, &rf.path);
 
@@ -90,46 +88,34 @@ pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String>
     {
         let sec = &rf.sections[idx];
         if sec.is_refused() {
-            return Err(format!("\"{}\" is already refused", sec.heading_text));
+            return Err(msg::already_refused(&sec.heading_text));
         }
         if sec.answer_line.is_some() {
-            return Err(format!("\"{}\" is already answered", sec.heading_text));
+            return Err(msg::already_answered(&sec.heading_text));
         }
         if !sec.options.iter().any(|o| o.letter == letter) {
-            return Err(format!(
-                "letter {} does not name an option in \"{}\"",
-                letter, sec.heading_text
-            ));
+            return Err(msg::letter_not_an_option(letter, &sec.heading_text));
         }
         cur_hash = record::section_hash(&rf.lines, sec);
         match led.latest_state(id) {
             Some(row) if row.event == "asked" && row.hash == cur_hash => {}
             _ => {
-                return Err(format!(
-                    "\"{}\" is not currently in the 'asked' state at its current hash",
-                    sec.heading_text
-                ));
+                return Err(msg::not_in_asked_state(&sec.heading_text));
             }
         }
         let Some(terms_line_idx) = sec.terms_line else {
-            return Err(format!("{}: no terms line; agent re-asks", id));
+            return Err(msg::no_terms_line(id));
         };
         let Some(pairs) = terms::parse_terms_line(rf.lines[terms_line_idx].trim_end()) else {
-            return Err(format!("{}: malformed terms line; agent re-asks", id));
+            return Err(msg::malformed_terms_line(id));
         };
         for (_, uuid) in &pairs {
             match tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str())) {
                 None => {
-                    return Err(format!(
-                        "{}: terms line names term {} that no longer exists; agent re-asks",
-                        id, uuid
-                    ));
+                    return Err(msg::terms_line_names_gone_term(id, uuid));
                 }
                 Some(t) if t.retired => {
-                    return Err(format!(
-                        "{}: terms line names retired term \"{}\"; agent re-asks",
-                        id, t.name
-                    ));
+                    return Err(msg::terms_line_names_retired_term(id, &t.name));
                 }
                 _ => {}
             }
@@ -160,10 +146,7 @@ pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String>
                 _ => false,
             };
             if !target_ok {
-                return Err(format!(
-                    "supersedes target {} is not a current decision; agent fixes the supersedes line",
-                    old
-                ));
+                return Err(msg::supersedes_not_current(old));
             }
         }
     }
@@ -186,7 +169,13 @@ pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String>
         );
     }
 
-    record::save(&rf).map_err(|e| format!("failed to write topic file: {}", e))?;
+    record::save(&rf).map_err(|e| {
+        msg::write_failed(
+            "topic file",
+            e,
+            Next::owner_runs(format!("adr answer {} <letter> again", id)),
+        )
+    })?;
 
     let mut rows = vec![ledger::Row {
         time: ledger::now_rfc3339(),
@@ -206,7 +195,13 @@ pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String>
             version: crate::version::VERSION.to_string(),
         });
     }
-    ledger::append(&ledger_path, &rows).map_err(|e| format!("failed to update ledger: {}", e))?;
+    ledger::append(&ledger_path, &rows).map_err(|e| {
+        msg::update_failed(
+            "ledger",
+            e,
+            Next::owner_runs(format!("adr answer {} <letter> again", id)),
+        )
+    })?;
 
     Ok(Outcome {
         summary: format!("answered: {}\n  {}", heading_for_print, sentence_for_print),
@@ -237,7 +232,7 @@ pub fn do_refuse(root: &Path, id: &str) -> Result<Outcome, String> {
         }
     }
     let Some((mut rf, idx)) = found else {
-        return Err(format!("id {} not found in any topic file", id));
+        return Err(msg::id_not_found(id));
     };
     let rel = state::rel_path(root, &rf.path);
 
@@ -250,19 +245,16 @@ pub fn do_refuse(root: &Path, id: &str) -> Result<Outcome, String> {
     {
         let sec = &rf.sections[idx];
         if sec.is_refused() {
-            return Err(format!("\"{}\" is already refused", sec.heading_text));
+            return Err(msg::already_refused(&sec.heading_text));
         }
         if sec.answer_line.is_some() {
-            return Err(format!("\"{}\" is already answered", sec.heading_text));
+            return Err(msg::already_answered(&sec.heading_text));
         }
         cur_hash = record::section_hash(&rf.lines, sec);
         match led.latest_state(id) {
             Some(row) if row.event == "asked" && row.hash == cur_hash => {}
             _ => {
-                return Err(format!(
-                    "\"{}\" is not currently in the 'asked' state at its current hash",
-                    sec.heading_text
-                ));
+                return Err(msg::not_in_asked_state(&sec.heading_text));
             }
         }
         supersedes_val = sec.supersedes.clone();
@@ -276,8 +268,8 @@ pub fn do_refuse(root: &Path, id: &str) -> Result<Outcome, String> {
         heading_for_print = sec.heading_text.clone();
         if !supersedes_val.is_empty() {
             note = Some(format!(
-                "answer: {}: supersedes ignored on a refused question",
-                heading_for_print
+                "answer: {}",
+                msg::supersedes_ignored_on_refusal(&heading_for_print)
             ));
         }
         rf.lines.splice(
@@ -286,7 +278,13 @@ pub fn do_refuse(root: &Path, id: &str) -> Result<Outcome, String> {
         );
     }
 
-    record::save(&rf).map_err(|e| format!("failed to write topic file: {}", e))?;
+    record::save(&rf).map_err(|e| {
+        msg::write_failed(
+            "topic file",
+            e,
+            Next::owner_runs(format!("adr answer {} refuse again", id)),
+        )
+    })?;
 
     let row = ledger::Row {
         time: ledger::now_rfc3339(),
@@ -296,12 +294,15 @@ pub fn do_refuse(root: &Path, id: &str) -> Result<Outcome, String> {
         detail: heading_for_print.clone(),
         version: crate::version::VERSION.to_string(),
     };
-    ledger::append(&ledger_path, &[row]).map_err(|e| format!("failed to update ledger: {}", e))?;
+    ledger::append(&ledger_path, &[row]).map_err(|e| {
+        msg::update_failed(
+            "ledger",
+            e,
+            Next::owner_runs(format!("adr answer {} refuse again", id)),
+        )
+    })?;
 
-    let mut summary = format!(
-        "answer: refused \"{}\"; agent re-plans, owner runs: adr approve {}",
-        heading_for_print, rel
-    );
+    let mut summary = format!("answer: {}", msg::refused_summary(&heading_for_print, &rel));
     if let Some(n) = note {
         summary.push('\n');
         summary.push_str(&n);
@@ -379,7 +380,7 @@ pub fn terms_refusals(
     // Step 1 (shape): "missing id" cannot appear here, since `tf` is
     // already minted.
     for e in &tf.errors {
-        refusals.push(format!("adrdom/terms.md: {}; agent fixes adrdom/terms.md", e));
+        refusals.push(msg::terms_shape_error(e));
     }
 
     // Step 3: definition pairings; a self-pairing or any cycle refuses.
@@ -387,10 +388,7 @@ pub fn terms_refusals(
     for cycle in terms::cycles(tf) {
         let mut chain = cycle.clone();
         chain.push(cycle[0].clone());
-        refusals.push(format!(
-            "adrdom/terms.md: circular definition: {}; agent defines one of them from plainer words",
-            chain.join(" -> ")
-        ));
+        refusals.push(msg::circular_definition(&chain.join(" -> ")));
     }
 
     // Fresh definition pairs for every term (never re-derived from a stale
@@ -447,33 +445,36 @@ pub fn terms_refusals(
         for (word, uuid) in &dep.pairs {
             let Some(target) = tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str()))
             else {
-                refusals.push(format!(
-                    "adrdom/terms.md: term {} removed but carried by {}; owner retires instead",
-                    uuid, dep.source
-                ));
+                refusals.push(msg::term_removed_but_carried(uuid, &dep.source));
                 continue;
             };
             if target.retired {
                 // A decision dependent: the agent's move is to write a new
                 // question that supersedes it, not the owner's to make on
                 // the spot. A term dependent (its own definition still
-                // carries the retired word) has no id to name here.
-                let tail = match &dep.id {
-                    Some(id) => format!("agent supersedes {} with a new question first", id),
-                    None => "owner supersedes first".to_string(),
+                // carries the retired word) is never superseded (9.3 B):
+                // the agent rewords the definition and the owner re-approves.
+                let next = match &dep.id {
+                    Some(id) => Next::agent(format!("supersedes {} with a new question first", id)),
+                    None => msg::term_reword_and_approve(),
                 };
-                refusals.push(format!(
-                    "adrdom/terms.md: term \"{}\" retired but carried by {}; {}",
-                    target.name, dep.source, tail
-                ));
+                refusals.push(msg::term_retired_but_carried(&target.name, &dep.source, next));
                 continue;
             }
             let still_resolves = lookup.get(word) == Some(uuid);
             if !still_resolves {
-                refusals.push(format!(
-                    "adrdom/terms.md: word \"{}\" moved off term \"{}\", carried by {}",
-                    word, target.name, dep.source
-                ));
+                // Same split as the retired case just above: a decision
+                // dependent re-asks so its terms line matches the current
+                // wording; a term dependent's own definition is reworded
+                // and the owner re-approves.
+                let next = match &dep.id {
+                    Some(id) => Next::agent(format!(
+                        "re-asks {} so its terms line matches the current wording",
+                        id
+                    )),
+                    None => msg::term_reword_and_approve(),
+                };
+                refusals.push(msg::word_moved_off_term(word, &target.name, &dep.source, next));
             }
         }
     }
@@ -498,12 +499,7 @@ pub fn terms_refusals(
                         })
                         .map(|n| format!(" (term {})", n))
                         .unwrap_or_default();
-                    refusals.push(format!(
-                        "adrdom/terms.md:{}: banned word \"{}\"{}; agent edits adrdom/terms.md to remove it",
-                        i + 1,
-                        tok,
-                        suffix
-                    ));
+                    refusals.push(msg::terms_banned_word(i + 1, &tok, &suffix));
                 }
             }
         }
@@ -523,8 +519,16 @@ fn do_approve_terms(
     ledger_path: &Path,
 ) -> Result<Outcome, String> {
     // Step 1: parse.
-    let mut tf =
-        terms::load(file).map_err(|e| format!("approve: cannot read {}: {}", file.display(), e))?;
+    let mut tf = terms::load(file).map_err(|e| {
+        format!(
+            "approve: {}",
+            msg::read_failed(
+                &file.display().to_string(),
+                e,
+                Next::owner_runs("adr approve adrdom/terms.md again"),
+            )
+        )
+    })?;
 
     // Every topic file, parsed once here and reused both by
     // `terms_refusals` (E1.3: no re-reading them from disk itself) and by
@@ -561,18 +565,24 @@ fn do_approve_terms(
     terms::write_terms_lines(&mut new_lines, &tf, &pairs_per_entry);
     tf.lines = new_lines;
 
-    terms::save(&tf).map_err(|e| format!("approve: failed to write {}: {}", file.display(), e))?;
+    terms::save(&tf).map_err(|e| {
+        format!(
+            "approve: {}",
+            msg::write_failed(
+                &file.display().to_string(),
+                e,
+                Next::owner_runs("adr approve adrdom/terms.md again"),
+            )
+        )
+    })?;
 
     let mut out: Vec<String> = Vec::new();
     if inserted > 0 {
-        out.push(format!(
-            "approve: adrdom/terms.md: {} missing id(s) filled",
-            inserted
-        ));
+        out.push(msg::terms_ids_filled(inserted));
     }
 
     if state::terms_approved(led, &tf) {
-        out.push("approve: adrdom/terms.md: already approved".to_string());
+        out.push(msg::terms_already_approved());
     } else {
         let row = ledger::Row {
             time: ledger::now_rfc3339(),
@@ -582,9 +592,17 @@ fn do_approve_terms(
             detail: "adrdom/terms.md".to_string(),
             version: crate::version::VERSION.to_string(),
         };
-        ledger::append(ledger_path, &[row])
-            .map_err(|e| format!("approve: failed to update ledger: {}", e))?;
-        out.push("approve: adrdom/terms.md: approved".to_string());
+        ledger::append(ledger_path, &[row]).map_err(|e| {
+            format!(
+                "approve: {}",
+                msg::update_failed(
+                    "ledger",
+                    e,
+                    Next::owner_runs("adr approve adrdom/terms.md again"),
+                )
+            )
+        })?;
+        out.push(msg::terms_approved_now());
     }
 
     // Step 7: informational, never a refusal. Only when the version on
@@ -604,7 +622,7 @@ fn do_approve_terms(
                     if old_t.definition == t.definition {
                         continue;
                     }
-                    out.push(format!("approve: term \"{}\" definition changed", t.name));
+                    out.push(msg::term_definition_changed(&t.name));
                     for rf in &records {
                         for sec in &rf.sections {
                             let Some(id) = &sec.id else { continue };
@@ -615,7 +633,7 @@ fn do_approve_terms(
                             let pairs =
                                 terms::parse_terms_line(rf.lines[tl].trim_end()).unwrap_or_default();
                             if pairs.iter().any(|(_, pid)| pid == tid) {
-                                out.push(format!("  current: {}: {}", rf.rel, sec.heading_text));
+                                out.push(msg::term_used_by_current(&rf.rel, &sec.heading_text));
                             }
                         }
                     }
@@ -624,7 +642,7 @@ fn do_approve_terms(
                             continue;
                         }
                         if pairs_per_entry[i].iter().any(|(_, pid)| pid == tid) {
-                            out.push(format!("  term: {}", t2.name));
+                            out.push(msg::term_used_by_term(&t2.name));
                         }
                     }
                 }
@@ -667,17 +685,14 @@ pub fn record_refusals(
     for e in &rf.shape_errors {
         out.push(Refusal {
             category: "parse",
-            message: format!("{}: {}; agent fixes the topic file", rel, e),
+            message: msg::shape_error(rel, e),
         });
     }
     for sec in &rf.sections {
         for e in &sec.shape_errors {
             out.push(Refusal {
                 category: "parse",
-                message: format!(
-                    "{}: \"{}\": {}; agent fixes the topic file",
-                    rel, sec.heading_text, e
-                ),
+                message: msg::section_shape_error(rel, &sec.heading_text, e),
             });
         }
     }
@@ -695,7 +710,7 @@ pub fn record_refusals(
         for (line, phrase, what) in tells::heading_tells(sec.start, &sec.heading_text) {
             out.push(Refusal {
                 category: "tells",
-                message: tells::tell_text(rel, line, &sec.heading_text, &phrase, what),
+                message: msg::tell(rel, line, &sec.heading_text, &phrase, what),
             });
         }
     }
@@ -704,7 +719,7 @@ pub fn record_refusals(
         for (line, phrase, what) in tells::prose_tells_in(&rf.lines, cs, ce) {
             out.push(Refusal {
                 category: "tells",
-                message: tells::tell_text(rel, line, "context", &phrase, what),
+                message: msg::tell(rel, line, "context", &phrase, what),
             });
         }
     }
@@ -716,10 +731,7 @@ pub fn record_refusals(
         if sec.depends.is_empty() {
             out.push(Refusal {
                 category: "plan",
-                message: format!(
-                    "{}: \"{}\" has no depends line; agent writes what the question stands on",
-                    rel, sec.heading_text
-                ),
+                message: msg::no_depends_line(rel, &sec.heading_text),
             });
         }
     }
@@ -741,7 +753,7 @@ pub fn record_refusals(
             if frozen && matches!(d, record::Dep::Text { .. }) {
                 out.push(Refusal {
                     category: "plan",
-                    message: format!("{}: \"{}\": answered; agent removes the edit", rel, sec.heading_text),
+                    message: msg::frozen_depends_edited(rel, &sec.heading_text),
                 });
                 continue;
             }
@@ -763,7 +775,7 @@ pub fn record_refusals(
     if let Some(err) = &rf.derive_error {
         out.push(Refusal {
             category: "plan",
-            message: record::derive_error_text(rel, err, None),
+            message: msg::derive_error(rel, err),
         });
     }
 
@@ -777,10 +789,7 @@ pub fn record_refusals(
         if let Some((tier, count)) = record::over_cap(&live) {
             out.push(Refusal {
                 category: "plan",
-                message: format!(
-                    "{}: tier {} holds {} questions, the cap is {}; agent moves questions under a higher heading or splits the topic",
-                    rel, tier, count, record::TIER_CAP
-                ),
+                message: msg::tier_cap_exceeded(rel, tier, count, record::TIER_CAP),
             });
         }
     }
@@ -830,10 +839,7 @@ pub fn missing_answered_refusals(records: &[RecordFile], led: &Ledger) -> Vec<Re
                     .unwrap_or_else(|| id.clone());
                 out.push(Refusal {
                     category: "ids",
-                    message: format!(
-                        "id {} (\"{}\") is answered and current but missing from every topic file; agent supersedes it or restores the heading",
-                        id, heading
-                    ),
+                    message: msg::answered_id_missing(id, &heading),
                 });
             }
         }
@@ -855,12 +861,7 @@ fn insert_missing_ids(rf: &RecordFile, mut work_lines: Vec<String>) -> Result<Ve
             let sec = &rf.sections[i];
             let depends_idx = (sec.start + 1..sec.end)
                 .find(|&j| work_lines[j].starts_with("depends: "))
-                .ok_or_else(|| {
-                    format!(
-                        "approve: \"{}\" has no depends line; agent writes what the question stands on",
-                        sec.heading_text
-                    )
-                })?;
+                .ok_or_else(|| format!("approve: {}", msg::no_depends_line_bare(&sec.heading_text)))?;
             let new_id = Uuid::new_v4().to_string();
             work_lines.insert(depends_idx + 1, format!("id: {}", new_id));
         }
@@ -886,8 +887,16 @@ fn do_approve_record(
     led: &Ledger,
     ledger_path: &Path,
 ) -> Result<Outcome, String> {
-    let rf =
-        record::load(file).map_err(|e| format!("approve: cannot read {}: {}", file.display(), e))?;
+    let rf = record::load(file).map_err(|e| {
+        format!(
+            "approve: {}",
+            msg::read_failed(
+                &file.display().to_string(),
+                e,
+                Next::owner_runs(format!("adr approve {} again", rel)),
+            )
+        )
+    })?;
 
     // Refuse up front, before a single `depends:` entry is resolved, when
     // adrdom/terms.md is missing, shape-broken, or not yet approved (the
@@ -1008,7 +1017,16 @@ fn do_approve_record(
     let plan_hash = record::plan_hash(&work_rf);
     let context_hash = record::context_hash(&work_rf);
 
-    record::save(&work_rf).map_err(|e| format!("approve: failed to write {}: {}", file.display(), e))?;
+    record::save(&work_rf).map_err(|e| {
+        format!(
+            "approve: {}",
+            msg::write_failed(
+                &file.display().to_string(),
+                e,
+                Next::owner_runs(format!("adr approve {} again", rel)),
+            )
+        )
+    })?;
 
     let mut rows: Vec<ledger::Row> = Vec::new();
     let mut messages: Vec<String> = Vec::new();
@@ -1026,9 +1044,9 @@ fn do_approve_record(
             detail: rel.to_string(),
             version: crate::version::VERSION.to_string(),
         });
-        messages.push(format!("approve: {}: plan approved", rel));
+        messages.push(msg::plan_approved(rel));
     } else {
-        messages.push(format!("approve: {}: plan unchanged", rel));
+        messages.push(msg::plan_unchanged(rel));
     }
 
     let context_changed = led
@@ -1044,38 +1062,57 @@ fn do_approve_record(
             detail: rel.to_string(),
             version: crate::version::VERSION.to_string(),
         });
-        messages.push(format!("approve: {}: context approved", rel));
+        messages.push(msg::context_approved(rel));
     } else {
-        messages.push(format!("approve: {}: context unchanged", rel));
+        messages.push(msg::context_unchanged(rel));
     }
 
-    ledger::append(ledger_path, &rows)
-        .map_err(|e| format!("approve: failed to update ledger: {}", e))?;
+    ledger::append(ledger_path, &rows).map_err(|e| {
+        format!(
+            "approve: {}",
+            msg::update_failed(
+                "ledger",
+                e,
+                Next::owner_runs(format!("adr approve {} again", rel)),
+            )
+        )
+    })?;
 
     // `withdrawn_rows` was computed, and any refusal already returned,
     // above -- before either write this function has made so far.
     if !withdrawn_rows.is_empty() {
-        ledger::append(ledger_path, &withdrawn_rows)
-            .map_err(|e| format!("approve: failed to update ledger: {}", e))?;
+        ledger::append(ledger_path, &withdrawn_rows).map_err(|e| {
+            format!(
+                "approve: {}",
+                msg::update_failed(
+                    "ledger",
+                    e,
+                    Next::owner_runs(format!("adr approve {} again", rel)),
+                )
+            )
+        })?;
         for r in &withdrawn_rows {
-            messages.push(format!("approve: withdrawn: {}", r.detail));
+            messages.push(msg::withdrawn(&r.detail));
         }
     }
 
     // Printed last, after a successful record approval (spec §3): the
-    // tiers this file now derives to, one `N (count)` per non-empty tier.
-    // `rf.tiers` is guaranteed `Some` here: a `derive_error` would already
-    // be among `refusals`, and the early return above would have fired.
-    let tiers: &Vec<usize> = rf
+    // tiers this file now derives to, one `N (count)` per non-empty tier,
+    // live counts only (8.8 A note; matches `check`'s own "tiers: ..."
+    // note, computed the same way via `state::live_tiers`). `work_rf.tiers`
+    // is guaranteed `Some` here: a `derive_error` would already be among
+    // `refusals`, and the early return above would have fired.
+    let tiers: &Vec<usize> = work_rf
         .tiers
         .as_ref()
         .expect("derive_error refuses above whenever tiers is None");
-    let tiers_str = record::tier_sizes(tiers)
+    let live = state::live_tiers(led, &work_rf, tiers);
+    let tiers_str = record::tier_sizes(&live)
         .into_iter()
         .map(|(t, c)| format!("{} ({})", t, c))
         .collect::<Vec<_>>()
         .join(" ");
-    messages.push(format!("approve: tiers: {}", tiers_str).trim_end().to_string());
+    messages.push(msg::tiers_note_approve(tiers_str.trim_end()));
 
     Ok(Outcome {
         summary: messages.join("\n"),
@@ -1145,7 +1182,7 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
 
     if removed.is_empty() {
         return Ok(Outcome {
-            summary: "nothing to remove".to_string(),
+            summary: msg::nothing_to_remove(),
         });
     }
 
@@ -1159,8 +1196,9 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
         content.push_str(&crate::banned::format_line(h, u));
         content.push('\n');
     }
-    std::fs::write(&banned_path, content)
-        .map_err(|e| format!("failed to update banned list: {}", e))?;
+    std::fs::write(&banned_path, content).map_err(|e| {
+        msg::update_failed("banned list", e, Next::owner_runs("adr unban again"))
+    })?;
 
     let rows: Vec<ledger::Row> = removed
         .iter()
@@ -1173,9 +1211,10 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
             version: crate::version::VERSION.to_string(),
         })
         .collect();
-    ledger::append(&ledger_path, &rows).map_err(|e| format!("failed to update ledger: {}", e))?;
+    ledger::append(&ledger_path, &rows)
+        .map_err(|e| msg::update_failed("ledger", e, Next::owner_runs("adr unban again")))?;
 
     Ok(Outcome {
-        summary: format!("removed {} entries", removed.len()),
+        summary: msg::removed_entries(removed.len()),
     })
 }

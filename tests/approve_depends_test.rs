@@ -238,7 +238,10 @@ fn approve_accepts_two_new_headings_when_two_in_the_tier_are_dead() {
     );
     let text = stdout(&out);
     assert!(!text.contains("holds"), "{}", text);
-    assert!(text.contains("approve: tiers: 1 (6)"), "{}", text);
+    // Live count only (8.8 A fix): the two dead questions (refused A,
+    // superseded B) no longer count toward the tier, matching `check`'s
+    // own "tiers: ..." note.
+    assert!(text.contains("approve: tiers: 1 (4)"), "{}", text);
 }
 
 #[test]

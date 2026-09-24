@@ -1,6 +1,7 @@
 use super::Failure;
 use crate::actions::Refusal;
 use crate::ledger::Ledger;
+use crate::msg;
 use crate::record::RecordFile;
 use crate::state;
 use std::collections::{HashMap, HashSet};
@@ -21,23 +22,14 @@ pub(super) fn check_ids(records: &[RecordFile], led: &Ledger, missing_answered: 
                 None => out.push(Failure {
                     check: "ids".to_string(),
                     id: None,
-                    message: format!(
-                        "{}: {}: plan not approved; owner runs: adr approve {}",
-                        rf.rel, sec.heading_text, rf.rel
-                    ),
+                    message: msg::heading_plan_not_approved(&rf.rel, &sec.heading_text),
                 }),
                 Some(id) => {
                     if let Some(prev) = seen.get(id) {
                         out.push(Failure {
                             check: "ids".to_string(),
                             id: Some(id.clone()),
-                            message: format!(
-                                "duplicate id {} in {} and {}:{}",
-                                id,
-                                prev,
-                                rf.rel,
-                                sec.heading_text
-                            ),
+                            message: msg::duplicate_id(id, prev, &rf.rel, &sec.heading_text),
                         });
                     } else {
                         seen.insert(
@@ -102,20 +94,10 @@ pub(super) fn check_ids(records: &[RecordFile], led: &Ledger, missing_answered: 
                 .map(|r| r.detail.clone())
                 .unwrap_or_else(|| id.clone());
             let removed_file = stale.iter().max_by_key(|&&(pos, _)| pos).map(|&(_, rel)| rel);
-            let tail = match removed_file {
-                Some(rel) => format!("; owner runs: adr approve {}", rel),
-                None => String::new(),
-            };
             out.push(Failure {
                 check: "ids".to_string(),
                 id: Some(id.clone()),
-                message: format!(
-                    "{} (\"{}\", {}) was removed from the plan{}",
-                    id,
-                    heading,
-                    event.unwrap_or("unknown"),
-                    tail
-                ),
+                message: msg::removed_from_plan(&id, &heading, event.unwrap_or("unknown"), removed_file),
             });
             continue;
         }
@@ -125,7 +107,7 @@ pub(super) fn check_ids(records: &[RecordFile], led: &Ledger, missing_answered: 
         out.push(Failure {
             check: "ids".to_string(),
             id: Some(id.clone()),
-            message: format!("ledger id {} not found in any topic file", id),
+            message: msg::ledger_id_not_found(&id),
         });
     }
 
@@ -145,11 +127,7 @@ pub(super) fn check_ids(records: &[RecordFile], led: &Ledger, missing_answered: 
                     out.push(Failure {
                         check: "ids".to_string(),
                         id: Some(id.clone()),
-                        message: format!(
-                            "withdrawn id {} still present in {}",
-                            id,
-                            rf.rel
-                        ),
+                        message: msg::withdrawn_id_present(id, &rf.rel),
                     });
                 }
             }

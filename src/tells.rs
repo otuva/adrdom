@@ -162,20 +162,6 @@ pub fn heading_tells(line: usize, heading_text: &str) -> Vec<(usize, String, &'s
     out
 }
 
-/// One tell message (9.5 A point 5): file, heading (or `"context"`), line,
-/// the phrase, and what it does, then the fix. `line` is 0-based; printed
-/// 1-based.
-pub fn tell_text(rel: &str, line: usize, label: &str, phrase: &str, what: &str) -> String {
-    format!(
-        "{}:{}: \"{}\": \"{}\" {}; agent rewrites the line",
-        rel,
-        line + 1,
-        label,
-        phrase,
-        what
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -246,12 +232,4 @@ mod tests {
         assert!(heading_tells(0, "does the tool store terms").is_empty());
     }
 
-    #[test]
-    fn tell_text_names_file_line_label_phrase_and_fix() {
-        let msg = tell_text("adrdom/decisions/x.md", 4, "context", "claude", PROVENANCE_WHAT);
-        assert_eq!(
-            msg,
-            "adrdom/decisions/x.md:5: \"context\": \"claude\" says who said it; agent rewrites the line"
-        );
-    }
 }

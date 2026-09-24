@@ -1,5 +1,6 @@
 use super::Failure;
 use crate::ledger::Ledger;
+use crate::msg;
 use crate::record::{self, RecordFile};
 
 pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure> {
@@ -22,10 +23,7 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                     out.push(Failure {
                         check: "answers".to_string(),
                         id: Some(id.clone()),
-                        message: format!(
-                            "{}: {}: refusal line without ledger row",
-                            rf.rel, sec.heading_text
-                        ),
+                        message: msg::refusal_without_row(&rf.rel, &sec.heading_text),
                     });
                 }
             } else if sec.answer_line.is_some() {
@@ -44,11 +42,7 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                     out.push(Failure {
                         check: "answers".to_string(),
                         id: Some(id.clone()),
-                        message: format!(
-                            "{}: {}: answer line without ledger row",
-                            rf.rel,
-                            sec.heading_text
-                        ),
+                        message: msg::answer_without_row(&rf.rel, &sec.heading_text),
                     });
                 }
             } else {
@@ -61,11 +55,7 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                     out.push(Failure {
                         check: "answers".to_string(),
                         id: Some(id.clone()),
-                        message: format!(
-                            "{}: {}: answered row without answer line",
-                            rf.rel,
-                            sec.heading_text
-                        ),
+                        message: msg::answered_row_without_line(&rf.rel, &sec.heading_text),
                     });
                 } else if has_refused_row {
                     // 8.1 A, the reverse of the refusal-line check: a
@@ -74,10 +64,7 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                     out.push(Failure {
                         check: "answers".to_string(),
                         id: Some(id.clone()),
-                        message: format!(
-                            "{}: {}: refused row without answer line",
-                            rf.rel, sec.heading_text
-                        ),
+                        message: msg::refused_row_without_line(&rf.rel, &sec.heading_text),
                     });
                 } else if let Some(latest_asked_hash) = led.latest_asked(id).map(|r| r.hash.clone()) {
                     // 9.1 A: `approve` now gives every heading an id,
@@ -89,11 +76,7 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                         out.push(Failure {
                             check: "answers".to_string(),
                             id: Some(id.clone()),
-                            message: format!(
-                                "{}: {}: edited after asking; run adr ask",
-                                rf.rel,
-                                sec.heading_text
-                            ),
+                            message: msg::edited_after_asking(&rf.rel, &sec.heading_text),
                         });
                     }
                 }
@@ -154,10 +137,7 @@ fn check_frozen_sets(
             out.push(Failure {
                 check: "answers".to_string(),
                 id: Some(id.to_string()),
-                message: format!(
-                    "{}: \"{}\" answer set on \"{}\" changed after ask; agent restores it, a change is a plan change",
-                    rf.rel, dep_heading, sec.heading_text
-                ),
+                message: msg::answer_set_changed(&rf.rel, &dep_heading, &sec.heading_text),
             });
         }
     }

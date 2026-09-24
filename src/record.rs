@@ -1084,62 +1084,6 @@ pub fn over_cap(tiers: &[usize]) -> Option<(usize, usize)> {
     tier_sizes(tiers).into_iter().find(|&(_, count)| count > TIER_CAP)
 }
 
-/// The shared core of a `derive_tiers` failure message: `<rel>: ...; <tail>`.
-/// `approve` and `plan` report the same wording (a per-variant "agent ..."
-/// clause) and pass `tail: None` to get it; `ask` ends every variant with
-/// its own single instruction instead (fix the file, then re-approve), and
-/// passes that text as `Some(tail)` to use in the agent clause's place.
-/// Callers add only their own prefix (`approve: `, `ask: `, or `plan: `,
-/// the last added by `check`'s failure formatting rather than here).
-pub fn derive_error_text(rel: &str, e: &DeriveError, tail: Option<&str>) -> String {
-    match e {
-        DeriveError::Dangling { section, entry } => format!(
-            "{}: \"{}\" depends on \"{}\" which is no heading in this file; {}",
-            rel,
-            section,
-            entry,
-            tail.unwrap_or("agent adds the heading or fixes the text")
-        ),
-        DeriveError::Cycle(names) => {
-            let mut chain: Vec<String> = names.clone();
-            if let Some(first) = names.first() {
-                chain.push(first.clone());
-            }
-            format!(
-                "{}: cycle: {}; {}",
-                rel,
-                chain
-                    .iter()
-                    .map(|n| format!("\"{}\"", n))
-                    .collect::<Vec<_>>()
-                    .join(" -> "),
-                tail.unwrap_or("agent breaks it")
-            )
-        }
-        DeriveError::SelfDep(h) => format!(
-            "{}: \"{}\" depends on itself; {}",
-            rel,
-            h,
-            tail.unwrap_or("agent removes the line or names something else")
-        ),
-    }
-}
-
-/// The shared core of the "answer set names an option the target doesn't
-/// have" message (8.7 A): a heading `depends:` entry's `=A|B` set must only
-/// name letters the target question actually has. `ask` reports this once
-/// the target's tier opens (`commands/ask.rs`); `check`'s `plan` check
-/// reports it unconditionally, whenever the target already has options, so
-/// the mismatch is caught before that tier ever opens. Callers add their
-/// own prefix (`ask: ` or `plan: `, the latter added by `check`'s failure
-/// formatting rather than here), the same split `derive_error_text` uses.
-pub fn bad_option_letter_text(rel: &str, dependent: &str, target: &str, letter: char) -> String {
-    format!(
-        "{}: \"{}\" depends on \"{}\" names option {} which \"{}\" does not have",
-        rel, dependent, target, letter, target
-    )
-}
-
 pub fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }

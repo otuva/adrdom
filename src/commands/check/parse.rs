@@ -1,5 +1,6 @@
 use super::Failure;
 use crate::actions::Refusal;
+use crate::msg;
 use crate::record::RecordFile;
 
 /// `parse`: a topic file's shape errors (missing/duplicate h1, a `## `
@@ -29,7 +30,7 @@ pub(super) fn check_parse(records: &[RecordFile], refusals: &[Vec<Refusal>]) -> 
                 out.push(Failure {
                     check: "parse".to_string(),
                     id: sec.id.clone(),
-                    message: format!("{}: {}: {}", rf.rel, sec.heading_text, e),
+                    message: msg::check_parse_error(&rf.rel, &sec.heading_text, e),
                 });
             }
         }

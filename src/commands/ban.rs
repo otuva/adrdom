@@ -1,6 +1,7 @@
 use crate::banned;
 use crate::commands::check::collect_targets;
 use crate::ledger;
+use crate::msg::{self, Actor, Next};
 use crate::record;
 use crate::repo;
 use crate::state;
@@ -33,7 +34,7 @@ pub fn run(term: Option<String>) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("ban: not inside a git repository");
+            eprintln!("{}", msg::not_a_repo("ban", Actor::Agent));
             return 1;
         }
     };
@@ -44,7 +45,7 @@ pub fn run(term: Option<String>) -> i32 {
         Some(name) => match resolve_term_uuid(&root, name) {
             Some(u) => Some(u),
             None => {
-                eprintln!("ban: no term named \"{}\" in adrdom/terms.md", name);
+                eprintln!("ban: {}", msg::no_such_term(name));
                 return 1;
             }
         },
@@ -53,7 +54,10 @@ pub fn run(term: Option<String>) -> i32 {
 
     let mut input = String::new();
     if std::io::stdin().read_to_string(&mut input).is_err() {
-        eprintln!("ban: failed to read stdin");
+        eprintln!(
+            "ban: {}",
+            msg::stdin_read_failed(Next::agent("checks stdin and retries"))
+        );
         return 1;
     }
 
@@ -74,7 +78,7 @@ pub fn run(term: Option<String>) -> i32 {
     }
 
     if new_hashes.is_empty() {
-        println!("ban: no new entries");
+        println!("ban: {}", msg::no_new_entries());
         return 0;
     }
 
@@ -95,7 +99,7 @@ pub fn run(term: Option<String>) -> i32 {
     }
 
     if !hits.is_empty() {
-        eprintln!("ban: refusing: already in use");
+        eprintln!("ban: {}", msg::already_in_use());
         for h in &hits {
             eprintln!("{}", h);
         }
@@ -108,7 +112,10 @@ pub fn run(term: Option<String>) -> i32 {
         .collect();
 
     if let Err(e) = banned::append(&banned_path, &entries) {
-        eprintln!("ban: failed to update banned list: {}", e);
+        eprintln!(
+            "ban: {}",
+            msg::update_failed("banned list", e, Next::agent("checks the error and retries"))
+        );
         return 1;
     }
 
@@ -124,10 +131,13 @@ pub fn run(term: Option<String>) -> i32 {
         })
         .collect();
     if let Err(e) = ledger::append(&ledger_path, &rows) {
-        eprintln!("ban: failed to update ledger: {}", e);
+        eprintln!(
+            "ban: {}",
+            msg::update_failed("ledger", e, Next::agent("checks the error and retries"))
+        );
         return 1;
     }
 
-    println!("ban: added {} entries", new_hashes.len());
+    println!("ban: {}", msg::banned_added(new_hashes.len()));
     0
 }

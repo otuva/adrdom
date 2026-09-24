@@ -2,6 +2,7 @@
 //! (spec §7). No HTML, no snapshot — reads the file and ledger directly,
 //! the same way the old (pre-tier) `show` did.
 use crate::ledger::{self, Ledger};
+use crate::msg::{self, Actor};
 use crate::record::{self, RecordFile, Section};
 use crate::repo;
 use crate::state;
@@ -14,7 +15,7 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("show: not inside a git repository");
+            eprintln!("{}", msg::not_a_repo("show", Actor::Agent));
             return 1;
         }
     };

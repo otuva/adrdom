@@ -270,7 +270,7 @@ fn check_install_fails_when_agents_md_is_missing() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("install: AGENTS.md lacks the adrdom brief; run: adr install"),
+        stdout(&out).contains("install: AGENTS.md lacks the adrdom brief; agent runs: adr install"),
         "{}",
         stdout(&out)
     );
@@ -285,7 +285,7 @@ fn check_install_fails_when_agents_md_has_no_marked_section() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("install: AGENTS.md lacks the adrdom brief; run: adr install"),
+        stdout(&out).contains("install: AGENTS.md lacks the adrdom brief; agent runs: adr install"),
         "{}",
         stdout(&out)
     );
@@ -309,7 +309,7 @@ fn check_install_fails_when_agents_md_brief_differs() {
     assert!(!out.status.success());
     assert!(
         stdout(&out)
-            .contains("install: AGENTS.md brief differs from this binary's; run: adr install"),
+            .contains("install: AGENTS.md brief differs from this binary's; agent runs: adr install"),
         "{}",
         stdout(&out)
     );
@@ -324,7 +324,7 @@ fn check_install_fails_when_claude_md_does_not_import_agents_md() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("install: CLAUDE.md does not import AGENTS.md; run: adr install"),
+        stdout(&out).contains("install: CLAUDE.md does not import AGENTS.md; agent runs: adr install"),
         "{}",
         stdout(&out)
     );
