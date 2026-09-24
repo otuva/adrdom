@@ -194,6 +194,7 @@ Standard: reference by a stable identifier; the reference points at a value that
 ### Does the tool cap the questions in a tier?
 depends: aec860fd-22ad-44a7-99f7-222ea19537e7=*, f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
 id: 15d82e53-e344-4347-b639-3bf6eb9ef1b4
+terms: answer=b36113a1-1384-4e4c-a798-8399f4181366, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, terms=f590059d-b681-40ec-8a1c-c8916d71f6bb, tier=f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, topic=292a10b8-c287-4d71-b2bd-840da0a6de61
 
 Problem: nothing bounds a tier; a large tier puts many questions before the owner at once, and a bad question found late in it costs every answer around it its context.
 Standard: kanban caps work in progress at every column and stops a pull past the cap.
@@ -211,6 +212,7 @@ Standard: kanban caps work in progress at every column and stops a pull past the
 ### Does a depends entry carry the answers it holds under?
 depends: aec860fd-22ad-44a7-99f7-222ea19537e7=*, 9d634996-475e-4ddc-8113-05c404ad9d5c
 id: fa90692a-150e-4a89-91e2-1d575cb59d0f
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answer=b36113a1-1384-4e4c-a798-8399f4181366, answered=b36113a1-1384-4e4c-a798-8399f4181366, answers=b36113a1-1384-4e4c-a798-8399f4181366, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, depends=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, refusal=0942e445-0163-423e-8ba7-84dd8ac07045, refuses=0942e445-0163-423e-8ba7-84dd8ac07045, tier=f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
 
 Problem: an answer in one tier can make a question in the next tier moot or false; a moot question that reaches the owner costs a refusal, or, answered, plants a decision inconsistent with the one that made it moot.
 Standard: a dependency graph records which outcome each node needs and drops the nodes whose outcome did not happen.
