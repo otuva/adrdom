@@ -6,7 +6,7 @@ use crate::repo;
 use crate::state::{self, TermsLoad};
 use crate::tells;
 use crate::terms;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::Path;
 use uuid::Uuid;
 
@@ -824,51 +824,43 @@ fn do_approve_record(
     }
 
     // Every check above passed: mint an id for every heading that lacks one
-    // (skeletons included, same insertion shape `ask` used to write: blank,
-    // `id:` line, blank), reparse so every heading's id is available, then
-    // rewrite every `Text` depends entry to the id it resolves to, keeping
-    // any `=set` suffix, in place (a single-line replace, never a shift).
+    // (skeletons included), reparse so every heading's id is available, then
+    // rewrite each section's single `depends:` line to one line of ids
+    // (8.1 A point 3), entry by entry, keeping any `=set` suffix.
+    //
+    // Every section has exactly one `depends:` line at this point (a
+    // second one already refused above, via `shape_msgs`; a missing one via
+    // `depends_msgs`), so the line found here is always the whole entry
+    // list for that section -- never one of several.
     let mut work_lines = rf.lines.clone();
     let needs_id: Vec<bool> = rf.sections.iter().map(|s| s.id.is_none()).collect();
     for i in (0..rf.sections.len()).rev() {
         if needs_id[i] {
-            let start = rf.sections[i].start;
+            let sec = &rf.sections[i];
+            let depends_idx = (sec.start + 1..sec.end)
+                .find(|&j| work_lines[j].starts_with("depends: "))
+                .expect("depends_msgs above already refused a section with no depends line");
             let new_id = Uuid::new_v4().to_string();
-            work_lines.splice(
-                start + 1..start + 1,
-                [String::new(), format!("id: {}", new_id), String::new()],
-            );
+            // Directly after the depends line, no blank padding (9.1 A/8.1
+            // A point 4): the same bare single-line insert `ask` already
+            // uses to write `terms:` directly after `id:`.
+            work_lines.insert(depends_idx + 1, format!("id: {}", new_id));
         }
     }
     let mut work_rf = record::build(rf.path.clone(), rel.to_string(), work_lines);
 
     let sections_snapshot = work_rf.sections.clone();
     for sec in &sections_snapshot {
-        let mut dep_i = 0;
-        for j in sec.start + 1..sec.end {
-            if !work_rf.lines[j].starts_with("depends: ") {
-                continue;
-            }
-            let d = &sec.depends[dep_i];
-            dep_i += 1;
-            if let record::Dep::Text { set, .. } = d {
-                if let Ok(Some(target)) =
-                    depends::resolve_dep(d, &work_rf, &terms_list, &phrase_lookup, led)
-                {
-                    let id = match target {
-                        DepTarget::Heading(idx) => work_rf.sections[idx].id.clone(),
-                        DepTarget::Term(id) | DepTarget::Decision(id) => Some(id),
-                    };
-                    if let Some(id) = id {
-                        let suffix = set
-                            .as_ref()
-                            .map(|s| format!("={}", record::canonical_set(s)))
-                            .unwrap_or_default();
-                        work_rf.lines[j] = format!("depends: {}{}", id, suffix);
-                    }
-                }
-            }
-        }
+        let Some(line_idx) = (sec.start + 1..sec.end).find(|&j| work_rf.lines[j].starts_with("depends: "))
+        else {
+            continue;
+        };
+        let parts: Vec<String> = sec
+            .depends
+            .iter()
+            .map(|d| rewrite_dep_entry(d, &work_rf, &terms_list, &phrase_lookup, led))
+            .collect();
+        work_rf.lines[line_idx] = format!("depends: {}", parts.join(", "));
     }
     // Reparse once more so `plan_hash`/`context_hash` and everything below
     // sees the file exactly as it will be written.
@@ -949,6 +941,45 @@ fn do_approve_record(
     Ok(Outcome {
         summary: messages.join("\n"),
     })
+}
+
+/// The final text one `depends:` entry rewrites to when `approve` rewrites
+/// a section's single `depends:` line (8.1 A point 3): an already-resolved
+/// `Id` entry keeps its id and set exactly as written; a `Text` entry
+/// resolves to the id its target already carries in `work_rf` (every entry
+/// was already validated above, so this should always find one), keeping
+/// its own written text as a fallback rather than silently dropping the
+/// entry on the one resolution rule this can't see (a dangling/cycle/
+/// self-dep heading reference, reported once from `rf.derive_error` instead
+/// of per entry).
+fn rewrite_dep_entry(
+    d: &record::Dep,
+    work_rf: &RecordFile,
+    terms_list: &[terms::Term],
+    phrase_lookup: &HashMap<String, String>,
+    led: &Ledger,
+) -> String {
+    let set_suffix = |set: &Option<record::AnswerSet>| {
+        set.as_ref()
+            .map(|s| format!("={}", record::canonical_set(s)))
+            .unwrap_or_default()
+    };
+    match d {
+        record::Dep::Id { id, set } => format!("{}{}", id, set_suffix(set)),
+        record::Dep::Text { text, set } => {
+            let resolved = depends::resolve_dep(d, work_rf, terms_list, phrase_lookup, led)
+                .ok()
+                .flatten()
+                .and_then(|target| match target {
+                    DepTarget::Heading(idx) => work_rf.sections[idx].id.clone(),
+                    DepTarget::Term(id) | DepTarget::Decision(id) => Some(id),
+                });
+            match resolved {
+                Some(id) => format!("{}{}", id, set_suffix(set)),
+                None => format!("{}{}", text, set_suffix(set)),
+            }
+        }
+    }
 }
 
 pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {

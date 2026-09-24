@@ -388,6 +388,39 @@ fn parse_answer_set(s: &str) -> Option<AnswerSet> {
     Some(AnswerSet::Letters(letters))
 }
 
+/// Splits a `depends:` line's whole value into its entries (8.1 A): entries
+/// are comma separated, an answer set stays on its own entry (`|` inside a
+/// set, never `,`). Before approve, an entry may itself be heading text that
+/// holds a comma: fragments are rejoined, longest run first, against
+/// `headings` (every heading text in the file, gathered once up front by
+/// the caller so a later heading can be named by an earlier one and vice
+/// versa) -- `parse_depends_entry` on the rejoined text tells whether it is
+/// heading-shaped (ends in `?`, once any `=set` tail is set aside) so this
+/// never needs its own copy of that rule. A fragment run that matches no
+/// heading falls back to one entry per raw fragment, same as a plain
+/// comma-separated list with no embedded commas.
+fn parse_depends_line(value: &str, headings: &[String]) -> Vec<Result<Dep, String>> {
+    let pieces: Vec<String> = value.split(',').map(|s| s.trim().to_string()).collect();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < pieces.len() {
+        let mut chosen = i + 1;
+        for j in (i + 2..=pieces.len()).rev() {
+            let joined = pieces[i..j].join(", ");
+            if let Ok(Dep::Text { text, .. }) = parse_depends_entry(&joined) {
+                if headings.iter().any(|h| h.trim() == text.trim()) {
+                    chosen = j;
+                    break;
+                }
+            }
+        }
+        let joined = pieces[i..chosen].join(", ");
+        out.push(parse_depends_entry(&joined));
+        i = chosen;
+    }
+    out
+}
+
 /// Classifies one `depends:` entry (the trimmed text after `depends: `) into
 /// `Id` (a uuid, with or without a trailing `=set`) or `Text` (words, with
 /// or without a trailing `=set` on a heading-shaped base). `Err` names why
@@ -440,6 +473,15 @@ fn dep_identity_eq(a: &Dep, b: &Dep) -> bool {
 }
 
 pub fn parse_sections(lines: &[String]) -> Vec<Section> {
+    // Every heading's text, gathered once before any body is scanned: a
+    // `depends:` line's comma-rejoin (see `parse_depends_line`) may need to
+    // match a heading that comes later in the file, or the section's own.
+    let headings: Vec<String> = lines
+        .iter()
+        .filter(|l| is_question_heading(l))
+        .map(|l| l["### ".len()..].trim().to_string())
+        .collect();
+
     let mut sections = Vec::new();
     let mut i = 0;
     while i < lines.len() {
@@ -447,7 +489,7 @@ pub fn parse_sections(lines: &[String]) -> Vec<Section> {
         if is_question_heading(line) {
             let start = i;
             let end = find_end(lines, i + 1);
-            sections.push(parse_question(lines, start, end));
+            sections.push(parse_question(lines, start, end, &headings));
             i = end;
         } else {
             i += 1;
@@ -488,12 +530,13 @@ struct BodyScan {
     option_shape_errors: Vec<String>,
 }
 
-fn scan_body(lines: &[String], start: usize, end: usize) -> BodyScan {
+fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) -> BodyScan {
     let mut id = None;
     let mut id_count = 0;
     let mut supersedes: Vec<String> = Vec::new();
     let mut depends: Vec<Dep> = Vec::new();
     let mut depends_errors: Vec<String> = Vec::new();
+    let mut depends_line_seen = false;
     let mut terms_line = None;
     let mut options: Vec<OptionRec> = Vec::new();
     let mut answer_line = None;
@@ -515,16 +558,23 @@ fn scan_body(lines: &[String], start: usize, end: usize) -> BodyScan {
             continue;
         }
         if let Some(v) = kv(line, "depends") {
-            match parse_depends_entry(&v) {
-                Ok(d) => {
-                    if depends.iter().any(|existing| dep_identity_eq(existing, &d)) {
-                        depends_errors.push(format!("depends: duplicate entry, line {}", j + 1));
-                    } else {
-                        depends.push(d);
+            if depends_line_seen {
+                depends_errors.push(format!("depends: second depends line, line {}", j + 1));
+                continue;
+            }
+            depends_line_seen = true;
+            for res in parse_depends_line(&v, headings) {
+                match res {
+                    Ok(d) => {
+                        if depends.iter().any(|existing| dep_identity_eq(existing, &d)) {
+                            depends_errors.push(format!("depends: duplicate entry, line {}", j + 1));
+                        } else {
+                            depends.push(d);
+                        }
                     }
-                }
-                Err(why) => {
-                    depends_errors.push(format!("depends: {}, line {}", why, j + 1));
+                    Err(why) => {
+                        depends_errors.push(format!("depends: {}, line {}", why, j + 1));
+                    }
                 }
             }
             continue;
@@ -656,14 +706,14 @@ fn is_skeleton_range(lines: &[String], start: usize, end: usize) -> bool {
     })
 }
 
-fn parse_question(lines: &[String], start: usize, end: usize) -> Section {
+fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String]) -> Section {
     // Fully trimmed (not just `trim_end`): every consumer that compares or
     // hashes `heading_text` (a depends line's target text, an `assumes`
     // row's detail, `check`'s frozen-set comparison) must agree on the same
     // string regardless of extra whitespace right after `### `.
     let heading_text = lines[start]["### ".len()..].trim().to_string();
     let is_skeleton = is_skeleton_range(lines, start, end);
-    let scan = scan_body(lines, start, end);
+    let scan = scan_body(lines, start, end, headings);
 
     let mut parse_errors = scan.option_errors;
     if scan.id_count > 1 {
@@ -1168,7 +1218,7 @@ mod tests {
 
     #[test]
     fn skeleton_with_only_depends_lines_is_skeleton() {
-        let rf = rf_from("# Topic\n\n### 1.1 Skeleton?\ndepends: widget\ndepends: 1.2 Other?\n\n### 1.2 Other?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
+        let rf = rf_from("# Topic\n\n### 1.1 Skeleton?\ndepends: widget, 1.2 Other?\n\n### 1.2 Other?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
         let sk = &rf.sections[0];
         assert!(sk.is_skeleton);
         assert!(sk.id.is_none());
@@ -1291,6 +1341,29 @@ mod tests {
     }
 
     #[test]
+    fn plan_hash_ignores_sets_on_a_one_line_multi_entry_depends() {
+        // Two heading-shaped entries on the one line (a set only ever
+        // attaches to a heading-shaped base -- a term entry like "widget"
+        // has no set syntax at all, spec 8.7 A), each carrying its own set.
+        let make = |set_a: &str, set_b: &str| {
+            format!(
+                "# Topic\n\n\
+                 ### 1.1 Q?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+                 ### 1.2 Q2?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+                 ### 1.3 R?\ndepends: 1.1 Q?{}, 1.2 Q2?{}\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+                set_a, set_b
+            )
+        };
+        let a = rf_from(&make("=A", "=B"));
+        let b = rf_from(&make("=B", "=A|B"));
+        assert_eq!(
+            plan_hash(&a),
+            plan_hash(&b),
+            "sets on either entry of a one-line depends must not move the plan hash"
+        );
+    }
+
+    #[test]
     fn section_hash_ignores_trailing_whitespace_on_a_line() {
         let clean = rf_from(SHAPED);
         let clean_hash = section_hash(&clean.lines, &clean.sections[0]);
@@ -1399,9 +1472,7 @@ mod tests {
              - A) x.\n  Why: w.\n  Costs: c.\n\
              - B) y.\n  Why: w.\n  Costs: c.\n\n\
              ### 1.2 Second question?\n\
-             depends: widget\n\
-             depends: 1.1 First question?=A\n\
-             depends: 11111111-1111-1111-1111-111111111111\n\n\
+             depends: widget, 1.1 First question?=A, 11111111-1111-1111-1111-111111111111\n\n\
              Problem: p2.\n\n\
              Standard: s2.\n\n\
              - A) x.\n  Why: w.\n  Costs: c.\n\
@@ -1472,14 +1543,15 @@ mod tests {
     }
 
     #[test]
-    fn depends_malformed_lines_are_shape_errors() {
+    fn depends_malformed_entries_on_one_line_are_shape_errors() {
+        // All four problems (an empty entry, a bad set, and a duplicate) are
+        // entries on the same, single `depends:` line -- 8.1 A: a section
+        // holds at most one `depends:` line, comma separated -- so every
+        // error below names the same line number.
         let rf = rf_from(
             "# Topic\n\n\
              ### 1.1 Q?\n\
-             depends: \n\
-             depends: 1.1 Q?=a\n\
-             depends: widget\n\
-             depends: widget\n\n\
+             depends: , 1.1 Q?=a, widget, widget\n\n\
              Problem: p.\n\n\
              Standard: s.\n\n\
              - A) x.\n  Why: w.\n  Costs: c.\n\
@@ -1494,16 +1566,82 @@ mod tests {
         assert!(
             sec.shape_errors
                 .iter()
-                .any(|e| e == "depends: bad set syntax, line 5"),
+                .any(|e| e == "depends: bad set syntax, line 4"),
             "{:?}",
             sec.shape_errors
         );
         assert!(
             sec.shape_errors
                 .iter()
-                .any(|e| e == "depends: duplicate entry, line 7"),
+                .any(|e| e == "depends: duplicate entry, line 4"),
             "{:?}",
             sec.shape_errors
+        );
+    }
+
+    #[test]
+    fn two_depends_lines_under_one_heading_is_a_shape_error() {
+        let rf = rf_from(
+            "# Topic\n\n### 1.1 Q?\ndepends: widget\ndepends: gadget\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        let sec = &rf.sections[0];
+        // Only the first line's entry is parsed; the second line is refused
+        // outright rather than treated as more entries.
+        assert_eq!(
+            sec.depends,
+            vec![Dep::Text {
+                text: "widget".to_string(),
+                set: None
+            }]
+        );
+        assert!(
+            sec.shape_errors
+                .iter()
+                .any(|e| e == "depends: second depends line, line 5"),
+            "{:?}",
+            sec.shape_errors
+        );
+    }
+
+    #[test]
+    fn depends_entry_with_a_comma_in_heading_text_rejoins_against_the_file_headings() {
+        let rf = rf_from(
+            "# Topic\n\n\
+             ### First, then second?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+             ### R?\ndepends: First, then second?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        let sec = &rf.sections[1];
+        assert_eq!(sec.shape_errors, Vec::<String>::new(), "{:?}", sec.shape_errors);
+        assert_eq!(sec.depends.len(), 1, "the comma must not split into two entries");
+        assert_eq!(
+            sec.depends[0],
+            Dep::Text {
+                text: "First, then second?".to_string(),
+                set: None
+            }
+        );
+        assert_eq!(rf.dep_target(&sec.depends[0]), Some(0));
+    }
+
+    #[test]
+    fn depends_comma_rejoin_prefers_the_longest_heading_match() {
+        // "Alpha, Beta?" is a real heading in this file too; the rejoin must
+        // still prefer the longer, full match "Alpha, Beta, Gamma?" over the
+        // shorter one it could stop at (8.1 A: "longest match wins").
+        let rf = rf_from(
+            "# Topic\n\n\
+             ### Alpha, Beta?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+             ### Alpha, Beta, Gamma?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+             ### R?\ndepends: Alpha, Beta, Gamma?=A\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        let sec = rf.sections.iter().find(|s| s.heading_text == "R?").unwrap();
+        assert_eq!(sec.depends.len(), 1, "{:?}", sec.depends);
+        assert_eq!(
+            sec.depends[0],
+            Dep::Text {
+                text: "Alpha, Beta, Gamma?".to_string(),
+                set: Some(AnswerSet::Letters(vec!['A']))
+            }
         );
     }
 
