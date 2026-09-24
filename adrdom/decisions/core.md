@@ -80,6 +80,7 @@ Standard: requirements traceability links every requirement to a test that verif
 ### Does check fail an answered question whose text changed?
 depends: dad5273c-afe2-4ab1-a451-e2a5d4d9a26d=A, 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e18b82d8-5271-4385-bbab-2b89e5da278f
 id: cd83e277-ebf0-4458-a77a-c526ab4cfeca
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answered=b36113a1-1384-4e4c-a798-8399f4181366, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, depends=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, question=277a8338-c57a-43cc-8b28-6b42e9347f6a
 
 Problem: an answered decision never changes, but it sits in a text file an agent can edit; an edit nothing notices moves the decision silently.
 Standard: tamper-evident logs store a hash of each record and verify it on every read.
@@ -94,6 +95,7 @@ Standard: tamper-evident logs store a hash of each record and verify it on every
 ### What does an owner command look for before it runs?
 depends: 98d5d389-8315-41da-9970-666e31f3a94d=*, 1d7e59ea-99e3-4d4b-9928-5dabca62723d, f90dbd5b-8fbe-4899-8588-f8762795c2e2
 id: aa275fac-def5-42a2-8a61-660142acad8e
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answer=b36113a1-1384-4e4c-a798-8399f4181366, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d
 
 Problem: an agent that runs an owner command because it seems helpful turns its own proposal into the owner's act; the command has to tell the two apart without a login.
 Standard: allowlist over denylist; recognise the known principal instead of listing the threats.
@@ -111,6 +113,7 @@ Standard: allowlist over denylist; recognise the known principal instead of list
 ### What does a depends line name?
 depends: da59b448-1afb-4469-b40e-69eda8f253c2=A|C, aef1b384-2b33-47a2-92a8-ec7f8fb258ef
 id: ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answer=b36113a1-1384-4e4c-a798-8399f4181366, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, checks=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, current=e2533580-1486-4dc9-8697-e6c53605fe72, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, depends=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, options=43778946-d44c-4acf-a766-0a4915fce199, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, stands on=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, term=f590059d-b681-40ec-8a1c-c8916d71f6bb, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
 
 Problem: a question that assumes another question's answer, or a behaviour no decision covers, carries that assumption nowhere the tool or the owner can see; it surfaces only when the owner reads the options.
 Standard: dependency-ordered task lists carry a prerequisite field per item and stop an item whose prerequisite does not resolve.
@@ -128,6 +131,7 @@ Standard: dependency-ordered task lists carry a prerequisite field per item and 
 ### What ties a test to a decision?
 depends: 33a45b9e-8150-488e-be70-7ab2ca9adaa6=*, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f
 id: 0b962bc8-05a8-48da-9fe8-bf77c7aa6e4a
+terms: decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, identifier=e877e4a9-2caf-4fe6-9f82-5476a2abb00b
 
 Problem: the tool runs in repositories of any language and has to find which test holds which decision without parsing that language.
 Standard: cross-language tools mark a file with a comment carrying an identifier in a fixed form and find it by text search.
