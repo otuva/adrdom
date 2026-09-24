@@ -396,7 +396,7 @@ fn answer_with_two_id_supersedes_refuses_when_one_is_not_current() {
 }
 
 #[test]
-fn answer_accepts_a_supersedes_target_already_superseded_as_lineage() {
+fn answer_refuses_a_supersedes_target_already_superseded() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -434,8 +434,9 @@ fn answer_accepts_a_supersedes_target_already_superseded_as_lineage() {
     let answer_out = adr_owner(&dir, &["answer", &second_id, "A"], "");
     assert!(answer_out.status.success(), "answer 1.2 failed: {}", stderr(&answer_out));
 
-    // The third question names the same, now superseded, first id: the
-    // answer is accepted as lineage and writes a second superseded row.
+    // The third question names the same, now superseded, first id: a
+    // supersedes target must be current (4.14 A), so this refuses instead
+    // of being accepted as lineage.
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(&THIRD_QUESTION.replacen(
         "### 1.3 What is the third unit of authority called?\n",
@@ -456,14 +457,77 @@ fn answer_accepts_a_supersedes_target_already_superseded_as_lineage() {
         .find(|id| id != &old_id && id != &second_id)
         .expect("third id assigned");
     let answer_out = adr_owner(&dir, &["answer", &third_id, "A"], "");
-    assert!(answer_out.status.success(), "lineage answer failed: {}", stderr(&answer_out));
+    assert!(
+        !answer_out.status.success(),
+        "answer should have refused: {}",
+        stdout(&answer_out)
+    );
+    let err = stderr(&answer_out);
+    assert!(err.contains(old_id.as_str()), "{}", err);
+    assert!(err.contains("is not a current decision"), "{}", err);
 
+    let after = std::fs::read_to_string(&record).unwrap();
+    assert_eq!(
+        after.matches("**Answer:**").count(),
+        2,
+        "answer must not have written an answer for 1.3: {}",
+        after
+    );
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let rows = ledger
         .lines()
         .filter(|l| l.contains("\tsuperseded\t") && l.contains(old_id.as_str()))
         .count();
-    assert_eq!(rows, 2, "expected two superseded rows for the first id: {}", ledger);
+    assert_eq!(rows, 1, "expected exactly one superseded row for the first id: {}", ledger);
+}
+
+#[test]
+fn answer_accepts_a_supersedes_target_that_is_current() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let old_id = extract_ids(&content)[0].clone();
+    let answer_out = adr_owner(&dir, &["answer", &old_id, "A"], "");
+    assert!(answer_out.status.success(), "answer 1.1 failed: {}", stderr(&answer_out));
+
+    // The second question supersedes the first while it is still current
+    // (latest state `answered`): accepted.
+    let mut content = std::fs::read_to_string(&record).unwrap();
+    content.push_str(&SECOND_QUESTION.replacen(
+        "### 1.2 What is the second unit of authority called?\n",
+        &format!(
+            "### 1.2 What is the second unit of authority called?\n\nsupersedes: {}\n",
+            old_id
+        ),
+        1,
+    ));
+    std::fs::write(&record, &content).unwrap();
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let second_id = extract_ids(&content)
+        .into_iter()
+        .find(|id| id != &old_id)
+        .expect("second id assigned");
+    let answer_out = adr_owner(&dir, &["answer", &second_id, "A"], "");
+    assert!(answer_out.status.success(), "answer 1.2 failed: {}", stderr(&answer_out));
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        ledger
+            .lines()
+            .any(|l| l.contains("\tsuperseded\t") && l.contains(old_id.as_str())),
+        "expected a superseded row for the first id: {}",
+        ledger
+    );
 }
 
 // --- answer's own terms.md gates (6) ---------------------------------------

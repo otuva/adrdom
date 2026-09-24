@@ -301,7 +301,12 @@ fn ask_refuses_on_a_banned_word_with_no_term_name() {
 }
 
 #[test]
-fn ask_refuses_a_retired_match() {
+fn ask_pairs_nothing_for_a_word_only_on_a_retired_term() {
+    // "authority" only appears on a retired term, and the question's own
+    // text pairs no other term: `resolve` never matches a retired term
+    // (9.3 B), so the word pairs nothing at all, and the existing
+    // zero-pairing refusal fires -- there is no separate retired-match
+    // refusal any more.
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
@@ -331,9 +336,51 @@ fn ask_refuses_a_retired_match() {
     assert!(!out.status.success());
     let err = stderr(&out);
     assert!(
-        err.contains("resolves \"authority\" to retired term \"authority\""),
+        err.contains("\"1.1 What is the unit of authority called?\" pairs no term"),
         "{}",
         err
+    );
+}
+
+#[test]
+fn ask_pairs_a_word_to_the_current_term_that_took_it_from_a_retired_one() {
+    // A retired term and a current term share the same word ("authority"):
+    // `duplicate_word_errors` allows this since the retired entry is
+    // ignored, and a new pairing (ask's terms line) sees current terms
+    // only, so the word binds to the current term's id.
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    // The "decision" term must exist and be approved before `approve` runs
+    // on the record, so it can resolve the heading's own `depends:
+    // decision` line to an id.
+    let terms = "# Terms\n\n\
+## decision\n\
+id: 33333333-3333-3333-3333-333333333333\n\
+definition: A fixture term.\n\
+aliases: \n\
+\n\
+## authority\n\
+id: 11111111-1111-1111-1111-111111111111\n\
+definition: The old fixture term.\n\
+aliases: \n\
+retired: yes\n\
+\n\
+## power\n\
+id: 22222222-2222-2222-2222-222222222222\n\
+definition: The new fixture term.\n\
+aliases: authority\n";
+    write_record(&dir, "adrdom/terms.md", terms);
+    approve_terms_via_ledger(&dir, terms);
+    let record = write_record(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
+
+    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    let content = std::fs::read_to_string(&record).unwrap();
+    assert!(
+        content.contains("terms: authority=22222222-2222-2222-2222-222222222222"),
+        "{}",
+        content
     );
 }
 

@@ -360,22 +360,13 @@ pub fn run(record_path: PathBuf) -> i32 {
             return 1;
         }
 
+        // `terms::resolve` never matches a retired term (9.3 B), so a
+        // retired-match refusal cannot fire here; a word that only a
+        // retired term owns simply pairs nothing, caught by refusal 6
+        // below.
         let pairs = terms::resolve(&text, &terms_list);
 
-        // Refusal 6: a retired term match.
-        for (word, tid) in &pairs {
-            if let Some(t) = terms_list.iter().find(|t| t.id.as_deref() == Some(tid.as_str())) {
-                if t.retired {
-                    eprintln!(
-                        "ask: {}: \"{}\" resolves \"{}\" to retired term \"{}\"; owner edits the topic file or un-retires the term",
-                        rel, sec.heading_text, word, t.name
-                    );
-                    return 1;
-                }
-            }
-        }
-
-        // Refusal 7: zero pairings.
+        // Refusal 6: zero pairings.
         if pairs.is_empty() {
             eprintln!(
                 "ask: {}: \"{}\" pairs no term; agent adds the term to adrdom/terms.md or rewrites the question",
@@ -394,7 +385,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     // Write/replace the `terms:` line directly under the `id:` line for
     // every candidate, bottom-to-top so earlier sections' line numbers are
     // unaffected by a section growing or shrinking by one line. Every
-    // candidate reaching this point paired at least one term (refusal 7
+    // candidate reaching this point paired at least one term (refusal 6
     // above), so the pairings are never empty here: ask never deletes a
     // terms line, and a candidate section whose id line cannot be found is
     // an error, not a silent skip.
@@ -409,7 +400,7 @@ pub fn run(record_path: PathBuf) -> i32 {
         let new_line = match terms::format_terms_line(&pairs) {
             Some(nl) => nl,
             None => {
-                // Unreachable given refusal 7 above, but never silently
+                // Unreachable given refusal 6 above, but never silently
                 // drop a binding if it somehow happens.
                 eprintln!(
                     "ask: {}: \"{}\": pairs no term at write time; owner re-runs ask",
