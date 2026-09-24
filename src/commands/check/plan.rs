@@ -20,7 +20,15 @@ pub(super) fn check_plan(root: &Path, records: &[RecordFile], led: &Ledger) -> (
     let mut awaiting: Vec<String> = Vec::new();
     let mut heading_files: HashMap<String, Vec<String>> = HashMap::new();
 
-    let terms_list: Vec<terms::Term> = state::load_terms(root).map(|tf| tf.terms).unwrap_or_default();
+    // Minted in memory (E1.3): a terms file that has never been approved
+    // carries no ids on disk yet, and `phrase_lookup` only resolves a term
+    // that has one. Without this, every `depends:` entry naming a real but
+    // not-yet-approved term would wrongly refuse "which is no term", one
+    // line per entry, drowning out the single `terms: adrdom/terms.md not
+    // approved` line `check`'s `terms` check already prints.
+    let terms_list: Vec<terms::Term> = state::load_terms(root)
+        .map(|tf| terms::minted_copy(&tf).terms)
+        .unwrap_or_default();
     // Built once for the whole run, not once per `depends:` entry across
     // every file (`resolve_dep` used to rebuild this internally via
     // `terms::resolve_word` on every call).

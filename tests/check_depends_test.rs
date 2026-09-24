@@ -116,6 +116,39 @@ fn check_fails_a_depends_entry_that_resolves_no_term() {
     );
 }
 
+// E1.3: a `depends:` entry naming a real term in a terms.md that has never
+// been approved (so it carries no id on disk yet) must not be reported as
+// "which is no term" -- that flooded one line per entry in the lab run,
+// drowning out the single `terms: adrdom/terms.md not approved` line.
+#[test]
+fn check_does_not_report_no_term_for_a_real_term_in_an_unapproved_terms_file() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    // Hand-written, never approved: no `id:` line, no `terms` ledger row.
+    std::fs::write(
+        dir.join("adrdom/terms.md"),
+        "# Terms\n\n## widget\ndefinition: A small thing.\naliases: \n",
+    )
+    .unwrap();
+    write_record(
+        &dir,
+        "adrdom/decisions/example.md",
+        "# Topic\n\n### 1.1 Q?\ndepends: widget\n",
+    );
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(
+        text.contains(
+            "terms: adrdom/terms.md not approved; owner runs: adr approve adrdom/terms.md"
+        ),
+        "{}",
+        text
+    );
+    assert!(!text.contains("no term"), "{}", text);
+}
+
 #[test]
 fn check_fails_a_depends_entry_on_a_retired_term() {
     let dir = init_repo();
