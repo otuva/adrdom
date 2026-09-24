@@ -4,6 +4,7 @@ use crate::ledger::{self, Ledger};
 use crate::record::{self, RecordFile};
 use crate::repo;
 use crate::state::{self, TermsLoad};
+use crate::tells;
 use crate::terms;
 use std::collections::{BTreeSet, HashSet};
 use std::path::Path;
@@ -594,6 +595,37 @@ fn do_approve_record(
         return Err(shape_msgs.join("\n"));
     }
 
+    // 9.5 A: a loaded phrase refuses before any write -- a heading with any
+    // tell (loaded opening, "and"/"or", provenance, code state, or a date),
+    // or a context prose line with a provenance, code-state, or date tell.
+    // A frozen heading (state::is_frozen) is skipped: it can never be
+    // edited, so refusing on it would block this file forever once the
+    // list grows to include a word it already carried.
+    let mut tell_msgs: Vec<String> = Vec::new();
+    for sec in &rf.sections {
+        if state::is_frozen(led, sec) {
+            continue;
+        }
+        for (line, phrase, what) in tells::heading_tells(sec.start, &sec.heading_text) {
+            tell_msgs.push(format!(
+                "approve: {}",
+                tells::tell_text(rel, line, &sec.heading_text, &phrase, what)
+            ));
+        }
+    }
+    {
+        let (cs, ce) = rf.context_range;
+        for (line, phrase, what) in tells::prose_tells_in(&rf.lines, cs, ce) {
+            tell_msgs.push(format!(
+                "approve: {}",
+                tells::tell_text(rel, line, "context", &phrase, what)
+            ));
+        }
+    }
+    if !tell_msgs.is_empty() {
+        return Err(tell_msgs.join("\n"));
+    }
+
     // 8.3/8.6 B: every section, skeleton or not, needs at least one
     // `depends:` line naming what the question stands on, before anything
     // about it is resolved or written.
@@ -629,16 +661,7 @@ fn do_approve_record(
     let phrase_lookup = terms::phrase_lookup(&terms_list);
     let mut resolve_msgs: Vec<String> = Vec::new();
     for sec in &rf.sections {
-        let frozen = sec
-            .id
-            .as_ref()
-            .map(|id| {
-                matches!(
-                    led.latest_state(id).map(|r| r.event.as_str()),
-                    Some("answered") | Some("refused") | Some("superseded")
-                )
-            })
-            .unwrap_or(false);
+        let frozen = state::is_frozen(led, sec);
         for d in &sec.depends {
             if frozen && matches!(d, record::Dep::Text { .. }) {
                 resolve_msgs.push(format!(

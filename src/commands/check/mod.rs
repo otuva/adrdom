@@ -7,6 +7,7 @@ mod ledger;
 mod moot;
 mod parse;
 mod plan;
+mod tells;
 mod terms;
 mod tests;
 
@@ -78,6 +79,7 @@ fn build(
     push_failures(&mut failures, terms_failures);
     let (test_failures, tested_count) = tests::check_tests(root, &records, &led, tests);
     push_failures(&mut failures, test_failures);
+    push_failures(&mut failures, tells::check_tells(root, &records, &led));
 
     notes.extend(moot::check_moot(&records, &led));
 

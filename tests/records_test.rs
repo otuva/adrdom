@@ -1,168 +1,235 @@
-//! Conformance of this repository's own records to the current decisions
-//! about record text. These tests read the real files under
-//! `adrdom/decisions/`, not a fixture.
+// 9.5 A: loaded phrases. `src/tells.rs` owns the lists and the matcher
+// (unit-tested there); these are the integration refusals/reports built on
+// top of it: `approve` on a heading and on context prose, `ask` on a
+// candidate's body, `check` on unfrozen text only, and a frozen answered
+// section with a tell passing `check`.
 
-use std::fs;
-use std::path::PathBuf;
+mod common;
 
-fn records_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("adrdom/decisions")
+use common::*;
+
+const HEADING_TELL_RECORD: &str = r#"# Topic
+
+Context prose line.
+
+### Which store holds the ledger?
+depends: decision
+
+Problem: the store is unclear.
+
+Standard: s.
+
+- A) Answer one.
+  Why: reasons.
+  Costs: costs.
+- B) Answer two.
+  Why: other reasons.
+  Costs: other costs.
+"#;
+
+#[test]
+fn approve_refuses_a_heading_with_a_loaded_opening() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_terms_with(&dir, &["decision"]);
+    let record = write_record(&dir, "adrdom/decisions/example.md", HEADING_TELL_RECORD);
+
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should refuse: {}", stdout(&out));
+    let text = stderr(&out);
+    assert!(text.contains("\"which\""), "{}", text);
+    assert!(text.contains("opens assuming an answer"), "{}", text);
+    assert!(text.contains("agent rewrites the line"), "{}", text);
 }
 
-/// Every line of every topic file, with its path and 1-based line number.
-fn record_lines() -> Vec<(String, usize, String)> {
-    let mut out = Vec::new();
-    let Ok(entries) = fs::read_dir(records_dir()) else {
-        return out;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("md") {
-            continue;
-        }
-        let content = fs::read_to_string(&path).unwrap();
-        for (i, line) in content.lines().enumerate() {
-            out.push((path.display().to_string(), i + 1, line.to_string()));
-        }
-    }
-    out
+const CONTEXT_TELL_RECORD: &str = r#"# Topic
+
+Claude decided this design already.
+
+### Does the store exist?
+depends: decision
+
+Problem: p.
+
+Standard: s.
+
+- A) Answer one.
+  Why: reasons.
+  Costs: costs.
+- B) Answer two.
+  Why: other reasons.
+  Costs: other costs.
+"#;
+
+#[test]
+fn approve_refuses_a_context_line_with_a_provenance_tell() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_terms_with(&dir, &["decision"]);
+    let record = write_record(&dir, "adrdom/decisions/example.md", CONTEXT_TELL_RECORD);
+
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should refuse: {}", stdout(&out));
+    let text = stderr(&out);
+    assert!(text.contains("\"claude\""), "{}", text);
+    assert!(text.contains("says who said it"), "{}", text);
+    assert!(text.contains("\"context\""), "{}", text);
 }
 
-/// A line the tool writes or that only points at other text: never the
-/// agent's own prose, so never scanned for tells.
-fn is_tool_line(line: &str) -> bool {
-    let t = line.trim_start();
-    t.starts_with("id: ")
-        || t.starts_with("terms: ")
-        || t.starts_with("depends: ")
-        || t.starts_with("**Answer:**")
+const BODY_TELL_RECORD: &str = r#"# Topic
+
+Context prose.
+
+### Does the store exist?
+depends: decision
+
+Problem: the team already built the store.
+
+Standard: s.
+
+- A) Answer one.
+  Why: reasons.
+  Costs: costs.
+- B) Answer two.
+  Why: other reasons.
+  Costs: other costs.
+"#;
+
+#[test]
+fn ask_refuses_a_candidate_with_a_code_state_tell_in_its_body() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_terms_with(&dir, &["decision"]);
+    let record = write_record(&dir, "adrdom/decisions/example.md", BODY_TELL_RECORD);
+    approve_record(&dir, "adrdom/decisions/example.md");
+
+    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(!out.status.success(), "ask should refuse: {}", stdout(&out));
+    let text = stderr(&out);
+    assert!(text.contains("\"already\""), "{}", text);
+    assert!(text.contains("states what the code does now"), "{}", text);
 }
 
-/// The text of every `### ` question heading, without the marker.
-fn heading_lines() -> Vec<(String, usize, String)> {
-    record_lines()
-        .into_iter()
-        .filter_map(|(path, no, line)| {
-            line.strip_prefix("### ")
-                .map(|h| (path, no, h.trim().to_string()))
-        })
-        .collect()
+const UNFROZEN_TELL_RECORD: &str = r#"# Topic
+
+The team said yes.
+
+### How many stores exist?
+depends: decision
+
+Problem: p.
+
+Standard: s.
+
+- A) Answer one.
+  Why: reasons.
+  Costs: costs.
+- B) Answer two.
+  Why: other reasons.
+  Costs: other costs.
+"#;
+
+#[test]
+fn check_reports_a_tell_in_an_unfrozen_heading_and_in_context_prose() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    write_record(&dir, "adrdom/decisions/example.md", UNFROZEN_TELL_RECORD);
+    // No approve/ask: the section is unfrozen (never asked at all), so
+    // `check` must still report it.
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(text.contains("\"how many\""), "{}", text);
+    assert!(text.contains("opens assuming an answer"), "{}", text);
+    assert!(text.contains("\"said\""), "{}", text);
+    assert!(text.contains("says who said it"), "{}", text);
+
+    let tells_lines: Vec<&str> = text.lines().filter(|l| l.starts_with("tells:")).collect();
+    assert_eq!(
+        tells_lines.len(),
+        2,
+        "expected exactly one heading hit and one context hit, got: {:?}",
+        tells_lines
+    );
 }
 
-/// Lowercased runs of alphanumerics: the words of a line, so that a tell
-/// matches whole words only ("as is" never matches inside "has issues").
-fn words(text: &str) -> Vec<String> {
-    text.to_lowercase()
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|w| !w.is_empty())
-        .map(str::to_string)
-        .collect()
-}
+const FROZEN_TELL_ID: &str = "22222222-2222-2222-2222-222222222222";
 
-/// Whether `tell`'s words occur contiguously in `line_words`.
-fn has_phrase(line_words: &[String], tell: &str) -> bool {
-    let tw = words(tell);
-    !tw.is_empty() && line_words.windows(tw.len()).any(|w| w == tw.as_slice())
-}
-
-/// A date of the form YYYY-MM-DD anywhere in the line.
-fn has_date(line: &str) -> bool {
-    let b = line.as_bytes();
-    (0..b.len().saturating_sub(9)).any(|i| {
-        b[i..i + 4].iter().all(u8::is_ascii_digit)
-            && b[i + 4] == b'-'
-            && b[i + 5..i + 7].iter().all(u8::is_ascii_digit)
-            && b[i + 7] == b'-'
-            && b[i + 8..i + 10].iter().all(u8::is_ascii_digit)
-    })
+/// Just the section (from its heading, no h1/context above it): a heading
+/// with a loaded opening, already answered. Hand-written, never through
+/// `adr approve`/`adr answer` -- approve would refuse this heading outright,
+/// so the only way to get a *frozen* section carrying a tell is to write
+/// the ledger row directly, the same way `check_refused_test.rs` builds a
+/// refused fixture.
+fn frozen_tell_section() -> String {
+    format!(
+        "### Which store holds the ledger?\ndepends: widget\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A",
+        FROZEN_TELL_ID
+    )
 }
 
 #[test]
-fn record_text_cites_neither_provenance_nor_code_state() {
-    // Who said, chose, or wanted what; where and when it was said. No actor
-    // word: the phrases must hold in any repository, whatever it calls its
-    // people and its agents.
-    let provenance = [
-        "said",
-        "told",
-        "agreed",
-        "chose",
-        "decided",
-        "wants",
-        "prefers",
-        "in chat",
-        "in the chat",
-        "this session",
-        "as agreed",
-        "as discussed",
-        "as decided",
-        "claude",
-        "codex",
-    ];
-    // What the code does at the moment of writing, or an option that only
-    // ratifies it.
-    let code_state = [
-        "already",
-        "currently",
-        "today",
-        "right now",
-        "at the moment",
-        "as built",
-        "as implemented",
-        "as is",
-        "as it is",
-        "unchanged",
-        "no change",
-        "keep it",
-        "nothing to build",
-    ];
-    let mut hits = Vec::new();
-    for (path, line_no, line) in record_lines() {
-        if is_tool_line(&line) {
-            continue;
-        }
-        let lw = words(&line);
-        for tell in provenance.iter().chain(code_state.iter()) {
-            if has_phrase(&lw, tell) {
-                hits.push(format!("{}:{}: \"{}\"", path, line_no, tell));
-            }
-        }
-        if has_date(&line) {
-            hits.push(format!("{}:{}: a date", path, line_no));
-        }
-    }
-    assert!(hits.is_empty(), "record lines citing provenance or code state:\n{}", hits.join("\n"));
+fn check_passes_a_frozen_answered_section_with_a_tell() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let content = format!("# Topic\n\n{}\n", frozen_tell_section());
+    write_record(&dir, "adrdom/decisions/example.md", &content);
+    append_ledger_row(&dir, "answered", FROZEN_TELL_ID, "somehash", "A");
+
+    let out = adr(&dir, &["check"], &[], "");
+    let text = stdout(&out);
+    assert!(
+        !text.contains("tells:"),
+        "a frozen answered section must never fail on a tell: {}",
+        text
+    );
+}
+
+/// Like `frozen_tell_section`, but its `depends:` line is already the
+/// term's uuid rather than the word "widget": a real approve of a frozen
+/// section refuses a still-text depends entry regardless of the tell
+/// question this test is about (9.1 A point 5), so this fixture is
+/// pre-resolved the way a real approve would have left it, matching
+/// `approve_minimal_terms`'s fixed term id.
+fn frozen_tell_section_resolved() -> String {
+    format!(
+        "### Which store holds the ledger?\ndepends: 99999999-9999-9999-9999-999999999999\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A",
+        FROZEN_TELL_ID
+    )
 }
 
 #[test]
-fn heading_does_not_open_with_a_loaded_form() {
-    // A heading that opens with one of these presupposes the set, the
-    // place, or the count it asks about; the fork the owner has not
-    // decided is whether the thing exists at all.
-    let loaded_forms = ["which", "where", "how many", "how much"];
-    let mut hits = Vec::new();
-    for (path, line_no, heading) in heading_lines() {
-        let hw = words(&heading);
-        for form in loaded_forms.iter() {
-            let fw = words(form);
-            if hw.len() >= fw.len() && hw[..fw.len()] == fw[..] {
-                hits.push(format!("{}:{}: \"{}\"", path, line_no, heading));
-            }
-        }
-    }
-    assert!(hits.is_empty(), "headings opening with a loaded form:\n{}", hits.join("\n"));
-}
+fn approve_skips_a_frozen_headings_tell_and_still_mints_a_new_skeletons_id() {
+    // A frozen heading can never be edited, so approve must never refuse on
+    // one: refusing would block this file forever once the list grows to
+    // include a word an already-answered heading happens to carry. approve
+    // must still process the rest of the file normally, minting an id for
+    // the new skeleton heading below it.
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let content = format!(
+        "# Topic\n\nContext prose.\n\n{}\n\n### A new clean heading?\ndepends: widget\n",
+        frozen_tell_section_resolved()
+    );
+    let record = write_record(&dir, "adrdom/decisions/example.md", &content);
+    append_ledger_row(&dir, "answered", FROZEN_TELL_ID, "somehash", "A");
 
-#[test]
-fn heading_asks_one_thing() {
-    // "and" or "or" in a heading joins two forks into one question; each
-    // gets its own heading.
-    let mut hits = Vec::new();
-    for (path, line_no, heading) in heading_lines() {
-        let hw = words(&heading);
-        if hw.iter().any(|w| w == "and" || w == "or") {
-            hits.push(format!("{}:{}: \"{}\"", path, line_no, heading));
-        }
-    }
-    assert!(hits.is_empty(), "headings joining more than one question:\n{}", hits.join("\n"));
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(
+        out.status.success(),
+        "approve should skip the frozen heading's tell: {}",
+        stderr(&out)
+    );
+
+    let saved = std::fs::read_to_string(&record).unwrap();
+    let ids = extract_ids(&saved);
+    assert_eq!(
+        ids.len(),
+        2,
+        "expected the frozen id plus a newly minted one for the skeleton: {}",
+        saved
+    );
 }

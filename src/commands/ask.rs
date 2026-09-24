@@ -3,6 +3,7 @@ use crate::ledger;
 use crate::record;
 use crate::repo;
 use crate::state::{self, TermsLoad};
+use crate::tells;
 use crate::terms;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -342,6 +343,22 @@ pub fn run(record_path: PathBuf) -> i32 {
                         }
                     }
                 }
+            }
+        }
+
+        // 9.5 A: a provenance, code-state, or date tell anywhere in the
+        // candidate's own body (heading through its hash range) refuses,
+        // from the same scan `approve` runs on headings and context prose.
+        {
+            let (s, e) = record::hash_range(&rf.lines, sec);
+            if let Some((line, phrase, what)) =
+                tells::prose_tells_in(&rf.lines, s, e).into_iter().next()
+            {
+                eprintln!(
+                    "ask: {}",
+                    tells::tell_text(&rel, line, &sec.heading_text, &phrase, what)
+                );
+                return 1;
             }
         }
 
