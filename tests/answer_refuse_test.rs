@@ -102,7 +102,7 @@ fn answer_letter_after_refused_refuses() {
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
-        "answer: \"1.1 What color is the widget?\" is already refused"
+        "answer: \"1.1 What color is the widget?\" is already refused; owner runs: adr answer a different, still-open id"
     );
 
     // Nothing changed: still exactly one Answer line, unmodified.
@@ -129,7 +129,7 @@ fn answer_refuse_twice_gives_the_already_refused_message() {
     assert!(!out.status.success(), "second refuse should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
-        "answer: \"1.1 What color is the widget?\" is already refused"
+        "answer: \"1.1 What color is the widget?\" is already refused; owner runs: adr answer a different, still-open id"
     );
 
     // Nothing changed: still exactly one Answer line, unmodified, and no

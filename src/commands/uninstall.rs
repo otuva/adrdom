@@ -2,22 +2,29 @@ use crate::commands::install::{
     self, CLAUDE_MD_IMPORT, CLAUDE_MD_MARKER, COMMIT_MSG_HOOK, PRE_COMMIT_HOOK,
 };
 use crate::commands::deny_entries;
+use crate::msg::{self, Actor, Next};
 use crate::repo;
 use std::fs;
 use std::path::Path;
+
+/// The owner's next move on any I/O failure while uninstalling: fix the
+/// underlying problem, then run uninstall again.
+fn retry() -> Next {
+    Next::owner_runs("adr uninstall again")
+}
 
 /// Owner-only: removes everything `adr install` wrote outside `adrdom/`,
 /// leaving `adrdom/` itself untouched.
 pub fn run() -> i32 {
     if !repo::owner_authorized() {
-        eprintln!("{}", repo::owner_refusal("uninstall", ""));
+        eprintln!("{}", msg::owner_refusal("uninstall", ""));
         return 2;
     }
 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("uninstall: not inside a git repository");
+            eprintln!("{}", msg::not_a_repo("uninstall", Actor::Owner));
             return 1;
         }
     };
@@ -28,7 +35,7 @@ pub fn run() -> i32 {
         Ok(Some(m)) => messages.push(m),
         Ok(None) => {}
         Err(e) => {
-            eprintln!("uninstall: failed to update AGENTS.md: {}", e);
+            eprintln!("uninstall: {}", msg::update_failed("AGENTS.md", e, retry()));
             return 1;
         }
     }
@@ -37,7 +44,7 @@ pub fn run() -> i32 {
         Ok(Some(m)) => messages.push(m),
         Ok(None) => {}
         Err(e) => {
-            eprintln!("uninstall: failed to update CLAUDE.md: {}", e);
+            eprintln!("uninstall: {}", msg::update_failed("CLAUDE.md", e, retry()));
             return 1;
         }
     }
@@ -47,7 +54,10 @@ pub fn run() -> i32 {
     match remove_settings_deny(&root) {
         Ok(mut msgs) => messages.append(&mut msgs),
         Err(e) => {
-            eprintln!("uninstall: failed to update .claude/settings.json: {}", e);
+            eprintln!(
+                "uninstall: {}",
+                msg::update_failed(".claude/settings.json", e, retry())
+            );
             return 1;
         }
     }
@@ -88,14 +98,10 @@ fn remove_agents_md_section(root: &Path) -> Result<Option<String>, String> {
 
     if new_content.trim().is_empty() {
         fs::remove_file(&path).map_err(|e| e.to_string())?;
-        return Ok(Some(
-            "uninstall: AGENTS.md: removed (held only the brief)".to_string(),
-        ));
+        return Ok(Some(msg::agents_md_removed_whole()));
     }
     fs::write(&path, &new_content).map_err(|e| e.to_string())?;
-    Ok(Some(
-        "uninstall: AGENTS.md: removed the brief section".to_string(),
-    ))
+    Ok(Some(msg::agents_md_section_removed()))
 }
 
 /// Removes the marker comment line and the `@AGENTS.md` line right after
@@ -135,15 +141,11 @@ fn remove_claude_md_import(root: &Path) -> Result<Option<String>, String> {
 
     if new_content.trim().is_empty() {
         fs::remove_file(&path).map_err(|e| e.to_string())?;
-        return Ok(Some(
-            "uninstall: CLAUDE.md: deleted (held only the AGENTS.md import)".to_string(),
-        ));
+        return Ok(Some(msg::claude_md_deleted()));
     }
 
     fs::write(&path, &new_content).map_err(|e| e.to_string())?;
-    Ok(Some(
-        "uninstall: CLAUDE.md: removed the AGENTS.md import".to_string(),
-    ))
+    Ok(Some(msg::claude_md_import_removed()))
 }
 
 /// Deletes the two hooks only when their content still matches exactly
@@ -157,24 +159,24 @@ fn remove_hooks(root: &Path) -> Vec<String> {
 
     if let Ok(content) = fs::read_to_string(&pre_commit) {
         if content == PRE_COMMIT_HOOK && fs::remove_file(&pre_commit).is_ok() {
-            messages.push("uninstall: removed .githooks/pre-commit".to_string());
+            messages.push(msg::hook_removed("pre-commit"));
         }
     }
     if let Ok(content) = fs::read_to_string(&commit_msg) {
         if content == COMMIT_MSG_HOOK && fs::remove_file(&commit_msg).is_ok() {
-            messages.push("uninstall: removed .githooks/commit-msg".to_string());
+            messages.push(msg::hook_removed("commit-msg"));
         }
     }
     if let Ok(mut entries) = fs::read_dir(&hooks) {
         if entries.next().is_none() && fs::remove_dir(&hooks).is_ok() {
-            messages.push("uninstall: removed empty .githooks".to_string());
+            messages.push(msg::githooks_dir_removed());
         }
     }
 
     if let Some(val) = repo::git(root, &["config", "core.hooksPath"]) {
         if val.trim() == ".githooks" {
             repo::git(root, &["config", "--unset", "core.hooksPath"]);
-            messages.push("uninstall: unset core.hooksPath".to_string());
+            messages.push(msg::hooks_path_unset());
         }
     }
 
@@ -193,17 +195,17 @@ fn remove_codex_rules(root: &Path) -> Vec<String> {
 
     if let Ok(content) = fs::read_to_string(&rules_path) {
         if content == install::codex_rules_content() && fs::remove_file(&rules_path).is_ok() {
-            messages.push("uninstall: removed .codex/rules/adrdom.rules".to_string());
+            messages.push(msg::codex_rules_removed());
         }
     }
     if let Ok(mut entries) = fs::read_dir(&rules_dir) {
         if entries.next().is_none() && fs::remove_dir(&rules_dir).is_ok() {
-            messages.push("uninstall: removed empty .codex/rules".to_string());
+            messages.push(msg::codex_rules_dir_removed());
         }
     }
     if let Ok(mut entries) = fs::read_dir(&codex_dir) {
         if entries.next().is_none() && fs::remove_dir(&codex_dir).is_ok() {
-            messages.push("uninstall: removed empty .codex".to_string());
+            messages.push(msg::codex_dir_removed());
         }
     }
 
@@ -222,8 +224,8 @@ fn remove_settings_deny(root: &Path) -> Result<Vec<String>, String> {
     if content.trim().is_empty() {
         return Ok(Vec::new());
     }
-    let mut value: serde_json::Value =
-        serde_json::from_str(&content).map_err(|e| format!("{}: {}", path.display(), e))?;
+    let mut value: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| msg::parse_failed(&path.display().to_string(), e, retry()))?;
 
     let mut messages = Vec::new();
     if let Some(deny) = value
@@ -235,10 +237,7 @@ fn remove_settings_deny(root: &Path) -> Result<Vec<String>, String> {
             let before = deny.len();
             deny.retain(|v| v.as_str() != Some(entry.as_str()));
             if deny.len() != before {
-                messages.push(format!(
-                    "uninstall: .claude/settings.json: removed deny entry {}",
-                    entry
-                ));
+                messages.push(msg::deny_entry_removed(&entry));
             }
         }
     }

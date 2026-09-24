@@ -106,6 +106,41 @@ pub fn is_frozen(led: &Ledger, sec: &Section) -> bool {
         .unwrap_or(false)
 }
 
+/// True when `sec`'s latest ledger state is `refused`, `superseded`, or
+/// `withdrawn`: the question is closed and out of play -- a refused
+/// question is done, a superseded decision has been replaced, a withdrawn
+/// question no longer stands in the file -- so it no longer holds its tier
+/// for the cap (8.8 A). `answered` is still live for this purpose (only
+/// `is_frozen`'s edit-lock treats it as closed); a section with no id yet,
+/// or none of those three states, is live.
+pub fn is_dead(led: &Ledger, sec: &Section) -> bool {
+    sec.id
+        .as_ref()
+        .map(|id| {
+            matches!(
+                led.latest_state(id).map(|r| r.event.as_str()),
+                Some("refused") | Some("superseded") | Some("withdrawn")
+            )
+        })
+        .unwrap_or(false)
+}
+
+/// `tiers` (index-aligned with `rf.sections`, as `rf.tiers` is) with every
+/// dead section's entry (`is_dead`) left out: the tier cap (8.8 A) counts
+/// only live questions, while everything else a tier holds -- derivation,
+/// a refused question holding its tier until the plan changes -- still
+/// reads `rf.tiers` whole. The one place that filters before counting, so
+/// `record::over_cap`/`record::tier_sizes` (which take a plain tier list
+/// and have no ledger access) stay ignorant of ledger state.
+pub fn live_tiers(led: &Ledger, rf: &RecordFile, tiers: &[usize]) -> Vec<usize> {
+    rf.sections
+        .iter()
+        .zip(tiers)
+        .filter(|(sec, _)| !is_dead(led, sec))
+        .map(|(_, &t)| t)
+        .collect()
+}
+
 /// The text a section's `terms:` line is (re)computed from, and what the
 /// banned-word scan reads (9.1 A): the section's hashed range (heading
 /// through the hash end, see `record::hash_range`) with the `terms:` line

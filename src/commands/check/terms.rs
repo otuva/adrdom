@@ -1,6 +1,7 @@
 use super::Failure;
 use crate::actions;
 use crate::ledger::Ledger;
+use crate::msg;
 use crate::record::{self, RecordFile};
 use crate::repo;
 use crate::state::{self, rel_path};
@@ -32,7 +33,7 @@ pub(super) fn check_terms(
             out.push(Failure {
                 check: "terms".to_string(),
                 id: None,
-                message: "adrdom/terms.md missing".to_string(),
+                message: msg::terms_missing(),
             });
         }
         return (out, false, notes);
@@ -59,8 +60,7 @@ pub(super) fn check_terms(
             out.push(Failure {
                 check: "terms".to_string(),
                 id: None,
-                message: "adrdom/terms.md not approved; owner runs: adr approve adrdom/terms.md"
-                    .to_string(),
+                message: msg::terms_md_not_approved(),
             });
         } else {
             awaiting = true;
@@ -99,7 +99,7 @@ pub(super) fn check_terms(
                 out.push(Failure {
                     check: "terms".to_string(),
                     id: Some(id.clone()),
-                    message: format!("{}: {}: no terms line", rel, sec.heading_text),
+                    message: msg::section_no_terms_line(&rel, &sec.heading_text),
                 });
                 continue;
             };
@@ -109,18 +109,12 @@ pub(super) fn check_terms(
                     None => out.push(Failure {
                         check: "terms".to_string(),
                         id: Some(id.clone()),
-                        message: format!(
-                            "{}: {}: term {} not found",
-                            rel, sec.heading_text, uuid
-                        ),
+                        message: msg::section_term_not_found(&rel, &sec.heading_text, uuid),
                     }),
                     Some(t) if t.retired => out.push(Failure {
                         check: "terms".to_string(),
                         id: Some(id.clone()),
-                        message: format!(
-                            "{}: {}: bound term \"{}\" is retired",
-                            rel, sec.heading_text, t.name
-                        ),
+                        message: msg::section_term_retired(&rel, &sec.heading_text, &t.name),
                     }),
                     Some(_) => {}
                 }
@@ -140,15 +134,12 @@ pub(super) fn check_terms(
                 None => out.push(Failure {
                     check: "terms".to_string(),
                     id: None,
-                    message: format!("adrdom/terms.md: \"{}\": term {} not found", t.name, uuid),
+                    message: msg::term_definition_term_not_found(&t.name, uuid),
                 }),
                 Some(o) if o.retired => out.push(Failure {
                     check: "terms".to_string(),
                     id: None,
-                    message: format!(
-                        "adrdom/terms.md: \"{}\": bound term \"{}\" is retired",
-                        t.name, o.name
-                    ),
+                    message: msg::term_definition_term_retired(&t.name, &o.name),
                 }),
                 Some(_) => {}
             }
@@ -193,11 +184,7 @@ pub(super) fn check_terms(
         .collect();
     unused.sort();
     if !unused.is_empty() {
-        notes.push(format!(
-            "terms: {} terms paired by nothing: {}",
-            unused.len(),
-            unused.join(", ")
-        ));
+        notes.push(msg::terms_unpaired(unused.len(), &unused.join(", ")));
     }
 
     (out, awaiting, notes)

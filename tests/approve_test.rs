@@ -120,7 +120,7 @@ fn approve_refuses_a_question_with_one_option() {
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(err.contains("1 options; at least two"), "{}", err);
-    assert!(err.contains("owner fixes the topic file"), "{}", err);
+    assert!(err.contains("agent fixes the topic file"), "{}", err);
 
     let after = std::fs::read_to_string(&record).unwrap();
     assert_eq!(after, content, "approve must not modify the file when it refuses");
@@ -146,7 +146,7 @@ fn approve_refuses_a_question_with_four_options() {
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(err.contains("4 options; at most three"), "{}", err);
-    assert!(err.contains("owner fixes the topic file"), "{}", err);
+    assert!(err.contains("agent fixes the topic file"), "{}", err);
 
     let after = std::fs::read_to_string(&record).unwrap();
     assert_eq!(after, content, "approve must not modify the file when it refuses");
@@ -916,7 +916,11 @@ fn approve_refuses_removing_a_term_carried_by_a_current_decision() {
         err
     );
     assert!(err.contains("What is the decision?"), "{}", err);
-    assert!(err.contains("owner retires instead"), "{}", err);
+    assert!(
+        err.contains("owner runs: adr approve adrdom/terms.md after restoring the term"),
+        "{}",
+        err
+    );
 }
 
 #[test]
@@ -948,7 +952,11 @@ fn approve_refuses_retiring_a_term_carried_by_a_current_decision() {
         err
     );
     assert!(err.contains("What is the decision?"), "{}", err);
-    assert!(err.contains("owner supersedes first"), "{}", err);
+    assert!(
+        err.contains(&format!("agent supersedes {} with a new question first", id)),
+        "{}",
+        err
+    );
 }
 
 const TERMS_BEFORE_RENAME: &str = "# Terms\n\n\
@@ -1252,7 +1260,9 @@ fn approve_refuses_retiring_a_term_carried_by_another_terms_definition() {
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(
-        err.contains("term \"decision\" retired but carried by term \"question\"; owner supersedes first"),
+        err.contains(
+            "term \"decision\" retired but carried by term \"question\"; agent rewords the definition to drop the retired word, owner runs: adr approve adrdom/terms.md"
+        ),
         "{}",
         err
     );
@@ -1300,7 +1310,9 @@ fn approve_refuses_retiring_a_term_while_a_new_term_takes_its_word_and_another_s
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(
-        err.contains("term \"decision\" retired but carried by term \"question\"; owner supersedes first"),
+        err.contains(
+            "term \"decision\" retired but carried by term \"question\"; agent rewords the definition to drop the retired word, owner runs: adr approve adrdom/terms.md"
+        ),
         "{}",
         err
     );

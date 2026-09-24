@@ -198,6 +198,53 @@ fn approve_refuses_five_root_questions_in_one_tier() {
 }
 
 #[test]
+fn approve_accepts_two_new_headings_when_two_in_the_tier_are_dead() {
+    let dir = init_repo();
+    setup(&dir);
+    let term_id = "99999999-9999-9999-9999-999999999999";
+    let old_a = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    let old_b = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+    let old_c = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+    let old_d = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+
+    // Tier 1 starts with four questions, already approved and frozen:
+    // "Dead A" refused, "Dead B" superseded, "Live C"/"Live D" still asked.
+    // The frozen ones carry their depends entry already resolved to the
+    // term's id (9.1 A), as a real prior approve would have left it. Two
+    // brand new skeleton headings are added to the same tier.
+    let content = format!(
+        "# Example\n\n\
+### 1.1 Dead A?\ndepends: {term}\n\nid: {a}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** refused\n\n\
+### 1.2 Dead B?\ndepends: {term}\n\nid: {b}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n\n\
+### 1.3 Live C?\ndepends: decision\n\nid: {c}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+### 1.4 Live D?\ndepends: decision\n\nid: {d}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+### 1.5 New E?\ndepends: decision\n\n\
+### 1.6 New F?\ndepends: decision\n",
+        term = term_id,
+        a = old_a,
+        b = old_b,
+        c = old_c,
+        d = old_d
+    );
+    let record = write_record(&dir, "adrdom/decisions/example.md", &content);
+    append_ledger_row(&dir, "refused", old_a, "-", "1.1 Dead A?");
+    append_ledger_row(&dir, "superseded", old_b, "-", "some-other-id");
+
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(
+        out.status.success(),
+        "approve should accept a tier with only 4 live questions: {}",
+        stderr(&out)
+    );
+    let text = stdout(&out);
+    assert!(!text.contains("holds"), "{}", text);
+    // Live count only (8.8 A fix): the two dead questions (refused A,
+    // superseded B) no longer count toward the tier, matching `check`'s
+    // own "tiers: ..." note.
+    assert!(text.contains("approve: tiers: 1 (4)"), "{}", text);
+}
+
+#[test]
 fn approve_accepts_four_root_questions_in_one_tier() {
     let dir = init_repo();
     setup(&dir);

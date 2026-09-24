@@ -1,4 +1,5 @@
 use super::Failure;
+use crate::msg;
 use std::path::Path;
 
 pub(super) fn check_install(root: &Path) -> Vec<Failure> {
@@ -23,22 +24,21 @@ pub(super) fn check_install(root: &Path) -> Vec<Failure> {
                         out.push(Failure {
                             check: "install".to_string(),
                             id: None,
-                            message: "AGENTS.md brief differs from this binary's; run: adr install"
-                                .to_string(),
+                            message: msg::agents_md_stale(),
                         });
                     }
                 }
                 None => out.push(Failure {
                     check: "install".to_string(),
                     id: None,
-                    message: "AGENTS.md lacks the adrdom brief; run: adr install".to_string(),
+                    message: msg::agents_md_missing_brief(),
                 }),
             }
         }
         Err(_) => out.push(Failure {
             check: "install".to_string(),
             id: None,
-            message: "AGENTS.md lacks the adrdom brief; run: adr install".to_string(),
+            message: msg::agents_md_missing_brief(),
         }),
     }
 
@@ -50,7 +50,7 @@ pub(super) fn check_install(root: &Path) -> Vec<Failure> {
             out.push(Failure {
                 check: "install".to_string(),
                 id: None,
-                message: "CLAUDE.md does not import AGENTS.md; run: adr install".to_string(),
+                message: msg::claude_md_missing_import(),
             });
         }
     }
@@ -80,10 +80,7 @@ pub(super) fn check_install(root: &Path) -> Vec<Failure> {
                 Err(_) => out.push(Failure {
                     check: "install".to_string(),
                     id: None,
-                    message: format!(
-                        "{} cannot be parsed; owner runs: adr install --claude",
-                        settings_path.display()
-                    ),
+                    message: msg::settings_unparseable(&settings_path.display().to_string()),
                 }),
             }
         }
@@ -99,16 +96,14 @@ pub(super) fn check_install(root: &Path) -> Vec<Failure> {
                     out.push(Failure {
                         check: "install".to_string(),
                         id: None,
-                        message: ".codex/rules/adrdom.rules differs from this binary's; owner runs: adr install --codex"
-                            .to_string(),
+                        message: msg::codex_rules_stale(),
                     });
                 }
             }
             Err(_) => out.push(Failure {
                 check: "install".to_string(),
                 id: None,
-                message: ".codex/rules/adrdom.rules missing; owner runs: adr install --codex"
-                    .to_string(),
+                message: msg::codex_rules_missing(),
             }),
         }
     }
@@ -120,9 +115,6 @@ fn missing_deny_entry(entry: &str) -> Failure {
     Failure {
         check: "install".to_string(),
         id: None,
-        message: format!(
-            ".claude/settings.json lacks deny entry {}; owner runs: adr install --claude",
-            entry
-        ),
+        message: msg::missing_deny_entry(entry),
     }
 }

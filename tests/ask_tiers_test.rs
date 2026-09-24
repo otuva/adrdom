@@ -415,7 +415,7 @@ fn ask_refuses_a_set_naming_an_option_the_target_does_not_have() {
     assert!(!out.status.success());
     assert_eq!(
         stderr(&out).trim_end(),
-        "ask: adrdom/decisions/example.md: \"1.2 Does the widget's paint match its color?\" depends on \"1.1 What color is the widget?\" names option C which \"1.1 What color is the widget?\" does not have"
+        "ask: adrdom/decisions/example.md: \"1.2 Does the widget's paint match its color?\" depends on \"1.1 What color is the widget?\" names option C which \"1.1 What color is the widget?\" does not have; agent fixes the answer set to only name options the target has"
     );
 }
 
@@ -515,7 +515,7 @@ fn ask_refuses_when_a_refused_section_was_edited_since_refusal() {
     assert_eq!(
         stderr(&out).trim_end(),
         format!(
-            "ask: {}: \"1.1 What color is the widget?\" was edited after being refused; refusing",
+            "ask: {}: \"1.1 What color is the widget?\" was edited after being refused; agent reverts the edit or writes a new question",
             record.display()
         )
     );

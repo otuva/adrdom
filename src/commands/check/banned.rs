@@ -1,6 +1,7 @@
 use super::Failure;
 use crate::banned;
 use crate::ledger::Ledger;
+use crate::msg;
 use crate::record;
 use crate::repo;
 use crate::state;
@@ -28,21 +29,22 @@ pub(super) fn check_banned(root: &Path, staged: bool, message: Option<&Path>) ->
                 if !seen.insert(tok.clone()) {
                     continue;
                 }
-                let mut msg = format!("{}:{}: banned word \"{}\"", name, i + 1, tok);
-                if let Some(uuid) = uuid_opt {
-                    if let Some(term_name) = tf.as_ref().and_then(|f| {
-                        f.terms
-                            .iter()
-                            .find(|t| t.id.as_deref() == Some(uuid.as_str()))
-                            .map(|t| t.name.clone())
-                    }) {
-                        msg.push_str(&format!(" (term {})", term_name));
-                    }
-                }
+                let suffix = uuid_opt
+                    .as_ref()
+                    .and_then(|uuid| {
+                        tf.as_ref().and_then(|f| {
+                            f.terms
+                                .iter()
+                                .find(|t| t.id.as_deref() == Some(uuid.as_str()))
+                                .map(|t| t.name.clone())
+                        })
+                    })
+                    .map(|n| format!(" (term {})", n))
+                    .unwrap_or_default();
                 out.push(Failure {
                     check: "banned".to_string(),
                     id: None,
-                    message: msg,
+                    message: msg::banned_word_at(&format!("{}:{}", name, i + 1), &tok, &suffix),
                 });
             }
         }
@@ -84,10 +86,7 @@ pub(super) fn check_banned_ledger(led: &Ledger, root: &Path) -> Vec<Failure> {
         out.push(Failure {
             check: "banned".to_string(),
             id: None,
-            message: format!(
-                "{} in ledger, missing from adrdom/state/banned.sha256",
-                hash_prefix(h)
-            ),
+            message: msg::banned_missing_from_file(hash_prefix(h)),
         });
     }
 
@@ -100,7 +99,7 @@ pub(super) fn check_banned_ledger(led: &Ledger, root: &Path) -> Vec<Failure> {
         out.push(Failure {
             check: "banned".to_string(),
             id: None,
-            message: format!("{} in file, no ledger row", hash_prefix(h)),
+            message: msg::banned_missing_from_ledger(hash_prefix(h)),
         });
     }
 

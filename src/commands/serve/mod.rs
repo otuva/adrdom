@@ -6,6 +6,7 @@ mod overview;
 mod terms;
 
 use crate::actions;
+use crate::msg::{self, Actor};
 use crate::repo;
 use crate::view;
 use std::collections::HashMap;
@@ -15,14 +16,14 @@ use tiny_http::{Header, Method, Request, Response, Server};
 
 pub fn run(port: u16) -> i32 {
     if !repo::owner_authorized() {
-        eprintln!("{}", repo::owner_refusal("serve", ""));
+        eprintln!("{}", msg::owner_refusal("serve", ""));
         return 2;
     }
 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("serve: not inside a git repository");
+            eprintln!("{}", msg::not_a_repo("serve", Actor::Owner));
             return 1;
         }
     };
@@ -30,7 +31,7 @@ pub fn run(port: u16) -> i32 {
     let server = match Server::http(("127.0.0.1", port)) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("serve: failed to bind 127.0.0.1:{}: {}", port, e);
+            eprintln!("serve: {}", msg::bind_failed(port, e));
             return 1;
         }
     };
@@ -213,12 +214,12 @@ fn handle_answer(root: &Path, form: &HashMap<String, String>) -> Reply {
     let letter = value.chars().next().map(|c| c.to_ascii_uppercase());
 
     let Some(letter) = letter else {
-        let banner = "serve: missing answer selection";
+        let banner = format!("serve: {}", msg::missing_answer_selection(&id));
         return Reply::Redirect(
             format!(
                 "/next?show={}&m={}",
                 percent_encode(&id),
-                percent_encode(banner)
+                percent_encode(&banner)
             ),
             None,
         );

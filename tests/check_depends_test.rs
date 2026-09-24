@@ -384,6 +384,48 @@ fn check_passes_a_tier_at_the_cap() {
 }
 
 #[test]
+fn check_tier_cap_and_tiers_note_ignore_a_refused_question() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let term_id = "99999999-9999-9999-9999-999999999999";
+    let refused_id = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";
+    // A frozen (refused) section carries its depends entry already
+    // resolved to the term's id, as a real prior approve would have left
+    // it -- otherwise the frozen/Text-depends refusal fires instead of the
+    // cap check this test means to exercise.
+    let refused_section = format!(
+        "### 1.1 Dead?\ndepends: {term}\n\nid: {id}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.",
+        term = term_id,
+        id = refused_id
+    );
+    let content = format!(
+        "# Topic\n\n{refused}\n\n**Answer:** refused\n\n\
+### 1.2 Q1?\ndepends: widget\n\n\
+### 1.3 Q2?\ndepends: widget\n\n\
+### 1.4 Q3?\ndepends: widget\n\n\
+### 1.5 Q4?\ndepends: widget\n",
+        refused = refused_section
+    );
+    write_record(&dir, "adrdom/decisions/deadcap.md", &content);
+    approve_via_ledger(&dir, "adrdom/decisions/deadcap.md", &content);
+    let hash = mirror_section_hash(&refused_section);
+    append_ledger_row(&dir, "refused", refused_id, &hash, "1.1 Dead?");
+
+    // Five raw questions in tier 1, one of them refused: the cap (4) reads
+    // only the four live ones, so this passes, and the tiers note counts
+    // the same way.
+    let out = adr(&dir, &["check"], &[], "");
+    let text = stdout(&out);
+    assert!(!text.contains("holds"), "{}", text);
+    assert!(
+        text.contains("tiers: adrdom/decisions/deadcap.md: 1 (4)"),
+        "{}",
+        text
+    );
+}
+
+#[test]
 fn check_prints_tiers_note_for_a_chain() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());

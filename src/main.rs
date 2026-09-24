@@ -3,6 +3,7 @@ mod banned;
 mod commands;
 mod depends;
 mod ledger;
+mod msg;
 mod record;
 mod repo;
 mod state;

@@ -2,6 +2,7 @@ use super::{file_approval, Failure};
 use crate::actions::Refusal;
 use crate::depends::{self, DepTarget};
 use crate::ledger::Ledger;
+use crate::msg;
 use crate::record::{AnswerSet, RecordFile};
 use crate::terms;
 use std::collections::HashMap;
@@ -40,10 +41,7 @@ pub(super) fn check_plan(
                     out.push(Failure {
                         check: "plan".to_string(),
                         id: sec.id.clone(),
-                        message: format!(
-                            "{}: body under unapproved heading \"{}\"",
-                            rel, sec.heading_text
-                        ),
+                        message: msg::body_under_unapproved_heading(&rel, &sec.heading_text),
                     });
                 }
             }
@@ -110,7 +108,7 @@ pub(super) fn check_plan(
             out.push(Failure {
                 check: "plan".to_string(),
                 id: None,
-                message: format!("duplicate heading \"{}\" twice in {}", heading, rel),
+                message: msg::duplicate_heading_in_file(heading, &rel),
             });
         }
     }
@@ -125,10 +123,7 @@ pub(super) fn check_plan(
             out.push(Failure {
                 check: "plan".to_string(),
                 id: None,
-                message: format!(
-                    "duplicate heading \"{}\" in {} and {}",
-                    heading, paths[0], paths[1]
-                ),
+                message: msg::duplicate_heading_across_files(heading, &paths[0], &paths[1]),
             });
         }
     }

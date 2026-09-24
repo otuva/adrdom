@@ -16,6 +16,7 @@ pub use tests::test_index;
 
 use crate::actions;
 use crate::ledger::Ledger;
+use crate::msg::{self, Actor};
 use crate::record::{self, RecordFile};
 use crate::repo;
 use crate::state::{self, rel_path};
@@ -63,7 +64,7 @@ fn build(
     for f in &files {
         match record::load_in(root, f) {
             Ok(rf) => records.push(rf),
-            Err(e) => notes.push(format!("parse: {}: cannot read: {}", f.display(), e)),
+            Err(e) => notes.push(msg::topic_file_unreadable(&f.display().to_string(), e)),
         }
     }
 
@@ -117,30 +118,30 @@ fn build(
 
     for rf in &records {
         if let Some(tiers) = &rf.tiers {
-            let sizes = record::tier_sizes(tiers)
+            // Live counts only (8.8 A): a dead (refused/superseded/
+            // withdrawn) question no longer holds its tier for the cap,
+            // and this note is read against that same cap.
+            let live = state::live_tiers(&led, rf, tiers);
+            let sizes = record::tier_sizes(&live)
                 .into_iter()
                 .map(|(t, n)| format!("{} ({})", t, n))
                 .collect::<Vec<_>>()
                 .join(" ");
-            notes.push(format!("tiers: {}: {}", rf.rel, sizes));
+            notes.push(msg::tiers_note_check(&rf.rel, &sizes));
         }
     }
 
     if !awaiting.is_empty() {
-        notes.push(format!(
-            "plan: {} file(s) awaiting approval: {}",
-            awaiting.len(),
-            awaiting.join(", ")
-        ));
+        notes.push(msg::plan_awaiting(awaiting.len(), &awaiting.join(", ")));
     }
     if terms_awaiting {
-        notes.push("terms: awaiting approval".to_string());
+        notes.push(msg::terms_awaiting());
     }
     notes.extend(terms_notes);
     for d in done::check_done(root, &records, &led) {
-        notes.push(format!("done: {}", d));
+        notes.push(msg::done(&d));
     }
-    notes.push(format!("tested: {}", tested_count));
+    notes.push(msg::tested_count(tested_count));
 
     view::CheckReport { failures, notes }
 }
@@ -149,7 +150,7 @@ pub fn run(staged: bool, message: Option<PathBuf>) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("check: not inside a git repository");
+            eprintln!("{}", msg::not_a_repo("check", Actor::Agent));
             return 1;
         }
     };

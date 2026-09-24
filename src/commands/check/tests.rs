@@ -1,5 +1,6 @@
 use super::Failure;
 use crate::ledger::Ledger;
+use crate::msg;
 use crate::record::RecordFile;
 use crate::repo;
 use std::collections::{HashMap, HashSet};
@@ -69,7 +70,7 @@ pub(super) fn check_tests(
             out.push(Failure {
                 check: "tested".to_string(),
                 id: Some(id.clone()),
-                message: format!("{}: untested", id),
+                message: msg::untested(id),
             });
         }
     }
@@ -79,7 +80,7 @@ pub(super) fn check_tests(
             out.push(Failure {
                 check: "tested".to_string(),
                 id: Some(id.clone()),
-                message: format!("{}: stale (not a current decision)", id),
+                message: msg::stale_test(id),
             });
         }
     }

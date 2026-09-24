@@ -6,7 +6,8 @@
 //! so this lives alongside `state.rs`'s other ledger-aware helpers rather
 //! than there.
 use crate::ledger::Ledger;
-use crate::record::{self, Dep, RecordFile, Section};
+use crate::msg;
+use crate::record::{Dep, RecordFile, Section};
 use crate::state;
 use crate::terms::Term;
 use std::collections::HashMap;
@@ -101,18 +102,12 @@ pub fn resolve_dep(
 /// own prefix, e.g. `approve: `).
 pub fn dep_refusal_text(rel: &str, heading: &str, err: &DepError) -> String {
     match err {
-        DepError::NotCurrentDecision(id) => format!(
-            "{}: \"{}\" depends on {} which is not a current decision; agent names a current decision or removes the line",
-            rel, heading, id
-        ),
-        DepError::NoTerm(text) => format!(
-            "{}: \"{}\" depends on \"{}\" which is no term; agent adds the term or names another",
-            rel, heading, text
-        ),
+        DepError::NotCurrentDecision(id) => msg::dep_not_current_decision(rel, heading, id),
+        DepError::NoTerm(text) => msg::dep_no_term(rel, heading, text),
     }
 }
 
-/// One `bad_option_letter_text` message per letter in `letters` that isn't
+/// One `bad_option_letter` message per letter in `letters` that isn't
 /// one of `target`'s options (8.7 A); empty when `target` has no options
 /// yet (an unopened tier's letters go unchecked). The one place a heading
 /// dep's answer-set letters are checked against its target, used by
@@ -130,6 +125,6 @@ pub fn bad_letters(
     letters
         .iter()
         .filter(|l| !target.options.iter().any(|o| o.letter == **l))
-        .map(|l| record::bad_option_letter_text(rel, dependent_heading, &target.heading_text, *l))
+        .map(|l| msg::bad_option_letter(rel, dependent_heading, &target.heading_text, *l))
         .collect()
 }

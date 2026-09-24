@@ -1,5 +1,6 @@
 use super::{dropped_state, Failure};
 use crate::ledger::Ledger;
+use crate::msg;
 use crate::record::RecordFile;
 use crate::repo;
 use std::collections::HashSet;
@@ -16,7 +17,7 @@ pub(super) fn check_ledger(
         out.push(Failure {
             check: "ledger".to_string(),
             id: None,
-            message: format!("line {}: malformed row: {}", lineno, raw),
+            message: msg::malformed_ledger_row(*lineno, raw),
         });
     }
 
@@ -26,7 +27,7 @@ pub(super) fn check_ledger(
             out.push(Failure {
                 check: "ledger".to_string(),
                 id: None,
-                message: "not append-only: working copy diverges from HEAD".to_string(),
+                message: msg::ledger_not_append_only(),
             });
         }
     }
@@ -41,7 +42,7 @@ pub(super) fn check_ledger(
             out.push(Failure {
                 check: "ledger".to_string(),
                 id: Some(row.id.clone()),
-                message: format!("asked row id {} not found in any topic file", row.id),
+                message: msg::ledger_asked_id_missing(&row.id),
             });
         }
     }
@@ -56,10 +57,7 @@ pub(super) fn check_ledger(
                 out.push(Failure {
                     check: "ledger".to_string(),
                     id: Some(row.id.clone()),
-                    message: format!(
-                        "answered row for {} has no matching earlier asked hash",
-                        row.id
-                    ),
+                    message: msg::ledger_answered_without_asked(&row.id),
                 });
             }
         }

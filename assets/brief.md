@@ -83,7 +83,8 @@ or `adr answer <id> refuse`.
 **4. After the answer.** Tie the decision to a test: put a comment
 `adr: <id>` inside a test, outside `adrdom/`, that shows the code follows the
 decision. Write the test if none exists. `adr check` lists every decision
-still untested.
+still untested. The hook refuses every commit until each answered decision
+is tied to a test, so commit answers together with their code and tests.
 
 Never write or edit `id:`, `terms:` or `**Answer:**` lines yourself.
 

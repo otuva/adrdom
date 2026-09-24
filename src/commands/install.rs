@@ -1,7 +1,14 @@
 use crate::commands::{deny_entries, OWNER_COMMANDS};
+use crate::msg::{self, Actor, Next};
 use crate::repo;
 use std::fs;
 use std::path::Path;
+
+/// The agent's next move on any I/O failure while installing: fix the
+/// underlying problem, then run install again.
+fn retry() -> Next {
+    Next::agent("checks the error and retries")
+}
 
 /// The agent brief, final at `assets/brief.md`. `adr install` writes it
 /// into AGENTS.md between the marker lines below; `adr check`'s `install`
@@ -39,7 +46,7 @@ pub fn run(claude: bool, codex: bool) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("install: not inside a git repository");
+            eprintln!("{}", msg::not_a_repo("install", Actor::Agent));
             return 1;
         }
     };
@@ -47,11 +54,17 @@ pub fn run(claude: bool, codex: bool) -> i32 {
     let decisions = root.join("adrdom/decisions");
     let state = root.join("adrdom/state");
     if let Err(e) = fs::create_dir_all(&decisions) {
-        eprintln!("install: failed to create {}: {}", decisions.display(), e);
+        eprintln!(
+            "install: {}",
+            msg::create_failed(&decisions.display().to_string(), e, retry())
+        );
         return 1;
     }
     if let Err(e) = fs::create_dir_all(&state) {
-        eprintln!("install: failed to create {}: {}", state.display(), e);
+        eprintln!(
+            "install: {}",
+            msg::create_failed(&state.display().to_string(), e, retry())
+        );
         return 1;
     }
 
@@ -70,7 +83,7 @@ pub fn run(claude: bool, codex: bool) -> i32 {
     match install_agents_md(&root) {
         Ok(m) => messages.push(m),
         Err(e) => {
-            eprintln!("install: failed to update AGENTS.md: {}", e);
+            eprintln!("install: {}", msg::update_failed("AGENTS.md", e, retry()));
             return 1;
         }
     }
@@ -79,7 +92,7 @@ pub fn run(claude: bool, codex: bool) -> i32 {
         Ok(Some(m)) => messages.push(m),
         Ok(None) => {}
         Err(e) => {
-            eprintln!("install: failed to update CLAUDE.md: {}", e);
+            eprintln!("install: {}", msg::update_failed("CLAUDE.md", e, retry()));
             return 1;
         }
     }
@@ -88,7 +101,10 @@ pub fn run(claude: bool, codex: bool) -> i32 {
         match merge_settings(&root) {
             Ok(mut msgs) => messages.append(&mut msgs),
             Err(e) => {
-                eprintln!("install: failed to update .claude/settings.json: {}", e);
+                eprintln!(
+                    "install: {}",
+                    msg::update_failed(".claude/settings.json", e, retry())
+                );
                 return 1;
             }
         }
@@ -98,7 +114,10 @@ pub fn run(claude: bool, codex: bool) -> i32 {
         match install_codex_rules(&root) {
             Ok(mut msgs) => messages.append(&mut msgs),
             Err(e) => {
-                eprintln!("install: failed to write .codex/rules/adrdom.rules: {}", e);
+                eprintln!(
+                    "install: {}",
+                    msg::write_failed(".codex/rules/adrdom.rules", e, retry())
+                );
                 return 1;
             }
         }
@@ -114,7 +133,7 @@ pub fn run(claude: bool, codex: bool) -> i32 {
 fn create_if_missing(path: &Path, content: &str) {
     if !path.exists() {
         if let Err(e) = fs::write(path, content) {
-            eprintln!("install: failed to write {}: {}", path.display(), e);
+            eprintln!("install: {}", msg::write_failed(&path.display().to_string(), e, retry()));
         }
     }
 }
@@ -124,7 +143,7 @@ fn create_hook(path: &Path, content: &str) {
         return;
     }
     if let Err(e) = fs::write(path, content) {
-        eprintln!("install: failed to write {}: {}", path.display(), e);
+        eprintln!("install: {}", msg::write_failed(&path.display().to_string(), e, retry()));
         return;
     }
     #[cfg(unix)]
@@ -173,7 +192,7 @@ fn install_agents_md(root: &Path) -> Result<String, String> {
     if !path.exists() {
         let content = section_lines().join("\n") + "\n";
         fs::write(&path, &content).map_err(|e| e.to_string())?;
-        return Ok("install: AGENTS.md: created with the brief".to_string());
+        return Ok(msg::agents_md_created());
     }
 
     let existing = fs::read_to_string(&path).map_err(|e| e.to_string())?;
@@ -188,10 +207,10 @@ fn install_agents_md(root: &Path) -> Result<String, String> {
             let new_content = new_parts.join("\n");
 
             if new_content == existing {
-                return Ok("install: AGENTS.md: brief already up to date".to_string());
+                return Ok(msg::agents_md_up_to_date());
             }
             fs::write(&path, &new_content).map_err(|e| e.to_string())?;
-            Ok("install: AGENTS.md: replaced the stale brief section".to_string())
+            Ok(msg::agents_md_replaced())
         }
         None => {
             let mut new_content = existing;
@@ -206,7 +225,7 @@ fn install_agents_md(root: &Path) -> Result<String, String> {
             new_content.push_str(&section_lines().join("\n"));
             new_content.push('\n');
             fs::write(&path, &new_content).map_err(|e| e.to_string())?;
-            Ok("install: AGENTS.md: appended the brief".to_string())
+            Ok(msg::agents_md_appended())
         }
     }
 }
@@ -247,9 +266,9 @@ fn install_claude_md(root: &Path, create: bool) -> Result<Option<String>, String
 
     fs::write(&path, &new_content).map_err(|e| e.to_string())?;
     Ok(Some(if created {
-        "install: CLAUDE.md: created with the AGENTS.md import".to_string()
+        msg::claude_md_created()
     } else {
-        "install: CLAUDE.md: added the AGENTS.md import".to_string()
+        msg::claude_md_import_added()
     }))
 }
 
@@ -267,14 +286,14 @@ fn merge_settings(root: &Path) -> Result<Vec<String>, String> {
             serde_json::json!({})
         } else {
             serde_json::from_str(&content)
-                .map_err(|e| format!("{}: {}", path.display(), e))?
+                .map_err(|e| msg::parse_failed(&path.display().to_string(), e, retry()))?
         }
     } else {
         serde_json::json!({})
     };
 
     if !value.is_object() {
-        return Err(format!("{} is not a JSON object", path.display()));
+        return Err(msg::settings_not_json_object(&path.display().to_string(), retry()));
     }
     let obj = value.as_object_mut().unwrap();
 
@@ -282,7 +301,10 @@ fn merge_settings(root: &Path) -> Result<Vec<String>, String> {
         .entry("permissions")
         .or_insert_with(|| serde_json::json!({}));
     if !permissions.is_object() {
-        return Err(format!("{}: permissions is not an object", path.display()));
+        return Err(msg::settings_permissions_not_object(
+            &path.display().to_string(),
+            retry(),
+        ));
     }
     let permissions_obj = permissions.as_object_mut().unwrap();
 
@@ -290,10 +312,7 @@ fn merge_settings(root: &Path) -> Result<Vec<String>, String> {
         .entry("deny")
         .or_insert_with(|| serde_json::json!([]));
     if !deny.is_array() {
-        return Err(format!(
-            "{}: permissions.deny is not an array",
-            path.display()
-        ));
+        return Err(msg::settings_deny_not_array(&path.display().to_string(), retry()));
     }
     let deny_arr = deny.as_array_mut().unwrap();
 
@@ -301,16 +320,10 @@ fn merge_settings(root: &Path) -> Result<Vec<String>, String> {
     for entry in deny_entries() {
         let already = deny_arr.iter().any(|v| v.as_str() == Some(entry.as_str()));
         if already {
-            messages.push(format!(
-                "install: .claude/settings.json: deny entry {} already present",
-                entry
-            ));
+            messages.push(msg::deny_entry_present(&entry));
         } else {
             deny_arr.push(serde_json::Value::String(entry.clone()));
-            messages.push(format!(
-                "install: .claude/settings.json: added deny entry {}",
-                entry
-            ));
+            messages.push(msg::deny_entry_added(&entry));
         }
     }
 
@@ -335,14 +348,11 @@ fn install_codex_rules(root: &Path) -> Result<Vec<String>, String> {
     let mut messages = Vec::new();
     let already = fs::read_to_string(&path).map(|c| c == content).unwrap_or(false);
     if already {
-        messages.push("install: .codex/rules/adrdom.rules: already up to date".to_string());
+        messages.push(msg::codex_rules_up_to_date());
     } else {
         fs::write(&path, &content).map_err(|e| e.to_string())?;
-        messages.push("install: .codex/rules/adrdom.rules: written".to_string());
+        messages.push(msg::codex_rules_written());
     }
-    messages.push(
-        "install: Codex enforces project rules only for a project marked trusted in the owner's Codex config."
-            .to_string(),
-    );
+    messages.push(msg::codex_trust_note());
     Ok(messages)
 }

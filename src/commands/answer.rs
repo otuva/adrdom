@@ -1,16 +1,17 @@
 use crate::actions;
+use crate::msg::{self, Actor};
 use crate::repo;
 
 pub fn run(id: String, letter: String) -> i32 {
     if !repo::owner_authorized() {
-        eprintln!("{}", repo::owner_refusal("answer", &format!("{} {}", id, letter)));
+        eprintln!("{}", msg::owner_refusal("answer", &format!("{} {}", id, letter)));
         return 2;
     }
 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("answer: not inside a git repository");
+            eprintln!("{}", msg::not_a_repo("answer", Actor::Owner));
             return 1;
         }
     };
@@ -24,7 +25,7 @@ pub fn run(id: String, letter: String) -> i32 {
         match parse_letter(&letter) {
             Some(c) => actions::do_answer(&root, &id, c),
             None => {
-                eprintln!("answer: invalid letter {}", letter);
+                eprintln!("answer: {}", msg::invalid_letter(&letter));
                 return 1;
             }
         }

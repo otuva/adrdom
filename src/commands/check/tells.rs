@@ -1,6 +1,7 @@
 use super::Failure;
 use crate::actions::Refusal;
 use crate::ledger::Ledger;
+use crate::msg;
 use crate::record::{self, RecordFile};
 use crate::state::{self, rel_path};
 use crate::tells;
@@ -45,7 +46,7 @@ pub(super) fn check_tells(root: &Path, records: &[RecordFile], led: &Ledger, ref
                 out.push(Failure {
                     check: "tells".to_string(),
                     id: sec.id.clone(),
-                    message: tells::tell_text(&rel, line, &sec.heading_text, &phrase, what),
+                    message: msg::tell(&rel, line, &sec.heading_text, &phrase, what),
                 });
             }
         }
