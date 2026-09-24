@@ -124,18 +124,34 @@ pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String>
         }
         supersedes_val = sec.supersedes.clone();
         for old in &supersedes_val {
-            // A supersedes target must be current (4.14 A): latest state
-            // `answered`. An already superseded id (or anything else)
-            // refuses; the agent rewrites the supersedes line to name the
-            // decision that actually superseded it.
-            match led.latest_state(old) {
-                Some(row) if row.event == "answered" => {}
-                _ => {
-                    return Err(format!(
-                        "supersedes target {} is not a current decision; agent fixes the supersedes line",
-                        old
-                    ));
+            // A supersedes target must be current when this question was
+            // asked (E3, founding 1.3 A/4.14 A, owner note 2026-09-24): the
+            // supersedes line freezes at ask, which `ask` itself now
+            // enforces. Here at answer time the target may since have moved
+            // to `superseded` -- accepted only when that happened after
+            // this question's own latest `asked` row, so a split (several
+            // newer questions each naming the same older target, asked
+            // together and answered one after another) goes through for
+            // every one of them. Compared by ledger order (row position),
+            // never the `time` string: two rows written in the same run can
+            // share a timestamp. Anything else -- never asked/answered,
+            // refused, withdrawn, or superseded before this question was
+            // asked -- refuses exactly as before.
+            let target_ok = match led.latest_state(old) {
+                Some(row) if row.event == "answered" => true,
+                Some(row) if row.event == "superseded" => {
+                    match (led.latest_asked_pos(id), led.latest_superseded_pos(old)) {
+                        (Some(asked_pos), Some(superseded_pos)) => superseded_pos > asked_pos,
+                        _ => false,
+                    }
                 }
+                _ => false,
+            };
+            if !target_ok {
+                return Err(format!(
+                    "supersedes target {} is not a current decision; agent fixes the supersedes line",
+                    old
+                ));
             }
         }
     }

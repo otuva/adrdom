@@ -117,6 +117,23 @@ impl Ledger {
         self.rows.iter().rfind(|r| r.id == id && r.event == "asked")
     }
 
+    /// The position in `rows` (ledger order) of the latest `asked` row for
+    /// `id`, if any (E3). Rows can share a timestamp when two ledger
+    /// entries are written in the same run, so a supersedes freeze check
+    /// compares this position -- the order rows were actually appended in --
+    /// rather than the `time` string.
+    pub fn latest_asked_pos(&self, id: &str) -> Option<usize> {
+        self.rows.iter().rposition(|r| r.id == id && r.event == "asked")
+    }
+
+    /// The position in `rows` (ledger order) of the latest `superseded` row
+    /// for `id`, if any (E3). Paired with `latest_asked_pos` to tell whether
+    /// a supersedes target was superseded before or after a question asking
+    /// it was itself asked.
+    pub fn latest_superseded_pos(&self, id: &str) -> Option<usize> {
+        self.rows.iter().rposition(|r| r.id == id && r.event == "superseded")
+    }
+
     /// The latest row of `event` whose `detail` column equals `path`.
     pub fn latest_for_path(&self, event: &str, path: &str) -> Option<&Row> {
         self.rows
@@ -265,6 +282,27 @@ mod tests {
         assert_eq!(a.hash, "hash-a2");
         let b = rows.iter().find(|r| r.detail == "Dependent B?").unwrap();
         assert_eq!(b.hash, "hash-b");
+    }
+
+    #[test]
+    fn latest_asked_pos_and_latest_superseded_pos_use_ledger_order_not_timestamps() {
+        // Two rows sharing a timestamp: position in the vec (append order)
+        // is still what breaks the tie, not the (equal) time string.
+        let led = Ledger {
+            rows: vec![
+                row("asked", "q1", "h1", "Q1?", "0.1.0"),
+                row("asked", "q2", "h2", "Q2?", "0.1.0"),
+                row("superseded", "x", "-", "q1", "0.1.0"),
+            ],
+            malformed: vec![],
+        };
+        assert_eq!(led.latest_asked_pos("q1"), Some(0));
+        assert_eq!(led.latest_asked_pos("q2"), Some(1));
+        assert_eq!(led.latest_superseded_pos("x"), Some(2));
+        assert_eq!(led.latest_superseded_pos("nope"), None);
+        // "x" was superseded after q2's asked row but not needed here --
+        // the position ordering itself is what this test checks.
+        assert!(led.latest_superseded_pos("x") > led.latest_asked_pos("q2"));
     }
 
     #[test]
