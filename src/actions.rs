@@ -1,4 +1,5 @@
 //! One code path for every owner act: the CLI and the page both call these (7.2 A).
+use crate::depends::{self, DepTarget};
 use crate::ledger::{self, Ledger};
 use crate::record::{self, RecordFile};
 use crate::repo;
@@ -6,6 +7,7 @@ use crate::state::{self, TermsLoad};
 use crate::terms;
 use std::collections::{BTreeSet, HashSet};
 use std::path::Path;
+use uuid::Uuid;
 
 pub struct Outcome {
     pub summary: String,
@@ -121,13 +123,15 @@ pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String>
         }
         supersedes_val = sec.supersedes.clone();
         for old in &supersedes_val {
-            // Current, or already superseded by an earlier answer: a later
-            // answer naming the same older id is accepted as lineage.
+            // A supersedes target must be current (4.14 A): latest state
+            // `answered`. An already superseded id (or anything else)
+            // refuses; the agent rewrites the supersedes line to name the
+            // decision that actually superseded it.
             match led.latest_state(old) {
-                Some(row) if row.event == "answered" || row.event == "superseded" => {}
+                Some(row) if row.event == "answered" => {}
                 _ => {
                     return Err(format!(
-                        "supersedes target {} is not current and was never superseded",
+                        "supersedes target {} is not a current decision; agent fixes the supersedes line",
                         old
                     ));
                 }
@@ -292,9 +296,10 @@ pub fn do_approve(root: &Path, file: &Path) -> Result<Outcome, String> {
 /// One dependent's pairs (`word=uuid`), together with a description of
 /// where they were carried, for approve's step 4.
 struct Dependent {
-    /// `<rel>: "<heading>"` for a decision, or `term "<name>"` for a
-    /// term's own definition pairs (freshly computed from the new file,
-    /// never read from a stale terms line).
+    /// `<rel>: "<heading>"` for a decision, or `term "<name>"` for a term:
+    /// in both cases the recorded pairing, read from the dependent's own
+    /// `terms:` line exactly as it stood in the file before this approve,
+    /// never re-resolved from today's definition/section text.
     source: String,
     pairs: Vec<(String, String)>,
 }
@@ -381,13 +386,21 @@ fn do_approve_terms(
             });
         }
     }
-    for (i, t) in tf.terms.iter().enumerate() {
+    for t in &tf.terms {
         if t.retired {
             continue;
         }
+        // The recorded pairing, exactly as decisions' frozen dependents are
+        // read: the term's own `terms:` line as it already stood in the
+        // file before this approve, not a fresh re-resolve (9.3 B;
+        // terms-walk: "definitions are dependents for retire/move
+        // refusals"). A term with no terms line yet has no dependents.
+        let Some(pairs) = t.terms_line.as_deref().and_then(terms::parse_terms_line) else {
+            continue;
+        };
         dependents.push(Dependent {
             source: format!("term \"{}\"", t.name),
-            pairs: pairs_per_entry[i].clone(),
+            pairs,
         });
     }
 
@@ -543,11 +556,17 @@ fn do_approve_terms(
     })
 }
 
-/// A topic file: parse, refuse on shape errors; compute plan hash and
-/// context hash; write an `approved` row if it differs from the latest for
-/// the path, a `context` row likewise; then for every ledger id that now
-/// appears in no topic file: withdraw an asked one, refuse on a current one,
-/// allow a superseded one silently.
+/// A topic file: parse, refuse on shape errors; resolve every `depends:`
+/// entry (9.1 A: the file holds ids, the agent writes words, and `approve`
+/// is what turns one into the other); check every ledger id that now
+/// appears in no topic file, refusing on a current (answered) one, before
+/// anything is written -- withdrawing an asked/refused one and allowing a
+/// superseded one silently happen after, since neither is a refusal; only
+/// then mint an id for every heading that lacks one, compute plan hash and
+/// context hash over the rewritten file, write an `approved` row if it
+/// differs from the latest for the path, a `context` row likewise, and
+/// finally write the withdrawn rows. Nothing is written to disk (file or
+/// ledger) when any check refuses.
 fn do_approve_record(
     root: &Path,
     file: &Path,
@@ -591,41 +610,55 @@ fn do_approve_record(
         return Err(depends_msgs.join("\n"));
     }
 
-    // Resolve every entry (8.3 A): a term entry must resolve to exactly one
-    // non-retired term; a decision entry must be a current decision (latest
-    // state `answered`); a heading entry's dangling/cycle/self-dep is
-    // `derive_tiers`'s single error (computed at parse time into
-    // `rf.derive_error`), folded into the same refusal list.
+    // Resolve every entry (8.3/9.1 A). An `Id` entry is kept as written and
+    // must already be a heading id in this file, a non-retired term id, or a
+    // current decision. A `Text` entry ending in `?` is a heading reference,
+    // whose dangling/cycle/self-dep is `derive_tiers`'s single error
+    // (computed at parse time into `rf.derive_error`); any other `Text`
+    // entry must resolve to exactly one non-retired term. A `Text` entry
+    // (of either shape) found inside a section whose latest ledger state is
+    // `answered`/`refused`/`superseded` refuses instead of being silently
+    // rewritten (9.1 A point 5): that section is frozen -- its decision is
+    // already closed, one way or another -- and an edit there is the
+    // agent's to remove, not approve's to carry forward.
     let terms_list: Vec<terms::Term> =
         state::load_terms(root).map(|tf| tf.terms).unwrap_or_default();
+    // Built once per command run (not per depends entry): `resolve_dep`
+    // used to call `terms::resolve_word`, which rebuilt this same map from
+    // scratch on every entry.
+    let phrase_lookup = terms::phrase_lookup(&terms_list);
     let mut resolve_msgs: Vec<String> = Vec::new();
     for sec in &rf.sections {
+        let frozen = sec
+            .id
+            .as_ref()
+            .map(|id| {
+                matches!(
+                    led.latest_state(id).map(|r| r.event.as_str()),
+                    Some("answered") | Some("refused") | Some("superseded")
+                )
+            })
+            .unwrap_or(false);
         for d in &sec.depends {
-            match d {
-                record::Dep::Term(w) => {
-                    let pairs = terms::resolve(w, &terms_list);
-                    let resolved_ok = pairs.len() == 1
-                        && terms_list
-                            .iter()
-                            .find(|t| t.id.as_deref() == Some(pairs[0].1.as_str()))
-                            .map(|t| !t.retired)
-                            .unwrap_or(false);
-                    if !resolved_ok {
-                        resolve_msgs.push(format!(
-                            "approve: {}: \"{}\" depends on \"{}\" which is no term; agent adds the term or names another",
-                            rel, sec.heading_text, w
-                        ));
-                    }
+            if frozen && matches!(d, record::Dep::Text { .. }) {
+                resolve_msgs.push(format!(
+                    "approve: {}: \"{}\": answered; agent removes the edit",
+                    rel, sec.heading_text
+                ));
+                continue;
+            }
+            if let record::Dep::Text { text, .. } = d {
+                if text.trim().ends_with('?') {
+                    // Dangling/cycle/self-dep is reported once, below, via
+                    // `rf.derive_error`.
+                    continue;
                 }
-                record::Dep::Decision(uuid) => {
-                    if !state::is_current(led, uuid) {
-                        resolve_msgs.push(format!(
-                            "approve: {}: \"{}\" depends on {} which is not a current decision; agent names a current decision or removes the line",
-                            rel, sec.heading_text, uuid
-                        ));
-                    }
-                }
-                record::Dep::Heading { .. } => {}
+            }
+            if let Err(e) = depends::resolve_dep(d, &rf, &terms_list, &phrase_lookup, led) {
+                resolve_msgs.push(format!(
+                    "approve: {}",
+                    depends::dep_refusal_text(rel, &sec.heading_text, &e)
+                ));
             }
         }
     }
@@ -653,54 +686,17 @@ fn do_approve_record(
         ));
     }
 
-    let plan_hash = record::plan_hash(&rf);
-    let context_hash = record::context_hash(&rf);
-
-    let mut rows: Vec<ledger::Row> = Vec::new();
-    let mut messages: Vec<String> = Vec::new();
-
-    let plan_changed = led
-        .latest_for_path("approved", rel)
-        .map(|r| r.hash.as_str())
-        != Some(plan_hash.as_str());
-    if plan_changed {
-        rows.push(ledger::Row {
-            time: ledger::now_rfc3339(),
-            event: "approved".to_string(),
-            id: "-".to_string(),
-            hash: plan_hash.clone(),
-            detail: rel.to_string(),
-            version: crate::version::VERSION.to_string(),
-        });
-        messages.push(format!("approve: {}: plan approved", rel));
-    } else {
-        messages.push(format!("approve: {}: plan unchanged", rel));
-    }
-
-    let context_changed = led
-        .latest_for_path("context", rel)
-        .map(|r| r.hash.as_str())
-        != Some(context_hash.as_str());
-    if context_changed {
-        rows.push(ledger::Row {
-            time: ledger::now_rfc3339(),
-            event: "context".to_string(),
-            id: "-".to_string(),
-            hash: context_hash.clone(),
-            detail: rel.to_string(),
-            version: crate::version::VERSION.to_string(),
-        });
-        messages.push(format!("approve: {}: context approved", rel));
-    } else {
-        messages.push(format!("approve: {}: context unchanged", rel));
-    }
-
-    ledger::append(ledger_path, &rows)
-        .map_err(|e| format!("approve: failed to update ledger: {}", e))?;
-
-    // Ledger ids (asked/answered/superseded/withdrawn) that now appear in
-    // no topic file at all: withdraw the asked ones, refuse on a current
-    // (answered, not superseded) one, allow a superseded one silently.
+    // Ledger ids (asked/answered/refused/superseded/withdrawn) that now
+    // appear in no topic file at all: withdraw the asked/refused ones,
+    // refuse on a current (answered, not superseded) one, allow a
+    // superseded one silently. Computed and checked here, before any write
+    // below, so a refusal on this leaves both the topic file and the
+    // ledger exactly as they were (the function's own contract: nothing is
+    // written when a check refuses). Reads `file` itself straight off disk
+    // like every other topic file -- it is still unwritten at this point,
+    // so its ids are exactly `rf`'s; minting new ids for skeleton headings
+    // below never removes an id already in the ledger's `state_ids`, so
+    // reading before that rewrite changes nothing this check depends on.
     let all_files = repo::list_decision_files(root);
     let mut present_ids: HashSet<String> = HashSet::new();
     for f in &all_files {
@@ -761,6 +757,106 @@ fn do_approve_record(
         return Err(refusals.join("\n"));
     }
 
+    // Every check above passed: mint an id for every heading that lacks one
+    // (skeletons included, same insertion shape `ask` used to write: blank,
+    // `id:` line, blank), reparse so every heading's id is available, then
+    // rewrite every `Text` depends entry to the id it resolves to, keeping
+    // any `=set` suffix, in place (a single-line replace, never a shift).
+    let mut work_lines = rf.lines.clone();
+    let needs_id: Vec<bool> = rf.sections.iter().map(|s| s.id.is_none()).collect();
+    for i in (0..rf.sections.len()).rev() {
+        if needs_id[i] {
+            let start = rf.sections[i].start;
+            let new_id = Uuid::new_v4().to_string();
+            work_lines.splice(
+                start + 1..start + 1,
+                [String::new(), format!("id: {}", new_id), String::new()],
+            );
+        }
+    }
+    let mut work_rf = record::build(rf.path.clone(), rel.to_string(), work_lines);
+
+    let sections_snapshot = work_rf.sections.clone();
+    for sec in &sections_snapshot {
+        let mut dep_i = 0;
+        for j in sec.start + 1..sec.end {
+            if !work_rf.lines[j].starts_with("depends: ") {
+                continue;
+            }
+            let d = &sec.depends[dep_i];
+            dep_i += 1;
+            if let record::Dep::Text { set, .. } = d {
+                if let Ok(Some(target)) =
+                    depends::resolve_dep(d, &work_rf, &terms_list, &phrase_lookup, led)
+                {
+                    let id = match target {
+                        DepTarget::Heading(idx) => work_rf.sections[idx].id.clone(),
+                        DepTarget::Term(id) | DepTarget::Decision(id) => Some(id),
+                    };
+                    if let Some(id) = id {
+                        let suffix = set
+                            .as_ref()
+                            .map(|s| format!("={}", record::canonical_set(s)))
+                            .unwrap_or_default();
+                        work_rf.lines[j] = format!("depends: {}{}", id, suffix);
+                    }
+                }
+            }
+        }
+    }
+    // Reparse once more so `plan_hash`/`context_hash` and everything below
+    // sees the file exactly as it will be written.
+    let work_rf = record::build(work_rf.path.clone(), rel.to_string(), work_rf.lines.clone());
+
+    let plan_hash = record::plan_hash(&work_rf);
+    let context_hash = record::context_hash(&work_rf);
+
+    record::save(&work_rf).map_err(|e| format!("approve: failed to write {}: {}", file.display(), e))?;
+
+    let mut rows: Vec<ledger::Row> = Vec::new();
+    let mut messages: Vec<String> = Vec::new();
+
+    let plan_changed = led
+        .latest_for_path("approved", rel)
+        .map(|r| r.hash.as_str())
+        != Some(plan_hash.as_str());
+    if plan_changed {
+        rows.push(ledger::Row {
+            time: ledger::now_rfc3339(),
+            event: "approved".to_string(),
+            id: "-".to_string(),
+            hash: plan_hash.clone(),
+            detail: rel.to_string(),
+            version: crate::version::VERSION.to_string(),
+        });
+        messages.push(format!("approve: {}: plan approved", rel));
+    } else {
+        messages.push(format!("approve: {}: plan unchanged", rel));
+    }
+
+    let context_changed = led
+        .latest_for_path("context", rel)
+        .map(|r| r.hash.as_str())
+        != Some(context_hash.as_str());
+    if context_changed {
+        rows.push(ledger::Row {
+            time: ledger::now_rfc3339(),
+            event: "context".to_string(),
+            id: "-".to_string(),
+            hash: context_hash.clone(),
+            detail: rel.to_string(),
+            version: crate::version::VERSION.to_string(),
+        });
+        messages.push(format!("approve: {}: context approved", rel));
+    } else {
+        messages.push(format!("approve: {}: context unchanged", rel));
+    }
+
+    ledger::append(ledger_path, &rows)
+        .map_err(|e| format!("approve: failed to update ledger: {}", e))?;
+
+    // `withdrawn_rows` was computed, and any refusal already returned,
+    // above -- before either write this function has made so far.
     if !withdrawn_rows.is_empty() {
         ledger::append(ledger_path, &withdrawn_rows)
             .map_err(|e| format!("approve: failed to update ledger: {}", e))?;

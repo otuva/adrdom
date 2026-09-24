@@ -15,7 +15,7 @@ use tiny_http::{Header, Method, Request, Response, Server};
 
 pub fn run(port: u16) -> i32 {
     if !repo::owner_authorized() {
-        eprintln!("serve: refusing: owner authorization required (interactive TTY, no CLAUDECODE)");
+        eprintln!("{}", repo::owner_refusal("serve", ""));
         return 2;
     }
 

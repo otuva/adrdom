@@ -168,28 +168,69 @@ pub(crate) fn qstate(led: &Ledger, sec: &Section) -> QState {
     }
 }
 
-/// A `depends:` entry's text as originally written in the file (spec §7):
-/// a term name and a decision's uuid are printed as-is; a heading dep's
-/// text has its `=set` suffix restored (`=A`, `=A|B`, `=*`) when it
-/// carries one. Shared by `show` (the "stands on:" line) and `/next` (the
-/// "Stands on:" line).
-pub fn format_dep(d: &record::Dep) -> String {
+/// Every heading id, from any topic file (not just one), paired with its
+/// heading text (9.1 A point 10): what turns a depends `Id` entry that
+/// names a decision in another topic file back into that decision's
+/// heading text, for `format_dep`.
+pub fn all_heading_texts(root: &Path) -> HashMap<String, String> {
+    let mut out = HashMap::new();
+    for f in repo::list_decision_files(root) {
+        if let Ok(rf) = record::load(&f) {
+            for sec in &rf.sections {
+                if let Some(id) = &sec.id {
+                    out.insert(id.clone(), sec.heading_text.clone());
+                }
+            }
+        }
+    }
+    out
+}
+
+fn dep_with_set(text: &str, set: &Option<record::AnswerSet>) -> String {
+    match set {
+        None => text.to_string(),
+        Some(record::AnswerSet::Any) => format!("{}=*", text),
+        Some(record::AnswerSet::Letters(letters)) => format!(
+            "{}={}",
+            text,
+            letters
+                .iter()
+                .map(|c| c.to_string())
+                .collect::<Vec<_>>()
+                .join("|")
+        ),
+    }
+}
+
+/// A `depends:` entry's text as words (spec §7, updated by 9.1 A point 10):
+/// a `Text` entry (not yet approved) prints as written, with its `=set`
+/// suffix restored (`=A`, `=A|B`, `=*`) when it carries one. An `Id` entry
+/// is looked up -- first as a heading id in `rf` (this file), else as a
+/// term id (`terms_list`), else as another topic file's heading id
+/// (`all_headings`) -- printed as that name/heading with the same set
+/// suffix restored, or the bare id when none of the three resolve it
+/// (should not happen once a plan is approved, but never hidden). Shared by
+/// `show` (the "stands on:" line) and `/next` (the "Stands on:" line).
+pub fn format_dep(
+    d: &record::Dep,
+    rf: &RecordFile,
+    terms_list: &[Term],
+    all_headings: &HashMap<String, String>,
+) -> String {
     match d {
-        record::Dep::Term(t) => t.clone(),
-        record::Dep::Decision(id) => id.clone(),
-        record::Dep::Heading { text, set } => match set {
-            None => text.clone(),
-            Some(record::AnswerSet::Any) => format!("{}=*", text),
-            Some(record::AnswerSet::Letters(letters)) => format!(
-                "{}={}",
-                text,
-                letters
-                    .iter()
-                    .map(|c| c.to_string())
-                    .collect::<Vec<_>>()
-                    .join("|")
-            ),
-        },
+        record::Dep::Text { text, set } => dep_with_set(text, set),
+        record::Dep::Id { id, set } => {
+            if let Some(sec) = rf.sections.iter().find(|s| s.id.as_deref() == Some(id.as_str())) {
+                return dep_with_set(&sec.heading_text, set);
+            }
+            if let Some(t) = terms_list.iter().find(|t| t.id.as_deref() == Some(id.as_str())) {
+                return dep_with_set(&t.name, set);
+            }
+            if let Some(heading) = all_headings.get(id) {
+                return dep_with_set(heading, set);
+            }
+            dep_with_set(id, set)
+        }
     }
 }
 
@@ -203,20 +244,13 @@ pub(crate) fn moot_notes(rf: &RecordFile, led: &Ledger) -> Vec<String> {
     let mut out = Vec::new();
     for sec in &rf.sections {
         for d in &sec.depends {
-            let record::Dep::Heading {
-                text,
-                set: Some(record::AnswerSet::Letters(letters)),
-            } = d
-            else {
+            let Some(record::AnswerSet::Letters(letters)) = d.set() else {
                 continue;
             };
-            let Some(target) = rf
-                .sections
-                .iter()
-                .find(|t| t.heading_text.trim() == text.trim())
-            else {
+            let Some(ti) = rf.dep_target(d) else {
                 continue;
             };
+            let target = &rf.sections[ti];
             // `Answered` implies a real id (qstate only reaches it via an
             // id's ledger row), so `target.answer_letter()` below is safe.
             if qstate(led, target) != QState::Answered {
@@ -485,10 +519,15 @@ fn build_question_view(
     led: &Ledger,
     test_idx: &HashMap<String, Vec<String>>,
     terms_list: &[Term],
+    all_headings: &HashMap<String, String>,
 ) -> QuestionView {
     let state = qstate(led, sec);
     let tier = rf.tier_of(idx);
-    let depends: Vec<String> = sec.depends.iter().map(format_dep).collect();
+    let depends: Vec<String> = sec
+        .depends
+        .iter()
+        .map(|d| format_dep(d, rf, terms_list, all_headings))
+        .collect();
     let problem = body_field(&rf.lines, sec, "Problem: ");
     let standard = body_field(&rf.lines, sec, "Standard: ");
     let options = record::option_details(&rf.lines, sec)
@@ -539,6 +578,7 @@ fn build_file_view(
     led: &Ledger,
     test_idx: &HashMap<String, Vec<String>>,
     terms_list: &[Term],
+    all_headings: &HashMap<String, String>,
 ) -> FileView {
     let path = state::rel_path(root, &rf.path);
     let plan_approved = state::plan_approved(led, rf, &path);
@@ -552,7 +592,7 @@ fn build_file_view(
         .sections
         .iter()
         .enumerate()
-        .map(|(idx, sec)| build_question_view(rf, idx, sec, led, test_idx, terms_list))
+        .map(|(idx, sec)| build_question_view(rf, idx, sec, led, test_idx, terms_list, all_headings))
         .collect();
 
     FileView {
@@ -696,10 +736,11 @@ pub fn snapshot(root: &Path) -> Snapshot {
         .map(|tf| tf.terms.clone())
         .unwrap_or_default();
 
+    let all_headings = all_heading_texts(root);
     let mut files: Vec<FileView> = Vec::new();
     for f in repo::list_decision_files(root) {
         if let Ok(rf) = record::load(&f) {
-            files.push(build_file_view(root, &rf, &led, &test_idx, &terms_list));
+            files.push(build_file_view(root, &rf, &led, &test_idx, &terms_list, &all_headings));
         }
     }
 
@@ -1026,14 +1067,19 @@ Standard: s2.\n\n\
         let test_idx = HashMap::new();
 
         // Nothing approved yet, nothing answered: not done.
-        let fv = build_file_view(&dir, &rf, &led, &test_idx, &[]);
+        let fv = build_file_view(&dir, &rf, &led, &test_idx, &[], &HashMap::new());
         assert!(!fv.done);
 
-        // Approve plan/context (hashes are computed from the unanswered
-        // fixture, since an answer line never moves either hash) and
-        // rewrite the file with every section answered: now it is done.
-        let plan_h = record::plan_hash(&rf);
-        let ctx_h = record::context_hash(&rf);
+        // Approve plan/context, then rewrite the file with every section
+        // answered: now it is done. The fixture bakes its own ids in
+        // (`id: id-1`/`id: id-2`), and `plan_hash` covers a heading's id
+        // line (9.1 A), so the hashes are computed from the id-bearing
+        // (already-answered) fixture, not the id-less base one -- an
+        // answer line itself never moves either hash.
+        std::fs::write(&record, TWO_GROUP_ANSWERED).unwrap();
+        let rf2 = record::load(&record).unwrap();
+        let plan_h = record::plan_hash(&rf2);
+        let ctx_h = record::context_hash(&rf2);
         append_row(
             &dir,
             "approved",
@@ -1042,15 +1088,12 @@ Standard: s2.\n\n\
             "adrdom/decisions/example.md",
         );
         append_row(&dir, "context", "-", &ctx_h, "adrdom/decisions/example.md");
-
-        std::fs::write(&record, TWO_GROUP_ANSWERED).unwrap();
-        let rf2 = record::load(&record).unwrap();
         let led2 = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
         assert!(
             rf2.sections.iter().all(|s| s.answer_line.is_some()),
             "fixture should have every section answered"
         );
-        let fv2 = build_file_view(&dir, &rf2, &led2, &test_idx, &[]);
+        let fv2 = build_file_view(&dir, &rf2, &led2, &test_idx, &[], &HashMap::new());
         assert!(fv2.plan_approved);
         assert!(fv2.context_approved);
         assert!(fv2.done);
@@ -1079,15 +1122,17 @@ Standard: s2.\n\n\
     fn done_is_false_when_a_question_is_refused_not_answered() {
         let dir = temp_repo();
         let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP);
-        let rf = record::load(&record).unwrap();
-        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
         let test_idx = HashMap::new();
 
-        // Approve plan/context from the unanswered fixture (an answer or
-        // refusal line never moves either hash), then rewrite the file with
-        // one question answered and the other refused.
-        let plan_h = record::plan_hash(&rf);
-        let ctx_h = record::context_hash(&rf);
+        // Approve plan/context from the id-bearing fixture (an answer or
+        // refusal line never moves either hash, but the fixture's own
+        // `id: id-1`/`id: id-2` lines do, since `plan_hash` covers them --
+        // 9.1 A), then rewrite the file with one question answered and the
+        // other refused.
+        std::fs::write(&record, TWO_GROUP_ONE_REFUSED).unwrap();
+        let rf2 = record::load(&record).unwrap();
+        let plan_h = record::plan_hash(&rf2);
+        let ctx_h = record::context_hash(&rf2);
         append_row(
             &dir,
             "approved",
@@ -1096,16 +1141,13 @@ Standard: s2.\n\n\
             "adrdom/decisions/example.md",
         );
         append_row(&dir, "context", "-", &ctx_h, "adrdom/decisions/example.md");
-
-        std::fs::write(&record, TWO_GROUP_ONE_REFUSED).unwrap();
-        let rf2 = record::load(&record).unwrap();
         let led2 = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
         assert!(
             rf2.sections.iter().all(|s| s.answer_line.is_some()),
             "fixture should have every section carrying an Answer line (one letter, one refused)"
         );
 
-        let fv = build_file_view(&dir, &rf2, &led2, &test_idx, &[]);
+        let fv = build_file_view(&dir, &rf2, &led2, &test_idx, &[], &HashMap::new());
         assert!(fv.plan_approved);
         assert!(fv.context_approved);
         assert!(
@@ -1117,35 +1159,77 @@ Standard: s2.\n\n\
     }
 
     #[test]
-    fn format_dep_restores_term_uuid_and_set_suffix() {
-        assert_eq!(format_dep(&record::Dep::Term("widget".to_string())), "widget");
+    fn format_dep_prints_words_for_text_and_id_entries() {
+        let dir = temp_repo();
+        let content = "# Topic\n\n\
+### 1.1 Q?\n\nid: 11111111-1111-1111-1111-111111111111\n\ndepends: widget\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+### 1.2 R?\ndepends: 11111111-1111-1111-1111-111111111111=A|B\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+        let record = write_record(&dir, "adrdom/decisions/example.md", content);
+        let rf = record::load(&record).unwrap();
+
+        let terms_list = vec![Term {
+            name: "widget".to_string(),
+            id: Some("22222222-2222-2222-2222-222222222222".to_string()),
+            definition: String::new(),
+            aliases: vec![],
+            retired: false,
+            start_line: 1,
+            id_line: None,
+            terms_line: None,
+            terms_line_idx: None,
+        }];
+
+        // A `Text` entry (not yet approved) prints as written.
         assert_eq!(
-            format_dep(&record::Dep::Decision(
-                "11111111-1111-1111-1111-111111111111".to_string()
-            )),
-            "11111111-1111-1111-1111-111111111111"
+            format_dep(&rf.sections[0].depends[0], &rf, &terms_list, &HashMap::new()),
+            "widget"
         );
+
+        // An `Id` entry naming a heading in this same file prints that
+        // heading's text with the set suffix restored.
         assert_eq!(
-            format_dep(&record::Dep::Heading {
-                text: "1.1 Q?".to_string(),
-                set: None
-            }),
-            "1.1 Q?"
-        );
-        assert_eq!(
-            format_dep(&record::Dep::Heading {
-                text: "1.1 Q?".to_string(),
-                set: Some(record::AnswerSet::Letters(vec!['A', 'B']))
-            }),
+            format_dep(&rf.sections[1].depends[0], &rf, &terms_list, &HashMap::new()),
             "1.1 Q?=A|B"
         );
+
+        // An `Id` entry naming a term prints the term's name.
+        let term_dep = record::Dep::Id {
+            id: "22222222-2222-2222-2222-222222222222".to_string(),
+            set: None,
+        };
         assert_eq!(
-            format_dep(&record::Dep::Heading {
-                text: "1.1 Q?".to_string(),
-                set: Some(record::AnswerSet::Any)
-            }),
-            "1.1 Q?=*"
+            format_dep(&term_dep, &rf, &terms_list, &HashMap::new()),
+            "widget"
         );
+
+        // An `Id` entry naming a decision in another topic file prints that
+        // decision's heading text, from `all_headings`.
+        let mut all_headings = HashMap::new();
+        all_headings.insert(
+            "33333333-3333-3333-3333-333333333333".to_string(),
+            "Elsewhere?".to_string(),
+        );
+        let decision_dep = record::Dep::Id {
+            id: "33333333-3333-3333-3333-333333333333".to_string(),
+            set: None,
+        };
+        assert_eq!(
+            format_dep(&decision_dep, &rf, &terms_list, &all_headings),
+            "Elsewhere?"
+        );
+
+        // An id resolving to none of the three (should not happen once
+        // approved) prints the bare id rather than hiding it.
+        let unknown_dep = record::Dep::Id {
+            id: "44444444-4444-4444-4444-444444444444".to_string(),
+            set: None,
+        };
+        assert_eq!(
+            format_dep(&unknown_dep, &rf, &terms_list, &HashMap::new()),
+            "44444444-4444-4444-4444-444444444444"
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
@@ -1156,7 +1240,7 @@ Standard: s2.\n\n\
         let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
         let test_idx = HashMap::new();
 
-        let fv = build_file_view(&dir, &rf, &led, &test_idx, &[]);
+        let fv = build_file_view(&dir, &rf, &led, &test_idx, &[], &HashMap::new());
         let q1 = fv
             .questions
             .iter()
@@ -1209,7 +1293,7 @@ Standard: s2.\n\n\
         );
 
         let test_idx = HashMap::new();
-        let fv = build_file_view(&dir, &rf, &led, &test_idx, &[]);
+        let fv = build_file_view(&dir, &rf, &led, &test_idx, &[], &HashMap::new());
         assert_eq!(fv.moot, notes);
 
         std::fs::remove_dir_all(&dir).ok();

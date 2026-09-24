@@ -6,7 +6,6 @@ use crate::state::{self, TermsLoad};
 use crate::terms;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use uuid::Uuid;
 
 /// The first banned-word hit in `text` against the ban list, tokenizing
 /// each line the way `ban`/`check` do: the word as `banned::tokenize`
@@ -280,19 +279,14 @@ pub fn run(record_path: PathBuf) -> i32 {
         // within the open tier, need not be this candidate's own
         // dependency even when the generic rule would also fire).
         for d in &sec.depends {
-            if let record::Dep::Heading { text, .. } = d {
-                if let Some(target) = rf
-                    .sections
-                    .iter()
-                    .find(|s| s.heading_text.trim() == text.trim())
-                {
-                    if target.is_refused() {
-                        eprintln!(
-                            "ask: {}: \"{}\" stands on refused \"{}\"; agent re-plans, owner runs: adr approve {}",
-                            rel, sec.heading_text, target.heading_text, rel
-                        );
-                        return 1;
-                    }
+            if let Some(ti) = rf.dep_target(d) {
+                let target = &rf.sections[ti];
+                if target.is_refused() {
+                    eprintln!(
+                        "ask: {}: \"{}\" stands on refused \"{}\"; agent re-plans, owner runs: adr approve {}",
+                        rel, sec.heading_text, target.heading_text, rel
+                    );
+                    return 1;
                 }
             }
         }
@@ -332,16 +326,9 @@ pub fn run(record_path: PathBuf) -> i32 {
         // Moot refusal (8.7 A): a heading dep carrying a set whose target
         // is now answered with a letter outside that set.
         for d in &sec.depends {
-            if let record::Dep::Heading {
-                text,
-                set: Some(record::AnswerSet::Letters(letters)),
-            } = d
-            {
-                if let Some(target) = rf
-                    .sections
-                    .iter()
-                    .find(|s| s.heading_text.trim() == text.trim())
-                {
+            if let Some(record::AnswerSet::Letters(letters)) = d.set() {
+                if let Some(ti) = rf.dep_target(d) {
+                    let target = &rf.sections[ti];
                     if let Some(c) = target.answer_letter() {
                         if !letters.contains(&c) {
                             let set_str = record::canonical_set(&record::AnswerSet::Letters(
@@ -373,22 +360,13 @@ pub fn run(record_path: PathBuf) -> i32 {
             return 1;
         }
 
+        // `terms::resolve` never matches a retired term (9.3 B), so a
+        // retired-match refusal cannot fire here; a word that only a
+        // retired term owns simply pairs nothing, caught by refusal 6
+        // below.
         let pairs = terms::resolve(&text, &terms_list);
 
-        // Refusal 6: a retired term match.
-        for (word, tid) in &pairs {
-            if let Some(t) = terms_list.iter().find(|t| t.id.as_deref() == Some(tid.as_str())) {
-                if t.retired {
-                    eprintln!(
-                        "ask: {}: \"{}\" resolves \"{}\" to retired term \"{}\"; owner edits the topic file or un-retires the term",
-                        rel, sec.heading_text, word, t.name
-                    );
-                    return 1;
-                }
-            }
-        }
-
-        // Refusal 7: zero pairings.
+        // Refusal 6: zero pairings.
         if pairs.is_empty() {
             eprintln!(
                 "ask: {}: \"{}\" pairs no term; agent adds the term to adrdom/terms.md or rewrites the question",
@@ -398,35 +376,16 @@ pub fn run(record_path: PathBuf) -> i32 {
         }
     }
 
-    // Insert missing ids, bottom-to-top so earlier insertions don't shift
-    // the line numbers sections below still need to be found at.
-    // Only candidates get ids: a skeleton heading stays without one (4.7).
-    let needs_id: Vec<bool> = rf
-        .sections
-        .iter()
-        .enumerate()
-        .map(|(i, s)| candidate[i] && s.id.is_none())
-        .collect();
-    let mut ids_inserted = false;
-    for i in (0..rf.sections.len()).rev() {
-        if needs_id[i] {
-            let start = rf.sections[i].start;
-            let new_id = Uuid::new_v4().to_string();
-            rf.lines.splice(
-                start + 1..start + 1,
-                [String::new(), format!("id: {}", new_id), String::new()],
-            );
-            ids_inserted = true;
-        }
-    }
-    if ids_inserted {
-        rf.sections = record::parse_sections(&rf.lines);
-    }
+    // 9.1 A: ask writes no ids. Every non-skeleton section already has one
+    // here -- refusal 4 above (`plan_approved`) already refused whenever
+    // one is missing, since `approve` mints every heading's id in the same
+    // pass that makes the plan hash match, and any further edit that added
+    // a heading lacking one would already have moved the plan hash.
 
     // Write/replace the `terms:` line directly under the `id:` line for
     // every candidate, bottom-to-top so earlier sections' line numbers are
     // unaffected by a section growing or shrinking by one line. Every
-    // candidate reaching this point paired at least one term (refusal 7
+    // candidate reaching this point paired at least one term (refusal 6
     // above), so the pairings are never empty here: ask never deletes a
     // terms line, and a candidate section whose id line cannot be found is
     // an error, not a silent skip.
@@ -441,7 +400,7 @@ pub fn run(record_path: PathBuf) -> i32 {
         let new_line = match terms::format_terms_line(&pairs) {
             Some(nl) => nl,
             None => {
-                // Unreachable given refusal 7 above, but never silently
+                // Unreachable given refusal 6 above, but never silently
                 // drop a binding if it somehow happens.
                 eprintln!(
                     "ask: {}: \"{}\": pairs no term at write time; owner re-runs ask",
@@ -480,6 +439,13 @@ pub fn run(record_path: PathBuf) -> i32 {
     let mut summary: Vec<String> = Vec::new();
     for i in 0..rf.sections.len() {
         let sec = &rf.sections[i];
+        // 9.1 A point 1: `approve` now gives a skeleton an id too, so an
+        // id alone no longer means "this is a candidate" -- a skeleton
+        // must still never be asked, exactly as `candidate` above already
+        // excludes it from becoming one.
+        if sec.is_skeleton {
+            continue;
+        }
         let Some(id) = sec.id.clone() else { continue };
         let cur = record::section_hash(&rf.lines, sec);
         let label = match led.latest_state(&id) {
@@ -511,13 +477,21 @@ pub fn run(record_path: PathBuf) -> i32 {
                 continue;
             };
             let dependent = &rf.sections[di];
+            // 9.1 A point 3: an `assumes` row keys on the dependent's own
+            // heading id, not its heading text -- every heading already has
+            // one by the time `ask` runs (approve mints them all up front),
+            // so the row stays valid across a rename that doesn't otherwise
+            // change the plan.
+            let Some(dep_id) = dependent.id.clone() else {
+                continue;
+            };
             let set_str = record::canonical_set(set);
             new_rows.push(ledger::Row {
                 time: ledger::now_rfc3339(),
                 event: "assumes".to_string(),
                 id: id.clone(),
-                hash: record::assumes_hash(&dependent.heading_text, set),
-                detail: dependent.heading_text.clone(),
+                hash: record::assumes_hash(&dep_id, set),
+                detail: dep_id,
                 version: crate::version::VERSION.to_string(),
             });
             summary.push(format!(

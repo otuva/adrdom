@@ -79,9 +79,13 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                             rf.rel, sec.heading_text
                         ),
                     });
-                } else {
-                    let latest_asked_hash = led.latest_asked(id).map(|r| r.hash.clone());
-                    if latest_asked_hash.as_deref() != Some(cur.as_str()) {
+                } else if let Some(latest_asked_hash) = led.latest_asked(id).map(|r| r.hash.clone()) {
+                    // 9.1 A: `approve` now gives every heading an id,
+                    // including one never asked at all (a skeleton, or a
+                    // real question still waiting on an earlier tier) --
+                    // only a section that genuinely was asked before, and
+                    // no longer hashes the same, is "edited after asking".
+                    if latest_asked_hash != cur {
                         out.push(Failure {
                             check: "answers".to_string(),
                             id: Some(id.clone()),
@@ -101,12 +105,14 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
     out
 }
 
-/// 8.7 A: for every `assumes` row of an asked/answered/refused id, the
-/// file's current set on that dependent entry must still hash to the row's
-/// hash -- a change to a depends line's answer set after the question was
-/// asked is a plan change, caught here rather than silently taking effect.
-/// A dependent heading that disappeared since (renamed or removed) is fine:
-/// the plan changed, and there is nothing left to compare against.
+/// 8.7 A, updated by 9.1 A: for every `assumes` row of an asked/answered/
+/// refused id, the file's current set on that dependent entry must still
+/// hash to the row's hash -- a change to a depends line's answer set after
+/// the question was asked is a plan change, caught here rather than
+/// silently taking effect. The row's `detail` is the dependent's own
+/// heading id (9.1 A point 3), not its heading text; a dependent id that
+/// disappeared since (the heading removed, or the plan otherwise changed)
+/// is fine: there is nothing left to compare against.
 fn check_frozen_sets(
     rf: &RecordFile,
     ti: usize,
@@ -127,21 +133,22 @@ fn check_frozen_sets(
     }
     let dependents = rf.dependents_of(ti);
     for row in &assumes_rows {
-        let dep_heading = row.detail.trim();
-        let Some((_, set)) = dependents
+        let dep_id = row.detail.trim();
+        let Some((di, set)) = dependents
             .iter()
-            .find(|(di, _)| rf.sections[*di].heading_text.trim() == dep_heading)
+            .find(|(di, _)| rf.sections[*di].id.as_deref() == Some(dep_id))
         else {
-            // Disappeared dependent heading: fine, the plan changed.
+            // Disappeared dependent id: fine, the plan changed.
             continue;
         };
+        let dep_heading = rf.sections[*di].heading_text.clone();
         // No set at all (the depends line lost its `=...` suffix since
         // asking) hashes the same empty-set text `set_text`/`canonical_set`
         // used to: never a match against a recorded `assumes` hash, which
         // is always written for a determined set.
         let expected = match set {
-            Some(s) => record::assumes_hash(dep_heading, s),
-            None => record::sha256_hex(&format!("{}=", dep_heading)),
+            Some(s) => record::assumes_hash(dep_id, s),
+            None => record::sha256_hex(&format!("{}=", dep_id)),
         };
         if expected != row.hash {
             out.push(Failure {

@@ -3,9 +3,14 @@ mod common;
 use common::*;
 use std::path::Path;
 
+// 9.1 A: every heading needs a `depends:` line for the real `adr approve`
+// these tests now go through (see `approve_record` in tests/common/mod.rs);
+// `depends: authority` reuses the term `approve_minimal_terms(&dir,
+// "authority")` sets up in every test below.
 const FIRST_QUESTION: &str = r#"# Example
 
 ### 1.1 What is the unit of authority called?
+depends: authority
 
 Problem: names leaked into decisions.
 
@@ -21,6 +26,7 @@ Standard: plain words.
 
 const SECOND_QUESTION: &str = r#"
 ### 1.2 What is the second unit of authority called?
+depends: authority
 
 Problem: naming the second unit.
 
@@ -36,6 +42,7 @@ Standard: plain words.
 
 const THIRD_QUESTION: &str = r#"
 ### 1.3 What is the third unit of authority called?
+depends: authority
 
 Problem: naming the third unit.
 
@@ -55,7 +62,7 @@ fn answer_writes_answer_line_and_ledger_row() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -82,12 +89,12 @@ fn answer_writes_answer_line_and_ledger_row() {
 }
 
 #[test]
-fn answer_refuses_when_claudecode_is_set() {
+fn answer_refuses_without_an_interactive_terminal() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -96,15 +103,16 @@ fn answer_refuses_when_claudecode_is_set() {
     let ids = extract_ids(&content);
     let question_id = &ids[0];
 
-    // CLAUDECODE set, no bypass: must be refused with exit code 2, and
-    // nothing should be written.
-    let out = adr(
-        &dir,
-        &["answer", question_id, "A"],
-        &[("CLAUDECODE", "1")],
-        "",
-    );
+    // No owner bypass: stdin is piped (never a TTY) in this harness, so the
+    // gate (9.2 A: stdin is an interactive terminal, no env var) refuses
+    // with exit code 2 and nothing should be written.
+    let out = adr(&dir, &["answer", question_id, "A"], &[], "");
     assert_eq!(out.status.code(), Some(2), "stderr: {}", stderr(&out));
+    assert!(
+        stderr(&out).contains("this is the owner's command"),
+        "stderr: {}",
+        stderr(&out)
+    );
 
     let after = std::fs::read_to_string(&record).unwrap();
     assert!(
@@ -127,7 +135,7 @@ fn answer_with_supersedes_writes_superseded_row_and_show_hides_old() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -156,7 +164,7 @@ fn answer_with_supersedes_writes_superseded_row_and_show_hides_old() {
     );
     content.push_str(&second_with_supersedes);
     std::fs::write(&record, &content).unwrap();
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
+    approve_record(&dir, "adrdom/decisions/example.md");
 
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
@@ -207,7 +215,7 @@ fn answer_with_two_id_supersedes_writes_a_row_per_id() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -219,7 +227,7 @@ fn answer_with_two_id_supersedes_writes_a_row_per_id() {
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(SECOND_QUESTION);
     std::fs::write(&record, &content).unwrap();
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -244,7 +252,7 @@ fn answer_with_two_id_supersedes_writes_a_row_per_id() {
     );
     content.push_str(&third_with_supersedes);
     std::fs::write(&record, &content).unwrap();
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -277,7 +285,7 @@ fn answer_refuses_a_second_time_with_already_answered_message() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -319,7 +327,7 @@ fn answer_with_two_id_supersedes_refuses_when_one_is_not_current() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -332,7 +340,7 @@ fn answer_with_two_id_supersedes_refuses_when_one_is_not_current() {
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(SECOND_QUESTION);
     std::fs::write(&record, &content).unwrap();
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -353,7 +361,7 @@ fn answer_with_two_id_supersedes_refuses_when_one_is_not_current() {
     );
     content.push_str(&third_with_supersedes);
     std::fs::write(&record, &content).unwrap();
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -388,12 +396,12 @@ fn answer_with_two_id_supersedes_refuses_when_one_is_not_current() {
 }
 
 #[test]
-fn answer_accepts_a_supersedes_target_already_superseded_as_lineage() {
+fn answer_refuses_a_supersedes_target_already_superseded() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -414,7 +422,7 @@ fn answer_accepts_a_supersedes_target_already_superseded_as_lineage() {
         1,
     ));
     std::fs::write(&record, &content).unwrap();
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -426,8 +434,9 @@ fn answer_accepts_a_supersedes_target_already_superseded_as_lineage() {
     let answer_out = adr_owner(&dir, &["answer", &second_id, "A"], "");
     assert!(answer_out.status.success(), "answer 1.2 failed: {}", stderr(&answer_out));
 
-    // The third question names the same, now superseded, first id: the
-    // answer is accepted as lineage and writes a second superseded row.
+    // The third question names the same, now superseded, first id: a
+    // supersedes target must be current (4.14 A), so this refuses instead
+    // of being accepted as lineage.
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(&THIRD_QUESTION.replacen(
         "### 1.3 What is the third unit of authority called?\n",
@@ -438,7 +447,7 @@ fn answer_accepts_a_supersedes_target_already_superseded_as_lineage() {
         1,
     ));
     std::fs::write(&record, &content).unwrap();
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -448,14 +457,77 @@ fn answer_accepts_a_supersedes_target_already_superseded_as_lineage() {
         .find(|id| id != &old_id && id != &second_id)
         .expect("third id assigned");
     let answer_out = adr_owner(&dir, &["answer", &third_id, "A"], "");
-    assert!(answer_out.status.success(), "lineage answer failed: {}", stderr(&answer_out));
+    assert!(
+        !answer_out.status.success(),
+        "answer should have refused: {}",
+        stdout(&answer_out)
+    );
+    let err = stderr(&answer_out);
+    assert!(err.contains(old_id.as_str()), "{}", err);
+    assert!(err.contains("is not a current decision"), "{}", err);
 
+    let after = std::fs::read_to_string(&record).unwrap();
+    assert_eq!(
+        after.matches("**Answer:**").count(),
+        2,
+        "answer must not have written an answer for 1.3: {}",
+        after
+    );
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let rows = ledger
         .lines()
         .filter(|l| l.contains("\tsuperseded\t") && l.contains(old_id.as_str()))
         .count();
-    assert_eq!(rows, 2, "expected two superseded rows for the first id: {}", ledger);
+    assert_eq!(rows, 1, "expected exactly one superseded row for the first id: {}", ledger);
+}
+
+#[test]
+fn answer_accepts_a_supersedes_target_that_is_current() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let old_id = extract_ids(&content)[0].clone();
+    let answer_out = adr_owner(&dir, &["answer", &old_id, "A"], "");
+    assert!(answer_out.status.success(), "answer 1.1 failed: {}", stderr(&answer_out));
+
+    // The second question supersedes the first while it is still current
+    // (latest state `answered`): accepted.
+    let mut content = std::fs::read_to_string(&record).unwrap();
+    content.push_str(&SECOND_QUESTION.replacen(
+        "### 1.2 What is the second unit of authority called?\n",
+        &format!(
+            "### 1.2 What is the second unit of authority called?\n\nsupersedes: {}\n",
+            old_id
+        ),
+        1,
+    ));
+    std::fs::write(&record, &content).unwrap();
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let second_id = extract_ids(&content)
+        .into_iter()
+        .find(|id| id != &old_id)
+        .expect("second id assigned");
+    let answer_out = adr_owner(&dir, &["answer", &second_id, "A"], "");
+    assert!(answer_out.status.success(), "answer 1.2 failed: {}", stderr(&answer_out));
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        ledger
+            .lines()
+            .any(|l| l.contains("\tsuperseded\t") && l.contains(old_id.as_str())),
+        "expected a superseded row for the first id: {}",
+        ledger
+    );
 }
 
 // --- answer's own terms.md gates (6) ---------------------------------------
@@ -466,7 +538,7 @@ fn answer_refuses_when_terms_md_is_missing() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -490,7 +562,7 @@ fn answer_refuses_when_terms_md_has_a_shape_error() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -515,7 +587,7 @@ fn answer_refuses_when_terms_md_is_not_approved() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -539,10 +611,10 @@ fn answer_refuses_when_terms_md_is_not_approved() {
 fn answer_refuses_a_section_with_no_terms_line() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    let content = "# Topic\n\n### 1.1 What is the authority?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n  Costs: z.\n- B) w.\n  Why: y.\n  Costs: z.\n";
-    let record = write_record(&dir, "adrdom/decisions/example.md", content);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", content);
     approve_minimal_terms(&dir, "authority");
+    let content = "# Topic\n\n### 1.1 What is the authority?\ndepends: authority\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n  Costs: z.\n- B) w.\n  Why: y.\n  Costs: z.\n";
+    let record = write_record(&dir, "adrdom/decisions/example.md", content);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -551,7 +623,7 @@ fn answer_refuses_a_section_with_no_terms_line() {
     let id = extract_ids(&asked)[0].clone();
 
     // Strip the `terms:` line ask just wrote, restoring the section's text
-    // to exactly what it was before that line existed (`ask`'s id
+    // to exactly what it was before that line existed (`approve`'s id
     // insertion leaves two blank lines where the original single blank
     // line was, so this is derived from the real file rather than
     // hand-assembled), and hand-write a matching `asked` row for that
@@ -606,7 +678,7 @@ fn answer_refuses_a_malformed_terms_line() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -635,7 +707,7 @@ fn answer_refuses_a_terms_line_naming_a_nonexistent_term() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -667,7 +739,7 @@ fn answer_refuses_a_terms_line_naming_a_retired_term() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());

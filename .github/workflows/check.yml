@@ -1,0 +1,25 @@
+name: check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      # `adr check` only ever reads the current commit's tree (`git show
+      # HEAD:...`) and the working tree/index, never older commits, so the
+      # default shallow checkout is enough.
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: cargo test --all-features
+        run: cargo test --all-features
+
+      - name: cargo build --release
+        run: cargo build --release
+
+      - name: adr check
+        run: ./target/release/adr check

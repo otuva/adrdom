@@ -8,7 +8,8 @@ fn example_record_round_trips_and_ask_assigns_ids() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_terms_with(&dir, &["decision", "example"]);
     let record = write_record(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
+    // 9.1 A: `approve`, not `ask`, mints the heading's id now.
+    approve_record(&dir, "adrdom/decisions/example.md");
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "ask failed: {}", stderr(&out));
@@ -40,7 +41,7 @@ fn ask_reasks_on_edit() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_terms_with(&dir, &["decision", "example"]);
     let record = write_record(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -85,7 +86,7 @@ fn ask_refuses_to_edit_an_answered_section() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_terms_with(&dir, &["decision", "example"]);
     let record = write_record(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -167,22 +168,36 @@ fn ask_refuses_a_question_with_four_options() {
 }
 
 #[test]
-fn ask_leaves_a_skeleton_heading_without_id_or_row() {
+fn ask_leaves_a_skeleton_heading_unasked_though_approve_gave_it_an_id() {
+    // 9.1 A point 1: `approve` gives every heading an id, skeletons
+    // included -- but `ask` still never asks a skeleton, so it gets no
+    // ledger row for it.
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_terms_with(&dir, &["decision", "example"]);
-    let content = format!("{}\n### 1.2 Where does the plan live?\n", EXAMPLE_RECORD);
+    let content = format!(
+        "{}\n### 1.2 Where does the plan live?\ndepends: example\n",
+        EXAMPLE_RECORD
+    );
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    let after_approve = std::fs::read_to_string(&record).unwrap();
+    let idx = after_approve.find("### 1.2 Where does the plan live?").unwrap();
+    assert!(
+        after_approve[idx..].contains("id: "),
+        "approve should have given the skeleton an id too: {}",
+        &after_approve[idx..]
+    );
+
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "ask failed: {}", stderr(&out));
-    let after = std::fs::read_to_string(&record).unwrap();
-    let idx = after.find("### 1.2 Where does the plan live?").unwrap();
-    assert!(
-        !after[idx..].contains("id: "),
-        "skeleton heading got an id: {}",
-        &after[idx..]
-    );
+    let after_ask = std::fs::read_to_string(&record).unwrap();
+    // `ask` does rewrite the other (real) question's `terms:` line, but the
+    // skeleton's own slice of the file -- from its heading onward, since it
+    // is the last heading -- must stay exactly as `approve` left it.
+    let skeleton_before = &after_approve[idx..];
+    let skeleton_after = &after_ask[after_ask.find("### 1.2 Where does the plan live?").unwrap()..];
+    assert_eq!(skeleton_after, skeleton_before, "ask must not touch the skeleton section");
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(!ledger.contains("Where does the plan live?"));
 }
@@ -193,6 +208,7 @@ fn ask_leaves_a_skeleton_heading_without_id_or_row() {
 const AUTHORITY_QUESTION: &str = r#"# Example
 
 ### 1.1 What is the unit of authority called?
+depends: decision
 
 Problem: names leaked into decisions.
 
@@ -285,7 +301,12 @@ fn ask_refuses_on_a_banned_word_with_no_term_name() {
 }
 
 #[test]
-fn ask_refuses_a_retired_match() {
+fn ask_pairs_nothing_for_a_word_only_on_a_retired_term() {
+    // "authority" only appears on a retired term, and the question's own
+    // text pairs no other term: `resolve` never matches a retired term
+    // (9.3 B), so the word pairs nothing at all, and the existing
+    // zero-pairing refusal fires -- there is no separate retired-match
+    // refusal any more.
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
@@ -315,9 +336,51 @@ fn ask_refuses_a_retired_match() {
     assert!(!out.status.success());
     let err = stderr(&out);
     assert!(
-        err.contains("resolves \"authority\" to retired term \"authority\""),
+        err.contains("\"1.1 What is the unit of authority called?\" pairs no term"),
         "{}",
         err
+    );
+}
+
+#[test]
+fn ask_pairs_a_word_to_the_current_term_that_took_it_from_a_retired_one() {
+    // A retired term and a current term share the same word ("authority"):
+    // `duplicate_word_errors` allows this since the retired entry is
+    // ignored, and a new pairing (ask's terms line) sees current terms
+    // only, so the word binds to the current term's id.
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    // The "decision" term must exist and be approved before `approve` runs
+    // on the record, so it can resolve the heading's own `depends:
+    // decision` line to an id.
+    let terms = "# Terms\n\n\
+## decision\n\
+id: 33333333-3333-3333-3333-333333333333\n\
+definition: A fixture term.\n\
+aliases: \n\
+\n\
+## authority\n\
+id: 11111111-1111-1111-1111-111111111111\n\
+definition: The old fixture term.\n\
+aliases: \n\
+retired: yes\n\
+\n\
+## power\n\
+id: 22222222-2222-2222-2222-222222222222\n\
+definition: The new fixture term.\n\
+aliases: authority\n";
+    write_record(&dir, "adrdom/terms.md", terms);
+    approve_terms_via_ledger(&dir, terms);
+    let record = write_record(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
+
+    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    let content = std::fs::read_to_string(&record).unwrap();
+    assert!(
+        content.contains("terms: authority=22222222-2222-2222-2222-222222222222"),
+        "{}",
+        content
     );
 }
 
@@ -349,9 +412,11 @@ fn ask_refuses_a_candidate_that_pairs_no_term() {
 fn ask_writes_the_terms_line_with_a_plural_word() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    let record = write_record(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
+    // The term must exist before `approve` runs, so it can resolve the
+    // heading's own `depends: decision` line.
     approve_minimal_terms(&dir, "decision");
+    let record = write_record(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "ask failed: {}", stderr(&out));

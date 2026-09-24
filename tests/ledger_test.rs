@@ -27,7 +27,7 @@ fn ledger_append_only_violation_is_detected_after_a_commit() {
     std::fs::write(dir.join("adrdom/terms.md"), terms).unwrap();
     approve_terms_via_ledger(&dir, terms);
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());

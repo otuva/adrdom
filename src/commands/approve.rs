@@ -4,9 +4,7 @@ use std::path::PathBuf;
 
 pub fn run(file: PathBuf) -> i32 {
     if !repo::owner_authorized() {
-        eprintln!(
-            "approve: refusing: owner authorization required (interactive TTY, no CLAUDECODE)"
-        );
+        eprintln!("{}", repo::owner_refusal("approve", &file.display().to_string()));
         return 2;
     }
 

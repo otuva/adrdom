@@ -32,7 +32,7 @@ fn answer_one_question(dir: &std::path::Path) -> (std::path::PathBuf, String) {
     std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
     approve_terms_via_ledger(dir, terms_content);
     let record = write_record(dir, "adrdom/decisions/example.md", ONE_QUESTION);
-    approve_via_ledger(dir, "adrdom/decisions/example.md", ONE_QUESTION);
+    approve_record(dir, "adrdom/decisions/example.md");
     assert!(adr(dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -77,15 +77,22 @@ fn check_parse_failure() {
 
 #[test]
 fn check_ids_failure_missing_id() {
+    // 9.1 A point 9: a missing id means the plan was never approved --
+    // `approve`, not `ask`, is what gives a heading one, so the message
+    // points at `approve`.
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
-    // No `adr ask` run, so the section has no id.
+    // No `adr approve` run, so the section has no id.
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(stdout(&out).contains("ids:"), "{}", stdout(&out));
-    assert!(stdout(&out).contains("missing id"), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains("plan not approved; owner runs: adr approve adrdom/decisions/example.md"),
+        "{}",
+        stdout(&out)
+    );
 }
 
 #[test]
@@ -110,7 +117,7 @@ fn check_answers_failure_hand_written_answer_line() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "pass");
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -127,6 +134,28 @@ fn check_answers_failure_hand_written_answer_line() {
         "{}",
         stdout(&out)
     );
+}
+
+#[test]
+fn check_passes_a_skeleton_that_got_an_id_from_approve_but_was_never_asked() {
+    // 9.1 A: `approve` gives every heading an id, skeletons included --
+    // `check`'s answers check must not mistake "has an id but was never
+    // asked" for "edited after asking" just because a ledger `asked` row
+    // for that id doesn't exist yet.
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "pass");
+    let content = format!("{}\n### 3.2 Not written yet?\ndepends: pass\n", ONE_QUESTION);
+    let record = write_record(&dir, "adrdom/decisions/example.md", &content);
+    approve_record(&dir, "adrdom/decisions/example.md");
+
+    let after = std::fs::read_to_string(&record).unwrap();
+    let idx = after.find("### 3.2 Not written yet?").unwrap();
+    assert!(after[idx..].contains("id: "), "{}", &after[idx..]);
+
+    let out = adr(&dir, &["check"], &[], "");
+    let text = stdout(&out);
+    assert!(!text.contains("edited after asking"), "{}", text);
 }
 
 #[test]
@@ -325,6 +354,79 @@ fn check_install_passes_right_after_install_claude_created_claude_md() {
     assert!(
         !stdout(&out).contains("install:"),
         "check should pass right after install --claude: {}",
+        stdout(&out)
+    );
+}
+
+#[test]
+fn check_install_passes_when_no_codex_directory() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    assert!(
+        !dir.join(".codex").exists(),
+        "plain install must not create .codex"
+    );
+
+    let out = adr(&dir, &["check"], &[], "");
+    let out_text = stdout(&out);
+    assert!(
+        !out_text.contains("install:"),
+        "no .codex directory should not trigger the install check: {}",
+        out_text
+    );
+}
+
+#[test]
+fn check_install_passes_right_after_install_codex() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install", "--codex"], &[], "").status.success());
+    assert!(dir.join(".codex/rules/adrdom.rules").is_file());
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(
+        !stdout(&out).contains("install:"),
+        "check should pass right after install --codex: {}",
+        stdout(&out)
+    );
+}
+
+#[test]
+fn check_install_fails_when_codex_rules_missing_and_passes_after_reinstall() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install", "--codex"], &[], "").status.success());
+    std::fs::remove_file(dir.join(".codex/rules/adrdom.rules")).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let out_text = stdout(&out);
+    assert!(
+        out_text.contains(".codex/rules/adrdom.rules missing"),
+        "{}",
+        out_text
+    );
+    assert!(out_text.contains("adr install --codex"), "{}", out_text);
+
+    assert!(adr(&dir, &["install", "--codex"], &[], "").status.success());
+    let out2 = adr(&dir, &["check"], &[], "");
+    assert!(
+        !stdout(&out2).contains("install:"),
+        "install check should pass after re-install --codex: {}",
+        stdout(&out2)
+    );
+}
+
+#[test]
+fn check_install_fails_when_codex_rules_edited() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install", "--codex"], &[], "").status.success());
+    std::fs::write(dir.join(".codex/rules/adrdom.rules"), "edited\n").unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    assert!(
+        stdout(&out).contains(".codex/rules/adrdom.rules differs from this binary's"),
+        "{}",
         stdout(&out)
     );
 }

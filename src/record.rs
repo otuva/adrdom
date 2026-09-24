@@ -20,16 +20,34 @@ pub enum AnswerSet {
     Letters(Vec<char>),
 }
 
-/// One `depends:` line, classified by shape (spec point 1): a uuid is a
-/// decision, text ending in `?` is a heading in the same file (optionally
-/// carrying an answer set), anything else is a term name or alias. Term and
-/// decision resolution happens in the commands (`approve`/`ask`), not here:
-/// record.rs has no ledger or terms access.
+/// One `depends:` line, classified only by whether it is a uuid or still
+/// words (9.1 A): `Id` is a uuid already written to the file, resolved by
+/// lookup (a heading id in this file, a term id, or a decision id) rather
+/// than by shape, since `approve` is the only command that mints an id and
+/// rewrites a `depends:` line to one. `Text` is anything still unresolved:
+/// heading-shaped (ends in `?`, optionally carrying an answer set) or
+/// term-shaped otherwise, exactly as `approve` classifies it when rewriting.
+/// Term/decision/heading resolution for an `Id` or a term-shaped `Text`
+/// happens in the commands (`approve`/`ask`/`check`), not here: record.rs has
+/// no ledger or terms access; a heading-shaped reference (either form) is
+/// resolved locally, in memory, against this file's own sections (used by
+/// `derive_tiers`/`dependents_of` so `show` can print tiers even before a
+/// plan is approved).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Dep {
-    Term(String),
-    Heading { text: String, set: Option<AnswerSet> },
-    Decision(String),
+    Id { id: String, set: Option<AnswerSet> },
+    Text { text: String, set: Option<AnswerSet> },
+}
+
+impl Dep {
+    /// The answer-set suffix carried by this entry, if any, regardless of
+    /// whether it is still words or already an id.
+    pub fn set(&self) -> Option<&AnswerSet> {
+        match self {
+            Dep::Id { set, .. } => set.as_ref(),
+            Dep::Text { set, .. } => set.as_ref(),
+        }
+    }
 }
 
 /// Why `derive_tiers` could not assign every section a tier.
@@ -150,21 +168,40 @@ impl RecordFile {
         self.tiers.as_ref().and_then(|t| t.get(idx).copied())
     }
 
+    /// The section index a heading-shaped `depends:` entry names in this
+    /// file, if any: an `Id` entry is matched by the target section's id
+    /// (the form every heading dep takes once the plan is approved); a
+    /// `Text` entry is matched only when heading-shaped (ends in `?`)
+    /// against the target's heading text (the pre-approval form, so `show`
+    /// can still derive tiers before `approve` has minted anything). `None`
+    /// for a term/decision reference, or a `Text` entry naming no heading in
+    /// this file (a dangling reference, reported elsewhere).
+    pub fn dep_target(&self, d: &Dep) -> Option<usize> {
+        match d {
+            Dep::Id { id, .. } => self.sections.iter().position(|s| s.id.as_deref() == Some(id.as_str())),
+            Dep::Text { text, .. } => {
+                let t = text.trim();
+                if !t.ends_with('?') {
+                    return None;
+                }
+                self.sections.iter().position(|s| s.heading_text.trim() == t)
+            }
+        }
+    }
+
     /// Sections whose heading `depends:` entry names section `idx`'s
-    /// heading text (exact match after trim), paired with the set they
-    /// declare on that entry, if any.
+    /// heading (by id once approved, by heading text before), paired with
+    /// the set they declare on that entry, if any (8.3 A, updated by 9.1 A:
+    /// dependents_of keys on heading ids once they exist).
     pub fn dependents_of(&self, idx: usize) -> Vec<(usize, Option<&AnswerSet>)> {
         let mut out = Vec::new();
-        let Some(target) = self.sections.get(idx) else {
+        if self.sections.get(idx).is_none() {
             return out;
-        };
-        let target_text = target.heading_text.trim();
+        }
         for (i, sec) in self.sections.iter().enumerate() {
             for d in &sec.depends {
-                if let Dep::Heading { text, set } = d {
-                    if text.trim() == target_text {
-                        out.push((i, set.as_ref()));
-                    }
+                if self.dep_target(d) == Some(idx) {
+                    out.push((i, d.set()));
                 }
             }
         }
@@ -205,7 +242,11 @@ pub fn load_in(root: &Path, path: &Path) -> std::io::Result<RecordFile> {
     Ok(rf)
 }
 
-fn build(path: PathBuf, rel: String, lines: Vec<String>) -> RecordFile {
+/// Rebuilds a `RecordFile` from an in-memory line buffer (re-parsing
+/// sections, shape, and tiers): used by `approve` to reparse after minting
+/// heading ids, so the depends-rewrite pass sees each target's freshly
+/// minted id.
+pub(crate) fn build(path: PathBuf, rel: String, lines: Vec<String>) -> RecordFile {
     let sections = parse_sections(&lines);
     let (topic, context_range, shape_errors) = analyze_shape(&lines, &sections);
     let mut rf = RecordFile {
@@ -347,46 +388,53 @@ fn parse_answer_set(s: &str) -> Option<AnswerSet> {
     Some(AnswerSet::Letters(letters))
 }
 
-/// Classifies one `depends:` entry (the trimmed text after `depends: `) by
-/// shape (spec point 1). `Err` names why the entry is malformed, without
-/// the "depends: " prefix or line number (the caller adds those).
+/// Classifies one `depends:` entry (the trimmed text after `depends: `) into
+/// `Id` (a uuid, with or without a trailing `=set`) or `Text` (words, with
+/// or without a trailing `=set` on a heading-shaped base). `Err` names why
+/// the entry is malformed, without the "depends: " prefix or line number
+/// (the caller adds those).
 fn parse_depends_entry(raw: &str) -> Result<Dep, String> {
     if raw.is_empty() {
         return Err("empty entry".to_string());
     }
-    if is_uuid(raw) {
-        return Ok(Dep::Decision(raw.to_string()));
-    }
     if let Some(eq_idx) = raw.rfind('=') {
         let base = raw[..eq_idx].trim_end();
-        if base.ends_with('?') {
+        if is_uuid(base) || base.ends_with('?') {
             let set_str = &raw[eq_idx + 1..];
             return match parse_answer_set(set_str) {
-                Some(set) => Ok(Dep::Heading {
-                    text: base.to_string(),
-                    set: Some(set),
+                Some(set) => Ok(if is_uuid(base) {
+                    Dep::Id {
+                        id: base.to_string(),
+                        set: Some(set),
+                    }
+                } else {
+                    Dep::Text {
+                        text: base.to_string(),
+                        set: Some(set),
+                    }
                 }),
                 None => Err("bad set syntax".to_string()),
             };
         }
     }
-    if raw.ends_with('?') {
-        return Ok(Dep::Heading {
-            text: raw.to_string(),
+    if is_uuid(raw) {
+        return Ok(Dep::Id {
+            id: raw.to_string(),
             set: None,
         });
     }
-    Ok(Dep::Term(raw.to_string()))
+    Ok(Dep::Text {
+        text: raw.to_string(),
+        set: None,
+    })
 }
 
 /// Whether two successfully-parsed deps name the same target (ignoring any
-/// answer set on a heading dep): used to catch a `depends:` line repeated
-/// under one heading.
+/// answer set): used to catch a `depends:` line repeated under one heading.
 fn dep_identity_eq(a: &Dep, b: &Dep) -> bool {
     match (a, b) {
-        (Dep::Term(x), Dep::Term(y)) => x == y,
-        (Dep::Decision(x), Dep::Decision(y)) => x == y,
-        (Dep::Heading { text: x, .. }, Dep::Heading { text: y, .. }) => x == y,
+        (Dep::Id { id: x, .. }, Dep::Id { id: y, .. }) => x == y,
+        (Dep::Text { text: x, .. }, Dep::Text { text: y, .. }) => x == y,
         _ => false,
     }
 }
@@ -593,16 +641,18 @@ fn scan_body(lines: &[String], start: usize, end: usize) -> BodyScan {
     }
 }
 
-/// A heading whose body holds only blank lines and `depends:` lines (4.7 A,
-/// updated by 8.3): needs no id, never a failure.
+/// A heading whose body holds only blank lines, `depends:` lines, and an
+/// `id:` line (4.7 A, updated by 8.3/9.1 A): needs no id of its own to stay
+/// a skeleton, but `approve` gives every heading an id, skeletons included,
+/// so a skeleton must stay a skeleton once it has one.
 fn is_skeleton_range(lines: &[String], start: usize, end: usize) -> bool {
     ((start + 1)..end).all(|j| {
         let t = lines[j].trim();
-        // Same prefix `kv` requires (line 299): "depends:" with no space
-        // after the colon is a typo, not a depends line, so it must not be
-        // silently swallowed as skeleton -- it falls through and
+        // Same prefix `kv` requires (line 299): "depends:"/"id:" with no
+        // space after the colon is a typo, not a real field, so it must not
+        // be silently swallowed as skeleton -- it falls through and
         // `scan_body` reports it as a stray line instead.
-        t.is_empty() || t.starts_with("depends: ")
+        t.is_empty() || t.starts_with("depends: ") || t.starts_with("id: ")
     })
 }
 
@@ -717,22 +767,26 @@ fn analyze_shape(lines: &[String], sections: &[Section]) -> (Option<String>, (us
     (topic, context_range, shape_errors)
 }
 
-/// sha256 of the question heading lines (trimmed text incl. the `### `
-/// prefix) in file order, each followed by its `depends:` lines with any
-/// `=set` suffix stripped (8.7 A: approve hashes the target, not the set),
-/// joined with `\n`. Changes on an added, reordered, or renamed heading, or
-/// a changed/added/removed depends target; unaffected by a body edit or a
-/// depends entry's answer set.
+/// sha256 of, per section: the question heading line (trimmed text incl.
+/// the `### ` prefix), its `id:` line if it has one, and its `depends:`
+/// lines with any `=set` suffix stripped (8.7 A: approve hashes the target,
+/// not the set; 9.1 A: the id line is now part of the plan, so minting or
+/// swapping one is a plan change), joined with `\n`. Changes on an added,
+/// reordered, or renamed heading, a heading gaining/losing/swapping its id,
+/// or a changed/added/removed depends target; unaffected by a body edit or
+/// a depends entry's answer set.
 #[allow(dead_code)]
 pub fn plan_hash(rf: &RecordFile) -> String {
     let mut out: Vec<String> = Vec::new();
     for s in &rf.sections {
         out.push(rf.lines[s.start].trim_end().to_string());
+        if let Some(id) = &s.id {
+            out.push(format!("id: {}", id));
+        }
         for d in &s.depends {
             let entry_text: &str = match d {
-                Dep::Term(t) => t.as_str(),
-                Dep::Decision(id) => id.as_str(),
-                Dep::Heading { text, .. } => text.as_str(),
+                Dep::Id { id, .. } => id.as_str(),
+                Dep::Text { text, .. } => text.as_str(),
             };
             out.push(format!("depends: {}", entry_text).trim_end().to_string());
         }
@@ -800,11 +854,13 @@ pub fn canonical_set(set: &AnswerSet) -> String {
     }
 }
 
-/// sha256 of `<dependent heading>=<canonical set>` (spec §2): an `assumes`
-/// row's hash, and what `check`'s frozen-set comparison recomputes against
-/// the depends line as currently written.
-pub fn assumes_hash(dependent_heading: &str, set: &AnswerSet) -> String {
-    sha256_hex(&format!("{}={}", dependent_heading, canonical_set(set)))
+/// sha256 of `<dependent key>=<canonical set>` (spec §2, updated by 9.1 A):
+/// an `assumes` row's hash, and what `check`'s frozen-set comparison
+/// recomputes against the depends line as currently written. `dependent_key`
+/// is the dependent section's own heading id (9.1 A point 3: `assumes` rows
+/// key on heading ids, not text).
+pub fn assumes_hash(dependent_key: &str, set: &AnswerSet) -> String {
+    sha256_hex(&format!("{}={}", dependent_key, canonical_set(set)))
 }
 
 pub fn section_hash(lines: &[String], sec: &Section) -> String {
@@ -862,6 +918,12 @@ pub const TIER_CAP: usize = 4;
 pub fn derive_tiers(rf: &RecordFile) -> Result<Vec<usize>, DeriveError> {
     let n = rf.sections.len();
 
+    let mut id_idx: HashMap<&str, usize> = HashMap::new();
+    for (i, sec) in rf.sections.iter().enumerate() {
+        if let Some(id) = &sec.id {
+            id_idx.entry(id.as_str()).or_insert(i);
+        }
+    }
     let mut heading_idx: HashMap<&str, usize> = HashMap::new();
     for (i, sec) in rf.sections.iter().enumerate() {
         heading_idx.entry(sec.heading_text.trim()).or_insert(i);
@@ -870,18 +932,40 @@ pub fn derive_tiers(rf: &RecordFile) -> Result<Vec<usize>, DeriveError> {
     let mut deps: Vec<Vec<usize>> = vec![Vec::new(); n];
     for (i, sec) in rf.sections.iter().enumerate() {
         for d in &sec.depends {
-            if let Dep::Heading { text, .. } = d {
-                let trimmed = text.trim();
-                if trimmed == sec.heading_text.trim() {
-                    return Err(DeriveError::SelfDep(sec.heading_text.clone()));
+            match d {
+                // An `Id` entry is a heading dep only when it matches a
+                // heading id in this same file (9.1 A); otherwise it is a
+                // term or decision reference, resolved elsewhere, and never
+                // affects tier -- never a Dangling error either, since it
+                // may legitimately resolve outside this file.
+                Dep::Id { id, .. } => {
+                    if let Some(&j) = id_idx.get(id.as_str()) {
+                        if j == i {
+                            return Err(DeriveError::SelfDep(sec.heading_text.clone()));
+                        }
+                        deps[i].push(j);
+                    }
                 }
-                match heading_idx.get(trimmed) {
-                    Some(&j) => deps[i].push(j),
-                    None => {
-                        return Err(DeriveError::Dangling {
-                            section: sec.heading_text.clone(),
-                            entry: text.clone(),
-                        })
+                // A `Text` entry is a heading dep only when heading-shaped
+                // (ends in `?`); this is the pre-approval form, resolved
+                // against headings in this file in memory so `show` can
+                // still derive tiers before `approve` has minted anything.
+                Dep::Text { text, .. } => {
+                    let trimmed = text.trim();
+                    if !trimmed.ends_with('?') {
+                        continue;
+                    }
+                    if trimmed == sec.heading_text.trim() {
+                        return Err(DeriveError::SelfDep(sec.heading_text.clone()));
+                    }
+                    match heading_idx.get(trimmed) {
+                        Some(&j) => deps[i].push(j),
+                        None => {
+                            return Err(DeriveError::Dangling {
+                                section: sec.heading_text.clone(),
+                                entry: text.clone(),
+                            })
+                        }
                     }
                 }
             }
@@ -1326,17 +1410,26 @@ mod tests {
         let sec = &rf.sections[1];
         assert_eq!(sec.shape_errors, Vec::<String>::new(), "{:?}", sec.shape_errors);
         assert_eq!(sec.depends.len(), 3);
-        assert_eq!(sec.depends[0], Dep::Term("widget".to_string()));
+        assert_eq!(
+            sec.depends[0],
+            Dep::Text {
+                text: "widget".to_string(),
+                set: None
+            }
+        );
         assert_eq!(
             sec.depends[1],
-            Dep::Heading {
+            Dep::Text {
                 text: "1.1 First question?".to_string(),
                 set: Some(AnswerSet::Letters(vec!['A']))
             }
         );
         assert_eq!(
             sec.depends[2],
-            Dep::Decision("11111111-1111-1111-1111-111111111111".to_string())
+            Dep::Id {
+                id: "11111111-1111-1111-1111-111111111111".to_string(),
+                set: None
+            }
         );
     }
 
@@ -1364,14 +1457,14 @@ mod tests {
         );
         assert_eq!(
             rf.sections[1].depends[0],
-            Dep::Heading {
+            Dep::Text {
                 text: "1.1 Q?".to_string(),
                 set: Some(AnswerSet::Letters(vec!['A', 'B']))
             }
         );
         assert_eq!(
             rf.sections[2].depends[0],
-            Dep::Heading {
+            Dep::Text {
                 text: "1.1 Q?".to_string(),
                 set: Some(AnswerSet::Any)
             }
@@ -1499,5 +1592,79 @@ mod tests {
             .iter()
             .any(|(i, set)| *i == 1 && *set == Some(&AnswerSet::Letters(vec!['A']))));
         assert!(deps.iter().any(|(i, set)| *i == 2 && set.is_none()));
+    }
+
+    #[test]
+    fn skeleton_with_an_id_line_is_still_skeleton() {
+        // 9.1 A: `approve` gives every heading an id, skeletons included; a
+        // skeleton that has picked one up must not suddenly start requiring
+        // Problem/Standard/options.
+        let rf = rf_from(
+            "# Topic\n\n### 1.1 Skeleton?\n\nid: 11111111-1111-1111-1111-111111111111\n\ndepends: widget\n\n### 1.2 Other?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        let sk = &rf.sections[0];
+        assert!(sk.is_skeleton, "{:?}", sk);
+        assert_eq!(
+            sk.id.as_deref(),
+            Some("11111111-1111-1111-1111-111111111111")
+        );
+        assert!(sk.shape_errors.is_empty(), "{:?}", sk.shape_errors);
+    }
+
+    #[test]
+    fn plan_hash_changes_when_an_id_line_changes() {
+        let base = "# Topic\n\n### 1.1 Q?\n\nid: 11111111-1111-1111-1111-111111111111\n\ndepends: widget\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+        let with_id = rf_from(base);
+        let no_id = rf_from(&base.replace("id: 11111111-1111-1111-1111-111111111111\n\n", ""));
+        assert_ne!(
+            plan_hash(&with_id),
+            plan_hash(&no_id),
+            "an id line appearing/disappearing must move the plan hash"
+        );
+
+        let swapped = base.replace(
+            "11111111-1111-1111-1111-111111111111",
+            "22222222-2222-2222-2222-222222222222",
+        );
+        let with_other_id = rf_from(&swapped);
+        assert_ne!(
+            plan_hash(&with_id),
+            plan_hash(&with_other_id),
+            "swapping a heading's id must move the plan hash"
+        );
+    }
+
+    #[test]
+    fn derive_tiers_resolves_a_heading_dep_written_as_an_id() {
+        // Post-approval form: the depends line already names the target's
+        // id rather than its heading text; tiers must still derive from it,
+        // and a self-dep by id must still be caught.
+        let rf = rf_from(
+            "# Topic\n\n\
+             ### A?\n\nid: 11111111-1111-1111-1111-111111111111\n\ndepends: widget\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+             ### B?\n\nid: 22222222-2222-2222-2222-222222222222\n\ndepends: 11111111-1111-1111-1111-111111111111\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        assert_eq!(rf.tiers, Some(vec![1, 2]), "{:?}", rf.derive_error);
+        assert!(rf.derive_error.is_none());
+
+        let selfdep = rf_from(
+            "# Topic\n\n### A?\n\nid: 11111111-1111-1111-1111-111111111111\n\ndepends: 11111111-1111-1111-1111-111111111111\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        match &selfdep.derive_error {
+            Some(DeriveError::SelfDep(h)) => assert_eq!(h, "A?"),
+            other => panic!("expected SelfDep, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn derive_tiers_treats_an_unmatched_id_as_a_non_heading_reference() {
+        // An `Id` entry that names no heading in this file (a term or a
+        // decision elsewhere) must never be a Dangling error: only `Text`
+        // heading-shaped entries can dangle.
+        let rf = rf_from(
+            "# Topic\n\n### A?\n\ndepends: 33333333-3333-3333-3333-333333333333\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        assert!(rf.derive_error.is_none(), "{:?}", rf.derive_error);
+        assert_eq!(rf.tiers, Some(vec![1]));
     }
 }

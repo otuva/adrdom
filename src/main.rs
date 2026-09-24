@@ -1,6 +1,7 @@
 mod actions;
 mod banned;
 mod commands;
+mod depends;
 mod ledger;
 mod record;
 mod repo;
@@ -32,6 +33,9 @@ enum Command {
         /// Also create CLAUDE.md with the AGENTS.md import when it is missing, and merge the deny entries into .claude/settings.json.
         #[arg(long)]
         claude: bool,
+        /// Also write .codex/rules/adrdom.rules, forbidding the owner's commands under Codex's project rules.
+        #[arg(long)]
+        codex: bool,
     },
     /// Owner-only: remove what `adr install` wrote outside adrdom/.
     Uninstall,
@@ -70,7 +74,7 @@ enum Command {
 fn main() {
     let cli = Cli::parse();
     let code = match cli.command {
-        Command::Install { claude } => commands::install::run(claude),
+        Command::Install { claude, codex } => commands::install::run(claude, codex),
         Command::Uninstall => commands::uninstall::run(),
         Command::Ask { topic_file } => commands::ask::run(topic_file),
         Command::Approve { file } => commands::approve::run(file),

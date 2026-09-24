@@ -1,6 +1,7 @@
 use super::{file_approval, Failure};
+use crate::depends::{self, DepTarget};
 use crate::ledger::Ledger;
-use crate::record::{self, AnswerSet, Dep, RecordFile};
+use crate::record::{self, AnswerSet, RecordFile};
 use crate::state;
 use crate::terms;
 use std::collections::HashMap;
@@ -20,6 +21,10 @@ pub(super) fn check_plan(root: &Path, records: &[RecordFile], led: &Ledger) -> (
     let mut heading_files: HashMap<String, Vec<String>> = HashMap::new();
 
     let terms_list: Vec<terms::Term> = state::load_terms(root).map(|tf| tf.terms).unwrap_or_default();
+    // Built once for the whole run, not once per `depends:` entry across
+    // every file (`resolve_dep` used to rebuild this internally via
+    // `terms::resolve_word` on every call).
+    let phrase_lookup = terms::phrase_lookup(&terms_list);
 
     for rf in records {
         let (rel, plan_ok, ctx_ok) = file_approval(root, rf, led);
@@ -53,74 +58,37 @@ pub(super) fn check_plan(root: &Path, records: &[RecordFile], led: &Ledger) -> (
             }
         }
 
-        // Resolve every entry (8.3 A), same rules and wording as `approve`:
-        // a term entry must resolve to exactly one non-retired term; a
-        // decision entry must be a current decision (latest state
-        // `answered`); a heading entry's dangling/cycle/self-dep is
-        // `derive_tiers`'s single error, computed at parse time into
-        // `rf.derive_error`.
+        // Resolve every entry (8.3/9.1 A), same rules and wording as
+        // `approve`: an `Id` entry must be a heading id in this file, a
+        // current non-retired term id, or a current decision; a `Text`
+        // entry ending in `?` is a heading reference, whose dangling/
+        // cycle/self-dep is `derive_tiers`'s single error, computed at
+        // parse time into `rf.derive_error`; any other `Text` entry must
+        // resolve to exactly one non-retired term. A letter-set suffix, on
+        // either form, validates against the target once found (9.1 A
+        // point 9: "letter sets validate against the target found by id").
         for sec in &rf.sections {
             for d in &sec.depends {
-                match d {
-                    Dep::Term(w) => {
-                        let pairs = terms::resolve(w, &terms_list);
-                        let resolved_ok = pairs.len() == 1
-                            && terms_list
-                                .iter()
-                                .find(|t| t.id.as_deref() == Some(pairs[0].1.as_str()))
-                                .map(|t| !t.retired)
-                                .unwrap_or(false);
-                        if !resolved_ok {
-                            out.push(Failure {
-                                check: "plan".to_string(),
-                                id: sec.id.clone(),
-                                message: format!(
-                                    "{}: \"{}\" depends on \"{}\" which is no term; agent adds the term or names another",
-                                    rel, sec.heading_text, w
-                                ),
-                            });
-                        }
-                    }
-                    Dep::Decision(uuid) => {
-                        if !state::is_current(led, uuid) {
-                            out.push(Failure {
-                                check: "plan".to_string(),
-                                id: sec.id.clone(),
-                                message: format!(
-                                    "{}: \"{}\" depends on {} which is not a current decision; agent names a current decision or removes the line",
-                                    rel, sec.heading_text, uuid
-                                ),
-                            });
-                        }
-                    }
-                    Dep::Heading { text, set: Some(AnswerSet::Letters(letters)) } => {
-                        // 8.7 A, checked here unconditionally (ask.rs only
-                        // checks this once the target's tier opens): once
-                        // the target already has options, every letter in
-                        // the set must be one of them.
-                        let target_text = text.trim();
-                        if let Some(target) =
-                            rf.sections.iter().find(|s| s.heading_text.trim() == target_text)
-                        {
-                            if !target.options.is_empty() {
-                                for l in letters {
-                                    if !target.options.iter().any(|o| o.letter == *l) {
-                                        out.push(Failure {
-                                            check: "plan".to_string(),
-                                            id: sec.id.clone(),
-                                            message: record::bad_option_letter_text(
-                                                &rel,
-                                                &sec.heading_text,
-                                                &target.heading_text,
-                                                *l,
-                                            ),
-                                        });
-                                    }
-                                }
+                match depends::resolve_dep(d, rf, &terms_list, &phrase_lookup, led) {
+                    Err(e) => out.push(Failure {
+                        check: "plan".to_string(),
+                        id: sec.id.clone(),
+                        message: depends::dep_refusal_text(&rel, &sec.heading_text, &e),
+                    }),
+                    Ok(Some(DepTarget::Heading(ti))) => {
+                        if let Some(AnswerSet::Letters(letters)) = d.set() {
+                            for msg in
+                                depends::bad_letters(&rel, &sec.heading_text, &rf.sections[ti], letters)
+                            {
+                                out.push(Failure {
+                                    check: "plan".to_string(),
+                                    id: sec.id.clone(),
+                                    message: msg,
+                                });
                             }
                         }
                     }
-                    Dep::Heading { .. } => {}
+                    Ok(_) => {}
                 }
             }
         }

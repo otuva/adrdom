@@ -95,20 +95,22 @@ fn unban_rewrites_two_column_lines() {
 }
 
 #[test]
-fn unban_refuses_when_claudecode_is_set() {
+fn unban_refuses_without_an_interactive_terminal() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let ban_out = adr(&dir, &["ban"], &[], "forbiddenword\n");
     assert!(ban_out.status.success(), "ban failed: {}", stderr(&ban_out));
 
-    let out = adr(
-        &dir,
-        &["unban"],
-        &[("CLAUDECODE", "1")],
-        "forbiddenword\n",
-    );
+    // No owner bypass: stdin is piped (never a TTY) in this harness, so the
+    // gate (9.2 A: stdin is an interactive terminal, no env var) refuses.
+    let out = adr(&dir, &["unban"], &[], "forbiddenword\n");
     assert_eq!(out.status.code(), Some(2), "stderr: {}", stderr(&out));
+    assert!(
+        stderr(&out).contains("this is the owner's command"),
+        "stderr: {}",
+        stderr(&out)
+    );
 
     let banned_after =
         std::fs::read_to_string(dir.join("adrdom/state/banned.sha256")).unwrap();

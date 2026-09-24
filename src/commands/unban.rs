@@ -4,9 +4,7 @@ use std::io::Read;
 
 pub fn run() -> i32 {
     if !repo::owner_authorized() {
-        eprintln!(
-            "unban: refusing: owner authorization required (interactive TTY, no CLAUDECODE)"
-        );
+        eprintln!("{}", repo::owner_refusal("unban", ""));
         return 2;
     }
 
