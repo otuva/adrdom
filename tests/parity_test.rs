@@ -88,6 +88,9 @@ fn parity_tier_over_cap() {
     assert_parity(&dir, &record, "tier 1 holds 5 questions, the cap is 4");
 }
 
+// adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a depends list split across
+// two lines is refused by both `adr approve` and `adr check` (a real CLI
+// run of each), not silently read as a continuation of the same list.
 #[test]
 fn parity_two_depends_lines() {
     let dir = init_repo();

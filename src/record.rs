@@ -1205,6 +1205,12 @@ mod tests {
         );
     }
 
+    // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
+    //
+    // Decision A's Problem/Standard presence clause, plus (via `SHAPED`
+    // below) a well-formed body -- one-line Problem, one-line Standard,
+    // two options each with a Why and a Costs line -- parsing with zero
+    // shape errors.
     #[test]
     fn missing_problem_or_standard_only_fails_non_skeleton_questions() {
         let rf = rf_from("# Topic\n\n### 1.1 Skeleton?\n\n### 1.2 Has a body but no Problem/Standard?\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
@@ -1320,6 +1326,9 @@ mod tests {
         );
     }
 
+    // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- the supersedes list, like
+    // depends, holds several entries as one line of comma-separated values,
+    // not one entry per line.
     #[test]
     fn supersedes_line_parses_multiple_comma_separated_ids() {
         let rf = rf_from("# Topic\n\n### 1.1 Q?\n\nid: new-id\n\nsupersedes: old-1, old-2\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
@@ -1329,6 +1338,14 @@ mod tests {
         );
     }
 
+    // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
+    //
+    // Decision A's "each one sentence" clause, at the unit that decides it:
+    // text with a sentence terminator yields that first sentence (and only
+    // it -- the second sentence here is simply never looked at, which is
+    // why a second sentence never becomes a shape or parse error); text
+    // with none yields `None`, which `scan_body` turns into "option X has
+    // no decision sentence".
     #[test]
     fn an_option_decides_exactly_its_first_sentence() {
         assert_eq!(
@@ -1367,6 +1384,10 @@ mod tests {
             .any(|e| e.starts_with("stray line")));
     }
 
+    // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
+    //
+    // Decision A's "two or three lettered options" clause: four is
+    // refused, three is accepted (the `ok` case below).
     #[test]
     fn a_fourth_option_is_a_shape_error() {
         let rf = rf_from(
@@ -1404,6 +1425,10 @@ mod tests {
         assert!(sec.parse_errors.is_empty(), "{:?}", sec.parse_errors);
     }
 
+    // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a one-line, comma-
+    // separated depends list with three entries parses cleanly (no shape
+    // errors) and each entry keeps its own answer set independently: the
+    // middle entry carries `=A`, the other two carry none.
     #[test]
     fn depends_parses_all_three_entry_forms_and_sets() {
         let rf = rf_from(
@@ -1484,6 +1509,51 @@ mod tests {
         );
     }
 
+    // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- two heading-shaped
+    // entries on the *same* depends line, each with its own distinct
+    // answer set: the sets must not bleed into each other or collapse to
+    // one set for the whole line.
+    #[test]
+    fn depends_two_entries_on_one_line_keep_separate_answer_sets() {
+        let rf = rf_from(
+            "# Topic\n\n\
+             ### 1.1 Q?\n\n\
+             Problem: p.\n\n\
+             Standard: s.\n\n\
+             - A) x.\n  Why: w.\n  Costs: c.\n\
+             - B) y.\n  Why: w.\n  Costs: c.\n\n\
+             ### 1.2 Q2?\n\n\
+             Problem: p.\n\n\
+             Standard: s.\n\n\
+             - A) x.\n  Why: w.\n  Costs: c.\n\
+             - B) y.\n  Why: w.\n  Costs: c.\n\n\
+             ### 1.3 R?\n\
+             depends: 1.1 Q?=A, 1.2 Q2?=A|B\n\n\
+             Problem: p3.\n\n\
+             Standard: s3.\n\n\
+             - A) x.\n  Why: w.\n  Costs: c.\n\
+             - B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        let sec = &rf.sections[2];
+        assert_eq!(sec.shape_errors, Vec::<String>::new(), "{:?}", sec.shape_errors);
+        assert_eq!(
+            sec.depends[0],
+            Dep::Text {
+                text: "1.1 Q?".to_string(),
+                set: Some(AnswerSet::Letters(vec!['A']))
+            },
+            "the first entry's set must be its own, not the second entry's"
+        );
+        assert_eq!(
+            sec.depends[1],
+            Dep::Text {
+                text: "1.2 Q2?".to_string(),
+                set: Some(AnswerSet::Letters(vec!['A', 'B']))
+            },
+            "the second entry's set must be its own, not the first entry's"
+        );
+    }
+
     #[test]
     fn depends_malformed_entries_on_one_line_are_shape_errors() {
         // All four problems (an empty entry, a bad set, and a duplicate) are
@@ -1521,6 +1591,9 @@ mod tests {
         );
     }
 
+    // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a depends list split
+    // across two lines is refused (a shape error), not read as more
+    // entries of the same list.
     #[test]
     fn two_depends_lines_under_one_heading_is_a_shape_error() {
         let rf = rf_from(

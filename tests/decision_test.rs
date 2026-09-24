@@ -44,6 +44,9 @@ fn principle_block_is_gone_a_p1_line_inside_a_body_is_stray_and_gets_no_id() {
     );
 }
 
+// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
+//
+// Decision A's "two or three lettered options" clause.
 #[test]
 fn a_question_needs_two_or_three_options() {
 
@@ -102,6 +105,11 @@ fn a_question_needs_two_or_three_options() {
     }
 }
 
+// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
+//
+// Decision A's "a one-line Problem, a one-line Standard" clause: this test
+// covers presence (exactly one of each); `a_problem_or_standard_value_stays_on_one_line`
+// below covers the "one-line" half.
 #[test]
 fn a_question_needs_a_problem_line_and_a_standard_line() {
 
@@ -145,6 +153,9 @@ fn a_question_needs_a_problem_line_and_a_standard_line() {
     }
 }
 
+// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
+//
+// Decision A's "an indented Why line and an indented Costs line" clause.
 #[test]
 fn every_option_needs_a_why_line_and_a_costs_line() {
 
@@ -186,6 +197,181 @@ fn every_option_needs_a_why_line_and_a_costs_line() {
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
         assert!(out.status.success(), "ask should have accepted it: {}", stderr(&out));
     }
+}
+
+// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
+//
+// Decision A's "a one-line Problem, a one-line Standard" clause, the half
+// `a_question_needs_a_problem_line_and_a_standard_line` above does not
+// cover: the parser has no continuation syntax for either field, so a
+// second physical line is refused rather than folded into the value.
+// A plain continuation line (not itself shaped like a recognized field)
+// is refused as a stray line; a second `Problem:`/`Standard:` line is
+// refused too, but as the same "missing Problem/Standard line" a zero
+// count gets, since the parser only accepts a count of exactly one and
+// does not distinguish "too many" from "none".
+#[test]
+fn a_problem_or_standard_value_stays_on_one_line() {
+
+    // A continuation line under Problem: refused as a stray line.
+    {
+        let dir = init_repo();
+        assert!(adr(&dir, &["install"], &[], "").status.success());
+        approve_minimal_terms(&dir, "decision");
+        let content = "# Example\n\n### 1.1 What is a decision?\n\nProblem: p.\ncontinued on a second line.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
+        let record = write_record(&dir, "adrdom/decisions/example.md", content);
+        let stray_line_no = content
+            .lines()
+            .position(|l| l == "continued on a second line.")
+            .unwrap()
+            + 1;
+
+        let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+        assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
+        assert!(
+            stderr(&out).contains(&format!("stray line {}", stray_line_no)),
+            "{}",
+            stderr(&out)
+        );
+    }
+
+    // A second Problem line: also refused, as a missing-Problem error.
+    {
+        let dir = init_repo();
+        assert!(adr(&dir, &["install"], &[], "").status.success());
+        approve_minimal_terms(&dir, "decision");
+        let content = "# Example\n\n### 1.1 What is a decision?\n\nProblem: p.\n\nProblem: p again.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
+        let record = write_record(&dir, "adrdom/decisions/example.md", content);
+
+        let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+        assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
+        assert!(stderr(&out).contains("missing Problem line"), "{}", stderr(&out));
+    }
+}
+
+// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
+//
+// Decision A's "each one sentence that responds to the heading" clause.
+// A missing decision sentence ("option X has no decision sentence") is a
+// *parse* error, and `ask` only reads `shape_errors` -- parse errors are a
+// separate list it never looks at (only `check` does, in
+// src/commands/check/parse.rs). So an option with no sentence terminator
+// at all still gets asked (an id minted, a ledger row written): only the
+// later, whole-repo `check` catches it. And once an option does carry a
+// sentence, the parser never looks past its first terminator, so a second
+// sentence tacked on is accepted by both `ask` and `check` -- "one
+// sentence" is enforced (by `check` alone) as "at least one", not
+// "exactly one" -- and whether the sentence answers the heading is a
+// semantic call the parser makes no attempt at.
+#[test]
+fn a_missing_decision_sentence_is_caught_by_check_not_ask() {
+
+    // No sentence terminator anywhere in the option: `ask` still succeeds;
+    // `check` is what refuses.
+    {
+        let dir = init_repo();
+        assert!(adr(&dir, &["install"], &[], "").status.success());
+        approve_minimal_terms(&dir, "decision");
+        let content = "# Example\n\n### 1.1 What is a decision?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) no terminator here\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
+        let record = write_record(&dir, "adrdom/decisions/example.md", content);
+        approve_record(&dir, "adrdom/decisions/example.md");
+
+        let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+        assert!(
+            ask_out.status.success(),
+            "ask does not read parse errors, so a missing decision sentence does not stop it: {}",
+            stderr(&ask_out)
+        );
+
+        let check_out = adr(&dir, &["check"], &[], "");
+        assert!(!check_out.status.success(), "check should have refused: {}", stdout(&check_out));
+        assert!(
+            stdout(&check_out).contains("option A has no decision sentence"),
+            "{}",
+            stdout(&check_out)
+        );
+    }
+
+    // A second sentence after the first: both `ask` and `check` accept it.
+    {
+        let dir = init_repo();
+        assert!(adr(&dir, &["install"], &[], "").status.success());
+        approve_minimal_terms(&dir, "decision");
+        let content = "# Example\n\n### 1.1 What is a decision?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) One. And a second sentence the parser never inspects.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
+        let record = write_record(&dir, "adrdom/decisions/example.md", content);
+        approve_record(&dir, "adrdom/decisions/example.md");
+
+        let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+        assert!(ask_out.status.success(), "ask should have accepted it: {}", stderr(&ask_out));
+
+        let check_out = adr(&dir, &["check"], &[], "");
+        assert!(check_out.status.success(), "check should have accepted it too: {}", stdout(&check_out));
+    }
+}
+
+// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
+//
+// Decision A's "an indented Why line and an indented Costs line" clause,
+// the half `every_option_needs_a_why_line_and_a_costs_line` above does
+// not cover: each detail line must appear exactly once per option, so a
+// repeated Why (or Costs) line is refused too, not just a missing one.
+#[test]
+fn an_option_with_a_repeated_why_or_costs_line_is_refused() {
+
+    // Option A has two Why lines: refused.
+    {
+        let dir = init_repo();
+        assert!(adr(&dir, &["install"], &[], "").status.success());
+        approve_minimal_terms(&dir, "decision");
+        let content = "# Example\n\n### 1.1 What is a decision?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Why: w2.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
+        let record = write_record(&dir, "adrdom/decisions/example.md", content);
+
+        let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+        assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
+        assert!(stderr(&out).contains("option A has two Why lines"), "{}", stderr(&out));
+    }
+
+    // Option A has two Costs lines: refused.
+    {
+        let dir = init_repo();
+        assert!(adr(&dir, &["install"], &[], "").status.success());
+        approve_minimal_terms(&dir, "decision");
+        let content = "# Example\n\n### 1.1 What is a decision?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n  Costs: c2.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
+        let record = write_record(&dir, "adrdom/decisions/example.md", content);
+
+        let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+        assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
+        assert!(stderr(&out).contains("option A has two Costs lines"), "{}", stderr(&out));
+    }
+}
+
+// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
+//
+// Decision A's "the answer line comes last" clause. Nothing checks
+// ordering: `scan_body` reads a body top to bottom and records whatever it
+// finds regardless of position, and `ask`'s own candidate test looks only
+// at the ledger (does this id have a matching `asked` row yet?), never at
+// where the `**Answer:**` line sits in the file. A body whose
+// `**Answer:**` line comes first -- the exact opposite of "comes last" --
+// still asks cleanly. (Such a line does trip `check`'s separate rule that
+// an `**Answer:**` line must be backed by a matching ledger row -- but a
+// hand-written line at the *correct*, last position gets that identical
+// complaint, so that rule is not evidence of an ordering check either.)
+#[test]
+fn an_answer_line_before_the_rest_of_the_body_is_not_rejected_for_its_position() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+    let content = "# Example\n\n### 1.1 What is a decision?\ndepends: decision\n\n**Answer:** A\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
+    let record = write_record(&dir, "adrdom/decisions/example.md", content);
+    approve_record(&dir, "adrdom/decisions/example.md");
+
+    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(
+        out.status.success(),
+        "ask does not check the answer line's position: {}",
+        stderr(&out)
+    );
 }
 
 // adr: 0a742360-83c2-479d-b858-4bea646c9b36
