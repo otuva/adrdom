@@ -981,3 +981,32 @@ aliases: \n";
         text
     );
 }
+
+// E1.1: `terms::cycles` only follows an edge between terms that have an id,
+// so a terms file that has never been approved -- and so carries no `id:`
+// line at all -- used to show no cycle to `check`, only to `approve` (which
+// mints ids in memory before looking). Same fixture as
+// `check_fails_a_circular_definition`, with every `id:` line dropped.
+#[test]
+fn check_fails_a_circular_definition_in_an_id_less_terms_file() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let terms_content = "# Terms\n\n\
+## alpha\n\
+definition: See beta.\n\
+aliases: \n\
+\n\
+## beta\n\
+definition: See alpha.\n\
+aliases: \n";
+    std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(
+        text.contains("terms: adrdom/terms.md: circular definition: alpha -> beta -> alpha"),
+        "{}",
+        text
+    );
+}

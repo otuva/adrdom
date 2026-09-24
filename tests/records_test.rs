@@ -233,3 +233,60 @@ fn approve_skips_a_frozen_headings_tell_and_still_mints_a_new_skeletons_id() {
         saved
     );
 }
+
+// E1.2: `do_approve_record` used to return at the first refusing category
+// (shape, tells, depends...), so a heading with both a loaded-opening tell
+// and a depends entry naming no term would only ever show the tell. `check`
+// already reports both (`tells::check_tells` and `plan::check_plan` both
+// run, unconditionally, every time), so this is really pinning `approve`
+// down to what `check` already does.
+const TELL_AND_BAD_DEPENDS_RECORD: &str = r#"# Topic
+
+Context prose line.
+
+### Which store holds the ledger?
+depends: nosuchterm
+
+Problem: the store is unclear.
+
+Standard: s.
+
+- A) Answer one.
+  Why: reasons.
+  Costs: costs.
+- B) Answer two.
+  Why: other reasons.
+  Costs: other costs.
+"#;
+
+#[test]
+fn approve_and_check_report_a_tell_and_a_bad_depends_entry_together() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_empty_terms(&dir);
+    let record = write_record(&dir, "adrdom/decisions/example.md", TELL_AND_BAD_DEPENDS_RECORD);
+
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should refuse: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(err.contains("opens assuming an answer"), "{}", err);
+    assert!(
+        err.contains("depends on \"nosuchterm\" which is no term"),
+        "{}",
+        err
+    );
+
+    let check_out = adr(&dir, &["check"], &[], "");
+    assert!(!check_out.status.success());
+    let text = stdout(&check_out);
+    assert!(
+        text.contains("tells:") && text.contains("opens assuming an answer"),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains("plan:") && text.contains("depends on \"nosuchterm\" which is no term"),
+        "{}",
+        text
+    );
+}

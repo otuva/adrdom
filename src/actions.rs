@@ -305,61 +305,59 @@ struct Dependent {
     pairs: Vec<(String, String)>,
 }
 
-/// `adrdom/terms.md`: the seven steps of 4 in the spec, in order, nothing
-/// written to disk before step 6 (a shape/cycle/dependent/banned refusal
-/// leaves the file byte-identical to what was on disk before the call).
-fn do_approve_terms(
+/// Every refusal `adrdom/terms.md` earns under steps 1, 3, 4 and 5 of
+/// `do_approve_terms` (shape errors, circular definitions, a dependent's
+/// pairing that no longer holds, banned words in the file's own text),
+/// collected all at once rather than returned at the first (E1.1) --
+/// `do_approve_terms` prints every one and writes nothing on any refusal;
+/// `check` reports the same list, each line prefixed `terms: ` instead of
+/// `approve: `, minus the approval-state lines that only make sense after a
+/// real write (`already approved`/`approved`, the definition-changed
+/// notes), which stay `check`'s own.
+///
+/// `tf` must already have every id minted in memory (step 2, see
+/// `terms::mint_ids`/`terms::minted_copy`): `do_approve_terms` mints
+/// straight into the file it is about to write before calling this; `check`
+/// -- which never writes -- calls this on a `terms::minted_copy` instead.
+/// Either way, a cycle or a moved/retired dependent's pairing in a terms
+/// file that has never been approved, and so carries no ids on disk, is
+/// caught the same way both callers look for it (`terms::cycles` and
+/// `terms::phrase_lookup` only see a term that has an id).
+///
+/// Returns every refusal message (`adrdom/terms.md: ...`, no caller
+/// prefix) plus each term's freshly resolved definition pairs
+/// (`terms::definition_pairs`, in `tf.terms` order), computed once here
+/// and reused by `do_approve_terms`'s write step so it is never resolved
+/// twice.
+pub fn terms_refusals(
     root: &Path,
-    file: &Path,
+    tf: &terms::TermsFile,
     led: &Ledger,
-    ledger_path: &Path,
-) -> Result<Outcome, String> {
-    // Step 1: parse.
-    let mut tf =
-        terms::load(file).map_err(|e| format!("approve: cannot read {}: {}", file.display(), e))?;
+) -> (Vec<String>, Vec<Vec<(String, String)>>) {
+    let mut refusals: Vec<String> = Vec::new();
 
-    // The pre-existing latest `terms` row, captured before anything below
-    // can change what "latest" means, for step 7's before/after compare.
-    let prev_terms_row = led.latest_for_path("terms", "adrdom/terms.md").cloned();
-
-    // Step 2: mint ids in memory only; nothing is written to disk yet.
-    let inserted = terms::mint_ids(&mut tf);
-
-    if !tf.errors.is_empty() {
-        let msg = tf
-            .errors
-            .iter()
-            .map(|e| format!("approve: adrdom/terms.md: {}; owner fixes adrdom/terms.md", e))
-            .collect::<Vec<_>>()
-            .join("\n");
-        return Err(msg);
+    // Step 1 (shape): "missing id" cannot appear here, since `tf` is
+    // already minted.
+    for e in &tf.errors {
+        refusals.push(format!("adrdom/terms.md: {}; owner fixes adrdom/terms.md", e));
     }
 
     // Step 3: definition pairings; a self-pairing or any cycle refuses.
-    let cycles = terms::cycles(&tf);
-    if !cycles.is_empty() {
-        let msg = cycles
-            .iter()
-            .map(|cycle| {
-                let mut chain = cycle.clone();
-                chain.push(cycle[0].clone());
-                format!(
-                    "approve: adrdom/terms.md: circular definition: {}; agent defines one of them from plainer words",
-                    chain.join(" -> ")
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        return Err(msg);
+    // Every cycle is reported, not just the first.
+    for cycle in terms::cycles(tf) {
+        let mut chain = cycle.clone();
+        chain.push(cycle[0].clone());
+        refusals.push(format!(
+            "adrdom/terms.md: circular definition: {}; agent defines one of them from plainer words",
+            chain.join(" -> ")
+        ));
     }
 
-    // Fresh definition pairs for every term (the new file, after
-    // `mint_ids`, never re-derived from a stale terms line in the file).
-    // Computed once and reused for the dependents check below, the write
-    // in step 6, and step 7's term-dependent print.
-    let pairs_per_entry: Vec<Vec<(String, String)>> = (0..tf.terms.len())
-        .map(|i| terms::definition_pairs(&tf, i))
-        .collect();
+    // Fresh definition pairs for every term (never re-derived from a stale
+    // terms line in the file). Computed once and reused for the dependents
+    // check below and, by the caller, for the write step.
+    let pairs_per_entry: Vec<Vec<(String, String)>> =
+        (0..tf.terms.len()).map(|i| terms::definition_pairs(tf, i)).collect();
 
     // Every current decision's terms line, and every non-retired term's
     // fresh definition pairs, is a dependent.
@@ -409,20 +407,19 @@ fn do_approve_terms(
     // `lookup` answers "what does this exact word/phrase resolve to" for
     // every dependent pair, built once rather than once per pair.
     let lookup = terms::phrase_lookup(&tf.terms);
-    let mut refusals: Vec<String> = Vec::new();
     for dep in &dependents {
         for (word, uuid) in &dep.pairs {
             let Some(target) = tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str()))
             else {
                 refusals.push(format!(
-                    "approve: adrdom/terms.md: term {} removed but carried by {}; owner retires instead",
+                    "adrdom/terms.md: term {} removed but carried by {}; owner retires instead",
                     uuid, dep.source
                 ));
                 continue;
             };
             if target.retired {
                 refusals.push(format!(
-                    "approve: adrdom/terms.md: term \"{}\" retired but carried by {}; owner supersedes first",
+                    "adrdom/terms.md: term \"{}\" retired but carried by {}; owner supersedes first",
                     target.name, dep.source
                 ));
                 continue;
@@ -430,14 +427,11 @@ fn do_approve_terms(
             let still_resolves = lookup.get(word) == Some(uuid);
             if !still_resolves {
                 refusals.push(format!(
-                    "approve: adrdom/terms.md: word \"{}\" moved off term \"{}\", carried by {}",
+                    "adrdom/terms.md: word \"{}\" moved off term \"{}\", carried by {}",
                     word, target.name, dep.source
                 ));
             }
         }
-    }
-    if !refusals.is_empty() {
-        return Err(refusals.join("\n"));
     }
 
     // Step 5: banned hits in terms.md's own text, from the single ban list.
@@ -446,7 +440,6 @@ fn do_approve_terms(
     if !banned_entries.is_empty() {
         let hash_map: std::collections::HashMap<String, Option<String>> =
             banned_entries.into_iter().collect();
-        let mut banned_refusals: Vec<String> = Vec::new();
         for (i, line) in tf.lines.iter().enumerate() {
             for tok in crate::banned::tokenize(line) {
                 let h = record::sha256_hex(&tok);
@@ -461,8 +454,8 @@ fn do_approve_terms(
                         })
                         .map(|n| format!(" (term {})", n))
                         .unwrap_or_default();
-                    banned_refusals.push(format!(
-                        "approve: adrdom/terms.md:{}: banned word \"{}\"{}; owner edits adrdom/terms.md to remove it",
+                    refusals.push(format!(
+                        "adrdom/terms.md:{}: banned word \"{}\"{}; owner edits adrdom/terms.md to remove it",
                         i + 1,
                         tok,
                         suffix
@@ -470,9 +463,42 @@ fn do_approve_terms(
                 }
             }
         }
-        if !banned_refusals.is_empty() {
-            return Err(banned_refusals.join("\n"));
-        }
+    }
+
+    (refusals, pairs_per_entry)
+}
+
+/// `adrdom/terms.md`: the seven steps of 4 in the spec, in order, nothing
+/// written to disk before step 6 (a shape/cycle/dependent/banned refusal
+/// leaves the file byte-identical to what was on disk before the call).
+/// Steps 1, 3, 4 and 5 are `terms_refusals`, shared with `check` (E1.1).
+fn do_approve_terms(
+    root: &Path,
+    file: &Path,
+    led: &Ledger,
+    ledger_path: &Path,
+) -> Result<Outcome, String> {
+    // Step 1: parse.
+    let mut tf =
+        terms::load(file).map_err(|e| format!("approve: cannot read {}: {}", file.display(), e))?;
+
+    // The pre-existing latest `terms` row, captured before anything below
+    // can change what "latest" means, for step 7's before/after compare.
+    let prev_terms_row = led.latest_for_path("terms", "adrdom/terms.md").cloned();
+
+    // Step 2: mint ids in memory only; nothing is written to disk yet.
+    let inserted = terms::mint_ids(&mut tf);
+
+    // Steps 1 (shape, post-mint), 3 (cycles), 4 (dependents), 5 (banned):
+    // every refusal, all at once.
+    let (refusals, pairs_per_entry) = terms_refusals(root, &tf, led);
+    if !refusals.is_empty() {
+        let msg = refusals
+            .iter()
+            .map(|r| format!("approve: {}", r))
+            .collect::<Vec<_>>()
+            .join("\n");
+        return Err(msg);
     }
 
     // Step 6: write the file. `terms:` lines use the fresh pairs computed
@@ -515,6 +541,16 @@ fn do_approve_terms(
         if let Some(head_content) = repo::git(root, &["show", "HEAD:adrdom/terms.md"]) {
             let old_tf = terms::parse(&record::split_lines(&head_content));
             if terms::file_hash(&old_tf) == prev_row.hash {
+                // Reloaded here (not kept from `terms_refusals`, which
+                // scopes its own copy to the dependents check): only this
+                // informational branch, taken on a genuine definition
+                // change, needs every current decision's terms line again.
+                let mut loaded: Vec<(String, RecordFile)> = Vec::new();
+                for f in &repo::list_decision_files(root) {
+                    if let Ok(rf) = record::load(f) {
+                        loaded.push((state::rel_path(root, f), rf));
+                    }
+                }
                 for t in &tf.terms {
                     let Some(tid) = &t.id else { continue };
                     let Some(old_t) = old_tf.terms.iter().find(|o| o.id.as_deref() == Some(tid.as_str()))
@@ -578,21 +614,24 @@ fn do_approve_record(
     let rf =
         record::load(file).map_err(|e| format!("approve: cannot read {}: {}", file.display(), e))?;
 
-    let mut shape_msgs: Vec<String> = rf
-        .shape_errors
-        .iter()
-        .map(|e| format!("approve: {}: {}; owner fixes the topic file", rel, e))
-        .collect();
+    // E1.2: every refusal this file can earn -- shape, tells, a missing
+    // depends line, depends resolution (including a frozen section's
+    // edit and the derived-tiers error), the tier cap, and an answered id
+    // missing from every topic file -- collected here and reported
+    // together instead of returned at the first, so one `approve` call
+    // tells the agent everything it owes the owner before asking again.
+    let mut refusals: Vec<String> = Vec::new();
+
+    for e in &rf.shape_errors {
+        refusals.push(format!("approve: {}: {}; owner fixes the topic file", rel, e));
+    }
     for sec in &rf.sections {
         for e in &sec.shape_errors {
-            shape_msgs.push(format!(
+            refusals.push(format!(
                 "approve: {}: \"{}\": {}; owner fixes the topic file",
                 rel, sec.heading_text, e
             ));
         }
-    }
-    if !shape_msgs.is_empty() {
-        return Err(shape_msgs.join("\n"));
     }
 
     // 9.5 A: a loaded phrase refuses before any write -- a heading with any
@@ -601,13 +640,12 @@ fn do_approve_record(
     // A frozen heading (state::is_frozen) is skipped: it can never be
     // edited, so refusing on it would block this file forever once the
     // list grows to include a word it already carried.
-    let mut tell_msgs: Vec<String> = Vec::new();
     for sec in &rf.sections {
         if state::is_frozen(led, sec) {
             continue;
         }
         for (line, phrase, what) in tells::heading_tells(sec.start, &sec.heading_text) {
-            tell_msgs.push(format!(
+            refusals.push(format!(
                 "approve: {}",
                 tells::tell_text(rel, line, &sec.heading_text, &phrase, what)
             ));
@@ -616,30 +654,23 @@ fn do_approve_record(
     {
         let (cs, ce) = rf.context_range;
         for (line, phrase, what) in tells::prose_tells_in(&rf.lines, cs, ce) {
-            tell_msgs.push(format!(
+            refusals.push(format!(
                 "approve: {}",
                 tells::tell_text(rel, line, "context", &phrase, what)
             ));
         }
     }
-    if !tell_msgs.is_empty() {
-        return Err(tell_msgs.join("\n"));
-    }
 
     // 8.3/8.6 B: every section, skeleton or not, needs at least one
     // `depends:` line naming what the question stands on, before anything
     // about it is resolved or written.
-    let mut depends_msgs: Vec<String> = Vec::new();
     for sec in &rf.sections {
         if sec.depends.is_empty() {
-            depends_msgs.push(format!(
+            refusals.push(format!(
                 "approve: {}: \"{}\" has no depends line; agent writes what the question stands on",
                 rel, sec.heading_text
             ));
         }
-    }
-    if !depends_msgs.is_empty() {
-        return Err(depends_msgs.join("\n"));
     }
 
     // Resolve every entry (8.3/9.1 A). An `Id` entry is kept as written and
@@ -659,12 +690,11 @@ fn do_approve_record(
     // used to call `terms::resolve_word`, which rebuilt this same map from
     // scratch on every entry.
     let phrase_lookup = terms::phrase_lookup(&terms_list);
-    let mut resolve_msgs: Vec<String> = Vec::new();
     for sec in &rf.sections {
         let frozen = state::is_frozen(led, sec);
         for d in &sec.depends {
             if frozen && matches!(d, record::Dep::Text { .. }) {
-                resolve_msgs.push(format!(
+                refusals.push(format!(
                     "approve: {}: \"{}\": answered; agent removes the edit",
                     rel, sec.heading_text
                 ));
@@ -678,7 +708,7 @@ fn do_approve_record(
                 }
             }
             if let Err(e) = depends::resolve_dep(d, &rf, &terms_list, &phrase_lookup, led) {
-                resolve_msgs.push(format!(
+                refusals.push(format!(
                     "approve: {}",
                     depends::dep_refusal_text(rel, &sec.heading_text, &e)
                 ));
@@ -686,27 +716,22 @@ fn do_approve_record(
         }
     }
     if let Some(err) = &rf.derive_error {
-        resolve_msgs.push(format!(
+        refusals.push(format!(
             "approve: {}",
             record::derive_error_text(rel, err, None)
         ));
     }
-    if !resolve_msgs.is_empty() {
-        return Err(resolve_msgs.join("\n"));
-    }
 
     // Cap (8.8 A): no derived tier may hold more than `TIER_CAP` questions.
-    // `rf.tiers` is guaranteed `Some` here: a `derive_error` would already
-    // have refused above.
-    let tiers: &Vec<usize> = rf
-        .tiers
-        .as_ref()
-        .expect("derive_error refuses above whenever tiers is None");
-    if let Some((tier, count)) = record::over_cap(tiers) {
-        return Err(format!(
-            "approve: {}: tier {} holds {} questions, the cap is {}; agent moves questions under a higher heading or splits the topic",
-            rel, tier, count, record::TIER_CAP
-        ));
+    // Only checkable when tiers were actually derived: a `derive_error`
+    // above leaves `rf.tiers` `None`, already refused there.
+    if let Some(tiers) = &rf.tiers {
+        if let Some((tier, count)) = record::over_cap(tiers) {
+            refusals.push(format!(
+                "approve: {}: tier {} holds {} questions, the cap is {}; agent moves questions under a higher heading or splits the topic",
+                rel, tier, count, record::TIER_CAP
+            ));
+        }
     }
 
     // Ledger ids (asked/answered/refused/superseded/withdrawn) that now
@@ -742,7 +767,9 @@ fn do_approve_record(
         }
     }
 
-    let mut refusals: Vec<String> = Vec::new();
+    // Always computed (harmless when `refusals` is already non-empty from
+    // an earlier category): only acted on -- ledger rows appended -- once
+    // every category above has been confirmed clean, below.
     let mut withdrawn_rows: Vec<ledger::Row> = Vec::new();
     for id in &state_ids {
         if present_ids.contains(id) {
@@ -890,6 +917,12 @@ fn do_approve_record(
 
     // Printed last, after a successful record approval (spec §3): the
     // tiers this file now derives to, one `N (count)` per non-empty tier.
+    // `rf.tiers` is guaranteed `Some` here: a `derive_error` would already
+    // be among `refusals`, and the early return above would have fired.
+    let tiers: &Vec<usize> = rf
+        .tiers
+        .as_ref()
+        .expect("derive_error refuses above whenever tiers is None");
     let tiers_str = record::tier_sizes(tiers)
         .into_iter()
         .map(|(t, c)| format!("{} ({})", t, c))

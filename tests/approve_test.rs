@@ -772,6 +772,43 @@ fn approve_refuses_a_circular_definition() {
     assert_eq!(before, after, "approve must not write anything on refusal");
 }
 
+// E1.1: two independent problems (a self-cycle on `alpha`, a missing
+// `aliases` field on `beta`) must both come back from one `approve` call,
+// not just the first found, and `check` (which never writes) must report
+// the same set.
+const TERMS_CYCLE_AND_SHAPE_ERROR: &str = "# Terms\n\n\
+## alpha\n\
+id: 11111111-1111-1111-1111-111111111111\n\
+definition: A loop that refers to alpha.\n\
+aliases: \n\
+\n\
+## beta\n\
+id: 22222222-2222-2222-2222-222222222222\n\
+definition: Something else.\n";
+
+#[test]
+fn approve_and_check_report_a_cycle_and_a_shape_error_from_one_run() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let terms = write_record(&dir, "adrdom/terms.md", TERMS_CYCLE_AND_SHAPE_ERROR);
+
+    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(err.contains("circular definition: alpha -> alpha"), "{}", err);
+    assert!(err.contains("missing field \"aliases\""), "{}", err);
+
+    let check_out = adr(&dir, &["check"], &[], "");
+    assert!(!check_out.status.success());
+    let text = stdout(&check_out);
+    assert!(
+        text.contains("terms: adrdom/terms.md: circular definition: alpha -> alpha"),
+        "{}",
+        text
+    );
+    assert!(text.contains("terms: adrdom/terms.md: line 8: missing field \"aliases\""), "{}", text);
+}
+
 #[test]
 fn approve_terms_reruns_as_already_approved_with_no_new_row() {
     let dir = init_repo();

@@ -25,6 +25,7 @@ pub struct Term {
     pub terms_line_idx: Option<usize>,
 }
 
+#[derive(Clone)]
 pub struct TermsFile {
     pub path: PathBuf,
     pub lines: Vec<String>,
@@ -292,6 +293,22 @@ pub fn mint_ids(tf: &mut TermsFile) -> usize {
     tf.terms = reparsed.terms;
     tf.errors = reparsed.errors;
     count
+}
+
+/// A clone of `tf` with an id minted in memory (`mint_ids`) for every entry
+/// that lacks one; every id already present is kept as-is. Never written to
+/// disk. `do_approve_terms` mints straight into the file it is about to
+/// write; `check` (which never writes) calls this first so the same
+/// id-dependent machinery -- `cycles`, `definition_pairs`, `phrase_lookup`
+/// -- sees a terms file exactly as `approve` would build it, even one that
+/// has never been approved and so carries no ids on disk yet. Without this,
+/// `check` misses a cycle (and a moved/retired dependent pairing) that
+/// `approve` would have refused on, since each of those only follows edges
+/// between terms that have an id.
+pub fn minted_copy(tf: &TermsFile) -> TermsFile {
+    let mut copy = tf.clone();
+    mint_ids(&mut copy);
+    copy
 }
 
 fn is_boundary_ok(chars: &[char], start: usize, len: usize) -> bool {
@@ -1212,6 +1229,57 @@ aliases: \n"
                 "gamma".to_string()
             ]]
         );
+    }
+
+    #[test]
+    fn cycles_misses_a_cycle_in_an_id_less_file() {
+        // Documents the gap `minted_copy` exists to close: `cycles` only
+        // follows edges between terms that have an id, so a term with none
+        // pairs against nothing at all, even a self-reference.
+        let mut tf = tf_of(vec![term_with_definition(
+            "loop",
+            "id-loop",
+            "A loop that refers to loop.",
+            1,
+        )]);
+        tf.terms[0].id = None;
+        assert!(cycles(&tf).is_empty());
+    }
+
+    #[test]
+    fn minted_copy_makes_cycles_visible_in_an_id_less_file() {
+        let lines = lines_of(
+            "# Terms\n\n\
+## alpha\n\
+definition: See beta.\n\
+aliases: \n\
+\n\
+## beta\n\
+definition: See alpha.\n\
+aliases: \n",
+        );
+        let tf = parse(&lines);
+        assert!(tf.terms.iter().all(|t| t.id.is_none()));
+        assert!(cycles(&tf).is_empty(), "id-less file should show no cycle directly");
+
+        let minted = minted_copy(&tf);
+        assert!(minted.terms.iter().all(|t| t.id.is_some()));
+        let found = cycles(&minted);
+        assert_eq!(found, vec![vec!["alpha".to_string(), "beta".to_string()]]);
+    }
+
+    #[test]
+    fn minted_copy_keeps_existing_ids() {
+        // `mint_ids` (which `minted_copy` calls) always reparses from
+        // `tf.lines`, so this needs a real parsed file -- not `tf_of`,
+        // whose fabricated `TermsFile` carries terms with no matching
+        // lines at all.
+        let tf = parse(&lines_of(&well_formed()));
+        let before: Vec<Option<String>> = tf.terms.iter().map(|t| t.id.clone()).collect();
+        let minted = minted_copy(&tf);
+        let after: Vec<Option<String>> = minted.terms.iter().map(|t| t.id.clone()).collect();
+        assert_eq!(before, after);
+        assert!(after.iter().all(Option::is_some));
     }
 
     #[test]
