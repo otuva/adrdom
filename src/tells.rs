@@ -104,6 +104,27 @@ pub fn find_date(line: &str) -> Option<&str> {
     })
 }
 
+/// The provenance, code-state and date tells in one line of text, at
+/// absolute line `i`: the one scan both prose and headings get.
+fn line_tells(i: usize, text: &str) -> Vec<(usize, String, &'static str)> {
+    let mut out = Vec::new();
+    let lw = words(text);
+    for tell in PROVENANCE {
+        if has_phrase(&lw, tell) {
+            out.push((i, (*tell).to_string(), PROVENANCE_WHAT));
+        }
+    }
+    for tell in CODE_STATE {
+        if has_phrase(&lw, tell) {
+            out.push((i, (*tell).to_string(), CODE_STATE_WHAT));
+        }
+    }
+    if let Some(d) = find_date(text) {
+        out.push((i, d.to_string(), DATE_WHAT));
+    }
+    out
+}
+
 /// Every provenance, code-state, or date tell in `lines[start..end]`, tool
 /// lines skipped: (absolute 0-based line index, the matched phrase or date,
 /// what it does). Used for a section's body (`ask`, `check`) and for the
@@ -116,20 +137,7 @@ pub fn prose_tells_in(lines: &[String], start: usize, end: usize) -> Vec<(usize,
         if is_tool_line(line) {
             continue;
         }
-        let lw = words(line);
-        for tell in PROVENANCE {
-            if has_phrase(&lw, tell) {
-                out.push((i, (*tell).to_string(), PROVENANCE_WHAT));
-            }
-        }
-        for tell in CODE_STATE {
-            if has_phrase(&lw, tell) {
-                out.push((i, (*tell).to_string(), CODE_STATE_WHAT));
-            }
-        }
-        if let Some(d) = find_date(line) {
-            out.push((i, d.to_string(), DATE_WHAT));
-        }
+        out.extend(line_tells(i, line));
     }
     out
 }
@@ -150,19 +158,7 @@ pub fn heading_tells(line: usize, heading_text: &str) -> Vec<(usize, String, &'s
     if let Some(w) = hw.iter().find(|w| w.as_str() == "and" || w.as_str() == "or") {
         out.push((line, w.clone(), JOIN_WHAT));
     }
-    for tell in PROVENANCE {
-        if has_phrase(&hw, tell) {
-            out.push((line, (*tell).to_string(), PROVENANCE_WHAT));
-        }
-    }
-    for tell in CODE_STATE {
-        if has_phrase(&hw, tell) {
-            out.push((line, (*tell).to_string(), CODE_STATE_WHAT));
-        }
-    }
-    if let Some(d) = find_date(heading_text) {
-        out.push((line, d.to_string(), DATE_WHAT));
-    }
+    out.extend(line_tells(line, heading_text));
     out
 }
 
