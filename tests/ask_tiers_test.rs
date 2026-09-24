@@ -230,6 +230,15 @@ Standard: plain words.
 
 // --- cap -------------------------------------------------------------------
 
+// adr: 15d82e53-e344-4347-b639-3bf6eb9ef1b4
+//
+// core: "four questions per tier, a value set in the tool; approve and ask
+// stop a plan with a tier over four". Five root questions (one tier) is one
+// past TIER_CAP: `approve` refuses naming the exact cap ("tier 1 holds 5
+// questions, the cap is 4"), and since the file was never approved, `ask`
+// independently refuses it too ("plan not approved") -- neither command
+// lets the over-cap plan through, and neither writes to the file on
+// refusal.
 #[test]
 fn ask_refuses_a_tier_over_the_cap() {
     let dir = init_repo();

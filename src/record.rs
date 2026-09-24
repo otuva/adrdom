@@ -950,10 +950,8 @@ pub fn option_details(lines: &[String], sec: &Section) -> Vec<(char, Option<Stri
     out
 }
 
-/// The owner-settable cap on how many questions one derived tier may hold
-/// (8.5 A, 8.8 A). The owner may ask to change this later; the setting
-/// mechanism is deferred until then, so today this constant is the whole
-/// implementation.
+/// The cap on how many live questions one derived tier may hold. A different
+/// value is a new question and a new release; no owner command sets it.
 pub const TIER_CAP: usize = 4;
 
 /// Assigns every section a 1-based tier: a section with no heading

@@ -209,6 +209,8 @@ Standard: kanban caps work in progress at every column and stops a pull past the
   Why: nothing new in the tool.
   Costs: the pile of questions returns as one large tier.
 
+**Answer:** A
+
 ### Does a depends entry carry the answers it holds under?
 depends: aec860fd-22ad-44a7-99f7-222ea19537e7=*, 9d634996-475e-4ddc-8113-05c404ad9d5c
 id: fa90692a-150e-4a89-91e2-1d575cb59d0f
@@ -226,3 +228,5 @@ Standard: a dependency graph records which outcome each node needs and drops the
 - C) No: the owner refuses a moot question when it arrives.
   Why: nothing for the agent to remember.
   Costs: every moot question costs the owner a move.
+
+**Answer:** A

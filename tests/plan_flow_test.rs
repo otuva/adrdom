@@ -137,6 +137,21 @@ fn asked_row_count(dir: &std::path::Path) -> usize {
     ledger.lines().filter(|l| l.contains("\tasked\t")).count()
 }
 
+// adr: fa90692a-150e-4a89-91e2-1d575cb59d0f
+//
+// core: "when a tier's bodies are written, every depends entry naming one
+// of its questions gets the letters it holds under (=A, =A|B or =*); ask
+// stops the tier until every such set is written and freezes the sets with
+// the bodies ...; once the tier is answered, a question whose set lacks the
+// answer is moot: ask stops it, check reports it, and it leaves at the next
+// plan change (approve accepts dropping it)". This single walk shows every
+// clause: step 2 has `ask` refuse Q2 for missing an answer set, then freeze
+// Q2's `=A` and Q3's `=*` the moment `ask` asks Q1; step 5 has `check` fail
+// once Q2's frozen `=A` is edited to `=B` after that ask (freezing holds);
+// step 4 has `check` report "moot: ... stands on ... =A, answered B" and
+// `ask` refuse the same moot Q2 outright; step 7 drops the still-moot Q2
+// (and the answered-but-refused Q3) at the next `approve`, which accepts it
+// and prints "approve: withdrawn: 1.3 ...".
 #[test]
 fn plan_lifecycle_end_to_end() {
     let dir = init_repo();
