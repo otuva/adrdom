@@ -137,6 +137,17 @@ fn asked_row_count(dir: &std::path::Path) -> usize {
     ledger.lines().filter(|l| l.contains("\tasked\t")).count()
 }
 
+// adr: f01e20ae-00fc-4ec9-a25b-88a90dffc624
+//
+// "one approval covers the headings and their depends lines; the question
+// bodies are written after it, one tier at a time, with no further
+// approval". Step 1 below approves STATE_0 -- headings and depends lines
+// only, every body still a skeleton -- in a single `approve` call; step 2
+// then grows Q1's skeleton into a full body and Q2/Q3's depends lines into
+// answer sets, and `check` confirms nothing is "awaiting approval" (no
+// second approve happened), and the very next `ask` succeeds straight
+// through on that body -- accepted with no new approve in between.
+//
 // adr: fa90692a-150e-4a89-91e2-1d575cb59d0f
 //
 // core: "when a tier's bodies are written, every depends entry naming one

@@ -230,16 +230,19 @@ fn install_agents_md(root: &Path) -> Result<String, String> {
     }
 }
 
-/// Adds the `@AGENTS.md` import to CLAUDE.md at the repo root when that
-/// file exists and doesn't already have a line equal to `@AGENTS.md`.
-/// With `--claude` a missing CLAUDE.md is created holding only the marker
-/// and the import; without the flag a missing file is left missing.
+/// Adds the `@AGENTS.md` import to CLAUDE.md at the repo root, but only
+/// with `--claude`: without the flag, CLAUDE.md is untouched whether it's
+/// missing or already exists (4f925b13-ad16-48b8-acd1-3e30d6e308b6,
+/// answer A -- nothing for one agent without a flag naming it). With
+/// `--claude`, a missing CLAUDE.md is created holding only the marker and
+/// the import; an existing one gets the import appended unless it already
+/// has a line equal to `@AGENTS.md`.
 fn install_claude_md(root: &Path, create: bool) -> Result<Option<String>, String> {
-    let path = root.join("CLAUDE.md");
-    let created = !path.exists();
-    if created && !create {
+    if !create {
         return Ok(None);
     }
+    let path = root.join("CLAUDE.md");
+    let created = !path.exists();
 
     let existing = if created {
         String::new()

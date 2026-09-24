@@ -33,15 +33,24 @@ pub enum DepError {
     NoTerm(String),
 }
 
-/// Resolves one `depends:` entry against `rf` (for same-file heading
-/// lookup), `terms_list`, `phrase_lookup` (`terms::phrase_lookup(terms_list)`,
-/// built once per command run by the caller and reused across every
-/// `depends:` entry in every file -- rebuilding it per entry was the
-/// expensive path), and `led`.
+/// Resolves one `depends:` entry, written by `sec`, against `rf` (for
+/// same-file heading lookup), `terms_list`, `phrase_lookup`
+/// (`terms::phrase_lookup(terms_list)`, built once per command run by the
+/// caller and reused across every `depends:` entry in every file --
+/// rebuilding it per entry was the expensive path), and `led`.
 ///
 /// `Id` entries: a heading id in `rf` first, else a non-retired term id in
 /// `terms_list`, else a current decision by the ledger; anything else
-/// refuses as `NotCurrentDecision`.
+/// refuses as `NotCurrentDecision`. An `Id` that names a *retired* term is
+/// allowed instead of refused when `sec` itself is no longer open
+/// (`state::is_dead`: refused, superseded, or withdrawn) -- that question
+/// is closed one way or another, so a depends line frozen back when the
+/// term was still current is a record of what it stood on then, not a
+/// dangling reference to re-plan. An open (unasked or asked-unanswered)
+/// or answered-current `sec` still refuses on it: an open question must be
+/// re-planned onto a live term, and an answered-current one naming a
+/// retired term should never happen at all (retiring a term a current
+/// decision depends on is refused up front, at `approve adrdom/terms.md`).
 ///
 /// `Text` entries: heading-shaped (trimmed text ends in `?`) look up a
 /// same-file heading by its exact text -- `Ok(Some(Heading(_)))` when
@@ -55,6 +64,7 @@ pub enum DepError {
 /// longer resolves here.
 pub fn resolve_dep(
     d: &Dep,
+    sec: &Section,
     rf: &RecordFile,
     terms_list: &[Term],
     phrase_lookup: &HashMap<String, String>,
@@ -69,11 +79,11 @@ pub fn resolve_dep(
             {
                 return Ok(Some(DepTarget::Heading(idx)));
             }
-            if terms_list
-                .iter()
-                .any(|t| t.id.as_deref() == Some(id.as_str()) && !t.retired)
-            {
-                return Ok(Some(DepTarget::Term(id.clone())));
+            if let Some(term) = terms_list.iter().find(|t| t.id.as_deref() == Some(id.as_str())) {
+                if !term.retired || state::is_dead(led, sec) {
+                    return Ok(Some(DepTarget::Term(id.clone())));
+                }
+                return Err(DepError::NotCurrentDecision(id.clone()));
             }
             if state::is_current(led, id) {
                 return Ok(Some(DepTarget::Decision(id.clone())));

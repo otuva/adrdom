@@ -358,7 +358,7 @@ fn ask_refuses_on_a_terms_md_shape_error() {
 }
 
 #[test]
-fn ask_refuses_on_a_banned_word_naming_the_word_and_term() {
+fn ask_refuses_on_a_banned_word_naming_the_heading_and_term() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -373,9 +373,10 @@ fn ask_refuses_on_a_banned_word_naming_the_word_and_term() {
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
     let err = stderr(&out);
+    assert!(err.contains("banned word (term authority)"), "{}", err);
     assert!(
-        err.contains("banned word \"predecessors\" (term authority)"),
-        "{}",
+        !err.to_lowercase().contains("predecessors"),
+        "the matched word must never reach stderr: {}",
         err
     );
 }
@@ -392,8 +393,13 @@ fn ask_refuses_on_a_banned_word_with_no_term_name() {
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("banned word \"predecessors\""), "{}", err);
+    assert!(err.contains("banned word"), "{}", err);
     assert!(!err.contains("(term"), "{}", err);
+    assert!(
+        !err.to_lowercase().contains("predecessors"),
+        "the matched word must never reach stderr: {}",
+        err
+    );
 }
 
 #[test]
@@ -438,6 +444,13 @@ fn ask_pairs_nothing_for_a_word_only_on_a_retired_term() {
     );
 }
 
+// adr: 05af74a6-36be-4923-b66f-1467b323816a
+//
+// `retiring frees a term's words and a new term may take them`: "authority"
+// is retired below, "power" is a new current term whose alias is
+// "authority", and a brand new question's use of the word "authority"
+// pairs "power"'s id -- not the retired term's -- proving the freed word
+// really did pass to the new concept.
 #[test]
 fn ask_pairs_a_word_to_the_current_term_that_took_it_from_a_retired_one() {
     // A retired term and a current term share the same word ("authority"):
@@ -524,5 +537,44 @@ fn ask_writes_the_terms_line_with_a_plural_word() {
             .any(|l| l.starts_with("terms: ") && l.contains("decisions=99999999-9999-9999-9999-999999999999")),
         "expected a plural match on the terms line: {}",
         content
+    );
+}
+
+// adr: f571a454-3e6c-46c1-b754-0822a5d1d667
+//
+// `ask` pairs every word of the question -- heading, body lines and every
+// option -- to terms, not only the heading or a chosen answer. In
+// `AUTHORITY_QUESTION`, "leaked" sits only in the Problem line ("names
+// leaked into decisions") and "predecessors" sits only in option B's Why
+// line ("matches predecessors"); the heading and option A never use either
+// word. Both still show up on the one terms line `ask` writes.
+#[test]
+fn ask_pairs_a_word_from_the_problem_line_and_a_word_from_a_single_option() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    // "decision" is needed for the heading's own `depends: decision` line
+    // to resolve at approve time; "leaked" and "predecessors" are the
+    // words under test here.
+    approve_terms_with(&dir, &["decision", "leaked", "predecessors"]);
+    let record = write_record(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
+
+    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(out.status.success(), "ask failed: {}", stderr(&out));
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let terms_line = content
+        .lines()
+        .find(|l| l.starts_with("terms: "))
+        .unwrap_or_else(|| panic!("no terms line written: {}", content));
+    assert!(
+        terms_line.contains("leaked=99999991-9999-9999-9999-999999999999"),
+        "Problem-line-only word missing from terms line: {}",
+        terms_line
+    );
+    assert!(
+        terms_line.contains("predecessors=99999992-9999-9999-9999-999999999999"),
+        "option-B-only word missing from terms line: {}",
+        terms_line
     );
 }

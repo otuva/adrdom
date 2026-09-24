@@ -5,8 +5,10 @@ use std::path::Path;
 pub(super) fn check_install(root: &Path) -> Vec<Failure> {
     let mut out = Vec::new();
 
-    // AGENTS.md and CLAUDE.md are checked unconditionally, regardless of
-    // whether .claude/ exists.
+    // AGENTS.md is checked unconditionally; CLAUDE.md's import is checked
+    // only when .claude/ exists, the same condition used below for the
+    // deny entries (4f925b13-ad16-48b8-acd1-3e30d6e308b6, answer A: the
+    // CLAUDE.md import is Claude-specific, gated on --claude at install).
     let agents_content = std::fs::read_to_string(root.join("AGENTS.md"));
     match &agents_content {
         Ok(content) => {
@@ -42,20 +44,20 @@ pub(super) fn check_install(root: &Path) -> Vec<Failure> {
         }),
     }
 
-    if let Ok(content) = std::fs::read_to_string(root.join("CLAUDE.md")) {
-        if !content
-            .lines()
-            .any(|l| l == crate::commands::install::CLAUDE_MD_IMPORT)
-        {
-            out.push(Failure {
-                check: "install".to_string(),
-                id: None,
-                message: msg::claude_md_missing_import(),
-            });
-        }
-    }
-
     if root.join(".claude").is_dir() {
+        if let Ok(content) = std::fs::read_to_string(root.join("CLAUDE.md")) {
+            if !content
+                .lines()
+                .any(|l| l == crate::commands::install::CLAUDE_MD_IMPORT)
+            {
+                out.push(Failure {
+                    check: "install".to_string(),
+                    id: None,
+                    message: msg::claude_md_missing_import(),
+                });
+            }
+        }
+
         let settings_path = root.join(".claude/settings.json");
         let content = std::fs::read_to_string(&settings_path).unwrap_or_default();
         if content.trim().is_empty() {

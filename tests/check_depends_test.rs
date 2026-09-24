@@ -36,7 +36,7 @@ fn check_fails_a_malformed_depends_line() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(
         &dir,
-        "adrdom/decisions/bad_depends.md",
+        "adrdom/decisions/bad-depends.md",
         "# Topic\n\n### 1.1 Q?\ndepends: 1.1 Q?=a\n",
     );
 
@@ -170,6 +170,89 @@ fn check_fails_a_depends_entry_on_a_retired_term() {
         "{}",
         text
     );
+}
+
+// The above uses a `Text` entry ("widget"), which never resolves to a
+// retired term at all (`phrase_lookup` skips retired terms). This exercises
+// the other shape: an already-approved `Id` entry that names a retired
+// term directly, on a section that is still open (asked, unanswered) --
+// still a failure, same as unasked.
+#[test]
+fn check_fails_a_depends_entry_on_a_retired_term_by_id_while_open() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let term_id = "11111111-1111-1111-1111-111111111111";
+    let terms_content = format!(
+        "# Terms\n\n## widget\nid: {}\ndefinition: A small thing.\naliases: \nretired: yes\n",
+        term_id
+    );
+    std::fs::write(dir.join("adrdom/terms.md"), &terms_content).unwrap();
+    approve_terms_via_ledger(&dir, &terms_content);
+
+    let question_id = "22222222-2222-2222-2222-222222222222";
+    let content = format!(
+        "# Topic\n\n### 1.1 Q?\ndepends: {term}\n\nid: {id}{body}",
+        term = term_id,
+        id = question_id,
+        body = QUESTION_BODY
+    );
+    write_record(&dir, "adrdom/decisions/example.md", &content);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
+    append_ledger_row(&dir, "asked", question_id, "deadbeef", "1.1 Q?");
+    // Asked but never answered: still open.
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(
+        text.contains(&format!(
+            "plan: adrdom/decisions/example.md: \"1.1 Q?\" depends on {} which is not a current decision; agent names a current decision or removes the line",
+            term_id
+        )),
+        "{}",
+        text
+    );
+}
+
+// Once the question is no longer open -- superseded here -- a `depends:`
+// entry frozen back when the term was still current is a record of what it
+// stood on then, not a dangling reference to re-plan: `check` stays clean
+// on it, the mirror of `check_fails_a_depends_entry_on_a_retired_term_by_id_while_open`
+// above.
+#[test]
+fn check_passes_a_depends_entry_on_a_retired_term_once_the_section_is_superseded() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let term_id = "11111111-1111-1111-1111-111111111111";
+    let terms_content = format!(
+        "# Terms\n\n## widget\nid: {}\ndefinition: A small thing.\naliases: \nretired: yes\n",
+        term_id
+    );
+    std::fs::write(dir.join("adrdom/terms.md"), &terms_content).unwrap();
+    approve_terms_via_ledger(&dir, &terms_content);
+
+    let question_id = "22222222-2222-2222-2222-222222222222";
+    let content = format!(
+        "# Topic\n\n### 1.1 Q?\ndepends: {term}\n\nid: {id}{body}",
+        term = term_id,
+        id = question_id,
+        body = QUESTION_BODY
+    );
+    write_record(&dir, "adrdom/decisions/example.md", &content);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
+    append_ledger_row(&dir, "asked", question_id, "deadbeef", "1.1 Q?");
+    append_ledger_row(
+        &dir,
+        "superseded",
+        question_id,
+        "-",
+        "33333333-3333-3333-3333-333333333333",
+    );
+
+    let out = adr(&dir, &["check"], &[], "");
+    let text = stdout(&out);
+    assert!(!text.contains("which is not a current decision"), "{}", text);
+    assert!(!text.contains("no term"), "{}", text);
 }
 
 #[test]

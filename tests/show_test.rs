@@ -166,3 +166,38 @@ fn show_with_a_file_argument_shows_only_that_file() {
     assert!(shown.contains("# Tiered Topic"), "{}", shown);
     assert!(!shown.contains("# Second Topic"), "{}", shown);
 }
+
+// adr: 48f4647d-8c81-4e8a-a936-6b32f5fb0699
+//
+// "there is no override": `override` names no subcommand the CLI
+// recognizes, so clap itself refuses it (a non-zero exit, no file or
+// ledger touched) rather than the tool running some bypass action. The
+// other half of this decision -- every stop names the move that clears
+// it -- is tied in src/msg.rs's `every_refusal_names_its_next_move`.
+#[test]
+fn override_is_not_a_recognized_command() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let out = adr(&dir, &["override", "some-stop", "because I said so"], &[], "");
+    assert!(
+        !out.status.success(),
+        "an `override` subcommand must not exist: {}",
+        stdout(&out)
+    );
+    let err = stderr(&out);
+    assert!(
+        err.contains("unrecognized subcommand") || err.contains("override"),
+        "expected clap to name the unknown subcommand: {}",
+        err
+    );
+
+    // Nothing was written: no override event of any kind lands in the
+    // ledger.
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        !ledger.to_lowercase().contains("override"),
+        "no override event should ever reach the ledger: {}",
+        ledger
+    );
+}

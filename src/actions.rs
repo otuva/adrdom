@@ -337,12 +337,21 @@ struct Dependent {
     /// supersede.
     id: Option<String>,
     pairs: Vec<(String, String)>,
+    /// True for a terms-line/definition dependent, whose pair's word can
+    /// drift off a term when a name/alias moves elsewhere (checked below);
+    /// false for a `depends:`-line dependent, whose pair is an id read
+    /// straight from the depends entry, never a resolved word, so nothing
+    /// about it can "move" -- only the target's removal or retirement
+    /// (checked either way) applies to it.
+    check_word_drift: bool,
 }
 
 /// Every refusal `adrdom/terms.md` earns under steps 1, 3, 4 and 5 of
 /// `do_approve_terms` (shape errors, circular definitions, a dependent's
 /// pairing that no longer holds, banned words in the file's own text),
-/// collected all at once rather than returned at the first (E1.1) --
+/// plus a definition running past two sentences
+/// (fcc1c1ec-d8e8-428e-9731-9817cdeb8e76, not one of the spec's numbered
+/// steps), collected all at once rather than returned at the first (E1.1) --
 /// `do_approve_terms` prints every one and writes nothing on any refusal;
 /// `check` reports the same list, each line prefixed `terms: ` instead of
 /// `approve: `, minus the approval-state lines that only make sense after a
@@ -397,8 +406,9 @@ pub fn terms_refusals(
     let pairs_per_entry: Vec<Vec<(String, String)>> =
         (0..tf.terms.len()).map(|i| terms::definition_pairs(tf, i)).collect();
 
-    // Every current decision's terms line, and every non-retired term's
-    // fresh definition pairs, is a dependent.
+    // Every current decision's terms line, every current decision's
+    // `depends:` line (once approved, an id -- possibly a term's), and
+    // every non-retired term's fresh definition pairs, is a dependent.
     let mut dependents: Vec<Dependent> = Vec::new();
     for rf in records {
         let frel = &rf.rel;
@@ -407,15 +417,41 @@ pub fn terms_refusals(
             if !state::is_current(led, id) {
                 continue;
             }
-            let Some(tl) = sec.terms_line else { continue };
-            let Some(pairs) = terms::parse_terms_line(rf.lines[tl].trim_end()) else {
-                continue;
-            };
-            dependents.push(Dependent {
-                source: format!("{}: \"{}\"", frel, sec.heading_text),
-                id: Some(id.clone()),
-                pairs,
-            });
+            let terms_line_pairs: Vec<(String, String)> = sec
+                .terms_line
+                .and_then(|tl| terms::parse_terms_line(rf.lines[tl].trim_end()))
+                .unwrap_or_default();
+            if !terms_line_pairs.is_empty() {
+                dependents.push(Dependent {
+                    source: format!("{}: \"{}\"", frel, sec.heading_text),
+                    id: Some(id.clone()),
+                    pairs: terms_line_pairs.clone(),
+                    check_word_drift: true,
+                });
+            }
+            // A `depends:` entry naming a term directly (by id, since a
+            // depends line holds only ids once its file has been
+            // approved): a current decision can stand on a term with no
+            // mention of it anywhere in its prose/terms line at all, so
+            // that terms line alone would miss this use entirely. Skipped
+            // when the terms line already carries the same id (its own
+            // check above already covers it) so retiring a term used both
+            // ways refuses with one message, not two.
+            for d in &sec.depends {
+                let record::Dep::Id { id: dep_id, .. } = d else { continue };
+                if terms_line_pairs.iter().any(|(_, u)| u == dep_id) {
+                    continue;
+                }
+                if !tf.terms.iter().any(|t| t.id.as_deref() == Some(dep_id.as_str())) {
+                    continue;
+                }
+                dependents.push(Dependent {
+                    source: format!("{}: \"{}\"", frel, sec.heading_text),
+                    id: Some(id.clone()),
+                    pairs: vec![(dep_id.clone(), dep_id.clone())],
+                    check_word_drift: false,
+                });
+            }
         }
     }
     for t in &tf.terms {
@@ -434,6 +470,7 @@ pub fn terms_refusals(
             source: format!("term \"{}\"", t.name),
             id: None,
             pairs,
+            check_word_drift: true,
         });
     }
 
@@ -461,20 +498,26 @@ pub fn terms_refusals(
                 refusals.push(msg::term_retired_but_carried(&target.name, &dep.source, next));
                 continue;
             }
-            let still_resolves = lookup.get(word) == Some(uuid);
-            if !still_resolves {
-                // Same split as the retired case just above: a decision
-                // dependent re-asks so its terms line matches the current
-                // wording; a term dependent's own definition is reworded
-                // and the owner re-approves.
-                let next = match &dep.id {
-                    Some(id) => Next::agent(format!(
-                        "re-asks {} so its terms line matches the current wording",
-                        id
-                    )),
-                    None => msg::term_reword_and_approve(),
-                };
-                refusals.push(msg::word_moved_off_term(word, &target.name, &dep.source, next));
+            // A `depends:`-line dependent's pair is an id read straight off
+            // the entry, never a resolved word -- there is no word to
+            // drift, only the target's removal/retirement above, so this
+            // check is skipped for it (`check_word_drift` is false).
+            if dep.check_word_drift {
+                let still_resolves = lookup.get(word) == Some(uuid);
+                if !still_resolves {
+                    // Same split as the retired case just above: a decision
+                    // dependent re-asks so its terms line matches the current
+                    // wording; a term dependent's own definition is reworded
+                    // and the owner re-approves.
+                    let next = match &dep.id {
+                        Some(id) => Next::agent(format!(
+                            "re-asks {} so its terms line matches the current wording",
+                            id
+                        )),
+                        None => msg::term_reword_and_approve(),
+                    };
+                    refusals.push(msg::word_moved_off_term(word, &target.name, &dep.source, next));
+                }
             }
         }
     }
@@ -499,9 +542,21 @@ pub fn terms_refusals(
                         })
                         .map(|n| format!(" (term {})", n))
                         .unwrap_or_default();
-                    refusals.push(msg::terms_banned_word(i + 1, &tok, &suffix));
+                    refusals.push(msg::terms_banned_word(i + 1, &suffix));
                 }
             }
+        }
+    }
+
+    // Every term's own definition is one or two sentences
+    // (fcc1c1ec-d8e8-428e-9731-9817cdeb8e76; not one of the spec's
+    // numbered steps). Checked on every entry, retired or not, the same
+    // way the shape checks in `terms::parse` run on every entry regardless
+    // of `retired`.
+    for t in &tf.terms {
+        let count = terms::sentence_count(&t.definition);
+        if count > 2 {
+            refusals.push(msg::definition_too_long(&t.name, count));
         }
     }
 
@@ -511,7 +566,8 @@ pub fn terms_refusals(
 /// `adrdom/terms.md`: the seven steps of 4 in the spec, in order, nothing
 /// written to disk before step 6 (a shape/cycle/dependent/banned refusal
 /// leaves the file byte-identical to what was on disk before the call).
-/// Steps 1, 3, 4 and 5 are `terms_refusals`, shared with `check` (E1.1).
+/// Steps 1, 3, 4 and 5 (plus the definition-length check above them) are
+/// `terms_refusals`, shared with `check` (E1.1).
 fn do_approve_terms(
     root: &Path,
     file: &Path,
@@ -764,7 +820,7 @@ pub fn record_refusals(
                     continue;
                 }
             }
-            if let Err(e) = depends::resolve_dep(d, rf, terms_list, phrase_lookup, led) {
+            if let Err(e) = depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, led) {
                 out.push(Refusal {
                     category: "plan",
                     message: depends::dep_refusal_text(rel, &sec.heading_text, &e),
@@ -1006,7 +1062,7 @@ fn do_approve_record(
         let parts: Vec<String> = sec
             .depends
             .iter()
-            .map(|d| rewrite_dep_entry(d, &work_rf, terms_list, &phrase_lookup, led))
+            .map(|d| rewrite_dep_entry(d, sec, &work_rf, terms_list, &phrase_lookup, led))
             .collect();
         work_rf.lines[line_idx] = format!("depends: {}", parts.join(", "));
     }
@@ -1130,6 +1186,7 @@ fn do_approve_record(
 /// of per entry).
 fn rewrite_dep_entry(
     d: &record::Dep,
+    sec: &record::Section,
     work_rf: &RecordFile,
     terms_list: &[terms::Term],
     phrase_lookup: &HashMap<String, String>,
@@ -1143,7 +1200,7 @@ fn rewrite_dep_entry(
     match d {
         record::Dep::Id { id, set } => format!("{}{}", id, set_suffix(set)),
         record::Dep::Text { text, set } => {
-            let resolved = depends::resolve_dep(d, work_rf, terms_list, phrase_lookup, led)
+            let resolved = depends::resolve_dep(d, sec, work_rf, terms_list, phrase_lookup, led)
                 .ok()
                 .flatten()
                 .and_then(|target| match target {

@@ -273,6 +273,22 @@ fn duplicate_word_errors(terms: &[Term]) -> Vec<String> {
     errors
 }
 
+/// Sentences in `text` (fcc1c1ec-d8e8-428e-9731-9817cdeb8e76): a sentence
+/// ends at `.`, `?` or `!` followed by whitespace or the end of the text,
+/// so this just counts those terminators.
+pub fn sentence_count(text: &str) -> usize {
+    let chars: Vec<char> = text.chars().collect();
+    let mut count = 0;
+    for (i, &c) in chars.iter().enumerate() {
+        if (c == '.' || c == '?' || c == '!')
+            && (i + 1 == chars.len() || chars[i + 1].is_whitespace())
+        {
+            count += 1;
+        }
+    }
+    count
+}
+
 /// Inserts `id: <uuid v4>` as the first line under each `## name` heading
 /// that has none. Returns the number of ids inserted.
 pub fn mint_ids(tf: &mut TermsFile) -> usize {
@@ -722,6 +738,7 @@ aliases: \n"
             .to_string()
     }
 
+    // adr: 7c306235-6243-4d79-b9aa-08ed19662779
     #[test]
     fn well_formed_file_parses_with_no_errors() {
         let tf = parse(&lines_of(&well_formed()));
@@ -777,6 +794,9 @@ aliases: \n"
         assert!(tf.errors.iter().any(|e| e.contains("unknown line")));
     }
 
+    // adr: c6da863d-5085-402f-815a-9bb832b4df7e
+    // A term entry carries no `banned` field: the ban list is the only
+    // place a term's banned words are kept.
     #[test]
     fn removed_fields_are_unknown_lines() {
         for field in ["test", "owner", "banned"] {
@@ -846,6 +866,20 @@ aliases: \n"
         assert!(tf.errors.iter().any(|e| e.contains("empty name")));
     }
 
+    // adr: fcc1c1ec-d8e8-428e-9731-9817cdeb8e76
+    #[test]
+    fn sentence_count_counts_terminators_followed_by_whitespace_or_end() {
+        assert_eq!(sentence_count("What the thing is."), 1);
+        assert_eq!(sentence_count("What the thing is. Never what it does."), 2);
+        assert_eq!(
+            sentence_count("What the thing is. Never what it does. Or how it is used."),
+            3
+        );
+        // A `.` not followed by whitespace or end (e.g. inside a word) is
+        // not a terminator.
+        assert_eq!(sentence_count("Version 1.5 of the thing."), 1);
+    }
+
     fn sample_terms() -> Vec<Term> {
         vec![
             Term {
@@ -905,6 +939,7 @@ aliases: \n"
         );
     }
 
+    // adr: 521e6211-344a-4b56-a1aa-07be956b3b29
     #[test]
     fn resolve_matches_simple_plural() {
         let terms = sample_terms();
@@ -962,6 +997,7 @@ aliases: \n"
         );
     }
 
+    // adr: 521e6211-344a-4b56-a1aa-07be956b3b29
     #[test]
     fn resolve_matches_irregular_plural_via_alias() {
         let terms = vec![Term {

@@ -137,6 +137,11 @@ fn get_root_without_cookie_is_forbidden() {
     let _ = child.wait();
 }
 
+// adr: df452a5a-1e2d-497e-93e9-7d6a80e8540d
+//
+// "the browser swaps [the token] for a cookie": a `GET` carrying the
+// printed `?t=` token gets back a `Set-Cookie: adr_t=<token>` (HttpOnly),
+// not a page body.
 #[test]
 fn get_root_with_token_sets_cookie_and_redirects() {
     let dir = setup_repo_with_open_question();
@@ -584,6 +589,12 @@ fn terms_article_shows_before_after_when_unapproved() {
     let _ = child.wait();
 }
 
+// adr: df452a5a-1e2d-497e-93e9-7d6a80e8540d
+//
+// "`adr serve` is an owner command (refuses without an interactive
+// terminal)": no `ADR_OWNER_BYPASS` here, and stdin is `Stdio::null()`
+// rather than a TTY, so the process must exit refusing before ever
+// printing an `open:` line or binding a port.
 #[test]
 fn serve_refuses_without_an_interactive_terminal() {
     // 9.2 A: the owner gate is stdin being a TTY, not an env var. A
@@ -756,6 +767,437 @@ fn overview_shows_a_moot_note_for_an_excluded_answer() {
             .contains("moot: &quot;1.2 Dependent?&quot; stands on &quot;1.1 Root?&quot;=A, answered B"),
         "body: {}",
         resp.body
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+// --- owner.md: does the adr binary serve the ui / what the ui requires ---
+
+/// Two independent (no depends between them) tier-1 questions, both
+/// standing on the "example" term, so one repo can carry a question the
+/// CLI answers and a separate one the page answers.
+const TWO_QUESTION_RECORD: &str = r#"# Example
+
+### 1.1 What is the unit of authority called?
+depends: example
+
+Problem: names leaked into decisions.
+
+Standard: plain words.
+
+- A) The authoritative sentence is a decision, and the question that produced it is a question.
+  Why: plainest word.
+  Costs: two nouns.
+- B) The whole unit is a block.
+  Why: matches predecessors.
+  Costs: names a region.
+
+### 1.2 What is the second unit of authority called?
+depends: example
+
+Problem: naming the second unit, also a decision.
+
+Standard: plain words.
+
+- A) The second thing is a widget, and a decision besides.
+  Why: reasons.
+  Costs: costs.
+- B) The second thing is a gadget.
+  Why: other reasons.
+  Costs: other costs.
+"#;
+
+// adr: ece60954-56d4-4622-883e-265f3b997c9f
+//
+// "every act on it calls the same code as the command": answering one
+// question through `adr answer` and an independent one through the page's
+// `POST /answer` writes the identical shape of file line
+// (`**Answer:** <letter>`) and ledger row (`answered`, the question's own
+// asked-hash, the letter, the running binary's version) either way -- both
+// go through `actions::do_answer`. And "a stop the command gives, the page
+// gives too": re-answering an already-answered id refuses with the same
+// "is already answered" text from `msg::already_answered` whichever side
+// asks.
+#[test]
+fn page_answer_and_cli_answer_write_the_same_shaped_file_line_and_ledger_row_and_share_stops() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_terms_with(&dir, &["decision", "example"]);
+    let record = write_record(&dir, "adrdom/decisions/example.md", TWO_QUESTION_RECORD);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(ask_out.status.success(), "ask failed: {}", stderr(&ask_out));
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let ids = extract_ids(&content);
+    assert_eq!(ids.len(), 2, "fixture should carry two ids: {:?}", ids);
+    let (cli_id, page_id) = (ids[0].clone(), ids[1].clone());
+
+    let ledger_before = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    let asked_hash = |id: &str| -> String {
+        ledger_before
+            .lines()
+            .filter(|l| l.contains("\tasked\t") && l.contains(id))
+            .last()
+            .unwrap_or_else(|| panic!("no asked row for {}: {}", id, ledger_before))
+            .split('\t')
+            .nth(3)
+            .unwrap()
+            .to_string()
+    };
+    let cli_hash = asked_hash(&cli_id);
+    let page_hash = asked_hash(&page_id);
+
+    // The CLI path: `adr answer <id> A`.
+    let answer_out = adr_owner(&dir, &["answer", &cli_id, "A"], "");
+    assert!(
+        answer_out.status.success(),
+        "cli answer failed: {}",
+        stderr(&answer_out)
+    );
+
+    // The page path: POST /answer with the cookie and the matching token.
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+    let form = format!("id={}&answer=A&t={}", page_id, token);
+    let resp = post(port, "/answer", Some(&cookie), &form);
+    assert_eq!(resp.status, 302, "body: {}", resp.body);
+
+    // Same file line: both sections get the exact same "**Answer:** A"
+    // text, regardless of which caller reached `actions::do_answer`.
+    let content_after = std::fs::read_to_string(&record).unwrap();
+    let answer_line_count = content_after
+        .lines()
+        .filter(|l| l.trim() == "**Answer:** A")
+        .count();
+    assert_eq!(
+        answer_line_count, 2,
+        "expected the CLI's and the page's answer to both write the identical \"**Answer:** A\" line: {}",
+        content_after
+    );
+
+    // Same ledger row shape: 6 tab-separated fields, event=answered, the
+    // question's own asked-hash, detail=the letter, and the same version
+    // field (one running binary), for both the CLI row and the page row.
+    let ledger_after = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    let answered_row = |id: &str| -> Vec<String> {
+        ledger_after
+            .lines()
+            .filter(|l| l.contains("\tanswered\t") && l.contains(id))
+            .last()
+            .unwrap_or_else(|| panic!("no answered row for {}: {}", id, ledger_after))
+            .split('\t')
+            .map(|s| s.to_string())
+            .collect()
+    };
+    let cli_row = answered_row(&cli_id);
+    let page_row = answered_row(&page_id);
+    assert_eq!(cli_row.len(), 6, "{:?}", cli_row);
+    assert_eq!(page_row.len(), 6, "{:?}", page_row);
+    assert_eq!(cli_row[1], "answered");
+    assert_eq!(page_row[1], "answered");
+    assert_eq!(cli_row[3], cli_hash, "cli row hash should be its own asked-hash");
+    assert_eq!(page_row[3], page_hash, "page row hash should be its own asked-hash");
+    assert_eq!(cli_row[4], "A");
+    assert_eq!(page_row[4], "A");
+    assert_eq!(
+        cli_row[5], page_row[5],
+        "same binary answering both, so the same version field"
+    );
+
+    // Same stop, both ways: re-answering an already-answered id refuses,
+    // with the identical "is already answered" text, whichever side asks.
+    let cli_stop = adr_owner(&dir, &["answer", &cli_id, "B"], "");
+    assert!(!cli_stop.status.success());
+    let cli_stop_err = stderr(&cli_stop);
+    assert!(
+        cli_stop_err.contains("is already answered"),
+        "{}",
+        cli_stop_err
+    );
+
+    let form2 = format!("id={}&answer=B&t={}", page_id, token);
+    let resp2 = post(port, "/answer", Some(&cookie), &form2);
+    assert_eq!(resp2.status, 302, "body: {}", resp2.body);
+    let location2 = header(&resp2, "Location").expect("Location header");
+    let followed = get(port, location2, Some(&cookie));
+    assert_eq!(followed.status, 200, "body: {}", followed.body);
+    assert!(
+        followed.body.contains("is already answered"),
+        "page did not surface the same stop: {}",
+        followed.body
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+// --- owner.md: what the ui requires before an owner act -------------------
+
+// adr: df452a5a-1e2d-497e-93e9-7d6a80e8540d
+//
+// "prints a fresh token once per start": two separate starts of `adr
+// serve` on the same repo print two different tokens.
+#[test]
+fn serve_prints_a_fresh_token_each_start() {
+    let dir = setup_repo_with_open_question();
+
+    let mut child1 = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (_port1, token1) = read_open_line(&mut child1);
+    let _ = child1.kill();
+    let _ = child1.wait();
+
+    let mut child2 = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (_port2, token2) = read_open_line(&mut child2);
+    let _ = child2.kill();
+    let _ = child2.wait();
+
+    assert_ne!(
+        token1, token2,
+        "each start of adr serve must print a fresh token"
+    );
+}
+
+// adr: df452a5a-1e2d-497e-93e9-7d6a80e8540d
+//
+// "listens on 127.0.0.1 only" (the `open:` line `read_open_line` parses
+// here is the printed `http://127.0.0.1:<port>`, asserted by its own
+// prefix check) "and every act verifies the cookie (an act without the
+// cookie or with a wrong one is refused and writes nothing)": a POST with
+// no `Cookie` header, and one with a wrong `adr_t` value, both refuse and
+// leave the topic file and the ledger byte-for-byte unchanged.
+#[test]
+fn serve_binds_loopback_and_every_act_verifies_the_cookie_or_writes_nothing() {
+    let dir = setup_repo_with_open_question();
+    let record_path = dir.join("adrdom/decisions/example.md");
+    let before_record = std::fs::read_to_string(&record_path).unwrap();
+    let before_ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child); // asserts the 127.0.0.1 prefix
+
+    let content = std::fs::read_to_string(&record_path).unwrap();
+    let question_id = extract_ids(&content)[0].clone();
+    let form = format!("id={}&answer=A&t={}", question_id, token);
+
+    // No cookie at all, even with the correct token in the form.
+    let resp = post(port, "/answer", None, &form);
+    assert_eq!(resp.status, 403, "body: {}", resp.body);
+
+    // A wrong cookie value.
+    let resp2 = post(port, "/answer", Some("adr_t=not-the-token"), &form);
+    assert_eq!(resp2.status, 403, "body: {}", resp2.body);
+
+    let after_record = std::fs::read_to_string(&record_path).unwrap();
+    let after_ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert_eq!(
+        before_record, after_record,
+        "an unverified post must not touch the topic file"
+    );
+    assert_eq!(
+        before_ledger, after_ledger,
+        "an unverified post must not touch the ledger"
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+// adr: 0a742360-83c2-479d-b858-4bea646c9b36
+//
+// "the page hold[s] none" / "the page's question view renders no lean":
+// the fixture question below carries options, a Problem and a Standard
+// like any other, and `/next`'s rendering of it has no "Lean" text
+// anywhere -- the page template has no field for one to land in. The
+// other half of this decision (the topic file rejects a `Lean:` line) is
+// tied in decision_test.rs's `a_lean_line_in_the_topic_file_is_stray`.
+#[test]
+fn question_page_never_renders_a_lean_field() {
+    let dir = setup_repo_with_open_question();
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let resp = get(port, "/next", Some(&cookie));
+    assert_eq!(resp.status, 200, "body: {}", resp.body);
+    assert!(
+        resp.body.contains("What is the unit of authority called?"),
+        "body: {}",
+        resp.body
+    );
+    assert!(
+        !resp.body.to_lowercase().contains("lean"),
+        "the question page must never render a lean: {}",
+        resp.body
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+// adr: 644b43ce-be10-4e9a-a7d5-71b27c51e365
+//
+// "approve ... run[s] from the page": posting to `/approve` with the
+// owner's cookie and token drives the same `actions::do_approve` a real
+// `adr approve` runs -- it mints the terms row, so the terms file is
+// approved afterward with no terminal `adr approve` call at all.
+#[test]
+fn post_approve_with_cookie_and_token_approves_terms_from_the_page() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    write_record(&dir, "adrdom/terms.md", WORDS_TERMS_MD);
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let form = format!("file=adrdom/terms.md&t={}", token);
+    let resp = post(port, "/approve", Some(&cookie), &form);
+    assert_eq!(resp.status, 302, "body: {}", resp.body);
+    let location = header(&resp, "Location").expect("Location header");
+    assert!(location.starts_with("/?m="), "{}", location);
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        ledger.lines().any(|l| l.contains("\tterms\t")),
+        "ledger missing terms row after a page approve: {}",
+        ledger
+    );
+
+    // The overview no longer offers an "Approve terms" button, and marks
+    // the terms as approved -- proof the approve the page just ran is the
+    // real thing, not a no-op.
+    let overview = get(port, "/", Some(&cookie));
+    assert_eq!(overview.status, 200, "body: {}", overview.body);
+    assert!(
+        overview.body.contains("approved"),
+        "body: {}",
+        overview.body
+    );
+    assert!(
+        !overview.body.contains("Approve terms"),
+        "terms should no longer need approving: {}",
+        overview.body
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+// adr: 644b43ce-be10-4e9a-a7d5-71b27c51e365
+//
+// "unban ... run[s] from the page": posting to `/unban` with the owner's
+// cookie and token drives the same `actions::do_unban` a real
+// `adr unban` runs -- the banned hash is actually removed and the ledger
+// gets its `unbanned` row, with no terminal `adr unban` call at all.
+#[test]
+fn post_unban_with_cookie_and_token_removes_a_banned_phrase_from_the_page() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let ban_out = adr(&dir, &["ban"], &[], "forbiddenword\n");
+    assert!(ban_out.status.success(), "ban failed: {}", stderr(&ban_out));
+    let banned_before =
+        std::fs::read_to_string(dir.join("adrdom/state/banned.sha256")).unwrap();
+    assert!(!banned_before.trim().is_empty());
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let form = format!("lines=forbiddenword&t={}", token);
+    let resp = post(port, "/unban", Some(&cookie), &form);
+    assert_eq!(resp.status, 302, "body: {}", resp.body);
+    let location = header(&resp, "Location").expect("Location header");
+    assert!(location.starts_with("/?m="), "{}", location);
+
+    let banned_after =
+        std::fs::read_to_string(dir.join("adrdom/state/banned.sha256")).unwrap();
+    assert!(
+        banned_after.trim().is_empty(),
+        "expected the hash removed by a page unban: {}",
+        banned_after
+    );
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        ledger.lines().any(|l| l.contains("\tunbanned\t")),
+        "ledger missing unbanned row after a page unban: {}",
+        ledger
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+// adr: 644b43ce-be10-4e9a-a7d5-71b27c51e365
+//
+// "the page shows every topic file's state, open questions with their
+// options, current decisions and check results": exercises the pieces
+// the tests above don't already cover -- an open question's own options
+// (on `/next`), and the answered-decision list (on `/decisions`, unhit
+// by any other test in this file). Topic-file state, and check's own
+// report, are covered by `get_root_with_cookie_shows_fixture_topic`,
+// `overview_shows_tier_n_is_open` and the moot/refused-state tests above.
+#[test]
+fn page_shows_question_options_and_the_decisions_list() {
+    let dir = setup_repo_with_open_question();
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    // The open question's own options, from EXAMPLE_RECORD, are on /next.
+    // "decision" is a paired term here (approve_terms_with above), so
+    // option A's sentence is split around the word the page wraps in a
+    // term span rather than matched as one literal run.
+    let next = get(port, "/next", Some(&cookie));
+    assert_eq!(next.status, 200, "body: {}", next.body);
+    assert!(
+        next.body.contains("The authoritative sentence is a"),
+        "option A's opening missing from the page: {}",
+        next.body
+    );
+    assert!(
+        next.body
+            .contains(", and the question that produced it is a question."),
+        "option A's close missing from the page: {}",
+        next.body
+    );
+    assert!(
+        next.body.contains("The whole unit is a block."),
+        "option B missing from the page: {}",
+        next.body
+    );
+
+    // Answer it for real, then /decisions shows it as a current decision
+    // with the sentence the owner picked.
+    let content = std::fs::read_to_string(dir.join("adrdom/decisions/example.md")).unwrap();
+    let question_id = extract_ids(&content)[0].clone();
+    assert!(adr_owner(&dir, &["answer", &question_id, "A"], "")
+        .status
+        .success());
+
+    let decisions = get(port, "/decisions", Some(&cookie));
+    assert_eq!(decisions.status, 200, "body: {}", decisions.body);
+    assert!(
+        decisions.body.contains("Current decisions"),
+        "body: {}",
+        decisions.body
+    );
+    assert!(
+        decisions.body.contains("What is the unit of authority called?"),
+        "answered heading missing from /decisions: {}",
+        decisions.body
+    );
+    assert!(
+        decisions.body.contains(
+            "The authoritative sentence is a decision, and the question that produced it is a question."
+        ),
+        "chosen sentence missing from /decisions: {}",
+        decisions.body
     );
 
     let _ = child.kill();

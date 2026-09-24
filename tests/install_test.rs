@@ -17,6 +17,52 @@ const ALL_DENY_ENTRIES: &[&str] = &[
     "Write(adrdom/state/**)",
 ];
 
+// The one owner-commands list (`OWNER_COMMANDS` in src/commands/mod.rs)
+// that both --claude's deny entries and --codex's rules are derived from.
+const OWNER_COMMANDS: &[&str] = &["answer", "approve", "unban", "serve", "uninstall"];
+
+// adr: ae63df95-0643-4108-af65-1e7a0009d631
+// With --claude, Claude's own files come from the one owner-commands list:
+// CLAUDE.md imports AGENTS.md (created here since it was missing), and
+// .claude/settings.json's deny entries forbid every command in the list.
+#[test]
+fn install_claude_flag_derives_claude_files_from_owner_commands() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+
+    let claude_md = std::fs::read_to_string(dir.join("CLAUDE.md")).unwrap();
+    assert!(
+        claude_md.lines().any(|l| l == "@AGENTS.md"),
+        "CLAUDE.md must import AGENTS.md: {}",
+        claude_md
+    );
+
+    let settings: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join(".claude/settings.json")).unwrap(),
+    )
+    .unwrap();
+    let deny: Vec<&str> = settings["permissions"]["deny"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    for cmd in OWNER_COMMANDS {
+        assert!(
+            deny.contains(&format!("Bash(adr {}*)", cmd).as_str()),
+            "settings.json forbids no adr {}: {:?}",
+            cmd,
+            deny
+        );
+        assert!(
+            deny.contains(&format!("Bash(* adr {}*)", cmd).as_str()),
+            "settings.json forbids no * adr {}: {:?}",
+            cmd,
+            deny
+        );
+    }
+}
+
 #[test]
 fn install_creates_layout_and_is_idempotent() {
     let dir = init_repo();
@@ -24,6 +70,9 @@ fn install_creates_layout_and_is_idempotent() {
     let out = adr(&dir, &["install", "--claude"], &[], "");
     assert!(out.status.success(), "install failed: {}", stderr(&out));
 
+    // adr: 16a71892-b348-4b9b-82c5-a9d375187bd3
+    // One visible adrdom directory at the root: topic files under
+    // adrdom/decisions, ledger and ban list under adrdom/state.
     assert!(dir.join("adrdom/decisions").is_dir());
     assert!(dir.join("adrdom/state/ledger.tsv").is_file());
     assert!(dir.join("adrdom/state/banned.sha256").is_file());
@@ -149,6 +198,41 @@ fn install_without_claude_flag_leaves_no_claude_directory() {
     );
 }
 
+// adr: 4f925b13-ad16-48b8-acd1-3e30d6e308b6
+// Plain install (no flags) writes only its git hooks (tracked .githooks,
+// hooksPath pointed at it) and the brief as a marked section of AGENTS.md;
+// nothing for one agent -- no CLAUDE.md, no .claude, no .codex -- without a
+// flag naming that agent.
+#[test]
+fn install_without_flags_writes_only_githooks_and_agents_md_brief() {
+    let dir = init_repo();
+
+    let out = adr(&dir, &["install"], &[], "");
+    assert!(out.status.success(), "install failed: {}", stderr(&out));
+
+    assert!(dir.join(".githooks/pre-commit").is_file());
+    assert!(dir.join(".githooks/commit-msg").is_file());
+    let hooks_cfg = run_git(&dir, &["config", "core.hooksPath"]);
+    assert_eq!(stdout(&hooks_cfg).trim(), ".githooks");
+
+    let agents = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
+    assert!(agents.contains("<!-- adrdom brief begin -->"));
+    assert!(agents.contains("This repository is governed by `adr`."));
+
+    assert!(
+        !dir.join("CLAUDE.md").exists(),
+        "plain install must not create CLAUDE.md"
+    );
+    assert!(
+        !dir.join(".claude").exists(),
+        "plain install must not create .claude"
+    );
+    assert!(
+        !dir.join(".codex").exists(),
+        "plain install must not create .codex"
+    );
+}
+
 // --- AGENTS.md ---------------------------------------------------------
 
 #[test]
@@ -229,8 +313,12 @@ fn install_replaces_a_stale_brief_section_in_place() {
 
 // --- CLAUDE.md -----------------------------------------------------------
 
+// adr: 4f925b13-ad16-48b8-acd1-3e30d6e308b6
+// Plain install (no --claude) is a no-op on an existing CLAUDE.md, even one
+// that doesn't import AGENTS.md yet: CLAUDE.md is Claude-specific, so it
+// only changes behind the --claude flag.
 #[test]
-fn install_appends_import_to_an_existing_claude_md_and_is_idempotent() {
+fn install_without_claude_flag_leaves_an_existing_claude_md_untouched() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     assert!(
@@ -241,17 +329,36 @@ fn install_appends_import_to_an_existing_claude_md_and_is_idempotent() {
     std::fs::write(dir.join("CLAUDE.md"), "# Notes\n\nSome text.\n").unwrap();
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
+    assert_eq!(
+        std::fs::read_to_string(dir.join("CLAUDE.md")).unwrap(),
+        "# Notes\n\nSome text.\n",
+        "install without --claude must not add the import to an existing CLAUDE.md"
+    );
+}
+
+#[test]
+fn install_claude_appends_import_to_an_existing_claude_md_and_is_idempotent() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    assert!(
+        !dir.join("CLAUDE.md").exists(),
+        "install without --claude must not create CLAUDE.md"
+    );
+
+    std::fs::write(dir.join("CLAUDE.md"), "# Notes\n\nSome text.\n").unwrap();
+    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+
     let content = std::fs::read_to_string(dir.join("CLAUDE.md")).unwrap();
     assert!(content.starts_with("# Notes\n\nSome text.\n"));
     assert!(content.lines().any(|l| l == "@AGENTS.md"));
     assert!(content.contains("adrdom: the next line imports the agent brief"));
 
     let first = std::fs::read(dir.join("CLAUDE.md")).unwrap();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
     let second = std::fs::read(dir.join("CLAUDE.md")).unwrap();
     assert_eq!(
         first, second,
-        "second install must leave CLAUDE.md unchanged"
+        "second install --claude must leave CLAUDE.md unchanged"
     );
 }
 
@@ -266,6 +373,9 @@ fn install_does_nothing_when_claude_md_already_imports_agents_md() {
     assert_eq!(content, "# Notes\n\n@AGENTS.md\n");
 }
 
+// adr: c304b7da-1843-43ad-930c-b01b3310483d
+// A file (CLAUDE.md) that holds nothing but what install wrote is deleted
+// on uninstall, not just emptied.
 #[test]
 fn install_claude_creates_claude_md_and_uninstall_deletes_it() {
     let dir = init_repo();
@@ -308,6 +418,10 @@ fn install_without_codex_flag_leaves_no_codex_directory() {
     );
 }
 
+// adr: ae63df95-0643-4108-af65-1e7a0009d631
+// With --codex, Codex's permission file (.codex/rules/adrdom.rules)
+// forbids every command in the same owner-commands list --claude's deny
+// entries are derived from.
 #[test]
 fn install_codex_writes_rules_file_and_is_idempotent() {
     let dir = init_repo();
@@ -321,7 +435,7 @@ fn install_codex_writes_rules_file_and_is_idempotent() {
     );
 
     let rules = std::fs::read_to_string(dir.join(".codex/rules/adrdom.rules")).unwrap();
-    for cmd in ["answer", "approve", "unban", "serve", "uninstall"] {
+    for cmd in OWNER_COMMANDS {
         assert!(
             rules.contains(&format!("pattern = [\"adr\", \"{}\"]", cmd)),
             "missing rule for {}: {}",
@@ -347,6 +461,9 @@ fn install_claude_and_codex_flags_combine() {
     assert!(dir.join(".codex/rules/adrdom.rules").is_file());
 }
 
+// adr: c304b7da-1843-43ad-930c-b01b3310483d
+// A directory install created (.codex/rules, then .codex) is removed too,
+// once uninstall has emptied it.
 #[test]
 fn uninstall_removes_codex_rules_and_empty_directories() {
     let dir = init_repo();
@@ -363,6 +480,9 @@ fn uninstall_removes_codex_rules_and_empty_directories() {
     );
 }
 
+// adr: 292359a4-0512-465b-b6a7-79838e66e5a5
+// uninstall removes a piece only while it still matches what install
+// wrote; a hand-edited file stays.
 #[test]
 fn uninstall_leaves_an_owner_edited_codex_rules_file_alone() {
     let dir = init_repo();
@@ -381,6 +501,9 @@ fn uninstall_leaves_an_owner_edited_codex_rules_file_alone() {
 
 // --- uninstall -------------------------------------------------------------
 
+// adr: 292359a4-0512-465b-b6a7-79838e66e5a5
+// uninstall is an owner command: an agent (no owner authorization) is
+// refused and nothing it would have removed is touched.
 #[test]
 fn uninstall_refuses_without_owner_authorization() {
     let dir = init_repo();
@@ -395,6 +518,10 @@ fn uninstall_refuses_without_owner_authorization() {
     assert!(dir.join(".githooks/pre-commit").exists());
 }
 
+// adr: 292359a4-0512-465b-b6a7-79838e66e5a5
+// uninstall removes everything install wrote outside adrdom (hooks,
+// hooksPath, the AGENTS.md/CLAUDE.md pieces, the deny entries) and leaves
+// adrdom itself in place.
 #[test]
 fn uninstall_removes_everything_install_wrote_outside_adrdom() {
     let dir = init_repo();
@@ -463,6 +590,9 @@ fn uninstall_removes_everything_install_wrote_outside_adrdom() {
     assert!(dir.join("adrdom/state/banned.sha256").is_file());
 }
 
+// adr: c304b7da-1843-43ad-930c-b01b3310483d
+// A file (AGENTS.md) that holds nothing but what install wrote is deleted
+// on uninstall, not left behind empty.
 #[test]
 fn uninstall_deletes_agents_md_that_held_only_the_brief() {
     let dir = init_repo();
@@ -478,13 +608,17 @@ fn uninstall_deletes_agents_md_that_held_only_the_brief() {
     );
 }
 
+// adr: c304b7da-1843-43ad-930c-b01b3310483d
+// A file with more in it than what install wrote (CLAUDE.md with the
+// owner's own text around the marker/import pair) keeps the rest: only
+// install's own lines come out, the file itself stays.
 #[test]
 fn uninstall_removes_claude_md_pair_but_keeps_a_bare_agents_import() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
     std::fs::write(dir.join("CLAUDE.md"), "# Notes\n\nSome text.\n").unwrap();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
     let with_pair = std::fs::read_to_string(dir.join("CLAUDE.md")).unwrap();
     assert!(with_pair.lines().any(|l| l == "@AGENTS.md"));
 
