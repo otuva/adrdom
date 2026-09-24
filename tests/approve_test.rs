@@ -300,6 +300,63 @@ fn approve_withdraws_a_struck_asked_heading() {
     );
 }
 
+// --- approve withdraws a struck refused heading --------------------------
+
+// adr: 6b3d8e59-e145-49e1-860d-a79d753d745c
+//
+// "when the owner approves a plan that drops it the section is gone
+// (approve accepts the drop and writes a withdrawn event for it)": `id` is
+// refused (never answered, never superseded) and its section stays in the
+// file, marked refused, until its heading is struck; the very `approve`
+// that accepts that edit writes the `withdrawn` row for it, exactly the
+// way `approve_withdraws_a_struck_asked_heading` shows for a merely-asked
+// heading above.
+#[test]
+fn approve_withdraws_a_struck_refused_heading() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+    let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let id = extract_ids(&content)[0].clone();
+    assert!(adr_owner(&dir, &["answer", &id, "refuse"], "").status.success());
+
+    // While the refused section still sits in the file, marked refused,
+    // check is clean over it -- no decision, no test, nothing owed.
+    let check_before = adr(&dir, &["check"], &[], "");
+    assert!(
+        check_before.status.success(),
+        "check should be clean with the refused section still in the file: {}",
+        stdout(&check_before)
+    );
+
+    std::fs::write(&record, HEADING_REMOVED).unwrap();
+
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(out.status.success(), "approve failed: {}", stderr(&out));
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        ledger.lines().any(|l| l.contains("\twithdrawn\t") && l.contains(id.as_str())),
+        "ledger missing withdrawn row for the dropped refused id: {}",
+        ledger
+    );
+
+    // check stays clean once the drop is approved.
+    let check_after = adr(&dir, &["check"], &[], "");
+    assert!(
+        check_after.status.success(),
+        "check should stay clean once the refused heading's drop is approved: {}",
+        stdout(&check_after)
+    );
+}
+
 // --- approve refuses when a current heading vanishes without a supersede --
 
 // adr: 21ae8ae0-6884-4d3c-8464-024a8a5aae2d

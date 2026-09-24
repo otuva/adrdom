@@ -158,6 +158,16 @@ fn ask_prefers_the_specific_stands_on_refused_message_over_the_generic_blocker()
     );
 }
 
+// adr: 506b3c6d-3d0a-4a02-98de-3b8a573d2fe9
+//
+// "a refused question counts as unanswered for its tier, so the next tier
+// waits (ask stops it, naming the refused question) until the owner
+// approves a plan change that drops or replaces it, after which the next
+// tier can be asked": Qx (tier 1, refused) holds tier 1 open even while
+// Q2 (tier 2) depends only on Q1, never on Qx directly -- ask still
+// refuses Q2, naming refused Qx as the blocker. Once Qx's heading is
+// struck and the plan re-approved, Qx no longer holds any tier open:
+// answering Q1 opens tier 2, and ask now succeeds for Q2.
 #[test]
 fn ask_names_the_generic_refused_blocker_when_the_candidate_does_not_depend_on_it() {
     let dir = init_repo();
@@ -225,6 +235,30 @@ Standard: plain words.
     assert_eq!(
         err.trim_end(),
         "ask: adrdom/decisions/example.md: \"1.2 Does the widget's paint match its color?\" is in tier 2; tier 1 is open, waiting on refused \"1.0 Is the widget on backorder?\"; agent re-plans, owner runs: adr approve adrdom/decisions/example.md"
+    );
+
+    // Drop Qx's heading and re-approve: the refused question no longer
+    // holds any tier open, so answering Q1 opens tier 2 and ask can now
+    // reach Q2.
+    let after_refusal = std::fs::read_to_string(&record).unwrap();
+    let q1_start = after_refusal.find("### 1.1").expect("1.1 heading present");
+    let dropped = format!("# Example\n\n{}", &after_refusal[q1_start..]);
+    std::fs::write(&record, &dropped).unwrap();
+    approve_record(&dir, "adrdom/decisions/example.md");
+
+    let q1_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
+    assert!(adr_owner(&dir, &["answer", &q1_id, "A"], "").status.success());
+
+    let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(
+        out2.status.success(),
+        "ask should succeed once the refused blocker is dropped from the plan: {}",
+        stderr(&out2)
+    );
+    assert_eq!(
+        asked_row_count(&dir),
+        3,
+        "Qx, Q1, and now Q2 should all have been asked"
     );
 }
 

@@ -98,6 +98,8 @@ Standard: issue trackers keep a closed item visible until a deliberate act archi
   Why: the file holds only live questions.
   Costs: an agent edit removes an asked heading from an approved plan, and the plan fails until the owner approves again.
 
+**Answer:** A
+
 ### Does a refused question hold the tiers above it?
 depends: b782664f-7465-4e1e-99e0-13f6dd2de774=A, f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
 id: 506b3c6d-3d0a-4a02-98de-3b8a573d2fe9
@@ -112,3 +114,5 @@ Standard: dependency-ordered work stops at the unmet prerequisite and names it; 
 - B) No: a refused question counts as settled, and the next tier opens.
   Why: a refusal never stalls the topic.
   Costs: questions standing on the refused one reach the owner with their ground gone.
+
+**Answer:** A
