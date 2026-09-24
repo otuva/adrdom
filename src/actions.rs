@@ -14,6 +14,18 @@ pub struct Outcome {
     pub summary: String,
 }
 
+/// One refusal a topic file earns, tagged with the `check` category under
+/// which the identical text is filed (`parse`, `tells`, `plan`, `ids`):
+/// `approve` prefixes each with `approve: `, `check` with `<category>: `,
+/// so the same line reads either way regardless of which one printed it
+/// (E1.2, one tag richer than `terms_refusals`'s plain `Vec<String>`,
+/// E1.1, since a topic file's refusals span four of `check`'s labels
+/// where `adrdom/terms.md`'s all live under `terms:`).
+pub struct Refusal {
+    pub category: &'static str,
+    pub message: String,
+}
+
 /// The terms.md gates shared by `do_answer` and `do_refuse` (5): missing,
 /// present but unreadable/shape-invalid, or not approved, each refusing with
 /// the same message either caller would print. `rel` is the topic file's
@@ -345,8 +357,15 @@ struct Dependent {
 /// (`terms::definition_pairs`, in `tf.terms` order), computed once here
 /// and reused by `do_approve_terms`'s write step so it is never resolved
 /// twice.
+///
+/// `records` is every topic file in the repo, already parsed by the
+/// caller (E1.3): `do_approve_terms` parses them once itself and reuses
+/// that same parse for its step-7 report; `check` passes the same
+/// `RecordFile`s it built for its own record checks. Neither re-reads a
+/// topic file from disk just to compute a dependent's terms line here.
 pub fn terms_refusals(
     root: &Path,
+    records: &[RecordFile],
     tf: &terms::TermsFile,
     led: &Ledger,
 ) -> (Vec<String>, Vec<Vec<(String, String)>>) {
@@ -377,15 +396,9 @@ pub fn terms_refusals(
 
     // Every current decision's terms line, and every non-retired term's
     // fresh definition pairs, is a dependent.
-    let files = repo::list_decision_files(root);
-    let mut loaded: Vec<(String, RecordFile)> = Vec::new();
-    for f in &files {
-        let Ok(rf) = record::load(f) else { continue };
-        loaded.push((state::rel_path(root, f), rf));
-    }
-
     let mut dependents: Vec<Dependent> = Vec::new();
-    for (frel, rf) in &loaded {
+    for rf in records {
+        let frel = &rf.rel;
         for sec in &rf.sections {
             let Some(id) = &sec.id else { continue };
             if !state::is_current(led, id) {
@@ -498,6 +511,16 @@ fn do_approve_terms(
     let mut tf =
         terms::load(file).map_err(|e| format!("approve: cannot read {}: {}", file.display(), e))?;
 
+    // Every topic file, parsed once here and reused both by
+    // `terms_refusals` (E1.3: no re-reading them from disk itself) and by
+    // step 7's dependent report below.
+    let mut records: Vec<RecordFile> = Vec::new();
+    for f in &repo::list_decision_files(root) {
+        if let Ok(rf) = record::load_in(root, f) {
+            records.push(rf);
+        }
+    }
+
     // The pre-existing latest `terms` row, captured before anything below
     // can change what "latest" means, for step 7's before/after compare.
     let prev_terms_row = led.latest_for_path("terms", "adrdom/terms.md").cloned();
@@ -507,7 +530,7 @@ fn do_approve_terms(
 
     // Steps 1 (shape, post-mint), 3 (cycles), 4 (dependents), 5 (banned):
     // every refusal, all at once.
-    let (refusals, pairs_per_entry) = terms_refusals(root, &tf, led);
+    let (refusals, pairs_per_entry) = terms_refusals(root, &records, &tf, led);
     if !refusals.is_empty() {
         let msg = refusals
             .iter()
@@ -557,16 +580,6 @@ fn do_approve_terms(
         if let Some(head_content) = repo::git(root, &["show", "HEAD:adrdom/terms.md"]) {
             let old_tf = terms::parse(&record::split_lines(&head_content));
             if terms::file_hash(&old_tf) == prev_row.hash {
-                // Reloaded here (not kept from `terms_refusals`, which
-                // scopes its own copy to the dependents check): only this
-                // informational branch, taken on a genuine definition
-                // change, needs every current decision's terms line again.
-                let mut loaded: Vec<(String, RecordFile)> = Vec::new();
-                for f in &repo::list_decision_files(root) {
-                    if let Ok(rf) = record::load(f) {
-                        loaded.push((state::rel_path(root, f), rf));
-                    }
-                }
                 for t in &tf.terms {
                     let Some(tid) = &t.id else { continue };
                     let Some(old_t) = old_tf.terms.iter().find(|o| o.id.as_deref() == Some(tid.as_str()))
@@ -577,7 +590,7 @@ fn do_approve_terms(
                         continue;
                     }
                     out.push(format!("approve: term \"{}\" definition changed", t.name));
-                    for (frel, rf) in &loaded {
+                    for rf in &records {
                         for sec in &rf.sections {
                             let Some(id) = &sec.id else { continue };
                             if !state::is_current(led, id) {
@@ -587,7 +600,7 @@ fn do_approve_terms(
                             let pairs =
                                 terms::parse_terms_line(rf.lines[tl].trim_end()).unwrap_or_default();
                             if pairs.iter().any(|(_, pid)| pid == tid) {
-                                out.push(format!("  current: {}: {}", frel, sec.heading_text));
+                                out.push(format!("  current: {}: {}", rf.rel, sec.heading_text));
                             }
                         }
                     }
@@ -607,6 +620,234 @@ fn do_approve_terms(
     Ok(Outcome {
         summary: out.join("\n"),
     })
+}
+
+/// Every refusal one topic file (`rf`, at `rel`) earns on its own: shape
+/// errors (`parse`), a heading/context-prose tell on text not yet frozen
+/// (`tells`), a missing `depends:` line, an entry that fails to resolve, a
+/// frozen section's edited depends entry, the derive error, and the tier
+/// cap (all `plan`) -- every category `do_approve_record` refuses on
+/// except the cross-file "answered id missing from every topic file"
+/// check, which needs every topic file, not just this one
+/// (`missing_answered_refusals`, below). Shared with `check` (E1.2, one
+/// function for both, mirroring `terms_refusals`, E1.1): `approve` prefixes
+/// each message `approve: `, `check` prefixes it `<category>: `, so the
+/// two print the identical line.
+///
+/// `terms_list`/`phrase_lookup` are supplied by the caller rather than
+/// loaded here: `approve` passes its own already-approved terms (gated by
+/// `require_terms` before this is ever called), `check` a copy with every
+/// id minted in memory so a real term in a terms.md that has never been
+/// approved still resolves (E1.3) instead of drowning this in "which is no
+/// term" refusals.
+pub fn record_refusals(
+    rel: &str,
+    rf: &RecordFile,
+    terms_list: &[terms::Term],
+    phrase_lookup: &HashMap<String, String>,
+    led: &Ledger,
+) -> Vec<Refusal> {
+    let mut out: Vec<Refusal> = Vec::new();
+
+    for e in &rf.shape_errors {
+        out.push(Refusal {
+            category: "parse",
+            message: format!("{}: {}; owner fixes the topic file", rel, e),
+        });
+    }
+    for sec in &rf.sections {
+        for e in &sec.shape_errors {
+            out.push(Refusal {
+                category: "parse",
+                message: format!(
+                    "{}: \"{}\": {}; owner fixes the topic file",
+                    rel, sec.heading_text, e
+                ),
+            });
+        }
+    }
+
+    // 9.5 A: a loaded phrase refuses before any write -- a heading with any
+    // tell (loaded opening, "and"/"or", provenance, code state, or a date),
+    // or a context prose line with a provenance, code-state, or date tell.
+    // A frozen heading (state::is_frozen) is skipped: it can never be
+    // edited, so refusing on it would block this file forever once the
+    // list grows to include a word it already carried.
+    for sec in &rf.sections {
+        if state::is_frozen(led, sec) {
+            continue;
+        }
+        for (line, phrase, what) in tells::heading_tells(sec.start, &sec.heading_text) {
+            out.push(Refusal {
+                category: "tells",
+                message: tells::tell_text(rel, line, &sec.heading_text, &phrase, what),
+            });
+        }
+    }
+    {
+        let (cs, ce) = rf.context_range;
+        for (line, phrase, what) in tells::prose_tells_in(&rf.lines, cs, ce) {
+            out.push(Refusal {
+                category: "tells",
+                message: tells::tell_text(rel, line, "context", &phrase, what),
+            });
+        }
+    }
+
+    // 8.3/8.6 B: every section, skeleton or not, needs at least one
+    // `depends:` line naming what the question stands on, before anything
+    // about it is resolved or written.
+    for sec in &rf.sections {
+        if sec.depends.is_empty() {
+            out.push(Refusal {
+                category: "plan",
+                message: format!(
+                    "{}: \"{}\" has no depends line; agent writes what the question stands on",
+                    rel, sec.heading_text
+                ),
+            });
+        }
+    }
+
+    // Resolve every entry (8.3/9.1 A). An `Id` entry is kept as written and
+    // must already be a heading id in this file, a non-retired term id, or a
+    // current decision. A `Text` entry ending in `?` is a heading reference,
+    // whose dangling/cycle/self-dep is `derive_tiers`'s single error
+    // (computed at parse time into `rf.derive_error`); any other `Text`
+    // entry must resolve to exactly one non-retired term. A `Text` entry
+    // (of either shape) found inside a section whose latest ledger state is
+    // `answered`/`refused`/`superseded` refuses instead of being silently
+    // rewritten (9.1 A point 5): that section is frozen -- its decision is
+    // already closed, one way or another -- and an edit there is the
+    // agent's to remove, not approve's to carry forward.
+    for sec in &rf.sections {
+        let frozen = state::is_frozen(led, sec);
+        for d in &sec.depends {
+            if frozen && matches!(d, record::Dep::Text { .. }) {
+                out.push(Refusal {
+                    category: "plan",
+                    message: format!("{}: \"{}\": answered; agent removes the edit", rel, sec.heading_text),
+                });
+                continue;
+            }
+            if let record::Dep::Text { text, .. } = d {
+                if text.trim().ends_with('?') {
+                    // Dangling/cycle/self-dep is reported once, below, via
+                    // `rf.derive_error`.
+                    continue;
+                }
+            }
+            if let Err(e) = depends::resolve_dep(d, rf, terms_list, phrase_lookup, led) {
+                out.push(Refusal {
+                    category: "plan",
+                    message: depends::dep_refusal_text(rel, &sec.heading_text, &e),
+                });
+            }
+        }
+    }
+    if let Some(err) = &rf.derive_error {
+        out.push(Refusal {
+            category: "plan",
+            message: record::derive_error_text(rel, err, None),
+        });
+    }
+
+    // Cap (8.8 A): no derived tier may hold more than `TIER_CAP` questions.
+    // Only checkable when tiers were actually derived: a `derive_error`
+    // above leaves `rf.tiers` `None`, already refused there.
+    if let Some(tiers) = &rf.tiers {
+        if let Some((tier, count)) = record::over_cap(tiers) {
+            out.push(Refusal {
+                category: "plan",
+                message: format!(
+                    "{}: tier {} holds {} questions, the cap is {}; agent moves questions under a higher heading or splits the topic",
+                    rel, tier, count, record::TIER_CAP
+                ),
+            });
+        }
+    }
+
+    out
+}
+
+/// A current (answered, not superseded) decision id now named by no topic
+/// file's heading at all, across every topic file in the repo (`records`):
+/// `approve` refuses on it rather than silently withdrawing it the way an
+/// asked/refused id missing from every file is (that withdrawal stays
+/// `do_approve_record`'s own bookkeeping, not a refusal, since striking a
+/// question that was never answered loses nothing). Global, so computed
+/// once per run rather than once per file -- `do_approve_record` calls it
+/// once regardless of which file was named; `check` likewise once for the
+/// whole repo. Shared with `check`'s `ids` category (E1.2).
+pub fn missing_answered_refusals(records: &[RecordFile], led: &Ledger) -> Vec<Refusal> {
+    let mut present_ids: HashSet<String> = HashSet::new();
+    for rf in records {
+        for sec in &rf.sections {
+            if let Some(id) = &sec.id {
+                present_ids.insert(id.clone());
+            }
+        }
+    }
+
+    let mut state_ids: BTreeSet<String> = BTreeSet::new();
+    for row in &led.rows {
+        if matches!(
+            row.event.as_str(),
+            "asked" | "answered" | "refused" | "superseded" | "withdrawn"
+        ) {
+            state_ids.insert(row.id.clone());
+        }
+    }
+
+    let mut out = Vec::new();
+    for id in &state_ids {
+        if present_ids.contains(id) {
+            continue;
+        }
+        if let Some(r) = led.latest_state(id) {
+            if r.event == "answered" {
+                let heading = led
+                    .latest_asked(id)
+                    .map(|a| a.detail.clone())
+                    .unwrap_or_else(|| id.clone());
+                out.push(Refusal {
+                    category: "ids",
+                    message: format!(
+                        "id {} (\"{}\") is answered and current but missing from every topic file; owner supersedes it or restores the heading",
+                        id, heading
+                    ),
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Inserts a freshly minted id directly after each skeleton section's
+/// `depends:` line (9.1 A/8.1 A point 4, no blank padding, the same bare
+/// single-line insert `ask` uses for `terms:` after `id:`). Every section
+/// here has already passed `record_refusals`'s "has no depends line"
+/// check, so the search below should never fail -- but that invariant
+/// lives in a different function now, so a future reorder of the two
+/// reports an error instead of panicking.
+fn insert_missing_ids(rf: &RecordFile, mut work_lines: Vec<String>) -> Result<Vec<String>, String> {
+    let needs_id: Vec<bool> = rf.sections.iter().map(|s| s.id.is_none()).collect();
+    for i in (0..rf.sections.len()).rev() {
+        if needs_id[i] {
+            let sec = &rf.sections[i];
+            let depends_idx = (sec.start + 1..sec.end)
+                .find(|&j| work_lines[j].starts_with("depends: "))
+                .ok_or_else(|| {
+                    format!(
+                        "approve: \"{}\" has no depends line; agent writes what the question stands on",
+                        sec.heading_text
+                    )
+                })?;
+            let new_id = Uuid::new_v4().to_string();
+            work_lines.insert(depends_idx + 1, format!("id: {}", new_id));
+        }
+    }
+    Ok(work_lines)
 }
 
 /// A topic file: parse, refuse on shape errors; resolve every `depends:`
@@ -630,149 +871,58 @@ fn do_approve_record(
     let rf =
         record::load(file).map_err(|e| format!("approve: cannot read {}: {}", file.display(), e))?;
 
-    // E1.2: every refusal this file can earn -- shape, tells, a missing
-    // depends line, depends resolution (including a frozen section's
-    // edit and the derived-tiers error), the tier cap, and an answered id
-    // missing from every topic file -- collected here and reported
-    // together instead of returned at the first, so one `approve` call
-    // tells the agent everything it owes the owner before asking again.
-    let mut refusals: Vec<String> = Vec::new();
-
-    for e in &rf.shape_errors {
-        refusals.push(format!("approve: {}: {}; owner fixes the topic file", rel, e));
-    }
-    for sec in &rf.sections {
-        for e in &sec.shape_errors {
-            refusals.push(format!(
-                "approve: {}: \"{}\": {}; owner fixes the topic file",
-                rel, sec.heading_text, e
-            ));
-        }
-    }
-
-    // 9.5 A: a loaded phrase refuses before any write -- a heading with any
-    // tell (loaded opening, "and"/"or", provenance, code state, or a date),
-    // or a context prose line with a provenance, code-state, or date tell.
-    // A frozen heading (state::is_frozen) is skipped: it can never be
-    // edited, so refusing on it would block this file forever once the
-    // list grows to include a word it already carried.
-    for sec in &rf.sections {
-        if state::is_frozen(led, sec) {
-            continue;
-        }
-        for (line, phrase, what) in tells::heading_tells(sec.start, &sec.heading_text) {
-            refusals.push(format!(
-                "approve: {}",
-                tells::tell_text(rel, line, &sec.heading_text, &phrase, what)
-            ));
-        }
-    }
-    {
-        let (cs, ce) = rf.context_range;
-        for (line, phrase, what) in tells::prose_tells_in(&rf.lines, cs, ce) {
-            refusals.push(format!(
-                "approve: {}",
-                tells::tell_text(rel, line, "context", &phrase, what)
-            ));
-        }
-    }
-
-    // 8.3/8.6 B: every section, skeleton or not, needs at least one
-    // `depends:` line naming what the question stands on, before anything
-    // about it is resolved or written.
-    for sec in &rf.sections {
-        if sec.depends.is_empty() {
-            refusals.push(format!(
-                "approve: {}: \"{}\" has no depends line; agent writes what the question stands on",
-                rel, sec.heading_text
-            ));
-        }
-    }
-
-    // Resolve every entry (8.3/9.1 A). An `Id` entry is kept as written and
-    // must already be a heading id in this file, a non-retired term id, or a
-    // current decision. A `Text` entry ending in `?` is a heading reference,
-    // whose dangling/cycle/self-dep is `derive_tiers`'s single error
-    // (computed at parse time into `rf.derive_error`); any other `Text`
-    // entry must resolve to exactly one non-retired term. A `Text` entry
-    // (of either shape) found inside a section whose latest ledger state is
-    // `answered`/`refused`/`superseded` refuses instead of being silently
-    // rewritten (9.1 A point 5): that section is frozen -- its decision is
-    // already closed, one way or another -- and an edit there is the
-    // agent's to remove, not approve's to carry forward.
-    let terms_list: Vec<terms::Term> =
-        state::load_terms(root).map(|tf| tf.terms).unwrap_or_default();
+    // Refuse up front, before a single `depends:` entry is resolved, when
+    // adrdom/terms.md is missing, shape-broken, or not yet approved (the
+    // review finding this fixes): the same gate `ask`/`do_answer` apply via
+    // `require_terms`. Without this, a real term with no id minted yet (an
+    // unapproved terms.md mints nothing to disk) silently fails to resolve
+    // and every depends entry naming it refuses "which is no term" instead
+    // of the one clear "terms not approved" line.
+    let tf = require_terms(root, led, rel).map_err(|e| format!("approve: {}", e))?;
+    let terms_list: &[terms::Term] = &tf.terms;
     // Built once per command run (not per depends entry): `resolve_dep`
     // used to call `terms::resolve_word`, which rebuilt this same map from
     // scratch on every entry.
-    let phrase_lookup = terms::phrase_lookup(&terms_list);
-    for sec in &rf.sections {
-        let frozen = state::is_frozen(led, sec);
-        for d in &sec.depends {
-            if frozen && matches!(d, record::Dep::Text { .. }) {
-                refusals.push(format!(
-                    "approve: {}: \"{}\": answered; agent removes the edit",
-                    rel, sec.heading_text
-                ));
-                continue;
-            }
-            if let record::Dep::Text { text, .. } = d {
-                if text.trim().ends_with('?') {
-                    // Dangling/cycle/self-dep is reported once, below, via
-                    // `rf.derive_error`.
-                    continue;
-                }
-            }
-            if let Err(e) = depends::resolve_dep(d, &rf, &terms_list, &phrase_lookup, led) {
-                refusals.push(format!(
-                    "approve: {}",
-                    depends::dep_refusal_text(rel, &sec.heading_text, &e)
-                ));
-            }
-        }
-    }
-    if let Some(err) = &rf.derive_error {
-        refusals.push(format!(
-            "approve: {}",
-            record::derive_error_text(rel, err, None)
-        ));
-    }
+    let phrase_lookup = terms::phrase_lookup(terms_list);
 
-    // Cap (8.8 A): no derived tier may hold more than `TIER_CAP` questions.
-    // Only checkable when tiers were actually derived: a `derive_error`
-    // above leaves `rf.tiers` `None`, already refused there.
-    if let Some(tiers) = &rf.tiers {
-        if let Some((tier, count)) = record::over_cap(tiers) {
-            refusals.push(format!(
-                "approve: {}: tier {} holds {} questions, the cap is {}; agent moves questions under a higher heading or splits the topic",
-                rel, tier, count, record::TIER_CAP
-            ));
-        }
-    }
+    // E1.2: every refusal this file can earn -- shape, tells, a missing
+    // depends line, depends resolution (including a frozen section's
+    // edit and the derived-tiers error), and the tier cap -- collected
+    // here (`record_refusals`, shared with `check`) instead of returned at
+    // the first, so one `approve` call tells the agent everything it owes
+    // the owner before asking again.
+    let mut refusals: Vec<String> = record_refusals(rel, &rf, terms_list, &phrase_lookup, led)
+        .into_iter()
+        .map(|r| format!("approve: {}", r.message))
+        .collect();
 
     // Ledger ids (asked/answered/refused/superseded/withdrawn) that now
     // appear in no topic file at all: withdraw the asked/refused ones,
-    // refuse on a current (answered, not superseded) one, allow a
-    // superseded one silently. Computed and checked here, before any write
-    // below, so a refusal on this leaves both the topic file and the
-    // ledger exactly as they were (the function's own contract: nothing is
-    // written when a check refuses). Reads `file` itself straight off disk
-    // like every other topic file -- it is still unwritten at this point,
-    // so its ids are exactly `rf`'s; minting new ids for skeleton headings
-    // below never removes an id already in the ledger's `state_ids`, so
-    // reading before that rewrite changes nothing this check depends on.
-    let all_files = repo::list_decision_files(root);
-    let mut present_ids: HashSet<String> = HashSet::new();
-    for f in &all_files {
+    // refuse on a current (answered, not superseded) one via
+    // `missing_answered_refusals` (shared with `check`'s `ids` category),
+    // allow a superseded one silently. Computed and checked here, before
+    // any write below, so a refusal on this leaves both the topic file and
+    // the ledger exactly as they were (the function's own contract:
+    // nothing is written when a check refuses). Reads every topic file
+    // straight off disk like `file` itself -- still unwritten at this
+    // point, so its ids are exactly `rf`'s; minting new ids for skeleton
+    // headings below never removes an id already in the ledger's
+    // `state_ids`, so reading before that rewrite changes nothing this
+    // check depends on.
+    let mut all_records: Vec<RecordFile> = Vec::new();
+    for f in &repo::list_decision_files(root) {
         if let Ok(rf2) = record::load(f) {
-            for sec in &rf2.sections {
-                if let Some(id) = &sec.id {
-                    present_ids.insert(id.clone());
-                }
-            }
+            all_records.push(rf2);
         }
     }
+    for r in missing_answered_refusals(&all_records, led) {
+        refusals.push(format!("approve: {}", r.message));
+    }
 
+    let present_ids: HashSet<String> = all_records
+        .iter()
+        .flat_map(|rf2| rf2.sections.iter().filter_map(|s| s.id.clone()))
+        .collect();
     let mut state_ids: BTreeSet<String> = BTreeSet::new();
     for row in &led.rows {
         if matches!(
@@ -791,11 +941,12 @@ fn do_approve_record(
         if present_ids.contains(id) {
             continue;
         }
-        match led.latest_state(id) {
-            // A refused id absent from every file is withdrawn exactly like
-            // a struck asked one (8.2 A): the refusal already closed it
-            // with no decision, so there's nothing left to protect.
-            Some(r) if r.event == "asked" || r.event == "refused" => {
+        // A refused id absent from every file is withdrawn exactly like a
+        // struck asked one (8.2 A): the refusal already closed it with no
+        // decision, so there's nothing left to protect. An answered one is
+        // handled above, by `missing_answered_refusals`.
+        if let Some(r) = led.latest_state(id) {
+            if r.event == "asked" || r.event == "refused" {
                 withdrawn_rows.push(ledger::Row {
                     time: ledger::now_rfc3339(),
                     event: "withdrawn".to_string(),
@@ -805,17 +956,6 @@ fn do_approve_record(
                     version: crate::version::VERSION.to_string(),
                 });
             }
-            Some(r) if r.event == "answered" => {
-                let heading = led
-                    .latest_asked(id)
-                    .map(|a| a.detail.clone())
-                    .unwrap_or_else(|| id.clone());
-                refusals.push(format!(
-                    "approve: id {} (\"{}\") is answered and current but missing from every topic file; owner supersedes it or restores the heading",
-                    id, heading
-                ));
-            }
-            _ => {}
         }
     }
 
@@ -827,26 +967,7 @@ fn do_approve_record(
     // (skeletons included), reparse so every heading's id is available, then
     // rewrite each section's single `depends:` line to one line of ids
     // (8.1 A point 3), entry by entry, keeping any `=set` suffix.
-    //
-    // Every section has exactly one `depends:` line at this point (a
-    // second one already refused above, via `shape_msgs`; a missing one via
-    // `depends_msgs`), so the line found here is always the whole entry
-    // list for that section -- never one of several.
-    let mut work_lines = rf.lines.clone();
-    let needs_id: Vec<bool> = rf.sections.iter().map(|s| s.id.is_none()).collect();
-    for i in (0..rf.sections.len()).rev() {
-        if needs_id[i] {
-            let sec = &rf.sections[i];
-            let depends_idx = (sec.start + 1..sec.end)
-                .find(|&j| work_lines[j].starts_with("depends: "))
-                .expect("depends_msgs above already refused a section with no depends line");
-            let new_id = Uuid::new_v4().to_string();
-            // Directly after the depends line, no blank padding (9.1 A/8.1
-            // A point 4): the same bare single-line insert `ask` already
-            // uses to write `terms:` directly after `id:`.
-            work_lines.insert(depends_idx + 1, format!("id: {}", new_id));
-        }
-    }
+    let work_lines = insert_missing_ids(&rf, rf.lines.clone())?;
     let mut work_rf = record::build(rf.path.clone(), rel.to_string(), work_lines);
 
     let sections_snapshot = work_rf.sections.clone();
@@ -858,7 +979,7 @@ fn do_approve_record(
         let parts: Vec<String> = sec
             .depends
             .iter()
-            .map(|d| rewrite_dep_entry(d, &work_rf, &terms_list, &phrase_lookup, led))
+            .map(|d| rewrite_dep_entry(d, &work_rf, terms_list, &phrase_lookup, led))
             .collect();
         work_rf.lines[line_idx] = format!("depends: {}", parts.join(", "));
     }

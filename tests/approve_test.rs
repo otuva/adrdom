@@ -112,6 +112,7 @@ fn approve_writes_approved_and_context_rows_then_is_idempotent() {
 fn approve_refuses_a_question_with_one_option() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_empty_terms(&dir);
     let content = "# Example\n\n### 1.1 One option?\n\nProblem: p.\n\nStandard: s.\n\n- A) Only choice.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
@@ -137,6 +138,7 @@ fn approve_refuses_a_question_with_one_option() {
 fn approve_refuses_a_question_with_four_options() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_empty_terms(&dir);
     let content = "# Example\n\n### 1.1 Four options?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n- D) Four.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
@@ -504,9 +506,15 @@ fn ask_refuses_while_terms_unapproved() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
     write_record(&dir, "adrdom/terms.md", TERMS_BASIC);
-    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
-        .status
-        .success());
+    // A real `adr approve` on the record now refuses up front while
+    // `adrdom/terms.md` itself is unapproved (the review finding this
+    // fixes: it used to succeed here since the hand-written id in
+    // `TERMS_BASIC` let depends resolution go through despite there being
+    // no `terms` ledger row at all). `approve_via_ledger` gets the record
+    // "looks approved" to `ask` the same way real approve's write step
+    // would have, without depending on the now-refusing terms gate --
+    // `ask`'s own terms gate fires before it ever needs the section's id.
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());

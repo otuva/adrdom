@@ -1,9 +1,10 @@
 use super::{dropped_state, Failure};
+use crate::actions::Refusal;
 use crate::ledger::Ledger;
 use crate::record::RecordFile;
 use std::collections::{HashMap, HashSet};
 
-pub(super) fn check_ids(records: &[RecordFile], led: &Ledger) -> Vec<Failure> {
+pub(super) fn check_ids(records: &[RecordFile], led: &Ledger, missing_answered: &[Refusal]) -> Vec<Failure> {
     let mut out = Vec::new();
     let mut seen: HashMap<String, String> = HashMap::new();
     for rf in records {
@@ -58,6 +59,12 @@ pub(super) fn check_ids(records: &[RecordFile], led: &Ledger) -> Vec<Failure> {
         if dropped_state(led, &id) {
             continue;
         }
+        // An answered-and-current id missing from every file is reported
+        // below, from `missing_answered` (E1.2, shared with `approve`'s
+        // `missing_answered_refusals`), so it isn't printed twice here.
+        if led.latest_state(&id).map(|r| r.event.as_str()) == Some("answered") {
+            continue;
+        }
         if !seen.contains_key(&id) {
             out.push(Failure {
                 check: "ids".to_string(),
@@ -65,6 +72,14 @@ pub(super) fn check_ids(records: &[RecordFile], led: &Ledger) -> Vec<Failure> {
                 message: format!("ledger id {} not found in any topic file", id),
             });
         }
+    }
+
+    for r in missing_answered {
+        out.push(Failure {
+            check: "ids".to_string(),
+            id: None,
+            message: r.message.clone(),
+        });
     }
 
     for rf in records {

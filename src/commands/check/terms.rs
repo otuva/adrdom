@@ -75,7 +75,7 @@ pub(super) fn check_terms(
     // it (`terms::cycles` and `terms::phrase_lookup` only see a term that
     // has an id).
     let minted = terms::minted_copy(&tf);
-    let (refusals, _pairs) = actions::terms_refusals(root, &minted, led);
+    let (refusals, _pairs) = actions::terms_refusals(root, records, &minted, led);
     for r in refusals {
         out.push(Failure {
             check: "terms".to_string(),
