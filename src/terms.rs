@@ -219,9 +219,15 @@ pub fn parse(lines: &[String]) -> TermsFile {
     }
 }
 
+/// A retired entry's name and aliases are ignored here, so a current term
+/// may take a retired term's word (9.3 B); two current entries sharing a
+/// word still refuse.
 fn duplicate_word_errors(terms: &[Term]) -> Vec<String> {
     let mut occ: HashMap<String, Vec<usize>> = HashMap::new();
     for (idx, t) in terms.iter().enumerate() {
+        if t.retired {
+            continue;
+        }
         let mut namealias = vec![t.name.clone()];
         namealias.extend(t.aliases.iter().cloned());
         for w in namealias {
@@ -306,8 +312,9 @@ enum MatchKind {
 /// same priority `resolve` uses when a string is a candidate match for more
 /// than one term: exact beats the "es" plural beats the "s" plural, and
 /// among candidates of equal priority the first one built (terms in
-/// `terms` order, name before its aliases) wins. Terms without an id are
-/// skipped.
+/// `terms` order, name before its aliases) wins. Terms without an id, and
+/// retired terms, are skipped (9.3 B): a lookup never lands on a retired
+/// term, so a new pairing sees current terms only.
 ///
 /// A single lookup against this map answers whether a whole word/phrase
 /// still resolves to a given id exactly as `resolve(word, terms)` would
@@ -317,6 +324,9 @@ enum MatchKind {
 pub fn phrase_lookup(terms: &[Term]) -> HashMap<String, String> {
     let mut map: HashMap<String, (String, MatchKind)> = HashMap::new();
     for t in terms {
+        if t.retired {
+            continue;
+        }
         let Some(id) = &t.id else { continue };
         let mut names = vec![t.name.clone()];
         names.extend(t.aliases.iter().cloned());
@@ -344,9 +354,11 @@ pub fn phrase_lookup(terms: &[Term]) -> HashMap<String, String> {
 }
 
 /// Whole-word/phrase, case-insensitive, longest-phrase-first, non-overlapping
-/// resolution of every term name/alias in `text`. Retired terms are included;
-/// callers decide whether to refuse on a retired match. Terms without an id
-/// are skipped. Returned pairs are unique and sorted by matched word.
+/// resolution of every term name/alias in `text`. Retired terms are never
+/// matched (9.3 B): every new pairing sees current terms only, so a word
+/// that only a retired term owns resolves to nothing here (a current term
+/// is free to take that same name or alias). Terms without an id are
+/// skipped. Returned pairs are unique and sorted by matched word.
 ///
 /// A word also matches a name or alias when it equals that name/alias with a
 /// trailing "s" or "es" appended (simple plural), tried in that order after
@@ -355,6 +367,9 @@ pub fn phrase_lookup(terms: &[Term]) -> HashMap<String, String> {
 pub fn resolve(text: &str, terms: &[Term]) -> Vec<(String, String)> {
     let mut phrases: Vec<(Vec<char>, String, MatchKind)> = Vec::new();
     for t in terms {
+        if t.retired {
+            continue;
+        }
         let id = match &t.id {
             Some(i) => i.clone(),
             None => continue,
@@ -409,8 +424,9 @@ pub fn resolve(text: &str, terms: &[Term]) -> Vec<(String, String)> {
     results.into_iter().collect()
 }
 
-/// Resolves term `idx`'s definition text against every term in `tf`
-/// (including itself, so a self-pairing can be detected).
+/// Resolves term `idx`'s definition text against every current term in
+/// `tf` (including itself, so a self-pairing can be detected; a retired
+/// `tf.terms[idx]` never matches, since `resolve` skips retired targets).
 ///
 /// Used by `cycles` below and by approve's circular-definition check.
 pub fn definition_pairs(tf: &TermsFile, idx: usize) -> Vec<(String, String)> {
@@ -842,9 +858,20 @@ aliases: \n"
                 id: Some("id-decision".to_string()),
                 definition: String::new(),
                 aliases: vec![],
-                retired: true,
+                retired: false,
                 start_line: 20,
                 id_line: Some(21),
+                terms_line: None,
+                terms_line_idx: None,
+            },
+            Term {
+                name: "verdict".to_string(),
+                id: Some("id-verdict".to_string()),
+                definition: String::new(),
+                aliases: vec![],
+                retired: true,
+                start_line: 30,
+                id_line: Some(31),
                 terms_line: None,
                 terms_line_idx: None,
             },
@@ -940,13 +967,62 @@ aliases: \n"
     }
 
     #[test]
-    fn resolve_includes_retired_terms_and_exposes_flag() {
+    fn resolve_excludes_retired_terms() {
+        // "verdict" is retired in `sample_terms`; a word that only a
+        // retired term owns pairs nothing at all (9.3 B).
         let terms = sample_terms();
-        let pairs = resolve("a decision was made", &terms);
-        assert!(pairs
+        assert!(terms.iter().find(|t| t.name == "verdict").unwrap().retired);
+        let pairs = resolve("the verdict was reached", &terms);
+        assert!(
+            pairs.iter().all(|(_, id)| id != "id-verdict"),
+            "{:?}",
+            pairs
+        );
+        // A current term is unaffected.
+        let pairs2 = resolve("a decision was made", &terms);
+        assert!(pairs2
             .iter()
             .any(|(w, id)| w == "decision" && id == "id-decision"));
-        assert!(terms.iter().find(|t| t.name == "decision").unwrap().retired);
+    }
+
+    #[test]
+    fn phrase_lookup_excludes_retired_terms() {
+        let terms = sample_terms();
+        let lookup = phrase_lookup(&terms);
+        assert!(!lookup.values().any(|id| id == "id-verdict"));
+        assert_eq!(lookup.get("decision").map(String::as_str), Some("id-decision"));
+    }
+
+    #[test]
+    fn duplicate_word_errors_ignores_a_retired_entry() {
+        // A retired entry and a current entry sharing the same word: no
+        // conflict, since the retired one is not counted (9.3 B).
+        let terms = vec![
+            Term {
+                name: "decision".to_string(),
+                id: Some("id-old".to_string()),
+                definition: String::new(),
+                aliases: vec![],
+                retired: true,
+                start_line: 1,
+                id_line: Some(2),
+                terms_line: None,
+                terms_line_idx: None,
+            },
+            Term {
+                name: "decision".to_string(),
+                id: Some("id-new".to_string()),
+                definition: String::new(),
+                aliases: vec![],
+                retired: false,
+                start_line: 10,
+                id_line: Some(11),
+                terms_line: None,
+                terms_line_idx: None,
+            },
+        ];
+        let errors = duplicate_word_errors(&terms);
+        assert!(errors.is_empty(), "{:?}", errors);
     }
 
     #[test]

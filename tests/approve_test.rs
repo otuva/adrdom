@@ -811,6 +811,64 @@ fn approve_allows_a_rename_that_keeps_the_old_name_as_an_alias() {
     );
 }
 
+const TERMS_ONE_RETIRED_ONE_CURRENT_SAME_WORD: &str = "# Terms\n\n\
+## decision\n\
+id: 66666666-6666-6666-6666-666666666666\n\
+definition: An old fixture term.\n\
+aliases: \n\
+retired: yes\n\
+\n\
+## verdict\n\
+id: 77777777-7777-7777-7777-777777777777\n\
+definition: A ruling reached after deliberation.\n\
+aliases: decision\n";
+
+/// 9.3 B: a retired entry's name/alias no longer belongs to it; a current
+/// entry may take it, and `approve` (which parses and shape-checks the
+/// file) does not refuse over the shared word.
+#[test]
+fn approve_allows_a_current_term_to_take_a_retired_terms_name_or_alias() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let terms = write_record(
+        &dir,
+        "adrdom/terms.md",
+        TERMS_ONE_RETIRED_ONE_CURRENT_SAME_WORD,
+    );
+
+    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    assert!(
+        out.status.success(),
+        "approve should have allowed the retired term's word to be reused: {}",
+        stderr(&out)
+    );
+}
+
+const TERMS_TWO_CURRENT_SAME_WORD: &str = "# Terms\n\n\
+## decision\n\
+id: 88888888-8888-8888-8888-888888888888\n\
+definition: A choice answered by the owner.\n\
+aliases: verdict\n\
+\n\
+## verdict\n\
+id: 99999999-9999-9999-9999-999999999999\n\
+definition: A ruling reached after deliberation.\n\
+aliases: \n";
+
+/// Unlike a retired entry, two current entries sharing a word still
+/// refuse (9.3 B only excuses a retired entry).
+#[test]
+fn approve_refuses_two_current_entries_sharing_a_word() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let terms = write_record(&dir, "adrdom/terms.md", TERMS_TWO_CURRENT_SAME_WORD);
+
+    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(err.contains("word \"verdict\""), "{}", err);
+}
+
 #[test]
 fn approve_prints_dependents_when_a_definition_changes() {
     let dir = init_repo();
@@ -928,9 +986,10 @@ fn approve_writes_a_terms_line_per_term_from_its_definition() {
     assert!(!question_block.contains("terms: "), "{}", question_block);
 }
 
-// --- approve terms (4): a term's own terms: line is machine state, not
-// prior state -- it is always overwritten from the fresh definition, never
-// read as a dependent in its own right.
+// --- approve terms (4): a term's own terms: line is the recorded pairing,
+// read as a dependent exactly like a decision's frozen line -- as it stood
+// in the file before this approve, never re-resolved from today's
+// definition text.
 
 const TERMS_ENTRY_WITH_BOGUS_LINE: &str = "# Terms\n\n\
 ## decision\n\
@@ -945,27 +1004,28 @@ aliases: \n\
 terms: bogus=99999999-9999-9999-9999-999999999999\n";
 
 #[test]
-fn approve_overwrites_an_agent_written_bogus_terms_line_in_a_term() {
+fn approve_refuses_an_agent_written_bogus_terms_line_in_a_term() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_ENTRY_WITH_BOGUS_LINE);
 
-    // Under the old rule this line was read as prior state: term
-    // 99999999-... doesn't exist, so approve refused with "removed but
-    // carried by term \"question\"". It's agent-written, unapproved
-    // state; approve overwrites it from "question"'s actual definition
-    // (which pairs "decision") instead of refusing on it.
+    // "question"'s terms: line is read as its recorded pairing (9.3 B):
+    // term 99999999-... doesn't exist, so approve refuses "removed but
+    // carried by term \"question\"", the same as a decision naming a
+    // removed term would. Nothing is written.
     let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
-    assert!(out.status.success(), "approve should have succeeded: {}", stderr(&out));
+    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(
+        err.contains(
+            "term 99999999-9999-9999-9999-999999999999 removed but carried by term \"question\""
+        ),
+        "{}",
+        err
+    );
 
     let content = std::fs::read_to_string(&terms).unwrap();
-    assert!(!content.contains("bogus=99999999"), "{}", content);
-    let question_block = &content[content.find("## question").unwrap()..];
-    assert!(
-        question_block.contains("terms: decision=11111111-1111-1111-1111-111111111111"),
-        "{}",
-        question_block
-    );
+    assert_eq!(content, TERMS_ENTRY_WITH_BOGUS_LINE);
 }
 
 const TERMS_ENTRY_PAIRS_ANOTHER_V1: &str = "# Terms\n\n\
@@ -979,6 +1039,9 @@ id: 44444444-4444-4444-4444-444444444444\n\
 definition: A thing bound to a decision.\n\
 aliases: \n";
 
+// "question" keeps the machine-written `terms:` line the first approve
+// gave it (pairing "decision" to its id): that recorded line, not a fresh
+// re-resolve, is what the second approve's dependents check reads.
 const TERMS_ENTRY_PAIRS_ANOTHER_RETIRED: &str = "# Terms\n\n\
 ## decision\n\
 id: 33333333-3333-3333-3333-333333333333\n\
@@ -989,7 +1052,8 @@ retired: yes\n\
 ## question\n\
 id: 44444444-4444-4444-4444-444444444444\n\
 definition: A thing bound to a decision.\n\
-aliases: \n";
+aliases: \n\
+terms: decision=33333333-3333-3333-3333-333333333333\n";
 
 #[test]
 fn approve_refuses_retiring_a_term_carried_by_another_terms_definition() {
@@ -1001,8 +1065,57 @@ fn approve_refuses_retiring_a_term_carried_by_another_terms_definition() {
         .success());
 
     // "question"'s definition is untouched and still says "a decision";
-    // only "decision" is retired.
+    // only "decision" is retired. (The recorded terms: line below is
+    // exactly what that first approve wrote for "question".)
     std::fs::write(&terms, TERMS_ENTRY_PAIRS_ANOTHER_RETIRED).unwrap();
+    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(
+        err.contains("term \"decision\" retired but carried by term \"question\"; owner supersedes first"),
+        "{}",
+        err
+    );
+}
+
+// Retiring "decision" and, in the same approve, adding a new current term
+// that takes its freed word: "question" still carries the retired id via
+// its own recorded terms: line, so this refuses exactly as it does without
+// the new term -- taking the word does not make the retirement any safer,
+// since it is "question"'s *old* pairing, not today's word lookup, that is
+// being protected.
+const TERMS_ENTRY_PAIRS_ANOTHER_RETIRED_WORD_TAKEN: &str = "# Terms\n\n\
+## decision\n\
+id: 33333333-3333-3333-3333-333333333333\n\
+definition: A choice answered by the owner.\n\
+aliases: \n\
+retired: yes\n\
+\n\
+## verdict\n\
+id: 55555555-5555-5555-5555-555555555555\n\
+definition: A ruling reached after deliberation.\n\
+aliases: decision\n\
+\n\
+## question\n\
+id: 44444444-4444-4444-4444-444444444444\n\
+definition: A thing bound to a decision.\n\
+aliases: \n\
+terms: decision=33333333-3333-3333-3333-333333333333\n";
+
+#[test]
+fn approve_refuses_retiring_a_term_while_a_new_term_takes_its_word_and_another_still_carries_it() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let terms = write_record(&dir, "adrdom/terms.md", TERMS_ENTRY_PAIRS_ANOTHER_V1);
+    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
+        .status
+        .success());
+
+    // "decision" retires, "verdict" is a brand new current term taking the
+    // freed word "decision" as an alias, and "question" keeps the recorded
+    // terms: line the first approve wrote for it, still naming "decision"'s
+    // id.
+    std::fs::write(&terms, TERMS_ENTRY_PAIRS_ANOTHER_RETIRED_WORD_TAKEN).unwrap();
     let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);

@@ -9,12 +9,16 @@ use std::io::Read;
 
 /// Resolves `--term <name>` to that term's uuid, matched case-insensitively
 /// by name or alias. Only `state::load_terms` plus the term's `id`/`name`/
-/// `aliases` are used here, so this keeps working whatever else changes in
-/// the terms file's shape.
+/// `aliases`/`retired` are used here, so this keeps working whatever else
+/// changes in the terms file's shape. A retired term is never matched
+/// (9.3 B): this pairing sees current terms only, same as `terms::resolve`.
 fn resolve_term_uuid(root: &std::path::Path, name: &str) -> Option<String> {
     let tf = state::load_terms(root)?;
     let needle = name.trim().to_lowercase();
     for t in &tf.terms {
+        if t.retired {
+            continue;
+        }
         if t.name.trim().to_lowercase() == needle {
             return t.id.clone();
         }

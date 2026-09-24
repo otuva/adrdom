@@ -121,13 +121,15 @@ pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String>
         }
         supersedes_val = sec.supersedes.clone();
         for old in &supersedes_val {
-            // Current, or already superseded by an earlier answer: a later
-            // answer naming the same older id is accepted as lineage.
+            // A supersedes target must be current (4.14 A): latest state
+            // `answered`. An already superseded id (or anything else)
+            // refuses; the agent rewrites the supersedes line to name the
+            // decision that actually superseded it.
             match led.latest_state(old) {
-                Some(row) if row.event == "answered" || row.event == "superseded" => {}
+                Some(row) if row.event == "answered" => {}
                 _ => {
                     return Err(format!(
-                        "supersedes target {} is not current and was never superseded",
+                        "supersedes target {} is not a current decision; agent fixes the supersedes line",
                         old
                     ));
                 }
@@ -292,9 +294,10 @@ pub fn do_approve(root: &Path, file: &Path) -> Result<Outcome, String> {
 /// One dependent's pairs (`word=uuid`), together with a description of
 /// where they were carried, for approve's step 4.
 struct Dependent {
-    /// `<rel>: "<heading>"` for a decision, or `term "<name>"` for a
-    /// term's own definition pairs (freshly computed from the new file,
-    /// never read from a stale terms line).
+    /// `<rel>: "<heading>"` for a decision, or `term "<name>"` for a term:
+    /// in both cases the recorded pairing, read from the dependent's own
+    /// `terms:` line exactly as it stood in the file before this approve,
+    /// never re-resolved from today's definition/section text.
     source: String,
     pairs: Vec<(String, String)>,
 }
@@ -381,13 +384,21 @@ fn do_approve_terms(
             });
         }
     }
-    for (i, t) in tf.terms.iter().enumerate() {
+    for t in &tf.terms {
         if t.retired {
             continue;
         }
+        // The recorded pairing, exactly as decisions' frozen dependents are
+        // read: the term's own `terms:` line as it already stood in the
+        // file before this approve, not a fresh re-resolve (9.3 B;
+        // terms-walk: "definitions are dependents for retire/move
+        // refusals"). A term with no terms line yet has no dependents.
+        let Some(pairs) = t.terms_line.as_deref().and_then(terms::parse_terms_line) else {
+            continue;
+        };
         dependents.push(Dependent {
             source: format!("term \"{}\"", t.name),
-            pairs: pairs_per_entry[i].clone(),
+            pairs,
         });
     }
 
