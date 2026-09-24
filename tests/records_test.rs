@@ -27,6 +27,8 @@ Standard: s.
   Costs: other costs.
 "#;
 
+// adr: 923818a7-05c6-4977-bbaf-53ee8f3773ef -- approve stops a phrase-list
+// hit in a heading (clause: "approve stops a hit in headings").
 #[test]
 fn approve_refuses_a_heading_with_a_loaded_opening() {
     let dir = init_repo();
@@ -61,6 +63,9 @@ Standard: s.
   Costs: other costs.
 "#;
 
+// adr: 923818a7-05c6-4977-bbaf-53ee8f3773ef -- approve stops a phrase-list
+// hit in the context prose (clause: "approve stops a hit ... in the
+// prose").
 #[test]
 fn approve_refuses_a_context_line_with_a_provenance_tell() {
     let dir = init_repo();
@@ -95,6 +100,8 @@ Standard: s.
   Costs: other costs.
 "#;
 
+// adr: 923818a7-05c6-4977-bbaf-53ee8f3773ef -- ask stops a phrase-list hit
+// in a question body (clause: "ask stops a hit in question bodies").
 #[test]
 fn ask_refuses_a_candidate_with_a_code_state_tell_in_its_body() {
     let dir = init_repo();
@@ -129,6 +136,10 @@ Standard: s.
   Costs: other costs.
 "#;
 
+// adr: 923818a7-05c6-4977-bbaf-53ee8f3773ef -- check reports phrase-list
+// hits in text that can still change: an unasked (unfrozen) heading and
+// its context prose (clause: "check reports hits in text that can still
+// change").
 #[test]
 fn check_reports_a_tell_in_an_unfrozen_heading_and_in_context_prose() {
     let dir = init_repo();
@@ -169,6 +180,10 @@ fn frozen_tell_section() -> String {
     )
 }
 
+// adr: 923818a7-05c6-4977-bbaf-53ee8f3773ef -- the other half of "text that
+// can still change": once a section is frozen (answered), check must never
+// report a tell in it -- the clause bounds check to unfrozen text, not all
+// text.
 #[test]
 fn check_passes_a_frozen_answered_section_with_a_tell() {
     let dir = init_repo();

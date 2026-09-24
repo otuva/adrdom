@@ -1,3 +1,4 @@
+use crate::terms;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
@@ -528,6 +529,11 @@ struct BodyScan {
     /// "option A missing Why" / "option B has two Costs lines", one entry
     /// per option that lacks exactly one non-empty Why/Costs line under it.
     option_shape_errors: Vec<String>,
+    /// "second answer line, line N" for each `**Answer:**` line past the
+    /// first one in the section: `answer_line`/`answer_val` always keep the
+    /// first occurrence, so a later one can never overwrite them and hide
+    /// itself from the "answer line comes last" check.
+    answer_errors: Vec<String>,
 }
 
 fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) -> BodyScan {
@@ -543,6 +549,7 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
     let mut answer_val = None;
     let mut option_errors = Vec::new();
     let mut stray_errors = Vec::new();
+    let mut answer_errors = Vec::new();
     let mut problem_count = 0;
     let mut standard_count = 0;
     // Parallel to `options`: how many non-empty `  Why: `/`  Costs: ` lines
@@ -614,6 +621,18 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
             let sentence = extract_sentence(&rest);
             if sentence.is_none() {
                 option_errors.push(format!("option {} has no decision sentence", letter));
+            } else {
+                // 055d303b A's "each one sentence": a decision text holding
+                // a second sentence is refused too -- `extract_sentence`
+                // above only ever looks at the first one, so a count has to
+                // be taken separately to catch the rest of the text.
+                let count = terms::sentence_count(rest.trim_end());
+                if count > 1 {
+                    option_errors.push(format!(
+                        "option {} decision text has {} sentences, more than one",
+                        letter, count
+                    ));
+                }
             }
             options.push(OptionRec {
                 letter,
@@ -643,8 +662,12 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
         }
         under_option = false;
         if let Some(v) = answer_value(line) {
-            answer_line = Some(j);
-            answer_val = Some(v);
+            if answer_line.is_none() {
+                answer_line = Some(j);
+                answer_val = Some(v);
+            } else {
+                answer_errors.push(format!("second answer line, line {}", j + 1));
+            }
             continue;
         }
         stray_errors.push(format!("stray line {}", j + 1));
@@ -688,6 +711,7 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
         problem_count,
         standard_count,
         option_shape_errors,
+        answer_errors,
     }
 }
 
@@ -735,11 +759,19 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
     let mut shape_errors = scan.stray_errors;
     shape_errors.extend(scan.depends_errors);
     if !is_skeleton {
-        if scan.problem_count != 1 {
-            shape_errors.push("missing Problem line".to_string());
+        // A missing field (count 0) and a repeated one (count > 1) are
+        // different mistakes and get different messages: a zero count is
+        // the field never being written, a count over one is the same
+        // field written twice (055d303b A point 4).
+        match scan.problem_count {
+            0 => shape_errors.push("missing Problem line".to_string()),
+            1 => {}
+            _ => shape_errors.push("duplicate Problem line".to_string()),
         }
-        if scan.standard_count != 1 {
-            shape_errors.push("missing Standard line".to_string());
+        match scan.standard_count {
+            0 => shape_errors.push("missing Standard line".to_string()),
+            1 => {}
+            _ => shape_errors.push("duplicate Standard line".to_string()),
         }
         // A skeleton heading (empty body) is exempt; a real body needs two
         // or three options.
@@ -748,6 +780,14 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
         }
     }
     shape_errors.extend(scan.option_shape_errors);
+    shape_errors.extend(scan.answer_errors);
+    // 055d303b A's "the answer line comes last": any non-blank line after
+    // it (Problem/Standard/an option/anything else) means it isn't.
+    if let Some(al) = scan.answer_line {
+        if (al + 1..end).any(|j| !lines[j].trim().is_empty()) {
+            shape_errors.push(format!("answer line not last, line {}", al + 1));
+        }
+    }
 
     Section {
         start,
@@ -1205,6 +1245,12 @@ mod tests {
         );
     }
 
+    // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
+    //
+    // Decision A's Problem/Standard presence clause, plus (via `SHAPED`
+    // below) a well-formed body -- one-line Problem, one-line Standard,
+    // two options each with a Why and a Costs line -- parsing with zero
+    // shape errors.
     #[test]
     fn missing_problem_or_standard_only_fails_non_skeleton_questions() {
         let rf = rf_from("# Topic\n\n### 1.1 Skeleton?\n\n### 1.2 Has a body but no Problem/Standard?\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
@@ -1320,6 +1366,9 @@ mod tests {
         );
     }
 
+    // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- the supersedes list, like
+    // depends, holds several entries as one line of comma-separated values,
+    // not one entry per line.
     #[test]
     fn supersedes_line_parses_multiple_comma_separated_ids() {
         let rf = rf_from("# Topic\n\n### 1.1 Q?\n\nid: new-id\n\nsupersedes: old-1, old-2\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
@@ -1329,6 +1378,17 @@ mod tests {
         );
     }
 
+    // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
+    //
+    // Decision A's "each one sentence" clause, at the unit that decides
+    // *which* sentence: text with a sentence terminator yields that first
+    // sentence -- still the sentence recorded on the option regardless of
+    // what follows it, since `chosen_sentence` should show the same text
+    // whether or not the option is later refused for holding a second one
+    // (that refusal is `scan_body`'s separate `terms::sentence_count` check,
+    // covered by `an_option_with_more_than_one_sentence_is_a_parse_error`
+    // below). Text with no terminator at all yields `None`, which
+    // `scan_body` turns into "option X has no decision sentence".
     #[test]
     fn an_option_decides_exactly_its_first_sentence() {
         assert_eq!(
@@ -1336,6 +1396,108 @@ mod tests {
             Some("Ties live in code.".to_string())
         );
         assert_eq!(extract_sentence("Ties live in code"), None);
+    }
+
+    // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
+    //
+    // Decision A's "each one sentence" clause, the half
+    // `an_option_decides_exactly_its_first_sentence` above does not cover:
+    // a decision text holding a second sentence is a parse error (a
+    // `terms::sentence_count` > 1 on the option's own text), not silently
+    // accepted just because the first sentence parsed fine.
+    #[test]
+    fn an_option_with_more_than_one_sentence_is_a_parse_error() {
+        let rf = rf_from(
+            "# T\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) One. And a second sentence.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n",
+        );
+        assert!(
+            rf.sections[0]
+                .parse_errors
+                .iter()
+                .any(|e| e == "option A decision text has 2 sentences, more than one"),
+            "{:?}",
+            rf.sections[0].parse_errors
+        );
+
+        let ok = rf_from(SHAPED);
+        assert!(ok.sections[0].parse_errors.is_empty(), "{:?}", ok.sections[0].parse_errors);
+    }
+
+    // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
+    //
+    // Decision A's "a second Problem:/Standard: line" fix (point 4): a
+    // repeated field is reported as a duplicate, not folded into the same
+    // "missing" message a zero count gets.
+    #[test]
+    fn a_repeated_problem_or_standard_line_is_a_duplicate_not_a_missing_one() {
+        let rf = rf_from(
+            "# T\n\n### Q?\n\nProblem: p.\n\nProblem: p again.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n",
+        );
+        assert!(
+            rf.sections[0].shape_errors.iter().any(|e| e == "duplicate Problem line"),
+            "{:?}",
+            rf.sections[0].shape_errors
+        );
+        assert!(
+            !rf.sections[0].shape_errors.iter().any(|e| e == "missing Problem line"),
+            "{:?}",
+            rf.sections[0].shape_errors
+        );
+
+        let rf2 = rf_from(
+            "# T\n\n### Q?\n\nProblem: p.\n\nStandard: s.\n\nStandard: s again.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n",
+        );
+        assert!(
+            rf2.sections[0].shape_errors.iter().any(|e| e == "duplicate Standard line"),
+            "{:?}",
+            rf2.sections[0].shape_errors
+        );
+    }
+
+    // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
+    //
+    // Decision A's "the answer line comes last" clause (point 3): an
+    // `**Answer:**` line with real body content after it is refused, at
+    // the section-parsing level `ask`/`check` both read.
+    #[test]
+    fn an_answer_line_before_the_rest_of_the_body_is_a_shape_error() {
+        let rf = rf_from(
+            "# T\n\n### Q?\n\n**Answer:** A\n\nProblem: p.\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n",
+        );
+        assert!(
+            rf.sections[0].shape_errors.iter().any(|e| e.starts_with("answer line not last")),
+            "{:?}",
+            rf.sections[0].shape_errors
+        );
+
+        // At the true end (nothing but blank lines after it): accepted.
+        let ok = rf_from(
+            "# T\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        );
+        assert!(
+            !ok.sections[0].shape_errors.iter().any(|e| e.starts_with("answer line not last")),
+            "{:?}",
+            ok.sections[0].shape_errors
+        );
+    }
+
+    // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
+    //
+    // Decision A's "the answer line comes last" clause: a second
+    // `**Answer:**` line is its own shape error, not silently swallowed by
+    // `answer_line` being overwritten to point at the later (last) one --
+    // which used to let an out-of-place early answer line escape the
+    // "answer line not last" check entirely.
+    #[test]
+    fn a_second_answer_line_is_a_shape_error() {
+        let rf = rf_from(
+            "# T\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n\n**Answer:** B\n",
+        );
+        assert!(
+            rf.sections[0].shape_errors.iter().any(|e| e.starts_with("second answer line")),
+            "{:?}",
+            rf.sections[0].shape_errors
+        );
     }
 
     #[test]
@@ -1367,6 +1529,10 @@ mod tests {
             .any(|e| e.starts_with("stray line")));
     }
 
+    // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
+    //
+    // Decision A's "two or three lettered options" clause: four is
+    // refused, three is accepted (the `ok` case below).
     #[test]
     fn a_fourth_option_is_a_shape_error() {
         let rf = rf_from(
@@ -1404,6 +1570,10 @@ mod tests {
         assert!(sec.parse_errors.is_empty(), "{:?}", sec.parse_errors);
     }
 
+    // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a one-line, comma-
+    // separated depends list with three entries parses cleanly (no shape
+    // errors) and each entry keeps its own answer set independently: the
+    // middle entry carries `=A`, the other two carry none.
     #[test]
     fn depends_parses_all_three_entry_forms_and_sets() {
         let rf = rf_from(
@@ -1484,6 +1654,51 @@ mod tests {
         );
     }
 
+    // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- two heading-shaped
+    // entries on the *same* depends line, each with its own distinct
+    // answer set: the sets must not bleed into each other or collapse to
+    // one set for the whole line.
+    #[test]
+    fn depends_two_entries_on_one_line_keep_separate_answer_sets() {
+        let rf = rf_from(
+            "# Topic\n\n\
+             ### 1.1 Q?\n\n\
+             Problem: p.\n\n\
+             Standard: s.\n\n\
+             - A) x.\n  Why: w.\n  Costs: c.\n\
+             - B) y.\n  Why: w.\n  Costs: c.\n\n\
+             ### 1.2 Q2?\n\n\
+             Problem: p.\n\n\
+             Standard: s.\n\n\
+             - A) x.\n  Why: w.\n  Costs: c.\n\
+             - B) y.\n  Why: w.\n  Costs: c.\n\n\
+             ### 1.3 R?\n\
+             depends: 1.1 Q?=A, 1.2 Q2?=A|B\n\n\
+             Problem: p3.\n\n\
+             Standard: s3.\n\n\
+             - A) x.\n  Why: w.\n  Costs: c.\n\
+             - B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        let sec = &rf.sections[2];
+        assert_eq!(sec.shape_errors, Vec::<String>::new(), "{:?}", sec.shape_errors);
+        assert_eq!(
+            sec.depends[0],
+            Dep::Text {
+                text: "1.1 Q?".to_string(),
+                set: Some(AnswerSet::Letters(vec!['A']))
+            },
+            "the first entry's set must be its own, not the second entry's"
+        );
+        assert_eq!(
+            sec.depends[1],
+            Dep::Text {
+                text: "1.2 Q2?".to_string(),
+                set: Some(AnswerSet::Letters(vec!['A', 'B']))
+            },
+            "the second entry's set must be its own, not the first entry's"
+        );
+    }
+
     #[test]
     fn depends_malformed_entries_on_one_line_are_shape_errors() {
         // All four problems (an empty entry, a bad set, and a duplicate) are
@@ -1521,6 +1736,9 @@ mod tests {
         );
     }
 
+    // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a depends list split
+    // across two lines is refused (a shape error), not read as more
+    // entries of the same list.
     #[test]
     fn two_depends_lines_under_one_heading_is_a_shape_error() {
         let rf = rf_from(

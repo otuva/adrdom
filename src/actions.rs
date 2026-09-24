@@ -712,16 +712,19 @@ fn do_approve_terms(
 }
 
 /// Every refusal one topic file (`rf`, at `rel`) earns on its own: shape
-/// errors (`parse`), a heading/context-prose tell on text not yet frozen
+/// errors and parse errors -- an option with no decision sentence or more
+/// than one, a duplicate id line, an answer naming a missing option --
+/// (both `parse`), a heading/context-prose tell on text not yet frozen
 /// (`tells`), a missing `depends:` line, an entry that fails to resolve, a
 /// frozen section's edited depends entry, the derive error, and the tier
 /// cap (all `plan`) -- every category `do_approve_record` refuses on
 /// except the cross-file "answered id missing from every topic file"
 /// check, which needs every topic file, not just this one
-/// (`missing_answered_refusals`, below). Shared with `check` (E1.2, one
-/// function for both, mirroring `terms_refusals`, E1.1): `approve` prefixes
-/// each message `approve: `, `check` prefixes it `<category>: `, so the
-/// two print the identical line.
+/// (`missing_answered_refusals`, below). Shared with `check` and `ask`
+/// (E1.2/055d303b A point 1, one function for all three, mirroring
+/// `terms_refusals`, E1.1): `approve` prefixes each message `approve: `,
+/// `check` prefixes it `<category>: `, `ask` prefixes the "parse" slice
+/// `ask: `, so the same line reads identically wherever it is printed.
 ///
 /// `terms_list`/`phrase_lookup` are supplied by the caller rather than
 /// loaded here: `approve` passes its own already-approved terms (gated by
@@ -749,6 +752,19 @@ pub fn record_refusals(
             out.push(Refusal {
                 category: "parse",
                 message: msg::section_shape_error(rel, &sec.heading_text, e),
+            });
+        }
+    }
+    // 055d303b A point 1: an option with no decision sentence (or more than
+    // one), a duplicate id line, and an answer naming a missing option were
+    // parse errors only `check` read; now every reader of the shared "parse"
+    // category (`ask`, `approve`, `check`) refuses on them the same way it
+    // already refuses on a shape error.
+    for sec in &rf.sections {
+        for e in &sec.parse_errors {
+            out.push(Refusal {
+                category: "parse",
+                message: msg::check_parse_error(rel, &sec.heading_text, e),
             });
         }
     }
