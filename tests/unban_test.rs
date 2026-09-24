@@ -2,6 +2,9 @@ mod common;
 
 use common::*;
 
+// adr: ef7ec04d-9cdd-40a1-8246-42a4a0200828
+// `unban` reads the word from standard input, removes its hash from the
+// list, and writes an `unbanned` event to the ledger.
 #[test]
 fn unban_removes_hash_and_writes_row() {
     let dir = init_repo();
@@ -94,6 +97,9 @@ fn unban_rewrites_two_column_lines() {
     );
 }
 
+// adr: ef7ec04d-9cdd-40a1-8246-42a4a0200828
+// unban is an owner command: it refuses to run at all without owner
+// authorization, leaving the list and ledger untouched.
 #[test]
 fn unban_refuses_without_an_interactive_terminal() {
     let dir = init_repo();

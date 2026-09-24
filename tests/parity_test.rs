@@ -153,3 +153,39 @@ fn parity_unapproved_terms() {
         check_text
     );
 }
+
+// --- terms: a definition longer than two sentences refuses -------------
+// adr: fcc1c1ec-d8e8-428e-9731-9817cdeb8e76
+
+const TERMS_THREE_SENTENCE_DEFINITION: &str = "# Terms\n\n\
+## decision\n\
+definition: A choice answered by the owner. It stays current until reversed. It is never made twice.\n\
+aliases: \n";
+
+#[test]
+fn parity_definition_over_two_sentences() {
+    let dir = init_repo();
+    setup(&dir);
+    let terms = write_record(&dir, "adrdom/terms.md", TERMS_THREE_SENTENCE_DEFINITION);
+
+    assert_parity(
+        &dir,
+        &terms,
+        "term \"decision\" definition has 3 sentences, more than two",
+    );
+}
+
+const TERMS_TWO_SENTENCE_DEFINITION: &str = "# Terms\n\n\
+## decision\n\
+definition: A choice answered by the owner. It stays current until reversed.\n\
+aliases: \n";
+
+#[test]
+fn approve_allows_a_two_sentence_definition() {
+    let dir = init_repo();
+    setup(&dir);
+    let terms = write_record(&dir, "adrdom/terms.md", TERMS_TWO_SENTENCE_DEFINITION);
+
+    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    assert!(out.status.success(), "approve should have allowed it: {}", stderr(&out));
+}

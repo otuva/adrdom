@@ -158,10 +158,37 @@ fn check_passes_a_skeleton_that_got_an_id_from_approve_but_was_never_asked() {
     assert!(!text.contains("edited after asking"), "{}", text);
 }
 
+// adr: d8a9dfff-de89-442c-a08c-8276efab3f36
+// The scan runs from three places: the installed pre-commit hook (staged
+// files), the installed commit-msg hook (the commit message), and this
+// repository's own CI workflow (every tracked file, on push). A hit names
+// the file and line, never the matched text.
 #[test]
-fn check_banned_default_and_message_modes_name_the_word() {
+fn check_banned_default_and_message_modes_name_the_line() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let pre_commit = std::fs::read_to_string(dir.join(".githooks/pre-commit")).unwrap();
+    assert!(
+        pre_commit.contains("adr check --staged"),
+        "pre-commit hook must run the staged-files scan: {}",
+        pre_commit
+    );
+    let commit_msg = std::fs::read_to_string(dir.join(".githooks/commit-msg")).unwrap();
+    assert!(
+        commit_msg.contains("adr check --message"),
+        "commit-msg hook must run the message scan: {}",
+        commit_msg
+    );
+
+    let workflow_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(".github/workflows/check.yml");
+    let workflow = std::fs::read_to_string(&workflow_path).unwrap();
+    assert!(
+        workflow.contains("adr check"),
+        "CI workflow must run `adr check` over every tracked file: {}",
+        workflow
+    );
 
     let ban_out = adr(&dir, &["ban"], &[], "forbiddenword\n");
     assert!(ban_out.status.success(), "ban failed: {}", stderr(&ban_out));
@@ -176,9 +203,19 @@ fn check_banned_default_and_message_modes_name_the_word() {
     assert!(!out.status.success());
     let out_text = stdout(&out);
     assert!(
-        out_text.contains("banned: notes.txt:1: banned word \"forbiddenword\""),
+        out_text.contains("banned: notes.txt:1: banned word"),
         "{}",
         out_text
+    );
+    assert!(
+        !out_text.to_lowercase().contains("forbiddenword"),
+        "the matched word must never reach stdout: {}",
+        out_text
+    );
+    assert!(
+        !stderr(&out).to_lowercase().contains("forbiddenword"),
+        "the matched word must never reach stderr: {}",
+        stderr(&out)
     );
 
     // --message mode: a commit message file containing the banned word.
@@ -193,17 +230,81 @@ fn check_banned_default_and_message_modes_name_the_word() {
     assert!(!out2.status.success());
     let out2_text = stdout(&out2);
     assert!(
-        out2_text.contains("COMMIT_EDITMSG:1: banned word \"forbiddenword\""),
+        out2_text.contains("COMMIT_EDITMSG:1: banned word"),
         "{}",
         out2_text
     );
+    assert!(
+        !out2_text.to_lowercase().contains("forbiddenword"),
+        "the matched word must never reach stdout: {}",
+        out2_text
+    );
+    assert!(
+        !stderr(&out2).to_lowercase().contains("forbiddenword"),
+        "the matched word must never reach stderr: {}",
+        stderr(&out2)
+    );
 }
 
+// adr: 735a32bd-db0c-428e-b65e-2acc750671b0
+// A banned word fails wherever it appears, quoted or not: the scanner
+// tokenizes on runs of alphanumerics, so punctuation around the word --
+// enclosing double quotes or a backtick code span -- never shields it.
+#[test]
+fn check_banned_scanner_catches_word_in_quotes_and_backticks() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let ban_out = adr(&dir, &["ban"], &[], "forbiddenword\n");
+    assert!(ban_out.status.success(), "ban failed: {}", stderr(&ban_out));
+
+    std::fs::write(
+        dir.join("notes.txt"),
+        "she called it \"forbiddenword\" out loud\nthe code spells it `forbiddenword` in the span\n",
+    )
+    .unwrap();
+    run_git(&dir, &["add", "notes.txt"]);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(
+        !out.status.success(),
+        "check should have failed: {}",
+        stdout(&out)
+    );
+    let text = stdout(&out);
+    assert!(
+        text.contains("banned: notes.txt:1: banned word"),
+        "word inside double quotes must still be caught: {}",
+        text
+    );
+    assert!(
+        text.contains("banned: notes.txt:2: banned word"),
+        "word inside a backtick code span must still be caught: {}",
+        text
+    );
+    assert!(
+        !text.to_lowercase().contains("forbiddenword"),
+        "the matched word must never reach stdout: {}",
+        text
+    );
+    assert!(
+        !stderr(&out).to_lowercase().contains("forbiddenword"),
+        "the matched word must never reach stderr: {}",
+        stderr(&out)
+    );
+}
+
+// adr: 33a45b9e-8150-488e-be70-7ab2ca9adaa6
+//
+// core (0): "check fails while any current decision has no test tied to
+// it". Shows both halves: check exits non-zero and names the untested
+// decision by id while nothing ties it to a test, then passes once an
+// `adr: <id>` comment exists for it.
 #[test]
 fn check_tests_failure_when_untested() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    let (_record, _id) = answer_one_question(&dir);
+    let (_record, id) = answer_one_question(&dir);
     // Nothing recorded anywhere for the id.
 
     let out = adr(&dir, &["check"], &[], "");
@@ -211,8 +312,127 @@ fn check_tests_failure_when_untested() {
     let out_text = stdout(&out);
     assert!(out_text.contains("tested:"), "{}", out_text);
     assert!(out_text.contains("untested"), "{}", out_text);
+    assert!(
+        out_text.contains(&format!("{}: untested", id)),
+        "check must name the untested decision by id: {}",
+        out_text
+    );
+
+    write_test_comment(&dir, &id);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(
+        out.status.success(),
+        "check should pass once the decision is tied to a test: {}",
+        stdout(&out)
+    );
+    assert!(stdout(&out).contains("tested: 1"), "{}", stdout(&out));
 }
 
+// adr: cd83e277-ebf0-4458-a77a-c526ab4cfeca
+//
+// "the ledger holds a hash of each answered question's text, and check
+// fails any answered question whose text no longer matches it". Answers a
+// question for real, so the `answered` ledger row carries a real sha256
+// hash of the text as answered (not a placeholder), then edits the
+// section's Problem line afterward: the section's current hash no longer
+// matches the hash the ledger recorded, and check fails naming it.
+#[test]
+fn check_fails_an_answered_question_whose_text_changed_since_answering() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let (record, id) = answer_one_question(&dir);
+    write_test_comment(&dir, &id);
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    let answered_row = ledger
+        .lines()
+        .find(|l| l.contains("\tanswered\t") && l.contains(id.as_str()))
+        .unwrap_or_else(|| panic!("no answered row for {}: {}", id, ledger));
+    let hash_field = answered_row.split('\t').nth(3).unwrap();
+    assert_ne!(
+        hash_field, "-",
+        "the answered row should carry a real hash of the text: {}",
+        answered_row
+    );
+    assert_eq!(
+        hash_field.len(),
+        64,
+        "expected a sha256 hex hash on the answered row: {}",
+        answered_row
+    );
+
+    // Untouched, check still passes.
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "check should pass before any edit: {}", stdout(&out));
+
+    // Edit the answered section's Problem line after the fact -- the
+    // `**Answer:** A` line and the id are left alone.
+    let content = std::fs::read_to_string(&record).unwrap();
+    let edited = content.replacen(
+        "Problem: whether it passes.",
+        "Problem: whether it truly passes.",
+        1,
+    );
+    assert_ne!(content, edited, "fixture edit should have changed something");
+    std::fs::write(&record, &edited).unwrap();
+
+    let out2 = adr(&dir, &["check"], &[], "");
+    assert!(!out2.status.success());
+    let text = stdout(&out2);
+    assert!(text.contains("answers:"), "{}", text);
+    assert!(text.contains("answer line without ledger row"), "{}", text);
+    assert!(text.contains("3.1 Does this pass?"), "{}", text);
+}
+
+// adr: 0b962bc8-05a8-48da-9fe8-bf77c7aa6e4a
+//
+// "a comment `adr: <id>` inside the test, found by text search in every
+// tracked file outside adrdom, ties a test to a decision". A tie written
+// in a tracked, non-Rust file outside adrdom/ counts (also relied on by
+// every other test here through `write_test_comment`); the same comment
+// placed under adrdom/, or left untracked, does not, so `check` still
+// names the decision untested until it is tracked outside adrdom/.
+#[test]
+fn check_tests_ignores_a_tie_under_adrdom_and_an_untracked_tie() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let (_record, id) = answer_one_question(&dir);
+
+    // Tracked, but under adrdom/: the scan skips it.
+    std::fs::write(dir.join("adrdom/note.txt"), format!("adr: {}\n", id)).unwrap();
+    run_git(&dir, &["add", "adrdom/note.txt"]);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    assert!(
+        stdout(&out).contains(&format!("{}: untested", id)),
+        "a tie under adrdom/ must not count: {}",
+        stdout(&out)
+    );
+
+    // The same comment outside adrdom/, but not yet tracked.
+    std::fs::write(dir.join("outside.txt"), format!("adr: {}\n", id)).unwrap();
+
+    let out2 = adr(&dir, &["check"], &[], "");
+    assert!(!out2.status.success());
+    assert!(
+        stdout(&out2).contains(&format!("{}: untested", id)),
+        "an untracked tie must not count: {}",
+        stdout(&out2)
+    );
+
+    // Tracking a non-Rust file outside adrdom/ is what makes it count.
+    run_git(&dir, &["add", "outside.txt"]);
+    let out3 = adr(&dir, &["check"], &[], "");
+    assert!(out3.status.success(), "{}", stdout(&out3));
+    assert!(stdout(&out3).contains("tested: 1"), "{}", stdout(&out3));
+}
+
+// adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
+// check fails when an agent's installed block (here, .claude/settings.json's
+// deny entries) differs from what install writes, and the message's move is
+// re-running install.
 #[test]
 fn check_install_fails_when_settings_deny_entry_removed_and_passes_after_install() {
     let dir = init_repo();
@@ -291,6 +511,9 @@ fn check_install_fails_when_agents_md_has_no_marked_section() {
     );
 }
 
+// adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
+// check fails when the AGENTS.md brief section differs from what install
+// writes; the message's move is running install again.
 #[test]
 fn check_install_fails_when_agents_md_brief_differs() {
     let dir = init_repo();
@@ -315,10 +538,14 @@ fn check_install_fails_when_agents_md_brief_differs() {
     );
 }
 
+// adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
+// check fails when the CLAUDE.md import (an agent's installed block, checked
+// once .claude/ exists) differs from what install writes; the move is
+// running install again.
 #[test]
 fn check_install_fails_when_claude_md_does_not_import_agents_md() {
     let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
     std::fs::write(dir.join("CLAUDE.md"), "# Notes\n\nNo import here.\n").unwrap();
 
     let out = adr(&dir, &["check"], &[], "");
@@ -330,11 +557,57 @@ fn check_install_fails_when_claude_md_does_not_import_agents_md() {
     );
 }
 
+// adr: f8d92841-aef7-4cd7-bd94-0e07c03e4cb6
+// The installed brief tells the agent to build only a tier whose questions
+// are all answered, and never a tier holding an open sibling.
+#[test]
+fn installed_brief_tells_the_agent_to_build_only_a_fully_answered_tier() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let agents = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
+    assert!(
+        agents.contains(
+            "Build only a tier whose\n   questions are all answered; nothing in a tier is built while a sibling\n   question in it is still open."
+        ),
+        "{}",
+        agents
+    );
+}
+
+// adr: 23d53545-c238-48cc-ae5e-21a2c7aab83e
+// The installed brief tells the agent that the owner may strike, add or
+// reorder headings before approving, or write the plan itself.
+#[test]
+fn installed_brief_tells_the_owner_may_edit_or_write_the_plan() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let agents = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
+    assert!(
+        agents.contains(
+            "The owner may\nstrike, add or reorder headings before approving, or write the plan itself\nand approve it the same way."
+        ),
+        "{}",
+        agents
+    );
+}
+
+// adr: 4f925b13-ad16-48b8-acd1-3e30d6e308b6, 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
+// A CLAUDE.md the owner wrote by hand, with no .claude/ directory: plain
+// install (no --claude) leaves it untouched (still missing the import), and
+// check does not hold CLAUDE.md's import to any standard while .claude/
+// does not exist.
 #[test]
 fn check_install_passes_right_after_install_with_a_claude_md_present() {
     let dir = init_repo();
     std::fs::write(dir.join("CLAUDE.md"), "# Notes\n\nOwner text.\n").unwrap();
     assert!(adr(&dir, &["install"], &[], "").status.success());
+    assert_eq!(
+        std::fs::read_to_string(dir.join("CLAUDE.md")).unwrap(),
+        "# Notes\n\nOwner text.\n",
+        "plain install must not touch an existing CLAUDE.md"
+    );
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(
@@ -469,6 +742,55 @@ fn check_parse_reports_a_file_shape_error() {
     assert!(text.contains("missing h1"), "{}", text);
 }
 
+// adr: f97e62a4-45ab-46c6-b4b1-a674792a4493
+//
+// "a fixed shape: one first-level heading naming the topic, optional prose
+// under it, then the questions as third-level headings ending in \"?\";
+// any other text, such as a note between questions, fails check". A line
+// sitting between two `### ` questions is neither of those things, so it
+// fails as a stray line in the first question's own section (everything
+// through the next heading belongs to it) -- exactly the failure the
+// decision describes for text nobody picked.
+#[test]
+fn check_fails_a_note_sitting_between_two_questions() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_empty_terms(&dir);
+    let content = "# Example\n\n\
+### 1.1 First question?\n\n\
+Problem: p.\n\n\
+Standard: s.\n\n\
+- A) x.\n  Why: y.\n  Costs: c.\n\
+- B) y.\n  Why: y.\n  Costs: c.\n\n\
+A note nobody asked for.\n\n\
+### 1.2 Second question?\n\n\
+Problem: p2.\n\n\
+Standard: s2.\n\n\
+- A) x.\n  Why: y.\n  Costs: c.\n\
+- B) y.\n  Why: y.\n  Costs: c.\n";
+    write_record(&dir, "adrdom/decisions/example.md", content);
+
+    let stray_line_no = content
+        .lines()
+        .position(|l| l == "A note nobody asked for.")
+        .unwrap()
+        + 1;
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success(), "check should have failed: {}", stdout(&out));
+    let text = stdout(&out);
+    assert!(text.contains("parse:"), "{}", text);
+    assert!(
+        text.contains(&format!("stray line {}", stray_line_no)),
+        "{}",
+        text
+    );
+}
+
+// adr: f97e62a4-45ab-46c6-b4b1-a674792a4493
+//
+// "... (also: a file with no prose passes)": nothing sits between the h1
+// and the first `### ` heading here, and check passes clean.
 #[test]
 fn check_passes_a_skeleton_heading_with_no_id_or_body() {
     let dir = init_repo();
@@ -487,6 +809,11 @@ fn check_passes_a_skeleton_heading_with_no_id_or_body() {
     assert!(!text.contains("parse:"), "{}", text);
 }
 
+// adr: 258107eb-2a90-4ce9-a111-d1bba047d423
+//
+// "a question body under an unapproved heading fails check": the file
+// below has never been approved (no `approved` ledger row), so its
+// question body fails, exactly as option A says.
 #[test]
 fn check_fails_a_body_under_an_unapproved_heading() {
     let dir = init_repo();
@@ -509,17 +836,32 @@ fn check_fails_a_body_under_an_unapproved_heading() {
     );
 }
 
+// adr: 258107eb-2a90-4ce9-a111-d1bba047d423
+//
+// "check reports a file awaiting approval as a count ... and passes
+// (exit 0)": a plan with no body under any heading (a bare skeleton) is
+// unapproved, so it lands in the count, but nothing in it fails check.
 #[test]
 fn check_prints_awaiting_approval_line() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
+    // A depends line and approved terms, so the only thing outstanding is
+    // approval itself -- otherwise the missing-depends-line and
+    // missing-terms failures would fail check for unrelated reasons and
+    // the exit-0 clause couldn't be checked cleanly.
+    approve_minimal_terms(&dir, "widget");
     write_record(
         &dir,
         "adrdom/decisions/skeleton.md",
-        "# Skeleton\n\n### 1.1 Not written yet?\n",
+        "# Skeleton\n\n### 1.1 Not written yet?\ndepends: widget\n",
     );
 
     let out = adr(&dir, &["check"], &[], "");
+    assert!(
+        out.status.success(),
+        "a skeleton awaiting approval must pass check: {}",
+        stdout(&out)
+    );
     let text = stdout(&out);
     assert!(
         text.contains("plan: 1 file(s) awaiting approval: adrdom/decisions/skeleton.md"),
@@ -528,6 +870,57 @@ fn check_prints_awaiting_approval_line() {
     );
 }
 
+// adr: b741b573-a2ee-498e-98fd-3a7e7d319470
+//
+// "check reports it as awaiting approval" for the case the option names:
+// the prose edited after approve, with the heading (and its `approved`
+// row) untouched. `check` still passes -- the heading itself is approved,
+// so no body lives under an unapproved heading -- but the file is counted
+// as awaiting approval because its `context` row is stale.
+#[test]
+fn check_counts_a_file_awaiting_approval_when_only_its_context_prose_is_stale() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+    let record = write_record(
+        &dir,
+        "adrdom/decisions/example.md",
+        "# Example\n\nContext prose.\n\n### 1.1 Only question?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n  Costs: c.\n- B) y.\n  Why: y.\n  Costs: c.\n",
+    );
+    approve_record(&dir, "adrdom/decisions/example.md");
+
+    // Edit only the context prose, on the file as approve left it (id
+    // already minted), so the heading and its `approved` row stay valid.
+    let approved_content = std::fs::read_to_string(&record).unwrap();
+    let edited = approved_content.replace("Context prose.", "Context prose, edited.");
+    std::fs::write(&record, &edited).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(
+        out.status.success(),
+        "a heading-approved file with stale context must still pass check: {}",
+        stdout(&out)
+    );
+    let text = stdout(&out);
+    assert!(
+        text.contains("plan: 1 file(s) awaiting approval: adrdom/decisions/example.md"),
+        "{}",
+        text
+    );
+    assert!(
+        !text.contains("body under unapproved heading"),
+        "the heading itself is approved, so its body must not fail: {}",
+        text
+    );
+}
+
+// adr: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
+//
+// "a question heading that appears in two topic files fails check": shown
+// here with files named "a.md"/"b.md", themselves valid names under the
+// same decision's naming half (a single lowercase-letter word needs no
+// hyphen); `check_fails_a_bad_topic_file_name` and
+// `check_passes_a_good_topic_file_name`, below, tie that half.
 #[test]
 fn check_fails_a_question_heading_duplicated_across_two_files() {
     let dir = init_repo();
@@ -581,6 +974,64 @@ fn check_fails_a_question_heading_duplicated_within_one_file() {
     );
 }
 
+// adr: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
+//
+// "each file holds one topic and is named by it in lowercase words joined
+// by hyphens, with no number or prefix": an uppercase letter and an
+// underscore both fail the name, and check names the file and the message
+// `repo::valid_topic_file_name`/`msg::bad_topic_file_name` share.
+#[test]
+fn check_fails_a_bad_topic_file_name() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    write_record(
+        &dir,
+        "adrdom/decisions/Bad_Name.md",
+        "# File\n\n### 1.1 Q?\n",
+    );
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(
+        text.contains(
+            "plan: adrdom/decisions/Bad_Name.md: file name is not lowercase words joined by single hyphens"
+        ),
+        "{}",
+        text
+    );
+}
+
+// adr: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
+//
+// The other side of the same rule: lowercase words joined by single
+// hyphens is a name check accepts without complaint -- and, with an
+// otherwise-clean skeleton heading, check passes outright.
+#[test]
+fn check_passes_a_good_topic_file_name() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    write_record(
+        &dir,
+        "adrdom/decisions/good-name.md",
+        "# Good Name\n\n### 1.1 Not written yet?\ndepends: widget\n",
+    );
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(
+        out.status.success(),
+        "a validly named skeleton file must pass check: {}",
+        stdout(&out)
+    );
+    let text = stdout(&out);
+    assert!(
+        !text.contains("file name is not lowercase words joined by single hyphens"),
+        "{}",
+        text
+    );
+}
+
 #[test]
 fn check_passes_when_a_superseded_id_is_missing_from_every_record() {
     let dir = init_repo();
@@ -609,6 +1060,11 @@ fn check_passes_when_a_superseded_id_is_missing_from_every_record() {
     );
 }
 
+// adr: 21ae8ae0-6884-4d3c-8464-024a8a5aae2d
+//
+// "a withdrawn identifier never returns": once `wd_id` carries a
+// `withdrawn` ledger row, its reappearing in a topic file's `id:` line is
+// itself a failure, not a tolerated reuse.
 #[test]
 fn check_fails_a_withdrawn_id_still_present_in_a_record() {
     let dir = init_repo();
@@ -644,6 +1100,76 @@ fn check_prints_done_for_a_fully_answered_approved_file() {
     assert!(
         stdout(&out).contains("done: adrdom/decisions/example.md"),
         "{}",
+        stdout(&out)
+    );
+}
+
+// adr: d981f6b0-df0d-428f-8c0e-e220b1651fa1
+//
+// "no close: a topic file is done when every question in its plan is
+// answered, check reports it as done, and a heading added later is a plan
+// change like any other (after approve, the file is no longer reported
+// done until the new question is answered)". No owner command ever closes
+// or reopens the file -- done is recomputed by `check` from scratch every
+// time, so a plain plan change (a new heading, approved like any other)
+// is enough to undo it, and answering that heading is enough to redo it.
+#[test]
+fn adding_a_heading_undoes_done_until_it_too_is_answered() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let (record, id) = answer_one_question(&dir);
+    write_test_comment(&dir, &id);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains("done: adrdom/decisions/example.md"),
+        "file should be done once its only question is answered: {}",
+        stdout(&out)
+    );
+
+    // A plan change on the already-done file: one more heading, added and
+    // approved exactly like any other plan change.
+    let approved = std::fs::read_to_string(&record).unwrap();
+    let mut extended = approved.clone();
+    extended.push_str(
+        "\n### 3.2 Does the second thing also pass?\n\
+depends: pass\n\n\
+Problem: a second thing to decide.\n\n\
+Standard: clear yes or no.\n\n\
+- A) Yes.\n  Why: reasons.\n  Costs: costs.\n\
+- B) No.\n  Why: other reasons.\n  Costs: other costs.\n",
+    );
+    std::fs::write(&record, &extended).unwrap();
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(out.status.success(), "approve failed: {}", stderr(&out));
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(
+        !stdout(&out).contains("done: adrdom/decisions/example.md"),
+        "adding an unanswered heading must undo done: {}",
+        stdout(&out)
+    );
+
+    // Ask and answer the new question: done again, with no close/reopen
+    // command ever invoked.
+    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(out.status.success(), "ask failed: {}", stderr(&out));
+    let content2 = std::fs::read_to_string(&record).unwrap();
+    let new_id = extract_ids(&content2)
+        .into_iter()
+        .find(|i| i != &id)
+        .expect("a second id should now exist");
+
+    let out = adr_owner(&dir, &["answer", &new_id, "A"], "");
+    assert!(out.status.success(), "answer failed: {}", stderr(&out));
+    write_test_comment(&dir, &new_id);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains("done: adrdom/decisions/example.md"),
+        "file should be done again once the added question is answered: {}",
         stdout(&out)
     );
 }
@@ -732,6 +1258,54 @@ fn check_fails_when_terms_unapproved_and_a_record_exists() {
     );
 }
 
+// adr: 767a1402-b079-4565-bf21-467236732478
+//
+// `check fails a terms file that differs from its latest approval`: here
+// `adrdom/terms.md` was genuinely approved once (a real `terms` ledger row
+// hashing its original text), then hand-edited afterwards without a new
+// `approve` -- not the "never approved at all" case above, but "approved,
+// then moved on". `check`'s own file hash no longer matches that latest
+// approval's hash, so it reports the same "not approved" failure, and
+// `ask` refuses the same way on a record that would otherwise be askable.
+#[test]
+fn check_and_ask_fail_when_terms_file_was_edited_after_its_latest_approval() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let approved_content =
+        "# Terms\n\n## pass\nid: 11111111-1111-1111-1111-111111111111\ndefinition: Whether something is accepted.\naliases: \n";
+    write_record(&dir, "adrdom/terms.md", approved_content);
+    approve_terms_via_ledger(&dir, approved_content);
+
+    // Approve the record while terms.md still matches its latest
+    // approval -- `approve` itself gates on terms approval, so this has to
+    // happen before the hand-edit below breaks it.
+    let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
+
+    // Hand-edit the definition after that approval, with no new `terms`
+    // ledger row: the file on disk now differs from what the latest
+    // approval hashed.
+    let edited_content = approved_content
+        .replace("Whether something is accepted.", "Whether something clears review.");
+    std::fs::write(dir.join("adrdom/terms.md"), &edited_content).unwrap();
+
+    let check_out = adr(&dir, &["check"], &[], "");
+    assert!(!check_out.status.success());
+    assert!(
+        stdout(&check_out).contains(
+            "terms: adrdom/terms.md not approved; owner runs: adr approve adrdom/terms.md"
+        ),
+        "{}",
+        stdout(&check_out)
+    );
+
+    let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(!ask_out.status.success());
+    let err = stderr(&ask_out);
+    assert!(err.contains("terms not approved"), "{}", err);
+    assert!(err.contains("adr approve adrdom/terms.md"), "{}", err);
+}
+
 #[test]
 fn check_notes_awaiting_approval_when_terms_unapproved_and_no_records() {
     let dir = init_repo();
@@ -751,6 +1325,7 @@ fn check_notes_awaiting_approval_when_terms_unapproved_and_no_records() {
     );
 }
 
+// adr: 6108b8b2-911e-443b-abe0-4c6f8b407384
 #[test]
 fn check_fails_an_asked_section_whose_terms_line_names_a_missing_uuid() {
     let dir = init_repo();
@@ -786,6 +1361,7 @@ fn check_fails_an_asked_section_whose_terms_line_names_a_missing_uuid() {
     );
 }
 
+// adr: 6108b8b2-911e-443b-abe0-4c6f8b407384
 #[test]
 fn check_fails_an_asked_section_bound_to_a_retired_term() {
     let dir = init_repo();
@@ -846,6 +1422,7 @@ fn check_fails_an_asked_section_with_no_terms_line() {
     );
 }
 
+// adr: 6108b8b2-911e-443b-abe0-4c6f8b407384
 #[test]
 fn check_passes_when_a_new_term_would_now_match_words_already_answered_in_text() {
     let dir = init_repo();
@@ -956,6 +1533,7 @@ fn check_staged_reads_terms_from_the_index() {
     }
 }
 
+// adr: fcc1c1ec-d8e8-428e-9731-9817cdeb8e76
 #[test]
 fn check_fails_a_circular_definition() {
     let dir = init_repo();

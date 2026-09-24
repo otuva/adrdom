@@ -188,6 +188,14 @@ fn every_option_needs_a_why_line_and_a_costs_line() {
     }
 }
 
+// adr: 0a742360-83c2-479d-b858-4bea646c9b36
+//
+// "the topic file ... hold[s] none": a `Lean: ` line under a heading is
+// not a recognized field, so both `ask` and `check` refuse it as a stray
+// line, exactly the fixed-shape refusal every other unrecognized line
+// gets. The other half of this decision -- the page's question view
+// renders no lean -- is tied in serve_test.rs's
+// `question_page_never_renders_a_lean_field`.
 #[test]
 fn a_lean_line_in_the_topic_file_is_stray() {
     let dir = init_repo();

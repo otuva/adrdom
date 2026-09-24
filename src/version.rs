@@ -27,6 +27,15 @@ pub const VERSION: &str = trim_trailing_newline(RAW);
 mod tests {
     use super::*;
 
+    // adr: 99619e27-19b6-47ef-83b9-c79ac30ee2f0
+    //
+    // "a VERSION file at the repository root is the one source of the
+    // version": Cargo.toml's own package version is held to the exact
+    // string this module reads from `../VERSION` at compile time -- the
+    // clause `tests/ledger_test.rs`'s
+    // `version_flag_and_ledger_rows_use_the_repository_version_file` does
+    // not cover (that `adr --version` prints it and a ledger row carries
+    // it).
     #[test]
     fn version_matches_cargo_pkg_version() {
         assert_eq!(env!("CARGO_PKG_VERSION"), VERSION);

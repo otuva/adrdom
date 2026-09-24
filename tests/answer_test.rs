@@ -88,6 +88,10 @@ fn answer_writes_answer_line_and_ledger_row() {
     );
 }
 
+// `answer` is an owner command; this test runs it the way an agent runs it
+// -- no interactive terminal, through the plain `adr(...)` helper rather
+// than `adr_owner` -- and shows it is refused and writes nothing (no
+// `**Answer:**` line, no `answered` ledger row).
 #[test]
 fn answer_refuses_without_an_interactive_terminal() {
     let dir = init_repo();
@@ -209,6 +213,127 @@ fn answer_with_supersedes_writes_superseded_row_and_show_hides_old() {
     );
 }
 
+// adr: dad5273c-afe2-4ab1-a451-e2a5d4d9a26d
+//
+// core (0): "an answered decision never changes; it leaves force only when
+// a newer decision supersedes it". Shows both halves: (1) editing an
+// answered question's text makes `check` fail on it, and (2) a later
+// answered question naming `supersedes: <old id>` is what takes the old
+// one out of force -- `adr show` stops printing it, exactly as
+// `answer_with_supersedes_writes_superseded_row_and_show_hides_old` already
+// shows for the ledger/show side, but here reached through an edit that
+// would otherwise have let the answered text drift.
+#[test]
+fn answered_question_text_is_immutable_until_a_later_decision_supersedes_it() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let original = std::fs::read_to_string(&record).unwrap();
+    let old_id = extract_ids(&original)[0].clone();
+
+    let answer_out = adr_owner(&dir, &["answer", &old_id, "A"], "");
+    assert!(
+        answer_out.status.success(),
+        "answer A failed: {}",
+        stderr(&answer_out)
+    );
+    let answered = std::fs::read_to_string(&record).unwrap();
+
+    // 1) An answered question's text never changes: editing its body (here,
+    // the Problem line) after the answer makes `check` fail on it, even
+    // though nothing touched the `**Answer:**` line itself.
+    let tampered = answered.replacen(
+        "Problem: names leaked into decisions.",
+        "Problem: names leaked into decisions, reworded after the answer.",
+        1,
+    );
+    assert_ne!(answered, tampered, "fixture edit should have changed something");
+    std::fs::write(&record, &tampered).unwrap();
+
+    let check_out = adr(&dir, &["check"], &[], "");
+    assert!(
+        !check_out.status.success(),
+        "check should fail on an answered question edited after the answer: {}",
+        stdout(&check_out)
+    );
+    assert!(
+        stdout(&check_out).contains("answers:"),
+        "{}",
+        stdout(&check_out)
+    );
+    assert!(
+        stdout(&check_out).contains("answer line without ledger row"),
+        "{}",
+        stdout(&check_out)
+    );
+
+    // Restore the answered text exactly as the owner answered it, then
+    // check the second half: a later answered question naming
+    // `supersedes: <old id>` is the only thing that takes the old decision
+    // out of force.
+    std::fs::write(&record, &answered).unwrap();
+    let restored_check = adr(&dir, &["check"], &[], "");
+    assert!(
+        !stdout(&restored_check).contains("answers:"),
+        "the answers check should be silent once the answered text is restored: {}",
+        stdout(&restored_check)
+    );
+
+    let mut content = answered.clone();
+    let second_with_supersedes = SECOND_QUESTION.replacen(
+        "### 1.2 What is the second unit of authority called?\n",
+        &format!(
+            "### 1.2 What is the second unit of authority called?\n\nsupersedes: {}\n",
+            old_id
+        ),
+        1,
+    );
+    content.push_str(&second_with_supersedes);
+    std::fs::write(&record, &content).unwrap();
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let new_id = extract_ids(&content)
+        .into_iter()
+        .find(|id| id != &old_id)
+        .expect("new id assigned");
+
+    let answer_out = adr_owner(&dir, &["answer", &new_id, "A"], "");
+    assert!(
+        answer_out.status.success(),
+        "answer on the superseding question failed: {}",
+        stderr(&answer_out)
+    );
+
+    let show = adr(&dir, &["show"], &[], "");
+    assert!(show.status.success());
+    let shown = stdout(&show);
+    assert!(
+        !shown.contains("The authoritative sentence is a decision"),
+        "superseded sentence still shown: {}",
+        shown
+    );
+    assert!(
+        shown.contains("The second thing is a widget."),
+        "new sentence missing: {}",
+        shown
+    );
+}
+
+// adr: f4f667ad-8714-4e65-897b-c7002e423c28
+//
+// "a supersedes line may name several decisions": the third question's
+// single `supersedes:` line names both old_id_1 and old_id_2, and
+// answering it writes one `superseded` row per named id.
 #[test]
 fn answer_with_two_id_supersedes_writes_a_row_per_id() {
     let dir = init_repo();
@@ -326,6 +451,13 @@ fn answer_refuses_a_second_time_with_already_answered_message() {
 // candidate outright, since a supersedes target must be current the
 // moment the question naming it is asked. This used to be caught by
 // `answer`; the gate moved to `ask`.
+//
+// adr: f4f667ad-8714-4e65-897b-c7002e423c28
+//
+// "each target must be current when the question is asked (ask stops a
+// non-current target)": 1.2 is only ever asked, never answered, so it is
+// not current when 1.3's supersedes line names it -- `ask` refuses the
+// whole candidate rather than letting the current target alone through.
 #[test]
 fn ask_refuses_a_two_id_supersedes_when_one_target_is_not_current() {
     let dir = init_repo();
@@ -519,6 +651,16 @@ fn answer_refuses_a_supersedes_target_already_superseded() {
 // since X was current when both were asked -- the freeze is at ask time,
 // not answer time -- and each answer writes its own `superseded` row for
 // X (one per answer, never merged).
+//
+// adr: f4f667ad-8714-4e65-897b-c7002e423c28
+//
+// "several newer decisions may name the same older one ... the older one
+// leaves force when the first replacement is answered (a second
+// replacement asked before that is still accepted at answer)": second_id
+// and third_id both name old_id and were both asked while it was still
+// current; answering second_id first makes old_id leave force, and
+// answering third_id afterward -- asked before that, at a time old_id was
+// current -- is still accepted, not refused as stale.
 #[test]
 fn answer_accepts_a_split_where_two_questions_asked_together_name_the_same_target() {
     let dir = init_repo();
@@ -959,4 +1101,104 @@ fn answer_refuses_a_terms_line_naming_a_retired_term() {
             id
         )
     );
+}
+
+// adr: aa275fac-def5-42a2-8a61-660142acad8e
+// adr: 98d5d389-8315-41da-9970-666e31f3a94d
+//
+// The tool guards against an agent that runs an owner command because it
+// looks helpful, not one that works to get past it: the plain agent run is
+// stopped, and a run that opens a terminal on purpose goes through.
+//
+// "a sign of a person at the keyboard, an interactive terminal; without it
+// the command stops, whatever the agent" is what every owner command
+// (`approve`, `answer`, `unban`, `uninstall`) looks for before it runs.
+// Shows both halves: with no interactive terminal on stdin -- and no agent
+// env var set either, since the gate reads none of them -- every one of
+// those commands refuses without writing anything, and the refusal names
+// the command as the owner's, never the terminal it is actually keyed on;
+// then, with a real interactive terminal (a pty allocated by `script`, no
+// `ADR_OWNER_BYPASS` or test feature involved), the same gate lets
+// `approve` run for real.
+#[test]
+fn owner_commands_refuse_without_a_tty_and_run_with_one() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let content = "# Example\n\n### 1.1 Q?\ndepends: widget\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let record = write_record(&dir, "adrdom/decisions/example.md", content);
+
+    // No TTY (the test harness always pipes stdin) and CLAUDECODE cleared
+    // (the `adr` helper already removes it): every owner command refuses,
+    // exit code 2, and none of the refusals mention "terminal".
+    let approve_out = adr(&dir, &["approve", record.to_str().unwrap()], &[], "");
+    assert_eq!(approve_out.status.code(), Some(2), "{}", stderr(&approve_out));
+    let approve_err = stderr(&approve_out);
+    assert!(approve_err.contains("this is the owner's command"), "{}", approve_err);
+    assert!(!approve_err.to_lowercase().contains("terminal"), "{}", approve_err);
+
+    let answer_out = adr(
+        &dir,
+        &["answer", "11111111-1111-1111-1111-111111111111", "A"],
+        &[],
+        "",
+    );
+    assert_eq!(answer_out.status.code(), Some(2), "{}", stderr(&answer_out));
+    let answer_err = stderr(&answer_out);
+    assert!(answer_err.contains("this is the owner's command"), "{}", answer_err);
+    assert!(!answer_err.to_lowercase().contains("terminal"), "{}", answer_err);
+
+    let unban_out = adr(&dir, &["unban"], &[], "somebannedword\n");
+    assert_eq!(unban_out.status.code(), Some(2), "{}", stderr(&unban_out));
+    let unban_err = stderr(&unban_out);
+    assert!(unban_err.contains("this is the owner's command"), "{}", unban_err);
+    assert!(!unban_err.to_lowercase().contains("terminal"), "{}", unban_err);
+
+    let uninstall_out = adr(&dir, &["uninstall"], &[], "");
+    assert_eq!(uninstall_out.status.code(), Some(2), "{}", stderr(&uninstall_out));
+    let uninstall_err = stderr(&uninstall_out);
+    assert!(
+        uninstall_err.contains("this is the owner's command"),
+        "{}",
+        uninstall_err
+    );
+    assert!(!uninstall_err.to_lowercase().contains("terminal"), "{}", uninstall_err);
+
+    // Nothing any of the refused commands could have written landed.
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        !ledger.lines().any(|l| l.contains("\tapproved\t") || l.contains("\tcontext\t")),
+        "no approve row should have been written on refusal: {}",
+        ledger
+    );
+
+    // A real interactive terminal -- via `script`, which allocates a pty
+    // for the child's stdin -- is not an agent env var and is not
+    // `ADR_OWNER_BYPASS`: the same gate lets `approve` run for real. A
+    // Linux machine without `script` fails the test, so this half is never
+    // skipped where CI runs; other systems' `script` takes other flags.
+    #[cfg(target_os = "linux")]
+    {
+        let cmd = format!(
+            "env -u CLAUDECODE {} approve {}",
+            adr_bin().display(),
+            record.to_str().unwrap()
+        );
+        let out = std::process::Command::new("script")
+            .current_dir(&dir)
+            .args(["-q", "-e", "-c", &cmd, "/dev/null"])
+            .output()
+            .expect("`script` (util-linux) is needed to open a real terminal");
+        assert!(
+            out.status.success(),
+            "approve should run under a real tty: stdout={} stderr={}",
+            stdout(&out),
+            stderr(&out)
+        );
+        assert!(
+            stdout(&out).contains("approved"),
+            "expected approve's own output under a real tty: {}",
+            stdout(&out)
+        );
+    }
 }

@@ -4,6 +4,8 @@ use crate::depends::{self, DepTarget};
 use crate::ledger::Ledger;
 use crate::msg;
 use crate::record::{AnswerSet, RecordFile};
+use crate::repo;
+use crate::state;
 use crate::terms;
 use std::collections::HashMap;
 use std::path::Path;
@@ -15,9 +17,13 @@ use std::path::Path;
 /// `mod.rs` and shared with `approve`'s `do_approve_record`, E1.2):
 /// unconditionally, regardless of the file's approval state (a derive
 /// error, a missing depends line, or an entry that resolves to nothing is a
-/// failure either way). Returns the failures plus the sorted, deduped list
-/// of paths still awaiting approval (printed as a summary line by the
-/// caller, not a failure by itself).
+/// failure either way). Also reports a bad file name and a heading
+/// duplicated within one file or across two (76bd7ef0 A), plus the
+/// letter-set check below -- three more check-only extras `approve` never
+/// refuses on, so none of them is a `record_refusals` category. Returns
+/// the failures plus the sorted, deduped list of paths still awaiting
+/// approval (printed as a summary line by the caller, not a failure by
+/// itself).
 pub(super) fn check_plan(
     root: &Path,
     records: &[RecordFile],
@@ -29,6 +35,23 @@ pub(super) fn check_plan(
     let mut out = Vec::new();
     let mut awaiting: Vec<String> = Vec::new();
     let mut heading_files: HashMap<String, Vec<String>> = HashMap::new();
+
+    // Naming half of the same decision as the cross-file duplicate-heading
+    // check below (76bd7ef0 A: "each file holds one topic and is named by
+    // it..."): every file `repo::list_decision_files` lists, by its own
+    // base name alone -- checked straight off the listing rather than off
+    // `records`, so a file whose name is wrong is still told so even when
+    // its content also fails to parse into one.
+    for f in repo::list_decision_files(root) {
+        let name = f.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if !repo::valid_topic_file_name(name) {
+            out.push(Failure {
+                check: "plan".to_string(),
+                id: None,
+                message: msg::bad_topic_file_name(&state::rel_path(root, &f)),
+            });
+        }
+    }
 
     for (rf, refs) in records.iter().zip(refusals) {
         let (rel, plan_ok, ctx_ok) = file_approval(root, rf, led);
@@ -68,7 +91,7 @@ pub(super) fn check_plan(
         for sec in &rf.sections {
             for d in &sec.depends {
                 if let Ok(Some(DepTarget::Heading(ti))) =
-                    depends::resolve_dep(d, rf, terms_list, phrase_lookup, led)
+                    depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, led)
                 {
                     if let Some(AnswerSet::Letters(letters)) = d.set() {
                         for msg in

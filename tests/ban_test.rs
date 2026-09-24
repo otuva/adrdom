@@ -18,7 +18,11 @@ fn ban_refuses_on_a_word_already_in_use_and_writes_nothing() {
     assert!(!out.status.success());
     let err = stderr(&out);
     assert!(err.contains("notes.txt:1"), "{}", err);
-    assert!(err.contains("\"gadgetword\""), "{}", err);
+    assert!(
+        !err.to_lowercase().contains("gadgetword"),
+        "the matched word must never reach stdout/stderr: {}",
+        err
+    );
 
     let banned = std::fs::read_to_string(dir.join("adrdom/state/banned.sha256")).unwrap();
     assert!(
@@ -52,6 +56,25 @@ fn ban_writes_two_column_lines_with_term() {
         "expected a two-column line carrying the term uuid: {}",
         banned
     );
+
+    // adr: fcc5b6fe-9072-42ea-a25b-2be72e094bac
+    // The repository holds only the hash of a banned word, never the word
+    // itself: no plaintext of the banned word appears in the file, and
+    // every hash column is a 64-character hex sha256 digest.
+    assert!(
+        !banned.to_lowercase().contains("forbiddenword"),
+        "banned list must hold only a hash, never the plaintext word: {}",
+        banned
+    );
+    for line in banned.lines() {
+        let hash = line.split(' ').next().unwrap();
+        assert_eq!(hash.len(), 64, "expected a sha256 hex digest: {}", line);
+        assert!(
+            hash.chars().all(|c| c.is_ascii_hexdigit()),
+            "expected a hex digest, not plaintext: {}",
+            line
+        );
+    }
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(
@@ -95,6 +118,10 @@ fn ban_refuses_unknown_term() {
     assert!(!ledger.lines().any(|l| l.contains("\tbanned\t")));
 }
 
+// adr: c6da863d-5085-402f-815a-9bb832b4df7e
+// One hashed ban list carries both a term-tagged word (banned with
+// `--term`) and a plain one (banned with no term), and one `check` scan
+// over that single list catches both.
 #[test]
 fn check_banned_scanner_names_the_term() {
     let dir = init_repo();
@@ -109,10 +136,16 @@ fn check_banned_scanner_names_the_term() {
 
     let ban_out = adr(&dir, &["ban", "--term", "widget"], &[], "forbiddenword\n");
     assert!(ban_out.status.success(), "ban failed: {}", stderr(&ban_out));
+    let ban_out2 = adr(&dir, &["ban"], &[], "plainword\n");
+    assert!(ban_out2.status.success(), "ban failed: {}", stderr(&ban_out2));
+
+    // Both words live in the one ban list file.
+    let banned = std::fs::read_to_string(dir.join("adrdom/state/banned.sha256")).unwrap();
+    assert_eq!(banned.lines().count(), 2, "expected one list, two lines: {}", banned);
 
     std::fs::write(
         dir.join("notes.txt"),
-        "this mentions forbiddenword right here\n",
+        "this mentions forbiddenword and plainword right here\n",
     )
     .unwrap();
     run_git(&dir, &["add", "notes.txt"]);
@@ -120,11 +153,25 @@ fn check_banned_scanner_names_the_term() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let text = stdout(&out);
+    let hits: Vec<&str> = text
+        .lines()
+        .filter(|l| l.starts_with("banned: notes.txt:1: banned word"))
+        .collect();
+    assert_eq!(hits.len(), 2, "expected one hit per word: {}", text);
     assert!(
-        text.contains("banned: notes.txt:1: banned word \"forbiddenword\" (term widget)"),
+        hits.iter().any(|l| l.contains("(term widget)")),
         "{}",
         text
     );
+    assert!(
+        hits
+            .iter()
+            .any(|l| l.starts_with("banned: notes.txt:1: banned word;")),
+        "{}",
+        text
+    );
+    assert!(!text.to_lowercase().contains("forbiddenword"), "{}", text);
+    assert!(!text.to_lowercase().contains("plainword"), "{}", text);
 }
 
 #[test]
@@ -199,7 +246,7 @@ fn ban_ignores_a_word_present_only_in_a_ledger_row_detail() {
     let out2 = adr(&dir, &["check"], &[], "");
     assert!(out2.status.success(), "check failed: {}", stdout(&out2));
     let text = stdout(&out2);
-    assert!(!text.contains("banned word \"gadgetword\""), "{}", text);
+    assert!(!text.to_lowercase().contains("gadgetword"), "{}", text);
 }
 
 #[test]

@@ -109,6 +109,18 @@ Standard: s4.\n\n\
 /// the chosen sentence, all via hand-crafted ledger rows and `**Answer:**`
 /// lines (per the wave-2 brief) rather than `adr ask`/`adr answer`, which
 /// are being rebuilt by other agents on this same branch.
+// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
+//
+// "show prints the tiers": the fixture below states no tier anywhere in
+// its text (only `depends:` lines and hand-written ledger rows), yet
+// `show` prints "tier 1" and "tier 2" derived from those depends lines.
+//
+// adr: b782664f-7465-4e1e-99e0-13f6dd2de774
+//
+// "show prints no decision" for a refused question: `id-refused` carries
+// `**Answer:** refused`, and the expected output below lists it as
+// `[refused] 2.2 Also depends?` with no chosen-sentence line under it,
+// unlike `id-root`'s `[answered A]` line, which does print one.
 #[test]
 fn show_prints_tiers_states_stands_on_and_chosen_sentence() {
     let dir = init_repo();
@@ -153,4 +165,39 @@ fn show_with_a_file_argument_shows_only_that_file() {
     let shown = stdout(&out);
     assert!(shown.contains("# Tiered Topic"), "{}", shown);
     assert!(!shown.contains("# Second Topic"), "{}", shown);
+}
+
+// adr: 48f4647d-8c81-4e8a-a936-6b32f5fb0699
+//
+// "there is no override": `override` names no subcommand the CLI
+// recognizes, so clap itself refuses it (a non-zero exit, no file or
+// ledger touched) rather than the tool running some bypass action. The
+// other half of this decision -- every stop names the move that clears
+// it -- is tied in src/msg.rs's `every_refusal_names_its_next_move`.
+#[test]
+fn override_is_not_a_recognized_command() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let out = adr(&dir, &["override", "some-stop", "because I said so"], &[], "");
+    assert!(
+        !out.status.success(),
+        "an `override` subcommand must not exist: {}",
+        stdout(&out)
+    );
+    let err = stderr(&out);
+    assert!(
+        err.contains("unrecognized subcommand") || err.contains("override"),
+        "expected clap to name the unknown subcommand: {}",
+        err
+    );
+
+    // Nothing was written: no override event of any kind lands in the
+    // ledger.
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        !ledger.to_lowercase().contains("override"),
+        "no override event should ever reach the ledger: {}",
+        ledger
+    );
 }

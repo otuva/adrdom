@@ -44,7 +44,7 @@ pub(super) fn check_banned(root: &Path, staged: bool, message: Option<&Path>) ->
                 out.push(Failure {
                     check: "banned".to_string(),
                     id: None,
-                    message: msg::banned_word_at(&format!("{}:{}", name, i + 1), &tok, &suffix),
+                    message: msg::banned_word_at(&format!("{}:{}", name, i + 1), &suffix),
                 });
             }
         }

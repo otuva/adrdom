@@ -38,6 +38,27 @@ pub fn list_decision_files(root: &Path) -> Vec<PathBuf> {
     out
 }
 
+/// The naming half of 76bd7ef0 A ("each file holds one topic and is named
+/// by it in lowercase words joined by hyphens, with no number or prefix"):
+/// whether `name` -- a file's own base name, e.g. from `Path::file_name`,
+/// never a whole path -- is one or more lowercase ASCII letter words joined
+/// by single hyphens, ending in `.md`. Equivalent to the regex
+/// `^[a-z]+(-[a-z]+)*\.md$`: a digit, an underscore, an uppercase letter, or
+/// a leading, trailing, or doubled hyphen all fail it. `list_decision_files`
+/// walks into subdirectories a topic file might sit under; this judges only
+/// the file's own base name, never the subdirectory part of its path, since
+/// the decision names "the file", not the file's place in the tree.
+pub fn valid_topic_file_name(name: &str) -> bool {
+    let Some(stem) = name.strip_suffix(".md") else {
+        return false;
+    };
+    if stem.is_empty() {
+        return false;
+    }
+    stem.split('-')
+        .all(|word| !word.is_empty() && word.chars().all(|c| c.is_ascii_lowercase()))
+}
+
 fn walk_md(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;

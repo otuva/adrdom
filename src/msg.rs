@@ -220,12 +220,21 @@ pub fn word_moved_off_term(word: &str, term_name: &str, source: &str, next: Next
     )
 }
 
-pub fn terms_banned_word(line: usize, word: &str, suffix: &str) -> String {
+/// A term's definition runs past two sentences (fcc1c1ec-d8e8-428e-9731-9817cdeb8e76:
+/// a definition says what a thing is "in one or two sentences").
+pub fn definition_too_long(name: &str, count: usize) -> String {
     refuse(
         format!(
-            "adrdom/terms.md:{}: banned word \"{}\"{}",
-            line, word, suffix
+            "adrdom/terms.md: term \"{}\" definition has {} sentences, more than two",
+            name, count
         ),
+        Next::agent("shortens the definition to one or two sentences"),
+    )
+}
+
+pub fn terms_banned_word(line: usize, suffix: &str) -> String {
+    refuse(
+        format!("adrdom/terms.md:{}: banned word{}", line, suffix),
         Next::agent("edits adrdom/terms.md to remove it"),
     )
 }
@@ -580,12 +589,9 @@ pub fn moot_candidate(
     )
 }
 
-pub fn banned_word_in_candidate(rel: &str, heading: &str, word: &str, suffix: &str) -> String {
+pub fn banned_word_in_candidate(rel: &str, heading: &str, suffix: &str) -> String {
     refuse(
-        format!(
-            "{}: \"{}\": banned word \"{}\"{}",
-            rel, heading, word, suffix
-        ),
+        format!("{}: \"{}\": banned word{}", rel, heading, suffix),
         Next::agent("rewrites the line without the banned word"),
     )
 }
@@ -756,9 +762,9 @@ pub fn answer_set_changed(rel: &str, dep_heading: &str, heading: &str) -> String
     )
 }
 
-pub fn banned_word_at(location: &str, word: &str, suffix: &str) -> String {
+pub fn banned_word_at(location: &str, suffix: &str) -> String {
     refuse(
-        format!("{}: banned word \"{}\"{}", location, word, suffix),
+        format!("{}: banned word{}", location, suffix),
         Next::agent("rewrites the line without the banned word"),
     )
 }
@@ -936,6 +942,28 @@ pub fn duplicate_heading_across_files(heading: &str, rel1: &str, rel2: &str) -> 
             heading, rel1, rel2
         ),
         Next::agent("renames one of the headings"),
+    )
+}
+
+/// The naming half of the same decision as `duplicate_heading_across_files`
+/// (76bd7ef0 A): a topic file whose own file name isn't lowercase ASCII
+/// words joined by single hyphens (`repo::valid_topic_file_name`). Check-
+/// only, like its duplicate-heading sibling -- neither is part of
+/// `record_refusals`, so `approve` doesn't stop on either one; naming, like
+/// cross-file duplication, needs every file in the directory, not just the
+/// one file `approve` was pointed at. No `owner runs:` clause: the fixed
+/// name is the agent's own choice, so there is no concrete command to name
+/// yet -- the agent's move covers telling the owner what re-approval a
+/// rename costs, when it costs one.
+pub fn bad_topic_file_name(rel: &str) -> String {
+    refuse(
+        format!(
+            "{}: file name is not lowercase words joined by single hyphens",
+            rel
+        ),
+        Next::agent(
+            "renames the file to lowercase ascii words joined by single hyphens (e.g. \"topic-name.md\"); if it had already been approved, the owner re-approves it under the new name, since approval is keyed to the path",
+        ),
     )
 }
 
@@ -1168,6 +1196,13 @@ mod tests {
     /// sample args: the type system already forces each to carry a `Next`,
     /// this is the second guard -- the rendered text must actually name
     /// the agent's move or a command the owner runs.
+    // adr: 48f4647d-8c81-4e8a-a936-6b32f5fb0699
+    //
+    // "every stop names the move that clears it and who makes it": every
+    // refusal/failure built in this module is asserted below to contain
+    // either "; agent " or "owner runs: ", so a stop with no legal move
+    // (the failure mode an override would otherwise paper over) is a
+    // compile-time-checked impossibility, not something callers can forget.
     #[test]
     fn every_refusal_names_its_next_move() {
         let e = "boom";
@@ -1193,7 +1228,8 @@ mod tests {
             term_retired_but_carried("x", "id-1: \"heading\"", Next::agent("supersedes id-1 with a new question first")),
             word_moved_off_term("word", "term", "term \"y\"", term_reword_and_approve()),
             word_moved_off_term("word", "term", "id-1: \"heading\"", Next::agent("re-asks id-1")),
-            terms_banned_word(3, "word", ""),
+            definition_too_long("x", 3),
+            terms_banned_word(3, ""),
             shape_error("x.md", "missing h1"),
             section_shape_error("x.md", "heading", "stray line 4"),
             tell("x.md", 3, "context", "claude", "says who said it"),
@@ -1233,7 +1269,7 @@ mod tests {
             tier_blocked_refused("x.md", "heading", 2, 1, "blocker"),
             tier_blocked_waiting("x.md", "heading", 2, 1, "blocker", "id-1"),
             moot_candidate("x.md", "heading", "target", "A", 'B'),
-            banned_word_in_candidate("x.md", "heading", "word", ""),
+            banned_word_in_candidate("x.md", "heading", ""),
             pairs_no_term("x.md", "heading"),
             pairs_no_term_at_write("x.md", "heading"),
             no_id_line("x.md", "heading"),
@@ -1256,7 +1292,7 @@ mod tests {
             refused_row_without_line("x.md", "heading"),
             edited_after_asking("x.md", "heading"),
             answer_set_changed("x.md", "dependent", "heading"),
-            banned_word_at("x.md:3", "word", ""),
+            banned_word_at("x.md:3", ""),
             banned_missing_from_file("abcdef123456"),
             banned_missing_from_ledger("abcdef123456"),
             agents_md_stale(),
@@ -1274,6 +1310,7 @@ mod tests {
             stale_test("id-1"),
             duplicate_heading_in_file("heading", "x.md"),
             duplicate_heading_across_files("heading", "x.md", "y.md"),
+            bad_topic_file_name("adrdom/decisions/Bad_Name.md"),
             body_under_unapproved_heading("x.md", "heading"),
             bind_failed(7357, e),
             missing_answer_selection("id-1"),

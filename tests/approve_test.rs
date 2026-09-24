@@ -83,6 +83,13 @@ fn ask_refuses_an_unapproved_file_naming_adr_approve() {
 
 // --- approve writes approved/context rows, idempotently --------------
 
+// adr: b741b573-a2ee-498e-98fd-3a7e7d319470
+//
+// "approve writes one event for the headings ('approved') and one for the
+// prose ('context'), each with its own hash": exactly one of each row for
+// one approve, and rerunning with nothing changed writes neither again --
+// which only holds if each hash is compared and stored on its own, not
+// folded into the other's.
 #[test]
 fn approve_writes_approved_and_context_rows_then_is_idempotent() {
     let dir = init_repo();
@@ -162,6 +169,13 @@ fn approve_refuses_a_question_with_four_options() {
 
 // --- editing context prose requires re-approval -----------------------
 
+// adr: b741b573-a2ee-498e-98fd-3a7e7d319470
+//
+// "each with its own hash; ask stops a file where either part is
+// unapproved (e.g. the prose edited after approve)": editing only the
+// context prose leaves the plan hash (and its `approved` row) untouched
+// while the context hash moves, so `ask` stops on "context not approved"
+// even though the heading itself is still approved.
 #[test]
 fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
     let dir = init_repo();
@@ -266,6 +280,12 @@ fn ask_refuses_group_two_while_group_one_unanswered_then_passes_after_answer() {
 
 // --- a struck asked heading is withdrawn on approve ---------------------
 
+// adr: 21ae8ae0-6884-4d3c-8464-024a8a5aae2d
+//
+// "when the owner approves a plan that no longer holds an asked question,
+// approve writes a withdrawn event for it": the heading naming `id` is
+// struck from the file (never answered, never superseded), and the very
+// `approve` that accepts the edit writes the `withdrawn` row for it.
 #[test]
 fn approve_withdraws_a_struck_asked_heading() {
     let dir = init_repo();
@@ -294,8 +314,71 @@ fn approve_withdraws_a_struck_asked_heading() {
     );
 }
 
+// --- approve withdraws a struck refused heading --------------------------
+
+// adr: 6b3d8e59-e145-49e1-860d-a79d753d745c
+//
+// "when the owner approves a plan that drops it the section is gone
+// (approve accepts the drop and writes a withdrawn event for it)": `id` is
+// refused (never answered, never superseded) and its section stays in the
+// file, marked refused, until its heading is struck; the very `approve`
+// that accepts that edit writes the `withdrawn` row for it, exactly the
+// way `approve_withdraws_a_struck_asked_heading` shows for a merely-asked
+// heading above.
+#[test]
+fn approve_withdraws_a_struck_refused_heading() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+    let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let id = extract_ids(&content)[0].clone();
+    assert!(adr_owner(&dir, &["answer", &id, "refuse"], "").status.success());
+
+    // While the refused section still sits in the file, marked refused,
+    // check is clean over it -- no decision, no test, nothing owed.
+    let check_before = adr(&dir, &["check"], &[], "");
+    assert!(
+        check_before.status.success(),
+        "check should be clean with the refused section still in the file: {}",
+        stdout(&check_before)
+    );
+
+    std::fs::write(&record, HEADING_REMOVED).unwrap();
+
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(out.status.success(), "approve failed: {}", stderr(&out));
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        ledger.lines().any(|l| l.contains("\twithdrawn\t") && l.contains(id.as_str())),
+        "ledger missing withdrawn row for the dropped refused id: {}",
+        ledger
+    );
+
+    // check stays clean once the drop is approved.
+    let check_after = adr(&dir, &["check"], &[], "");
+    assert!(
+        check_after.status.success(),
+        "check should stay clean once the refused heading's drop is approved: {}",
+        stdout(&check_after)
+    );
+}
+
 // --- approve refuses when a current heading vanishes without a supersede --
 
+// adr: 21ae8ae0-6884-4d3c-8464-024a8a5aae2d
+//
+// "approve stops when an answered question is missing from every topic
+// file": `id` is answered and current, never superseded, yet its heading
+// is struck; `approve` refuses (naming `id`) instead of withdrawing it,
+// and writes no `withdrawn` row.
 #[test]
 fn approve_refuses_when_answered_heading_gone_and_not_superseded() {
     let dir = init_repo();
@@ -369,6 +452,17 @@ fn approve_leaves_file_and_ledger_unchanged_when_missing_answered_id_refuses() {
 
 // --- approve allows a vanished heading once it is superseded ------------
 
+// adr: 1b181f10-97f4-4bbe-8939-d5842192126c
+//
+// "once superseded, a question's section may leave the file as a plan
+// change the owner approves, and approve allows that only for superseded
+// questions": old_id's section is dropped from the file entirely once it
+// is superseded, and `approve` accepts the edit (contrast
+// `approve_refuses_when_answered_heading_gone_and_not_superseded`, where
+// the same removal on a current, non-superseded id refuses). "the old
+// text stays in git history and its hash in the ledger": old_id's
+// `answered` row, carrying the section's hash, is still in the ledger
+// after its text has left the file.
 #[test]
 fn approve_allows_a_vanished_heading_once_superseded() {
     let dir = init_repo();
@@ -384,6 +478,14 @@ fn approve_allows_a_vanished_heading_once_superseded() {
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
     assert!(adr_owner(&dir, &["answer", &old_id, "A"], "").status.success());
+    let old_answered_row = {
+        let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+        ledger
+            .lines()
+            .find(|l| l.contains("\tanswered\t") && l.contains(old_id.as_str()))
+            .expect("answered row for old_id")
+            .to_string()
+    };
 
     let superseding = format!(
         "\n### 1.2 Replacement question?\ndepends: decision\n\nsupersedes: {}\n\nProblem: the decision needs revisiting.\n\nStandard: s2.\n\n- A) New answer.\n  Why: reasons.\n  Costs: costs.\n- B) Other new answer.\n  Why: other reasons.\n  Costs: other costs.\n",
@@ -415,6 +517,101 @@ fn approve_allows_a_vanished_heading_once_superseded() {
     assert!(out.status.success(), "approve should have allowed it: {}", stderr(&out));
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(!ledger.lines().any(|l| l.contains("\twithdrawn\t") && l.contains(old_id.as_str())));
+    // The old text is gone from the file, but its ledger row -- hash and
+    // all -- is untouched: nothing rewrites or drops a ledger row when the
+    // section it describes leaves the file.
+    assert!(
+        ledger.lines().any(|l| l == old_answered_row),
+        "old_id's answered row must still be in the ledger unchanged: {}",
+        ledger
+    );
+}
+
+// --- a topic file with nothing current or open left may be deleted -------
+
+// adr: 1b181f10-97f4-4bbe-8939-d5842192126c
+//
+// "a topic file with no current or open question left may be deleted the
+// same way": once `a.md`'s only question is superseded and its section
+// removed by an approved edit, the file holds no current or open question
+// at all; deleting it outright leaves `check` clean, exactly as removing
+// just the section did above -- no special act beyond the plan change
+// already approved.
+#[test]
+fn check_stays_clean_once_an_emptied_topic_file_is_deleted() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+
+    let record_a = write_record(&dir, "adrdom/decisions/a.md", ONE_QUESTION_RECORD);
+    assert!(adr_owner(&dir, &["approve", record_a.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record_a.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content_a = std::fs::read_to_string(&record_a).unwrap();
+    let old_id = extract_ids(&content_a)[0].clone();
+    assert!(adr_owner(&dir, &["answer", &old_id, "A"], "").status.success());
+    let old_answered_row = {
+        let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+        ledger
+            .lines()
+            .find(|l| l.contains("\tanswered\t") && l.contains(old_id.as_str()))
+            .expect("answered row for old_id")
+            .to_string()
+    };
+
+    // A second, unrelated topic file supersedes old_id: a.md's only
+    // question is now superseded, not answered by anything a.md still
+    // holds.
+    let superseding = format!(
+        "# Other Topic\n\n### 2.1 Replacement in another file?\ndepends: decision\n\nsupersedes: {}\n\nProblem: the decision needs revisiting from elsewhere.\n\nStandard: s2.\n\n- A) New answer.\n  Why: reasons.\n  Costs: costs.\n- B) Other new answer.\n  Why: other reasons.\n  Costs: other costs.\n",
+        old_id
+    );
+    let record_b = write_record(&dir, "adrdom/decisions/b.md", &superseding);
+    assert!(adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record_b.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content_b = std::fs::read_to_string(&record_b).unwrap();
+    let new_id = extract_ids(&content_b)[0].clone();
+    assert!(adr_owner(&dir, &["answer", &new_id, "A"], "").status.success());
+
+    // a.md's only heading is superseded now: an approved edit may drop it,
+    // leaving a.md with no current or open question left at all.
+    std::fs::write(&record_a, HEADING_REMOVED).unwrap();
+    assert!(adr_owner(&dir, &["approve", record_a.to_str().unwrap()], "")
+        .status
+        .success());
+
+    // Delete the emptied file outright.
+    std::fs::remove_file(&record_a).unwrap();
+
+    // Tie new_id so the only thing left for `check` to possibly complain
+    // about is old_id and the deleted file, not an unrelated "untested"
+    // note on b.md's own, still-current decision.
+    write_test_comment(&dir, &new_id);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "check should stay clean: {}", stdout(&out));
+    let text = stdout(&out);
+    assert!(
+        !text.contains(old_id.as_str()),
+        "a deleted, fully-superseded file's id must earn no failure: {}",
+        text
+    );
+
+    // The old text is gone from disk entirely, but its hash lives on in
+    // the ledger, unaffected by the file's deletion.
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        ledger.lines().any(|l| l == old_answered_row),
+        "old_id's answered row must survive the file's deletion: {}",
+        ledger
+    );
 }
 
 // --- the frozen-depends check also covers a superseded section ----------
@@ -642,6 +839,15 @@ Standard: plain words.
   Costs: other costs.
 "#;
 
+// adr: 7cf81ded-be48-4777-b83e-f8a2998c1ab5
+//
+// `approve stops a terms edit that takes a word off an entry while a
+// current decision pairs the word to it, and names those decisions`:
+// CHOICE_QUESTION_RECORD's 1.1 is answered A (current) with a terms line
+// pairing the word "choice" to term "decision"; moving the "choice" alias
+// off "decision" onto "verdict" is refused, naming exactly that current
+// decision by heading text, and the terms.md ledger row count below shows
+// nothing was written on the refusal.
 #[test]
 fn approve_refuses_a_terms_edit_that_moves_a_word_off_a_term_carried_by_a_current_decision() {
     let dir = init_repo();
@@ -703,6 +909,15 @@ id: 11111111-1111-1111-1111-111111111111\n\
 definition: A choice answered by the owner, in writing.\n\
 aliases: \n";
 
+// adr: 767a1402-b079-4565-bf21-467236732478
+//
+// `the owner approves the whole file with approve, which writes one event
+// over its hash`: each distinct content of adrdom/terms.md that `approve`
+// accepts gets exactly one `terms` ledger row, keyed to that content's
+// hash -- the first approve writes row 1 (asserted just above via
+// `approve_terms_reruns_as_already_approved_with_no_new_row`'s sibling
+// check), and approving the edited `TERMS_V2` content writes exactly one
+// more row (2 total), not one per file or per term inside it.
 #[test]
 fn approve_writes_a_terms_row_on_a_clean_edit() {
     let dir = init_repo();
@@ -759,6 +974,7 @@ id: 22222222-2222-2222-2222-222222222222\n\
 definition: See alpha.\n\
 aliases: \n";
 
+// adr: fcc1c1ec-d8e8-428e-9731-9817cdeb8e76
 #[test]
 fn approve_refuses_a_circular_definition() {
     let dir = init_repo();
@@ -959,6 +1175,248 @@ fn approve_refuses_retiring_a_term_carried_by_a_current_decision() {
     );
 }
 
+// Two terms: "flag" (this test retires it) and "step" (stays current, and
+// is the only one the heading's prose actually mentions -- `ask` refuses a
+// heading whose terms line pairs no term at all, so the prose needs *some*
+// term, just never "flag").
+const TERMS_FLAG_AND_STEP: &str = "# Terms\n\n\
+## flag\n\
+id: 66666666-6666-6666-6666-666666666666\n\
+definition: A marker set on something.\n\
+aliases: \n\
+\n\
+## step\n\
+id: 77777777-7777-7777-7777-777777777777\n\
+definition: One move in a sequence.\n\
+aliases: \n";
+
+const TERMS_FLAG_RETIRED_STEP_CURRENT: &str = "# Terms\n\n\
+## flag\n\
+id: 66666666-6666-6666-6666-666666666666\n\
+definition: A marker set on something.\n\
+aliases: \n\
+retired: yes\n\
+\n\
+## step\n\
+id: 77777777-7777-7777-7777-777777777777\n\
+definition: One move in a sequence.\n\
+aliases: \n";
+
+// This heading's prose never mentions "flag" at all -- only its `depends:`
+// line stands on the term -- so its `terms:` line carries no pairing for
+// it (only for "step", which the prose does mention). Before this
+// decision, `terms_refusals`' dependents came from a `terms:`/definition
+// line only, so retiring a term named solely by a current decision's
+// `depends:` line went unrefused.
+const DECISION_RECORD_DEPENDS_ONLY: &str = r#"# Topic
+
+Context prose.
+
+### 1.1 What comes next?
+depends: flag
+
+Problem: the next step is unclear.
+
+Standard: plain words.
+
+- A) Take the step now.
+  Why: reasons.
+  Costs: costs.
+- B) Hold the step.
+  Why: other reasons.
+  Costs: other costs.
+"#;
+
+#[test]
+fn approve_refuses_retiring_a_term_named_only_by_a_current_decisions_depends_line() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let record = write_record(&dir, "adrdom/decisions/example.md", DECISION_RECORD_DEPENDS_ONLY);
+    let terms = write_record(&dir, "adrdom/terms.md", TERMS_FLAG_AND_STEP);
+    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let id = extract_ids(&content)[0].clone();
+    assert!(adr_owner(&dir, &["answer", &id, "A"], "").status.success());
+    // Its `terms:` line, once written, pairs "step" but has no pairing for
+    // "flag" at all: the only thing standing on "flag" is the `depends:`
+    // line.
+    let terms_line = std::fs::read_to_string(&record)
+        .unwrap()
+        .lines()
+        .find(|l| l.starts_with("terms: "))
+        .map(|l| l.to_string())
+        .expect("1.1 has a terms line");
+    assert!(
+        terms_line.contains("step=77777777-7777-7777-7777-777777777777"),
+        "{}",
+        terms_line
+    );
+    assert!(!terms_line.contains("66666666-6666-6666-6666-666666666666"), "{}", terms_line);
+
+    std::fs::write(&terms, TERMS_FLAG_RETIRED_STEP_CURRENT).unwrap();
+    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(err.contains("term \"flag\" retired but carried by"), "{}", err);
+    assert!(err.contains("What comes next?"), "{}", err);
+    assert!(
+        err.contains(&format!("agent supersedes {} with a new question first", id)),
+        "{}",
+        err
+    );
+}
+
+const TERMS_DECISION_RETIRED_WORD_TAKEN: &str = "# Terms\n\n\
+## decision\n\
+id: 33333333-3333-3333-3333-333333333333\n\
+definition: A choice answered by the owner.\n\
+aliases: \n\
+retired: yes\n\
+\n\
+## verdict\n\
+id: 44444444-4444-4444-4444-444444444444\n\
+definition: A ruling reached after deliberation.\n\
+aliases: \n\
+\n\
+## commitment\n\
+id: 55555555-5555-5555-5555-555555555555\n\
+definition: A pledge that stands until met.\n\
+aliases: decision\n";
+
+// `depends: decision` (the term this test goes on to retire), on purpose:
+// once 1.1 is superseded it is no longer open, so `check`'s `plan` category
+// resolving this depends entry to the now-retired term is exactly the case
+// that used to fail forever (unconditionally, with no exception for a
+// superseded heading, unlike the `terms:` line, which this decision
+// covers) and must now pass.
+const DECISION_RECORD_DEPENDS_ELSEWHERE: &str = r#"# Topic
+
+Context prose.
+
+### 1.1 What is the decision?
+depends: decision
+
+Problem: the decision is unclear.
+
+Standard: plain words.
+
+- A) The decision is final.
+  Why: reasons.
+  Costs: costs.
+- B) The decision is provisional.
+  Why: other reasons.
+  Costs: other costs.
+"#;
+
+// adr: 05af74a6-36be-4923-b66f-1467b323816a
+//
+// `answered questions keep the retired term's identifier on their terms
+// line, so their meaning does not move (check stays clean for them)`.
+// 1.1's answered terms line pairs "decision"=33333333-..., and its
+// `depends:` line resolves to that same id; once 1.2 supersedes 1.1 (so
+// 1.1 is no longer a *current* decision), retiring "decision" -- and
+// handing its freed word to the new term "commitment" -- is accepted, and
+// `adr check` stays entirely clean even though 1.1's terms line and
+// depends line both still name the now-retired id: its meaning does not
+// move just because the word moved on.
+#[test]
+fn approve_allows_retiring_a_term_once_its_only_current_decision_is_superseded_and_check_stays_clean(
+) {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let record = write_record(
+        &dir,
+        "adrdom/decisions/example.md",
+        DECISION_RECORD_DEPENDS_ELSEWHERE,
+    );
+    let terms = write_record(&dir, "adrdom/terms.md", TERMS_TWO_ENTRIES);
+    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let old_id = extract_ids(&content)[0].clone();
+    assert!(adr_owner(&dir, &["answer", &old_id, "A"], "").status.success());
+    // No test tie for `old_id`: once it is superseded below it is no
+    // longer a *current* decision, and the `tested` check only requires
+    // (and only tolerates) a tie for a current one.
+    let old_terms_line = std::fs::read_to_string(&record)
+        .unwrap()
+        .lines()
+        .find(|l| l.starts_with("terms: "))
+        .expect("1.1 has a terms line")
+        .to_string();
+    assert!(
+        old_terms_line.contains("decision=33333333-3333-3333-3333-333333333333"),
+        "{}",
+        old_terms_line
+    );
+
+    // Supersede 1.1 with a new question that also stands on "verdict", so
+    // retiring "decision" afterwards has no current dependent left to
+    // refuse it.
+    let superseding = format!(
+        "\n### 1.2 What is the verdict now?\ndepends: verdict\n\nsupersedes: {}\n\nProblem: whether the verdict still holds.\n\nStandard: plain words.\n\n- A) The verdict stands.\n  Why: reasons.\n  Costs: costs.\n- B) The verdict is reversed.\n  Why: other reasons.\n  Costs: other costs.\n",
+        old_id
+    );
+    let mut content2 = std::fs::read_to_string(&record).unwrap();
+    content2.push_str(&superseding);
+    std::fs::write(&record, &content2).unwrap();
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content3 = std::fs::read_to_string(&record).unwrap();
+    let new_id = extract_ids(&content3)
+        .into_iter()
+        .find(|i| i != &old_id)
+        .expect("new id assigned");
+    assert!(adr_owner(&dir, &["answer", &new_id, "A"], "").status.success());
+    write_test_comment(&dir, &new_id);
+
+    // 1.1 is now superseded, not current: retiring "decision" (and giving
+    // its freed word to the brand new "commitment" term) is accepted.
+    std::fs::write(&terms, TERMS_DECISION_RETIRED_WORD_TAKEN).unwrap();
+    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    assert!(
+        out.status.success(),
+        "approve should have allowed retiring a term no longer carried by a current decision: {}",
+        stderr(&out)
+    );
+
+    // The old (superseded) 1.1 section still carries "decision"'s retired
+    // id on its terms line -- untouched -- and `check` reports nothing
+    // about it.
+    let final_content = std::fs::read_to_string(&record).unwrap();
+    assert!(
+        final_content.lines().any(|l| l == old_terms_line),
+        "1.1's terms line must be unchanged: {}",
+        final_content
+    );
+    let check_out = adr(&dir, &["check"], &[], "");
+    assert!(check_out.status.success(), "check should stay clean: {}", stdout(&check_out));
+    assert!(
+        !stdout(&check_out).contains("retired"),
+        "{}",
+        stdout(&check_out)
+    );
+}
+
 const TERMS_BEFORE_RENAME: &str = "# Terms\n\n\
 ## decision\n\
 id: 55555555-5555-5555-5555-555555555555\n\
@@ -971,6 +1429,7 @@ id: 55555555-5555-5555-5555-555555555555\n\
 definition: A choice answered by the owner.\n\
 aliases: decision\n";
 
+// adr: 7c306235-6243-4d79-b9aa-08ed19662779
 #[test]
 fn approve_allows_a_rename_that_keeps_the_old_name_as_an_alias() {
     let dir = init_repo();
@@ -990,12 +1449,43 @@ fn approve_allows_a_rename_that_keeps_the_old_name_as_an_alias() {
     let id = extract_ids(&content)[0].clone();
     assert!(adr_owner(&dir, &["answer", &id, "A"], "").status.success());
 
+    // The question's own terms line, written by `ask` before the rename,
+    // pairs the word "decision" to the term's identifier -- not its name.
+    let term_uuid = "55555555-5555-5555-5555-555555555555";
+    let before_rename = std::fs::read_to_string(&record).unwrap();
+    assert!(
+        before_rename.contains(&format!("decision={}", term_uuid)),
+        "expected the question's terms line to pair by identifier: {}",
+        before_rename
+    );
+
     std::fs::write(&terms, TERMS_AFTER_RENAME_ALIAS_KEPT).unwrap();
     let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
     assert!(
         out.status.success(),
         "approve should have allowed the rename: {}",
         stderr(&out)
+    );
+
+    // The identifier carries the meaning: the answered question's stored
+    // terms line is untouched by the rename (still `decision=<uuid>`, the
+    // old name, now an alias rather than the term's `## ` heading), and
+    // `check` reads that identifier, not the name, so the pairing still
+    // holds.
+    let after_rename = std::fs::read_to_string(&record).unwrap();
+    assert_eq!(
+        before_rename, after_rename,
+        "a terms.md rename must not touch the answered question's own file"
+    );
+
+    let check_out = adr(&dir, &["check"], &[], "");
+    let text = stdout(&check_out);
+    assert!(
+        !text
+            .lines()
+            .any(|l| l.starts_with("terms:") && l.contains("What is the decision?")),
+        "a rename that keeps the old name as an alias must not break the answered question's pairing: {}",
+        text
     );
 }
 
@@ -1057,6 +1547,13 @@ fn approve_refuses_two_current_entries_sharing_a_word() {
     assert!(err.contains("word \"verdict\""), "{}", err);
 }
 
+// adr: 767a1402-b079-4565-bf21-467236732478
+//
+// `on a definition change approve prints the current decisions paired to
+// that term`: "decision"'s definition text changes here (same id, same
+// name), and the re-approve prints both "term \"decision\" definition
+// changed" and the current decision -- DECISION_RECORD_FOR_DEPENDENTS'
+// 1.1, answered and still current -- that pairs it, by heading text.
 #[test]
 fn approve_prints_dependents_when_a_definition_changes() {
     let dir = init_repo();

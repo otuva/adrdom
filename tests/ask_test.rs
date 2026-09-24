@@ -123,6 +123,102 @@ fn ask_refuses_to_edit_an_answered_section() {
     );
 }
 
+const Q1_ONLY: &str = r#"# Example
+
+### 1.1 What color is the widget?
+depends: widget
+
+Problem: the widget's color is undecided.
+
+Standard: plain words.
+
+- A) The widget is red.
+  Why: reasons.
+  Costs: costs.
+- B) The widget is blue.
+  Why: other reasons.
+  Costs: other costs.
+"#;
+
+const Q2_ADDED_AFTER_APPROVAL: &str = r#"
+### 1.2 What color is the second widget?
+depends: widget
+
+Problem: the second widget's color is undecided.
+
+Standard: plain words.
+
+- A) The second widget is red.
+  Why: reasons.
+  Costs: costs.
+- B) The second widget is blue.
+  Why: other reasons.
+  Costs: other costs.
+"#;
+
+// adr: da59b448-1afb-4469-b40e-69eda8f253c2
+//
+// core (0): "ask stops any question whose heading is not in the plan the
+// owner approved". Two ways a heading ends up outside the approved plan:
+// the file was never approved at all, and a heading appended after an
+// approval that covered only the headings before it. In both, `ask`
+// refuses "plan not approved" and writes nothing -- no id minted, no
+// `asked` ledger row -- rather than asking the heading that was in the
+// approved plan and silently ignoring the one that was not.
+#[test]
+fn ask_refuses_a_heading_added_after_approval_and_a_never_approved_file() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+
+    // A file never approved at all.
+    let never_approved = write_record(&dir, "adrdom/decisions/never.md", Q1_ONLY);
+    let out = adr(&dir, &["ask", never_approved.to_str().unwrap()], &[], "");
+    assert!(
+        !out.status.success(),
+        "ask should refuse an unapproved file: {}",
+        stdout(&out)
+    );
+    assert_eq!(
+        stderr(&out).trim_end(),
+        "ask: adrdom/decisions/never.md: plan not approved; owner runs: adr approve adrdom/decisions/never.md"
+    );
+
+    // A heading added after approval: the owner approved only 1.1, then the
+    // agent appends 1.2 without asking the owner to re-approve.
+    let record = write_record(&dir, "adrdom/decisions/example.md", Q1_ONLY);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    let approved = std::fs::read_to_string(&record).unwrap();
+
+    let mut with_new_heading = approved.clone();
+    with_new_heading.push_str(Q2_ADDED_AFTER_APPROVAL);
+    std::fs::write(&record, &with_new_heading).unwrap();
+
+    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(
+        !out.status.success(),
+        "ask should refuse a heading outside the approved plan: {}",
+        stdout(&out)
+    );
+    assert_eq!(
+        stderr(&out).trim_end(),
+        "ask: adrdom/decisions/example.md: plan not approved; owner runs: adr approve adrdom/decisions/example.md"
+    );
+
+    // Nothing written: no id minted for the new heading, no ledger row.
+    let after = std::fs::read_to_string(&record).unwrap();
+    assert_eq!(
+        after, with_new_heading,
+        "ask must not modify the file when it refuses"
+    );
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        !ledger.lines().any(|l| l.contains("\tasked\t")),
+        "ask must not have asked anything: {}",
+        ledger
+    );
+}
+
 #[test]
 fn ask_refuses_a_question_with_one_option() {
     let dir = init_repo();
@@ -262,7 +358,7 @@ fn ask_refuses_on_a_terms_md_shape_error() {
 }
 
 #[test]
-fn ask_refuses_on_a_banned_word_naming_the_word_and_term() {
+fn ask_refuses_on_a_banned_word_naming_the_heading_and_term() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -277,9 +373,10 @@ fn ask_refuses_on_a_banned_word_naming_the_word_and_term() {
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
     let err = stderr(&out);
+    assert!(err.contains("banned word (term authority)"), "{}", err);
     assert!(
-        err.contains("banned word \"predecessors\" (term authority)"),
-        "{}",
+        !err.to_lowercase().contains("predecessors"),
+        "the matched word must never reach stderr: {}",
         err
     );
 }
@@ -296,8 +393,13 @@ fn ask_refuses_on_a_banned_word_with_no_term_name() {
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("banned word \"predecessors\""), "{}", err);
+    assert!(err.contains("banned word"), "{}", err);
     assert!(!err.contains("(term"), "{}", err);
+    assert!(
+        !err.to_lowercase().contains("predecessors"),
+        "the matched word must never reach stderr: {}",
+        err
+    );
 }
 
 #[test]
@@ -342,6 +444,13 @@ fn ask_pairs_nothing_for_a_word_only_on_a_retired_term() {
     );
 }
 
+// adr: 05af74a6-36be-4923-b66f-1467b323816a
+//
+// `retiring frees a term's words and a new term may take them`: "authority"
+// is retired below, "power" is a new current term whose alias is
+// "authority", and a brand new question's use of the word "authority"
+// pairs "power"'s id -- not the retired term's -- proving the freed word
+// really did pass to the new concept.
 #[test]
 fn ask_pairs_a_word_to_the_current_term_that_took_it_from_a_retired_one() {
     // A retired term and a current term share the same word ("authority"):
@@ -428,5 +537,44 @@ fn ask_writes_the_terms_line_with_a_plural_word() {
             .any(|l| l.starts_with("terms: ") && l.contains("decisions=99999999-9999-9999-9999-999999999999")),
         "expected a plural match on the terms line: {}",
         content
+    );
+}
+
+// adr: f571a454-3e6c-46c1-b754-0822a5d1d667
+//
+// `ask` pairs every word of the question -- heading, body lines and every
+// option -- to terms, not only the heading or a chosen answer. In
+// `AUTHORITY_QUESTION`, "leaked" sits only in the Problem line ("names
+// leaked into decisions") and "predecessors" sits only in option B's Why
+// line ("matches predecessors"); the heading and option A never use either
+// word. Both still show up on the one terms line `ask` writes.
+#[test]
+fn ask_pairs_a_word_from_the_problem_line_and_a_word_from_a_single_option() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    // "decision" is needed for the heading's own `depends: decision` line
+    // to resolve at approve time; "leaked" and "predecessors" are the
+    // words under test here.
+    approve_terms_with(&dir, &["decision", "leaked", "predecessors"]);
+    let record = write_record(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
+
+    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(out.status.success(), "ask failed: {}", stderr(&out));
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let terms_line = content
+        .lines()
+        .find(|l| l.starts_with("terms: "))
+        .unwrap_or_else(|| panic!("no terms line written: {}", content));
+    assert!(
+        terms_line.contains("leaked=99999991-9999-9999-9999-999999999999"),
+        "Problem-line-only word missing from terms line: {}",
+        terms_line
+    );
+    assert!(
+        terms_line.contains("predecessors=99999992-9999-9999-9999-999999999999"),
+        "option-B-only word missing from terms line: {}",
+        terms_line
     );
 }

@@ -381,13 +381,13 @@ pub fn run(record_path: PathBuf) -> i32 {
 
         // Refusal 5: a banned word in the candidate's own text, from the
         // single hash-based ban list scanner.
-        if let Some((word, term_name)) = first_banned_hit(&text, &banned_entries, &terms_list) {
+        if let Some((_word, term_name)) = first_banned_hit(&text, &banned_entries, &terms_list) {
             let suffix = term_name
                 .map(|n| format!(" (term {})", n))
                 .unwrap_or_default();
             eprintln!(
                 "ask: {}",
-                msg::banned_word_in_candidate(&rel, &sec.heading_text, &word, &suffix)
+                msg::banned_word_in_candidate(&rel, &sec.heading_text, &suffix)
             );
             return 1;
         }

@@ -88,12 +88,11 @@ pub fn run(term: Option<String>) -> i32 {
     let mut hits: Vec<String> = Vec::new();
     for (name, content) in collect_targets(&root, false, None) {
         for (i, line) in content.lines().enumerate() {
-            let mut seen_words: HashSet<String> = HashSet::new();
-            for tok in banned::tokenize(line) {
-                if new_hash_set.contains(&record::sha256_hex(&tok)) && seen_words.insert(tok.clone())
-                {
-                    hits.push(format!("{}:{}: \"{}\"", name, i + 1, tok));
-                }
+            if banned::tokenize(line)
+                .iter()
+                .any(|tok| new_hash_set.contains(&record::sha256_hex(tok)))
+            {
+                hits.push(format!("{}:{}", name, i + 1));
             }
         }
     }

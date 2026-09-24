@@ -72,6 +72,12 @@ Standard: plain words.
 
 // --- tier order: blocked, then allowed once the blocker is answered -------
 
+// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
+//
+// "ask asks the lowest tier with an unanswered question (and stops a
+// higher one)": Q2 (tier 2, derived from its `depends:` line, never
+// written as a tier by hand) is refused while Q1's tier is still open, and
+// only succeeds once Q1 is answered.
 #[test]
 fn ask_blocks_a_higher_tier_candidate_naming_the_open_tier_blocker() {
     let dir = init_repo();
@@ -152,6 +158,16 @@ fn ask_prefers_the_specific_stands_on_refused_message_over_the_generic_blocker()
     );
 }
 
+// adr: 506b3c6d-3d0a-4a02-98de-3b8a573d2fe9
+//
+// "a refused question counts as unanswered for its tier, so the next tier
+// waits (ask stops it, naming the refused question) until the owner
+// approves a plan change that drops or replaces it, after which the next
+// tier can be asked": Qx (tier 1, refused) holds tier 1 open even while
+// Q2 (tier 2) depends only on Q1, never on Qx directly -- ask still
+// refuses Q2, naming refused Qx as the blocker. Once Qx's heading is
+// struck and the plan re-approved, Qx no longer holds any tier open:
+// answering Q1 opens tier 2, and ask now succeeds for Q2.
 #[test]
 fn ask_names_the_generic_refused_blocker_when_the_candidate_does_not_depend_on_it() {
     let dir = init_repo();
@@ -220,10 +236,43 @@ Standard: plain words.
         err.trim_end(),
         "ask: adrdom/decisions/example.md: \"1.2 Does the widget's paint match its color?\" is in tier 2; tier 1 is open, waiting on refused \"1.0 Is the widget on backorder?\"; agent re-plans, owner runs: adr approve adrdom/decisions/example.md"
     );
+
+    // Drop Qx's heading and re-approve: the refused question no longer
+    // holds any tier open, so answering Q1 opens tier 2 and ask can now
+    // reach Q2.
+    let after_refusal = std::fs::read_to_string(&record).unwrap();
+    let q1_start = after_refusal.find("### 1.1").expect("1.1 heading present");
+    let dropped = format!("# Example\n\n{}", &after_refusal[q1_start..]);
+    std::fs::write(&record, &dropped).unwrap();
+    approve_record(&dir, "adrdom/decisions/example.md");
+
+    let q1_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
+    assert!(adr_owner(&dir, &["answer", &q1_id, "A"], "").status.success());
+
+    let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(
+        out2.status.success(),
+        "ask should succeed once the refused blocker is dropped from the plan: {}",
+        stderr(&out2)
+    );
+    assert_eq!(
+        asked_row_count(&dir),
+        3,
+        "Qx, Q1, and now Q2 should all have been asked"
+    );
 }
 
 // --- cap -------------------------------------------------------------------
 
+// adr: 15d82e53-e344-4347-b639-3bf6eb9ef1b4
+//
+// core: "four questions per tier, a value set in the tool; approve and ask
+// stop a plan with a tier over four". Five root questions (one tier) is one
+// past TIER_CAP: `approve` refuses naming the exact cap ("tier 1 holds 5
+// questions, the cap is 4"), and since the file was never approved, `ask`
+// independently refuses it too ("plan not approved") -- neither command
+// lets the over-cap plan through, and neither writes to the file on
+// refusal.
 #[test]
 fn ask_refuses_a_tier_over_the_cap() {
     let dir = init_repo();
@@ -484,6 +533,12 @@ fn ask_prints_the_tier_and_writes_an_assumes_row_per_dependent() {
 // --- edited-after-refused (mirrors the pre-existing edited-after-answered
 // guard) -------------------------------------------------------------------
 
+// adr: b782664f-7465-4e1e-99e0-13f6dd2de774
+//
+// "its identifier never returns, and a replacement is a new question":
+// rewording the refused section under its own id does not bring it back
+// askable -- `ask` refuses and points the agent at reverting the edit or
+// writing a new question (a new id), never at re-asking the old one.
 #[test]
 fn ask_refuses_when_a_refused_section_was_edited_since_refusal() {
     let dir = init_repo();
