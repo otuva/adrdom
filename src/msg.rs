@@ -615,7 +615,10 @@ pub fn no_id_line(rel: &str, heading: &str) -> String {
 }
 
 pub fn nothing_to_ask(path: &str) -> String {
-    format!("nothing to do in {}", path)
+    format!(
+        "nothing to ask in {}: no question in the open tier has a body that is not already asked; agent writes the bodies of the open tier (adr show names it)",
+        path
+    )
 }
 
 // --- answer.rs / ban.rs / unban.rs / install.rs / uninstall.rs -------------
