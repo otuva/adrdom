@@ -69,7 +69,10 @@ pub(super) fn check_tests(
             out.push(Failure {
                 check: "tested".to_string(),
                 id: Some(id.clone()),
-                message: format!("{}: untested", id),
+                message: format!(
+                    "{}: untested; agent writes a test that shows the code follows this decision and puts \"adr: {}\" in it",
+                    id, id
+                ),
             });
         }
     }

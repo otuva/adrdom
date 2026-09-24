@@ -91,12 +91,12 @@ pub fn run(record_path: PathBuf) -> i32 {
     let mut shape_msgs: Vec<String> = rf
         .shape_errors
         .iter()
-        .map(|e| format!("ask: {}: {}; owner fixes the topic file", rel, e))
+        .map(|e| format!("ask: {}: {}; agent fixes the topic file", rel, e))
         .collect();
     for sec in &rf.sections {
         for e in &sec.shape_errors {
             shape_msgs.push(format!(
-                "ask: {}: \"{}\": {}; owner fixes the topic file",
+                "ask: {}: \"{}\": {}; agent fixes the topic file",
                 rel, sec.heading_text, e
             ));
         }
@@ -190,10 +190,12 @@ pub fn run(record_path: PathBuf) -> i32 {
         return 1;
     }
 
-    // Cap refusal (8.8 A): any derived tier over `TIER_CAP`, file-wide
-    // (mirrors approve's cap check, prefixed `ask:`).
+    // Cap refusal (8.8 A): any derived tier over `TIER_CAP` live questions,
+    // file-wide (mirrors approve's cap check, prefixed `ask:`). Dead
+    // (refused/superseded/withdrawn) questions don't count.
     if let Some(tiers) = &rf.tiers {
-        if let Some((n, m)) = record::over_cap(tiers) {
+        let live = state::live_tiers(&led, &rf, tiers);
+        if let Some((n, m)) = record::over_cap(&live) {
             eprintln!(
                 "ask: {}: tier {} holds {} questions, the cap is {}; agent moves questions under a higher heading or splits the topic",
                 rel, n, m, record::TIER_CAP

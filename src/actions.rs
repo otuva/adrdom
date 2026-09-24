@@ -330,6 +330,11 @@ struct Dependent {
     /// `terms:` line exactly as it stood in the file before this approve,
     /// never re-resolved from today's definition/section text.
     source: String,
+    /// The dependent's own decision id when it is a decision (`Some`), so a
+    /// retired-term refusal can point at the exact question to supersede;
+    /// `None` for a term dependent, which has no id and nothing to
+    /// supersede.
+    id: Option<String>,
     pairs: Vec<(String, String)>,
 }
 
@@ -374,7 +379,7 @@ pub fn terms_refusals(
     // Step 1 (shape): "missing id" cannot appear here, since `tf` is
     // already minted.
     for e in &tf.errors {
-        refusals.push(format!("adrdom/terms.md: {}; owner fixes adrdom/terms.md", e));
+        refusals.push(format!("adrdom/terms.md: {}; agent fixes adrdom/terms.md", e));
     }
 
     // Step 3: definition pairings; a self-pairing or any cycle refuses.
@@ -410,6 +415,7 @@ pub fn terms_refusals(
             };
             dependents.push(Dependent {
                 source: format!("{}: \"{}\"", frel, sec.heading_text),
+                id: Some(id.clone()),
                 pairs,
             });
         }
@@ -428,6 +434,7 @@ pub fn terms_refusals(
         };
         dependents.push(Dependent {
             source: format!("term \"{}\"", t.name),
+            id: None,
             pairs,
         });
     }
@@ -447,9 +454,17 @@ pub fn terms_refusals(
                 continue;
             };
             if target.retired {
+                // A decision dependent: the agent's move is to write a new
+                // question that supersedes it, not the owner's to make on
+                // the spot. A term dependent (its own definition still
+                // carries the retired word) has no id to name here.
+                let tail = match &dep.id {
+                    Some(id) => format!("agent supersedes {} with a new question first", id),
+                    None => "owner supersedes first".to_string(),
+                };
                 refusals.push(format!(
-                    "adrdom/terms.md: term \"{}\" retired but carried by {}; owner supersedes first",
-                    target.name, dep.source
+                    "adrdom/terms.md: term \"{}\" retired but carried by {}; {}",
+                    target.name, dep.source, tail
                 ));
                 continue;
             }
@@ -484,7 +499,7 @@ pub fn terms_refusals(
                         .map(|n| format!(" (term {})", n))
                         .unwrap_or_default();
                     refusals.push(format!(
-                        "adrdom/terms.md:{}: banned word \"{}\"{}; owner edits adrdom/terms.md to remove it",
+                        "adrdom/terms.md:{}: banned word \"{}\"{}; agent edits adrdom/terms.md to remove it",
                         i + 1,
                         tok,
                         suffix
@@ -652,7 +667,7 @@ pub fn record_refusals(
     for e in &rf.shape_errors {
         out.push(Refusal {
             category: "parse",
-            message: format!("{}: {}; owner fixes the topic file", rel, e),
+            message: format!("{}: {}; agent fixes the topic file", rel, e),
         });
     }
     for sec in &rf.sections {
@@ -660,7 +675,7 @@ pub fn record_refusals(
             out.push(Refusal {
                 category: "parse",
                 message: format!(
-                    "{}: \"{}\": {}; owner fixes the topic file",
+                    "{}: \"{}\": {}; agent fixes the topic file",
                     rel, sec.heading_text, e
                 ),
             });
@@ -752,11 +767,14 @@ pub fn record_refusals(
         });
     }
 
-    // Cap (8.8 A): no derived tier may hold more than `TIER_CAP` questions.
-    // Only checkable when tiers were actually derived: a `derive_error`
-    // above leaves `rf.tiers` `None`, already refused there.
+    // Cap (8.8 A): no derived tier may hold more than `TIER_CAP` live
+    // questions. Only checkable when tiers were actually derived: a
+    // `derive_error` above leaves `rf.tiers` `None`, already refused
+    // there. A refused/superseded/withdrawn question is dead and does not
+    // count (`state::live_tiers`).
     if let Some(tiers) = &rf.tiers {
-        if let Some((tier, count)) = record::over_cap(tiers) {
+        let live = state::live_tiers(led, rf, tiers);
+        if let Some((tier, count)) = record::over_cap(&live) {
             out.push(Refusal {
                 category: "plan",
                 message: format!(
@@ -813,7 +831,7 @@ pub fn missing_answered_refusals(records: &[RecordFile], led: &Ledger) -> Vec<Re
                 out.push(Refusal {
                     category: "ids",
                     message: format!(
-                        "id {} (\"{}\") is answered and current but missing from every topic file; owner supersedes it or restores the heading",
+                        "id {} (\"{}\") is answered and current but missing from every topic file; agent supersedes it or restores the heading",
                         id, heading
                     ),
                 });

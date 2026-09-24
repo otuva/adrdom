@@ -135,7 +135,7 @@ fn ask_refuses_a_question_with_one_option() {
     assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(err.contains("1 options; at least two"), "{}", err);
-    assert!(err.contains("owner fixes the topic file"), "{}", err);
+    assert!(err.contains("agent fixes the topic file"), "{}", err);
 
     let after = std::fs::read_to_string(&record).unwrap();
     assert_eq!(after, content, "ask must not modify the file when it refuses");
@@ -157,7 +157,7 @@ fn ask_refuses_a_question_with_four_options() {
     assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(err.contains("4 options; at most three"), "{}", err);
-    assert!(err.contains("owner fixes the topic file"), "{}", err);
+    assert!(err.contains("agent fixes the topic file"), "{}", err);
 
     let after = std::fs::read_to_string(&record).unwrap();
     assert_eq!(after, content, "ask must not modify the file when it refuses");

@@ -173,3 +173,62 @@ fn check_passes_a_refused_id_missing_once_withdrawn() {
         text
     );
 }
+
+#[test]
+fn check_names_the_file_when_an_asked_heading_is_dropped_by_an_unapproved_edit() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let rel = "adrdom/decisions/example.md";
+    let content = refusable_content(None);
+    write_record(&dir, rel, &content);
+    approve_via_ledger(&dir, rel, &content);
+    let hash = mirror_section_hash(&refusable_section(None));
+    append_ledger_row(&dir, "asked", REFUSABLE_ID, &hash, "1.1 Q?");
+
+    // The heading is edited out of the file, but the file is never
+    // re-approved: a plan change awaiting approval, not a formal
+    // withdrawal.
+    write_record(&dir, rel, "# Topic\n\nContext prose.\n");
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(
+        text.contains(&format!(
+            "{} (\"1.1 Q?\", asked) was removed from the plan; owner runs: adr approve {}",
+            REFUSABLE_ID, rel
+        )),
+        "{}",
+        text
+    );
+}
+
+#[test]
+fn check_stays_silent_on_a_superseded_id_once_the_file_is_reapproved() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let rel = "adrdom/decisions/example.md";
+    let content = refusable_content(None);
+    write_record(&dir, rel, &content);
+    approve_via_ledger(&dir, rel, &content);
+    let hash = mirror_section_hash(&refusable_section(None));
+    append_ledger_row(&dir, "asked", REFUSABLE_ID, &hash, "1.1 Q?");
+    append_ledger_row(&dir, "superseded", REFUSABLE_ID, "-", "new-id");
+
+    // The heading is gone and the file has since been re-approved without
+    // it: the ordinary, finished state after a supersede, not a plan
+    // change still awaiting approval.
+    let after = "# Topic\n\nContext prose.\n";
+    write_record(&dir, rel, after);
+    approve_via_ledger(&dir, rel, after);
+
+    let out = adr(&dir, &["check"], &[], "");
+    let text = stdout(&out);
+    assert!(
+        !text.contains(REFUSABLE_ID),
+        "a superseded id must earn no ids failure at all: {}",
+        text
+    );
+}

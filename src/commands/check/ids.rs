@@ -1,7 +1,8 @@
-use super::{dropped_state, Failure};
+use super::Failure;
 use crate::actions::Refusal;
 use crate::ledger::Ledger;
 use crate::record::RecordFile;
+use crate::state;
 use std::collections::{HashMap, HashSet};
 
 pub(super) fn check_ids(records: &[RecordFile], led: &Ledger, missing_answered: &[Refusal]) -> Vec<Failure> {
@@ -56,22 +57,76 @@ pub(super) fn check_ids(records: &[RecordFile], led: &Ledger, missing_answered: 
         }
     }
     for id in ledger_ids {
-        if dropped_state(led, &id) {
+        if seen.contains_key(&id) {
+            continue;
+        }
+        let event = led.latest_state(&id).map(|r| r.event.as_str());
+        // Withdrawn is `approve`'s own formal record that it already saw
+        // this heading gone and accounted for it: fully processed, nothing
+        // left to flag.
+        if event == Some("withdrawn") {
             continue;
         }
         // An answered-and-current id missing from every file is reported
         // below, from `missing_answered` (E1.2, shared with `approve`'s
         // `missing_answered_refusals`), so it isn't printed twice here.
-        if led.latest_state(&id).map(|r| r.event.as_str()) == Some("answered") {
+        if event == Some("answered") {
             continue;
         }
-        if !seen.contains_key(&id) {
+
+        // asked / refused / superseded, missing from every current topic
+        // file: when a file that was once approved now has a stale, still
+        // unapproved plan, the heading was very likely just edited out of
+        // it, so say what happened and point at the fix instead of the
+        // bare "not found" line. Name the file from whichever such file's
+        // own latest `approved` row is most recent; several equally
+        // plausible candidates just leave the file out. A file that was
+        // never approved at all names nothing here -- there is no earlier
+        // approved plan for this id to have dropped out of. A superseded
+        // id outside a stale edit is its ordinary, permanent end state
+        // (`approve`'s "allow a superseded one silently") and earns
+        // nothing at all.
+        let stale: Vec<(usize, &str)> = records
+            .iter()
+            .filter(|rf| !state::plan_approved(led, rf, &rf.rel))
+            .filter_map(|rf| {
+                led.rows
+                    .iter()
+                    .rposition(|r| r.event == "approved" && r.detail == rf.rel)
+                    .map(|pos| (pos, rf.rel.as_str()))
+            })
+            .collect();
+        if !stale.is_empty() {
+            let heading = led
+                .latest_asked(&id)
+                .map(|r| r.detail.clone())
+                .unwrap_or_else(|| id.clone());
+            let removed_file = stale.iter().max_by_key(|&&(pos, _)| pos).map(|&(_, rel)| rel);
+            let tail = match removed_file {
+                Some(rel) => format!("; owner runs: adr approve {}", rel),
+                None => String::new(),
+            };
             out.push(Failure {
                 check: "ids".to_string(),
                 id: Some(id.clone()),
-                message: format!("ledger id {} not found in any topic file", id),
+                message: format!(
+                    "{} (\"{}\", {}) was removed from the plan{}",
+                    id,
+                    heading,
+                    event.unwrap_or("unknown"),
+                    tail
+                ),
             });
+            continue;
         }
+        if event == Some("superseded") {
+            continue;
+        }
+        out.push(Failure {
+            check: "ids".to_string(),
+            id: Some(id.clone()),
+            message: format!("ledger id {} not found in any topic file", id),
+        });
     }
 
     for r in missing_answered {

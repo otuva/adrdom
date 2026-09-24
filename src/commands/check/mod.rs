@@ -117,7 +117,11 @@ fn build(
 
     for rf in &records {
         if let Some(tiers) = &rf.tiers {
-            let sizes = record::tier_sizes(tiers)
+            // Live counts only (8.8 A): a dead (refused/superseded/
+            // withdrawn) question no longer holds its tier for the cap,
+            // and this note is read against that same cap.
+            let live = state::live_tiers(&led, rf, tiers);
+            let sizes = record::tier_sizes(&live)
                 .into_iter()
                 .map(|(t, n)| format!("{} ({})", t, n))
                 .collect::<Vec<_>>()
