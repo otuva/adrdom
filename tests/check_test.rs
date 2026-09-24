@@ -32,7 +32,7 @@ fn answer_one_question(dir: &std::path::Path) -> (std::path::PathBuf, String) {
     std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
     approve_terms_via_ledger(dir, terms_content);
     let record = write_record(dir, "adrdom/decisions/example.md", ONE_QUESTION);
-    approve_via_ledger(dir, "adrdom/decisions/example.md", ONE_QUESTION);
+    approve_record(dir, "adrdom/decisions/example.md");
     assert!(adr(dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -77,15 +77,22 @@ fn check_parse_failure() {
 
 #[test]
 fn check_ids_failure_missing_id() {
+    // 9.1 A point 9: a missing id means the plan was never approved --
+    // `approve`, not `ask`, is what gives a heading one, so the message
+    // points at `approve`.
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
-    // No `adr ask` run, so the section has no id.
+    // No `adr approve` run, so the section has no id.
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(stdout(&out).contains("ids:"), "{}", stdout(&out));
-    assert!(stdout(&out).contains("missing id"), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains("plan not approved; owner runs: adr approve adrdom/decisions/example.md"),
+        "{}",
+        stdout(&out)
+    );
 }
 
 #[test]
@@ -110,7 +117,7 @@ fn check_answers_failure_hand_written_answer_line() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "pass");
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -127,6 +134,28 @@ fn check_answers_failure_hand_written_answer_line() {
         "{}",
         stdout(&out)
     );
+}
+
+#[test]
+fn check_passes_a_skeleton_that_got_an_id_from_approve_but_was_never_asked() {
+    // 9.1 A: `approve` gives every heading an id, skeletons included --
+    // `check`'s answers check must not mistake "has an id but was never
+    // asked" for "edited after asking" just because a ledger `asked` row
+    // for that id doesn't exist yet.
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "pass");
+    let content = format!("{}\n### 3.2 Not written yet?\ndepends: pass\n", ONE_QUESTION);
+    let record = write_record(&dir, "adrdom/decisions/example.md", &content);
+    approve_record(&dir, "adrdom/decisions/example.md");
+
+    let after = std::fs::read_to_string(&record).unwrap();
+    let idx = after.find("### 3.2 Not written yet?").unwrap();
+    assert!(after[idx..].contains("id: "), "{}", &after[idx..]);
+
+    let out = adr(&dir, &["check"], &[], "");
+    let text = stdout(&out);
+    assert!(!text.contains("edited after asking"), "{}", text);
 }
 
 #[test]

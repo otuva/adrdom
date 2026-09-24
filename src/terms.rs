@@ -409,6 +409,22 @@ pub fn resolve(text: &str, terms: &[Term]) -> Vec<(String, String)> {
     results.into_iter().collect()
 }
 
+/// Resolves a single word/phrase (already the whole, trimmed entry text --
+/// not scanned out of a longer string) to the id of the one current
+/// (non-retired) term it names exactly or as a simple plural, built on
+/// `phrase_lookup` (9.1 A). `None` when it names no current term. The one
+/// function that does the word-to-id work for a `depends:` entry; used by
+/// `approve`'s depends rewrite.
+pub fn resolve_word(word: &str, terms: &[Term]) -> Option<String> {
+    let lookup = phrase_lookup(terms);
+    let id = lookup.get(&word.trim().to_lowercase())?;
+    let t = terms.iter().find(|t| t.id.as_deref() == Some(id.as_str()))?;
+    if t.retired {
+        return None;
+    }
+    Some(id.clone())
+}
+
 /// Resolves term `idx`'s definition text against every term in `tf`
 /// (including itself, so a self-pairing can be detected).
 ///
@@ -947,6 +963,29 @@ aliases: \n"
             .iter()
             .any(|(w, id)| w == "decision" && id == "id-decision"));
         assert!(terms.iter().find(|t| t.name == "decision").unwrap().retired);
+    }
+
+    #[test]
+    fn resolve_word_rejects_a_retired_term() {
+        let terms = sample_terms();
+        // "decision" is retired in `sample_terms()`.
+        assert_eq!(resolve_word("decision", &terms), None);
+    }
+
+    #[test]
+    fn resolve_word_resolves_a_current_term_exactly_and_as_a_plural() {
+        let terms = sample_terms();
+        assert_eq!(resolve_word("terms", &terms), Some("id-terms".to_string()));
+        assert_eq!(
+            resolve_word("terms file", &terms),
+            Some("id-terms-file".to_string())
+        );
+    }
+
+    #[test]
+    fn resolve_word_returns_none_for_an_unknown_word() {
+        let terms = sample_terms();
+        assert_eq!(resolve_word("nosuchword", &terms), None);
     }
 
     #[test]

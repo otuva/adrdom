@@ -118,7 +118,7 @@ fn setup_repo_with_open_question() -> std::path::PathBuf {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_terms_with(&dir, &["decision", "example"]);
     let record = write_record(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
+    approve_record(&dir, "adrdom/decisions/example.md");
     let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(ask_out.status.success(), "ask failed: {}", stderr(&ask_out));
     dir

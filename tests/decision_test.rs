@@ -80,9 +80,9 @@ fn a_question_needs_two_or_three_options() {
         let dir = init_repo();
         assert!(adr(&dir, &["install"], &[], "").status.success());
         approve_minimal_terms(&dir, "options");
-        let content = "# Example\n\n### 1.1 Two options?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
+        let content = "# Example\n\n### 1.1 Two options?\ndepends: options\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
-        approve_via_ledger(&dir, "adrdom/decisions/example.md", content);
+        approve_record(&dir, "adrdom/decisions/example.md");
 
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
         assert!(out.status.success(), "two options should be accepted: {}", stderr(&out));
@@ -93,9 +93,9 @@ fn a_question_needs_two_or_three_options() {
         let dir = init_repo();
         assert!(adr(&dir, &["install"], &[], "").status.success());
         approve_minimal_terms(&dir, "options");
-        let content = "# Example\n\n### 1.1 Three options?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n";
+        let content = "# Example\n\n### 1.1 Three options?\ndepends: options\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
-        approve_via_ledger(&dir, "adrdom/decisions/example.md", content);
+        approve_record(&dir, "adrdom/decisions/example.md");
 
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
         assert!(out.status.success(), "three options should be accepted: {}", stderr(&out));
@@ -136,9 +136,9 @@ fn a_question_needs_a_problem_line_and_a_standard_line() {
         let dir = init_repo();
         assert!(adr(&dir, &["install"], &[], "").status.success());
         approve_minimal_terms(&dir, "decision");
-        let content = "# Example\n\n### 1.1 What is a decision?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
+        let content = "# Example\n\n### 1.1 What is a decision?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
-        approve_via_ledger(&dir, "adrdom/decisions/example.md", content);
+        approve_record(&dir, "adrdom/decisions/example.md");
 
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
         assert!(out.status.success(), "ask should have accepted it: {}", stderr(&out));
@@ -179,9 +179,9 @@ fn every_option_needs_a_why_line_and_a_costs_line() {
         let dir = init_repo();
         assert!(adr(&dir, &["install"], &[], "").status.success());
         approve_minimal_terms(&dir, "decision");
-        let content = "# Example\n\n### 1.1 What is a decision?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
+        let content = "# Example\n\n### 1.1 What is a decision?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
-        approve_via_ledger(&dir, "adrdom/decisions/example.md", content);
+        approve_record(&dir, "adrdom/decisions/example.md");
 
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
         assert!(out.status.success(), "ask should have accepted it: {}", stderr(&out));

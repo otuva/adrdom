@@ -13,13 +13,15 @@ pub(super) fn check_ids(records: &[RecordFile], led: &Ledger) -> Vec<Failure> {
                 continue;
             }
             match &sec.id {
+                // 9.1 A point 9: a section with no id means the plan was
+                // never approved (or an edit since moved the plan hash) --
+                // `approve`, not `ask`, is what gives it one.
                 None => out.push(Failure {
                     check: "ids".to_string(),
                     id: None,
                     message: format!(
-                        "{}: {}: missing id, run adr ask",
-                        rf.rel,
-                        sec.heading_text
+                        "{}: {}: plan not approved; owner runs: adr approve {}",
+                        rf.rel, sec.heading_text, rf.rel
                     ),
                 }),
                 Some(id) => {

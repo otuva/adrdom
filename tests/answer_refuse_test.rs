@@ -6,6 +6,7 @@ use common::*;
 const Q1: &str = r#"# Example
 
 ### 1.1 What color is the widget?
+depends: widget
 
 Problem: the widget's color is undecided.
 
@@ -21,6 +22,7 @@ Standard: plain words.
 
 const Q2: &str = r#"
 ### 1.2 What color is the second widget?
+depends: widget
 
 Problem: the second widget's color is undecided.
 
@@ -40,7 +42,7 @@ fn answer_refuse_writes_the_line_and_the_refused_row() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     let record = write_record(&dir, "adrdom/decisions/example.md", Q1);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", Q1);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -88,7 +90,7 @@ fn answer_letter_after_refused_refuses() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     let record = write_record(&dir, "adrdom/decisions/example.md", Q1);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", Q1);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -115,7 +117,7 @@ fn answer_refuse_twice_gives_the_already_refused_message() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     let record = write_record(&dir, "adrdom/decisions/example.md", Q1);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", Q1);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -149,7 +151,7 @@ fn answer_refuse_ignores_supersedes_with_a_printed_note_and_writes_no_superseded
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     let record = write_record(&dir, "adrdom/decisions/example.md", Q1);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", Q1);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -170,7 +172,7 @@ fn answer_refuse_ignores_supersedes_with_a_printed_note_and_writes_no_superseded
     );
     content.push_str(&with_supersedes);
     std::fs::write(&record, &content).unwrap();
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());

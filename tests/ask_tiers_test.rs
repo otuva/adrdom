@@ -2,6 +2,18 @@
 // refused-dependency refusals (generic blocker + specific "stands on
 // refused"), the moot refusal, the mandatory-set refusals, and the
 // `assumes` rows/tier print that come out of a successful ask.
+//
+// 9.1 A: every fixture now goes through a real `adr approve` (`approve_record`)
+// before `ask` touches it, since `approve` -- not `ask` any more -- is what
+// mints a heading's id, and `ask` refuses outright on a section with none.
+// Every heading here needs its own `depends:` line for `approve` to accept
+// it (batch 8's pre-existing rule); `depends: widget` (a term
+// `approve_minimal_terms` already sets up) covers a root-tier heading that
+// has no other natural dependency. Because every heading already has an id
+// the moment it is approved, `extract_ids(...).len()` no longer tracks
+// "how many questions have been asked" -- a count of `\tasked\t` ledger
+// rows, or a before/after file-content comparison, is what these tests use
+// instead.
 mod common;
 
 use common::*;
@@ -13,9 +25,15 @@ fn sha256_hex(text: &str) -> String {
     h.finalize().iter().map(|b| format!("{:02x}", b)).collect()
 }
 
+fn asked_row_count(dir: &std::path::Path) -> usize {
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap_or_default();
+    ledger.lines().filter(|l| l.contains("\tasked\t")).count()
+}
+
 const Q1: &str = r#"# Example
 
 ### 1.1 What color is the widget?
+depends: widget
 
 Problem: the widget's color is undecided.
 
@@ -60,7 +78,7 @@ fn ask_blocks_a_higher_tier_candidate_naming_the_open_tier_blocker() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     let record = write_record(&dir, "adrdom/decisions/example.md", Q1);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", Q1);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -73,7 +91,8 @@ fn ask_blocks_a_higher_tier_candidate_naming_the_open_tier_blocker() {
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(&q2_depends_on_q1("=A"));
     std::fs::write(&record, &content).unwrap();
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    let before_refused_ask = std::fs::read_to_string(&record).unwrap();
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
@@ -86,9 +105,10 @@ fn ask_blocks_a_higher_tier_candidate_naming_the_open_tier_blocker() {
         )
     );
 
-    // Nothing written: Q2 got no id.
+    // Nothing written: ask wrote no new content and asked nothing new.
     let after = std::fs::read_to_string(&record).unwrap();
-    assert_eq!(extract_ids(&after).len(), 1, "{}", after);
+    assert_eq!(after, before_refused_ask, "ask must not modify the file when it refuses");
+    assert_eq!(asked_row_count(&dir), 1, "only Q1 should be asked so far");
 
     // Now answer Q1: the same ask on Q2 succeeds.
     let answer_out = adr_owner(&dir, &["answer", &q1_id, "A"], "");
@@ -96,8 +116,7 @@ fn ask_blocks_a_higher_tier_candidate_naming_the_open_tier_blocker() {
 
     let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out2.status.success(), "ask should now succeed: {}", stderr(&out2));
-    let after2 = std::fs::read_to_string(&record).unwrap();
-    assert_eq!(extract_ids(&after2).len(), 2, "{}", after2);
+    assert_eq!(asked_row_count(&dir), 2, "Q2 should now be asked too");
 }
 
 #[test]
@@ -106,7 +125,7 @@ fn ask_prefers_the_specific_stands_on_refused_message_over_the_generic_blocker()
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     let record = write_record(&dir, "adrdom/decisions/example.md", Q1);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", Q1);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -119,7 +138,7 @@ fn ask_prefers_the_specific_stands_on_refused_message_over_the_generic_blocker()
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(&q2_depends_on_q1("=A"));
     std::fs::write(&record, &content).unwrap();
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
+    approve_record(&dir, "adrdom/decisions/example.md");
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
@@ -146,6 +165,7 @@ fn ask_names_the_generic_refused_blocker_when_the_candidate_does_not_depend_on_i
     let content = r#"# Example
 
 ### 1.0 Is the widget on backorder?
+depends: widget
 
 Problem: stock is unknown.
 
@@ -159,6 +179,7 @@ Standard: plain words.
   Costs: other costs.
 
 ### 1.1 What color is the widget?
+depends: widget
 
 Problem: the widget's color is undecided.
 
@@ -172,7 +193,7 @@ Standard: plain words.
   Costs: other costs.
 "#;
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", content);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -190,7 +211,7 @@ Standard: plain words.
     let mut content2 = std::fs::read_to_string(&record).unwrap();
     content2.push_str(&q2_depends_on_q1("=A"));
     std::fs::write(&record, &content2).unwrap();
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content2);
+    approve_record(&dir, "adrdom/decisions/example.md");
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
@@ -211,21 +232,36 @@ fn ask_refuses_a_tier_over_the_cap() {
     let mut content = String::from("# Example\n");
     for i in 1..=5 {
         content.push_str(&format!(
-            "\n### 1.{n} Is widget option {n} chosen?\n\nProblem: widget option {n}.\n\nStandard: plain words.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n",
+            "\n### 1.{n} Is widget option {n} chosen?\ndepends: widget\n\nProblem: widget option {n}.\n\nStandard: plain words.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n",
             n = i
         ));
     }
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
+
+    // The cap refuses at `approve` itself now (approve checks the same cap
+    // before ever minting an id), so `ask` never even gets a chance to see
+    // this file approved; assert the refusal there directly instead of
+    // faking approval around it.
+    let approve_out = adr_owner(
+        &dir,
+        &["approve", record.to_str().unwrap()],
+        "",
+    );
+    assert!(!approve_out.status.success());
+    assert!(
+        stderr(&approve_out).contains("tier 1 holds 5 questions, the cap is 4"),
+        "{}",
+        stderr(&approve_out)
+    );
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
     assert_eq!(
         stderr(&out).trim_end(),
-        "ask: adrdom/decisions/example.md: tier 1 holds 5 questions, the cap is 4; agent moves questions under a higher heading or splits the topic"
+        "ask: adrdom/decisions/example.md: plan not approved; owner runs: adr approve adrdom/decisions/example.md"
     );
     let after = std::fs::read_to_string(&record).unwrap();
-    assert_eq!(after, content, "ask must not modify the file when it refuses");
+    assert_eq!(after, content, "neither approve nor ask may modify the file when they refuse");
 }
 
 // --- stands on refused: a specific dependency, not the generic blocker ----
@@ -243,6 +279,7 @@ fn ask_names_the_specific_refused_dependency_not_the_file_order_blocker() {
     let content = r#"# Example
 
 ### 1.0 Is the widget in stock?
+depends: widget
 
 Problem: stock is unknown.
 
@@ -256,6 +293,7 @@ Standard: plain words.
   Costs: other costs.
 
 ### 1.1 What color is the widget?
+depends: widget
 
 Problem: the widget's color is undecided.
 
@@ -269,7 +307,7 @@ Standard: plain words.
   Costs: other costs.
 "#;
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", content);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -290,7 +328,7 @@ Standard: plain words.
     let mut content2 = std::fs::read_to_string(&record).unwrap();
     content2.push_str(&q2_depends_on_q1("=A"));
     std::fs::write(&record, &content2).unwrap();
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content2);
+    approve_record(&dir, "adrdom/decisions/example.md");
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
@@ -314,7 +352,7 @@ fn ask_refuses_a_moot_candidate() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     let record = write_record(&dir, "adrdom/decisions/example.md", Q1);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", Q1);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
@@ -326,7 +364,7 @@ fn ask_refuses_a_moot_candidate() {
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(&q2_depends_on_q1("=A"));
     std::fs::write(&record, &content).unwrap();
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
+    approve_record(&dir, "adrdom/decisions/example.md");
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
@@ -348,7 +386,8 @@ fn ask_refuses_a_tier_n_dependent_with_no_answer_set() {
         Q1
     );
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    let before = std::fs::read_to_string(&record).unwrap();
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
@@ -357,7 +396,7 @@ fn ask_refuses_a_tier_n_dependent_with_no_answer_set() {
         "ask: adrdom/decisions/example.md: \"1.2 Does the widget's paint match its color?\" depends on \"1.1 What color is the widget?\" without an answer set; agent writes =A, =A|B or =* on that depends line"
     );
     let after = std::fs::read_to_string(&record).unwrap();
-    assert_eq!(after, content);
+    assert_eq!(after, before);
 }
 
 #[test]
@@ -370,7 +409,7 @@ fn ask_refuses_a_set_naming_an_option_the_target_does_not_have() {
         Q1
     );
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
+    approve_record(&dir, "adrdom/decisions/example.md");
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
@@ -395,7 +434,7 @@ fn ask_prints_the_tier_and_writes_an_assumes_row_per_dependent() {
         Q1
     );
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
+    approve_record(&dir, "adrdom/decisions/example.md");
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
@@ -413,9 +452,24 @@ fn ask_prints_the_tier_and_writes_an_assumes_row_per_dependent() {
     );
 
     let after = std::fs::read_to_string(&record).unwrap();
-    let q1_id = extract_ids(&after)[0].clone();
+    let ids = extract_ids(&after);
+    assert_eq!(ids.len(), 2, "both headings should have an id from approve: {}", after);
+    let q1_id = after
+        .lines()
+        .skip_while(|l| !l.starts_with("### 1.1 What color"))
+        .find_map(|l| l.strip_prefix("id: "))
+        .unwrap()
+        .to_string();
+    let q2_id = after
+        .lines()
+        .skip_while(|l| !l.starts_with("### 1.2 Does the widget's paint"))
+        .find_map(|l| l.strip_prefix("id: "))
+        .unwrap()
+        .to_string();
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    let expected_hash = sha256_hex("1.2 Does the widget's paint match its color?=A|B");
+    // 9.1 A point 3: an `assumes` row keys on the dependent's own heading
+    // id, not its heading text.
+    let expected_hash = sha256_hex(&format!("{}=A|B", q2_id));
     let row = ledger
         .lines()
         .find(|l| l.contains("\tassumes\t"))
@@ -424,7 +478,7 @@ fn ask_prints_the_tier_and_writes_an_assumes_row_per_dependent() {
     assert_eq!(fields[1], "assumes");
     assert_eq!(fields[2], q1_id, "assumes row id should be the asked question's id");
     assert_eq!(fields[3], expected_hash, "row: {}", row);
-    assert_eq!(fields[4], "1.2 Does the widget's paint match its color?");
+    assert_eq!(fields[4], q2_id);
 }
 
 // --- edited-after-refused (mirrors the pre-existing edited-after-answered
@@ -436,7 +490,7 @@ fn ask_refuses_when_a_refused_section_was_edited_since_refusal() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     let record = write_record(&dir, "adrdom/decisions/example.md", Q1);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", Q1);
+    approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());

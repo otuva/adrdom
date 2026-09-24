@@ -226,9 +226,15 @@ pub fn context_hash(content: &str) -> String {
 
 /// Writes `approved`/`context` ledger rows for `content` as if `adr
 /// approve` had just run on `rel` (path relative to `dir`, forward
-/// slashes). Call this with the record's as-written content before `ask`
-/// or `answer` touch it: neither changes headings or context prose, so the
-/// hashes stay valid afterward.
+/// slashes) -- without minting a heading id or rewriting a single depends
+/// line to one (9.1 A: real `approve` now does both). Call this only for a
+/// file that a test wants to look "plan/context approved" to `check`
+/// without ever really being approvable (e.g. deliberately missing a
+/// depends line, or naming a term that doesn't exist) -- `check`'s own
+/// independent validation is what such a test means to exercise. Anything
+/// that goes on to run `adr ask`/`adr answer` for real needs `approve_record`
+/// instead: `ask` now refuses outright on a section with no id, and only
+/// real `approve` gives one.
 pub fn approve_via_ledger(dir: &Path, rel: &str, content: &str) {
     let plan = plan_hash(content);
     let ctx = context_hash(content);
@@ -237,6 +243,24 @@ pub fn approve_via_ledger(dir: &Path, rel: &str, content: &str) {
     existing.push_str(&format!("2024-01-01T00:00:00Z\tapproved\t-\t{}\t{}\n", plan, rel));
     existing.push_str(&format!("2024-01-01T00:00:00Z\tcontext\t-\t{}\t{}\n", ctx, rel));
     std::fs::write(&ledger_path, existing).unwrap();
+}
+
+/// Runs the real, owner-gated `adr approve <rel>` (9.1 A: `approve` mints
+/// every heading's id and rewrites its depends entries to ids). Use this,
+/// not `approve_via_ledger`, for any fixture that a test then hands to a
+/// real `adr ask`/`adr answer` call, since those now require a section to
+/// already have an id -- which only a real approve gives it. Panics (with
+/// the command's stderr) if approve refuses, since a fixture meant to reach
+/// `ask` must be one real `approve` actually accepts.
+pub fn approve_record(dir: &Path, rel: &str) {
+    let path = dir.join(rel);
+    let out = adr_owner(dir, &["approve", path.to_str().unwrap()], "");
+    assert!(
+        out.status.success(),
+        "approve_record: adr approve {} failed: {}",
+        rel,
+        stderr(&out)
+    );
 }
 
 /// Appends a hand-crafted ledger row (bypassing every command): `event`,
