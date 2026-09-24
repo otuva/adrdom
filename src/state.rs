@@ -88,6 +88,24 @@ pub fn is_current(led: &Ledger, id: &str) -> bool {
     matches!(led.latest_state(id), Some(row) if row.event == "answered")
 }
 
+/// True when `sec`'s latest ledger state is `answered`, `refused`, or
+/// `superseded`: its decision is closed, one way or another, so its text --
+/// heading included -- is never edited again (9.1 A point 5, 9.5 A). A
+/// section with no id yet, or none of those three states, is unfrozen.
+/// The one shared "is this section frozen" test `approve` and `check` both
+/// use.
+pub fn is_frozen(led: &Ledger, sec: &Section) -> bool {
+    sec.id
+        .as_ref()
+        .map(|id| {
+            matches!(
+                led.latest_state(id).map(|r| r.event.as_str()),
+                Some("answered") | Some("refused") | Some("superseded")
+            )
+        })
+        .unwrap_or(false)
+}
+
 /// The text a section's `terms:` line is (re)computed from, and what the
 /// banned-word scan reads (9.1 A): the section's hashed range (heading
 /// through the hash end, see `record::hash_range`) with the `terms:` line
