@@ -1,4 +1,4 @@
-use crate::commands::DENY_ENTRIES;
+use crate::commands::{deny_entries, OWNER_COMMANDS};
 use crate::repo;
 use std::fs;
 use std::path::Path;
@@ -18,13 +18,9 @@ pub(crate) const CLAUDE_MD_IMPORT: &str = "@AGENTS.md";
 pub(crate) const PRE_COMMIT_HOOK: &str = "#!/bin/sh\nadr check --staged\nexit $?\n";
 pub(crate) const COMMIT_MSG_HOOK: &str = "#!/bin/sh\nadr check --message \"$1\"\nexit $?\n";
 
-/// The five commands only the owner runs (matches the brief's "Commands"
-/// section and `repo::owner_authorized`'s callers): one Codex `prefix_rule`
-/// per command in `--codex`'s rules file.
-const OWNER_COMMANDS: &[&str] = &["answer", "approve", "unban", "serve", "uninstall"];
-
 /// `.codex/rules/adrdom.rules`'s content: one `prefix_rule` block per
-/// `OWNER_COMMANDS` entry, `decision = "forbidden"`. `check`'s `install`
+/// `OWNER_COMMANDS` entry (`commands::OWNER_COMMANDS`), `decision =
+/// "forbidden"`. `check`'s `install`
 /// check compares the file on disk against this text (see
 /// `commands/check/install.rs`), the same way it compares AGENTS.md against
 /// `BRIEF`.
@@ -257,7 +253,7 @@ fn install_claude_md(root: &Path, create: bool) -> Result<Option<String>, String
     }))
 }
 
-/// Merges `DENY_ENTRIES` into `.claude/settings.json`'s
+/// Merges `deny_entries()` into `.claude/settings.json`'s
 /// `permissions.deny` array, preserving every other key and array entry.
 /// Creates the directory/file if missing. Returns one message per entry.
 fn merge_settings(root: &Path) -> Result<Vec<String>, String> {
@@ -302,15 +298,15 @@ fn merge_settings(root: &Path) -> Result<Vec<String>, String> {
     let deny_arr = deny.as_array_mut().unwrap();
 
     let mut messages = Vec::new();
-    for entry in DENY_ENTRIES {
-        let already = deny_arr.iter().any(|v| v.as_str() == Some(*entry));
+    for entry in deny_entries() {
+        let already = deny_arr.iter().any(|v| v.as_str() == Some(entry.as_str()));
         if already {
             messages.push(format!(
                 "install: .claude/settings.json: deny entry {} already present",
                 entry
             ));
         } else {
-            deny_arr.push(serde_json::Value::String(entry.to_string()));
+            deny_arr.push(serde_json::Value::String(entry.clone()));
             messages.push(format!(
                 "install: .claude/settings.json: added deny entry {}",
                 entry

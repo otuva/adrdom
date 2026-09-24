@@ -67,3 +67,22 @@ pub fn owner_authorized() -> bool {
     }
     std::io::stdin().is_terminal()
 }
+
+/// The refusal line every owner command prints when `owner_authorized`
+/// fails: `<cmd>: refusing: this is the owner's command; owner runs: adr
+/// <cmd> <args>` -- `args` is the command line exactly as the agent typed
+/// it (empty for a command that takes none), never mentioning a terminal,
+/// TTY, or env var.
+pub fn owner_refusal(cmd: &str, args: &str) -> String {
+    if args.is_empty() {
+        format!(
+            "{}: refusing: this is the owner's command; owner runs: adr {}",
+            cmd, cmd
+        )
+    } else {
+        format!(
+            "{}: refusing: this is the owner's command; owner runs: adr {} {}",
+            cmd, cmd, args
+        )
+    }
+}

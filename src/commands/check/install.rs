@@ -59,8 +59,8 @@ pub(super) fn check_install(root: &Path) -> Vec<Failure> {
         let settings_path = root.join(".claude/settings.json");
         let content = std::fs::read_to_string(&settings_path).unwrap_or_default();
         if content.trim().is_empty() {
-            for entry in crate::commands::DENY_ENTRIES {
-                out.push(missing_deny_entry(entry));
+            for entry in crate::commands::deny_entries() {
+                out.push(missing_deny_entry(&entry));
             }
         } else {
             match serde_json::from_str::<serde_json::Value>(&content) {
@@ -71,9 +71,9 @@ pub(super) fn check_install(root: &Path) -> Vec<Failure> {
                         .and_then(|d| d.as_array())
                         .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
                         .unwrap_or_default();
-                    for entry in crate::commands::DENY_ENTRIES {
-                        if !deny.contains(entry) {
-                            out.push(missing_deny_entry(entry));
+                    for entry in crate::commands::deny_entries() {
+                        if !deny.contains(&entry.as_str()) {
+                            out.push(missing_deny_entry(&entry));
                         }
                     }
                 }

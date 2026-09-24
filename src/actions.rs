@@ -1,10 +1,11 @@
 //! One code path for every owner act: the CLI and the page both call these (7.2 A).
+use crate::depends::{self, DepTarget};
 use crate::ledger::{self, Ledger};
 use crate::record::{self, RecordFile};
 use crate::repo;
 use crate::state::{self, TermsLoad};
 use crate::terms;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashSet};
 use std::path::Path;
 use uuid::Uuid;
 
@@ -632,47 +633,25 @@ fn do_approve_record(
             })
             .unwrap_or(false);
         for d in &sec.depends {
-            match d {
-                record::Dep::Id { id, .. } => {
-                    let is_heading = rf.sections.iter().any(|s| s.id.as_deref() == Some(id.as_str()));
-                    let is_term = terms_list
-                        .iter()
-                        .any(|t| t.id.as_deref() == Some(id.as_str()) && !t.retired);
-                    if !is_heading && !is_term && !state::is_current(led, id) {
-                        resolve_msgs.push(format!(
-                            "approve: {}: \"{}\" depends on {} which is not a current decision; agent names a current decision or removes the line",
-                            rel, sec.heading_text, id
-                        ));
-                    }
+            if frozen && matches!(d, record::Dep::Text { .. }) {
+                resolve_msgs.push(format!(
+                    "approve: {}: \"{}\": answered; agent removes the edit",
+                    rel, sec.heading_text
+                ));
+                continue;
+            }
+            if let record::Dep::Text { text, .. } = d {
+                if text.trim().ends_with('?') {
+                    // Dangling/cycle/self-dep is reported once, below, via
+                    // `rf.derive_error`.
+                    continue;
                 }
-                record::Dep::Text { text, .. } => {
-                    if frozen {
-                        resolve_msgs.push(format!(
-                            "approve: {}: \"{}\": answered; agent removes the edit",
-                            rel, sec.heading_text
-                        ));
-                        continue;
-                    }
-                    let t = text.trim();
-                    if t.ends_with('?') {
-                        // Dangling/cycle/self-dep is reported once, below,
-                        // via `rf.derive_error`.
-                        continue;
-                    }
-                    let pairs = terms::resolve(t, &terms_list);
-                    let resolved_ok = pairs.len() == 1
-                        && terms_list
-                            .iter()
-                            .find(|tm| tm.id.as_deref() == Some(pairs[0].1.as_str()))
-                            .map(|tm| !tm.retired)
-                            .unwrap_or(false);
-                    if !resolved_ok {
-                        resolve_msgs.push(format!(
-                            "approve: {}: \"{}\" depends on \"{}\" which is no term; agent adds the term or names another",
-                            rel, sec.heading_text, t
-                        ));
-                    }
-                }
+            }
+            if let Err(e) = depends::resolve_dep(d, &rf, &terms_list, led) {
+                resolve_msgs.push(format!(
+                    "approve: {}",
+                    depends::dep_refusal_text(rel, &sec.heading_text, &e)
+                ));
             }
         }
     }
@@ -719,12 +698,6 @@ fn do_approve_record(
     }
     let mut work_rf = record::build(rf.path.clone(), rel.to_string(), work_lines);
 
-    let mut heading_id: HashMap<String, String> = HashMap::new();
-    for s in &work_rf.sections {
-        if let Some(id) = &s.id {
-            heading_id.insert(s.heading_text.trim().to_string(), id.clone());
-        }
-    }
     let sections_snapshot = work_rf.sections.clone();
     for sec in &sections_snapshot {
         let mut dep_i = 0;
@@ -734,19 +707,19 @@ fn do_approve_record(
             }
             let d = &sec.depends[dep_i];
             dep_i += 1;
-            if let record::Dep::Text { text, set } = d {
-                let t = text.trim();
-                let resolved = if t.ends_with('?') {
-                    heading_id.get(t).cloned()
-                } else {
-                    terms::resolve_word(t, &terms_list)
-                };
-                if let Some(id) = resolved {
-                    let suffix = set
-                        .as_ref()
-                        .map(|s| format!("={}", record::canonical_set(s)))
-                        .unwrap_or_default();
-                    work_rf.lines[j] = format!("depends: {}{}", id, suffix);
+            if let record::Dep::Text { set, .. } = d {
+                if let Ok(Some(target)) = depends::resolve_dep(d, &work_rf, &terms_list, led) {
+                    let id = match target {
+                        DepTarget::Heading(idx) => work_rf.sections[idx].id.clone(),
+                        DepTarget::Term(id) | DepTarget::Decision(id) => Some(id),
+                    };
+                    if let Some(id) = id {
+                        let suffix = set
+                            .as_ref()
+                            .map(|s| format!("={}", record::canonical_set(s)))
+                            .unwrap_or_default();
+                        work_rf.lines[j] = format!("depends: {}{}", id, suffix);
+                    }
                 }
             }
         }

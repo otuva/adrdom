@@ -9,20 +9,23 @@ pub mod show;
 pub mod unban;
 pub mod uninstall;
 
+/// The five commands only the owner runs (matches the brief's "Commands"
+/// section and `repo::owner_authorized`'s callers): the one list the Claude
+/// deny entries and the Codex rules are both derived from.
+pub const OWNER_COMMANDS: &[&str] = &["answer", "approve", "unban", "serve", "uninstall"];
+
 /// The deny entries `adr install` installs into `.claude/settings.json` and
-/// `adr check`'s `install` check verifies are present. Shared so the two
-/// stay in lockstep.
-pub const DENY_ENTRIES: &[&str] = &[
-    "Bash(adr answer*)",
-    "Bash(* adr answer*)",
-    "Bash(adr approve*)",
-    "Bash(* adr approve*)",
-    "Bash(adr unban*)",
-    "Bash(* adr unban*)",
-    "Bash(adr serve*)",
-    "Bash(* adr serve*)",
-    "Bash(adr uninstall*)",
-    "Bash(* adr uninstall*)",
-    "Edit(adrdom/state/**)",
-    "Write(adrdom/state/**)",
-];
+/// `adr check`'s `install` check verifies are present: two `Bash` patterns
+/// per `OWNER_COMMANDS` entry, in that order, then the two `adrdom/state/**`
+/// entries -- the exact strings and order already installed, so existing
+/// installs stay valid.
+pub fn deny_entries() -> Vec<String> {
+    let mut out = Vec::new();
+    for cmd in OWNER_COMMANDS {
+        out.push(format!("Bash(adr {}*)", cmd));
+        out.push(format!("Bash(* adr {}*)", cmd));
+    }
+    out.push("Edit(adrdom/state/**)".to_string());
+    out.push("Write(adrdom/state/**)".to_string());
+    out
+}

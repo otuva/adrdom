@@ -15,7 +15,7 @@ use tiny_http::{Header, Method, Request, Response, Server};
 
 pub fn run(port: u16) -> i32 {
     if !repo::owner_authorized() {
-        eprintln!("serve: refusing: this is the owner's command; owner runs: adr serve");
+        eprintln!("{}", repo::owner_refusal("serve", ""));
         return 2;
     }
 

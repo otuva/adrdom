@@ -3,10 +3,7 @@ use crate::repo;
 
 pub fn run(id: String, letter: String) -> i32 {
     if !repo::owner_authorized() {
-        eprintln!(
-            "answer: refusing: this is the owner's command; owner runs: adr answer {} {}",
-            id, letter
-        );
+        eprintln!("{}", repo::owner_refusal("answer", &format!("{} {}", id, letter)));
         return 2;
     }
 

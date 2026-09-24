@@ -1,6 +1,7 @@
 use super::{file_approval, Failure};
+use crate::depends::{self, DepTarget};
 use crate::ledger::Ledger;
-use crate::record::{self, AnswerSet, Dep, RecordFile};
+use crate::record::{self, AnswerSet, RecordFile};
 use crate::state;
 use crate::terms;
 use std::collections::HashMap;
@@ -64,86 +65,26 @@ pub(super) fn check_plan(root: &Path, records: &[RecordFile], led: &Ledger) -> (
         // point 9: "letter sets validate against the target found by id").
         for sec in &rf.sections {
             for d in &sec.depends {
-                match d {
-                    Dep::Id { id, .. } => {
-                        let target = rf.sections.iter().find(|s| s.id.as_deref() == Some(id.as_str()));
-                        let is_term = terms_list
-                            .iter()
-                            .any(|t| t.id.as_deref() == Some(id.as_str()) && !t.retired);
-                        if target.is_none() && !is_term && !state::is_current(led, id) {
-                            out.push(Failure {
-                                check: "plan".to_string(),
-                                id: sec.id.clone(),
-                                message: format!(
-                                    "{}: \"{}\" depends on {} which is not a current decision; agent names a current decision or removes the line",
-                                    rel, sec.heading_text, id
-                                ),
-                            });
-                        }
-                        if let (Some(target), Some(AnswerSet::Letters(letters))) = (target, d.set()) {
-                            if !target.options.is_empty() {
-                                for l in letters {
-                                    if !target.options.iter().any(|o| o.letter == *l) {
-                                        out.push(Failure {
-                                            check: "plan".to_string(),
-                                            id: sec.id.clone(),
-                                            message: record::bad_option_letter_text(
-                                                &rel,
-                                                &sec.heading_text,
-                                                &target.heading_text,
-                                                *l,
-                                            ),
-                                        });
-                                    }
-                                }
+                match depends::resolve_dep(d, rf, &terms_list, led) {
+                    Err(e) => out.push(Failure {
+                        check: "plan".to_string(),
+                        id: sec.id.clone(),
+                        message: depends::dep_refusal_text(&rel, &sec.heading_text, &e),
+                    }),
+                    Ok(Some(DepTarget::Heading(ti))) => {
+                        if let Some(AnswerSet::Letters(letters)) = d.set() {
+                            for msg in
+                                depends::bad_letters(&rel, &sec.heading_text, &rf.sections[ti], letters)
+                            {
+                                out.push(Failure {
+                                    check: "plan".to_string(),
+                                    id: sec.id.clone(),
+                                    message: msg,
+                                });
                             }
                         }
                     }
-                    Dep::Text { text, set } => {
-                        let t = text.trim();
-                        if t.ends_with('?') {
-                            if let Some(AnswerSet::Letters(letters)) = set {
-                                if let Some(target) =
-                                    rf.sections.iter().find(|s| s.heading_text.trim() == t)
-                                {
-                                    if !target.options.is_empty() {
-                                        for l in letters {
-                                            if !target.options.iter().any(|o| o.letter == *l) {
-                                                out.push(Failure {
-                                                    check: "plan".to_string(),
-                                                    id: sec.id.clone(),
-                                                    message: record::bad_option_letter_text(
-                                                        &rel,
-                                                        &sec.heading_text,
-                                                        &target.heading_text,
-                                                        *l,
-                                                    ),
-                                                });
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            continue;
-                        }
-                        let pairs = terms::resolve(t, &terms_list);
-                        let resolved_ok = pairs.len() == 1
-                            && terms_list
-                                .iter()
-                                .find(|tm| tm.id.as_deref() == Some(pairs[0].1.as_str()))
-                                .map(|tm| !tm.retired)
-                                .unwrap_or(false);
-                        if !resolved_ok {
-                            out.push(Failure {
-                                check: "plan".to_string(),
-                                id: sec.id.clone(),
-                                message: format!(
-                                    "{}: \"{}\" depends on \"{}\" which is no term; agent adds the term or names another",
-                                    rel, sec.heading_text, t
-                                ),
-                            });
-                        }
-                    }
+                    Ok(_) => {}
                 }
             }
         }

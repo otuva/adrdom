@@ -4,7 +4,7 @@ use std::io::Read;
 
 pub fn run() -> i32 {
     if !repo::owner_authorized() {
-        eprintln!("unban: refusing: this is the owner's command; owner runs: adr unban");
+        eprintln!("{}", repo::owner_refusal("unban", ""));
         return 2;
     }
 

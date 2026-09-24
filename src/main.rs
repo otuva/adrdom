@@ -1,6 +1,7 @@
 mod actions;
 mod banned;
 mod commands;
+mod depends;
 mod ledger;
 mod record;
 mod repo;

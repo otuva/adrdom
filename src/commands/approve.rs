@@ -4,10 +4,7 @@ use std::path::PathBuf;
 
 pub fn run(file: PathBuf) -> i32 {
     if !repo::owner_authorized() {
-        eprintln!(
-            "approve: refusing: this is the owner's command; owner runs: adr approve {}",
-            file.display()
-        );
+        eprintln!("{}", repo::owner_refusal("approve", &file.display().to_string()));
         return 2;
     }
 

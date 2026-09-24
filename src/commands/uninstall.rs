@@ -1,7 +1,7 @@
 use crate::commands::install::{
     self, CLAUDE_MD_IMPORT, CLAUDE_MD_MARKER, COMMIT_MSG_HOOK, PRE_COMMIT_HOOK,
 };
-use crate::commands::DENY_ENTRIES;
+use crate::commands::deny_entries;
 use crate::repo;
 use std::fs;
 use std::path::Path;
@@ -10,7 +10,7 @@ use std::path::Path;
 /// leaving `adrdom/` itself untouched.
 pub fn run() -> i32 {
     if !repo::owner_authorized() {
-        eprintln!("uninstall: refusing: this is the owner's command; owner runs: adr uninstall");
+        eprintln!("{}", repo::owner_refusal("uninstall", ""));
         return 2;
     }
 
@@ -210,7 +210,7 @@ fn remove_codex_rules(root: &Path) -> Vec<String> {
     messages
 }
 
-/// Removes every `DENY_ENTRIES` string from `.claude/settings.json`'s
+/// Removes every `deny_entries()` string from `.claude/settings.json`'s
 /// `permissions.deny`, leaving every other key and entry untouched. Does
 /// nothing when the file doesn't exist.
 fn remove_settings_deny(root: &Path) -> Result<Vec<String>, String> {
@@ -231,9 +231,9 @@ fn remove_settings_deny(root: &Path) -> Result<Vec<String>, String> {
         .and_then(|p| p.get_mut("deny"))
         .and_then(|d| d.as_array_mut())
     {
-        for entry in DENY_ENTRIES {
+        for entry in deny_entries() {
             let before = deny.len();
-            deny.retain(|v| v.as_str() != Some(*entry));
+            deny.retain(|v| v.as_str() != Some(entry.as_str()));
             if deny.len() != before {
                 messages.push(format!(
                     "uninstall: .claude/settings.json: removed deny entry {}",
