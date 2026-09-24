@@ -10,9 +10,7 @@ use std::path::Path;
 /// leaving `adrdom/` itself untouched.
 pub fn run() -> i32 {
     if !repo::owner_authorized() {
-        eprintln!(
-            "uninstall: refusing: owner authorization required (interactive TTY, no CLAUDECODE)"
-        );
+        eprintln!("uninstall: refusing: this is the owner's command; owner runs: adr uninstall");
         return 2;
     }
 
@@ -53,6 +51,8 @@ pub fn run() -> i32 {
             return 1;
         }
     }
+
+    messages.extend(remove_codex_rules(&root));
 
     println!("adrdom uninstalled at {}", root.display());
     for m in &messages {
@@ -175,6 +175,35 @@ fn remove_hooks(root: &Path) -> Vec<String> {
         if val.trim() == ".githooks" {
             repo::git(root, &["config", "--unset", "core.hooksPath"]);
             messages.push("uninstall: unset core.hooksPath".to_string());
+        }
+    }
+
+    messages
+}
+
+/// Removes `.codex/rules/adrdom.rules` only when its content still matches
+/// exactly what `adr install --codex` writes, then removes `.codex/rules`
+/// once empty, and `.codex` once that is empty too. Leaves an
+/// owner-edited or foreign file alone (mirrors `remove_hooks`).
+fn remove_codex_rules(root: &Path) -> Vec<String> {
+    let mut messages = Vec::new();
+    let rules_dir = root.join(".codex/rules");
+    let rules_path = rules_dir.join("adrdom.rules");
+    let codex_dir = root.join(".codex");
+
+    if let Ok(content) = fs::read_to_string(&rules_path) {
+        if content == install::codex_rules_content() && fs::remove_file(&rules_path).is_ok() {
+            messages.push("uninstall: removed .codex/rules/adrdom.rules".to_string());
+        }
+    }
+    if let Ok(mut entries) = fs::read_dir(&rules_dir) {
+        if entries.next().is_none() && fs::remove_dir(&rules_dir).is_ok() {
+            messages.push("uninstall: removed empty .codex/rules".to_string());
+        }
+    }
+    if let Ok(mut entries) = fs::read_dir(&codex_dir) {
+        if entries.next().is_none() && fs::remove_dir(&codex_dir).is_ok() {
+            messages.push("uninstall: removed empty .codex".to_string());
         }
     }
 

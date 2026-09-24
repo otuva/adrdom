@@ -18,7 +18,28 @@ pub(crate) const CLAUDE_MD_IMPORT: &str = "@AGENTS.md";
 pub(crate) const PRE_COMMIT_HOOK: &str = "#!/bin/sh\nadr check --staged\nexit $?\n";
 pub(crate) const COMMIT_MSG_HOOK: &str = "#!/bin/sh\nadr check --message \"$1\"\nexit $?\n";
 
-pub fn run(claude: bool) -> i32 {
+/// The five commands only the owner runs (matches the brief's "Commands"
+/// section and `repo::owner_authorized`'s callers): one Codex `prefix_rule`
+/// per command in `--codex`'s rules file.
+const OWNER_COMMANDS: &[&str] = &["answer", "approve", "unban", "serve", "uninstall"];
+
+/// `.codex/rules/adrdom.rules`'s content: one `prefix_rule` block per
+/// `OWNER_COMMANDS` entry, `decision = "forbidden"`. `check`'s `install`
+/// check compares the file on disk against this text (see
+/// `commands/check/install.rs`), the same way it compares AGENTS.md against
+/// `BRIEF`.
+pub(crate) fn codex_rules_content() -> String {
+    let mut out = String::new();
+    for cmd in OWNER_COMMANDS {
+        out.push_str(&format!(
+            "prefix_rule(\n    pattern = [\"adr\", \"{}\"],\n    decision = \"forbidden\",\n    justification = \"adrdom: the owner runs this\",\n)\n",
+            cmd
+        ));
+    }
+    out
+}
+
+pub fn run(claude: bool, codex: bool) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
@@ -72,6 +93,16 @@ pub fn run(claude: bool) -> i32 {
             Ok(mut msgs) => messages.append(&mut msgs),
             Err(e) => {
                 eprintln!("install: failed to update .claude/settings.json: {}", e);
+                return 1;
+            }
+        }
+    }
+
+    if codex {
+        match install_codex_rules(&root) {
+            Ok(mut msgs) => messages.append(&mut msgs),
+            Err(e) => {
+                eprintln!("install: failed to write .codex/rules/adrdom.rules: {}", e);
                 return 1;
             }
         }
@@ -291,5 +322,31 @@ fn merge_settings(root: &Path) -> Result<Vec<String>, String> {
     pretty.push('\n');
     fs::write(&path, pretty).map_err(|e| e.to_string())?;
 
+    Ok(messages)
+}
+
+/// Writes `.codex/rules/adrdom.rules` (creating `.codex/rules/`), then adds
+/// the note that Codex only enforces project rules for a project the owner
+/// has marked trusted in their own Codex config (tested fact; adrdom never
+/// touches that config, which lives outside the repo, under the owner's
+/// home directory).
+fn install_codex_rules(root: &Path) -> Result<Vec<String>, String> {
+    let dir = root.join(".codex/rules");
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join("adrdom.rules");
+    let content = codex_rules_content();
+
+    let mut messages = Vec::new();
+    let already = fs::read_to_string(&path).map(|c| c == content).unwrap_or(false);
+    if already {
+        messages.push("install: .codex/rules/adrdom.rules: already up to date".to_string());
+    } else {
+        fs::write(&path, &content).map_err(|e| e.to_string())?;
+        messages.push("install: .codex/rules/adrdom.rules: written".to_string());
+    }
+    messages.push(
+        "install: Codex enforces project rules only for a project marked trusted in the owner's Codex config."
+            .to_string(),
+    );
     Ok(messages)
 }

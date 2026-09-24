@@ -330,6 +330,79 @@ fn check_install_passes_right_after_install_claude_created_claude_md() {
 }
 
 #[test]
+fn check_install_passes_when_no_codex_directory() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    assert!(
+        !dir.join(".codex").exists(),
+        "plain install must not create .codex"
+    );
+
+    let out = adr(&dir, &["check"], &[], "");
+    let out_text = stdout(&out);
+    assert!(
+        !out_text.contains("install:"),
+        "no .codex directory should not trigger the install check: {}",
+        out_text
+    );
+}
+
+#[test]
+fn check_install_passes_right_after_install_codex() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install", "--codex"], &[], "").status.success());
+    assert!(dir.join(".codex/rules/adrdom.rules").is_file());
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(
+        !stdout(&out).contains("install:"),
+        "check should pass right after install --codex: {}",
+        stdout(&out)
+    );
+}
+
+#[test]
+fn check_install_fails_when_codex_rules_missing_and_passes_after_reinstall() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install", "--codex"], &[], "").status.success());
+    std::fs::remove_file(dir.join(".codex/rules/adrdom.rules")).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let out_text = stdout(&out);
+    assert!(
+        out_text.contains(".codex/rules/adrdom.rules missing"),
+        "{}",
+        out_text
+    );
+    assert!(out_text.contains("adr install --codex"), "{}", out_text);
+
+    assert!(adr(&dir, &["install", "--codex"], &[], "").status.success());
+    let out2 = adr(&dir, &["check"], &[], "");
+    assert!(
+        !stdout(&out2).contains("install:"),
+        "install check should pass after re-install --codex: {}",
+        stdout(&out2)
+    );
+}
+
+#[test]
+fn check_install_fails_when_codex_rules_edited() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install", "--codex"], &[], "").status.success());
+    std::fs::write(dir.join(".codex/rules/adrdom.rules"), "edited\n").unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    assert!(
+        stdout(&out).contains(".codex/rules/adrdom.rules differs from this binary's"),
+        "{}",
+        stdout(&out)
+    );
+}
+
+#[test]
 fn check_tests_ignores_adr_prefix_that_is_not_a_uuid() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
