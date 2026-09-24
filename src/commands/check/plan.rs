@@ -21,6 +21,10 @@ pub(super) fn check_plan(root: &Path, records: &[RecordFile], led: &Ledger) -> (
     let mut heading_files: HashMap<String, Vec<String>> = HashMap::new();
 
     let terms_list: Vec<terms::Term> = state::load_terms(root).map(|tf| tf.terms).unwrap_or_default();
+    // Built once for the whole run, not once per `depends:` entry across
+    // every file (`resolve_dep` used to rebuild this internally via
+    // `terms::resolve_word` on every call).
+    let phrase_lookup = terms::phrase_lookup(&terms_list);
 
     for rf in records {
         let (rel, plan_ok, ctx_ok) = file_approval(root, rf, led);
@@ -65,7 +69,7 @@ pub(super) fn check_plan(root: &Path, records: &[RecordFile], led: &Ledger) -> (
         // point 9: "letter sets validate against the target found by id").
         for sec in &rf.sections {
             for d in &sec.depends {
-                match depends::resolve_dep(d, rf, &terms_list, led) {
+                match depends::resolve_dep(d, rf, &terms_list, &phrase_lookup, led) {
                     Err(e) => out.push(Failure {
                         check: "plan".to_string(),
                         id: sec.id.clone(),

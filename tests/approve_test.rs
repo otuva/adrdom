@@ -322,6 +322,50 @@ fn approve_refuses_when_answered_heading_gone_and_not_superseded() {
     assert!(!ledger.lines().any(|l| l.contains("\twithdrawn\t")));
 }
 
+// Regression: the missing-answered-id check used to run after `record::save`
+// and the `approved`/`context` ledger rows had already been written, so a
+// refusal here left a rewritten topic file and a moved ledger behind --
+// contradicting `do_approve_record`'s own doc comment that nothing is
+// written when a check refuses. The plan hash of the headless file differs
+// from what's on the ledger, so a pre-fix `approve` would have appended a
+// fresh `approved` row before ever reaching this refusal.
+#[test]
+fn approve_leaves_file_and_ledger_unchanged_when_missing_answered_id_refuses() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+    let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let id = extract_ids(&content)[0].clone();
+    assert!(adr_owner(&dir, &["answer", &id, "A"], "").status.success());
+
+    std::fs::write(&record, HEADING_REMOVED).unwrap();
+    let ledger_path = dir.join("adrdom/state/ledger.tsv");
+    let record_before = std::fs::read(&record).unwrap();
+    let ledger_before = std::fs::read(&ledger_path).unwrap();
+
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    assert!(stderr(&out).contains(id.as_str()), "{}", stderr(&out));
+
+    let record_after = std::fs::read(&record).unwrap();
+    let ledger_after = std::fs::read(&ledger_path).unwrap();
+    assert_eq!(
+        record_before, record_after,
+        "topic file must be untouched when approve refuses"
+    );
+    assert_eq!(
+        ledger_before, ledger_after,
+        "ledger must be untouched when approve refuses"
+    );
+}
+
 // --- approve allows a vanished heading once it is superseded ------------
 
 #[test]
@@ -370,6 +414,81 @@ fn approve_allows_a_vanished_heading_once_superseded() {
     assert!(out.status.success(), "approve should have allowed it: {}", stderr(&out));
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(!ledger.lines().any(|l| l.contains("\twithdrawn\t") && l.contains(old_id.as_str())));
+}
+
+// --- the frozen-depends check also covers a superseded section ----------
+//
+// The same check already refuses a `Text`-shaped `depends:` entry rewritten
+// inside a section whose latest ledger state is `answered` or `refused`
+// (`approve_terms_refuses_before_writing_leaving_the_file_unchanged` and
+// friends exercise the terms half of this; there was no coverage at all,
+// for either code path, of the third closed state a section can be in:
+// `superseded`). A superseded decision is exactly as closed as a refused
+// one, so an edit there must refuse the same way.
+
+#[test]
+fn approve_refuses_a_text_depends_edit_in_a_superseded_section() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+    let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let old_id = extract_ids(&content)[0].clone();
+    assert!(adr_owner(&dir, &["answer", &old_id, "A"], "").status.success());
+
+    let superseding = format!(
+        "\n### 1.2 Replacement question?\ndepends: decision\n\nsupersedes: {}\n\nProblem: the decision needs revisiting.\n\nStandard: s2.\n\n- A) New answer.\n  Why: reasons.\n  Costs: costs.\n- B) Other new answer.\n  Why: other reasons.\n  Costs: other costs.\n",
+        old_id
+    );
+    let mut content2 = std::fs::read_to_string(&record).unwrap();
+    content2.push_str(&superseding);
+    std::fs::write(&record, &content2).unwrap();
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content3 = std::fs::read_to_string(&record).unwrap();
+    let new_id = extract_ids(&content3)
+        .into_iter()
+        .find(|i| i != &old_id)
+        .expect("new id assigned");
+    // Answering 1.2 (which carries `supersedes: <old_id>`) is what writes
+    // the `superseded` ledger row for 1.1's id.
+    assert!(adr_owner(&dir, &["answer", &new_id, "A"], "").status.success());
+
+    // 1.1's heading is kept in the file (unlike
+    // `approve_allows_a_vanished_heading_once_superseded`), but its
+    // already-resolved `depends: <term id>` line is hand-edited back to
+    // plain text, exactly as an agent might carry an unrelated edit
+    // forward. 1.1's id is now `superseded`, not `answered`/`refused`.
+    let content4 = std::fs::read_to_string(&record).unwrap();
+    let rewritten = content4.replacen(
+        "depends: 99999999-9999-9999-9999-999999999999\n",
+        "depends: decision\n",
+        1,
+    );
+    assert_ne!(
+        content4, rewritten,
+        "expected 1.1's depends line to already be rewritten to the term id"
+    );
+    std::fs::write(&record, &rewritten).unwrap();
+
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(
+        err.contains("\"1.1 Only question?\": answered; agent removes the edit"),
+        "{}",
+        err
+    );
 }
 
 // --- terms: ask waits on terms approval ---------------------------------

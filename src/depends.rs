@@ -8,7 +8,8 @@
 use crate::ledger::Ledger;
 use crate::record::{self, Dep, RecordFile, Section};
 use crate::state;
-use crate::terms::{self, Term};
+use crate::terms::Term;
+use std::collections::HashMap;
 
 /// What a `depends:` entry resolves to: a heading in the same file (its
 /// index into `rf.sections`), a current (non-retired) term (its id), or a
@@ -32,7 +33,10 @@ pub enum DepError {
 }
 
 /// Resolves one `depends:` entry against `rf` (for same-file heading
-/// lookup), `terms_list`, and `led`.
+/// lookup), `terms_list`, `phrase_lookup` (`terms::phrase_lookup(terms_list)`,
+/// built once per command run by the caller and reused across every
+/// `depends:` entry in every file -- rebuilding it per entry was the
+/// expensive path), and `led`.
 ///
 /// `Id` entries: a heading id in `rf` first, else a non-retired term id in
 /// `terms_list`, else a current decision by the ledger; anything else
@@ -43,15 +47,16 @@ pub enum DepError {
 /// found, `Ok(None)` when not (never a refusal here: a dangling/cycle/
 /// self-dep heading reference is `derive_tiers`'s single error, reported
 /// once from `RecordFile::derive_error` rather than per entry). Anything
-/// else must resolve to exactly one current term via `terms::resolve_word`
-/// -- the whole trimmed entry against `terms::phrase_lookup`, which skips
-/// retired terms -- not the scanning `terms::resolve`, so a phrase that
-/// only contains a term's name (rather than naming it outright) no longer
-/// resolves here.
+/// else must resolve to exactly one current term via a lookup in
+/// `phrase_lookup` -- the whole trimmed entry, case-insensitive -- which
+/// skips retired terms, not the scanning `terms::resolve`, so a phrase
+/// that only contains a term's name (rather than naming it outright) no
+/// longer resolves here.
 pub fn resolve_dep(
     d: &Dep,
     rf: &RecordFile,
     terms_list: &[Term],
+    phrase_lookup: &HashMap<String, String>,
     led: &Ledger,
 ) -> Result<Option<DepTarget>, DepError> {
     match d {
@@ -83,8 +88,8 @@ pub fn resolve_dep(
                     .position(|s| s.heading_text.trim() == t)
                     .map(DepTarget::Heading));
             }
-            match terms::resolve_word(t, terms_list) {
-                Some(id) => Ok(Some(DepTarget::Term(id))),
+            match phrase_lookup.get(&t.to_lowercase()) {
+                Some(id) => Ok(Some(DepTarget::Term(id.clone()))),
                 None => Err(DepError::NoTerm(t.to_string())),
             }
         }

@@ -424,15 +424,6 @@ pub fn resolve(text: &str, terms: &[Term]) -> Vec<(String, String)> {
     results.into_iter().collect()
 }
 
-/// Resolves a single word/phrase (already the whole, trimmed entry text --
-/// not scanned out of a longer string) to the id of the one current term it
-/// names exactly or as a simple plural, built on `phrase_lookup`, which
-/// skips retired terms (9.1 A, 9.3 B). `None` when it names no current term.
-/// The word-to-id step for a `depends:` entry; used by `approve`'s rewrite.
-pub fn resolve_word(word: &str, terms: &[Term]) -> Option<String> {
-    phrase_lookup(terms).get(&word.trim().to_lowercase()).cloned()
-}
-
 /// Resolves term `idx`'s definition text against every current term in
 /// `tf` (including itself, so a self-pairing can be detected; a retired
 /// `tf.terms[idx]` never matches, since `resolve` skips retired targets).
@@ -1034,27 +1025,36 @@ aliases: \n"
         assert!(errors.is_empty(), "{:?}", errors);
     }
 
+    // `resolve_word` (the per-call, per-entry resolver) was folded into
+    // `depends::resolve_dep`, which now takes a `phrase_lookup` built once
+    // per command run instead of rebuilding it on every `depends:` entry;
+    // these three cases move to `phrase_lookup` directly, the map that
+    // backed it and still backs `resolve_dep`.
+
     #[test]
-    fn resolve_word_rejects_a_retired_term() {
+    fn phrase_lookup_word_rejects_a_retired_term() {
         let terms = sample_terms();
+        let lookup = phrase_lookup(&terms);
         // "verdict" is retired in `sample_terms()`.
-        assert_eq!(resolve_word("verdict", &terms), None);
+        assert_eq!(lookup.get("verdict"), None);
     }
 
     #[test]
-    fn resolve_word_resolves_a_current_term_exactly_and_as_a_plural() {
+    fn phrase_lookup_word_resolves_a_current_term_exactly_and_as_a_plural() {
         let terms = sample_terms();
-        assert_eq!(resolve_word("terms", &terms), Some("id-terms".to_string()));
+        let lookup = phrase_lookup(&terms);
+        assert_eq!(lookup.get("terms"), Some(&"id-terms".to_string()));
         assert_eq!(
-            resolve_word("terms file", &terms),
-            Some("id-terms-file".to_string())
+            lookup.get("terms file"),
+            Some(&"id-terms-file".to_string())
         );
     }
 
     #[test]
-    fn resolve_word_returns_none_for_an_unknown_word() {
+    fn phrase_lookup_word_returns_none_for_an_unknown_word() {
         let terms = sample_terms();
-        assert_eq!(resolve_word("nosuchword", &terms), None);
+        let lookup = phrase_lookup(&terms);
+        assert_eq!(lookup.get("nosuchword"), None);
     }
 
     #[test]

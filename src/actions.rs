@@ -557,14 +557,16 @@ fn do_approve_terms(
 }
 
 /// A topic file: parse, refuse on shape errors; resolve every `depends:`
-/// entry and mint an id for every heading that lacks one (9.1 A: the file
-/// holds ids, the agent writes words, and `approve` is what turns one into
-/// the other); compute plan hash and context hash over the rewritten file;
-/// write an `approved` row if it differs from the latest for the path, a
-/// `context` row likewise; then for every ledger id that now appears in no
-/// topic file: withdraw an asked one, refuse on a current one, allow a
-/// superseded one silently. Nothing is written to disk when any check
-/// refuses.
+/// entry (9.1 A: the file holds ids, the agent writes words, and `approve`
+/// is what turns one into the other); check every ledger id that now
+/// appears in no topic file, refusing on a current (answered) one, before
+/// anything is written -- withdrawing an asked/refused one and allowing a
+/// superseded one silently happen after, since neither is a refusal; only
+/// then mint an id for every heading that lacks one, compute plan hash and
+/// context hash over the rewritten file, write an `approved` row if it
+/// differs from the latest for the path, a `context` row likewise, and
+/// finally write the withdrawn rows. Nothing is written to disk (file or
+/// ledger) when any check refuses.
 fn do_approve_record(
     root: &Path,
     file: &Path,
@@ -615,11 +617,16 @@ fn do_approve_record(
     // (computed at parse time into `rf.derive_error`); any other `Text`
     // entry must resolve to exactly one non-retired term. A `Text` entry
     // (of either shape) found inside a section whose latest ledger state is
-    // `answered`/`refused` refuses instead of being silently rewritten
-    // (9.1 A point 5): that section is frozen, and an edit there is the
+    // `answered`/`refused`/`superseded` refuses instead of being silently
+    // rewritten (9.1 A point 5): that section is frozen -- its decision is
+    // already closed, one way or another -- and an edit there is the
     // agent's to remove, not approve's to carry forward.
     let terms_list: Vec<terms::Term> =
         state::load_terms(root).map(|tf| tf.terms).unwrap_or_default();
+    // Built once per command run (not per depends entry): `resolve_dep`
+    // used to call `terms::resolve_word`, which rebuilt this same map from
+    // scratch on every entry.
+    let phrase_lookup = terms::phrase_lookup(&terms_list);
     let mut resolve_msgs: Vec<String> = Vec::new();
     for sec in &rf.sections {
         let frozen = sec
@@ -628,7 +635,7 @@ fn do_approve_record(
             .map(|id| {
                 matches!(
                     led.latest_state(id).map(|r| r.event.as_str()),
-                    Some("answered") | Some("refused")
+                    Some("answered") | Some("refused") | Some("superseded")
                 )
             })
             .unwrap_or(false);
@@ -647,7 +654,7 @@ fn do_approve_record(
                     continue;
                 }
             }
-            if let Err(e) = depends::resolve_dep(d, &rf, &terms_list, led) {
+            if let Err(e) = depends::resolve_dep(d, &rf, &terms_list, &phrase_lookup, led) {
                 resolve_msgs.push(format!(
                     "approve: {}",
                     depends::dep_refusal_text(rel, &sec.heading_text, &e)
@@ -679,6 +686,77 @@ fn do_approve_record(
         ));
     }
 
+    // Ledger ids (asked/answered/refused/superseded/withdrawn) that now
+    // appear in no topic file at all: withdraw the asked/refused ones,
+    // refuse on a current (answered, not superseded) one, allow a
+    // superseded one silently. Computed and checked here, before any write
+    // below, so a refusal on this leaves both the topic file and the
+    // ledger exactly as they were (the function's own contract: nothing is
+    // written when a check refuses). Reads `file` itself straight off disk
+    // like every other topic file -- it is still unwritten at this point,
+    // so its ids are exactly `rf`'s; minting new ids for skeleton headings
+    // below never removes an id already in the ledger's `state_ids`, so
+    // reading before that rewrite changes nothing this check depends on.
+    let all_files = repo::list_decision_files(root);
+    let mut present_ids: HashSet<String> = HashSet::new();
+    for f in &all_files {
+        if let Ok(rf2) = record::load(f) {
+            for sec in &rf2.sections {
+                if let Some(id) = &sec.id {
+                    present_ids.insert(id.clone());
+                }
+            }
+        }
+    }
+
+    let mut state_ids: BTreeSet<String> = BTreeSet::new();
+    for row in &led.rows {
+        if matches!(
+            row.event.as_str(),
+            "asked" | "answered" | "refused" | "superseded" | "withdrawn"
+        ) {
+            state_ids.insert(row.id.clone());
+        }
+    }
+
+    let mut refusals: Vec<String> = Vec::new();
+    let mut withdrawn_rows: Vec<ledger::Row> = Vec::new();
+    for id in &state_ids {
+        if present_ids.contains(id) {
+            continue;
+        }
+        match led.latest_state(id) {
+            // A refused id absent from every file is withdrawn exactly like
+            // a struck asked one (8.2 A): the refusal already closed it
+            // with no decision, so there's nothing left to protect.
+            Some(r) if r.event == "asked" || r.event == "refused" => {
+                withdrawn_rows.push(ledger::Row {
+                    time: ledger::now_rfc3339(),
+                    event: "withdrawn".to_string(),
+                    id: id.clone(),
+                    hash: "-".to_string(),
+                    detail: r.detail.clone(),
+                    version: crate::version::VERSION.to_string(),
+                });
+            }
+            Some(r) if r.event == "answered" => {
+                let heading = led
+                    .latest_asked(id)
+                    .map(|a| a.detail.clone())
+                    .unwrap_or_else(|| id.clone());
+                refusals.push(format!(
+                    "approve: id {} (\"{}\") is answered and current but missing from every topic file; owner supersedes it or restores the heading",
+                    id, heading
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    if !refusals.is_empty() {
+        return Err(refusals.join("\n"));
+    }
+
     // Every check above passed: mint an id for every heading that lacks one
     // (skeletons included, same insertion shape `ask` used to write: blank,
     // `id:` line, blank), reparse so every heading's id is available, then
@@ -708,7 +786,9 @@ fn do_approve_record(
             let d = &sec.depends[dep_i];
             dep_i += 1;
             if let record::Dep::Text { set, .. } = d {
-                if let Ok(Some(target)) = depends::resolve_dep(d, &work_rf, &terms_list, led) {
+                if let Ok(Some(target)) =
+                    depends::resolve_dep(d, &work_rf, &terms_list, &phrase_lookup, led)
+                {
                     let id = match target {
                         DepTarget::Heading(idx) => work_rf.sections[idx].id.clone(),
                         DepTarget::Term(id) | DepTarget::Decision(id) => Some(id),
@@ -775,69 +855,8 @@ fn do_approve_record(
     ledger::append(ledger_path, &rows)
         .map_err(|e| format!("approve: failed to update ledger: {}", e))?;
 
-    // Ledger ids (asked/answered/superseded/withdrawn) that now appear in
-    // no topic file at all: withdraw the asked ones, refuse on a current
-    // (answered, not superseded) one, allow a superseded one silently.
-    let all_files = repo::list_decision_files(root);
-    let mut present_ids: HashSet<String> = HashSet::new();
-    for f in &all_files {
-        if let Ok(rf2) = record::load(f) {
-            for sec in &rf2.sections {
-                if let Some(id) = &sec.id {
-                    present_ids.insert(id.clone());
-                }
-            }
-        }
-    }
-
-    let mut state_ids: BTreeSet<String> = BTreeSet::new();
-    for row in &led.rows {
-        if matches!(
-            row.event.as_str(),
-            "asked" | "answered" | "refused" | "superseded" | "withdrawn"
-        ) {
-            state_ids.insert(row.id.clone());
-        }
-    }
-
-    let mut refusals: Vec<String> = Vec::new();
-    let mut withdrawn_rows: Vec<ledger::Row> = Vec::new();
-    for id in &state_ids {
-        if present_ids.contains(id) {
-            continue;
-        }
-        match led.latest_state(id) {
-            // A refused id absent from every file is withdrawn exactly like
-            // a struck asked one (8.2 A): the refusal already closed it
-            // with no decision, so there's nothing left to protect.
-            Some(r) if r.event == "asked" || r.event == "refused" => {
-                withdrawn_rows.push(ledger::Row {
-                    time: ledger::now_rfc3339(),
-                    event: "withdrawn".to_string(),
-                    id: id.clone(),
-                    hash: "-".to_string(),
-                    detail: r.detail.clone(),
-                    version: crate::version::VERSION.to_string(),
-                });
-            }
-            Some(r) if r.event == "answered" => {
-                let heading = led
-                    .latest_asked(id)
-                    .map(|a| a.detail.clone())
-                    .unwrap_or_else(|| id.clone());
-                refusals.push(format!(
-                    "approve: id {} (\"{}\") is answered and current but missing from every topic file; owner supersedes it or restores the heading",
-                    id, heading
-                ));
-            }
-            _ => {}
-        }
-    }
-
-    if !refusals.is_empty() {
-        return Err(refusals.join("\n"));
-    }
-
+    // `withdrawn_rows` was computed, and any refusal already returned,
+    // above -- before either write this function has made so far.
     if !withdrawn_rows.is_empty() {
         ledger::append(ledger_path, &withdrawn_rows)
             .map_err(|e| format!("approve: failed to update ledger: {}", e))?;
