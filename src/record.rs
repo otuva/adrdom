@@ -529,6 +529,11 @@ struct BodyScan {
     /// "option A missing Why" / "option B has two Costs lines", one entry
     /// per option that lacks exactly one non-empty Why/Costs line under it.
     option_shape_errors: Vec<String>,
+    /// "second answer line, line N" for each `**Answer:**` line past the
+    /// first one in the section: `answer_line`/`answer_val` always keep the
+    /// first occurrence, so a later one can never overwrite them and hide
+    /// itself from the "answer line comes last" check.
+    answer_errors: Vec<String>,
 }
 
 fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) -> BodyScan {
@@ -544,6 +549,7 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
     let mut answer_val = None;
     let mut option_errors = Vec::new();
     let mut stray_errors = Vec::new();
+    let mut answer_errors = Vec::new();
     let mut problem_count = 0;
     let mut standard_count = 0;
     // Parallel to `options`: how many non-empty `  Why: `/`  Costs: ` lines
@@ -656,8 +662,12 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
         }
         under_option = false;
         if let Some(v) = answer_value(line) {
-            answer_line = Some(j);
-            answer_val = Some(v);
+            if answer_line.is_none() {
+                answer_line = Some(j);
+                answer_val = Some(v);
+            } else {
+                answer_errors.push(format!("second answer line, line {}", j + 1));
+            }
             continue;
         }
         stray_errors.push(format!("stray line {}", j + 1));
@@ -701,6 +711,7 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
         problem_count,
         standard_count,
         option_shape_errors,
+        answer_errors,
     }
 }
 
@@ -769,6 +780,7 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
         }
     }
     shape_errors.extend(scan.option_shape_errors);
+    shape_errors.extend(scan.answer_errors);
     // 055d303b A's "the answer line comes last": any non-blank line after
     // it (Problem/Standard/an option/anything else) means it isn't.
     if let Some(al) = scan.answer_line {
@@ -1466,6 +1478,25 @@ mod tests {
             !ok.sections[0].shape_errors.iter().any(|e| e.starts_with("answer line not last")),
             "{:?}",
             ok.sections[0].shape_errors
+        );
+    }
+
+    // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
+    //
+    // Decision A's "the answer line comes last" clause: a second
+    // `**Answer:**` line is its own shape error, not silently swallowed by
+    // `answer_line` being overwritten to point at the later (last) one --
+    // which used to let an out-of-place early answer line escape the
+    // "answer line not last" check entirely.
+    #[test]
+    fn a_second_answer_line_is_a_shape_error() {
+        let rf = rf_from(
+            "# T\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n\n**Answer:** B\n",
+        );
+        assert!(
+            rf.sections[0].shape_errors.iter().any(|e| e.starts_with("second answer line")),
+            "{:?}",
+            rf.sections[0].shape_errors
         );
     }
 

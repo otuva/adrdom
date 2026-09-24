@@ -273,17 +273,37 @@ fn duplicate_word_errors(terms: &[Term]) -> Vec<String> {
     errors
 }
 
-/// Sentences in `text` (fcc1c1ec-d8e8-428e-9731-9817cdeb8e76): a sentence
-/// ends at `.`, `?` or `!` followed by whitespace or the end of the text,
-/// so this just counts those terminators.
+/// Sentences in `text` (fcc1c1ec-d8e8-428e-9731-9817cdeb8e76): a `.`, `?`
+/// or `!` ends a sentence only when it is followed by the end of the text,
+/// or by whitespace and then an uppercase letter, a digit, or an opening
+/// quote, backtick, or bracket -- so an abbreviation like "e.g." or "i.e."
+/// mid-sentence, whose next word starts lowercase, is not counted as a
+/// sentence end.
 pub fn sentence_count(text: &str) -> usize {
     let chars: Vec<char> = text.chars().collect();
     let mut count = 0;
     for (i, &c) in chars.iter().enumerate() {
-        if (c == '.' || c == '?' || c == '!')
-            && (i + 1 == chars.len() || chars[i + 1].is_whitespace())
-        {
+        if c != '.' && c != '?' && c != '!' {
+            continue;
+        }
+        if i + 1 == chars.len() {
             count += 1;
+            continue;
+        }
+        if !chars[i + 1].is_whitespace() {
+            continue;
+        }
+        let next = chars[(i + 1)..].iter().find(|c| !c.is_whitespace());
+        match next {
+            None => count += 1,
+            Some(&n) => {
+                if n.is_uppercase()
+                    || n.is_ascii_digit()
+                    || matches!(n, '"' | '\'' | '`' | '(' | '[' | '{')
+                {
+                    count += 1;
+                }
+            }
         }
     }
     count
@@ -878,6 +898,23 @@ aliases: \n"
         // A `.` not followed by whitespace or end (e.g. inside a word) is
         // not a terminator.
         assert_eq!(sentence_count("Version 1.5 of the thing."), 1);
+    }
+
+    // adr: fcc1c1ec-d8e8-428e-9731-9817cdeb8e76
+    //
+    // A `.` inside an abbreviation like "e.g." or "i.e." is followed by
+    // whitespace, but the word after that whitespace starts lowercase, so
+    // it is not a sentence end; only the terminator at the true end of the
+    // text counts.
+    #[test]
+    fn an_abbreviation_dot_mid_sentence_does_not_end_a_sentence() {
+        assert_eq!(sentence_count("Use e.g. the shared helper for this."), 1);
+        assert_eq!(sentence_count("Ship i.e. one path only."), 1);
+        assert_eq!(sentence_count("Ship it, etc. and stop there."), 1);
+        assert_eq!(
+            sentence_count("One sentence here. Another sentence here."),
+            2
+        );
     }
 
     fn sample_terms() -> Vec<Term> {
