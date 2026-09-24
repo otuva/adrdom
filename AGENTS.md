@@ -91,7 +91,10 @@ Never write or edit `id:`, `terms:` or `**Answer:**` lines yourself.
 
 To add, strike or reword a heading, or change what it depends on: edit the
 file, say in chat what changed and why, and stop. Nothing in the file can be
-asked until the owner approves it again. A refused question holds its tier
+asked until the owner approves it again. The owner approves a plan as a
+whole, and every change costs them a full re-read: when one heading turns
+out wrong, check every heading in the file for the same flaw and propose all
+the changes together, once. A refused question holds its tier
 until the plan changes. Never add a `depends:` line just to move a question
 into a later tier.
 
@@ -116,7 +119,9 @@ after any edit.
 
 Each line of the message names what failed and the command that clears it.
 A line ending in `owner runs: ...` is the owner's move: post that command in
-chat and stop. Never pass `--no-verify`, never edit anything under
+chat and stop. The owner is not a way past a refusal: never change a file
+just so the owner's command clears it, and never ask for an approval or an
+answer the refusal did not name. Never pass `--no-verify`, never edit anything under
 `adrdom/state/`, and never remove or edit the hooks.
 
 ## Commands
