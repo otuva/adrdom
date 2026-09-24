@@ -1,3 +1,4 @@
+use crate::actions;
 use crate::banned;
 use crate::ledger;
 use crate::msg::{self, Actor, Next};
@@ -93,20 +94,19 @@ pub fn run(record_path: PathBuf) -> i32 {
         }
     };
 
-    // Shape errors refuse first, before anything else is even considered.
-    let mut shape_msgs: Vec<String> = rf
-        .shape_errors
-        .iter()
-        .map(|e| format!("ask: {}", msg::shape_error(&rel, e)))
-        .collect();
-    for sec in &rf.sections {
-        for e in &sec.shape_errors {
-            shape_msgs.push(format!(
-                "ask: {}",
-                msg::section_shape_error(&rel, &sec.heading_text, e)
-            ));
-        }
-    }
+    // Shape and parse errors refuse first, before anything else is even
+    // considered: the same "parse" category `approve`/`check` refuse on
+    // (055d303b A point 1 -- an option with no decision sentence or more
+    // than one, a duplicate id line, an answer naming a missing option --
+    // used to be a parse error only `check` read; `record_refusals` is now
+    // the one shared validation all three commands read it through).
+    let phrase_lookup = terms::phrase_lookup(&terms_list);
+    let shape_msgs: Vec<String> =
+        actions::record_refusals(&rel, &rf, &terms_list, &phrase_lookup, &led)
+            .into_iter()
+            .filter(|r| r.category == "parse")
+            .map(|r| format!("ask: {}", r.message))
+            .collect();
     if !shape_msgs.is_empty() {
         for m in &shape_msgs {
             eprintln!("{}", m);

@@ -1,3 +1,4 @@
+use crate::terms;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
@@ -614,6 +615,18 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
             let sentence = extract_sentence(&rest);
             if sentence.is_none() {
                 option_errors.push(format!("option {} has no decision sentence", letter));
+            } else {
+                // 055d303b A's "each one sentence": a decision text holding
+                // a second sentence is refused too -- `extract_sentence`
+                // above only ever looks at the first one, so a count has to
+                // be taken separately to catch the rest of the text.
+                let count = terms::sentence_count(rest.trim_end());
+                if count > 1 {
+                    option_errors.push(format!(
+                        "option {} decision text has {} sentences, more than one",
+                        letter, count
+                    ));
+                }
             }
             options.push(OptionRec {
                 letter,
@@ -735,11 +748,19 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
     let mut shape_errors = scan.stray_errors;
     shape_errors.extend(scan.depends_errors);
     if !is_skeleton {
-        if scan.problem_count != 1 {
-            shape_errors.push("missing Problem line".to_string());
+        // A missing field (count 0) and a repeated one (count > 1) are
+        // different mistakes and get different messages: a zero count is
+        // the field never being written, a count over one is the same
+        // field written twice (055d303b A point 4).
+        match scan.problem_count {
+            0 => shape_errors.push("missing Problem line".to_string()),
+            1 => {}
+            _ => shape_errors.push("duplicate Problem line".to_string()),
         }
-        if scan.standard_count != 1 {
-            shape_errors.push("missing Standard line".to_string());
+        match scan.standard_count {
+            0 => shape_errors.push("missing Standard line".to_string()),
+            1 => {}
+            _ => shape_errors.push("duplicate Standard line".to_string()),
         }
         // A skeleton heading (empty body) is exempt; a real body needs two
         // or three options.
@@ -748,6 +769,13 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
         }
     }
     shape_errors.extend(scan.option_shape_errors);
+    // 055d303b A's "the answer line comes last": any non-blank line after
+    // it (Problem/Standard/an option/anything else) means it isn't.
+    if let Some(al) = scan.answer_line {
+        if (al + 1..end).any(|j| !lines[j].trim().is_empty()) {
+            shape_errors.push(format!("answer line not last, line {}", al + 1));
+        }
+    }
 
     Section {
         start,
@@ -1340,12 +1368,15 @@ mod tests {
 
     // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
     //
-    // Decision A's "each one sentence" clause, at the unit that decides it:
-    // text with a sentence terminator yields that first sentence (and only
-    // it -- the second sentence here is simply never looked at, which is
-    // why a second sentence never becomes a shape or parse error); text
-    // with none yields `None`, which `scan_body` turns into "option X has
-    // no decision sentence".
+    // Decision A's "each one sentence" clause, at the unit that decides
+    // *which* sentence: text with a sentence terminator yields that first
+    // sentence -- still the sentence recorded on the option regardless of
+    // what follows it, since `chosen_sentence` should show the same text
+    // whether or not the option is later refused for holding a second one
+    // (that refusal is `scan_body`'s separate `terms::sentence_count` check,
+    // covered by `an_option_with_more_than_one_sentence_is_a_parse_error`
+    // below). Text with no terminator at all yields `None`, which
+    // `scan_body` turns into "option X has no decision sentence".
     #[test]
     fn an_option_decides_exactly_its_first_sentence() {
         assert_eq!(
@@ -1353,6 +1384,89 @@ mod tests {
             Some("Ties live in code.".to_string())
         );
         assert_eq!(extract_sentence("Ties live in code"), None);
+    }
+
+    // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
+    //
+    // Decision A's "each one sentence" clause, the half
+    // `an_option_decides_exactly_its_first_sentence` above does not cover:
+    // a decision text holding a second sentence is a parse error (a
+    // `terms::sentence_count` > 1 on the option's own text), not silently
+    // accepted just because the first sentence parsed fine.
+    #[test]
+    fn an_option_with_more_than_one_sentence_is_a_parse_error() {
+        let rf = rf_from(
+            "# T\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) One. And a second sentence.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n",
+        );
+        assert!(
+            rf.sections[0]
+                .parse_errors
+                .iter()
+                .any(|e| e == "option A decision text has 2 sentences, more than one"),
+            "{:?}",
+            rf.sections[0].parse_errors
+        );
+
+        let ok = rf_from(SHAPED);
+        assert!(ok.sections[0].parse_errors.is_empty(), "{:?}", ok.sections[0].parse_errors);
+    }
+
+    // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
+    //
+    // Decision A's "a second Problem:/Standard: line" fix (point 4): a
+    // repeated field is reported as a duplicate, not folded into the same
+    // "missing" message a zero count gets.
+    #[test]
+    fn a_repeated_problem_or_standard_line_is_a_duplicate_not_a_missing_one() {
+        let rf = rf_from(
+            "# T\n\n### Q?\n\nProblem: p.\n\nProblem: p again.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n",
+        );
+        assert!(
+            rf.sections[0].shape_errors.iter().any(|e| e == "duplicate Problem line"),
+            "{:?}",
+            rf.sections[0].shape_errors
+        );
+        assert!(
+            !rf.sections[0].shape_errors.iter().any(|e| e == "missing Problem line"),
+            "{:?}",
+            rf.sections[0].shape_errors
+        );
+
+        let rf2 = rf_from(
+            "# T\n\n### Q?\n\nProblem: p.\n\nStandard: s.\n\nStandard: s again.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n",
+        );
+        assert!(
+            rf2.sections[0].shape_errors.iter().any(|e| e == "duplicate Standard line"),
+            "{:?}",
+            rf2.sections[0].shape_errors
+        );
+    }
+
+    // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
+    //
+    // Decision A's "the answer line comes last" clause (point 3): an
+    // `**Answer:**` line with real body content after it is refused, at
+    // the section-parsing level `ask`/`check` both read.
+    #[test]
+    fn an_answer_line_before_the_rest_of_the_body_is_a_shape_error() {
+        let rf = rf_from(
+            "# T\n\n### Q?\n\n**Answer:** A\n\nProblem: p.\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n",
+        );
+        assert!(
+            rf.sections[0].shape_errors.iter().any(|e| e.starts_with("answer line not last")),
+            "{:?}",
+            rf.sections[0].shape_errors
+        );
+
+        // At the true end (nothing but blank lines after it): accepted.
+        let ok = rf_from(
+            "# T\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        );
+        assert!(
+            !ok.sections[0].shape_errors.iter().any(|e| e.starts_with("answer line not last")),
+            "{:?}",
+            ok.sections[0].shape_errors
+        );
     }
 
     #[test]

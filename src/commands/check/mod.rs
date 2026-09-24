@@ -92,7 +92,7 @@ fn build(
     let missing_answered = actions::missing_answered_refusals(&records, &led);
 
     let mut failures: Vec<String> = Vec::new();
-    push_failures(&mut failures, parse::check_parse(&records, &per_record_refusals));
+    push_failures(&mut failures, parse::check_parse(&per_record_refusals));
     push_failures(&mut failures, ids::check_ids(&records, &led, &missing_answered));
     push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_path));
     push_failures(&mut failures, banned::check_banned_ledger(&led, root));
