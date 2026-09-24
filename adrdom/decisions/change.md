@@ -83,6 +83,7 @@ Standard: version control keeps old text; a working document drops what is repla
 ### Does a refused question stay in its topic file?
 depends: b782664f-7465-4e1e-99e0-13f6dd2de774=A, 08193e75-dd89-4857-8e9f-b19e1a9e75e6, 94677ed8-eaf6-46e2-bc71-7392fa0805bf
 id: 6b3d8e59-e145-49e1-860d-a79d753d745c
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, approved=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approves=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, asked=3c8d4c9c-abca-4faa-b7c1-aae39951376c, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, refusal=0942e445-0163-423e-8ba7-84dd8ac07045, refused=0942e445-0163-423e-8ba7-84dd8ac07045, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
 
 Problem: a refused question has a body, a ledger event and no decision; if it leaves at once the file loses what was turned away, and if it never leaves the file carries it for good.
 Standard: issue trackers keep a closed item visible until a deliberate act archives it.
@@ -100,6 +101,7 @@ Standard: issue trackers keep a closed item visible until a deliberate act archi
 ### Does a refused question hold the tiers above it?
 depends: b782664f-7465-4e1e-99e0-13f6dd2de774=A, f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
 id: 506b3c6d-3d0a-4a02-98de-3b8a573d2fe9
+terms: answered=b36113a1-1384-4e4c-a798-8399f4181366, approves=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, asked=3c8d4c9c-abca-4faa-b7c1-aae39951376c, asking=3c8d4c9c-abca-4faa-b7c1-aae39951376c, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, refusal=0942e445-0163-423e-8ba7-84dd8ac07045, refused=0942e445-0163-423e-8ba7-84dd8ac07045, tier=f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, tiers=f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, topic=292a10b8-c287-4d71-b2bd-840da0a6de61
 
 Problem: a question above a refused one was written on the assumption the refused one would be answered; asking it anyway puts a question before the owner whose ground is gone.
 Standard: dependency-ordered work stops at the unmet prerequisite and names it; nothing proceeds on a placeholder.
