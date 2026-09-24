@@ -1,4 +1,5 @@
 use super::Failure;
+use crate::actions;
 use crate::ledger::Ledger;
 use crate::record::{self, RecordFile};
 use crate::repo;
@@ -42,15 +43,10 @@ pub(super) fn check_terms(
 
     // A missing id is not a shape error the agent can fix: only approve
     // mints ids. It is reported once, as part of the approval state below,
-    // and only fails when a topic file exists.
+    // and only fails when a topic file exists -- never as one of
+    // `terms_refusals`' shape messages, which run on a minted copy (see
+    // below) and so never see it.
     let missing_ids = tf.errors.iter().any(|e| e.contains("missing id"));
-    for e in tf.errors.iter().filter(|e| !e.contains("missing id")) {
-        out.push(Failure {
-            check: "terms".to_string(),
-            id: None,
-            message: format!("adrdom/terms.md: {}", e),
-        });
-    }
 
     let file_hash = terms::file_hash(&tf);
     let approved = led
@@ -69,6 +65,23 @@ pub(super) fn check_terms(
         } else {
             awaiting = true;
         }
+    }
+
+    // Shared with approve (E1.1): every shape, circular-definition,
+    // dependent-pairing, and banned-word refusal `adrdom/terms.md` earns,
+    // computed on a copy with every id minted in memory so a cycle or a
+    // dependent's pairing in a terms file that has never been approved --
+    // and so has no ids on disk -- is caught the same way `approve` catches
+    // it (`terms::cycles` and `terms::phrase_lookup` only see a term that
+    // has an id).
+    let minted = terms::minted_copy(&tf);
+    let (refusals, _pairs) = actions::terms_refusals(root, records, &minted, led);
+    for r in refusals {
+        out.push(Failure {
+            check: "terms".to_string(),
+            id: None,
+            message: r,
+        });
     }
 
     // Every asked/answered section: must have a terms line; each uuid on
@@ -140,19 +153,6 @@ pub(super) fn check_terms(
                 Some(_) => {}
             }
         }
-    }
-
-    // Circular definitions.
-    for cycle in terms::cycles(&tf) {
-        let mut chain = cycle.clone();
-        if let Some(first) = cycle.first() {
-            chain.push(first.clone());
-        }
-        out.push(Failure {
-            check: "terms".to_string(),
-            id: None,
-            message: format!("adrdom/terms.md: circular definition: {}", chain.join(" -> ")),
-        });
     }
 
     // Note (never a failure): every non-retired term that no current

@@ -14,10 +14,12 @@ mod tests;
 pub(crate) use banned::collect_targets;
 pub use tests::test_index;
 
+use crate::actions;
 use crate::ledger::Ledger;
 use crate::record::{self, RecordFile};
 use crate::repo;
-use crate::state::rel_path;
+use crate::state::{self, rel_path};
+use crate::terms as terms_mod;
 use crate::view;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -65,21 +67,51 @@ fn build(
         }
     }
 
+    // Terms minted in memory (E1.3): a terms file that has never been
+    // approved carries no ids on disk yet, and `phrase_lookup` only
+    // resolves a term that has one. Computed once here, shared by every
+    // category below that resolves a `depends:` entry, rather than each
+    // reloading/minting its own copy.
+    let terms_list: Vec<terms_mod::Term> = state::load_terms(root)
+        .map(|tf| terms_mod::minted_copy(&tf).terms)
+        .unwrap_or_default();
+    let phrase_lookup = terms_mod::phrase_lookup(&terms_list);
+
+    // Every refusal each topic file earns on its own (E1.2, shared with
+    // `approve`'s `do_approve_record`), one `Vec` per record in `records`'
+    // order, plus the cross-file "answered id missing from every topic
+    // file" refusal, computed once for the whole repo. `parse`/`tells`/
+    // `plan` pull their failures from these instead of re-deriving the
+    // same shape/tells/depends checks `approve` already refuses on; `ids`
+    // pulls the missing-answered-id lines the same way.
+    let per_record_refusals: Vec<Vec<actions::Refusal>> = records
+        .iter()
+        .map(|rf| actions::record_refusals(&rf.rel, rf, &terms_list, &phrase_lookup, &led))
+        .collect();
+    let missing_answered = actions::missing_answered_refusals(&records, &led);
+
     let mut failures: Vec<String> = Vec::new();
-    push_failures(&mut failures, parse::check_parse(&records));
-    push_failures(&mut failures, ids::check_ids(&records, &led));
+    push_failures(&mut failures, parse::check_parse(&records, &per_record_refusals));
+    push_failures(&mut failures, ids::check_ids(&records, &led, &missing_answered));
     push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_path));
     push_failures(&mut failures, banned::check_banned_ledger(&led, root));
     push_failures(&mut failures, answers::check_answers(&records, &led));
     push_failures(&mut failures, banned::check_banned(root, staged, message));
     push_failures(&mut failures, install::check_install(root));
-    let (plan_failures, awaiting) = plan::check_plan(root, &records, &led);
+    let (plan_failures, awaiting) = plan::check_plan(
+        root,
+        &records,
+        &led,
+        &per_record_refusals,
+        &terms_list,
+        &phrase_lookup,
+    );
     push_failures(&mut failures, plan_failures);
     let (terms_failures, terms_awaiting, terms_notes) = terms::check_terms(root, &records, &led, staged);
     push_failures(&mut failures, terms_failures);
     let (test_failures, tested_count) = tests::check_tests(root, &records, &led, tests);
     push_failures(&mut failures, test_failures);
-    push_failures(&mut failures, tells::check_tells(root, &records, &led));
+    push_failures(&mut failures, tells::check_tells(root, &records, &led, &per_record_refusals));
 
     notes.extend(moot::check_moot(&records, &led));
 

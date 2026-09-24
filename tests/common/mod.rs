@@ -177,8 +177,12 @@ fn strip_answer_set_suffix(entry: &str) -> String {
 
 /// Mirrors `record::plan_hash` (see src/record.rs): sha256 of the trimmed
 /// `### ` question heading lines in file order, each followed by its
-/// `depends:` lines with any `=set` suffix stripped, joined with `\n`. No
-/// `## ` tier headings any more (8.3 A): tiers are derived, not written.
+/// (single, 8.1 A) `depends:` line's entries, comma-split, each with any
+/// `=set` suffix stripped, joined with `\n`. No `## ` tier headings any
+/// more (8.3 A): tiers are derived, not written. Doesn't reproduce the
+/// comma-in-heading-text rejoin `record::parse_depends_line` does before
+/// approve (see src/record.rs) -- fine for the well-formed, comma-free
+/// fixture content every caller of this mirror uses.
 pub fn plan_hash(content: &str) -> String {
     let mut items: Vec<String> = Vec::new();
     let mut seen_heading = false;
@@ -191,7 +195,9 @@ pub fn plan_hash(content: &str) -> String {
         }
         if seen_heading {
             if let Some(v) = line.trim_start().strip_prefix("depends: ") {
-                items.push(format!("depends: {}", strip_answer_set_suffix(v.trim())));
+                for entry in v.split(',') {
+                    items.push(format!("depends: {}", strip_answer_set_suffix(entry.trim())));
+                }
             }
         }
     }

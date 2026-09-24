@@ -26,8 +26,7 @@ Standard: s1.
 
 const GROUP_TWO_ADDITION: &str = r#"
 ### 2.1 Second question?
-depends: 1.1 First question?
-depends: decision
+depends: 1.1 First question?, decision
 
 Problem: p2, another decision.
 
@@ -113,6 +112,7 @@ fn approve_writes_approved_and_context_rows_then_is_idempotent() {
 fn approve_refuses_a_question_with_one_option() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_empty_terms(&dir);
     let content = "# Example\n\n### 1.1 One option?\n\nProblem: p.\n\nStandard: s.\n\n- A) Only choice.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
@@ -138,6 +138,7 @@ fn approve_refuses_a_question_with_one_option() {
 fn approve_refuses_a_question_with_four_options() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_empty_terms(&dir);
     let content = "# Example\n\n### 1.1 Four options?\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n- D) Four.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
@@ -505,9 +506,15 @@ fn ask_refuses_while_terms_unapproved() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
     write_record(&dir, "adrdom/terms.md", TERMS_BASIC);
-    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
-        .status
-        .success());
+    // A real `adr approve` on the record now refuses up front while
+    // `adrdom/terms.md` itself is unapproved (the review finding this
+    // fixes: it used to succeed here since the hand-written id in
+    // `TERMS_BASIC` let depends resolution go through despite there being
+    // no `terms` ledger row at all). `approve_via_ledger` gets the record
+    // "looks approved" to `ask` the same way real approve's write step
+    // would have, without depending on the now-refusing terms gate --
+    // `ask`'s own terms gate fires before it ever needs the section's id.
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
@@ -770,6 +777,43 @@ fn approve_refuses_a_circular_definition() {
 
     let after = std::fs::read_to_string(&terms).unwrap();
     assert_eq!(before, after, "approve must not write anything on refusal");
+}
+
+// E1.1: two independent problems (a self-cycle on `alpha`, a missing
+// `aliases` field on `beta`) must both come back from one `approve` call,
+// not just the first found, and `check` (which never writes) must report
+// the same set.
+const TERMS_CYCLE_AND_SHAPE_ERROR: &str = "# Terms\n\n\
+## alpha\n\
+id: 11111111-1111-1111-1111-111111111111\n\
+definition: A loop that refers to alpha.\n\
+aliases: \n\
+\n\
+## beta\n\
+id: 22222222-2222-2222-2222-222222222222\n\
+definition: Something else.\n";
+
+#[test]
+fn approve_and_check_report_a_cycle_and_a_shape_error_from_one_run() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let terms = write_record(&dir, "adrdom/terms.md", TERMS_CYCLE_AND_SHAPE_ERROR);
+
+    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(err.contains("circular definition: alpha -> alpha"), "{}", err);
+    assert!(err.contains("missing field \"aliases\""), "{}", err);
+
+    let check_out = adr(&dir, &["check"], &[], "");
+    assert!(!check_out.status.success());
+    let text = stdout(&check_out);
+    assert!(
+        text.contains("terms: adrdom/terms.md: circular definition: alpha -> alpha"),
+        "{}",
+        text
+    );
+    assert!(text.contains("terms: adrdom/terms.md: line 8: missing field \"aliases\""), "{}", text);
 }
 
 #[test]
