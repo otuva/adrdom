@@ -19,7 +19,9 @@ hooks run `adr check` on every commit and refuse what breaks a decision.
 
 ## Before you build anything
 
-1. Run `adr show` and read every current decision. Build under them.
+1. Run `adr show` and read every current decision. Build only a tier whose
+   questions are all answered; nothing in a tier is built while a sibling
+   question in it is still open.
 2. If no current decision covers what you are about to build, do not build
    it. Write the question (below) and stop until the owner answers.
 3. If a current decision looks wrong, say so in chat and stop. Never edit an
@@ -47,10 +49,11 @@ depends: check
 
 Ask "does X" or "what does X do", not "which X", "where" or "how many": those
 assume an answer the owner has not given. One question per heading. A tier
-holds at most 4 questions. Say the plan is ready and stop. The owner runs
-`adr approve <file>`, which gives every heading an `id:` line, directly
-after its `depends:` line, and rewrites that line's entries to the ids they
-name.
+holds at most 4 questions. Say the plan is ready and stop. The owner may
+strike, add or reorder headings before approving, or write the plan itself
+and approve it the same way. The owner runs `adr approve <file>`, which
+gives every heading an `id:` line, directly after its `depends:` line, and
+rewrites that line's entries to the ids they name.
 
 **2. Write the bodies of the open tier.** `adr show` prints the tiers; the
 lowest one with an unanswered question is open. Under each of its headings:
