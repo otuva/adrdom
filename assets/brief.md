@@ -27,9 +27,10 @@ hooks run `adr check` on every commit and refuse what breaks a decision.
 ## Asking a question
 
 **1. Write the plan.** In the topic file: one `# <Topic>` line, a few lines
-of prose, then the headings. Under each heading put only `depends:` lines,
-one for each thing the question stands on: a term by its name, another
-heading in this file by its text, or a current decision by its id.
+of prose, then the headings. Under each heading put one `depends:` line,
+comma separated: one entry for each thing the question stands on -- a term
+by its name, another heading in this file by its text, or a current
+decision by its id.
 
 ```
 # Hooks
@@ -37,8 +38,7 @@ heading in this file by its text, or a current decision by its id.
 What the git hooks run and when.
 
 ### Does the pre-commit hook run the tests?
-depends: hook
-depends: Does check read staged files only?
+depends: hook, Does check read staged files only?
 
 ### Does check read staged files only?
 depends: check
@@ -47,8 +47,9 @@ depends: check
 Ask "does X" or "what does X do", not "which X", "where" or "how many": those
 assume an answer the owner has not given. One question per heading. A tier
 holds at most 4 questions. Say the plan is ready and stop. The owner runs
-`adr approve <file>`, which gives every heading an `id:` line and replaces
-each `depends:` word with the id it names.
+`adr approve <file>`, which gives every heading an `id:` line, directly
+after its `depends:` line, and rewrites that line's entries to the ids they
+name.
 
 **2. Write the bodies of the open tier.** `adr show` prints the tiers; the
 lowest one with an unanswered question is open. Under each of its headings:
@@ -68,10 +69,10 @@ compare them: two options that answer it the same way are one option. If the
 question replaces a current decision, add `supersedes: <id>` under the
 heading (several ids separated by commas).
 
-Every `depends:` line elsewhere in the file that points at a question in
-this tier also gets an answer set: `=A`, `=A|B` or `=*`, the letters under
-which the dependent question still makes sense. `adr show` prints what each
-id stands for.
+Every `depends:` entry elsewhere in the file that names a question in this
+tier also gets an answer set: `=A`, `=A|B` or `=*`, the letters under which
+the dependent question still makes sense. `adr show` prints what each id
+stands for.
 
 **3. Run `adr ask <file>`.** It writes each question's `terms:` line, or
 refuses and says why (a question outside the open tier, a missing answer
@@ -94,14 +95,15 @@ asked until the owner approves it again. The owner approves a plan as a
 whole, and every change costs them a full re-read: when one heading turns
 out wrong, check every heading in the file for the same flaw and propose all
 the changes together, once. A refused question holds its tier
-until the plan changes. Never add a `depends:` line just to move a question
+until the plan changes. Never add a `depends:` entry just to move a question
 into a later tier.
 
 ## Terms
 
 `adrdom/terms.md` fixes the meaning of words; `adr ask` pairs the words of
 each question to its terms, and a question with no term in it is refused.
-When a question needs a word no term defines, add an entry and stop:
+Terms are approved before any topic file that names them. When a question
+needs a word no term defines, add an entry and stop:
 
 ```
 ## <name>

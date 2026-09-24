@@ -26,8 +26,7 @@ Standard: s1.
 
 const GROUP_TWO_ADDITION: &str = r#"
 ### 2.1 Second question?
-depends: 1.1 First question?
-depends: decision
+depends: 1.1 First question?, decision
 
 Problem: p2, another decision.
 
