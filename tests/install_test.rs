@@ -293,6 +293,92 @@ fn install_claude_creates_claude_md_and_uninstall_deletes_it() {
     );
 }
 
+// --- --codex -----------------------------------------------------------
+
+#[test]
+fn install_without_codex_flag_leaves_no_codex_directory() {
+    let dir = init_repo();
+
+    let out = adr(&dir, &["install"], &[], "");
+    assert!(out.status.success(), "install failed: {}", stderr(&out));
+
+    assert!(
+        !dir.join(".codex").exists(),
+        "plain install must not create .codex"
+    );
+}
+
+#[test]
+fn install_codex_writes_rules_file_and_is_idempotent() {
+    let dir = init_repo();
+
+    let out = adr(&dir, &["install", "--codex"], &[], "");
+    assert!(out.status.success(), "install failed: {}", stderr(&out));
+    assert!(
+        stdout(&out).contains("Codex enforces project rules only for a project marked trusted"),
+        "{}",
+        stdout(&out)
+    );
+
+    let rules = std::fs::read_to_string(dir.join(".codex/rules/adrdom.rules")).unwrap();
+    for cmd in ["answer", "approve", "unban", "serve", "uninstall"] {
+        assert!(
+            rules.contains(&format!("pattern = [\"adr\", \"{}\"]", cmd)),
+            "missing rule for {}: {}",
+            cmd,
+            rules
+        );
+        assert!(rules.contains("decision = \"forbidden\""), "{}", rules);
+    }
+
+    let out2 = adr(&dir, &["install", "--codex"], &[], "");
+    assert!(out2.status.success(), "second install failed: {}", stderr(&out2));
+    let rules_after = std::fs::read_to_string(dir.join(".codex/rules/adrdom.rules")).unwrap();
+    assert_eq!(rules, rules_after, "second install --codex must not change the file");
+}
+
+#[test]
+fn install_claude_and_codex_flags_combine() {
+    let dir = init_repo();
+    let out = adr(&dir, &["install", "--claude", "--codex"], &[], "");
+    assert!(out.status.success(), "install failed: {}", stderr(&out));
+
+    assert!(dir.join("CLAUDE.md").is_file());
+    assert!(dir.join(".codex/rules/adrdom.rules").is_file());
+}
+
+#[test]
+fn uninstall_removes_codex_rules_and_empty_directories() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install", "--codex"], &[], "").status.success());
+    assert!(dir.join(".codex/rules/adrdom.rules").is_file());
+
+    let out = adr_owner(&dir, &["uninstall"], "");
+    assert!(out.status.success(), "uninstall failed: {}", stderr(&out));
+
+    assert!(!dir.join(".codex/rules/adrdom.rules").exists());
+    assert!(
+        !dir.join(".codex").exists(),
+        "empty .codex should be removed"
+    );
+}
+
+#[test]
+fn uninstall_leaves_an_owner_edited_codex_rules_file_alone() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install", "--codex"], &[], "").status.success());
+    std::fs::write(dir.join(".codex/rules/adrdom.rules"), "owner edited\n").unwrap();
+
+    let out = adr_owner(&dir, &["uninstall"], "");
+    assert!(out.status.success(), "uninstall failed: {}", stderr(&out));
+
+    assert_eq!(
+        std::fs::read_to_string(dir.join(".codex/rules/adrdom.rules")).unwrap(),
+        "owner edited\n",
+        "uninstall must not remove a rules file it didn't write"
+    );
+}
+
 // --- uninstall -------------------------------------------------------------
 
 #[test]

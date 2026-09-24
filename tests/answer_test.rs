@@ -89,7 +89,7 @@ fn answer_writes_answer_line_and_ledger_row() {
 }
 
 #[test]
-fn answer_refuses_when_claudecode_is_set() {
+fn answer_refuses_without_an_interactive_terminal() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -103,15 +103,16 @@ fn answer_refuses_when_claudecode_is_set() {
     let ids = extract_ids(&content);
     let question_id = &ids[0];
 
-    // CLAUDECODE set, no bypass: must be refused with exit code 2, and
-    // nothing should be written.
-    let out = adr(
-        &dir,
-        &["answer", question_id, "A"],
-        &[("CLAUDECODE", "1")],
-        "",
-    );
+    // No owner bypass: stdin is piped (never a TTY) in this harness, so the
+    // gate (9.2 A: stdin is an interactive terminal, no env var) refuses
+    // with exit code 2 and nothing should be written.
+    let out = adr(&dir, &["answer", question_id, "A"], &[], "");
     assert_eq!(out.status.code(), Some(2), "stderr: {}", stderr(&out));
+    assert!(
+        stderr(&out).contains("this is the owner's command"),
+        "stderr: {}",
+        stderr(&out)
+    );
 
     let after = std::fs::read_to_string(&record).unwrap();
     assert!(

@@ -52,19 +52,18 @@ fn walk_md(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// The owner-authorization gate shared by `adr answer` and `adr unban`:
-/// refuse unless running interactively as a human (no CLAUDECODE, stdin is
-/// a TTY), or built with the test-only `owner-bypass` feature and
-/// `ADR_OWNER_BYPASS=1`.
+/// The owner-authorization gate shared by every owner command (`answer`,
+/// `approve`, `unban`, `serve`, `uninstall`): the owner's sign is stdin
+/// being an interactive terminal. No env var is consulted (9.2 A: an agent
+/// can set or unset any env var, so one is not evidence of who is typing).
+/// Built with the test-only `owner-bypass` feature and `ADR_OWNER_BYPASS=1`
+/// bypasses this for tests, which never run with a real TTY on stdin.
 pub fn owner_authorized() -> bool {
     #[cfg(feature = "owner-bypass")]
     {
         if std::env::var("ADR_OWNER_BYPASS").as_deref() == Ok("1") {
             return true;
         }
-    }
-    if std::env::var_os("CLAUDECODE").is_some() {
-        return false;
     }
     std::io::stdin().is_terminal()
 }

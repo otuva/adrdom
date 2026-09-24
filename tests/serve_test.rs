@@ -585,12 +585,14 @@ fn terms_article_shows_before_after_when_unapproved() {
 }
 
 #[test]
-fn serve_refuses_when_claudecode_is_set() {
+fn serve_refuses_without_an_interactive_terminal() {
+    // 9.2 A: the owner gate is stdin being a TTY, not an env var. A
+    // non-interactive stdin (Stdio::null() here) refuses regardless.
     let dir = setup_repo_with_open_question();
     let out = Command::new(adr_bin())
         .current_dir(&dir)
         .args(["serve", "--port", "0"])
-        .env("CLAUDECODE", "1")
+        .env_remove("CLAUDECODE")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -598,7 +600,12 @@ fn serve_refuses_when_claudecode_is_set() {
         .expect("adr serve should run");
     assert_eq!(out.status.code(), Some(2), "stderr: {}", stderr(&out));
     assert!(
-        stderr(&out).contains("owner authorization required"),
+        stderr(&out).contains("this is the owner's command"),
+        "stderr: {}",
+        stderr(&out)
+    );
+    assert!(
+        stderr(&out).contains("owner runs: adr serve"),
         "stderr: {}",
         stderr(&out)
     );
