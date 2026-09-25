@@ -6,7 +6,12 @@ use crate::record::RecordFile;
 use crate::state;
 use std::collections::{HashMap, HashSet};
 
-pub(super) fn check_ids(records: &[RecordFile], led: &Ledger, missing_answered: &[Refusal]) -> Vec<Failure> {
+pub(super) fn check_ids(
+    records: &[RecordFile],
+    led: &Ledger,
+    missing_answered: &[Refusal],
+    raw_hashes: &HashMap<String, (String, String)>,
+) -> Vec<Failure> {
     let mut out = Vec::new();
     let mut seen: HashMap<String, String> = HashMap::new();
     for rf in records {
@@ -16,7 +21,8 @@ pub(super) fn check_ids(records: &[RecordFile], led: &Ledger, missing_answered: 
                 continue;
             }
             match &sec.id {
-                // 9.1 A point 9: a section with no id means the plan was
+                // Per "Does the owner approve a plan in one step?": a
+                // section with no id means the plan was
                 // never approved (or an edit since moved the plan hash) --
                 // `approve`, not `ask`, is what gives it one.
                 None => out.push(Failure {
@@ -53,9 +59,21 @@ pub(super) fn check_ids(records: &[RecordFile], led: &Ledger, missing_answered: 
     // change awaiting re-approval. This doesn't depend on which id is being
     // looked at, so it's computed once for the whole loop below rather than
     // per id.
+    // Read off `raw_hashes` (computed before the normalize pass mutates
+    // each `RecordFile`'s parsed `depends:` entries in memory) rather than
+    // `state::plan_approved(led, rf, &rf.rel)`, which would otherwise
+    // recompute the plan hash from the by-then-normalized `rf`: approval
+    // state must always be read off the file exactly as it sits on disk
+    // (per "...").
     let stale: Vec<(usize, &str)> = records
         .iter()
-        .filter(|rf| !state::plan_approved(led, rf, &rf.rel))
+        .filter(|rf| {
+            let plan_h = raw_hashes
+                .get(&rf.rel)
+                .map(|(p, _)| p.as_str())
+                .unwrap_or_default();
+            !state::plan_approved_hash(led, &rf.rel, plan_h)
+        })
         .filter_map(|rf| {
             led.rows
                 .iter()
@@ -76,7 +94,7 @@ pub(super) fn check_ids(records: &[RecordFile], led: &Ledger, missing_answered: 
             continue;
         }
         // An answered-and-current id missing from every file is reported
-        // below, from `missing_answered` (E1.2, shared with `approve`'s
+        // below, from `missing_answered` (shared with `approve`'s
         // `missing_answered_refusals`), so it isn't printed twice here.
         if event == Some("answered") {
             continue;

@@ -1,12 +1,13 @@
-//! `adr show`: per topic file, each derived tier and its questions, plainly
-//! (spec §7). No HTML, no snapshot — reads the file and ledger directly,
+//! `adr show`: per topic file, each derived tier and its questions,
+//! plainly. No HTML, no snapshot — reads the file and ledger directly,
 //! the same way the old (pre-tier) `show` did.
+use crate::depends;
 use crate::ledger::{self, Ledger};
 use crate::msg::{self, Actor};
 use crate::record::{self, RecordFile, Section};
 use crate::repo;
 use crate::state;
-use crate::terms::Term;
+use crate::terms::{self, Term};
 use crate::view::{self, QState};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -22,19 +23,52 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
     let ledger_path = root.join("adrdom/state/ledger.tsv");
     let led = ledger::read(&ledger_path);
     let terms_list: Vec<Term> = state::load_terms(&root).map(|tf| tf.terms).unwrap_or_default();
-    // 9.1 A point 10: a depends `Id` entry is printed as words -- a heading
-    // in this file, a term name, or another topic file's decision heading
-    // text, so every heading id in the repo is looked up once, here.
+    // A depends `Id` entry is printed as words -- a heading in this file, a
+    // term name, or another topic file's decision heading text, so every
+    // heading id in the repo is looked up once, here.
     let all_headings = view::all_heading_texts(&root);
+    // Same pre-pass `approve`/`check` run before reading `rf.tiers`
+    // (`depends::normalize_cross_file_deps`): a heading-shaped `depends:`
+    // entry naming a current decision's heading in another topic file is
+    // rewritten in memory to that decision's id and the tiers re-derived,
+    // so an unapproved file with such an entry still prints its real
+    // tiers instead of nothing (the file-wide derive error a plain,
+    // unresolved `Text` heading dep would otherwise earn). The ambiguous
+    // case (the same heading text naming a current decision in more than
+    // one other file) becomes this file's `derive_error`
+    // (`DeriveError::AmbiguousHeading`) instead of tiers: `print_file`
+    // already prints nothing but the topic line when `rf.tiers` is `None`,
+    // so `show` never guesses which decision an ambiguous entry means --
+    // `check` is still where the ambiguity itself is reported.
+    let phrase_lookup = terms::phrase_lookup(&terms_list);
+    // Every topic file, loaded once: the index needs all of them regardless
+    // of which one `record_arg` asks to print, so they're loaded here
+    // rather than inside `cross_file_heading_index` (which used to load
+    // them all itself, then have the loop below load whichever of them it
+    // was about to print all over again).
+    let all_records: Vec<RecordFile> = repo::list_decision_files(&root)
+        .iter()
+        .filter_map(|f| record::load_in(&root, f).ok())
+        .collect();
+    let cross_file_headings = depends::cross_file_heading_index(&all_records, &led);
 
-    let files = match &record_arg {
-        Some(p) => vec![p.clone()],
-        None => repo::list_decision_files(&root),
+    let mut records: Vec<RecordFile> = match &record_arg {
+        Some(p) => {
+            let rel = state::rel_path(&root, p);
+            match all_records.into_iter().find(|rf| rf.rel == rel) {
+                Some(rf) => vec![rf],
+                // Not one of the repo's topic files (an unusual path
+                // outside adrdom/decisions/, say): loaded directly, same as
+                // before this pass.
+                None => record::load(p).into_iter().collect(),
+            }
+        }
+        None => all_records,
     };
 
-    for f in &files {
-        let Ok(rf) = record::load(f) else { continue };
-        print_file(&rf, &led, &terms_list, &all_headings);
+    for rf in &mut records {
+        depends::normalize_cross_file_deps(rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
+        print_file(rf, &led, &terms_list, &all_headings);
     }
     0
 }

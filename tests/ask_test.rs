@@ -586,3 +586,89 @@ fn ask_pairs_a_word_from_the_problem_line_and_a_word_from_a_single_option() {
         terms_line
     );
 }
+
+// --- core.md: "What does a depends line name?" -- the "does not resolve"
+// half, reached through ask on a file approve already accepted --------
+
+// adr: ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf
+//
+// "every question carries [a depends] line ...; approve and ask stop a
+// line that is missing or names anything that does not resolve": the
+// path this test reaches is exactly the one the owner's workflow can
+// actually produce -- approve already accepted the file (minting an id
+// and rewriting the depends line to it), and an agent then edits the
+// depends line on disk without re-approving, either retargeting it to a
+// uuid that resolves to nothing at all or deleting the line outright.
+// Either edit is a `depends:` edit, so it moves the file's plan hash out
+// from under the last `approved` ledger row -- `ask` does stop the file,
+// but with the generic "plan not approved" refusal, before it ever
+// reaches a per-entry resolution check (src/depends.rs's own doc comment
+// names only `approve`'s validation and `check`'s plan check as callers
+// of `resolve_dep`; `ask` is not one of them). `adr check`, run on the
+// same broken file right after, is what actually names the specific
+// thing wrong with the line ("... which is not a current decision" /
+// "has no depends line") -- confirming ask's refusal, though real, never
+// gets that specific.
+#[test]
+fn ask_refuses_a_depends_entry_that_no_longer_resolves_or_is_missing_after_approval() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let record = write_record(&dir, "adrdom/decisions/example.md", Q1_ONLY);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    let approved = std::fs::read_to_string(&record).unwrap();
+
+    // approve_minimal_terms's fixed term id.
+    let widget_term_id = "99999999-9999-9999-9999-999999999999";
+    assert!(
+        approved.contains(&format!("depends: {}", widget_term_id)),
+        "expected approve to have rewritten the depends line to the term id: {}",
+        approved
+    );
+
+    // Case 1: retargeted to a uuid naming nothing at all.
+    let garbage = approved.replace(
+        &format!("depends: {}", widget_term_id),
+        "depends: 00000000-0000-0000-0000-000000000000",
+    );
+    std::fs::write(&record, &garbage).unwrap();
+
+    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
+    assert!(
+        stderr(&out).contains("plan not approved"),
+        "{}",
+        stderr(&out)
+    );
+    let check_out = adr(&dir, &["check"], &[], "");
+    assert!(!check_out.status.success());
+    assert!(
+        stdout(&check_out).contains("which is not a current decision"),
+        "{}",
+        stdout(&check_out)
+    );
+
+    // Case 2: the depends line removed outright.
+    let missing: String = approved
+        .lines()
+        .filter(|l| !l.starts_with("depends:"))
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    std::fs::write(&record, &missing).unwrap();
+
+    let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(!out2.status.success(), "ask should have refused: {}", stdout(&out2));
+    assert!(
+        stderr(&out2).contains("plan not approved"),
+        "{}",
+        stderr(&out2)
+    );
+    let check_out2 = adr(&dir, &["check"], &[], "");
+    assert!(!check_out2.status.success());
+    assert!(
+        stdout(&check_out2).contains("has no depends line"),
+        "{}",
+        stdout(&check_out2)
+    );
+}

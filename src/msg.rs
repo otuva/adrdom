@@ -187,7 +187,7 @@ pub fn term_removed_but_carried(uuid: &str, source: &str) -> String {
 /// dependent kind: a decision supersedes itself with a new question
 /// (built by the caller, which knows the decision's id); a term's own
 /// definition is reworded by the agent and re-approved by the owner --
-/// terms are never superseded (9.3 B; the fix for a term-dependent is
+/// terms are never superseded (per "Does a retired term keep its words?"; the fix for a term-dependent is
 /// always this same pair, so it's fixed here).
 pub fn term_retired_but_carried(name: &str, source: &str, next: Next) -> String {
     refuse(
@@ -257,7 +257,8 @@ pub fn section_shape_error(rel: &str, heading: &str, e: &str) -> String {
     )
 }
 
-/// One provenance/code-state/date/loaded-heading tell (9.5 A).
+/// One provenance/code-state/date/loaded-heading tell (per "Does the tool
+/// stop loaded phrases in a question?").
 pub fn tell(rel: &str, line: usize, label: &str, phrase: &str, what: &str) -> String {
     refuse(
         format!("{}:{}: \"{}\": \"{}\" {}", rel, line + 1, label, phrase, what),
@@ -307,6 +308,34 @@ pub fn dep_no_term(rel: &str, heading: &str, text: &str) -> String {
         ),
         Next::agent("adds the term or names another"),
     )
+}
+
+/// A heading-shaped `depends:` entry naming no heading in its own file, but
+/// a current decision's heading text more than once elsewhere (the
+/// cross-file gap "Does a reference in a topic file carry the identifier
+/// of what it names?" left open): which one it means is ambiguous, so this
+/// refuses instead of guessing. `files` is the (deduped, sorted) list of
+/// files those decisions live in -- one entry when the same topic file
+/// happens to carry the heading text on two different current decisions
+/// (`check`'s cross-file duplicate-heading check only flags that between
+/// files, not within one), more than one when the decisions are spread
+/// across files; the wording says which, rather than always calling it
+/// "more than one file" when it may be only one file holding more than one
+/// decision. Reported as a file's one `derive_error` (`derive_what`'s
+/// `DeriveError::AmbiguousHeading` arm, from
+/// `depends::normalize_cross_file_deps`), never per entry:
+/// `depends::dep_refusal_text` never reaches this case (see its own doc
+/// comment).
+fn ambiguous_heading_what(rel: &str, heading: &str, text: &str, files: &[String]) -> String {
+    let detail = match files {
+        [one] => format!("names more than one current decision in {}", one),
+        many => format!("is a current decision in more than one file: {}", many.join(", ")),
+    };
+    format!("{}: \"{}\" depends on \"{}\" which {}", rel, heading, text, detail)
+}
+
+fn ambiguous_heading_next() -> Next {
+    Next::agent("names it by id instead")
 }
 
 /// A heading `depends:` entry's `=A|B` set names a letter its target
@@ -359,6 +388,9 @@ fn derive_what(rel: &str, e: &DeriveError) -> String {
             )
         }
         DeriveError::SelfDep(h) => format!("{}: \"{}\" depends on itself", rel, h),
+        DeriveError::AmbiguousHeading { section, entry, files } => {
+            ambiguous_heading_what(rel, section, entry, files)
+        }
     }
 }
 
@@ -367,6 +399,7 @@ fn derive_next(e: &DeriveError) -> Next {
         DeriveError::Dangling { .. } => Next::agent("adds the heading or fixes the text"),
         DeriveError::Cycle(_) => Next::agent("breaks it"),
         DeriveError::SelfDep(_) => Next::agent("removes the line or names something else"),
+        DeriveError::AmbiguousHeading { .. } => ambiguous_heading_next(),
     }
 }
 

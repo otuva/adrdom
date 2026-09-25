@@ -75,7 +75,8 @@ fn walk_md(dir: &Path, out: &mut Vec<PathBuf>) {
 
 /// The owner-authorization gate shared by every owner command (`answer`,
 /// `approve`, `unban`, `serve`, `uninstall`): the owner's sign is stdin
-/// being an interactive terminal. No env var is consulted (9.2 A: an agent
+/// being an interactive terminal. No env var is consulted (per "What does
+/// an owner command look for before it runs?": an agent
 /// can set or unset any env var, so one is not evidence of who is typing).
 /// Built with the test-only `owner-bypass` feature and `ADR_OWNER_BYPASS=1`
 /// bypasses this for tests, which never run with a real TTY on stdin.

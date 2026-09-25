@@ -12,9 +12,11 @@ use std::path::Path;
 
 /// `plan`: per file, compares the current plan/context hash against the
 /// latest `approved`/`context` ledger rows for that path. Also reports the
-/// same depends-line/derivation/cap problems `approve` refuses on (8.3/8.4/
-/// 8.8, the `plan` category of `record_refusals`, computed once in
-/// `mod.rs` and shared with `approve`'s `do_approve_record`, E1.2):
+/// same depends-line/derivation/cap problems `approve` refuses on (per
+/// "What does a depends line name?", "Does the tool derive tiers from the
+/// depends lines?", and "Does the tool cap the questions in a tier?" --
+/// the `plan` category of `record_refusals`, computed once in
+/// `mod.rs` and shared with `approve`'s `do_approve_record`):
 /// unconditionally, regardless of the file's approval state (a derive
 /// error, a missing depends line, or an entry that resolves to nothing is a
 /// failure either way). Also reports a bad file name and a heading
@@ -24,6 +26,7 @@ use std::path::Path;
 /// the failures plus the sorted, deduped list of paths still awaiting
 /// approval (printed as a summary line by the caller, not a failure by
 /// itself).
+#[allow(clippy::too_many_arguments)]
 pub(super) fn check_plan(
     root: &Path,
     records: &[RecordFile],
@@ -31,6 +34,8 @@ pub(super) fn check_plan(
     refusals: &[Vec<Refusal>],
     terms_list: &[terms::Term],
     phrase_lookup: &HashMap<String, String>,
+    cross_file_headings: &HashMap<String, Vec<(String, String)>>,
+    raw_hashes: &HashMap<String, (String, String)>,
 ) -> (Vec<Failure>, Vec<String>) {
     let mut out = Vec::new();
     let mut awaiting: Vec<String> = Vec::new();
@@ -54,7 +59,7 @@ pub(super) fn check_plan(
     }
 
     for (rf, refs) in records.iter().zip(refusals) {
-        let (rel, plan_ok, ctx_ok) = file_approval(root, rf, led);
+        let (rel, plan_ok, ctx_ok) = file_approval(rf, raw_hashes, led);
         if !plan_ok || !ctx_ok {
             awaiting.push(rel.clone());
         }
@@ -83,17 +88,22 @@ pub(super) fn check_plan(
             }
         }
 
-        // A letter-set suffix on a resolved heading dependency validates
-        // against the target once found (9.1 A point 9: "letter sets
-        // validate against the target found by id") -- `approve` never
-        // checks this today, so it stays a check-only extra rather than a
-        // `record_refusals` category.
+        // A letter-set suffix on a resolved dependency validates against
+        // the target once found (per "Does a depends entry carry the
+        // answers it holds under?") -- `approve` never checks this today,
+        // so it stays a check-only extra rather than a `record_refusals`
+        // category. A same-file `Heading` target reads its options
+        // straight off `rf`; a cross-file `Decision` target (an already-id
+        // entry, or a heading-shaped one `normalize_cross_file_deps`
+        // resolved above) has its options nowhere in `rf`, so its section
+        // is found in `records` instead (`bad_letters_for_decision`).
         for sec in &rf.sections {
             for d in &sec.depends {
-                if let Ok(Some(DepTarget::Heading(ti))) =
-                    depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, led)
-                {
-                    if let Some(AnswerSet::Letters(letters)) = d.set() {
+                let Some(AnswerSet::Letters(letters)) = d.set() else {
+                    continue;
+                };
+                match depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, cross_file_headings, led) {
+                    Ok(Some(DepTarget::Heading(ti))) => {
                         for msg in
                             depends::bad_letters(&rel, &sec.heading_text, &rf.sections[ti], letters)
                         {
@@ -104,6 +114,22 @@ pub(super) fn check_plan(
                             });
                         }
                     }
+                    Ok(Some(DepTarget::Decision(id))) => {
+                        for msg in depends::bad_letters_for_decision(
+                            &rel,
+                            &sec.heading_text,
+                            records,
+                            &id,
+                            letters,
+                        ) {
+                            out.push(Failure {
+                                check: "plan".to_string(),
+                                id: sec.id.clone(),
+                                message: msg,
+                            });
+                        }
+                    }
+                    _ => {}
                 }
             }
         }

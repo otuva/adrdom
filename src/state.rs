@@ -21,22 +21,52 @@ pub fn rel_path(root: &Path, path: &Path) -> String {
     parts.join("/")
 }
 
-/// True when the topic file's current plan hash matches the latest `approved`
-/// ledger row for `rel` (the topic file's path relative to the repo root).
-pub fn plan_approved(led: &Ledger, rf: &RecordFile, rel: &str) -> bool {
-    match led.latest_for_path("approved", rel) {
-        Some(row) => row.hash == record::plan_hash(rf),
+/// True when `hash` matches the latest ledger row for `event`/`rel`: the
+/// comparison `plan_approved`/`context_approved` make, factored out so a
+/// caller that already holds the hash -- computed from the file exactly as
+/// it sits on disk, before any in-memory normalization
+/// (`depends::normalize_cross_file_deps`) touched it -- can make the same
+/// comparison without recomputing the hash from a `RecordFile` that may by
+/// then have been normalized. Approval state must always read the file
+/// exactly as written, never the resolved-for-tiers copy: normalization is
+/// only for resolving depends targets and deriving tiers.
+fn hash_matches_latest(led: &Ledger, event: &str, rel: &str, hash: &str) -> bool {
+    match led.latest_for_path(event, rel) {
+        Some(row) => row.hash == hash,
         None => false,
     }
 }
 
+/// True when `plan_hash` (computed by the caller) matches the latest
+/// `approved` ledger row for `rel`. See `hash_matches_latest`.
+pub fn plan_approved_hash(led: &Ledger, rel: &str, plan_hash: &str) -> bool {
+    hash_matches_latest(led, "approved", rel, plan_hash)
+}
+
+/// True when `context_hash` (computed by the caller) matches the latest
+/// `context` ledger row for `rel`. See `hash_matches_latest`.
+pub fn context_approved_hash(led: &Ledger, rel: &str, context_hash: &str) -> bool {
+    hash_matches_latest(led, "context", rel, context_hash)
+}
+
+/// True when the topic file's current plan hash matches the latest `approved`
+/// ledger row for `rel` (the topic file's path relative to the repo root).
+/// `rf` must not have gone through `depends::normalize_cross_file_deps` --
+/// that mutates the parsed `depends:` entries this hashes, in memory, so a
+/// caller that normalizes its `rf` must compute the hash before doing so
+/// and call `plan_approved_hash` with it instead of this.
+pub fn plan_approved(led: &Ledger, rf: &RecordFile, rel: &str) -> bool {
+    plan_approved_hash(led, rel, &record::plan_hash(rf))
+}
+
 /// True when the topic file's current context hash matches the latest
-/// `context` ledger row for `rel`.
+/// `context` ledger row for `rel`. Context hashing never reads a
+/// section's `depends:` entries, so it is unaffected by
+/// `depends::normalize_cross_file_deps` in practice -- kept alongside
+/// `plan_approved` (and `context_approved_hash` given the same way) so
+/// nothing about that stays implicit.
 pub fn context_approved(led: &Ledger, rf: &RecordFile, rel: &str) -> bool {
-    match led.latest_for_path("context", rel) {
-        Some(row) => row.hash == record::context_hash(rf),
-        None => false,
-    }
+    context_approved_hash(led, rel, &record::context_hash(rf))
 }
 
 /// True when the terms file's current hash matches the latest `terms`
@@ -90,7 +120,9 @@ pub fn is_current(led: &Ledger, id: &str) -> bool {
 
 /// True when `sec`'s latest ledger state is `answered`, `refused`, or
 /// `superseded`: its decision is closed, one way or another, so its text --
-/// heading included -- is never edited again (9.1 A point 5, 9.5 A). A
+/// heading included -- is never edited again (per "Does a decision change
+/// after it is answered?" and "Does the tool stop loaded phrases in a
+/// question?"). A
 /// section with no id yet, or none of those three states, is unfrozen.
 /// The one shared "is this section frozen" test `approve` and `check` both
 /// use.
@@ -110,7 +142,8 @@ pub fn is_frozen(led: &Ledger, sec: &Section) -> bool {
 /// `withdrawn`: the question is closed and out of play -- a refused
 /// question is done, a superseded decision has been replaced, a withdrawn
 /// question no longer stands in the file -- so it no longer holds its tier
-/// for the cap (8.8 A). `answered` is still live for this purpose (only
+/// for the cap (per "Does the tool cap the questions in a tier?").
+/// `answered` is still live for this purpose (only
 /// `is_frozen`'s edit-lock treats it as closed); a section with no id yet,
 /// or none of those three states, is live.
 pub fn is_dead(led: &Ledger, sec: &Section) -> bool {
@@ -126,7 +159,8 @@ pub fn is_dead(led: &Ledger, sec: &Section) -> bool {
 }
 
 /// `tiers` (index-aligned with `rf.sections`, as `rf.tiers` is) with every
-/// dead section's entry (`is_dead`) left out: the tier cap (8.8 A) counts
+/// dead section's entry (`is_dead`) left out: the tier cap (per "Does the
+/// tool cap the questions in a tier?") counts
 /// only live questions, while everything else a tier holds -- derivation,
 /// a refused question holding its tier until the plan changes -- still
 /// reads `rf.tiers` whole. The one place that filters before counting, so
@@ -142,7 +176,8 @@ pub fn live_tiers(led: &Ledger, rf: &RecordFile, tiers: &[usize]) -> Vec<usize> 
 }
 
 /// The text a section's `terms:` line is (re)computed from, and what the
-/// banned-word scan reads (9.1 A): the section's hashed range (heading
+/// banned-word scan reads (per "Does a reference in a topic file carry the
+/// identifier of what it names?"): the section's hashed range (heading
 /// through the hash end, see `record::hash_range`) with the `terms:` line
 /// itself left out (so re-resolving never matches against a term's own
 /// previous resolution rather than the prose that produced it), and with

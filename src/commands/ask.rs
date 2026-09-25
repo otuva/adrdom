@@ -1,5 +1,6 @@
 use crate::actions;
 use crate::banned;
+use crate::depends;
 use crate::ledger;
 use crate::msg::{self, Actor, Next};
 use crate::record;
@@ -96,13 +97,51 @@ pub fn run(record_path: PathBuf) -> i32 {
 
     // Shape and parse errors refuse first, before anything else is even
     // considered: the same "parse" category `approve`/`check` refuse on
-    // (055d303b A point 1 -- an option with no decision sentence or more
-    // than one, a duplicate id line, an answer naming a missing option --
-    // used to be a parse error only `check` read; `record_refusals` is now
-    // the one shared validation all three commands read it through).
+    // (an option with no decision sentence or more than one, a duplicate id
+    // line, an answer naming a missing option -- used to be a parse error
+    // only `check` read; `record_refusals` is now the one shared validation
+    // all three commands read it through).
     let phrase_lookup = terms::phrase_lookup(&terms_list);
+    // Every current decision's heading text, repo-wide: built once here,
+    // the same map `approve`/`check` build, and passed to the normalize
+    // pass below and to every `resolve_dep` call `ask` makes through
+    // `record_refusals`. `ask` has nothing else loaded repo-wide (only
+    // `rf`, the one file it was asked about), so this is the one caller
+    // that still has to load every topic file for it.
+    let all_records: Vec<record::RecordFile> = repo::list_decision_files(&root)
+        .iter()
+        .filter_map(|f| record::load_in(&root, f).ok())
+        .collect();
+    let cross_file_headings = depends::cross_file_heading_index(&all_records, &led);
+
+    // Plan/context approval state must be read off `rf` exactly as loaded,
+    // before the normalize pass below mutates its parsed `depends:`
+    // entries in memory (per "..."): captured here, ahead of that
+    // mutation, and used below via `state::plan_approved_hash`/
+    // `context_approved_hash` instead of recomputing from the
+    // (by-then-normalized) `rf`.
+    let raw_plan_hash = record::plan_hash(&rf);
+    let raw_context_hash = record::context_hash(&rf);
+
+    // Same pre-pass `approve`/`check` run before reading `rf.tiers`/
+    // `rf.derive_error` (`depends::normalize_cross_file_deps`): a
+    // heading-shaped `depends:` entry naming a current decision's heading
+    // in another topic file is rewritten in memory to that decision's id
+    // and the tiers re-derived, so a file with such an entry never trips
+    // the derive-error refusal below just because it hasn't been approved
+    // yet. An entry naming a current decision in more than one other file
+    // becomes `rf.derive_error` instead (`DeriveError::AmbiguousHeading`),
+    // checked immediately below, before the plan-approved gate -- exactly
+    // as `approve` refuses on it, and ahead of a "plan not approved"
+    // refusal that would otherwise fire first on an unapproved file.
+    depends::normalize_cross_file_deps(&mut rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
+    if let Some(err @ record::DeriveError::AmbiguousHeading { .. }) = &rf.derive_error {
+        eprintln!("ask: {}", msg::derive_error(&rel, err));
+        return 1;
+    }
+
     let shape_msgs: Vec<String> =
-        actions::record_refusals(&rel, &rf, &terms_list, &phrase_lookup, &led)
+        actions::record_refusals(&rel, &rf, &terms_list, &phrase_lookup, &cross_file_headings, &led)
             .into_iter()
             .filter(|r| r.category == "parse")
             .map(|r| format!("ask: {}", r.message))
@@ -143,12 +182,13 @@ pub fn run(record_path: PathBuf) -> i32 {
     }
 
     // Refusal 4: plan / context must be approved before ask will touch the
-    // file at all.
-    if !state::plan_approved(&led, &rf, &rel) {
+    // file at all -- checked against the hashes captured before the
+    // normalize pass above, never the normalized `rf`.
+    if !state::plan_approved_hash(&led, &rel, &raw_plan_hash) {
         eprintln!("ask: {}", msg::plan_not_approved(&rel));
         return 1;
     }
-    if !state::context_approved(&led, &rf, &rel) {
+    if !state::context_approved_hash(&led, &rel, &raw_context_hash) {
         eprintln!("ask: {}", msg::context_not_approved(&rel));
         return 1;
     }
@@ -187,7 +227,8 @@ pub fn run(record_path: PathBuf) -> i32 {
         return 1;
     }
 
-    // Cap refusal (8.8 A): any derived tier over `TIER_CAP` live questions,
+    // Cap refusal (per "Does the tool cap the questions in a tier?"): any
+    // derived tier over `TIER_CAP` live questions,
     // file-wide (mirrors approve's cap check, prefixed `ask:`). Dead
     // (refused/superseded/withdrawn) questions don't count.
     if let Some(tiers) = &rf.tiers {
@@ -198,7 +239,8 @@ pub fn run(record_path: PathBuf) -> i32 {
         }
     }
 
-    // The open tier (8.4 A): the lowest tier holding a non-skeleton
+    // The open tier (per "Does the tool derive tiers from the depends
+    // lines?"): the lowest tier holding a non-skeleton
     // question without a letter answer (a refused question counts as
     // without one). Every candidate is non-skeleton and has no letter
     // answer by construction, so whenever any candidate exists, it names a
@@ -211,7 +253,8 @@ pub fn run(record_path: PathBuf) -> i32 {
         .filter_map(|(i, _)| rf.tier_of(i))
         .min();
 
-    // Answer sets mandatory (8.7 A): before asking any candidate in the
+    // Answer sets mandatory (per "Does a depends entry carry the answers
+    // it holds under?"): before asking any candidate in the
     // open tier, every section in the file with a heading dep pointing at
     // an open-tier section must carry an explicit set on that entry, and
     // every set's letters must be options the target actually has. Runs
@@ -288,8 +331,9 @@ pub fn run(record_path: PathBuf) -> i32 {
             }
         }
 
-        // Supersedes target must be current (E3, founding 1.3 A/4.14 A,
-        // owner note 2026-09-24): the supersedes line freezes at ask, so a
+        // Supersedes target must be current (per "Does one decision
+        // supersede several?", owner note 2026-09-24): the supersedes
+        // line freezes at ask, so a
         // candidate naming a target that is not current right now -- never
         // answered, refused, withdrawn, or already superseded -- refuses
         // here; `answer` later accepts a target that was superseded after
@@ -302,7 +346,8 @@ pub fn run(record_path: PathBuf) -> i32 {
             }
         }
 
-        // Tier rule (8.4/8.5 A): a candidate outside the open tier
+        // Tier rule (per "Does the tool derive tiers from the depends
+        // lines?"): a candidate outside the open tier
         // refuses, naming the tier's blocker (the first non-skeleton,
         // unanswered section in the open tier, by file order) and whether
         // that blocker is refused.
@@ -342,7 +387,8 @@ pub fn run(record_path: PathBuf) -> i32 {
             }
         }
 
-        // Moot refusal (8.7 A): a heading dep carrying a set whose target
+        // Moot refusal (per "Does a depends entry carry the answers it
+        // holds under?"): a heading dep carrying a set whose target
         // is now answered with a letter outside that set.
         for d in &sec.depends {
             if let Some(record::AnswerSet::Letters(letters)) = d.set() {
@@ -364,7 +410,8 @@ pub fn run(record_path: PathBuf) -> i32 {
             }
         }
 
-        // 9.5 A: a provenance, code-state, or date tell anywhere in the
+        // Per "Does the tool stop loaded phrases in a question?": a
+        // provenance, code-state, or date tell anywhere in the
         // candidate's own body (heading through its hash range) refuses,
         // from the same scan `approve` runs on headings and context prose.
         {
@@ -392,7 +439,7 @@ pub fn run(record_path: PathBuf) -> i32 {
             return 1;
         }
 
-        // `terms::resolve` never matches a retired term (9.3 B), so a
+        // `terms::resolve` never matches a retired term (per "Does a retired term keep its words?"), so a
         // retired-match refusal cannot fire here; a word that only a
         // retired term owns simply pairs nothing, caught by refusal 6
         // below.
@@ -405,7 +452,8 @@ pub fn run(record_path: PathBuf) -> i32 {
         }
     }
 
-    // 9.1 A: ask writes no ids. Every non-skeleton section already has one
+    // Per "Does a reference in a topic file carry the identifier of what
+    // it names?": ask writes no ids. Every non-skeleton section already has one
     // here -- refusal 4 above (`plan_approved`) already refused whenever
     // one is missing, since `approve` mints every heading's id in the same
     // pass that makes the plan hash match, and any further edit that added
@@ -462,7 +510,8 @@ pub fn run(record_path: PathBuf) -> i32 {
     let mut summary: Vec<String> = Vec::new();
     for i in 0..rf.sections.len() {
         let sec = &rf.sections[i];
-        // 9.1 A point 1: `approve` now gives a skeleton an id too, so an
+        // Per "Does a reference in a topic file carry the identifier of
+        // what it names?": `approve` now gives a skeleton an id too, so an
         // id alone no longer means "this is a candidate" -- a skeleton
         // must still never be asked, exactly as `candidate` above already
         // excludes it from becoming one.
@@ -488,7 +537,8 @@ pub fn run(record_path: PathBuf) -> i32 {
         });
         summary.push(format!("{}: \"{}\" (tier {})", label, sec.heading_text, tier));
 
-        // One `assumes` row per dependent (8.1/8.7 A): what set the
+        // One `assumes` row per dependent (per "Does a depends entry
+        // carry the answers it holds under?"): what set the
         // dependent currently declares on this question, frozen at ask
         // time so `check`'s `answers.rs` can later catch it moving.
         for (di, set) in rf.dependents_of(i) {
@@ -500,7 +550,8 @@ pub fn run(record_path: PathBuf) -> i32 {
                 continue;
             };
             let dependent = &rf.sections[di];
-            // 9.1 A point 3: an `assumes` row keys on the dependent's own
+            // Per "Does a reference in a topic file carry the identifier
+            // of what it names?": an `assumes` row keys on the dependent's own
             // heading id, not its heading text -- every heading already has
             // one by the time `ask` runs (approve mints them all up front),
             // so the row stays valid across a rename that doesn't otherwise

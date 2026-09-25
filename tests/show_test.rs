@@ -201,3 +201,118 @@ fn override_is_not_a_recognized_command() {
         ledger
     );
 }
+
+// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
+//
+// "Does the tool derive tiers from the depends lines?": `show` derives
+// tiers the same way `approve`/`check` do, including the cross-file
+// pre-pass (`depends::normalize_cross_file_deps`) that rewrites a
+// heading-shaped `depends:` entry naming a current decision's heading in
+// another topic file to that decision's id before tiers are derived. File
+// B here is never approved -- its depends line is still the written
+// heading text, exactly as an agent first writes it -- so this only
+// passes when `show` runs that same pre-pass itself instead of reading
+// `rf.tiers` straight off an unnormalized file.
+#[test]
+fn show_derives_tiers_for_an_unapproved_file_whose_depends_line_names_a_cross_file_heading() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+
+    // A: an already-answered, current decision living in a topic file of
+    // its own.
+    let a_id = "77777777-7777-7777-7777-777777777777";
+    append_ledger_row(&dir, "asked", a_id, "h1", "1.1 Does A do a thing?");
+    append_ledger_row(&dir, "answered", a_id, "h1", "A");
+    let a_content = format!(
+        "# Topic A\n\n### 1.1 Does A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        a_id
+    );
+    write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
+
+    // B: never approved -- its only question stands on A, named by A's
+    // heading text, still unrewritten on disk.
+    let b_content = "# Topic B\n\n### 1.1 Does B stand on A?\ndepends: 1.1 Does A do a thing?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
+
+    let out = adr(&dir, &["show"], &[], "");
+    assert!(out.status.success(), "stderr: {}", stderr(&out));
+    let shown = stdout(&out);
+
+    assert!(shown.contains("# Topic B"), "{}", shown);
+    assert!(
+        shown.contains("tier 1\n  [unasked] 1.1 Does B stand on A?"),
+        "B's only question should land in tier 1 and be listed as unasked: {}",
+        shown
+    );
+    assert!(
+        shown.contains("stands on: 1.1 Does A do a thing?"),
+        "the cross-file dependency should resolve back to A's heading text: {}",
+        shown
+    );
+    assert!(
+        !shown.contains("no heading in this file"),
+        "an unapproved cross-file heading reference must not be reported as dangling: {}",
+        shown
+    );
+}
+
+// adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
+//
+// The cross-file half's edge, at `show` rather than `approve`: a heading
+// text that names a current decision in more than one other topic file is
+// ambiguous, so `show` must never guess which one a "stands on" line
+// means. Before this fix, `normalize_cross_file_deps` silently substituted
+// the first of the ambiguous matches (so tiers still derived and `show`
+// printed a "stands on" line naming one of the two decisions, indistin-
+// guishable from a real answer); now the ambiguity becomes the file's own
+// `derive_error`, so `show` prints B's topic line and nothing else for it
+// -- no tier, no question, no guessed "stands on" line -- the same silent
+// drop every other derive error already gets from `show`.
+#[test]
+fn show_prints_no_guess_for_an_ambiguous_cross_file_heading_dependency() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+
+    let a_id = "88888888-8888-8888-8888-888888888888";
+    append_ledger_row(&dir, "asked", a_id, "h1", "1.1 Shared heading?");
+    append_ledger_row(&dir, "answered", a_id, "h1", "A");
+    let a_content = format!(
+        "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        a_id
+    );
+    write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
+
+    let c_id = "99999999-8888-8888-8888-888888888888";
+    append_ledger_row(&dir, "asked", c_id, "h1", "1.1 Shared heading?");
+    append_ledger_row(&dir, "answered", c_id, "h1", "A");
+    let c_content = format!(
+        "# Topic C\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        c_id
+    );
+    write_record(&dir, "adrdom/decisions/topic-c.md", &c_content);
+
+    let b_content = "# Topic B\n\n### 1.1 Does B stand on the shared heading?\ndepends: 1.1 Shared heading?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
+
+    let out = adr(&dir, &["show"], &[], "");
+    assert!(out.status.success(), "stderr: {}", stderr(&out));
+    let shown = stdout(&out);
+
+    // Everything `show` prints for file B, from its topic line to the next
+    // file's (or end of output): tier derivation failed on the ambiguous
+    // entry, so this is the topic line alone -- no tier, no question, and
+    // in particular no guessed "stands on" line.
+    let b_start = shown.find("# Topic B").expect("topic B header");
+    let b_end = shown[b_start..]
+        .find("\n# ")
+        .map(|i| b_start + i)
+        .unwrap_or(shown.len());
+    let b_block = shown[b_start..b_end].trim_end();
+    assert_eq!(
+        b_block, "# Topic B",
+        "an ambiguous cross-file dependency must print nothing but the topic line, never a guessed tier or \"stands on\": {}",
+        shown
+    );
+}

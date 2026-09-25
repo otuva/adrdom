@@ -88,7 +88,8 @@ pub(super) fn check_install(root: &Path) -> Vec<Failure> {
         }
     }
 
-    // .codex/rules/adrdom.rules (9.2 A note, Codex flag): checked only when
+    // .codex/rules/adrdom.rules (per "What does install write for one
+    // agent?", the Codex flag): checked only when
     // .codex/ exists, same as the Claude deny entries above.
     if root.join(".codex").is_dir() {
         let rules_path = root.join(".codex/rules/adrdom.rules");

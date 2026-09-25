@@ -1,5 +1,6 @@
-//! Everything the page shows, computed from the repo (7.1 A). No HTML here.
+//! Everything the page shows, computed from the repo. No HTML here.
 use crate::commands::check;
+use crate::depends;
 use crate::ledger::{self, Ledger};
 use crate::record::{self, RecordFile, Section};
 use crate::repo;
@@ -33,7 +34,8 @@ pub enum QState {
     Open,
     Answered,
     /// The owner's answer that the question cannot be answered as asked
-    /// (8.1 A `**Answer:** refused`): answered for hashing/editing, but
+    /// (per "Does the owner answer a question with a refusal?":
+    /// `**Answer:** refused`): answered for hashing/editing, but
     /// unanswered for the tier rule and for `done`.
     Refused,
     Superseded,
@@ -58,7 +60,8 @@ pub struct WordPair {
 pub struct QuestionView {
     pub id: Option<String>,
     pub heading: String,
-    /// The section's derived tier (8.3 A), or `None` when tier derivation
+    /// The section's derived tier (per "Does the tool derive tiers from
+    /// the depends lines?"), or `None` when tier derivation
     /// failed for the file (`RecordFile::derive_error`).
     pub tier: Option<usize>,
     /// This section's `depends:` entries, each formatted as written in the
@@ -90,7 +93,8 @@ pub struct FileView {
     pub open_tier: Option<usize>,
     pub waits_on: Option<String>,
     /// One note per heading dep whose set excludes the answer its target
-    /// was given (8.7 A "moot", §6's `moot.rs`), formatted `"<h>" stands
+    /// was given (per "Does a depends entry carry the answers it holds
+    /// under?", "moot", `moot.rs`), formatted `"<h>" stands
     /// on "<other>"=A|B, answered C` — the file-scoped counterpart to
     /// `check`'s `moot: <rel>: ...` lines, shown alongside this file on
     /// the overview page.
@@ -149,7 +153,7 @@ pub struct Snapshot {
 /// with a body is `Unasked`; otherwise the id's latest ledger event maps
 /// straight across (`asked` -> `Open`, `answered` -> `Answered`, `refused`
 /// -> `Refused`, `superseded`/`withdrawn` accordingly). `pub(crate)` so
-/// `commands::show` (spec §7) can reuse it instead of re-deriving state.
+/// `commands::show` can reuse it instead of re-deriving state.
 pub(crate) fn qstate(led: &Ledger, sec: &Section) -> QState {
     let Some(id) = &sec.id else {
         return if sec.is_skeleton {
@@ -169,7 +173,8 @@ pub(crate) fn qstate(led: &Ledger, sec: &Section) -> QState {
 }
 
 /// Every heading id, from any topic file (not just one), paired with its
-/// heading text (9.1 A point 10): what turns a depends `Id` entry that
+/// heading text (per "Does a reference in a topic file carry the
+/// identifier of what it names?"): what turns a depends `Id` entry that
 /// names a decision in another topic file back into that decision's
 /// heading text, for `format_dep`.
 pub fn all_heading_texts(root: &Path) -> HashMap<String, String> {
@@ -202,8 +207,9 @@ fn dep_with_set(text: &str, set: &Option<record::AnswerSet>) -> String {
     }
 }
 
-/// A `depends:` entry's text as words (spec §7, updated by 9.1 A point 10):
-/// a `Text` entry (not yet approved) prints as written, with its `=set`
+/// A `depends:` entry's text as words (per "Does a reference in a topic
+/// file carry the identifier of what it names?"): a `Text` entry (not yet
+/// approved) prints as written, with its `=set`
 /// suffix restored (`=A`, `=A|B`, `=*`) when it carries one. An `Id` entry
 /// is looked up -- first as a heading id in `rf` (this file), else as a
 /// term id (`terms_list`), else as another topic file's heading id
@@ -235,7 +241,8 @@ pub fn format_dep(
 }
 
 /// One note per heading dep in `rf` whose declared answer set excludes the
-/// letter its target was actually answered with (8.7 A "moot"; mirrors
+/// letter its target was actually answered with (per "Does a depends entry
+/// carry the answers it holds under?", "moot"; mirrors
 /// `check`'s `moot.rs`, computed independently here since `record.rs` has
 /// no ledger access): `"<h>" stands on "<other>"=A|B, answered C`, `<h>`
 /// the dependent's heading and `<other>` the target's. A target that is
@@ -283,10 +290,11 @@ fn body_field(lines: &[String], sec: &Section, prefix: &str) -> Option<String> {
 
 /// `open_tier`: the lowest derived tier that still has a non-skeleton
 /// question without a letter answer — Open, Unasked, or Refused all count
-/// (8.1 A: a refusal is unanswered for the tier rule) — or `None` when
+/// (per "Does the owner answer a question with a refusal?": a refusal is
+/// unanswered for the tier rule) — or `None` when
 /// every tier is clear or tier derivation failed
 /// (`RecordFile::derive_error`; `check`/`approve`/`ask` report why). This
-/// is the "Tier N is open" tier the overview names (spec §7).
+/// is the "Tier N is open" tier the overview names.
 ///
 /// `waits_on`: the heading of the first Open/Unasked/Refused question in a
 /// tier earlier than the lowest tier that has an Unasked/Skeleton question
@@ -572,6 +580,16 @@ fn build_question_view(
     }
 }
 
+/// `plan_approved`/`context_approved` are supplied by the caller rather
+/// than computed here: `snapshot` must read them off `rf` before its own
+/// cross-file normalize pass (`depends::normalize_cross_file_deps`) mutates
+/// `rf`'s parsed `depends:` entries in memory (plan hashing covers them),
+/// so it always had to capture them ahead of calling this and hand them
+/// in. Computing them again in here, from the by-then-normalized `rf`,
+/// would only ever be wrong -- every caller must overwrite it with the
+/// value it already had -- so there is nothing here left to get wrong or
+/// forget to overwrite.
+#[allow(clippy::too_many_arguments)]
 fn build_file_view(
     root: &Path,
     rf: &RecordFile,
@@ -579,10 +597,10 @@ fn build_file_view(
     test_idx: &HashMap<String, Vec<String>>,
     terms_list: &[Term],
     all_headings: &HashMap<String, String>,
+    plan_approved: bool,
+    context_approved: bool,
 ) -> FileView {
     let path = state::rel_path(root, &rf.path);
-    let plan_approved = state::plan_approved(led, rf, &path);
-    let context_approved = state::context_approved(led, rf, &path);
     let done = plan_approved
         && context_approved
         && rf.sections.iter().all(|s| s.answer_letter().is_some());
@@ -737,11 +755,53 @@ pub fn snapshot(root: &Path) -> Snapshot {
         .unwrap_or_default();
 
     let all_headings = all_heading_texts(root);
-    let mut files: Vec<FileView> = Vec::new();
+    // Same pre-pass `approve`/`check` run before reading `rf.tiers`/
+    // `rf.derive_error` (`depends::normalize_cross_file_deps`): a
+    // heading-shaped `depends:` entry naming a current decision's heading
+    // in another topic file is rewritten in memory to that decision's id
+    // and the tiers re-derived, so an unapproved file with such an entry
+    // still shows its real tiers on the page instead of the file-wide
+    // "no heading in this file" error a plain, unresolved `Text` heading
+    // dep would otherwise earn. The ambiguous case (the same heading text
+    // naming a current decision in more than one other file) becomes that
+    // file's `derive_error` (`DeriveError::AmbiguousHeading`) instead of
+    // tiers -- `check`'s own report (already folded into `report.failures`
+    // below) is still where the ambiguity itself is reported; the page
+    // just shows no tiers for that file rather than guessing.
+    let phrase_lookup = terms::phrase_lookup(&terms_list);
+    // Every topic file, loaded once: `cross_file_heading_index` used to
+    // reload every one of them itself, then this loop reloaded whichever
+    // one it was about to build a `FileView` for all over again.
+    let mut records: Vec<RecordFile> = Vec::new();
     for f in repo::list_decision_files(root) {
-        if let Ok(rf) = record::load(&f) {
-            files.push(build_file_view(root, &rf, &led, &test_idx, &terms_list, &all_headings));
+        if let Ok(rf) = record::load_in(root, &f) {
+            records.push(rf);
         }
+    }
+    let cross_file_headings = depends::cross_file_heading_index(&records, &led);
+    let mut files: Vec<FileView> = Vec::new();
+    for mut rf in records {
+        let rel = rf.rel.clone();
+        // Plan/context approval state must be read off `rf` exactly as
+        // loaded, before the normalize pass below mutates its parsed
+        // `depends:` entries in memory (per "..."): captured here, ahead of
+        // that mutation, and passed straight into `build_file_view` (which
+        // takes them as parameters rather than computing its own, wrong,
+        // copy off the by-then-normalized `rf`).
+        let plan_ok = state::plan_approved(&led, &rf, &rel);
+        let ctx_ok = state::context_approved(&led, &rf, &rel);
+        depends::normalize_cross_file_deps(&mut rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
+        let fv = build_file_view(
+            root,
+            &rf,
+            &led,
+            &test_idx,
+            &terms_list,
+            &all_headings,
+            plan_ok,
+            ctx_ok,
+        );
+        files.push(fv);
     }
 
     let terms = terms_opt.map(|tf| build_terms_view(root, &led, tf));
@@ -1067,13 +1127,26 @@ Standard: s2.\n\n\
         let test_idx = HashMap::new();
 
         // Nothing approved yet, nothing answered: not done.
-        let fv = build_file_view(&dir, &rf, &led, &test_idx, &[], &HashMap::new());
+        let path = state::rel_path(&dir, &rf.path);
+        let plan_ok = state::plan_approved(&led, &rf, &path);
+        let ctx_ok = state::context_approved(&led, &rf, &path);
+        let fv = build_file_view(
+            &dir,
+            &rf,
+            &led,
+            &test_idx,
+            &[],
+            &HashMap::new(),
+            plan_ok,
+            ctx_ok,
+        );
         assert!(!fv.done);
 
         // Approve plan/context, then rewrite the file with every section
         // answered: now it is done. The fixture bakes its own ids in
         // (`id: id-1`/`id: id-2`), and `plan_hash` covers a heading's id
-        // line (9.1 A), so the hashes are computed from the id-bearing
+        // line (per "Does a reference in a topic file carry the identifier
+        // of what it names?"), so the hashes are computed from the id-bearing
         // (already-answered) fixture, not the id-less base one -- an
         // answer line itself never moves either hash.
         std::fs::write(&record, TWO_GROUP_ANSWERED).unwrap();
@@ -1093,7 +1166,19 @@ Standard: s2.\n\n\
             rf2.sections.iter().all(|s| s.answer_line.is_some()),
             "fixture should have every section answered"
         );
-        let fv2 = build_file_view(&dir, &rf2, &led2, &test_idx, &[], &HashMap::new());
+        let path2 = state::rel_path(&dir, &rf2.path);
+        let plan_ok2 = state::plan_approved(&led2, &rf2, &path2);
+        let ctx_ok2 = state::context_approved(&led2, &rf2, &path2);
+        let fv2 = build_file_view(
+            &dir,
+            &rf2,
+            &led2,
+            &test_idx,
+            &[],
+            &HashMap::new(),
+            plan_ok2,
+            ctx_ok2,
+        );
         assert!(fv2.plan_approved);
         assert!(fv2.context_approved);
         assert!(fv2.done);
@@ -1127,8 +1212,9 @@ Standard: s2.\n\n\
         // Approve plan/context from the id-bearing fixture (an answer or
         // refusal line never moves either hash, but the fixture's own
         // `id: id-1`/`id: id-2` lines do, since `plan_hash` covers them --
-        // 9.1 A), then rewrite the file with one question answered and the
-        // other refused.
+        // per "Does a reference in a topic file carry the identifier of
+        // what it names?"), then rewrite the file with one question
+        // answered and the other refused.
         std::fs::write(&record, TWO_GROUP_ONE_REFUSED).unwrap();
         let rf2 = record::load(&record).unwrap();
         let plan_h = record::plan_hash(&rf2);
@@ -1147,7 +1233,19 @@ Standard: s2.\n\n\
             "fixture should have every section carrying an Answer line (one letter, one refused)"
         );
 
-        let fv = build_file_view(&dir, &rf2, &led2, &test_idx, &[], &HashMap::new());
+        let path2 = state::rel_path(&dir, &rf2.path);
+        let plan_ok2 = state::plan_approved(&led2, &rf2, &path2);
+        let ctx_ok2 = state::context_approved(&led2, &rf2, &path2);
+        let fv = build_file_view(
+            &dir,
+            &rf2,
+            &led2,
+            &test_idx,
+            &[],
+            &HashMap::new(),
+            plan_ok2,
+            ctx_ok2,
+        );
         assert!(fv.plan_approved);
         assert!(fv.context_approved);
         assert!(
@@ -1240,7 +1338,19 @@ Standard: s2.\n\n\
         let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
         let test_idx = HashMap::new();
 
-        let fv = build_file_view(&dir, &rf, &led, &test_idx, &[], &HashMap::new());
+        let path = state::rel_path(&dir, &rf.path);
+        let plan_ok = state::plan_approved(&led, &rf, &path);
+        let ctx_ok = state::context_approved(&led, &rf, &path);
+        let fv = build_file_view(
+            &dir,
+            &rf,
+            &led,
+            &test_idx,
+            &[],
+            &HashMap::new(),
+            plan_ok,
+            ctx_ok,
+        );
         let q1 = fv
             .questions
             .iter()
@@ -1293,7 +1403,19 @@ Standard: s2.\n\n\
         );
 
         let test_idx = HashMap::new();
-        let fv = build_file_view(&dir, &rf, &led, &test_idx, &[], &HashMap::new());
+        let path = state::rel_path(&dir, &rf.path);
+        let plan_ok = state::plan_approved(&led, &rf, &path);
+        let ctx_ok = state::context_approved(&led, &rf, &path);
+        let fv = build_file_view(
+            &dir,
+            &rf,
+            &led,
+            &test_idx,
+            &[],
+            &HashMap::new(),
+            plan_ok,
+            ctx_ok,
+        );
         assert_eq!(fv.moot, notes);
 
         std::fs::remove_dir_all(&dir).ok();

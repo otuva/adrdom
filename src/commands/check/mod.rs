@@ -15,11 +15,12 @@ pub(crate) use banned::collect_targets;
 pub use tests::test_index;
 
 use crate::actions;
+use crate::depends;
 use crate::ledger::Ledger;
 use crate::msg::{self, Actor};
 use crate::record::{self, RecordFile};
 use crate::repo;
-use crate::state::{self, rel_path};
+use crate::state;
 use crate::terms as terms_mod;
 use crate::view;
 use std::collections::HashMap;
@@ -68,7 +69,7 @@ fn build(
         }
     }
 
-    // Terms minted in memory (E1.3): a terms file that has never been
+    // Terms minted in memory: a terms file that has never been
     // approved carries no ids on disk yet, and `phrase_lookup` only
     // resolves a term that has one. Computed once here, shared by every
     // category below that resolves a `depends:` entry, rather than each
@@ -77,8 +78,42 @@ fn build(
         .map(|tf| terms_mod::minted_copy(&tf).terms)
         .unwrap_or_default();
     let phrase_lookup = terms_mod::phrase_lookup(&terms_list);
+    // Every current decision's heading text, repo-wide (the cross-file gap
+    // "Does a reference in a topic file carry the identifier of what it
+    // names?" left open): built once here too, shared the same way
+    // `terms_list`/`phrase_lookup` already are. Built from `records`,
+    // already loaded above, rather than re-reading every topic file a
+    // second time off disk.
+    let cross_file_headings = depends::cross_file_heading_index(&records, &led);
 
-    // Every refusal each topic file earns on its own (E1.2, shared with
+    // Plan/context approval state must be read off each file exactly as it
+    // sits on disk, before the normalize pass below mutates its parsed
+    // `depends:` entries in memory (per "..."): captured here, ahead of
+    // that mutation, keyed by `rel` and threaded down to every check that
+    // compares against the ledger (`file_approval`, `ids::check_ids`'s
+    // stale-plan filter) instead of letting them recompute the hash from
+    // the (by-then-normalized) `RecordFile`.
+    let raw_hashes: HashMap<String, (String, String)> = records
+        .iter()
+        .map(|rf| (rf.rel.clone(), (record::plan_hash(rf), record::context_hash(rf))))
+        .collect();
+
+    // Heading-shaped `depends:` entries that name no heading in their own
+    // file but resolve to exactly one current decision elsewhere are
+    // rewritten to `Id` entries in memory here, before any refusal is
+    // computed below -- the same normalization `approve` runs on the file
+    // it is approving, so `check` never reports a legitimate cross-file
+    // reference as the file-wide `derive_error` a plain, unresolved `Text`
+    // heading dep always earns. An entry matching more than one current
+    // decision elsewhere becomes that file's `derive_error`
+    // (`DeriveError::AmbiguousHeading`) instead, which `record_refusals`
+    // below already turns into a "plan" category failure -- no side list
+    // to fold in here any more.
+    for rf in &mut records {
+        depends::normalize_cross_file_deps(rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
+    }
+
+    // Every refusal each topic file earns on its own (shared with
     // `approve`'s `do_approve_record`), one `Vec` per record in `records`'
     // order, plus the cross-file "answered id missing from every topic
     // file" refusal, computed once for the whole repo. `parse`/`tells`/
@@ -87,13 +122,13 @@ fn build(
     // pulls the missing-answered-id lines the same way.
     let per_record_refusals: Vec<Vec<actions::Refusal>> = records
         .iter()
-        .map(|rf| actions::record_refusals(&rf.rel, rf, &terms_list, &phrase_lookup, &led))
+        .map(|rf| actions::record_refusals(&rf.rel, rf, &terms_list, &phrase_lookup, &cross_file_headings, &led))
         .collect();
     let missing_answered = actions::missing_answered_refusals(&records, &led);
 
     let mut failures: Vec<String> = Vec::new();
     push_failures(&mut failures, parse::check_parse(&per_record_refusals));
-    push_failures(&mut failures, ids::check_ids(&records, &led, &missing_answered));
+    push_failures(&mut failures, ids::check_ids(&records, &led, &missing_answered, &raw_hashes));
     push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_path));
     push_failures(&mut failures, banned::check_banned_ledger(&led, root));
     push_failures(&mut failures, answers::check_answers(&records, &led));
@@ -106,6 +141,8 @@ fn build(
         &per_record_refusals,
         &terms_list,
         &phrase_lookup,
+        &cross_file_headings,
+        &raw_hashes,
     );
     push_failures(&mut failures, plan_failures);
     let (terms_failures, terms_awaiting, terms_notes) = terms::check_terms(root, &records, &led, staged);
@@ -118,7 +155,8 @@ fn build(
 
     for rf in &records {
         if let Some(tiers) = &rf.tiers {
-            // Live counts only (8.8 A): a dead (refused/superseded/
+            // Live counts only (per "Does the tool cap the questions in a
+            // tier?"): a dead (refused/superseded/
             // withdrawn) question no longer holds its tier for the cap,
             // and this note is read against that same cap.
             let live = state::live_tiers(&led, rf, tiers);
@@ -138,7 +176,7 @@ fn build(
         notes.push(msg::terms_awaiting());
     }
     notes.extend(terms_notes);
-    for d in done::check_done(root, &records, &led) {
+    for d in done::check_done(&records, &led, &raw_hashes) {
         notes.push(msg::done(&d));
     }
     notes.push(msg::tested_count(tested_count));
@@ -180,18 +218,32 @@ fn dropped_state(led: &Ledger, id: &str) -> bool {
 
 /// A file's plan/context approval state: its ledger-relative path, whether
 /// its current plan hash matches the latest `approved` row for that path,
-/// and likewise for context/`context`.
-fn file_approval(root: &Path, rf: &RecordFile, led: &Ledger) -> (String, bool, bool) {
-    let rel = rel_path(root, &rf.path);
-    let plan_h = record::plan_hash(rf);
-    let ctx_h = record::context_hash(rf);
-    let plan_ok = led
-        .latest_for_path("approved", &rel)
-        .map(|r| r.hash == plan_h)
-        .unwrap_or(false);
-    let ctx_ok = led
-        .latest_for_path("context", &rel)
-        .map(|r| r.hash == ctx_h)
-        .unwrap_or(false);
+/// and likewise for context/`context`. `raw_hashes` is `rel -> (plan_hash,
+/// context_hash)`, computed by `build` before its normalize pass mutates
+/// `rf`'s parsed `depends:` entries in memory -- approval state must
+/// always be read off the file exactly as it sits on disk (per "..."), so
+/// this reads that precomputed hash rather than recomputing one from `rf`,
+/// which by the time any caller here runs has already been normalized.
+/// Keyed and looked up by `rf.rel` on both sides (the same field
+/// `raw_hashes` itself was built from, in `build`, off the very same
+/// `records` list every caller here still shares) -- never `rel_path(root,
+/// &rf.path)` recomputed afresh, which risks the two disagreeing. A miss
+/// is a bug in that shared construction, not a case to paper over with a
+/// silent recompute from the (by-then-normalized) `rf`, so it panics
+/// instead of guessing.
+fn file_approval(
+    rf: &RecordFile,
+    raw_hashes: &HashMap<String, (String, String)>,
+    led: &Ledger,
+) -> (String, bool, bool) {
+    let rel = rf.rel.clone();
+    let (plan_h, ctx_h) = raw_hashes.get(&rel).unwrap_or_else(|| {
+        panic!(
+            "file_approval: {} missing from raw_hashes, though raw_hashes is built from the same records list this is called on",
+            rel
+        )
+    });
+    let plan_ok = state::plan_approved_hash(led, &rel, plan_h);
+    let ctx_ok = state::context_approved_hash(led, &rel, ctx_h);
     (rel, plan_ok, ctx_ok)
 }

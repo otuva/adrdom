@@ -6,7 +6,7 @@ use crate::actions::Refusal;
 /// `parse_errors` ("option X has no decision sentence", a duplicate `id:`
 /// line, an answer naming a missing option) -- the `parse` category of
 /// `record_refusals`, computed once in `mod.rs` and shared with `approve`'s
-/// `do_approve_record` and `ask` (E1.2/055d303b A point 1): both lists now
+/// `do_approve_record` and `ask` (055d303b A point 1): both lists now
 /// live in the shared `Refusal` list, so this is a plain filter over it
 /// rather than its own scan over `records`.
 pub(super) fn check_parse(refusals: &[Vec<Refusal>]) -> Vec<Failure> {

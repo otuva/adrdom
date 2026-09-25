@@ -32,7 +32,7 @@ hooks run `adr check` on every commit and refuse what breaks a decision.
 of prose, then the headings. Under each heading put one `depends:` line,
 comma separated: one entry for each thing the question stands on -- a term
 by its name, another heading in this file by its text, or a current
-decision by its id.
+decision by its heading text, the same as a heading in this file.
 
 ```
 # Hooks

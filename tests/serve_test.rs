@@ -1203,3 +1203,302 @@ fn page_shows_question_options_and_the_decisions_list() {
     let _ = child.kill();
     let _ = child.wait();
 }
+
+// --- core.md: tiers derived from depends lines, and a reference resolved
+// back into a name -- both on the page, not just on `show` -------------
+
+/// Tier 1, no depends line at all (mirrors `ask_tiers_test.rs`'s Q1,
+/// proven to pair the "widget" term through a real `ask`).
+const TIER_Q1_RECORD: &str = r#"# Example
+
+### 1.1 What color is the widget?
+depends: widget
+
+Problem: the widget's color is undecided.
+
+Standard: plain words.
+
+- A) The widget is red.
+  Why: reasons.
+  Costs: costs.
+- B) The widget is blue.
+  Why: other reasons.
+  Costs: other costs.
+"#;
+
+/// Appended after Q1 is answered: never written with a tier of its own --
+/// its `depends:` line just names Q1's heading text with a mandatory
+/// `=A` set -- so its tier (2) is entirely the tool's own derivation.
+const TIER_Q2_APPENDIX: &str = "\n### 1.2 Does the widget's paint match its color?\n\ndepends: 1.1 What color is the widget?=A\n\nProblem: the paint might not match.\n\nStandard: plain words.\n\n- A) The paint matches.\n  Why: reasons.\n  Costs: costs.\n- B) The paint does not match.\n  Why: other reasons.\n  Costs: other costs.\n";
+
+// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
+//
+// "show and the page print the tiers": Q1 is tier 1 (no depends line at
+// all); Q2, appended later and never written with a tier of its own,
+// stands on Q1's heading and so is tier 2, purely derived. As the topic
+// advances from Q1 open to Q2 open, the page's own tier line moves with
+// it on both routes it appears on -- "<topic>, tier N" on /next and
+// "Tier N is open" on the overview -- proof the page computes the tier
+// itself rather than reading one written in the file.
+#[test]
+fn page_prints_the_tiers_as_the_topic_advances() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let record = write_record(&dir, "adrdom/decisions/example.md", TIER_Q1_RECORD);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let next1 = get(port, "/next", Some(&cookie));
+    assert_eq!(next1.status, 200, "body: {}", next1.body);
+    assert!(next1.body.contains("Example, tier 1"), "body: {}", next1.body);
+    let overview1 = get(port, "/", Some(&cookie));
+    assert_eq!(overview1.status, 200, "body: {}", overview1.body);
+    assert!(
+        overview1.body.contains("Tier 1 is open"),
+        "body: {}",
+        overview1.body
+    );
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let q1_id = extract_ids(&content)[0].clone();
+    assert!(adr_owner(&dir, &["answer", &q1_id, "A"], "")
+        .status
+        .success());
+
+    let mut content2 = std::fs::read_to_string(&record).unwrap();
+    content2.push_str(TIER_Q2_APPENDIX);
+    std::fs::write(&record, &content2).unwrap();
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    // Same routes, no restart: the page re-reads the file/ledger fresh on
+    // every request, so it now reports tier 2 with nothing written in the
+    // topic file naming a tier at all.
+    let next2 = get(port, "/next", Some(&cookie));
+    assert_eq!(next2.status, 200, "body: {}", next2.body);
+    assert!(next2.body.contains("Example, tier 2"), "body: {}", next2.body);
+    let overview2 = get(port, "/", Some(&cookie));
+    assert_eq!(overview2.status, 200, "body: {}", overview2.body);
+    assert!(
+        overview2.body.contains("Tier 2 is open"),
+        "body: {}",
+        overview2.body
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+// adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
+//
+// "every reference carries the identifier of what it names; the agent
+// writes the name, approve turns it into the identifier, and show and the
+// page turn it back into the name": Q2's depends line is written by hand
+// naming Q1's heading text; approve rewrites it on disk to Q1's freshly
+// minted uuid (asserted below, so the id-vs-name distinction is real, not
+// assumed). The page's "Stands on:" line for Q2 still prints the heading
+// words with the `=A` set restored -- never the raw uuid the file
+// actually carries.
+#[test]
+fn page_shows_a_heading_depends_entry_by_name_not_id() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let record = write_record(&dir, "adrdom/decisions/example.md", TIER_Q1_RECORD);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let q1_id = extract_ids(&content)[0].clone();
+    assert!(adr_owner(&dir, &["answer", &q1_id, "A"], "")
+        .status
+        .success());
+
+    let mut content2 = std::fs::read_to_string(&record).unwrap();
+    content2.push_str(TIER_Q2_APPENDIX);
+    std::fs::write(&record, &content2).unwrap();
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    // On disk, Q2's depends line now carries Q1's raw uuid, not its name.
+    let approved = std::fs::read_to_string(&record).unwrap();
+    assert!(
+        approved.contains(&format!("depends: {}=A", q1_id)),
+        "expected the depends line rewritten to the id on disk: {}",
+        approved
+    );
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let next = get(port, "/next", Some(&cookie));
+    assert_eq!(next.status, 200, "body: {}", next.body);
+    assert!(
+        next.body
+            .contains("Stands on: 1.1 What color is the widget?=A"),
+        "expected the page to turn the id back into the heading name: {}",
+        next.body
+    );
+    assert!(
+        !next.body.contains(&q1_id),
+        "the page must never leak the raw id: {}",
+        next.body
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+// adr: 644b43ce-be10-4e9a-a7d5-71b27c51e365
+//
+// "answer ... run[s] from the page": POSTing to /answer with the owner's
+// cookie and token writes both of the two things a real `adr answer`
+// writes -- the topic file's own "**Answer:** A" line and the ledger's
+// "answered" row -- with no terminal `adr answer` call at all.
+#[test]
+fn post_answer_through_the_page_writes_the_answer_to_the_file_and_ledger() {
+    let dir = setup_repo_with_open_question();
+    let content = std::fs::read_to_string(dir.join("adrdom/decisions/example.md")).unwrap();
+    let question_id = extract_ids(&content)[0].clone();
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let form = format!("id={}&answer=A&t={}", question_id, token);
+    let resp = post(port, "/answer", Some(&cookie), &form);
+    assert_eq!(resp.status, 302, "body: {}", resp.body);
+
+    let record_after = std::fs::read_to_string(dir.join("adrdom/decisions/example.md")).unwrap();
+    assert!(
+        record_after.lines().any(|l| l.trim() == "**Answer:** A"),
+        "expected the page's answer written to the topic file: {}",
+        record_after
+    );
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        ledger
+            .lines()
+            .any(|l| l.contains("\tanswered\t") && l.contains(question_id.as_str())),
+        "ledger missing answered row: {}",
+        ledger
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+// adr: da59b448-1afb-4469-b40e-69eda8f253c2
+//
+// The page must show the same approval state the CLI does. B's `depends:`
+// line, hand-reverted back to the heading words `approve` rewrote to A's
+// id, still resolves to that same id in memory (the same cross-file
+// pre-pass `snapshot` runs before reading approval state) -- but it is no
+// longer the bytes the owner approved, exactly the fixture
+// `ask_and_check_refuse_a_cross_file_depends_line_reverted_by_hand_after_approve`
+// proves `ask`/`check` catch. The page must catch it too: `snapshot` reads
+// plan/context approval off each file before its own normalize pass
+// mutates the parsed `depends:` entries in memory, and hands those values
+// straight into `build_file_view` as parameters (rather than letting it
+// recompute its own, wrong, copy off the by-then-normalized file) -- so
+// there is no window where the page could show B as approved.
+#[test]
+fn page_shows_a_reverted_cross_file_depends_line_as_not_approved() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+
+    // A: a real, fully approved current decision of its own.
+    let a_content = "# Topic A\n\n### 1.1 Does A do a thing?\ndepends: decision\n\nProblem: a decision.\n\nStandard: a decision.\n\n- A) x, a decision.\n  Why: w.\n  Costs: c.\n- B) y, a decision.\n  Why: w.\n  Costs: c.\n";
+    let record_a = write_record(&dir, "adrdom/decisions/topic-a.md", a_content);
+    let out_a = adr_owner(&dir, &["approve", record_a.to_str().unwrap()], "");
+    assert!(out_a.status.success(), "approving A failed: {}", stderr(&out_a));
+    let approved_a = std::fs::read_to_string(&record_a).unwrap();
+    let a_id = approved_a
+        .lines()
+        .find_map(|l| l.strip_prefix("id: "))
+        .unwrap()
+        .to_string();
+    let ask_a = adr(&dir, &["ask", record_a.to_str().unwrap()], &[], "");
+    assert!(ask_a.status.success(), "asking A failed: {}", stderr(&ask_a));
+    assert!(
+        adr_owner(&dir, &["answer", &a_id, "A"], "").status.success(),
+        "answering A failed"
+    );
+
+    // B: its only question stands on A, named by A's heading text.
+    let b_text = "1.1 Does A do a thing?";
+    let b_content = format!(
+        "# Topic B\n\n### 1.1 Does B stand on A?\ndepends: {}\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        b_text
+    );
+    let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", &b_content);
+    let out_b = adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "");
+    assert!(out_b.status.success(), "approving B failed: {}", stderr(&out_b));
+
+    let approved_b = std::fs::read_to_string(&record_b).unwrap();
+    assert!(
+        approved_b.contains(&format!("depends: {}\n", a_id)),
+        "expected B's depends line rewritten to A's id: {}",
+        approved_b
+    );
+
+    // Hand-revert the rewritten line back to the heading words `approve`
+    // replaced it with.
+    let reverted = approved_b.replacen(
+        &format!("depends: {}\n", a_id),
+        &format!("depends: {}\n", b_text),
+        1,
+    );
+    assert_ne!(reverted, approved_b, "the fixture should still hold the rewritten line");
+    std::fs::write(&record_b, &reverted).unwrap();
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let resp = get(port, "/", Some(&cookie));
+    assert_eq!(resp.status, 200, "body: {}", resp.body);
+
+    let b_start = resp.body.find("Topic B").expect("topic B on the page");
+    let b_end = resp.body[b_start..]
+        .find("</article>")
+        .map(|i| b_start + i)
+        .unwrap_or(resp.body.len());
+    let b_block = &resp.body[b_start..b_end];
+    assert!(
+        b_block.contains("not approved"),
+        "a hand-reverted depends line must still show as not approved on the page: {}",
+        b_block
+    );
+
+    let a_start = resp.body.find("Topic A").expect("topic A on the page");
+    let a_end = resp.body[a_start..]
+        .find("</article>")
+        .map(|i| a_start + i)
+        .unwrap_or(resp.body.len());
+    let a_block = &resp.body[a_start..a_end];
+    assert!(
+        !a_block.contains("not approved"),
+        "A is genuinely approved and must not show as waiting: {}",
+        a_block
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+}

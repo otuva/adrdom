@@ -14,7 +14,8 @@ pub struct OptionRec {
 
 /// A `depends:` entry's answer-set suffix (`=A`, `=A|B`, `=*`): the letters
 /// of the target question's options under which the dependent is asked
-/// (8.7 A). `Any` is `=*`.
+/// (per "Does a depends entry carry the answers it holds under?"). `Any`
+/// is `=*`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AnswerSet {
     Any,
@@ -22,7 +23,8 @@ pub enum AnswerSet {
 }
 
 /// One `depends:` line, classified only by whether it is a uuid or still
-/// words (9.1 A): `Id` is a uuid already written to the file, resolved by
+/// words (per "Does a reference in a topic file carry the identifier of
+/// what it names?"): `Id` is a uuid already written to the file, resolved by
 /// lookup (a heading id in this file, a term id, or a decision id) rather
 /// than by shape, since `approve` is the only command that mints an id and
 /// rewrites a `depends:` line to one. `Text` is anything still unresolved:
@@ -63,6 +65,20 @@ pub enum DeriveError {
     /// A section's own heading text, found as one of its own heading
     /// `depends:` entries.
     SelfDep(String),
+    /// A heading-shaped `depends:` entry (`entry`, on the section whose
+    /// heading text is `section`) naming no heading in this file, but a
+    /// current decision's heading text in more than one *other* topic file
+    /// (`files`, sorted, deduped): set by
+    /// `depends::normalize_cross_file_deps` in place of calling
+    /// `derive_tiers` at all, so this file's one `derive_error` slot always
+    /// carries the real reason (ambiguous, never guessed at) instead of the
+    /// `Dangling` `derive_tiers` alone would otherwise report for an entry
+    /// it has no cross-file knowledge of.
+    AmbiguousHeading {
+        section: String,
+        entry: String,
+        files: Vec<String>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -97,7 +113,7 @@ pub struct Section {
     pub shape_errors: Vec<String>,
     /// True when the heading has no non-blank line before the next
     /// heading other than `depends:` lines: no id, no body, never a
-    /// failure (4.7 A, updated by 8.3).
+    /// failure.
     #[allow(dead_code)]
     pub is_skeleton: bool,
     /// Line index of this section's `terms: ` line, if any.
@@ -117,7 +133,8 @@ impl Section {
         None
     }
 
-    /// True when `**Answer:** refused` (8.1 A): answered for hashing and
+    /// True when `**Answer:** refused` (per "Does the owner answer a
+    /// question with a refusal?"): answered for hashing and
     /// editing purposes (the text is frozen), unanswered for the tier rule
     /// and for `done`.
     pub fn is_refused(&self) -> bool {
@@ -192,8 +209,10 @@ impl RecordFile {
 
     /// Sections whose heading `depends:` entry names section `idx`'s
     /// heading (by id once approved, by heading text before), paired with
-    /// the set they declare on that entry, if any (8.3 A, updated by 9.1 A:
-    /// dependents_of keys on heading ids once they exist).
+    /// the set they declare on that entry, if any (per "What does a
+    /// depends line name?", updated by "Does a reference in a topic file
+    /// carry the identifier of what it names?": dependents_of keys on
+    /// heading ids once they exist).
     pub fn dependents_of(&self, idx: usize) -> Vec<(usize, Option<&AnswerSet>)> {
         let mut out = Vec::new();
         if self.sections.get(idx).is_none() {
@@ -389,7 +408,8 @@ fn parse_answer_set(s: &str) -> Option<AnswerSet> {
     Some(AnswerSet::Letters(letters))
 }
 
-/// Splits a `depends:` line's whole value into its entries (8.1 A): entries
+/// Splits a `depends:` line's whole value into its entries (per "Does a
+/// reference line hold its whole list on one line?"): entries
 /// are comma separated, an answer set stays on its own entry (`|` inside a
 /// set, never `,`). Before approve, an entry may itself be heading text that
 /// holds a comma: fragments are rejoined, longest run first, against
@@ -716,8 +736,10 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
 }
 
 /// A heading whose body holds only blank lines, `depends:` lines, and an
-/// `id:` line (4.7 A, updated by 8.3/9.1 A): needs no id of its own to stay
-/// a skeleton, but `approve` gives every heading an id, skeletons included,
+/// `id:` line (per "What does a depends line name?" and "Does a reference
+/// in a topic file carry the identifier of what it names?"): needs no id
+/// of its own to stay a skeleton, but `approve` gives every heading an id,
+/// skeletons included,
 /// so a skeleton must stay a skeleton once it has one.
 fn is_skeleton_range(lines: &[String], start: usize, end: usize) -> bool {
     ((start + 1)..end).all(|j| {
@@ -842,7 +864,8 @@ fn analyze_shape(lines: &[String], sections: &[Section]) -> (Option<String>, (us
         h1_idx = Some(first_h1);
     }
 
-    // 8.3 A: tiers are derived from `depends:` lines, never written by
+    // Per "Does the tool derive tiers from the depends lines?": tiers are
+    // derived from `depends:` lines, never written by
     // hand; a `## ` line left over from the old format is a shape error.
     for (i, l) in lines.iter().enumerate() {
         if is_h2(l) {
@@ -859,8 +882,10 @@ fn analyze_shape(lines: &[String], sections: &[Section]) -> (Option<String>, (us
 
 /// sha256 of, per section: the question heading line (trimmed text incl.
 /// the `### ` prefix), its `id:` line if it has one, and its `depends:`
-/// lines with any `=set` suffix stripped (8.7 A: approve hashes the target,
-/// not the set; 9.1 A: the id line is now part of the plan, so minting or
+/// lines with any `=set` suffix stripped (per "Does a depends entry carry
+/// the answers it holds under?": approve hashes the target, not the set;
+/// per "Does a reference in a topic file carry the identifier of what it
+/// names?": the id line is now part of the plan, so minting or
 /// swapping one is a plan change), joined with `\n`. Changes on an added,
 /// reordered, or renamed heading, a heading gaining/losing/swapping its id,
 /// or a changed/added/removed depends target; unaffected by a body edit or
@@ -944,10 +969,12 @@ pub fn canonical_set(set: &AnswerSet) -> String {
     }
 }
 
-/// sha256 of `<dependent key>=<canonical set>` (spec §2, updated by 9.1 A):
-/// an `assumes` row's hash, and what `check`'s frozen-set comparison
+/// sha256 of `<dependent key>=<canonical set>` (per "Does a depends entry
+/// carry the answers it holds under?", updated by "Does a reference in a
+/// topic file carry the identifier of what it names?"): an `assumes`
+/// row's hash, and what `check`'s frozen-set comparison
 /// recomputes against the depends line as currently written. `dependent_key`
-/// is the dependent section's own heading id (9.1 A point 3: `assumes` rows
+/// is the dependent section's own heading id (`assumes` rows
 /// key on heading ids, not text).
 pub fn assumes_hash(dependent_key: &str, set: &AnswerSet) -> String {
     sha256_hex(&format!("{}={}", dependent_key, canonical_set(set)))
@@ -1022,7 +1049,9 @@ pub fn derive_tiers(rf: &RecordFile) -> Result<Vec<usize>, DeriveError> {
         for d in &sec.depends {
             match d {
                 // An `Id` entry is a heading dep only when it matches a
-                // heading id in this same file (9.1 A); otherwise it is a
+                // heading id in this same file (per "Does a reference in a
+                // topic file carry the identifier of what it names?");
+                // otherwise it is a
                 // term or decision reference, resolved elsewhere, and never
                 // affects tier -- never a Dangling error either, since it
                 // may legitimately resolve outside this file.
@@ -1117,7 +1146,7 @@ pub fn tier_sizes(tiers: &[usize]) -> Vec<(usize, usize)> {
 }
 
 /// The first (lowest-numbered) tier holding more than `TIER_CAP` sections,
-/// if any (8.8 A).
+/// if any (per "Does the tool cap the questions in a tier?").
 pub fn over_cap(tiers: &[usize]) -> Option<(usize, usize)> {
     tier_sizes(tiers).into_iter().find(|&(_, count)| count > TIER_CAP)
 }
@@ -1332,7 +1361,8 @@ mod tests {
     fn plan_hash_ignores_sets_on_a_one_line_multi_entry_depends() {
         // Two heading-shaped entries on the one line (a set only ever
         // attaches to a heading-shaped base -- a term entry like "widget"
-        // has no set syntax at all, spec 8.7 A), each carrying its own set.
+        // has no set syntax at all, per "Does a depends entry carry the
+        // answers it holds under?"), each carrying its own set.
         let make = |set_a: &str, set_b: &str| {
             format!(
                 "# Topic\n\n\
@@ -1702,7 +1732,8 @@ mod tests {
     #[test]
     fn depends_malformed_entries_on_one_line_are_shape_errors() {
         // All four problems (an empty entry, a bad set, and a duplicate) are
-        // entries on the same, single `depends:` line -- 8.1 A: a section
+        // entries on the same, single `depends:` line -- per "Does a
+        // reference line hold its whole list on one line?": a section
         // holds at most one `depends:` line, comma separated -- so every
         // error below names the same line number.
         let rf = rf_from(
@@ -1787,7 +1818,7 @@ mod tests {
     fn depends_comma_rejoin_prefers_the_longest_heading_match() {
         // "Alpha, Beta?" is a real heading in this file too; the rejoin must
         // still prefer the longer, full match "Alpha, Beta, Gamma?" over the
-        // shorter one it could stop at (8.1 A: "longest match wins").
+        // shorter one it could stop at ("longest match wins").
         let rf = rf_from(
             "# Topic\n\n\
              ### Alpha, Beta?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
@@ -1894,8 +1925,9 @@ mod tests {
 
     #[test]
     fn skeleton_with_an_id_line_is_still_skeleton() {
-        // 9.1 A: `approve` gives every heading an id, skeletons included; a
-        // skeleton that has picked one up must not suddenly start requiring
+        // Per "Does a reference in a topic file carry the identifier of
+        // what it names?": `approve` gives every heading an id, skeletons
+        // included; a skeleton that has picked one up must not suddenly start requiring
         // Problem/Standard/options.
         let rf = rf_from(
             "# Topic\n\n### 1.1 Skeleton?\n\nid: 11111111-1111-1111-1111-111111111111\n\ndepends: widget\n\n### 1.2 Other?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",

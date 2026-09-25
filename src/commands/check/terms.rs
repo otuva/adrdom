@@ -67,7 +67,7 @@ pub(super) fn check_terms(
         }
     }
 
-    // Shared with approve (E1.1): every shape, circular-definition,
+    // Shared with approve: every shape, circular-definition,
     // dependent-pairing, and banned-word refusal `adrdom/terms.md` earns,
     // computed on a copy with every id minted in memory so a cycle or a
     // dependent's pairing in a terms file that has never been approved --

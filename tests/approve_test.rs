@@ -221,6 +221,67 @@ fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
         .success());
 }
 
+// adr: b741b573-a2ee-498e-98fd-3a7e7d319470
+//
+// "approve writes one event for the headings and one for the prose, each
+// with its own hash; ask stops a file where either part is unapproved":
+// the other direction from `editing_context_prose_requires_reapproval...`
+// above -- here the context prose is left untouched (so the `context`
+// hash, and its row, never move) while a heading's own text is edited
+// after approval, which moves only the plan hash. `ask` stops the file on
+// "plan not approved" even though the context is still approved, and
+// re-approving writes exactly one new `approved` row and no new `context`
+// row.
+#[test]
+fn editing_a_heading_requires_reapproval_with_one_new_approved_row() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+    let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP_RECORD);
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
+
+    // Edited on the file as `approve` actually left it (with the heading's
+    // id already minted), renaming the heading text only -- the context
+    // prose lines above it are untouched.
+    let approved_content = std::fs::read_to_string(&record).unwrap();
+    let edited = approved_content.replace(
+        "### 1.1 First question?",
+        "### 1.1 First question, renamed?",
+    );
+    assert_ne!(edited, approved_content, "the heading text must exist to rename");
+    std::fs::write(&record, &edited).unwrap();
+
+    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(!out.status.success());
+    assert!(stderr(&out).contains("plan not approved"), "{}", stderr(&out));
+
+    let ledger_before = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    let approved_before = ledger_before.lines().filter(|l| l.contains("\tapproved\t")).count();
+    let context_before = ledger_before.lines().filter(|l| l.contains("\tcontext\t")).count();
+
+    let out2 = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(out2.status.success(), "approve failed: {}", stderr(&out2));
+    assert!(
+        stdout(&out2).contains("context unchanged"),
+        "{}",
+        stdout(&out2)
+    );
+
+    let ledger_after = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    let approved_after = ledger_after.lines().filter(|l| l.contains("\tapproved\t")).count();
+    let context_after = ledger_after.lines().filter(|l| l.contains("\tcontext\t")).count();
+
+    assert_eq!(approved_after, approved_before + 1, "exactly one new approved row expected");
+    assert_eq!(context_after, context_before, "context hash did not change; no new context row expected");
+
+    // ask now succeeds.
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+}
+
 // --- tier rule: a later group waits on an earlier one ------------------
 
 #[test]
