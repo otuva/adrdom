@@ -221,7 +221,7 @@ pub fn parse(lines: &[String]) -> TermsFile {
 }
 
 /// A retired entry's name and aliases are ignored here, so a current term
-/// may take a retired term's word (9.3 B); two current entries sharing a
+/// may take a retired term's word (per "Does a retired term keep its words?"); two current entries sharing a
 /// word still refuse.
 fn duplicate_word_errors(terms: &[Term]) -> Vec<String> {
     let mut occ: HashMap<String, Vec<usize>> = HashMap::new();
@@ -366,7 +366,7 @@ enum MatchKind {
 /// than one term: exact beats the "es" plural beats the "s" plural, and
 /// among candidates of equal priority the first one built (terms in
 /// `terms` order, name before its aliases) wins. Terms without an id, and
-/// retired terms, are skipped (9.3 B): a lookup never lands on a retired
+/// retired terms, are skipped (per "Does a retired term keep its words?"): a lookup never lands on a retired
 /// term, so a new pairing sees current terms only.
 ///
 /// A single lookup against this map answers whether a whole word/phrase
@@ -408,7 +408,7 @@ pub fn phrase_lookup(terms: &[Term]) -> HashMap<String, String> {
 
 /// Whole-word/phrase, case-insensitive, longest-phrase-first, non-overlapping
 /// resolution of every term name/alias in `text`. Retired terms are never
-/// matched (9.3 B): every new pairing sees current terms only, so a word
+/// matched (per "Does a retired term keep its words?"): every new pairing sees current terms only, so a word
 /// that only a retired term owns resolves to nothing here (a current term
 /// is free to take that same name or alias). Terms without an id are
 /// skipped. Returned pairs are unique and sorted by matched word.
@@ -1059,7 +1059,7 @@ aliases: \n"
     #[test]
     fn resolve_excludes_retired_terms() {
         // "verdict" is retired in `sample_terms`; a word that only a
-        // retired term owns pairs nothing at all (9.3 B).
+        // retired term owns pairs nothing at all (per "Does a retired term keep its words?").
         let terms = sample_terms();
         assert!(terms.iter().find(|t| t.name == "verdict").unwrap().retired);
         let pairs = resolve("the verdict was reached", &terms);
@@ -1086,7 +1086,7 @@ aliases: \n"
     #[test]
     fn duplicate_word_errors_ignores_a_retired_entry() {
         // A retired entry and a current entry sharing the same word: no
-        // conflict, since the retired one is not counted (9.3 B).
+        // conflict, since the retired one is not counted (per "Does a retired term keep its words?").
         let terms = vec![
             Term {
                 name: "decision".to_string(),

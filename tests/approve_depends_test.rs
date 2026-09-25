@@ -495,3 +495,285 @@ fn approve_turns_a_depends_name_into_an_id_and_show_turns_it_back_into_words() {
     assert!(shown2.contains("stands on: 1.1 Is the gadget red?"), "{}", shown2);
     assert!(!shown2.contains("Is the widget red?"), "{}", shown2);
 }
+
+// adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
+//
+// Same decision, the cross-file half: "a current decision" a depends line
+// names by heading text is not only one living in the same topic file --
+// it can be a current decision in a *different* topic file, named the same
+// way, by its heading text alone (never its id, never written by hand).
+// File A holds an already-answered, current decision of its own; file B's
+// only question depends on it by A's heading text. `approve` on file B
+// resolves that name to A's id and rewrites the depends line to it, the
+// same as it would a same-file heading or a term; `show` then reads that
+// id back off B and prints A's heading text again, unprompted.
+#[test]
+fn approve_resolves_a_cross_file_heading_dependency_and_show_turns_it_back_into_words() {
+    let dir = init_repo();
+    setup(&dir);
+
+    // A: an already-answered, current decision living in a topic file of
+    // its own -- the same shape
+    // `approve_accepts_all_three_depends_target_kinds_and_refuses_a_missing_line`
+    // uses for "a current decision", just with a real heading of its own
+    // for B to name.
+    let a_id = "77777777-7777-7777-7777-777777777777";
+    append_ledger_row(&dir, "asked", a_id, "h1", "1.1 Does A do a thing?");
+    append_ledger_row(&dir, "answered", a_id, "h1", "A");
+    let a_content = format!(
+        "# Topic A\n\n### 1.1 Does A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        a_id
+    );
+    write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
+
+    // B: a fresh topic file whose only question stands on A, named by A's
+    // heading text.
+    let b_content = "# Topic B\n\n### 1.1 Does B stand on A?\ndepends: 1.1 Does A do a thing?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
+
+    let out = adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "");
+    assert!(out.status.success(), "approve failed: {}", stderr(&out));
+
+    let approved_b = std::fs::read_to_string(&record_b).unwrap();
+    assert!(
+        approved_b.contains(&format!("depends: {}\n", a_id)),
+        "expected B's depends line rewritten to A's id: {}",
+        approved_b
+    );
+    assert!(
+        !approved_b.contains("depends: 1.1 Does A do a thing?"),
+        "the written words must not survive approve: {}",
+        approved_b
+    );
+
+    let show = adr(&dir, &["show"], &[], "");
+    assert!(show.status.success(), "{}", stderr(&show));
+    assert!(
+        stdout(&show).contains("stands on: 1.1 Does A do a thing?"),
+        "{}",
+        stdout(&show)
+    );
+}
+
+// adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
+//
+// The cross-file half's edge: a heading text that names a current decision
+// in more than one other topic file is ambiguous, so `approve` refuses
+// rather than silently picking one.
+#[test]
+fn approve_refuses_a_cross_file_heading_dependency_naming_two_current_decisions() {
+    let dir = init_repo();
+    setup(&dir);
+
+    let a_id = "88888888-8888-8888-8888-888888888888";
+    append_ledger_row(&dir, "asked", a_id, "h1", "1.1 Shared heading?");
+    append_ledger_row(&dir, "answered", a_id, "h1", "A");
+    let a_content = format!(
+        "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        a_id
+    );
+    write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
+
+    let c_id = "99999999-8888-8888-8888-888888888888";
+    append_ledger_row(&dir, "asked", c_id, "h1", "1.1 Shared heading?");
+    append_ledger_row(&dir, "answered", c_id, "h1", "A");
+    let c_content = format!(
+        "# Topic C\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        c_id
+    );
+    write_record(&dir, "adrdom/decisions/topic-c.md", &c_content);
+
+    let b_content = "# Topic B\n\n### 1.1 Does B stand on the shared heading?\ndepends: 1.1 Shared heading?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
+
+    let out = adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(
+        err.contains("\"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\" which is a current decision in more than one file"),
+        "{}",
+        err
+    );
+    assert!(err.contains("adrdom/decisions/topic-a.md"), "{}", err);
+    assert!(err.contains("adrdom/decisions/topic-c.md"), "{}", err);
+    // The ambiguous entry must earn only its own refusal: before this fix,
+    // `normalize_cross_file_deps` left the entry as an unresolved same-file
+    // `Text` heading dep whenever it found no *unambiguous* substitution to
+    // make, so `derive_tiers` (recomputed, or in this case never
+    // recomputed at all, since there was nothing to substitute) still
+    // called it `Dangling` and this same line earned a second, wrong
+    // refusal alongside the ambiguous one.
+    assert!(
+        !err.contains("which is no heading in this file"),
+        "the ambiguous entry must not also be reported as dangling: {}",
+        err
+    );
+}
+
+// adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
+//
+// The same ambiguity, but every match lives in one other topic file (two
+// current decisions there happen to carry the exact same heading text --
+// `check`'s cross-file duplicate-heading check only flags a duplicate
+// heading text *between* files, so nothing else in this repo refuses on a
+// same-file one): the refusal must say a heading names several decisions
+// in that one file, never "more than one file" when only one file is
+// involved.
+#[test]
+fn approve_refuses_a_cross_file_heading_dependency_naming_two_decisions_in_one_file() {
+    let dir = init_repo();
+    setup(&dir);
+
+    let a_id = "aaaaaaaa-8888-8888-8888-888888888888";
+    append_ledger_row(&dir, "asked", a_id, "h1", "1.1 Shared heading?");
+    append_ledger_row(&dir, "answered", a_id, "h1", "A");
+    let c_id = "cccccccc-8888-8888-8888-888888888888";
+    append_ledger_row(&dir, "asked", c_id, "h2", "1.1 Shared heading?");
+    append_ledger_row(&dir, "answered", c_id, "h2", "A");
+    let a_content = format!(
+        "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {a}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {c}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        a = a_id,
+        c = c_id,
+    );
+    write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
+
+    let b_content = "# Topic B\n\n### 1.1 Does B stand on the shared heading?\ndepends: 1.1 Shared heading?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
+
+    let out = adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(
+        err.contains(
+            "\"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\" which names more than one current decision in adrdom/decisions/topic-a.md"
+        ),
+        "{}",
+        err
+    );
+    assert!(
+        !err.contains("more than one file"),
+        "only one file is involved, the wording must not say otherwise: {}",
+        err
+    );
+}
+
+// adr: dad5273c-afe2-4ab1-a451-e2a5d4d9a26d
+//
+// A frozen (answered) section's `depends:` line, hand-edited to a
+// heading text that resolves to exactly one current decision in another
+// topic file: the frozen check must still catch it. Before this fix,
+// `normalize_cross_file_deps` ran its substitution pass before
+// `record_refusals`'s frozen check ever saw the entry, rewriting the
+// `Text` entry to an `Id` one first -- the frozen check only recognizes a
+// `Text` entry as an edit to refuse, so the rewritten `Id` slipped past it
+// and `approve` wrote the file.
+#[test]
+fn approve_refuses_a_frozen_sections_depends_line_hand_edited_to_a_cross_file_heading() {
+    let dir = init_repo();
+    setup(&dir);
+
+    // Y: an already-answered, current decision living in a topic file of
+    // its own, for X to (wrongly) start naming after X is already answered.
+    let y_id = "77777777-7777-7777-7777-777777777777";
+    append_ledger_row(&dir, "asked", y_id, "h1", "1.1 Does Y do a thing?");
+    append_ledger_row(&dir, "answered", y_id, "h1", "A");
+    let y_content = format!(
+        "# Topic Y\n\n### 1.1 Does Y do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        y_id
+    );
+    write_record(&dir, "adrdom/decisions/topic-y.md", &y_content);
+
+    // X: an already-answered section whose depends line is hand-edited,
+    // after the fact, to a cross-file heading reference -- exactly the
+    // edit `record_refusals`'s frozen check exists to catch.
+    let x_id = "66666666-6666-6666-6666-666666666666";
+    append_ledger_row(&dir, "asked", x_id, "h1", "1.1 Does X stand on something?");
+    append_ledger_row(&dir, "answered", x_id, "h1", "A");
+    let x_content = format!(
+        "# Topic X\n\n### 1.1 Does X stand on something?\ndepends: 1.1 Does Y do a thing?\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        x_id
+    );
+    let record_x = write_record(&dir, "adrdom/decisions/topic-x.md", &x_content);
+
+    let out = adr_owner(&dir, &["approve", record_x.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    assert!(
+        stderr(&out).contains("\"1.1 Does X stand on something?\": answered; agent removes the edit"),
+        "{}",
+        stderr(&out)
+    );
+
+    let content_after = std::fs::read_to_string(&record_x).unwrap();
+    assert!(
+        content_after.contains("depends: 1.1 Does Y do a thing?\n"),
+        "a refused approve must leave the hand-edited line exactly as written, never rewritten to Y's id: {}",
+        content_after
+    );
+
+    let check = adr(&dir, &["check"], &[], "");
+    assert!(
+        stdout(&check).contains("\"1.1 Does X stand on something?\": answered; agent removes the edit"),
+        "check must report the same frozen-edit refusal: {}",
+        stdout(&check)
+    );
+}
+
+// adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
+//
+// `ask` builds its own repo-wide cross-file heading index the same way
+// `approve`/`check` do (per "Does a reference in a topic file carry the
+// identifier of what it names?"), now loading every topic file itself
+// (rather than that load living inside `cross_file_heading_index`, shared
+// with callers who load their own copy for other reasons): a plan whose
+// only question names a heading text that is a current decision in more
+// than one other topic file is exactly as ambiguous to `ask` as it is to
+// `approve` -- and `ask`'s own ambiguity check runs before the
+// plan-approved gate, so this refuses on the ambiguity itself rather than
+// on the plan never having been approved.
+#[test]
+fn ask_refuses_a_cross_file_heading_dependency_naming_two_current_decisions() {
+    let dir = init_repo();
+    setup(&dir);
+
+    let a_id = "88888888-8888-8888-8888-888888888888";
+    append_ledger_row(&dir, "asked", a_id, "h1", "1.1 Shared heading?");
+    append_ledger_row(&dir, "answered", a_id, "h1", "A");
+    let a_content = format!(
+        "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        a_id
+    );
+    write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
+
+    let c_id = "99999999-8888-8888-8888-888888888888";
+    append_ledger_row(&dir, "asked", c_id, "h1", "1.1 Shared heading?");
+    append_ledger_row(&dir, "answered", c_id, "h1", "A");
+    let c_content = format!(
+        "# Topic C\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        c_id
+    );
+    write_record(&dir, "adrdom/decisions/topic-c.md", &c_content);
+
+    let b_content = "# Topic B\n\n### 1.1 Does B stand on the shared heading?\ndepends: 1.1 Shared heading?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
+
+    let out = adr(&dir, &["ask", record_b.to_str().unwrap()], &[], "");
+    assert!(!out.status.success(), "ask should have refused on the ambiguity: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(
+        err.contains(
+            "\"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\" which is a current decision in more than one file"
+        ),
+        "{}",
+        err
+    );
+    assert!(
+        !err.contains("plan not approved"),
+        "the ambiguity must refuse before the plan-approved gate: {}",
+        err
+    );
+    assert!(
+        !err.contains("which is no heading in this file"),
+        "the ambiguous entry must not also be reported as dangling: {}",
+        err
+    );
+}

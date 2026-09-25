@@ -3,7 +3,8 @@ use crate::msg;
 use crate::record::RecordFile;
 use crate::view;
 
-/// `moot` (8.7 A): a note, never a failure -- one line for every section
+/// `moot` (per "Does a depends entry carry the answers it holds under?"):
+/// a note, never a failure -- one line for every section
 /// whose heading `depends:` entry carries an answer set that excludes the
 /// letter the target question was actually answered with. The plan still
 /// asks the agent to look, but it is not wrong on its own: the owner may

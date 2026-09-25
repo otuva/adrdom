@@ -12,9 +12,11 @@ use std::path::Path;
 
 /// `plan`: per file, compares the current plan/context hash against the
 /// latest `approved`/`context` ledger rows for that path. Also reports the
-/// same depends-line/derivation/cap problems `approve` refuses on (8.3/8.4/
-/// 8.8, the `plan` category of `record_refusals`, computed once in
-/// `mod.rs` and shared with `approve`'s `do_approve_record`, E1.2):
+/// same depends-line/derivation/cap problems `approve` refuses on (per
+/// "What does a depends line name?", "Does the tool derive tiers from the
+/// depends lines?", and "Does the tool cap the questions in a tier?" --
+/// the `plan` category of `record_refusals`, computed once in
+/// `mod.rs` and shared with `approve`'s `do_approve_record`):
 /// unconditionally, regardless of the file's approval state (a derive
 /// error, a missing depends line, or an entry that resolves to nothing is a
 /// failure either way). Also reports a bad file name and a heading
@@ -31,6 +33,7 @@ pub(super) fn check_plan(
     refusals: &[Vec<Refusal>],
     terms_list: &[terms::Term],
     phrase_lookup: &HashMap<String, String>,
+    cross_file_headings: &HashMap<String, Vec<(String, String)>>,
 ) -> (Vec<Failure>, Vec<String>) {
     let mut out = Vec::new();
     let mut awaiting: Vec<String> = Vec::new();
@@ -84,14 +87,14 @@ pub(super) fn check_plan(
         }
 
         // A letter-set suffix on a resolved heading dependency validates
-        // against the target once found (9.1 A point 9: "letter sets
-        // validate against the target found by id") -- `approve` never
+        // against the target once found (per "Does a depends entry carry
+        // the answers it holds under?") -- `approve` never
         // checks this today, so it stays a check-only extra rather than a
         // `record_refusals` category.
         for sec in &rf.sections {
             for d in &sec.depends {
                 if let Ok(Some(DepTarget::Heading(ti))) =
-                    depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, led)
+                    depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, cross_file_headings, led)
                 {
                     if let Some(AnswerSet::Letters(letters)) = d.set() {
                         for msg in

@@ -1,4 +1,5 @@
-//! One code path for every owner act: the CLI and the page both call these (7.2 A).
+//! One code path for every owner act: the CLI and the page both call these
+//! (per "Does the adr binary serve the ui?").
 use crate::depends::{self, DepTarget};
 use crate::ledger::{self, Ledger};
 use crate::msg::{self, Next};
@@ -19,9 +20,9 @@ pub struct Outcome {
 /// which the identical text is filed (`parse`, `tells`, `plan`, `ids`):
 /// `approve` prefixes each with `approve: `, `check` with `<category>: `,
 /// so the same line reads either way regardless of which one printed it
-/// (E1.2, one tag richer than `terms_refusals`'s plain `Vec<String>`,
-/// E1.1, since a topic file's refusals span four of `check`'s labels
-/// where `adrdom/terms.md`'s all live under `terms:`).
+/// (one tag richer than `terms_refusals`'s plain `Vec<String>`, since a
+/// topic file's refusals span four of `check`'s labels where
+/// `adrdom/terms.md`'s all live under `terms:`).
 pub struct Refusal {
     pub category: &'static str,
     pub message: String,
@@ -123,8 +124,8 @@ pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String>
         supersedes_val = sec.supersedes.clone();
         for old in &supersedes_val {
             // A supersedes target must be current when this question was
-            // asked (E3, founding 1.3 A/4.14 A, owner note 2026-09-24): the
-            // supersedes line freezes at ask, which `ask` itself now
+            // asked (per "Does one decision supersede several?", owner note
+            // 2026-09-24): the supersedes line freezes at ask, which `ask` itself now
             // enforces. Here at answer time the target may since have moved
             // to `superseded` -- accepted only when that happened after
             // this question's own latest `asked` row, so a split (several
@@ -208,7 +209,8 @@ pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String>
     })
 }
 
-/// `adr answer <id> refuse` (8.1 A). The refusals shared with the letter
+/// `adr answer <id> refuse` (per "Does the owner answer a question with a
+/// refusal?"). The refusals shared with the letter
 /// path (id not found, already answered, terms, hash state) apply; the
 /// letter-specific option check and the section's own terms-line/pairing
 /// checks do not, since a refusal commits no decision sentence bound to a
@@ -350,8 +352,8 @@ struct Dependent {
 /// `do_approve_terms` (shape errors, circular definitions, a dependent's
 /// pairing that no longer holds, banned words in the file's own text),
 /// plus a definition running past two sentences
-/// (fcc1c1ec-d8e8-428e-9731-9817cdeb8e76, not one of the spec's numbered
-/// steps), collected all at once rather than returned at the first (E1.1) --
+/// (fcc1c1ec-d8e8-428e-9731-9817cdeb8e76, not one of the numbered steps
+/// above), collected all at once rather than returned at the first --
 /// `do_approve_terms` prints every one and writes nothing on any refusal;
 /// `check` reports the same list, each line prefixed `terms: ` instead of
 /// `approve: `, minus the approval-state lines that only make sense after a
@@ -374,7 +376,7 @@ struct Dependent {
 /// twice.
 ///
 /// `records` is every topic file in the repo, already parsed by the
-/// caller (E1.3): `do_approve_terms` parses them once itself and reuses
+/// caller: `do_approve_terms` parses them once itself and reuses
 /// that same parse for its step-7 report; `check` passes the same
 /// `RecordFile`s it built for its own record checks. Neither re-reads a
 /// topic file from disk just to compute a dependent's terms line here.
@@ -460,9 +462,10 @@ pub fn terms_refusals(
         }
         // The recorded pairing, exactly as decisions' frozen dependents are
         // read: the term's own `terms:` line as it already stood in the
-        // file before this approve, not a fresh re-resolve (9.3 B;
-        // terms-walk: "definitions are dependents for retire/move
-        // refusals"). A term with no terms line yet has no dependents.
+        // file before this approve, not a fresh re-resolve (per "Does a
+        // retired term keep its words?"; terms-walk: "definitions are
+        // dependents for retire/move refusals"). A term with no terms line
+        // yet has no dependents.
         let Some(pairs) = t.terms_line.as_deref().and_then(terms::parse_terms_line) else {
             continue;
         };
@@ -489,8 +492,9 @@ pub fn terms_refusals(
                 // A decision dependent: the agent's move is to write a new
                 // question that supersedes it, not the owner's to make on
                 // the spot. A term dependent (its own definition still
-                // carries the retired word) is never superseded (9.3 B):
-                // the agent rewords the definition and the owner re-approves.
+                // carries the retired word) is never superseded (per "Does
+                // a retired term keep its words?"): the agent rewords the
+                // definition and the owner re-approves.
                 let next = match &dep.id {
                     Some(id) => Next::agent(format!("supersedes {} with a new question first", id)),
                     None => msg::term_reword_and_approve(),
@@ -563,11 +567,12 @@ pub fn terms_refusals(
     (refusals, pairs_per_entry)
 }
 
-/// `adrdom/terms.md`: the seven steps of 4 in the spec, in order, nothing
-/// written to disk before step 6 (a shape/cycle/dependent/banned refusal
-/// leaves the file byte-identical to what was on disk before the call).
-/// Steps 1, 3, 4 and 5 (plus the definition-length check above them) are
-/// `terms_refusals`, shared with `check` (E1.1).
+/// `adrdom/terms.md` (per "Does the owner approve the terms file as a
+/// whole?"): the seven steps below, in order, nothing written to disk
+/// before step 6 (a shape/cycle/dependent/banned refusal leaves the file
+/// byte-identical to what was on disk before the call). Steps 1, 3, 4 and 5
+/// (plus the definition-length check above them) are `terms_refusals`,
+/// shared with `check`.
 fn do_approve_terms(
     root: &Path,
     file: &Path,
@@ -587,7 +592,7 @@ fn do_approve_terms(
     })?;
 
     // Every topic file, parsed once here and reused both by
-    // `terms_refusals` (E1.3: no re-reading them from disk itself) and by
+    // `terms_refusals` (no re-reading them from disk itself) and by
     // step 7's dependent report below.
     let mut records: Vec<RecordFile> = Vec::new();
     for f in &repo::list_decision_files(root) {
@@ -721,8 +726,8 @@ fn do_approve_terms(
 /// except the cross-file "answered id missing from every topic file"
 /// check, which needs every topic file, not just this one
 /// (`missing_answered_refusals`, below). Shared with `check` and `ask`
-/// (E1.2/055d303b A point 1, one function for all three, mirroring
-/// `terms_refusals`, E1.1): `approve` prefixes each message `approve: `,
+/// (055d303b A point 1, one function for all three, mirroring
+/// `terms_refusals`): `approve` prefixes each message `approve: `,
 /// `check` prefixes it `<category>: `, `ask` prefixes the "parse" slice
 /// `ask: `, so the same line reads identically wherever it is printed.
 ///
@@ -730,13 +735,16 @@ fn do_approve_terms(
 /// loaded here: `approve` passes its own already-approved terms (gated by
 /// `require_terms` before this is ever called), `check` a copy with every
 /// id minted in memory so a real term in a terms.md that has never been
-/// approved still resolves (E1.3) instead of drowning this in "which is no
-/// term" refusals.
+/// approved still resolves instead of drowning this in "which is no
+/// term" refusals. `cross_file_headings` is likewise supplied once per
+/// command run (`depends::cross_file_heading_index`), threaded straight
+/// into `resolve_dep`.
 pub fn record_refusals(
     rel: &str,
     rf: &RecordFile,
     terms_list: &[terms::Term],
     phrase_lookup: &HashMap<String, String>,
+    cross_file_headings: &HashMap<String, Vec<(String, String)>>,
     led: &Ledger,
 ) -> Vec<Refusal> {
     let mut out: Vec<Refusal> = Vec::new();
@@ -769,7 +777,8 @@ pub fn record_refusals(
         }
     }
 
-    // 9.5 A: a loaded phrase refuses before any write -- a heading with any
+    // Per "Does the tool stop loaded phrases in a question?": a loaded
+    // phrase refuses before any write -- a heading with any
     // tell (loaded opening, "and"/"or", provenance, code state, or a date),
     // or a context prose line with a provenance, code-state, or date tell.
     // A frozen heading (state::is_frozen) is skipped: it can never be
@@ -796,9 +805,9 @@ pub fn record_refusals(
         }
     }
 
-    // 8.3/8.6 B: every section, skeleton or not, needs at least one
-    // `depends:` line naming what the question stands on, before anything
-    // about it is resolved or written.
+    // Per "What does a depends line name?": every section, skeleton or
+    // not, needs at least one `depends:` line naming what the question
+    // stands on, before anything about it is resolved or written.
     for sec in &rf.sections {
         if sec.depends.is_empty() {
             out.push(Refusal {
@@ -808,17 +817,20 @@ pub fn record_refusals(
         }
     }
 
-    // Resolve every entry (8.3/9.1 A). An `Id` entry is kept as written and
-    // must already be a heading id in this file, a non-retired term id, or a
-    // current decision. A `Text` entry ending in `?` is a heading reference,
-    // whose dangling/cycle/self-dep is `derive_tiers`'s single error
-    // (computed at parse time into `rf.derive_error`); any other `Text`
-    // entry must resolve to exactly one non-retired term. A `Text` entry
-    // (of either shape) found inside a section whose latest ledger state is
+    // Resolve every entry (per "What does a depends line name?" and "Does a
+    // reference in a topic file carry the identifier of what it names?").
+    // An `Id` entry is kept as written and must already be a heading id in
+    // this file, a non-retired term id, or a current decision. A `Text`
+    // entry ending in `?` is a heading reference, whose dangling/cycle/
+    // self-dep is `derive_tiers`'s single error (computed at parse time
+    // into `rf.derive_error`); any other `Text` entry must resolve to
+    // exactly one non-retired term. A `Text` entry (of either shape) found
+    // inside a section whose latest ledger state is
     // `answered`/`refused`/`superseded` refuses instead of being silently
-    // rewritten (9.1 A point 5): that section is frozen -- its decision is
-    // already closed, one way or another -- and an edit there is the
-    // agent's to remove, not approve's to carry forward.
+    // rewritten (per "Does a decision change after it is answered?"): that
+    // section is frozen -- its decision is already closed, one way or
+    // another -- and an edit there is the agent's to remove, not approve's
+    // to carry forward.
     for sec in &rf.sections {
         let frozen = state::is_frozen(led, sec);
         for d in &sec.depends {
@@ -836,7 +848,9 @@ pub fn record_refusals(
                     continue;
                 }
             }
-            if let Err(e) = depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, led) {
+            if let Err(e) =
+                depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, cross_file_headings, led)
+            {
                 out.push(Refusal {
                     category: "plan",
                     message: depends::dep_refusal_text(rel, &sec.heading_text, &e),
@@ -851,7 +865,7 @@ pub fn record_refusals(
         });
     }
 
-    // Cap (8.8 A): no derived tier may hold more than `TIER_CAP` live
+    // Cap (per "Does the tool cap the questions in a tier?"): no derived tier may hold more than `TIER_CAP` live
     // questions. Only checkable when tiers were actually derived: a
     // `derive_error` above leaves `rf.tiers` `None`, already refused
     // there. A refused/superseded/withdrawn question is dead and does not
@@ -877,7 +891,7 @@ pub fn record_refusals(
 /// question that was never answered loses nothing). Global, so computed
 /// once per run rather than once per file -- `do_approve_record` calls it
 /// once regardless of which file was named; `check` likewise once for the
-/// whole repo. Shared with `check`'s `ids` category (E1.2).
+/// whole repo. Shared with `check`'s `ids` category.
 pub fn missing_answered_refusals(records: &[RecordFile], led: &Ledger) -> Vec<Refusal> {
     let mut present_ids: HashSet<String> = HashSet::new();
     for rf in records {
@@ -920,7 +934,8 @@ pub fn missing_answered_refusals(records: &[RecordFile], led: &Ledger) -> Vec<Re
 }
 
 /// Inserts a freshly minted id directly after each skeleton section's
-/// `depends:` line (9.1 A/8.1 A point 4, no blank padding, the same bare
+/// `depends:` line (per "Does a reference in a topic file carry the
+/// identifier of what it names?"; no blank padding, the same bare
 /// single-line insert `ask` uses for `terms:` after `id:`). Every section
 /// here has already passed `record_refusals`'s "has no depends line"
 /// check, so the search below should never fail -- but that invariant
@@ -942,7 +957,8 @@ fn insert_missing_ids(rf: &RecordFile, mut work_lines: Vec<String>) -> Result<Ve
 }
 
 /// A topic file: parse, refuse on shape errors; resolve every `depends:`
-/// entry (9.1 A: the file holds ids, the agent writes words, and `approve`
+/// entry (per "Does a reference in a topic file carry the identifier of
+/// what it names?": the file holds ids, the agent writes words, and `approve`
 /// is what turns one into the other); check every ledger id that now
 /// appears in no topic file, refusing on a current (answered) one, before
 /// anything is written -- withdrawing an asked/refused one and allowing a
@@ -959,7 +975,7 @@ fn do_approve_record(
     led: &Ledger,
     ledger_path: &Path,
 ) -> Result<Outcome, String> {
-    let rf = record::load(file).map_err(|e| {
+    let mut rf = record::load(file).map_err(|e| {
         format!(
             "approve: {}",
             msg::read_failed(
@@ -984,16 +1000,55 @@ fn do_approve_record(
     // scratch on every entry.
     let phrase_lookup = terms::phrase_lookup(terms_list);
 
-    // E1.2: every refusal this file can earn -- shape, tells, a missing
+    // Every topic file, loaded once here rather than twice: this used to be
+    // loaded again, further down, only for `missing_answered_refusals` --
+    // after `cross_file_heading_index` had already loaded every file
+    // itself to build its own copy of the same thing. Loaded via
+    // `load_in` (root-relative `.rel`, matching what `cross_file_heading_index`
+    // always printed) straight off disk, still unwritten at this point, so
+    // its ids are exactly what's on disk; minting new ids for skeleton
+    // headings below never removes an id already in the ledger's
+    // `state_ids`, so loading before that rewrite changes nothing either
+    // read below depends on.
+    let mut all_records: Vec<RecordFile> = Vec::new();
+    for f in &repo::list_decision_files(root) {
+        if let Ok(rf2) = record::load_in(root, f) {
+            all_records.push(rf2);
+        }
+    }
+    // Every current decision's heading text, repo-wide (the cross-file gap
+    // "Does a reference in a topic file carry the identifier of what it
+    // names?" left open): built once here too, from `all_records` above,
+    // and reused for the normalize pass below and for every `resolve_dep`
+    // call this function makes.
+    let cross_file_headings = depends::cross_file_heading_index(&all_records, led);
+
+    // Heading-shaped `depends:` entries that name no heading in `rf` but
+    // resolve to exactly one current decision elsewhere are rewritten to
+    // `Id` entries in memory, and `rf.tiers`/`rf.derive_error` recomputed,
+    // before `record_refusals` runs -- otherwise a legitimate cross-file
+    // reference would still trip the file-wide `derive_error` a plain
+    // `Text` heading dep always has when it names no heading in its own
+    // file (`record::derive_tiers` has no cross-file/ledger knowledge of
+    // its own). An entry that matches more than one current decision
+    // elsewhere earns its own `AmbiguousHeading` refusal here instead.
+    let ambiguous_cross_file =
+        depends::normalize_cross_file_deps(rel, &mut rf, terms_list, &phrase_lookup, &cross_file_headings, led);
+
+    // Every refusal this file can earn -- shape, tells, a missing
     // depends line, depends resolution (including a frozen section's
     // edit and the derived-tiers error), and the tier cap -- collected
     // here (`record_refusals`, shared with `check`) instead of returned at
     // the first, so one `approve` call tells the agent everything it owes
     // the owner before asking again.
-    let mut refusals: Vec<String> = record_refusals(rel, &rf, terms_list, &phrase_lookup, led)
-        .into_iter()
-        .map(|r| format!("approve: {}", r.message))
-        .collect();
+    let mut refusals: Vec<String> =
+        record_refusals(rel, &rf, terms_list, &phrase_lookup, &cross_file_headings, led)
+            .into_iter()
+            .map(|r| format!("approve: {}", r.message))
+            .collect();
+    for m in ambiguous_cross_file {
+        refusals.push(format!("approve: {}", m));
+    }
 
     // Ledger ids (asked/answered/refused/superseded/withdrawn) that now
     // appear in no topic file at all: withdraw the asked/refused ones,
@@ -1002,18 +1057,8 @@ fn do_approve_record(
     // allow a superseded one silently. Computed and checked here, before
     // any write below, so a refusal on this leaves both the topic file and
     // the ledger exactly as they were (the function's own contract:
-    // nothing is written when a check refuses). Reads every topic file
-    // straight off disk like `file` itself -- still unwritten at this
-    // point, so its ids are exactly `rf`'s; minting new ids for skeleton
-    // headings below never removes an id already in the ledger's
-    // `state_ids`, so reading before that rewrite changes nothing this
-    // check depends on.
-    let mut all_records: Vec<RecordFile> = Vec::new();
-    for f in &repo::list_decision_files(root) {
-        if let Ok(rf2) = record::load(f) {
-            all_records.push(rf2);
-        }
-    }
+    // nothing is written when a check refuses). `all_records`, loaded
+    // above, is still exactly what's on disk at this point.
     for r in missing_answered_refusals(&all_records, led) {
         refusals.push(format!("approve: {}", r.message));
     }
@@ -1041,7 +1086,8 @@ fn do_approve_record(
             continue;
         }
         // A refused id absent from every file is withdrawn exactly like a
-        // struck asked one (8.2 A): the refusal already closed it with no
+        // struck asked one (per "Does approve withdraw an asked question
+        // struck from the plan?"): the refusal already closed it with no
         // decision, so there's nothing left to protect. An answered one is
         // handled above, by `missing_answered_refusals`.
         if let Some(r) = led.latest_state(id) {
@@ -1065,7 +1111,8 @@ fn do_approve_record(
     // Every check above passed: mint an id for every heading that lacks one
     // (skeletons included), reparse so every heading's id is available, then
     // rewrite each section's single `depends:` line to one line of ids
-    // (8.1 A point 3), entry by entry, keeping any `=set` suffix.
+    // (per "Does a reference line hold its whole list on one line?"), entry
+    // by entry, keeping any `=set` suffix.
     let work_lines = insert_missing_ids(&rf, rf.lines.clone())?;
     let mut work_rf = record::build(rf.path.clone(), rel.to_string(), work_lines);
 
@@ -1078,7 +1125,7 @@ fn do_approve_record(
         let parts: Vec<String> = sec
             .depends
             .iter()
-            .map(|d| rewrite_dep_entry(d, sec, &work_rf, terms_list, &phrase_lookup, led))
+            .map(|d| rewrite_dep_entry(d, sec, &work_rf, terms_list, &phrase_lookup, &cross_file_headings, led))
             .collect();
         work_rf.lines[line_idx] = format!("depends: {}", parts.join(", "));
     }
@@ -1168,10 +1215,11 @@ fn do_approve_record(
         }
     }
 
-    // Printed last, after a successful record approval (spec §3): the
-    // tiers this file now derives to, one `N (count)` per non-empty tier,
-    // live counts only (8.8 A note; matches `check`'s own "tiers: ..."
-    // note, computed the same way via `state::live_tiers`). `work_rf.tiers`
+    // Printed last, after a successful record approval: the tiers this
+    // file now derives to, one `N (count)` per non-empty tier, live counts
+    // only (per "Does the tool cap the questions in a tier?"; matches
+    // `check`'s own "tiers: ..." note, computed the same way via
+    // `state::live_tiers`). `work_rf.tiers`
     // is guaranteed `Some` here: a `derive_error` would already be among
     // `refusals`, and the early return above would have fired.
     let tiers: &Vec<usize> = work_rf
@@ -1192,7 +1240,8 @@ fn do_approve_record(
 }
 
 /// The final text one `depends:` entry rewrites to when `approve` rewrites
-/// a section's single `depends:` line (8.1 A point 3): an already-resolved
+/// a section's single `depends:` line (per "Does a reference line hold its
+/// whole list on one line?"): an already-resolved
 /// `Id` entry keeps its id and set exactly as written; a `Text` entry
 /// resolves to the id its target already carries in `work_rf` (every entry
 /// was already validated above, so this should always find one), keeping
@@ -1206,6 +1255,7 @@ fn rewrite_dep_entry(
     work_rf: &RecordFile,
     terms_list: &[terms::Term],
     phrase_lookup: &HashMap<String, String>,
+    cross_file_headings: &HashMap<String, Vec<(String, String)>>,
     led: &Ledger,
 ) -> String {
     let set_suffix = |set: &Option<record::AnswerSet>| {
@@ -1216,7 +1266,15 @@ fn rewrite_dep_entry(
     match d {
         record::Dep::Id { id, set } => format!("{}{}", id, set_suffix(set)),
         record::Dep::Text { text, set } => {
-            let resolved = depends::resolve_dep(d, sec, work_rf, terms_list, phrase_lookup, led)
+            let resolved = depends::resolve_dep(
+                d,
+                sec,
+                work_rf,
+                terms_list,
+                phrase_lookup,
+                cross_file_headings,
+                led,
+            )
                 .ok()
                 .flatten()
                 .and_then(|target| match target {

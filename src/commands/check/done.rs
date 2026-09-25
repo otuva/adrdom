@@ -4,7 +4,8 @@ use crate::record::RecordFile;
 use std::path::Path;
 
 /// `done`: every file whose plan and context are approved and whose every
-/// h3 section carries a letter answer (4.15, updated by 8.1 A: a refused
+/// h3 section carries a letter answer (per "Does a topic file close?",
+/// updated by "Does the owner answer a question with a refusal?": a refused
 /// section is unanswered for `done`, same as an unasked one).
 pub(super) fn check_done(root: &Path, records: &[RecordFile], led: &Ledger) -> Vec<String> {
     let mut out = Vec::new();

@@ -201,3 +201,58 @@ fn override_is_not_a_recognized_command() {
         ledger
     );
 }
+
+// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
+//
+// "Does the tool derive tiers from the depends lines?": `show` derives
+// tiers the same way `approve`/`check` do, including the cross-file
+// pre-pass (`depends::normalize_cross_file_deps`) that rewrites a
+// heading-shaped `depends:` entry naming a current decision's heading in
+// another topic file to that decision's id before tiers are derived. File
+// B here is never approved -- its depends line is still the written
+// heading text, exactly as an agent first writes it -- so this only
+// passes when `show` runs that same pre-pass itself instead of reading
+// `rf.tiers` straight off an unnormalized file.
+#[test]
+fn show_derives_tiers_for_an_unapproved_file_whose_depends_line_names_a_cross_file_heading() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+
+    // A: an already-answered, current decision living in a topic file of
+    // its own.
+    let a_id = "77777777-7777-7777-7777-777777777777";
+    append_ledger_row(&dir, "asked", a_id, "h1", "1.1 Does A do a thing?");
+    append_ledger_row(&dir, "answered", a_id, "h1", "A");
+    let a_content = format!(
+        "# Topic A\n\n### 1.1 Does A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        a_id
+    );
+    write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
+
+    // B: never approved -- its only question stands on A, named by A's
+    // heading text, still unrewritten on disk.
+    let b_content = "# Topic B\n\n### 1.1 Does B stand on A?\ndepends: 1.1 Does A do a thing?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
+
+    let out = adr(&dir, &["show"], &[], "");
+    assert!(out.status.success(), "stderr: {}", stderr(&out));
+    let shown = stdout(&out);
+
+    assert!(shown.contains("# Topic B"), "{}", shown);
+    assert!(
+        shown.contains("tier 1\n  [unasked] 1.1 Does B stand on A?"),
+        "B's only question should land in tier 1 and be listed as unasked: {}",
+        shown
+    );
+    assert!(
+        shown.contains("stands on: 1.1 Does A do a thing?"),
+        "the cross-file dependency should resolve back to A's heading text: {}",
+        shown
+    );
+    assert!(
+        !shown.contains("no heading in this file"),
+        "an unapproved cross-file heading reference must not be reported as dangling: {}",
+        shown
+    );
+}

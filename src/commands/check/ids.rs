@@ -16,7 +16,8 @@ pub(super) fn check_ids(records: &[RecordFile], led: &Ledger, missing_answered: 
                 continue;
             }
             match &sec.id {
-                // 9.1 A point 9: a section with no id means the plan was
+                // Per "Does the owner approve a plan in one step?": a
+                // section with no id means the plan was
                 // never approved (or an edit since moved the plan hash) --
                 // `approve`, not `ask`, is what gives it one.
                 None => out.push(Failure {
@@ -76,7 +77,7 @@ pub(super) fn check_ids(records: &[RecordFile], led: &Ledger, missing_answered: 
             continue;
         }
         // An answered-and-current id missing from every file is reported
-        // below, from `missing_answered` (E1.2, shared with `approve`'s
+        // below, from `missing_answered` (shared with `approve`'s
         // `missing_answered_refusals`), so it isn't printed twice here.
         if event == Some("answered") {
             continue;

@@ -24,8 +24,9 @@ pub struct Row {
     pub hash: String,
     pub detail: String,
     /// The tool version that wrote this row (src/version.rs's `VERSION`
-    /// at write time). Empty for a row read from a pre-8.1 5-field line;
-    /// `read` fills that in as `String::new()` rather than refusing it.
+    /// at write time). Empty for a row read from an older 5-field line, from
+    /// before "Does every ledger row carry the tool version?" added this
+    /// field; `read` fills that in as `String::new()` rather than refusing it.
     pub version: String,
 }
 
@@ -74,7 +75,8 @@ pub fn read(path: &Path) -> Ledger {
     Ledger { rows, malformed }
 }
 
-/// Always 6 tab-separated fields (8.1 A): the pre-existing 5 plus
+/// Always 6 tab-separated fields (per "Does every ledger row carry the
+/// tool version?"): the pre-existing 5 plus
 /// `version`, even when it's empty.
 pub fn row_line(r: &Row) -> String {
     let detail = r.detail.replace(['\t', '\n'], " ");
@@ -118,7 +120,8 @@ impl Ledger {
     }
 
     /// The position in `rows` (ledger order) of the latest `asked` row for
-    /// `id`, if any (E3). Rows can share a timestamp when two ledger
+    /// `id`, if any (per "Does one decision supersede several?"). Rows
+    /// can share a timestamp when two ledger
     /// entries are written in the same run, so a supersedes freeze check
     /// compares this position -- the order rows were actually appended in --
     /// rather than the `time` string.
@@ -127,7 +130,8 @@ impl Ledger {
     }
 
     /// The position in `rows` (ledger order) of the latest `superseded` row
-    /// for `id`, if any (E3). Paired with `latest_asked_pos` to tell whether
+    /// for `id`, if any (per "Does one decision supersede several?").
+    /// Paired with `latest_asked_pos` to tell whether
     /// a supersedes target was superseded before or after a question asking
     /// it was itself asked.
     pub fn latest_superseded_pos(&self, id: &str) -> Option<usize> {

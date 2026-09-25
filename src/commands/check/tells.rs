@@ -7,7 +7,8 @@ use crate::state::{self, rel_path};
 use crate::tells;
 use std::path::Path;
 
-/// `tells` (9.5 A): the same provenance/code-state/date/loaded-heading scan
+/// `tells` (per "Does the tool stop loaded phrases in a question?"): the
+/// same provenance/code-state/date/loaded-heading scan
 /// `approve` and `ask` refuse on, reported here instead -- only for text not
 /// yet frozen: a section whose latest ledger state is not `answered`,
 /// `refused`, or `superseded`, plus the context prose, which is never
@@ -16,7 +17,7 @@ use std::path::Path;
 ///
 /// The heading-tell and context-prose-tell lines are the `tells` category
 /// of `record_refusals` (`refusals`, computed once in `mod.rs`, shared
-/// with `approve`'s `do_approve_record`, E1.2). Each section's body below
+/// with `approve`'s `do_approve_record`). Each section's body below
 /// the heading (Problem/Standard/Why/Costs) is scanned here too, for
 /// provenance/code-state/date only -- `approve` never reads this far into
 /// a body, only the heading and the file's context prose, so it stays a

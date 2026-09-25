@@ -1,6 +1,7 @@
 //! One list, one matcher, for text that reports who said or chose
 //! something, what the code does right now, when something was said, or
-//! that opens a heading already presupposing an answer (9.5 A). `approve`
+//! that opens a heading already presupposing an answer (per "Does the tool
+//! stop loaded phrases in a question?"). `approve`
 //! and `ask` refuse on a hit; `check` reports the same hits, but only in
 //! text not yet frozen (a section whose latest ledger state is not
 //! `answered`, `refused`, or `superseded`) plus the context prose, which is

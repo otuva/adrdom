@@ -144,10 +144,10 @@ pub(super) fn render_next(
     let first = q.options.first().map(|o| o.letter).unwrap_or('A');
     // The Refuse button shares the `answer` form field with the letter
     // radios, submitting `answer=refuse` when it (not a radio) is the
-    // control that submits the form (spec §7). `actions::do_answer` takes
-    // this the same way it takes a letter today: see the wave-2 report for
-    // the follow-up once `do_answer`/`do_refuse` (§5, built in parallel)
-    // lands its own handling of the value "refuse".
+    // control that submits the form (per "Does the owner answer a question
+    // with a refusal?"). `actions::do_answer` takes this the same way it
+    // takes a letter, via `do_answer`/`do_refuse`'s own handling of the
+    // value "refuse".
     body.push_str(&format!(
         "<p class=\"act\"><button type=\"submit\" class=\"answer\" id=\"answer-button\">Answer <span id=\"answer-letter\">{}</span></button> <button type=\"submit\" name=\"answer\" value=\"refuse\" class=\"refuse\" id=\"refuse-button\">Refuse</button> <a class=\"skip\" href=\"/next?after={}\">Skip this one</a></p>\n",
         first,
