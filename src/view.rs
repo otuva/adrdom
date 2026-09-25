@@ -580,6 +580,16 @@ fn build_question_view(
     }
 }
 
+/// `plan_approved`/`context_approved` are supplied by the caller rather
+/// than computed here: `snapshot` must read them off `rf` before its own
+/// cross-file normalize pass (`depends::normalize_cross_file_deps`) mutates
+/// `rf`'s parsed `depends:` entries in memory (plan hashing covers them),
+/// so it always had to capture them ahead of calling this and hand them
+/// in. Computing them again in here, from the by-then-normalized `rf`,
+/// would only ever be wrong -- every caller must overwrite it with the
+/// value it already had -- so there is nothing here left to get wrong or
+/// forget to overwrite.
+#[allow(clippy::too_many_arguments)]
 fn build_file_view(
     root: &Path,
     rf: &RecordFile,
@@ -587,10 +597,10 @@ fn build_file_view(
     test_idx: &HashMap<String, Vec<String>>,
     terms_list: &[Term],
     all_headings: &HashMap<String, String>,
+    plan_approved: bool,
+    context_approved: bool,
 ) -> FileView {
     let path = state::rel_path(root, &rf.path);
-    let plan_approved = state::plan_approved(led, rf, &path);
-    let context_approved = state::context_approved(led, rf, &path);
     let done = plan_approved
         && context_approved
         && rf.sections.iter().all(|s| s.answer_letter().is_some());
@@ -774,17 +784,23 @@ pub fn snapshot(root: &Path) -> Snapshot {
         let rel = rf.rel.clone();
         // Plan/context approval state must be read off `rf` exactly as
         // loaded, before the normalize pass below mutates its parsed
-        // `depends:` entries in memory (per "..."): captured here, ahead
-        // of that mutation, and patched into the `FileView` after
-        // `build_file_view` runs (which otherwise reads them straight off
-        // the, by-then-normalized, `rf`).
+        // `depends:` entries in memory (per "..."): captured here, ahead of
+        // that mutation, and passed straight into `build_file_view` (which
+        // takes them as parameters rather than computing its own, wrong,
+        // copy off the by-then-normalized `rf`).
         let plan_ok = state::plan_approved(&led, &rf, &rel);
         let ctx_ok = state::context_approved(&led, &rf, &rel);
         depends::normalize_cross_file_deps(&mut rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
-        let mut fv = build_file_view(root, &rf, &led, &test_idx, &terms_list, &all_headings);
-        fv.plan_approved = plan_ok;
-        fv.context_approved = ctx_ok;
-        fv.done = plan_ok && ctx_ok && rf.sections.iter().all(|s| s.answer_letter().is_some());
+        let fv = build_file_view(
+            root,
+            &rf,
+            &led,
+            &test_idx,
+            &terms_list,
+            &all_headings,
+            plan_ok,
+            ctx_ok,
+        );
         files.push(fv);
     }
 
@@ -1111,7 +1127,19 @@ Standard: s2.\n\n\
         let test_idx = HashMap::new();
 
         // Nothing approved yet, nothing answered: not done.
-        let fv = build_file_view(&dir, &rf, &led, &test_idx, &[], &HashMap::new());
+        let path = state::rel_path(&dir, &rf.path);
+        let plan_ok = state::plan_approved(&led, &rf, &path);
+        let ctx_ok = state::context_approved(&led, &rf, &path);
+        let fv = build_file_view(
+            &dir,
+            &rf,
+            &led,
+            &test_idx,
+            &[],
+            &HashMap::new(),
+            plan_ok,
+            ctx_ok,
+        );
         assert!(!fv.done);
 
         // Approve plan/context, then rewrite the file with every section
@@ -1138,7 +1166,19 @@ Standard: s2.\n\n\
             rf2.sections.iter().all(|s| s.answer_line.is_some()),
             "fixture should have every section answered"
         );
-        let fv2 = build_file_view(&dir, &rf2, &led2, &test_idx, &[], &HashMap::new());
+        let path2 = state::rel_path(&dir, &rf2.path);
+        let plan_ok2 = state::plan_approved(&led2, &rf2, &path2);
+        let ctx_ok2 = state::context_approved(&led2, &rf2, &path2);
+        let fv2 = build_file_view(
+            &dir,
+            &rf2,
+            &led2,
+            &test_idx,
+            &[],
+            &HashMap::new(),
+            plan_ok2,
+            ctx_ok2,
+        );
         assert!(fv2.plan_approved);
         assert!(fv2.context_approved);
         assert!(fv2.done);
@@ -1193,7 +1233,19 @@ Standard: s2.\n\n\
             "fixture should have every section carrying an Answer line (one letter, one refused)"
         );
 
-        let fv = build_file_view(&dir, &rf2, &led2, &test_idx, &[], &HashMap::new());
+        let path2 = state::rel_path(&dir, &rf2.path);
+        let plan_ok2 = state::plan_approved(&led2, &rf2, &path2);
+        let ctx_ok2 = state::context_approved(&led2, &rf2, &path2);
+        let fv = build_file_view(
+            &dir,
+            &rf2,
+            &led2,
+            &test_idx,
+            &[],
+            &HashMap::new(),
+            plan_ok2,
+            ctx_ok2,
+        );
         assert!(fv.plan_approved);
         assert!(fv.context_approved);
         assert!(
@@ -1286,7 +1338,19 @@ Standard: s2.\n\n\
         let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
         let test_idx = HashMap::new();
 
-        let fv = build_file_view(&dir, &rf, &led, &test_idx, &[], &HashMap::new());
+        let path = state::rel_path(&dir, &rf.path);
+        let plan_ok = state::plan_approved(&led, &rf, &path);
+        let ctx_ok = state::context_approved(&led, &rf, &path);
+        let fv = build_file_view(
+            &dir,
+            &rf,
+            &led,
+            &test_idx,
+            &[],
+            &HashMap::new(),
+            plan_ok,
+            ctx_ok,
+        );
         let q1 = fv
             .questions
             .iter()
@@ -1339,7 +1403,19 @@ Standard: s2.\n\n\
         );
 
         let test_idx = HashMap::new();
-        let fv = build_file_view(&dir, &rf, &led, &test_idx, &[], &HashMap::new());
+        let path = state::rel_path(&dir, &rf.path);
+        let plan_ok = state::plan_approved(&led, &rf, &path);
+        let ctx_ok = state::context_approved(&led, &rf, &path);
+        let fv = build_file_view(
+            &dir,
+            &rf,
+            &led,
+            &test_idx,
+            &[],
+            &HashMap::new(),
+            plan_ok,
+            ctx_ok,
+        );
         assert_eq!(fv.moot, notes);
 
         std::fs::remove_dir_all(&dir).ok();

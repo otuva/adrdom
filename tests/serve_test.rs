@@ -1402,3 +1402,103 @@ fn post_answer_through_the_page_writes_the_answer_to_the_file_and_ledger() {
     let _ = child.kill();
     let _ = child.wait();
 }
+
+// adr: da59b448-1afb-4469-b40e-69eda8f253c2
+//
+// The page must show the same approval state the CLI does. B's `depends:`
+// line, hand-reverted back to the heading words `approve` rewrote to A's
+// id, still resolves to that same id in memory (the same cross-file
+// pre-pass `snapshot` runs before reading approval state) -- but it is no
+// longer the bytes the owner approved, exactly the fixture
+// `ask_and_check_refuse_a_cross_file_depends_line_reverted_by_hand_after_approve`
+// proves `ask`/`check` catch. The page must catch it too: `snapshot` reads
+// plan/context approval off each file before its own normalize pass
+// mutates the parsed `depends:` entries in memory, and hands those values
+// straight into `build_file_view` as parameters (rather than letting it
+// recompute its own, wrong, copy off the by-then-normalized file) -- so
+// there is no window where the page could show B as approved.
+#[test]
+fn page_shows_a_reverted_cross_file_depends_line_as_not_approved() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+
+    // A: a real, fully approved current decision of its own.
+    let a_content = "# Topic A\n\n### 1.1 Does A do a thing?\ndepends: decision\n\nProblem: a decision.\n\nStandard: a decision.\n\n- A) x, a decision.\n  Why: w.\n  Costs: c.\n- B) y, a decision.\n  Why: w.\n  Costs: c.\n";
+    let record_a = write_record(&dir, "adrdom/decisions/topic-a.md", a_content);
+    let out_a = adr_owner(&dir, &["approve", record_a.to_str().unwrap()], "");
+    assert!(out_a.status.success(), "approving A failed: {}", stderr(&out_a));
+    let approved_a = std::fs::read_to_string(&record_a).unwrap();
+    let a_id = approved_a
+        .lines()
+        .find_map(|l| l.strip_prefix("id: "))
+        .unwrap()
+        .to_string();
+    let ask_a = adr(&dir, &["ask", record_a.to_str().unwrap()], &[], "");
+    assert!(ask_a.status.success(), "asking A failed: {}", stderr(&ask_a));
+    assert!(
+        adr_owner(&dir, &["answer", &a_id, "A"], "").status.success(),
+        "answering A failed"
+    );
+
+    // B: its only question stands on A, named by A's heading text.
+    let b_text = "1.1 Does A do a thing?";
+    let b_content = format!(
+        "# Topic B\n\n### 1.1 Does B stand on A?\ndepends: {}\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        b_text
+    );
+    let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", &b_content);
+    let out_b = adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "");
+    assert!(out_b.status.success(), "approving B failed: {}", stderr(&out_b));
+
+    let approved_b = std::fs::read_to_string(&record_b).unwrap();
+    assert!(
+        approved_b.contains(&format!("depends: {}\n", a_id)),
+        "expected B's depends line rewritten to A's id: {}",
+        approved_b
+    );
+
+    // Hand-revert the rewritten line back to the heading words `approve`
+    // replaced it with.
+    let reverted = approved_b.replacen(
+        &format!("depends: {}\n", a_id),
+        &format!("depends: {}\n", b_text),
+        1,
+    );
+    assert_ne!(reverted, approved_b, "the fixture should still hold the rewritten line");
+    std::fs::write(&record_b, &reverted).unwrap();
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let resp = get(port, "/", Some(&cookie));
+    assert_eq!(resp.status, 200, "body: {}", resp.body);
+
+    let b_start = resp.body.find("Topic B").expect("topic B on the page");
+    let b_end = resp.body[b_start..]
+        .find("</article>")
+        .map(|i| b_start + i)
+        .unwrap_or(resp.body.len());
+    let b_block = &resp.body[b_start..b_end];
+    assert!(
+        b_block.contains("not approved"),
+        "a hand-reverted depends line must still show as not approved on the page: {}",
+        b_block
+    );
+
+    let a_start = resp.body.find("Topic A").expect("topic A on the page");
+    let a_end = resp.body[a_start..]
+        .find("</article>")
+        .map(|i| a_start + i)
+        .unwrap_or(resp.body.len());
+    let a_block = &resp.body[a_start..a_end];
+    assert!(
+        !a_block.contains("not approved"),
+        "A is genuinely approved and must not show as waiting: {}",
+        a_block
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+}

@@ -795,6 +795,65 @@ fn approve_refuses_a_cross_file_heading_dependency_naming_two_decisions_in_one_f
     );
 }
 
+// adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
+//
+// A same-file problem that has nothing to do with the ambiguity must not
+// be hidden behind it: `normalize_cross_file_deps` used to set the file's
+// one `rf.derive_error` straight to the ambiguity and skip
+// `record::derive_tiers` altogether whenever it found an ambiguous entry,
+// so a genuine dangling entry on a *different* heading, in the same file,
+// never got reported at all. B here carries both: 1.1 names a heading that
+// exists nowhere, and 1.2 (afterward, in file order) names the ambiguous
+// shared heading. The real bug must win.
+#[test]
+fn approve_refuses_a_real_dangling_entry_over_a_co_occurring_ambiguous_heading() {
+    let dir = init_repo();
+    setup(&dir);
+
+    let a_id = "88888888-8888-8888-8888-888888888888";
+    append_ledger_row(&dir, "asked", a_id, "h1", "1.1 Shared heading?");
+    append_ledger_row(&dir, "answered", a_id, "h1", "A");
+    let a_content = format!(
+        "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        a_id
+    );
+    write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
+
+    let c_id = "99999999-8888-8888-8888-888888888888";
+    append_ledger_row(&dir, "asked", c_id, "h1", "1.1 Shared heading?");
+    append_ledger_row(&dir, "answered", c_id, "h1", "A");
+    let c_content = format!(
+        "# Topic C\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        c_id
+    );
+    write_record(&dir, "adrdom/decisions/topic-c.md", &c_content);
+
+    let b_content = "# Topic B\n\n\
+### 1.1 Names nothing anywhere?\n\
+depends: 1.1 Nothing anywhere names this?\n\n\
+Problem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+### 1.2 Does B stand on the shared heading?\n\
+depends: 1.1 Shared heading?\n\n\
+Problem: p3.\n\nStandard: s3.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
+
+    let out = adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(
+        err.contains(
+            "\"1.1 Names nothing anywhere?\" depends on \"1.1 Nothing anywhere names this?\" which is no heading in this file"
+        ),
+        "the real dangling entry must be reported: {}",
+        err
+    );
+    assert!(
+        !err.contains("current decision in more than one file"),
+        "the ambiguity must not be reported while a real same-file bug is still open: {}",
+        err
+    );
+}
+
 // adr: dad5273c-afe2-4ab1-a451-e2a5d4d9a26d
 //
 // A frozen (answered) section's `depends:` line, hand-edited to a

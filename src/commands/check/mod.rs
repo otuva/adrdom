@@ -20,7 +20,7 @@ use crate::ledger::Ledger;
 use crate::msg::{self, Actor};
 use crate::record::{self, RecordFile};
 use crate::repo;
-use crate::state::{self, rel_path};
+use crate::state;
 use crate::terms as terms_mod;
 use crate::view;
 use std::collections::HashMap;
@@ -176,7 +176,7 @@ fn build(
         notes.push(msg::terms_awaiting());
     }
     notes.extend(terms_notes);
-    for d in done::check_done(root, &records, &led, &raw_hashes) {
+    for d in done::check_done(&records, &led, &raw_hashes) {
         notes.push(msg::done(&d));
     }
     notes.push(msg::tested_count(tested_count));
@@ -224,21 +224,26 @@ fn dropped_state(led: &Ledger, id: &str) -> bool {
 /// always be read off the file exactly as it sits on disk (per "..."), so
 /// this reads that precomputed hash rather than recomputing one from `rf`,
 /// which by the time any caller here runs has already been normalized.
-/// Falls back to hashing `rf` itself only when `rel` is missing from the
-/// map (should not happen, since `raw_hashes` is built from the very same
-/// file list; never assumed).
+/// Keyed and looked up by `rf.rel` on both sides (the same field
+/// `raw_hashes` itself was built from, in `build`, off the very same
+/// `records` list every caller here still shares) -- never `rel_path(root,
+/// &rf.path)` recomputed afresh, which risks the two disagreeing. A miss
+/// is a bug in that shared construction, not a case to paper over with a
+/// silent recompute from the (by-then-normalized) `rf`, so it panics
+/// instead of guessing.
 fn file_approval(
-    root: &Path,
     rf: &RecordFile,
     raw_hashes: &HashMap<String, (String, String)>,
     led: &Ledger,
 ) -> (String, bool, bool) {
-    let rel = rel_path(root, &rf.path);
-    let (plan_h, ctx_h) = raw_hashes
-        .get(&rel)
-        .cloned()
-        .unwrap_or_else(|| (record::plan_hash(rf), record::context_hash(rf)));
-    let plan_ok = state::plan_approved_hash(led, &rel, &plan_h);
-    let ctx_ok = state::context_approved_hash(led, &rel, &ctx_h);
+    let rel = rf.rel.clone();
+    let (plan_h, ctx_h) = raw_hashes.get(&rel).unwrap_or_else(|| {
+        panic!(
+            "file_approval: {} missing from raw_hashes, though raw_hashes is built from the same records list this is called on",
+            rel
+        )
+    });
+    let plan_ok = state::plan_approved_hash(led, &rel, plan_h);
+    let ctx_ok = state::context_approved_hash(led, &rel, ctx_h);
     (rel, plan_ok, ctx_ok)
 }

@@ -145,13 +145,19 @@ pub fn resolve_dep(
 
 /// The refusal text for a `resolve_dep` failure, `rel: "<heading>" ...`,
 /// the same wording `approve` and `check` already used (callers add their
-/// own prefix, e.g. `approve: `).
+/// own prefix, e.g. `approve: `). `DepError::AmbiguousHeading` never
+/// reaches here: `resolve_dep` only returns it for a heading-shaped `Text`
+/// entry (trimmed text ending in `?`), and `record_refusals` -- the one
+/// caller of this function -- always resolves that shape of entry through
+/// `rf.derive_error` (via `normalize_cross_file_deps`) instead, skipping it
+/// before ever calling `resolve_dep` for the purpose of a per-entry
+/// message.
 pub fn dep_refusal_text(rel: &str, heading: &str, err: &DepError) -> String {
     match err {
         DepError::NotCurrentDecision(id) => msg::dep_not_current_decision(rel, heading, id),
         DepError::NoTerm(text) => msg::dep_no_term(rel, heading, text),
-        DepError::AmbiguousHeading { text, files } => {
-            msg::dep_ambiguous_heading(rel, heading, text, files)
+        DepError::AmbiguousHeading { .. } => {
+            unreachable!("a heading-shaped entry never reaches dep_refusal_text; see the doc comment above")
         }
     }
 }
@@ -211,18 +217,28 @@ pub fn cross_file_heading_index(records: &[RecordFile], led: &Ledger) -> HashMap
 /// An entry naming a current decision in more than one other file is never
 /// substituted (guessing which one it means is exactly the bug this
 /// leaves unresolved on purpose): the first such entry found (in file
-/// order) instead becomes this file's one `rf.derive_error`
-/// (`DeriveError::AmbiguousHeading`), set directly rather than by calling
-/// `derive_tiers` at all -- `derive_tiers` has no cross-file knowledge of
-/// its own, so left to itself it would call the very same unresolved entry
-/// `Dangling` instead. Because `derive_error`/`tiers` are one file-wide
-/// slot each, every caller that already reads them for any other
-/// `DeriveError` (approve and check through `record_refusals`'s "plan"
-/// category, ask through its own `derive_error` check, show and the page
-/// through `rf.tiers` being `None`) sees the ambiguity the same way,
-/// without needing a side list of its own to remember to fold in -- the
-/// gap that let `show`/the page silently print a guessed "stands on" line
-/// for this exact case before this fix.
+/// order) is remembered, and `derive_tiers` is still run afterward, on the
+/// entries as they stand (every unambiguous substitution applied, every
+/// ambiguous entry left as the unresolved `Text` it was written as) --
+/// `derive_tiers` has no cross-file knowledge of its own, so it always
+/// calls that unresolved entry `Dangling`. When that is the *only* problem
+/// `derive_tiers` finds (`Ok`, or an `Err` that is exactly this entry's own
+/// `Dangling`), the real reason is more informative and replaces it as
+/// `rf.derive_error` (`DeriveError::AmbiguousHeading`). But when
+/// `derive_tiers` finds a *different* same-file problem first -- a cycle, a
+/// self-dep, or a dangling entry on some other heading, reached before the
+/// ambiguous one in file order -- that real bug is kept instead: an
+/// ambiguous cross-file reference elsewhere in the file must never hide a
+/// same-file defect the agent still has to fix. `derive_error`/`tiers`
+/// remain one file-wide slot each (never both a same-file error and the
+/// ambiguity at once -- the design already reports at most one derive
+/// error per file, same as before this fix), so every caller that already
+/// reads them for any other `DeriveError` (approve and check through
+/// `record_refusals`'s "plan" category, ask through its own `derive_error`
+/// check, show and the page through `rf.tiers` being `None`) sees whichever
+/// one is chosen the same way, without needing a side list of its own to
+/// remember to fold in -- the gap that let `show`/the page silently print a
+/// guessed "stands on" line for the ambiguous case before this fix.
 pub fn normalize_cross_file_deps(
     rf: &mut RecordFile,
     terms_list: &[Term],
@@ -270,22 +286,50 @@ pub fn normalize_cross_file_deps(
         }
     }
 
-    if let Some(err) = ambiguous {
-        rf.tiers = None;
-        rf.derive_error = Some(err);
+    let Some(ambiguous_err) = ambiguous else {
+        match record::derive_tiers(rf) {
+            Ok(t) => {
+                rf.tiers = Some(t);
+                rf.derive_error = None;
+            }
+            Err(e) => {
+                rf.tiers = None;
+                rf.derive_error = Some(e);
+            }
+        }
         return;
-    }
+    };
 
-    match record::derive_tiers(rf) {
-        Ok(t) => {
-            rf.tiers = Some(t);
-            rf.derive_error = None;
+    // `ambiguous` is only ever set from this variant, above.
+    let record::DeriveError::AmbiguousHeading {
+        section: a_section,
+        entry: a_entry,
+        ..
+    } = &ambiguous_err
+    else {
+        unreachable!("ambiguous is only ever set to DeriveError::AmbiguousHeading")
+    };
+    let (a_section, a_entry) = (a_section.clone(), a_entry.clone());
+
+    rf.tiers = None;
+    rf.derive_error = Some(match record::derive_tiers(rf) {
+        // Nothing else wrong: the ambiguity is the file's one problem.
+        Ok(_) => ambiguous_err,
+        // The artifact `Dangling` the ambiguous entry always earns on its
+        // own (it names no heading in `rf`, by construction -- that is
+        // exactly what made it a cross-file candidate): the ambiguity is
+        // still the more informative reason.
+        Err(record::DeriveError::Dangling { section, entry })
+            if section == a_section && entry == a_entry =>
+        {
+            ambiguous_err
         }
-        Err(e) => {
-            rf.tiers = None;
-            rf.derive_error = Some(e);
-        }
-    }
+        // A different same-file problem -- a cycle, a self-dep, or a
+        // dangling entry on some other heading, reached before the
+        // ambiguous one in file order -- is a real bug and must not be
+        // hidden behind the ambiguity.
+        Err(e) => e,
+    });
 }
 
 /// One `bad_option_letter` message per letter in `letters` that isn't

@@ -321,13 +321,11 @@ pub fn dep_no_term(rel: &str, heading: &str, text: &str) -> String {
 /// files, not within one), more than one when the decisions are spread
 /// across files; the wording says which, rather than always calling it
 /// "more than one file" when it may be only one file holding more than one
-/// decision.
-/// The shared wording for an ambiguous cross-file heading reference,
-/// whether it is reported per entry (`dep_ambiguous_heading`, from
-/// `depends::resolve_dep`) or as a file's one `derive_error`
-/// (`derive_what`'s `DeriveError::AmbiguousHeading` arm, from
-/// `depends::normalize_cross_file_deps`) -- the same entry can never earn
-/// both today, but the wording is one place either way.
+/// decision. Reported as a file's one `derive_error` (`derive_what`'s
+/// `DeriveError::AmbiguousHeading` arm, from
+/// `depends::normalize_cross_file_deps`), never per entry:
+/// `depends::dep_refusal_text` never reaches this case (see its own doc
+/// comment).
 fn ambiguous_heading_what(rel: &str, heading: &str, text: &str, files: &[String]) -> String {
     let detail = match files {
         [one] => format!("names more than one current decision in {}", one),
@@ -338,13 +336,6 @@ fn ambiguous_heading_what(rel: &str, heading: &str, text: &str, files: &[String]
 
 fn ambiguous_heading_next() -> Next {
     Next::agent("names it by id instead")
-}
-
-pub fn dep_ambiguous_heading(rel: &str, heading: &str, text: &str, files: &[String]) -> String {
-    refuse(
-        ambiguous_heading_what(rel, heading, text, files),
-        ambiguous_heading_next(),
-    )
 }
 
 /// A heading `depends:` entry's `=A|B` set names a letter its target

@@ -59,7 +59,7 @@ pub(super) fn check_plan(
     }
 
     for (rf, refs) in records.iter().zip(refusals) {
-        let (rel, plan_ok, ctx_ok) = file_approval(root, rf, raw_hashes, led);
+        let (rel, plan_ok, ctx_ok) = file_approval(rf, raw_hashes, led);
         if !plan_ok || !ctx_ok {
             awaiting.push(rel.clone());
         }
