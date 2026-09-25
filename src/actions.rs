@@ -1031,9 +1031,11 @@ fn do_approve_record(
     // `Text` heading dep always has when it names no heading in its own
     // file (`record::derive_tiers` has no cross-file/ledger knowledge of
     // its own). An entry that matches more than one current decision
-    // elsewhere earns its own `AmbiguousHeading` refusal here instead.
-    let ambiguous_cross_file =
-        depends::normalize_cross_file_deps(rel, &mut rf, terms_list, &phrase_lookup, &cross_file_headings, led);
+    // elsewhere becomes `rf.derive_error` instead
+    // (`DeriveError::AmbiguousHeading`), which `record_refusals` below
+    // turns into this file's "plan" refusal -- no side list to fold in
+    // here any more.
+    depends::normalize_cross_file_deps(&mut rf, terms_list, &phrase_lookup, &cross_file_headings, led);
 
     // Every refusal this file can earn -- shape, tells, a missing
     // depends line, depends resolution (including a frozen section's
@@ -1046,8 +1048,30 @@ fn do_approve_record(
             .into_iter()
             .map(|r| format!("approve: {}", r.message))
             .collect();
-    for m in ambiguous_cross_file {
-        refusals.push(format!("approve: {}", m));
+
+    // A letter-set suffix naming a current decision elsewhere
+    // (`DepTarget::Decision`, an already-id entry or a heading-shaped one
+    // the normalize pass above just resolved) must still only name that
+    // decision's own option letters -- `bad_letters` alone never sees this
+    // case, since its target always comes from `rf` itself. `check`'s own
+    // `plan` check makes the same test (and, for a same-file
+    // `DepTarget::Heading`, only `check` makes it -- see its own comment
+    // for why that half stays a check-only extra).
+    for sec in &rf.sections {
+        for d in &sec.depends {
+            let Some(record::AnswerSet::Letters(letters)) = d.set() else {
+                continue;
+            };
+            if let Ok(Some(DepTarget::Decision(id))) =
+                depends::resolve_dep(d, sec, &rf, terms_list, &phrase_lookup, &cross_file_headings, led)
+            {
+                for m in
+                    depends::bad_letters_for_decision(rel, &sec.heading_text, &all_records, &id, letters)
+                {
+                    refusals.push(format!("approve: {}", m));
+                }
+            }
+        }
     }
 
     // Ledger ids (asked/answered/refused/superseded/withdrawn) that now

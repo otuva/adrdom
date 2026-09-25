@@ -256,3 +256,63 @@ fn show_derives_tiers_for_an_unapproved_file_whose_depends_line_names_a_cross_fi
         shown
     );
 }
+
+// adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
+//
+// The cross-file half's edge, at `show` rather than `approve`: a heading
+// text that names a current decision in more than one other topic file is
+// ambiguous, so `show` must never guess which one a "stands on" line
+// means. Before this fix, `normalize_cross_file_deps` silently substituted
+// the first of the ambiguous matches (so tiers still derived and `show`
+// printed a "stands on" line naming one of the two decisions, indistin-
+// guishable from a real answer); now the ambiguity becomes the file's own
+// `derive_error`, so `show` prints B's topic line and nothing else for it
+// -- no tier, no question, no guessed "stands on" line -- the same silent
+// drop every other derive error already gets from `show`.
+#[test]
+fn show_prints_no_guess_for_an_ambiguous_cross_file_heading_dependency() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+
+    let a_id = "88888888-8888-8888-8888-888888888888";
+    append_ledger_row(&dir, "asked", a_id, "h1", "1.1 Shared heading?");
+    append_ledger_row(&dir, "answered", a_id, "h1", "A");
+    let a_content = format!(
+        "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        a_id
+    );
+    write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
+
+    let c_id = "99999999-8888-8888-8888-888888888888";
+    append_ledger_row(&dir, "asked", c_id, "h1", "1.1 Shared heading?");
+    append_ledger_row(&dir, "answered", c_id, "h1", "A");
+    let c_content = format!(
+        "# Topic C\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        c_id
+    );
+    write_record(&dir, "adrdom/decisions/topic-c.md", &c_content);
+
+    let b_content = "# Topic B\n\n### 1.1 Does B stand on the shared heading?\ndepends: 1.1 Shared heading?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
+
+    let out = adr(&dir, &["show"], &[], "");
+    assert!(out.status.success(), "stderr: {}", stderr(&out));
+    let shown = stdout(&out);
+
+    // Everything `show` prints for file B, from its topic line to the next
+    // file's (or end of output): tier derivation failed on the ambiguous
+    // entry, so this is the topic line alone -- no tier, no question, and
+    // in particular no guessed "stands on" line.
+    let b_start = shown.find("# Topic B").expect("topic B header");
+    let b_end = shown[b_start..]
+        .find("\n# ")
+        .map(|i| b_start + i)
+        .unwrap_or(shown.len());
+    let b_block = shown[b_start..b_end].trim_end();
+    assert_eq!(
+        b_block, "# Topic B",
+        "an ambiguous cross-file dependency must print nothing but the topic line, never a guessed tier or \"stands on\": {}",
+        shown
+    );
+}

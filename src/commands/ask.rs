@@ -114,6 +114,15 @@ pub fn run(record_path: PathBuf) -> i32 {
         .collect();
     let cross_file_headings = depends::cross_file_heading_index(&all_records, &led);
 
+    // Plan/context approval state must be read off `rf` exactly as loaded,
+    // before the normalize pass below mutates its parsed `depends:`
+    // entries in memory (per "..."): captured here, ahead of that
+    // mutation, and used below via `state::plan_approved_hash`/
+    // `context_approved_hash` instead of recomputing from the
+    // (by-then-normalized) `rf`.
+    let raw_plan_hash = record::plan_hash(&rf);
+    let raw_context_hash = record::context_hash(&rf);
+
     // Same pre-pass `approve`/`check` run before reading `rf.tiers`/
     // `rf.derive_error` (`depends::normalize_cross_file_deps`): a
     // heading-shaped `depends:` entry naming a current decision's heading
@@ -121,19 +130,13 @@ pub fn run(record_path: PathBuf) -> i32 {
     // and the tiers re-derived, so a file with such an entry never trips
     // the derive-error refusal below just because it hasn't been approved
     // yet. An entry naming a current decision in more than one other file
-    // refuses here instead, exactly as `approve` refuses on it.
-    let ambiguous_cross_file = depends::normalize_cross_file_deps(
-        &rel,
-        &mut rf,
-        &terms_list,
-        &phrase_lookup,
-        &cross_file_headings,
-        &led,
-    );
-    if !ambiguous_cross_file.is_empty() {
-        for m in &ambiguous_cross_file {
-            eprintln!("ask: {}", m);
-        }
+    // becomes `rf.derive_error` instead (`DeriveError::AmbiguousHeading`),
+    // checked immediately below, before the plan-approved gate -- exactly
+    // as `approve` refuses on it, and ahead of a "plan not approved"
+    // refusal that would otherwise fire first on an unapproved file.
+    depends::normalize_cross_file_deps(&mut rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
+    if let Some(err @ record::DeriveError::AmbiguousHeading { .. }) = &rf.derive_error {
+        eprintln!("ask: {}", msg::derive_error(&rel, err));
         return 1;
     }
 
@@ -179,12 +182,13 @@ pub fn run(record_path: PathBuf) -> i32 {
     }
 
     // Refusal 4: plan / context must be approved before ask will touch the
-    // file at all.
-    if !state::plan_approved(&led, &rf, &rel) {
+    // file at all -- checked against the hashes captured before the
+    // normalize pass above, never the normalized `rf`.
+    if !state::plan_approved_hash(&led, &rel, &raw_plan_hash) {
         eprintln!("ask: {}", msg::plan_not_approved(&rel));
         return 1;
     }
-    if !state::context_approved(&led, &rf, &rel) {
+    if !state::context_approved_hash(&led, &rel, &raw_context_hash) {
         eprintln!("ask: {}", msg::context_not_approved(&rel));
         return 1;
     }

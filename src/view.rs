@@ -753,9 +753,11 @@ pub fn snapshot(root: &Path) -> Snapshot {
     // still shows its real tiers on the page instead of the file-wide
     // "no heading in this file" error a plain, unresolved `Text` heading
     // dep would otherwise earn. The ambiguous case (the same heading text
-    // naming a current decision in more than one other file) is left for
-    // `check`'s own report (already folded into `report.failures` below)
-    // rather than reported a second time here.
+    // naming a current decision in more than one other file) becomes that
+    // file's `derive_error` (`DeriveError::AmbiguousHeading`) instead of
+    // tiers -- `check`'s own report (already folded into `report.failures`
+    // below) is still where the ambiguity itself is reported; the page
+    // just shows no tiers for that file rather than guessing.
     let phrase_lookup = terms::phrase_lookup(&terms_list);
     // Every topic file, loaded once: `cross_file_heading_index` used to
     // reload every one of them itself, then this loop reloaded whichever
@@ -770,15 +772,20 @@ pub fn snapshot(root: &Path) -> Snapshot {
     let mut files: Vec<FileView> = Vec::new();
     for mut rf in records {
         let rel = rf.rel.clone();
-        depends::normalize_cross_file_deps(
-            &rel,
-            &mut rf,
-            &terms_list,
-            &phrase_lookup,
-            &cross_file_headings,
-            &led,
-        );
-        files.push(build_file_view(root, &rf, &led, &test_idx, &terms_list, &all_headings));
+        // Plan/context approval state must be read off `rf` exactly as
+        // loaded, before the normalize pass below mutates its parsed
+        // `depends:` entries in memory (per "..."): captured here, ahead
+        // of that mutation, and patched into the `FileView` after
+        // `build_file_view` runs (which otherwise reads them straight off
+        // the, by-then-normalized, `rf`).
+        let plan_ok = state::plan_approved(&led, &rf, &rel);
+        let ctx_ok = state::context_approved(&led, &rf, &rel);
+        depends::normalize_cross_file_deps(&mut rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
+        let mut fv = build_file_view(root, &rf, &led, &test_idx, &terms_list, &all_headings);
+        fv.plan_approved = plan_ok;
+        fv.context_approved = ctx_ok;
+        fv.done = plan_ok && ctx_ok && rf.sections.iter().all(|s| s.answer_letter().is_some());
+        files.push(fv);
     }
 
     let terms = terms_opt.map(|tf| build_terms_view(root, &led, tf));

@@ -65,6 +65,20 @@ pub enum DeriveError {
     /// A section's own heading text, found as one of its own heading
     /// `depends:` entries.
     SelfDep(String),
+    /// A heading-shaped `depends:` entry (`entry`, on the section whose
+    /// heading text is `section`) naming no heading in this file, but a
+    /// current decision's heading text in more than one *other* topic file
+    /// (`files`, sorted, deduped): set by
+    /// `depends::normalize_cross_file_deps` in place of calling
+    /// `derive_tiers` at all, so this file's one `derive_error` slot always
+    /// carries the real reason (ambiguous, never guessed at) instead of the
+    /// `Dangling` `derive_tiers` alone would otherwise report for an entry
+    /// it has no cross-file knowledge of.
+    AmbiguousHeading {
+        section: String,
+        entry: String,
+        files: Vec<String>,
+    },
 }
 
 #[derive(Debug, Clone)]

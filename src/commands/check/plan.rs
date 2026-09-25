@@ -26,6 +26,7 @@ use std::path::Path;
 /// the failures plus the sorted, deduped list of paths still awaiting
 /// approval (printed as a summary line by the caller, not a failure by
 /// itself).
+#[allow(clippy::too_many_arguments)]
 pub(super) fn check_plan(
     root: &Path,
     records: &[RecordFile],
@@ -34,6 +35,7 @@ pub(super) fn check_plan(
     terms_list: &[terms::Term],
     phrase_lookup: &HashMap<String, String>,
     cross_file_headings: &HashMap<String, Vec<(String, String)>>,
+    raw_hashes: &HashMap<String, (String, String)>,
 ) -> (Vec<Failure>, Vec<String>) {
     let mut out = Vec::new();
     let mut awaiting: Vec<String> = Vec::new();
@@ -57,7 +59,7 @@ pub(super) fn check_plan(
     }
 
     for (rf, refs) in records.iter().zip(refusals) {
-        let (rel, plan_ok, ctx_ok) = file_approval(root, rf, led);
+        let (rel, plan_ok, ctx_ok) = file_approval(root, rf, raw_hashes, led);
         if !plan_ok || !ctx_ok {
             awaiting.push(rel.clone());
         }
@@ -86,17 +88,22 @@ pub(super) fn check_plan(
             }
         }
 
-        // A letter-set suffix on a resolved heading dependency validates
-        // against the target once found (per "Does a depends entry carry
-        // the answers it holds under?") -- `approve` never
-        // checks this today, so it stays a check-only extra rather than a
-        // `record_refusals` category.
+        // A letter-set suffix on a resolved dependency validates against
+        // the target once found (per "Does a depends entry carry the
+        // answers it holds under?") -- `approve` never checks this today,
+        // so it stays a check-only extra rather than a `record_refusals`
+        // category. A same-file `Heading` target reads its options
+        // straight off `rf`; a cross-file `Decision` target (an already-id
+        // entry, or a heading-shaped one `normalize_cross_file_deps`
+        // resolved above) has its options nowhere in `rf`, so its section
+        // is found in `records` instead (`bad_letters_for_decision`).
         for sec in &rf.sections {
             for d in &sec.depends {
-                if let Ok(Some(DepTarget::Heading(ti))) =
-                    depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, cross_file_headings, led)
-                {
-                    if let Some(AnswerSet::Letters(letters)) = d.set() {
+                let Some(AnswerSet::Letters(letters)) = d.set() else {
+                    continue;
+                };
+                match depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, cross_file_headings, led) {
+                    Ok(Some(DepTarget::Heading(ti))) => {
                         for msg in
                             depends::bad_letters(&rel, &sec.heading_text, &rf.sections[ti], letters)
                         {
@@ -107,6 +114,22 @@ pub(super) fn check_plan(
                             });
                         }
                     }
+                    Ok(Some(DepTarget::Decision(id))) => {
+                        for msg in depends::bad_letters_for_decision(
+                            &rel,
+                            &sec.heading_text,
+                            records,
+                            &id,
+                            letters,
+                        ) {
+                            out.push(Failure {
+                                check: "plan".to_string(),
+                                id: sec.id.clone(),
+                                message: msg,
+                            });
+                        }
+                    }
+                    _ => {}
                 }
             }
         }

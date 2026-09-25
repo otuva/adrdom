@@ -35,8 +35,11 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
     // tiers instead of nothing (the file-wide derive error a plain,
     // unresolved `Text` heading dep would otherwise earn). The ambiguous
     // case (the same heading text naming a current decision in more than
-    // one other file) is left for `check` to report; `show` just leaves
-    // that one entry unresolved, exactly as before this pass.
+    // one other file) becomes this file's `derive_error`
+    // (`DeriveError::AmbiguousHeading`) instead of tiers: `print_file`
+    // already prints nothing but the topic line when `rf.tiers` is `None`,
+    // so `show` never guesses which decision an ambiguous entry means --
+    // `check` is still where the ambiguity itself is reported.
     let phrase_lookup = terms::phrase_lookup(&terms_list);
     // Every topic file, loaded once: the index needs all of them regardless
     // of which one `record_arg` asks to print, so they're loaded here
@@ -64,15 +67,7 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
     };
 
     for rf in &mut records {
-        let rel = rf.rel.clone();
-        depends::normalize_cross_file_deps(
-            &rel,
-            rf,
-            &terms_list,
-            &phrase_lookup,
-            &cross_file_headings,
-            &led,
-        );
+        depends::normalize_cross_file_deps(rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
         print_file(rf, &led, &terms_list, &all_headings);
     }
     0

@@ -206,26 +206,32 @@ pub fn cross_file_heading_index(records: &[RecordFile], led: &Ledger) -> HashMap
 /// there is `record_refusals`'s frozen-edit refusal to catch, on the
 /// unrewritten `Text` entry it expects -- substituting it here first would
 /// turn it into an `Id` entry before that check ever runs and the edit
-/// would slip through unrefused. An entry naming a current decision in
-/// more than one other file is also substituted -- to the first of those
-/// decisions, arbitrarily -- so this entry, too, stops looking like a
-/// same-file dangling reference to `derive_tiers`; which one gets picked
-/// never matters, since every caller that reads `substitutions` also reads
-/// the `AmbiguousHeading` refusal this returns for the same entry and
-/// refuses the whole file on it before writing anything. Its
-/// `AmbiguousHeading` refusal text is returned, one line per such entry,
-/// for the caller to fold into its own refusal list the same way it folds
-/// in every other `dep_refusal_text` line.
+/// would slip through unrefused.
+///
+/// An entry naming a current decision in more than one other file is never
+/// substituted (guessing which one it means is exactly the bug this
+/// leaves unresolved on purpose): the first such entry found (in file
+/// order) instead becomes this file's one `rf.derive_error`
+/// (`DeriveError::AmbiguousHeading`), set directly rather than by calling
+/// `derive_tiers` at all -- `derive_tiers` has no cross-file knowledge of
+/// its own, so left to itself it would call the very same unresolved entry
+/// `Dangling` instead. Because `derive_error`/`tiers` are one file-wide
+/// slot each, every caller that already reads them for any other
+/// `DeriveError` (approve and check through `record_refusals`'s "plan"
+/// category, ask through its own `derive_error` check, show and the page
+/// through `rf.tiers` being `None`) sees the ambiguity the same way,
+/// without needing a side list of its own to remember to fold in -- the
+/// gap that let `show`/the page silently print a guessed "stands on" line
+/// for this exact case before this fix.
 pub fn normalize_cross_file_deps(
-    rel: &str,
     rf: &mut RecordFile,
     terms_list: &[Term],
     phrase_lookup: &HashMap<String, String>,
     cross_file_headings: &HashMap<String, Vec<(String, String)>>,
     led: &Ledger,
-) -> Vec<String> {
-    let mut ambiguous: Vec<String> = Vec::new();
+) {
     let mut substitutions: Vec<(usize, usize, String)> = Vec::new();
+    let mut ambiguous: Option<record::DeriveError> = None;
 
     for (si, sec) in rf.sections.iter().enumerate() {
         if state::is_frozen(led, sec) {
@@ -243,24 +249,18 @@ pub fn normalize_cross_file_deps(
             match resolve_dep(d, sec, rf, terms_list, phrase_lookup, cross_file_headings, led) {
                 Ok(Some(DepTarget::Decision(id))) => substitutions.push((si, di, id)),
                 Ok(_) => {}
-                Err(e @ DepError::AmbiguousHeading { .. }) => {
-                    ambiguous.push(dep_refusal_text(rel, &sec.heading_text, &e));
-                    // Substituted too (see the doc comment above): picking
-                    // the first of `cross_file_headings`'s matches for this
-                    // text is always possible here, since `resolve_dep`
-                    // only returns `AmbiguousHeading` when that lookup has
-                    // more than one entry.
-                    if let Some((_, id)) = cross_file_headings.get(text.trim()).and_then(|m| m.first()) {
-                        substitutions.push((si, di, id.clone()));
+                Err(DepError::AmbiguousHeading { text: entry, files }) => {
+                    if ambiguous.is_none() {
+                        ambiguous = Some(record::DeriveError::AmbiguousHeading {
+                            section: sec.heading_text.clone(),
+                            entry,
+                            files,
+                        });
                     }
                 }
                 Err(_) => {}
             }
         }
-    }
-
-    if substitutions.is_empty() {
-        return ambiguous;
     }
 
     for (si, di, id) in substitutions {
@@ -269,6 +269,13 @@ pub fn normalize_cross_file_deps(
             rf.sections[si].depends[di] = Dep::Id { id, set };
         }
     }
+
+    if let Some(err) = ambiguous {
+        rf.tiers = None;
+        rf.derive_error = Some(err);
+        return;
+    }
+
     match record::derive_tiers(rf) {
         Ok(t) => {
             rf.tiers = Some(t);
@@ -279,8 +286,6 @@ pub fn normalize_cross_file_deps(
             rf.derive_error = Some(e);
         }
     }
-
-    ambiguous
 }
 
 /// One `bad_option_letter` message per letter in `letters` that isn't
@@ -304,4 +309,28 @@ pub fn bad_letters(
         .filter(|l| !target.options.iter().any(|o| o.letter == **l))
         .map(|l| msg::bad_option_letter(rel, dependent_heading, &target.heading_text, *l))
         .collect()
+}
+
+/// `bad_letters`'s cross-file counterpart: the same check, for a depends
+/// entry that resolves to a current decision elsewhere (`DepTarget::Decision`)
+/// rather than a same-file heading -- `bad_letters` alone can't reach it,
+/// since its `target: &Section` always comes out of the same `RecordFile`.
+/// `records` is every topic file in the repo (already loaded by the
+/// caller, the same shape `cross_file_heading_index`'s callers already
+/// have); empty when `id` names no section anywhere in it (should not
+/// happen once it has resolved as a current decision, but never assumed).
+pub fn bad_letters_for_decision(
+    rel: &str,
+    dependent_heading: &str,
+    records: &[RecordFile],
+    id: &str,
+    letters: &[char],
+) -> Vec<String> {
+    let Some(target) = records
+        .iter()
+        .find_map(|rf| rf.sections.iter().find(|s| s.id.as_deref() == Some(id)))
+    else {
+        return Vec::new();
+    };
+    bad_letters(rel, dependent_heading, target, letters)
 }

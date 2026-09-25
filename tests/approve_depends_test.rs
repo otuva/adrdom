@@ -496,6 +496,144 @@ fn approve_turns_a_depends_name_into_an_id_and_show_turns_it_back_into_words() {
     assert!(!shown2.contains("Is the widget red?"), "{}", shown2);
 }
 
+// adr: da59b448-1afb-4469-b40e-69eda8f253c2
+//
+// "ask stops any question whose heading is not in the plan the owner
+// approved": plan approval is a hash over the file exactly as the owner
+// approved it. B's `depends:` line, hand-reverted back to the heading
+// words `approve` rewrote to A's id, still resolves to that same id in
+// memory (the same cross-file pre-pass `ask`/`check` run before reading
+// approval state) -- but it is no longer the bytes the owner approved.
+// Before this fix, `ask`/`check` computed the plan hash off that
+// normalized in-memory copy instead of the file exactly as it sits on
+// disk, so the revert went unnoticed and both treated B as still
+// approved; this proves they now catch it.
+#[test]
+fn ask_and_check_refuse_a_cross_file_depends_line_reverted_by_hand_after_approve() {
+    let dir = init_repo();
+    setup(&dir);
+
+    // A: a real, fully approved current decision of its own. "decision"
+    // (the fixture term `setup` approves) is repeated in the body so `ask`
+    // pairs a term.
+    let a_content = "# Topic A\n\n### 1.1 Does A do a thing?\ndepends: decision\n\nProblem: a decision.\n\nStandard: a decision.\n\n- A) x, a decision.\n  Why: w.\n  Costs: c.\n- B) y, a decision.\n  Why: w.\n  Costs: c.\n";
+    let record_a = write_record(&dir, "adrdom/decisions/topic-a.md", a_content);
+    let out_a = adr_owner(&dir, &["approve", record_a.to_str().unwrap()], "");
+    assert!(out_a.status.success(), "approving A failed: {}", stderr(&out_a));
+    let approved_a = std::fs::read_to_string(&record_a).unwrap();
+    let a_id = approved_a
+        .lines()
+        .find_map(|l| l.strip_prefix("id: "))
+        .unwrap()
+        .to_string();
+    let ask_a = adr(&dir, &["ask", record_a.to_str().unwrap()], &[], "");
+    assert!(ask_a.status.success(), "asking A failed: {}", stderr(&ask_a));
+    assert!(
+        adr_owner(&dir, &["answer", &a_id, "A"], "").status.success(),
+        "answering A failed"
+    );
+
+    // B: its only question stands on A, named by A's heading text.
+    let b_text = "1.1 Does A do a thing?";
+    let b_content = format!(
+        "# Topic B\n\n### 1.1 Does B stand on A?\ndepends: {}\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        b_text
+    );
+    let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", &b_content);
+    let out_b = adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "");
+    assert!(out_b.status.success(), "approving B failed: {}", stderr(&out_b));
+
+    let approved_b = std::fs::read_to_string(&record_b).unwrap();
+    assert!(
+        approved_b.contains(&format!("depends: {}\n", a_id)),
+        "expected B's depends line rewritten to A's id: {}",
+        approved_b
+    );
+
+    // Hand-revert the rewritten line back to the heading words `approve`
+    // replaced it with.
+    let reverted = approved_b.replacen(
+        &format!("depends: {}\n", a_id),
+        &format!("depends: {}\n", b_text),
+        1,
+    );
+    assert_ne!(reverted, approved_b, "the fixture should still hold the rewritten line");
+    std::fs::write(&record_b, &reverted).unwrap();
+
+    let ask_out = adr(&dir, &["ask", record_b.to_str().unwrap()], &[], "");
+    assert!(
+        !ask_out.status.success(),
+        "ask must refuse a plan reverted back to its pre-approval wording: {}",
+        stdout(&ask_out)
+    );
+    assert!(
+        stderr(&ask_out).contains("adrdom/decisions/topic-b.md: plan not approved"),
+        "{}",
+        stderr(&ask_out)
+    );
+
+    let check_out = adr(&dir, &["check"], &[], "");
+    assert!(!check_out.status.success(), "{}", stdout(&check_out));
+    let checked = stdout(&check_out);
+    assert!(
+        checked.contains("plan: 1 file(s) awaiting approval: adrdom/decisions/topic-b.md"),
+        "{}",
+        checked
+    );
+    assert!(
+        checked.contains("body under unapproved heading \"1.1 Does B stand on A?\""),
+        "{}",
+        checked
+    );
+}
+
+// adr: fa90692a-150e-4a89-91e2-1d575cb59d0f
+//
+// "Does a depends entry carry the answers it holds under?", the cross-file
+// half: a depends entry naming a current decision elsewhere by id, with an
+// answer set naming a letter that decision has no option for, is refused
+// by `approve` too, not only reported by `check` -- before this fix,
+// nothing checked a `DepTarget::Decision` target's letters at all, in any
+// command.
+#[test]
+fn approve_refuses_a_depends_set_naming_an_option_a_cross_file_decision_does_not_have() {
+    let dir = init_repo();
+    setup(&dir);
+
+    let a_id = "11111111-2222-3333-4444-555555555555";
+    append_ledger_row(&dir, "asked", a_id, "h1", "1.1 Does A do a thing?");
+    append_ledger_row(&dir, "answered", a_id, "h1", "A");
+    let a_content = format!(
+        "# Topic A\n\n### 1.1 Does A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        a_id
+    );
+    write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
+
+    let b_content = format!(
+        "# Topic B\n\n### 1.1 Does B stand on A?\ndepends: {}=C\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        a_id
+    );
+    let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", &b_content);
+
+    let out = adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "");
+    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    assert!(
+        err.contains(
+            "\"1.1 Does B stand on A?\" depends on \"1.1 Does A do a thing?\" names option C which \"1.1 Does A do a thing?\" does not have"
+        ),
+        "{}",
+        err
+    );
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        !ledger.lines().any(|l| l.contains("\tapproved\t") && l.contains("topic-b.md")),
+        "no approved row should have been written for B on refusal: {}",
+        ledger
+    );
+}
+
 // adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
 //
 // Same decision, the cross-file half: "a current decision" a depends line

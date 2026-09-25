@@ -21,22 +21,52 @@ pub fn rel_path(root: &Path, path: &Path) -> String {
     parts.join("/")
 }
 
-/// True when the topic file's current plan hash matches the latest `approved`
-/// ledger row for `rel` (the topic file's path relative to the repo root).
-pub fn plan_approved(led: &Ledger, rf: &RecordFile, rel: &str) -> bool {
-    match led.latest_for_path("approved", rel) {
-        Some(row) => row.hash == record::plan_hash(rf),
+/// True when `hash` matches the latest ledger row for `event`/`rel`: the
+/// comparison `plan_approved`/`context_approved` make, factored out so a
+/// caller that already holds the hash -- computed from the file exactly as
+/// it sits on disk, before any in-memory normalization
+/// (`depends::normalize_cross_file_deps`) touched it -- can make the same
+/// comparison without recomputing the hash from a `RecordFile` that may by
+/// then have been normalized. Approval state must always read the file
+/// exactly as written, never the resolved-for-tiers copy: normalization is
+/// only for resolving depends targets and deriving tiers.
+fn hash_matches_latest(led: &Ledger, event: &str, rel: &str, hash: &str) -> bool {
+    match led.latest_for_path(event, rel) {
+        Some(row) => row.hash == hash,
         None => false,
     }
 }
 
+/// True when `plan_hash` (computed by the caller) matches the latest
+/// `approved` ledger row for `rel`. See `hash_matches_latest`.
+pub fn plan_approved_hash(led: &Ledger, rel: &str, plan_hash: &str) -> bool {
+    hash_matches_latest(led, "approved", rel, plan_hash)
+}
+
+/// True when `context_hash` (computed by the caller) matches the latest
+/// `context` ledger row for `rel`. See `hash_matches_latest`.
+pub fn context_approved_hash(led: &Ledger, rel: &str, context_hash: &str) -> bool {
+    hash_matches_latest(led, "context", rel, context_hash)
+}
+
+/// True when the topic file's current plan hash matches the latest `approved`
+/// ledger row for `rel` (the topic file's path relative to the repo root).
+/// `rf` must not have gone through `depends::normalize_cross_file_deps` --
+/// that mutates the parsed `depends:` entries this hashes, in memory, so a
+/// caller that normalizes its `rf` must compute the hash before doing so
+/// and call `plan_approved_hash` with it instead of this.
+pub fn plan_approved(led: &Ledger, rf: &RecordFile, rel: &str) -> bool {
+    plan_approved_hash(led, rel, &record::plan_hash(rf))
+}
+
 /// True when the topic file's current context hash matches the latest
-/// `context` ledger row for `rel`.
+/// `context` ledger row for `rel`. Context hashing never reads a
+/// section's `depends:` entries, so it is unaffected by
+/// `depends::normalize_cross_file_deps` in practice -- kept alongside
+/// `plan_approved` (and `context_approved_hash` given the same way) so
+/// nothing about that stays implicit.
 pub fn context_approved(led: &Ledger, rf: &RecordFile, rel: &str) -> bool {
-    match led.latest_for_path("context", rel) {
-        Some(row) => row.hash == record::context_hash(rf),
-        None => false,
-    }
+    context_approved_hash(led, rel, &record::context_hash(rf))
 }
 
 /// True when the terms file's current hash matches the latest `terms`
