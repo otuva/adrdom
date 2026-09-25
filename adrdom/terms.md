@@ -47,8 +47,8 @@ aliases: answers, answered, answering
 
 ## ask
 id: 3c8d4c9c-abca-4faa-b7c1-aae39951376c
-terms: identifier=e877e4a9-2caf-4fe6-9f82-5476a2abb00b, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, question=277a8338-c57a-43cc-8b28-6b42e9347f6a
-definition: The act that gives a question its identifier and writes that event to the ledger.
+terms: ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a
+definition: The act that puts a question to the owner and writes that event to the ledger.
 aliases: asks, asked, asking
 
 ## current
