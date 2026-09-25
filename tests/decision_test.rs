@@ -457,3 +457,59 @@ fn a_lean_line_in_the_topic_file_is_stray() {
         stdout(&check_out)
     );
 }
+
+// adr: 0a742360-83c2-479d-b858-4bea646c9b36
+//
+// "the lean lives in the conversation where the question is presented;
+// the topic file, the ledger and the page hold none": the ledger side.
+// The row `ask` writes for a question and the row `answer` writes for it
+// both keep the ledger's fixed six-field shape (time, event, id, hash,
+// detail, tool version, per ledger.md's "What does a ledger row hold?")
+// -- the `asked` row's detail is the plain heading text and the
+// `answered` row's detail is just the letter, neither one a field a lean
+// sentence could be tucked into -- and no row anywhere in the ledger
+// contains the word "lean".
+#[test]
+fn ledger_rows_for_ask_and_answer_carry_no_lean() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+    let content = "# Example\n\n### 1.1 What is a decision?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n";
+    let record = write_record(&dir, "adrdom/decisions/example.md", content);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let after_ask = std::fs::read_to_string(&record).unwrap();
+    let question_id = extract_ids(&after_ask)[0].clone();
+    assert!(adr_owner(&dir, &["answer", &question_id, "A"], "")
+        .status
+        .success());
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    let asked_row = ledger
+        .lines()
+        .find(|l| l.contains("\tasked\t") && l.contains(question_id.as_str()))
+        .unwrap_or_else(|| panic!("no asked row: {}", ledger));
+    let answered_row = ledger
+        .lines()
+        .find(|l| l.contains("\tanswered\t") && l.contains(question_id.as_str()))
+        .unwrap_or_else(|| panic!("no answered row: {}", ledger));
+
+    let asked_fields: Vec<&str> = asked_row.split('\t').collect();
+    let answered_fields: Vec<&str> = answered_row.split('\t').collect();
+    assert_eq!(asked_fields.len(), 6, "{:?}", asked_fields);
+    assert_eq!(answered_fields.len(), 6, "{:?}", answered_fields);
+
+    // detail = index 4: the heading text for `asked`, just the letter for
+    // `answered` -- no room for a lean sentence in either.
+    assert_eq!(asked_fields[4], "1.1 What is a decision?");
+    assert_eq!(answered_fields[4], "A");
+
+    assert!(
+        !ledger.to_lowercase().contains("lean"),
+        "ledger carries no lean text anywhere: {}",
+        ledger
+    );
+}
