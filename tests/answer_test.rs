@@ -918,11 +918,31 @@ fn answer_refuses_when_terms_md_is_missing() {
     );
 }
 
+// adr: cd450764-bacd-4378-82ba-19edfc5a9edb
+//
+// "Does answer wait for terms approval?" (cd450764 B): no -- once
+// terms.md has ever been approved for real (so a genuine
+// `adrdom/state/terms.approved.md` snapshot exists), a draft sitting on
+// top of that approval never blocks answer, even one with its own shape
+// error (an added term with no id yet, minted only by `approve`). This
+// used to be `answer_refuses_when_terms_md_has_a_shape_error`, which
+// showed the opposite of what the owner just decided.
 #[test]
-fn answer_refuses_when_terms_md_has_a_shape_error() {
+fn answer_succeeds_when_terms_md_holds_an_unapproved_added_term_with_a_shape_error() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "authority");
+
+    // A real `adr approve adrdom/terms.md`, not the ledger-only
+    // `approve_minimal_terms` shortcut, so a genuine snapshot lands on
+    // disk for answer to fall back on below.
+    let terms_path = write_record(
+        &dir,
+        "adrdom/terms.md",
+        "# Terms\n\n## authority\ndefinition: A fixture term for tests.\naliases: \n",
+    );
+    let terms_out = adr_owner(&dir, &["approve", terms_path.to_str().unwrap()], "");
+    assert!(terms_out.status.success(), "approve terms failed: {}", stderr(&terms_out));
+
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
@@ -931,23 +951,86 @@ fn answer_refuses_when_terms_md_has_a_shape_error() {
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
 
-    // Corrupt terms.md with an unknown line after it was approved.
-    let mut terms = std::fs::read_to_string(dir.join("adrdom/terms.md")).unwrap();
-    terms.push_str("notes: extra\n");
-    std::fs::write(dir.join("adrdom/terms.md"), terms).unwrap();
+    // Add a brand-new term with no `id:` line at all -- `terms::parse`
+    // reports this as a "missing id" shape error, and the file no longer
+    // matches its latest approval either way.
+    let mut terms = std::fs::read_to_string(&terms_path).unwrap();
+    terms.push_str("\n## widget\ndefinition: An unrelated fixture term.\naliases: \n");
+    std::fs::write(&terms_path, &terms).unwrap();
 
     let out = adr_answer(&dir, &id, "A");
-    assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
-    let err = stderr(&out);
-    assert!(err.starts_with("answer: adrdom/terms.md:"), "{}", err);
-    assert!(err.contains("unknown line"), "{}", err);
+    assert!(out.status.success(), "answer should have succeeded: {}", stderr(&out));
 }
 
+// adr: cd450764-bacd-4378-82ba-19edfc5a9edb
+//
+// The exact case the owner's answer names: an asked question can be
+// answered, and another can be refused, while terms.md holds a term added
+// but never approved. This used to be `answer_refuses_when_terms_md_is_not_approved`,
+// which showed the opposite.
 #[test]
-fn answer_refuses_when_terms_md_is_not_approved() {
+fn answer_and_refuse_succeed_while_terms_md_holds_an_unapproved_added_term() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "authority");
+
+    let terms_path = write_record(
+        &dir,
+        "adrdom/terms.md",
+        "# Terms\n\n## authority\ndefinition: A fixture term for tests.\naliases: \n",
+    );
+    let terms_out = adr_owner(&dir, &["approve", terms_path.to_str().unwrap()], "");
+    assert!(terms_out.status.success(), "approve terms failed: {}", stderr(&terms_out));
+
+    let mut content = FIRST_QUESTION.to_string();
+    content.push_str(SECOND_QUESTION);
+    let record = write_record(&dir, "adrdom/decisions/example.md", &content);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let asked = std::fs::read_to_string(&record).unwrap();
+    let ids = extract_ids(&asked);
+    let (id1, id2) = (ids[0].clone(), ids[1].clone());
+
+    // A brand-new, unapproved term added on top of the real approval above.
+    let mut terms = std::fs::read_to_string(&terms_path).unwrap();
+    terms.push_str("\n## widget\ndefinition: An unrelated fixture term.\naliases: \n");
+    std::fs::write(&terms_path, &terms).unwrap();
+
+    let answer_out = adr_answer(&dir, &id1, "A");
+    assert!(
+        answer_out.status.success(),
+        "answer should have succeeded: {}",
+        stderr(&answer_out)
+    );
+    let refuse_out = adr_answer(&dir, &id2, "refuse");
+    assert!(
+        refuse_out.status.success(),
+        "refuse should have succeeded: {}",
+        stderr(&refuse_out)
+    );
+}
+
+// adr: cd450764-bacd-4378-82ba-19edfc5a9edb
+//
+// The other half of the owner's answer: a term retired in the terms
+// file's latest real approval still refuses a question paired against it,
+// even once a further, unapproved draft edit sits on top of that
+// retirement -- answer judges the question's terms line against the
+// approved snapshot, never the live file.
+#[test]
+fn answer_refuses_a_terms_line_naming_a_term_retired_in_the_approved_terms() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let terms_path = write_record(
+        &dir,
+        "adrdom/terms.md",
+        "# Terms\n\n## authority\ndefinition: A fixture term for tests.\naliases: \n",
+    );
+    let terms_out = adr_owner(&dir, &["approve", terms_path.to_str().unwrap()], "");
+    assert!(terms_out.status.success(), "approve terms failed: {}", stderr(&terms_out));
+
     let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
@@ -956,17 +1039,34 @@ fn answer_refuses_when_terms_md_is_not_approved() {
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
 
-    // Edit terms.md's definition without re-approving it.
-    let terms_path = dir.join("adrdom/terms.md");
-    let terms = std::fs::read_to_string(&terms_path).unwrap();
-    let edited = terms.replace("A fixture term for tests.", "A fixture term, edited.");
-    std::fs::write(&terms_path, edited).unwrap();
+    // Retire "authority" for real, with its own approve: the question is
+    // still only asked (not yet current), so this isn't refused.
+    let mut retired = std::fs::read_to_string(&terms_path).unwrap();
+    retired.push_str("retired: yes\n");
+    std::fs::write(&terms_path, &retired).unwrap();
+    let retire_out = adr_owner(&dir, &["approve", terms_path.to_str().unwrap()], "");
+    assert!(
+        retire_out.status.success(),
+        "approve retired terms failed: {}",
+        stderr(&retire_out)
+    );
+
+    // A further, unapproved draft edit on top of that retirement: the live
+    // file no longer matches its latest approval, so answer must fall
+    // back to the snapshot -- which still shows "authority" retired.
+    let mut draft = std::fs::read_to_string(&terms_path).unwrap();
+    draft.push_str("\n## widget\ndefinition: An unrelated fixture term.\naliases: \n");
+    std::fs::write(&terms_path, &draft).unwrap();
 
     let out = adr_answer(&dir, &id, "A");
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
-    let err = stderr(&out);
-    assert!(err.contains("terms not approved"), "{}", err);
-    assert!(err.contains("adr approve adrdom/terms.md"), "{}", err);
+    assert_eq!(
+        stderr(&out).trim_end(),
+        format!(
+            "answer: {}: terms line names retired term \"authority\"; agent re-asks",
+            id
+        )
+    );
 }
 
 #[test]

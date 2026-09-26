@@ -28,12 +28,14 @@ pub struct Refusal {
     pub message: String,
 }
 
-/// The terms.md gates shared by `do_answer` and `do_refuse` (5): missing,
-/// present but unreadable/shape-invalid, or not approved, each refusing with
-/// the same message either caller would print. `rel` is the topic file's
-/// path, named in the not-approved message exactly as both callers already
-/// print it. On success, the loaded, approved terms file is returned (only
-/// `do_answer` has further use for it).
+/// The strict terms.md gates (5): missing, present but unreadable/
+/// shape-invalid, or not approved, each refusing with the same message the
+/// caller would print. `rel` is the topic file's path, named in the
+/// not-approved message exactly as the caller already prints it. On
+/// success, the loaded, approved terms file is returned. Used by
+/// `do_approve_record` only -- `do_answer`/`do_refuse` use the more
+/// tolerant `terms_for_answer` instead (per "Does answer wait for terms
+/// approval?", cd450764 B).
 fn require_terms(root: &Path, led: &Ledger, rel: &str) -> Result<terms::TermsFile, String> {
     match state::load_terms_checked(root) {
         TermsLoad::Missing => Err(msg::terms_missing()),
@@ -59,6 +61,40 @@ fn require_terms(root: &Path, led: &Ledger, rel: &str) -> Result<terms::TermsFil
     }
 }
 
+/// The terms.md gate for `do_answer`/`do_refuse` (per "Does answer wait for
+/// terms approval?", cd450764 B: no -- answer checks the question's terms
+/// line against the approved terms and proceeds). Missing entirely, or a
+/// read error, refuse exactly as `require_terms` does. Otherwise: when the
+/// file on disk still matches its latest approval, that file itself is
+/// returned, same as `require_terms` always did. When it doesn't -- a draft
+/// sitting on top of the last approval, which may carry its own shape
+/// errors (an added term with no id yet, say) that are none of this
+/// command's business -- the file itself is never consulted for validity;
+/// instead the last approved snapshot (`adrdom/state/terms.approved.md`,
+/// the exact text `approve` wrote) is returned, so the question's terms
+/// line is judged against what the owner actually approved, not against
+/// whatever the file happens to hold right now. No snapshot at all (the
+/// file has never been approved) refuses the same "not approved" way this
+/// always has.
+fn terms_for_answer(root: &Path, led: &Ledger, rel: &str) -> Result<terms::TermsFile, String> {
+    match state::load_terms_checked(root) {
+        TermsLoad::Missing => Err(msg::terms_missing()),
+        TermsLoad::LoadError(e) => Err(msg::terms_load_error(
+            &e,
+            Next::owner_runs("the same command again once adrdom/terms.md can be read"),
+        )),
+        TermsLoad::Ok(tf) => {
+            if state::terms_approved(led, &tf) {
+                return Ok(tf);
+            }
+            match state::load_terms_snapshot(root) {
+                Some(snapshot) => Ok(snapshot),
+                None => Err(msg::terms_not_approved(rel)),
+            }
+        }
+    }
+}
+
 pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<Outcome, String> {
     let ledger_path = root.join("adrdom/state/ledger.tsv");
     let led = ledger::read(&ledger_path);
@@ -78,11 +114,13 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
     };
     let rel = state::rel_path(root, &rf.path);
 
-    // Refuse when terms.md is missing, has shape errors, or is not
-    // approved: the same messages `ask` uses, prefixed `answer:` by the
-    // caller in `commands::answer::run`. The loaded, approved terms file is
-    // kept for the terms-line validity check below.
-    let tf = require_terms(root, &led, &rel)?;
+    // Refuse when terms.md is missing or unreadable; otherwise check the
+    // question's terms line against whichever text is currently approved
+    // (`terms_for_answer`, per cd450764 B) -- the file itself when it
+    // matches its latest approval, the snapshot when a draft sits on top of
+    // it. The returned terms file is kept for the terms-line validity check
+    // below.
+    let tf = terms_for_answer(root, &led, &rel)?;
 
     let cur_hash;
     let supersedes_val;
@@ -257,9 +295,10 @@ pub fn do_refuse(root: &Path, id: &str, version: &str) -> Result<Outcome, String
     };
     let rel = state::rel_path(root, &rf.path);
 
-    // Same terms.md gates as the letter path (missing/shape/not approved);
-    // the section's own terms-line/pairing checks are not shared (5).
-    require_terms(root, &led, &rel)?;
+    // Same terms.md gate as the letter path (`terms_for_answer`, cd450764
+    // B); the section's own terms-line/pairing checks are not shared (5),
+    // so the returned terms file has no further use here.
+    terms_for_answer(root, &led, &rel)?;
 
     let cur_hash;
     let supersedes_val;
@@ -1068,8 +1107,8 @@ fn do_approve_record(
 
     // Refuse up front, before a single `depends:` entry is resolved, when
     // adrdom/terms.md is missing, shape-broken, or not yet approved (the
-    // review finding this fixes): the same gate `ask`/`do_answer` apply via
-    // `require_terms`. Without this, a real term with no id minted yet (an
+    // review finding this fixes): the same gate `ask` applies via
+    // `require_terms` (`do_answer`/`do_refuse` use `terms_for_answer`). Without this, a real term with no id minted yet (an
     // unapproved terms.md mints nothing to disk) silently fails to resolve
     // and every depends entry naming it refuses "which is no term" instead
     // of the one clear "terms not approved" line.

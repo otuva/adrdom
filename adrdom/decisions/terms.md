@@ -181,3 +181,20 @@ Standard: change control gates the step that uses a change, such as merge, submi
   Costs: a changed definition under answered questions lands unapproved, and agents build on it.
 
 **Answer:** A
+
+### Does answer stop while the terms file waits for approval?
+depends: b36113a1-1384-4e4c-a798-8399f4181366, 528fe6f6-6d77-42d5-9086-017048d1448d, 03b2853b-4379-4f4b-9cbf-ec6e06aad7fd
+id: cd450764-bacd-4378-82ba-19edfc5a9edb
+terms: answer=b36113a1-1384-4e4c-a798-8399f4181366, answers=b36113a1-1384-4e4c-a798-8399f4181366, approval=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approved=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approves=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, checks=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, current=e2533580-1486-4dc9-8697-e6c53605fe72, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, terms=f590059d-b681-40ec-8a1c-c8916d71f6bb, terms file=528fe6f6-6d77-42d5-9086-017048d1448d, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
+
+Problem: a terms edit waiting for approval blocks answers to questions whose terms it does not touch.
+Standard: change control gates the step that uses a change, not steps that never read it.
+
+- A) Yes: answer stops until the owner approves the terms file.
+  Why: every answer is written while the terms file matches its approval.
+  Costs: a terms edit for one topic file holds every open answer in the others.
+- B) No: answer checks the question's terms line against the approved terms and proceeds.
+  Why: an unrelated terms edit never holds an answer, and approve still stops an edit that moves a word a current decision pairs.
+  Costs: the owner may answer while a terms edit waits unread.
+
+**Answer:** B
