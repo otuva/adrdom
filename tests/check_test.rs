@@ -331,13 +331,18 @@ fn check_tests_failure_when_untested() {
 }
 
 // adr: cd83e277-ebf0-4458-a77a-c526ab4cfeca
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 //
 // "the ledger holds a hash of each answered question's text, and check
 // fails any answered question whose text no longer matches it". Answers a
 // question for real, so the `answered` ledger row carries a real sha256
 // hash of the text as answered (not a placeholder), then edits the
 // section's Problem line afterward: the section's current hash no longer
-// matches the hash the ledger recorded, and check fails naming it.
+// matches the hash the ledger recorded, and check fails naming it with the
+// "text changed since being answered" message -- never "answer line
+// without ledger row" (the answer line is genuine) and never a re-ask
+// (an answered question can't be re-asked); the fix named is restoring the
+// text from git or superseding the decision.
 #[test]
 fn check_fails_an_answered_question_whose_text_changed_since_answering() {
     let dir = init_repo();
@@ -382,7 +387,21 @@ fn check_fails_an_answered_question_whose_text_changed_since_answering() {
     assert!(!out2.status.success());
     let text = stdout(&out2);
     assert!(text.contains("answers:"), "{}", text);
-    assert!(text.contains("answer line without ledger row"), "{}", text);
+    assert!(text.contains("text changed since being answered"), "{}", text);
+    assert!(
+        text.contains(&format!(
+            "agent restores it from git (e.g. git checkout -- adrdom/decisions/example.md), or writes a new question that supersedes {}",
+            id
+        )),
+        "{}",
+        text
+    );
+    assert!(
+        !text.contains("answer line without ledger row"),
+        "a genuine answer line must never be reported as hand-written: {}",
+        text
+    );
+    assert!(!text.contains("re-asks"), "an answered question can never be re-asked: {}", text);
     assert!(text.contains("3.1 Does this pass?"), "{}", text);
 }
 
@@ -1423,6 +1442,11 @@ fn check_fails_an_asked_section_bound_to_a_retired_term() {
         "{}",
         text
     );
+    assert!(
+        text.contains("agent re-asks so the terms line drops the retired term"),
+        "an asked-only question bound to a retired term is still re-asked: {}",
+        text
+    );
 }
 
 #[test]
@@ -1448,6 +1472,61 @@ fn check_fails_an_asked_section_with_no_terms_line() {
     assert!(
         text.contains("adrdom/decisions/example.md: 1.1 Some question?: no terms line"),
         "{}",
+        text
+    );
+    assert!(
+        text.contains("agent re-asks so the terms line is written"),
+        "an asked-only question with no terms line is still re-asked: {}",
+        text
+    );
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// The answered twin of `check_fails_an_asked_section_with_no_terms_line`:
+// once `question_id` is answered (both an `asked` and an `answered` row at
+// the same hash, mirroring what `adr answer` itself writes), the section
+// can never be re-asked (per "Does a decision change after it is
+// answered?"), so losing its terms line -- only possible here through an
+// edit made after answering -- is reported with the restore-or-supersede
+// next move, never "re-asks".
+#[test]
+fn check_fails_an_answered_section_with_no_terms_line_by_restoring_or_superseding() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let terms_content = "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice answered by the owner.\naliases: \n";
+    std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
+    approve_terms_via_ledger(&dir, terms_content);
+
+    let question_id = "66666666-6666-6666-6666-666666666666";
+    let record_content = format!(
+        "# Example\n\n### 1.1 Some question?\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n\n**Answer:** A\n",
+        question_id
+    );
+    write_record(&dir, "adrdom/decisions/example.md", &record_content);
+    append_ledger_row(&dir, "asked", question_id, "deadbeef", "1.1 Some question?");
+    append_ledger_row(&dir, "answered", question_id, "deadbeef", "A");
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(
+        text.contains("adrdom/decisions/example.md: 1.1 Some question?: no terms line"),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains(&format!(
+            "agent restores the terms line from git (e.g. git checkout -- adrdom/decisions/example.md), or writes a question that supersedes {}",
+            question_id
+        )),
+        "an answered section's next move must be restore-or-supersede: {}",
+        text
+    );
+    assert!(
+        !text.contains("re-asks"),
+        "an answered section can never be re-asked: {}",
         text
     );
 }

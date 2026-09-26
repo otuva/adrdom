@@ -143,11 +143,16 @@ pub(super) fn check_terms(
             if !matches!(st, Some("asked") | Some("answered")) {
                 continue;
             }
+            // Whether this section is already answered (frozen, never
+            // re-asked -- "Does a decision change after it is answered?")
+            // or only asked (still open, `ask` can rewrite it): the message
+            // functions below need this to pick a legal next move.
+            let answered = st == Some("answered");
             let Some(tl) = sec.terms_line else {
                 out.push(Failure {
                     check: "terms".to_string(),
                     id: Some(id.clone()),
-                    message: msg::section_no_terms_line(&rel, &sec.heading_text),
+                    message: msg::section_no_terms_line(&rel, &sec.heading_text, id, answered),
                 });
                 continue;
             };
@@ -157,12 +162,12 @@ pub(super) fn check_terms(
                     None => out.push(Failure {
                         check: "terms".to_string(),
                         id: Some(id.clone()),
-                        message: msg::section_term_not_found(&rel, &sec.heading_text, uuid),
+                        message: msg::section_term_not_found(&rel, &sec.heading_text, uuid, id, answered),
                     }),
                     Some(t) if t.retired => out.push(Failure {
                         check: "terms".to_string(),
                         id: Some(id.clone()),
-                        message: msg::section_term_retired(&rel, &sec.heading_text, &t.name),
+                        message: msg::section_term_retired(&rel, &sec.heading_text, &t.name, id, answered),
                     }),
                     Some(_) => {}
                 }

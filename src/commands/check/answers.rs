@@ -29,17 +29,37 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                 }
             } else if sec.answer_line.is_some() {
                 let letter = sec.answer_letter();
-                let ok = letter
+                // Every `answered` row for this id at the letter the file's
+                // `**Answer:**` line names -- there may be more than one
+                // (a text edit followed by a genuine re-answer would add a
+                // second), so any of them matching the current hash is
+                // enough to call the line genuine.
+                let rows_for_letter: Vec<_> = letter
                     .map(|l| {
-                        led.rows.iter().any(|r| {
-                            r.event == "answered"
-                                && &r.id == id
-                                && r.hash == cur
-                                && r.detail == l.to_string()
-                        })
+                        led.rows
+                            .iter()
+                            .filter(|r| r.event == "answered" && &r.id == id && r.detail == l.to_string())
+                            .collect::<Vec<_>>()
                     })
-                    .unwrap_or(false);
-                if !ok {
+                    .unwrap_or_default();
+                if rows_for_letter.iter().any(|r| r.hash == cur) {
+                    // Genuine and current: nothing to report.
+                } else if !rows_for_letter.is_empty() {
+                    // A genuine `answered` row exists at this letter, but
+                    // none of them hash to the section's current text: the
+                    // answer is real, the question's text moved since (per
+                    // "Does check fail an answered question whose text
+                    // changed?") -- never `answer_without_row`, whose fix
+                    // would remove a real answer.
+                    out.push(Failure {
+                        check: "answers".to_string(),
+                        id: Some(id.clone()),
+                        message: msg::answered_text_changed(&rf.rel, &sec.heading_text, id),
+                    });
+                } else {
+                    // No genuine `answered` row for this id at all (at any
+                    // letter, or the line's letter didn't parse): a
+                    // hand-written answer line with nothing backing it.
                     out.push(Failure {
                         check: "answers".to_string(),
                         id: Some(id.clone()),

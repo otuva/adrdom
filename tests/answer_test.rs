@@ -214,10 +214,16 @@ fn answer_with_supersedes_writes_superseded_row_and_show_hides_old() {
 }
 
 // adr: dad5273c-afe2-4ab1-a451-e2a5d4d9a26d
+// adr: cd83e277-ebf0-4458-a77a-c526ab4cfeca
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 //
 // core (0): "an answered decision never changes; it leaves force only when
 // a newer decision supersedes it". Shows both halves: (1) editing an
-// answered question's text makes `check` fail on it, and (2) a later
+// answered question's text makes `check` fail on it, naming the failure
+// with the "text changed since being answered" message and pointing the
+// agent at restoring it from git or superseding it -- never at re-asking
+// it (which can't clear an answered question) and never at removing the
+// answer line (which is genuine, not hand-written) -- and (2) a later
 // answered question naming `supersedes: <old id>` is what takes the old
 // one out of force -- `adr show` stops printing it, exactly as
 // `answer_with_supersedes_writes_superseded_row_and_show_hides_old` already
@@ -268,8 +274,26 @@ fn answered_question_text_is_immutable_until_a_later_decision_supersedes_it() {
         stdout(&check_out)
     );
     assert!(
-        stdout(&check_out).contains("answer line without ledger row"),
+        stdout(&check_out).contains("text changed since being answered"),
         "{}",
+        stdout(&check_out)
+    );
+    assert!(
+        stdout(&check_out).contains(&format!(
+            "agent restores it from git (e.g. git checkout -- adrdom/decisions/example.md), or writes a new question that supersedes {}",
+            old_id
+        )),
+        "next move must be restore-from-git or supersede, never re-ask or remove the (genuine) answer line: {}",
+        stdout(&check_out)
+    );
+    assert!(
+        !stdout(&check_out).contains("answer line without ledger row"),
+        "a genuine answer line must never be reported as hand-written: {}",
+        stdout(&check_out)
+    );
+    assert!(
+        !stdout(&check_out).contains("re-asks"),
+        "an answered question can never be re-asked: {}",
         stdout(&check_out)
     );
 

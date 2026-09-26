@@ -859,10 +859,35 @@ pub fn refusal_without_row(rel: &str, heading: &str) -> String {
     )
 }
 
+/// A hand-written `**Answer:** <letter>` line with no genuine `answered`
+/// ledger row behind it at all -- distinct from `answered_text_changed`,
+/// whose answer line *is* backed by a real row at that same letter, but the
+/// question's own text moved since. Removing the line is only the right fix
+/// here, where nothing genuine is being thrown away.
 pub fn answer_without_row(rel: &str, heading: &str) -> String {
     refuse(
         format!("{}: {}: answer line without ledger row", rel, heading),
         Next::agent("removes the hand-written answer line; only adr answer writes one backed by the ledger"),
+    )
+}
+
+/// An answered section (a genuine `answered` row exists for its id, at the
+/// letter its `**Answer:**` line names) whose current text no longer
+/// hashes to that row: the answer is genuine, the question's text moved
+/// since (per "Does check fail an answered question whose text changed?",
+/// cd83e277 A). Never reported as `answer_without_row` -- that message's
+/// fix, removing the answer line, would throw away a real answer over a
+/// text edit; an answered question can't be re-asked either (per "Does a
+/// decision change after it is answered?"), so the fix is to restore the
+/// text as it was answered, from git, or to write a new question that
+/// supersedes it when the change is meant.
+pub fn answered_text_changed(rel: &str, heading: &str, id: &str) -> String {
+    refuse(
+        format!("{}: {}: text changed since being answered", rel, heading),
+        Next::agent(format!(
+            "restores it from git (e.g. git checkout -- {}), or writes a new question that supersedes {}",
+            rel, id
+        )),
     )
 }
 
@@ -925,25 +950,61 @@ pub fn banned_missing_from_ledger(hash_prefix: &str) -> String {
     )
 }
 
-/// An asked/answered section that carries no `terms:` line at all.
-pub fn section_no_terms_line(rel: &str, heading: &str) -> String {
-    refuse(
-        format!("{}: {}: no terms line", rel, heading),
-        Next::agent("re-asks so the terms line is written"),
-    )
+/// An asked/answered section that carries no `terms:` line at all. `ask`
+/// always writes one, so an answered section can only lose it through an
+/// edit made after the answer -- and an answered question can never be
+/// re-asked (per "Does a decision change after it is answered?"), so
+/// `answered` picks the legal move: re-asking while the question is still
+/// only asked (`ask` will write the line the next time it runs), or
+/// restoring the edit from git / superseding once it's answered (per "Does
+/// check fail an answered question whose text changed?").
+pub fn section_no_terms_line(rel: &str, heading: &str, id: &str, answered: bool) -> String {
+    let next = if answered {
+        Next::agent(format!(
+            "restores the terms line from git (e.g. git checkout -- {}), or writes a question that supersedes {}",
+            rel, id
+        ))
+    } else {
+        Next::agent("re-asks so the terms line is written")
+    };
+    refuse(format!("{}: {}: no terms line", rel, heading), next)
 }
 
-pub fn section_term_not_found(rel: &str, heading: &str, uuid: &str) -> String {
+/// A section's `terms:` line names a uuid that isn't in `adrdom/terms.md`
+/// at all. Same split as `section_no_terms_line`: an asked section can
+/// still be re-asked; an answered one is frozen, so the fix moves to
+/// restoring the term in `adrdom/terms.md` (mirrors `term_removed_but_carried`)
+/// or superseding the decision.
+pub fn section_term_not_found(rel: &str, heading: &str, uuid: &str, id: &str, answered: bool) -> String {
+    let next = if answered {
+        Next::agent(format!(
+            "restores the term in adrdom/terms.md (marked retired: yes if it should stay gone), or writes a question that supersedes {} with a new terms pairing",
+            id
+        ))
+    } else {
+        Next::agent("re-asks so the terms line matches current terms")
+    };
     refuse(
         format!("{}: {}: term {} not found", rel, heading, uuid),
-        Next::agent("re-asks so the terms line matches current terms"),
+        next,
     )
 }
 
-pub fn section_term_retired(rel: &str, heading: &str, name: &str) -> String {
+/// A section's `terms:` line names a term that is now retired. Same split
+/// as `section_no_terms_line`/`section_term_not_found`; the answered fix
+/// mirrors `term_retired_but_carried`'s decision-dependent branch.
+pub fn section_term_retired(rel: &str, heading: &str, name: &str, id: &str, answered: bool) -> String {
+    let next = if answered {
+        Next::agent(format!(
+            "un-retires the term in adrdom/terms.md, or writes a question that supersedes {} with a new terms pairing",
+            id
+        ))
+    } else {
+        Next::agent("re-asks so the terms line drops the retired term")
+    };
     refuse(
         format!("{}: {}: bound term \"{}\" is retired", rel, heading, name),
-        Next::agent("re-asks so the terms line drops the retired term"),
+        next,
     )
 }
 
@@ -1374,7 +1435,12 @@ mod tests {
             term_retired_but_carried("x", "term \"y\"", term_reword_and_approve()),
             term_retired_but_carried("x", "id-1: \"heading\"", Next::agent("supersedes id-1 with a new question first")),
             word_moved_off_term("word", "term", "term \"y\"", term_reword_and_approve()),
-            word_moved_off_term("word", "term", "id-1: \"heading\"", Next::agent("re-asks id-1")),
+            word_moved_off_term(
+                "word",
+                "term",
+                "id-1: \"heading\"",
+                Next::agent("restores the wording in adrdom/terms.md so \"word\" still names \"term\", or writes a question that supersedes id-1 with a new terms pairing"),
+            ),
             definition_too_long("x", 3),
             terms_banned_word(3, ""),
             shape_error("x.md", "missing h1"),
@@ -1383,9 +1449,12 @@ mod tests {
             no_depends_line("x.md", "heading"),
             no_depends_line_bare("heading"),
             refused_summary("heading", "x.md"),
-            section_no_terms_line("x.md", "heading"),
-            section_term_not_found("x.md", "heading", "uuid-1"),
-            section_term_retired("x.md", "heading", "term"),
+            section_no_terms_line("x.md", "heading", "id-1", false),
+            section_no_terms_line("x.md", "heading", "id-1", true),
+            section_term_not_found("x.md", "heading", "uuid-1", "id-1", false),
+            section_term_not_found("x.md", "heading", "uuid-1", "id-1", true),
+            section_term_retired("x.md", "heading", "term", "id-1", false),
+            section_term_retired("x.md", "heading", "term", "id-1", true),
             term_definition_term_not_found("term", "uuid-1"),
             term_definition_term_retired("term", "retired-term"),
             frozen_depends_edited("x.md", "heading"),
@@ -1439,6 +1508,7 @@ mod tests {
             withdrawn_id_present("id-1", "x.md"),
             refusal_without_row("x.md", "heading"),
             answer_without_row("x.md", "heading"),
+            answered_text_changed("x.md", "heading", "id-1"),
             answered_row_without_line("x.md", "heading"),
             refused_row_without_line("x.md", "heading"),
             edited_after_asking("x.md", "heading"),
