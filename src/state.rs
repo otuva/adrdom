@@ -88,6 +88,19 @@ pub fn load_terms(root: &Path) -> Option<TermsFile> {
     terms::load(&path).ok()
 }
 
+/// Like `load_terms`, but through `source` (per "Does check at a commit
+/// read the staged files?"): every `check` caller that needs the terms
+/// file uses this instead, so a staged edit to it is judged, not whatever
+/// is left on disk. Every other caller (`ask`, `approve`, `ban`, `show`,
+/// `serve`) keeps calling `load_terms`, which always wants the working
+/// tree.
+pub fn load_terms_via(root: &Path, source: &crate::repo::Source) -> Option<TermsFile> {
+    let content = source.read(root, "adrdom/terms.md")?;
+    let mut tf = terms::parse(&record::split_lines(&content));
+    tf.path = root.join("adrdom/terms.md");
+    Some(tf)
+}
+
 /// `adrdom/state/terms.approved.md`: the exact bytes `approve
 /// adrdom/terms.md` last wrote to `adrdom/terms.md`, snapshotted in the same
 /// run as its ledger event (`actions::do_approve_terms`). `check`'s only
@@ -100,6 +113,13 @@ pub fn load_terms(root: &Path) -> Option<TermsFile> {
 pub fn load_terms_snapshot(root: &Path) -> Option<TermsFile> {
     let path = root.join("adrdom/state/terms.approved.md");
     let content = std::fs::read_to_string(path).ok()?;
+    Some(terms::parse(&record::split_lines(&content)))
+}
+
+/// Like `load_terms_snapshot`, but through `source`: `check`'s own copy,
+/// used the same way `load_terms_via` is.
+pub fn load_terms_snapshot_via(root: &Path, source: &crate::repo::Source) -> Option<TermsFile> {
+    let content = source.read(root, "adrdom/state/terms.approved.md")?;
     Some(terms::parse(&record::split_lines(&content)))
 }
 

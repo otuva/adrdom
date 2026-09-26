@@ -3,20 +3,19 @@ use crate::banned;
 use crate::ledger::Ledger;
 use crate::msg;
 use crate::record;
-use crate::repo;
+use crate::repo::{self, Source};
 use crate::state;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-pub(super) fn check_banned(root: &Path, staged: bool, message: Option<&Path>) -> Vec<Failure> {
+pub(super) fn check_banned(root: &Path, staged: bool, message: Option<&Path>, source: &Source) -> Vec<Failure> {
     let mut out = Vec::new();
-    let banned_path = root.join("adrdom/state/banned.sha256");
-    let entries = banned::read_entries(&banned_path);
+    let entries = read_banned_entries(root, source);
     if entries.is_empty() {
         return out;
     }
     let hash_map: HashMap<String, Option<String>> = entries.into_iter().collect();
-    let tf = state::load_terms(root);
+    let tf = state::load_terms_via(root, source);
 
     for (name, content) in collect_targets(root, staged, message) {
         for (i, line) in content.lines().enumerate() {
@@ -57,10 +56,12 @@ pub(super) fn check_banned(root: &Path, staged: bool, message: Option<&Path>) ->
 /// later `unbanned` row) must be in the file, and every hash in the file
 /// must trace back to some `banned` row (regardless of a later `unbanned`
 /// row, which would otherwise have removed it from the file already).
-pub(super) fn check_banned_ledger(led: &Ledger, root: &Path) -> Vec<Failure> {
+pub(super) fn check_banned_ledger(led: &Ledger, root: &Path, source: &Source) -> Vec<Failure> {
     let mut out = Vec::new();
-    let banned_path = root.join("adrdom/state/banned.sha256");
-    let file_hashes = banned::read_set(&banned_path);
+    let file_hashes: HashSet<String> = read_banned_entries(root, source)
+        .into_iter()
+        .map(|(h, _)| h)
+        .collect();
 
     let mut ever_banned: HashSet<String> = HashSet::new();
     let mut currently_banned: HashSet<String> = HashSet::new();
@@ -110,6 +111,14 @@ fn hash_prefix(h: &str) -> &str {
     &h[..h.len().min(12)]
 }
 
+/// `adrdom/state/banned.sha256` through `source` (per "Does check at a
+/// commit read the staged files?"): a staged edit to the ban list is
+/// judged, not whatever is left on disk. Every entry, hash plus term uuid;
+/// empty when the file doesn't exist in `source` at all.
+fn read_banned_entries(root: &Path, source: &Source) -> Vec<(String, Option<String>)> {
+    banned::parse_entries(&source.read(root, "adrdom/state/banned.sha256").unwrap_or_default())
+}
+
 pub(crate) fn collect_targets(
     root: &Path,
     staged: bool,
@@ -131,7 +140,7 @@ pub(crate) fn collect_targets(
                 if skip_path(path) {
                     continue;
                 }
-                if let Some(content) = repo::git(root, &["show", &format!(":{}", path)]) {
+                if let Some(content) = Source::Index.read(root, path) {
                     out.push((path.to_string(), content));
                 }
             }
@@ -155,8 +164,7 @@ pub(crate) fn collect_targets(
         if skip_path(&p) {
             continue;
         }
-        let full = root.join(&p);
-        if let Ok(content) = std::fs::read_to_string(&full) {
+        if let Some(content) = Source::WorkingTree.read(root, &p) {
             out.push((p, content));
         }
     }

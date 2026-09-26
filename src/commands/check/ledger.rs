@@ -10,7 +10,7 @@ pub(super) fn check_ledger(
     led: &Ledger,
     records: &[RecordFile],
     root: &Path,
-    ledger_path: &Path,
+    ledger_content: &str,
 ) -> Vec<Failure> {
     let mut out = Vec::new();
     for (lineno, raw) in &led.malformed {
@@ -21,9 +21,13 @@ pub(super) fn check_ledger(
         });
     }
 
+    // Compared against `ledger_content` -- the same staged-or-working-tree
+    // bytes `led` was itself parsed from in `build` (per "Does check at a
+    // commit read the staged files?") -- rather than re-reading the
+    // filesystem here, so this never disagrees with `led` about which copy
+    // of the ledger it is judging.
     if let Some(head_content) = repo::git(root, &["show", "HEAD:adrdom/state/ledger.tsv"]) {
-        let working = std::fs::read_to_string(ledger_path).unwrap_or_default();
-        if !working.starts_with(&head_content) {
+        if !ledger_content.starts_with(&head_content) {
             out.push(Failure {
                 check: "ledger".to_string(),
                 id: None,

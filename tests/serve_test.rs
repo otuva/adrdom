@@ -680,7 +680,10 @@ fn terms_article_shows_before_after_when_unapproved() {
     assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
         .status
         .success());
-    run_git(&dir, &["add", "adrdom/terms.md", "adrdom/state/ledger.tsv"]);
+    // AGENTS.md staged too: the pre-commit hook now judges the same
+    // staged tree `check --staged` does (per "Does check at a commit read
+    // the staged files?"), and it sits on disk, unstaged, since install.
+    run_git(&dir, &["add", "adrdom/terms.md", "adrdom/state/ledger.tsv", "AGENTS.md"]);
     let commit_out = run_git(&dir, &["commit", "-q", "-m", "approve terms v1"]);
     assert!(commit_out.status.success(), "{:?}", commit_out);
 

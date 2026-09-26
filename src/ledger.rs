@@ -43,7 +43,15 @@ pub fn now_rfc3339() -> String {
 }
 
 pub fn read(path: &Path) -> Ledger {
-    let content = fs::read_to_string(path).unwrap_or_default();
+    parse(&fs::read_to_string(path).unwrap_or_default())
+}
+
+/// Parses ledger rows straight from `content`, without touching the
+/// filesystem: what `read` does after its own `fs::read_to_string`, split
+/// out so a caller that already has the bytes -- `check`, reading through
+/// `repo::Source` so a staged ledger edit is judged too -- doesn't have to
+/// write them to a temp file first.
+pub fn parse(content: &str) -> Ledger {
     let mut rows = Vec::new();
     let mut malformed = Vec::new();
     for (idx, line) in content.lines().enumerate() {

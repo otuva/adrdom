@@ -19,12 +19,29 @@ use crate::depends;
 use crate::ledger::Ledger;
 use crate::msg::{self, Actor};
 use crate::record::{self, RecordFile};
-use crate::repo;
+use crate::repo::{self, Source};
 use crate::state;
 use crate::terms as terms_mod;
 use crate::view;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+
+/// Loads one topic file through `source` instead of `record::load_in`,
+/// which always reads the filesystem: the one place `check` builds a
+/// `RecordFile` from bytes, so every category below judges the same
+/// staged-or-working-tree text (per "Does check at a commit read the
+/// staged files?", 34e81f57 A). `path` is one of `source`'s own file
+/// listing (`repo::list_decision_files_via`), so it may not exist on disk
+/// at all (a file only staged, never `git add`ed to disk... never mind,
+/// always on disk if staged; but never committed either) -- only
+/// `source.read` is ever asked for its bytes.
+fn load_record(root: &Path, path: &Path, source: &Source) -> Result<RecordFile, String> {
+    let rel = state::rel_path(root, path);
+    match source.read(root, &rel) {
+        Some(content) => Ok(record::build(path.to_path_buf(), rel, record::split_lines(&content))),
+        None => Err("not found".to_string()),
+    }
+}
 
 struct Failure {
     check: String,
@@ -56,14 +73,23 @@ fn build(
     message: Option<&Path>,
     tests: Option<&HashMap<String, Vec<String>>>,
 ) -> view::CheckReport {
-    let ledger_path = root.join("adrdom/state/ledger.tsv");
-    let led = crate::ledger::read(&ledger_path);
+    // Picked once per run and threaded through every category below (per
+    // "Does check at a commit read the staged files?", 34e81f57 A): the
+    // commit-msg hook's `--message` run judges the same staged tree the
+    // pre-commit hook already saw -- it is "at a commit" too, even though
+    // its own `staged` flag is false -- so it counts here alongside
+    // `--staged` itself.
+    let source = Source::for_check(staged, message.is_some());
 
-    let files = repo::list_decision_files(root);
+    let ledger_rel = "adrdom/state/ledger.tsv";
+    let ledger_content = source.read(root, ledger_rel).unwrap_or_default();
+    let led = crate::ledger::parse(&ledger_content);
+
+    let files = repo::list_decision_files_via(root, &source);
     let mut records = Vec::new();
     let mut notes: Vec<String> = Vec::new();
     for f in &files {
-        match record::load_in(root, f) {
+        match load_record(root, f, &source) {
             Ok(rf) => records.push(rf),
             Err(e) => notes.push(msg::topic_file_unreadable(&f.display().to_string(), e)),
         }
@@ -74,7 +100,7 @@ fn build(
     // resolves a term that has one. Computed once here, shared by every
     // category below that resolves a `depends:` entry, rather than each
     // reloading/minting its own copy.
-    let terms_list: Vec<terms_mod::Term> = state::load_terms(root)
+    let terms_list: Vec<terms_mod::Term> = state::load_terms_via(root, &source)
         .map(|tf| terms_mod::minted_copy(&tf).terms)
         .unwrap_or_default();
     let phrase_lookup = terms_mod::phrase_lookup(&terms_list);
@@ -129,13 +155,14 @@ fn build(
     let mut failures: Vec<String> = Vec::new();
     push_failures(&mut failures, parse::check_parse(&per_record_refusals));
     push_failures(&mut failures, ids::check_ids(&records, &led, &missing_answered, &raw_hashes));
-    push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_path));
-    push_failures(&mut failures, banned::check_banned_ledger(&led, root));
+    push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_content));
+    push_failures(&mut failures, banned::check_banned_ledger(&led, root, &source));
     push_failures(&mut failures, answers::check_answers(&records, &led));
-    push_failures(&mut failures, banned::check_banned(root, staged, message));
-    push_failures(&mut failures, install::check_install(root));
+    push_failures(&mut failures, banned::check_banned(root, staged, message, &source));
+    push_failures(&mut failures, install::check_install(root, &source));
     let (plan_failures, awaiting) = plan::check_plan(
         root,
+        &source,
         &records,
         &led,
         &per_record_refusals,
@@ -145,9 +172,9 @@ fn build(
         &raw_hashes,
     );
     push_failures(&mut failures, plan_failures);
-    let (terms_failures, terms_awaiting, terms_notes) = terms::check_terms(root, &records, &led, staged);
+    let (terms_failures, terms_awaiting, terms_notes) = terms::check_terms(root, &records, &led, &source);
     push_failures(&mut failures, terms_failures);
-    let (test_failures, tested_count) = tests::check_tests(root, &records, &led, tests);
+    let (test_failures, tested_count) = tests::check_tests(root, &records, &led, tests, &source);
     push_failures(&mut failures, test_failures);
     push_failures(&mut failures, tells::check_tells(root, &records, &led, &per_record_refusals));
 

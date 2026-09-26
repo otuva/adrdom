@@ -220,6 +220,13 @@ fn check_banned_default_and_message_modes_name_the_line() {
     );
 
     // --message mode: a commit message file containing the banned word.
+    // Everything else staged first (adrdom/state/banned.sha256 included):
+    // by the time the commit-msg hook runs for real, the pre-commit hook
+    // has already run against this same staged tree, so `--message` reads
+    // it from the index too (34e81f57 A) -- with nothing staged at all,
+    // the ban list itself wouldn't exist in the index yet and this check
+    // would have nothing to compare the message against.
+    run_git(&dir, &["add", "-A"]);
     let msg_path = dir.join("COMMIT_EDITMSG");
     std::fs::write(&msg_path, "fix: mentions forbiddenword in the subject\n").unwrap();
     let out2 = adr(
@@ -552,6 +559,37 @@ fn check_install_fails_when_agents_md_is_missing() {
         stdout(&out).contains("install: AGENTS.md lacks the adrdom brief; agent runs: adr install"),
         "{}",
         stdout(&out)
+    );
+}
+
+// adr: 34e81f57-9b3c-4dc4-a2ba-ca227523177d
+//
+// The install check is judged like every other file `check` reads: `adr
+// install` writes AGENTS.md straight to the working tree, but nothing
+// stages it. `check --staged` reads the index, where AGENTS.md does not
+// exist yet, so it refuses exactly as it would if the file were missing
+// outright; plain `adr check` reads the working tree, where the freshly
+// installed brief is fine.
+#[test]
+fn check_staged_refuses_an_unstaged_agents_md_from_install() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    // AGENTS.md sits on disk from install, but nothing has been staged.
+
+    let out = adr(&dir, &["check", "--staged"], &[], "");
+    let text = stdout(&out);
+    assert!(!out.status.success(), "{}", text);
+    assert!(
+        text.contains("install: AGENTS.md lacks the adrdom brief; agent runs: adr install"),
+        "an unstaged AGENTS.md from install must not satisfy a staged check: {}",
+        text
+    );
+
+    let out2 = adr(&dir, &["check"], &[], "");
+    assert!(
+        !stdout(&out2).contains("install:"),
+        "plain check reads the working tree, where AGENTS.md is fine: {}",
+        stdout(&out2)
     );
 }
 
@@ -1679,6 +1717,162 @@ fn check_staged_reads_terms_from_the_index() {
         let text = stdout(&out);
         assert!(!text.contains("missing h1"), "{}", text);
     }
+}
+
+// The exploit "Does check at a commit read the staged files?" closes: an
+// agent stages an edit to an answered option's text, then restores the
+// working tree copy so a plain read of the file on disk shows nothing
+// wrong. `check --staged` must still catch it, because it reads the text
+// that is actually about to enter the commit (the index), not whatever
+// sits on disk.
+//
+// adr: 34e81f57-9b3c-4dc4-a2ba-ca227523177d
+#[test]
+fn check_staged_refuses_a_reworded_answered_option_restored_on_disk() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let (record, id) = answer_one_question(&dir);
+    write_test_comment(&dir, &id);
+    run_git(&dir, &["add", "-A"]);
+    run_git(&dir, &["commit", "--no-verify", "-q", "-m", "seed answered question"]);
+
+    let original = std::fs::read_to_string(&record).unwrap();
+    let reworded = original.replace("Yes it passes.", "Yes, this now passes for sure.");
+    std::fs::write(&record, &reworded).unwrap();
+    run_git(&dir, &["add", "adrdom/decisions/example.md"]);
+    // The working tree copy is put back to the answered text -- only the
+    // index still holds the reword.
+    std::fs::write(&record, &original).unwrap();
+
+    let out = adr(&dir, &["check", "--staged"], &[], "");
+    let text = stdout(&out);
+    assert!(!out.status.success(), "{}", text);
+    assert!(
+        text.contains("text changed since being answered"),
+        "a staged reword must be caught even with the working tree restored: {}",
+        text
+    );
+}
+
+// The mirror case: the reword already sits at HEAD (nothing new is staged
+// for this commit), and someone applies the real fix only to the working
+// tree, forgetting to stage it. `check --staged` reads the index/HEAD
+// content, so the unstaged fix must not count.
+#[test]
+fn check_staged_ignores_an_unstaged_working_tree_fix() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let (record, id) = answer_one_question(&dir);
+    write_test_comment(&dir, &id);
+
+    let original = std::fs::read_to_string(&record).unwrap();
+    let reworded = original.replace("Yes it passes.", "Yes, this now passes for sure.");
+    std::fs::write(&record, &reworded).unwrap();
+    run_git(&dir, &["add", "-A"]);
+    run_git(&dir, &["commit", "--no-verify", "-q", "-m", "reword (bad, committed for the fixture)"]);
+
+    // The fix, applied only to the working tree: never staged, so the
+    // index (and HEAD) still hold the reworded text.
+    std::fs::write(&record, &original).unwrap();
+
+    let out = adr(&dir, &["check", "--staged"], &[], "");
+    let text = stdout(&out);
+    assert!(!out.status.success(), "{}", text);
+    assert!(
+        text.contains("text changed since being answered"),
+        "an unstaged working-tree fix must not satisfy a staged check: {}",
+        text
+    );
+}
+
+// Outside a commit, the flag is what flips the source: the identical
+// stage-bad/restore-good setup from
+// `check_staged_refuses_a_reworded_answered_option_restored_on_disk`
+// passes under plain `adr check`, which reads the working tree.
+#[test]
+fn check_without_staged_reads_the_working_tree() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let (record, id) = answer_one_question(&dir);
+    write_test_comment(&dir, &id);
+
+    let original = std::fs::read_to_string(&record).unwrap();
+    let reworded = original.replace("Yes it passes.", "Yes, this now passes for sure.");
+    std::fs::write(&record, &reworded).unwrap();
+    run_git(&dir, &["add", "adrdom/decisions/example.md"]);
+    std::fs::write(&record, &original).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(
+        out.status.success(),
+        "plain check must read the working tree, not the index: {}",
+        stdout(&out)
+    );
+}
+
+// A staged deletion of a topic file is read as the file being gone at a
+// commit, even though it is still sitting on disk: the id it answered can
+// no longer be found in any topic file the index holds.
+#[test]
+fn check_staged_treats_a_staged_deleted_topic_file_as_gone() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let (record, id) = answer_one_question(&dir);
+    write_test_comment(&dir, &id);
+    run_git(&dir, &["add", "-A"]);
+    run_git(&dir, &["commit", "--no-verify", "-q", "-m", "seed answered question"]);
+
+    // Staged deletion, left on disk: `git rm --cached` removes the path
+    // from the index only.
+    run_git(&dir, &["rm", "--cached", "-q", "adrdom/decisions/example.md"]);
+    assert!(
+        record.exists(),
+        "the working tree copy must still be on disk -- only the index drops it"
+    );
+
+    let out = adr(&dir, &["check", "--staged"], &[], "");
+    let text = stdout(&out);
+    assert!(!out.status.success(), "{}", text);
+    assert!(
+        text.contains(&format!("asked row id {} not found in any topic file", id)),
+        "a staged deletion must be read as the file being gone, at a commit: {}",
+        text
+    );
+}
+
+// A brand new test file's tie counts once it is staged, even though its
+// working-tree copy is edited back to drop the tie afterward (the index
+// content is what is about to enter the commit); the same tie sitting
+// only in the working tree, outside a commit, is what plain `adr check`
+// reads instead.
+#[test]
+fn check_staged_reads_a_newly_staged_test_files_tie_from_the_index() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let (_record, id) = answer_one_question(&dir);
+    // The answered question itself staged too, so it is a current
+    // decision in the index this `--staged` run reads, not just on disk.
+    run_git(&dir, &["add", "-A"]);
+
+    std::fs::write(dir.join("tested.txt"), format!("adr: {}\n", id)).unwrap();
+    run_git(&dir, &["add", "tested.txt"]);
+    // Working tree copy edited back to drop the tie: the staged content
+    // still has it.
+    std::fs::write(dir.join("tested.txt"), "no tie here\n").unwrap();
+
+    let out = adr(&dir, &["check", "--staged"], &[], "");
+    assert!(out.status.success(), "{}", stdout(&out));
+    assert!(stdout(&out).contains("tested: 1"), "{}", stdout(&out));
+
+    // Outside a commit, the working tree is read instead: the tie is gone
+    // there, so plain `adr check` calls it untested.
+    let out2 = adr(&dir, &["check"], &[], "");
+    assert!(!out2.status.success(), "{}", stdout(&out2));
+    assert!(
+        stdout(&out2).contains(&format!("{}: untested", id)),
+        "{}",
+        stdout(&out2)
+    );
 }
 
 // adr: fcc1c1ec-d8e8-428e-9731-9817cdeb8e76
