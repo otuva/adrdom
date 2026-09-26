@@ -262,3 +262,5 @@ Standard: traceability links are kept current, so every link from a test names a
 - B) No: check reports a tie to an identifier that is not current and passes.
   Why: a supersede never holds a commit on old test comments.
   Costs: stale ties build up and a test can claim a decision that left force.
+
+**Answer:** A

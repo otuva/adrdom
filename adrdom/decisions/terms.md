@@ -196,3 +196,5 @@ Standard: change control gates the step that uses a change, not steps that never
 - B) No: answer checks the question's terms line against the approved terms and proceeds.
   Why: an unrelated terms edit never holds an answer, and approve still stops an edit that moves a word a current decision pairs.
   Costs: the owner may answer while a terms edit waits unread.
+
+**Answer:** B

@@ -1930,3 +1930,97 @@ aliases: \n";
         text
     );
 }
+
+// adr: b871e776-2da5-4f1e-b4c4-fb8229657e25
+//
+// "Does check fail a stale test tie?" (b871e776 A): yes -- a tie to a
+// decision whose latest ledger state is no longer `answered` is stale, and
+// the agent's move is to remove the tag or point it at the current
+// decision. A later decision superseding the first is one way a tie goes
+// stale: `old_id` was genuinely current (and tested) when the tie was
+// written, then a second, real decision named `supersedes: <old_id>` and
+// took it out of force.
+#[test]
+fn check_fails_a_test_tied_to_a_decision_that_was_later_superseded() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
+    let first = "# Example\n\n### 1.1 What is the unit of authority called?\ndepends: authority\n\nProblem: names leaked into decisions.\n\nStandard: plain words.\n\n- A) The authoritative sentence is a decision.\n  Why: plainest word.\n  Costs: two nouns.\n- B) The whole unit is a block.\n  Why: matches predecessors.\n  Costs: names a region.\n";
+    let second = "\n### 1.2 What is the second unit of authority called?\ndepends: authority\n\nProblem: naming the second unit.\n\nStandard: plain words.\n\n- A) The second thing is a widget.\n  Why: reasons.\n  Costs: costs.\n- B) The second thing is a gadget.\n  Why: other reasons.\n  Costs: other costs.\n";
+    let record = write_record(&dir, "adrdom/decisions/example.md", first);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let old_id = extract_ids(&content)[0].clone();
+    assert!(adr_answer(&dir, &old_id, "A").status.success());
+    write_test_comment(&dir, &old_id);
+
+    // While `old_id` is still current, the tie is genuine and check passes.
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "check should pass: {}", stdout(&out));
+
+    // A second question, naming `supersedes: <old_id>`, takes the old
+    // decision out of force once it is itself answered.
+    let mut content = std::fs::read_to_string(&record).unwrap();
+    let second_with_supersedes = second.replacen(
+        "### 1.2 What is the second unit of authority called?\n",
+        &format!(
+            "### 1.2 What is the second unit of authority called?\n\nsupersedes: {}\n",
+            old_id
+        ),
+        1,
+    );
+    content.push_str(&second_with_supersedes);
+    std::fs::write(&record, &content).unwrap();
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let new_id = extract_ids(&content)
+        .into_iter()
+        .find(|id| id != &old_id)
+        .expect("new id assigned");
+    assert!(adr_answer(&dir, &new_id, "A").status.success());
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success(), "check should fail: {}", stdout(&out));
+    assert!(
+        stdout(&out).contains(&format!("{}: stale (not a current decision)", old_id)),
+        "{}",
+        stdout(&out)
+    );
+}
+
+// adr: b871e776-2da5-4f1e-b4c4-fb8229657e25
+//
+// The other way a tie goes stale (b871e776 A): the question it names was
+// answered with a refusal, never a lettered decision, so it never becomes
+// current at all -- a tie to it is stale from the moment it is written.
+#[test]
+fn check_fails_a_test_tied_to_a_refused_decision() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let content = "# Example\n\n### 1.1 What color is the widget?\ndepends: widget\n\nProblem: the widget's color is undecided.\n\nStandard: plain words.\n\n- A) The widget is red.\n  Why: reasons.\n  Costs: costs.\n- B) The widget is blue.\n  Why: other reasons.\n  Costs: other costs.\n";
+    let record = write_record(&dir, "adrdom/decisions/example.md", content);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let asked = std::fs::read_to_string(&record).unwrap();
+    let id = extract_ids(&asked)[0].clone();
+    assert!(adr_answer(&dir, &id, "refuse").status.success());
+    write_test_comment(&dir, &id);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success(), "check should fail: {}", stdout(&out));
+    assert!(
+        stdout(&out).contains(&format!("{}: stale (not a current decision)", id)),
+        "{}",
+        stdout(&out)
+    );
+}
