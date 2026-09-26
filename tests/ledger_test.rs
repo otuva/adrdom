@@ -75,7 +75,6 @@ fn ledger_append_only_violation_is_detected_after_a_commit() {
 
     let out2 = adr(&dir, &["check"], &[], "");
     let out2_text = stdout(&out2);
-    eprintln!("DEBUG out2 status={:?} text={}", out2.status, out2_text);
     assert!(!out2.status.success());
     assert!(out2_text.contains("ledger:"), "{}", out2_text);
     assert!(out2_text.contains("not append-only"), "{}", out2_text);
