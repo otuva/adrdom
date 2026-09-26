@@ -39,3 +39,11 @@ Standard: staged delivery builds a layer once the layer is specified, not per se
   Costs: the slowest question holds every build in the topic.
 
 **Answer:** A
+
+### Does the agent build what no current decision covers?
+depends: f90dbd5b-8fbe-4899-8588-f8762795c2e2, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, e2533580-1486-4dc9-8697-e6c53605fe72
+id: c3127af2-4c96-48d5-a164-bac49a9a09ec
+
+### Does a refusal name the command that clears it?
+depends: 0942e445-0163-423e-8ba7-84dd8ac07045, 1d7e59ea-99e3-4d4b-9928-5dabca62723d, f90dbd5b-8fbe-4899-8588-f8762795c2e2
+id: b0e865b4-9204-4c55-9f5b-dcb755b3a03b

@@ -143,3 +143,11 @@ Standard: terminology systems let a deprecated term's label pass to a new concep
   Costs: a split or merge loses the word.
 
 **Answer:** A
+
+### Does ask refuse a question with no term?
+depends: f571a454-3e6c-46c1-b754-0822a5d1d667, 3c8d4c9c-abca-4faa-b7c1-aae39951376c, 277a8338-c57a-43cc-8b28-6b42e9347f6a, f590059d-b681-40ec-8a1c-c8916d71f6bb
+id: 711a7636-9f4d-402d-ae62-265208adf0ac
+
+### Does check fail a terms file that differs from its latest approval?
+depends: 7cf81ded-be48-4777-b83e-f8a2998c1ab5, 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 528fe6f6-6d77-42d5-9086-017048d1448d, 607cb55f-c0fa-40af-b290-c17f3ba0f812
+id: 03b2853b-4379-4f4b-9cbf-ec6e06aad7fd

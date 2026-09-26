@@ -115,3 +115,7 @@ Standard: local admin pages bind to loopback, print a one-time token at start, s
   Costs: machine setup, beyond the threat the tool guards against.
 
 **Answer:** A
+
+### Does an answer carry the version of the question the owner read?
+depends: 644b43ce-be10-4e9a-a7d5-71b27c51e365, b36113a1-1384-4e4c-a798-8399f4181366, 277a8338-c57a-43cc-8b28-6b42e9347f6a, 1d7e59ea-99e3-4d4b-9928-5dabca62723d
+id: 11be073c-ce91-44d8-833a-ef0b5e0b1672

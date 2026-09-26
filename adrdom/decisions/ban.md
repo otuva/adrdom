@@ -96,3 +96,7 @@ Standard: secret scanners have no mention form; a hit is a hit, and allowing one
   Costs: any sentence can carry the word by quoting it.
 
 **Answer:** A
+
+### Does ban refuse a word that appears in the repository?
+depends: d8a9dfff-de89-442c-a08c-8276efab3f36, ef83beae-6857-4200-b251-a0fcc3c72f9d
+id: 4f04bae4-98e3-48eb-9403-3257268e2d87
