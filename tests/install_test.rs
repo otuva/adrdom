@@ -566,24 +566,17 @@ fn uninstall_removes_everything_install_wrote_outside_adrdom() {
         "core.hooksPath should be unset"
     );
 
-    let settings: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(dir.join(".claude/settings.json")).unwrap(),
-    )
-    .unwrap();
-    let deny: Vec<&str> = settings["permissions"]["deny"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v.as_str().unwrap())
-        .collect();
-    for entry in ALL_DENY_ENTRIES {
-        assert!(
-            !deny.contains(entry),
-            "deny entry {} should have been removed: {:?}",
-            entry,
-            deny
-        );
-    }
+    // This settings.json held nothing but the deny entries install --claude
+    // wrote, so uninstall deletes the file (and the .claude it created)
+    // rather than leaving it behind with an empty deny array.
+    assert!(
+        !dir.join(".claude/settings.json").exists(),
+        "settings.json held only install's deny entries and should be deleted"
+    );
+    assert!(
+        !dir.join(".claude").exists(),
+        "empty .claude should be removed"
+    );
 
     assert!(dir.join("adrdom/decisions").is_dir());
     assert!(dir.join("adrdom/state/ledger.tsv").is_file());
@@ -640,6 +633,78 @@ fn uninstall_removes_claude_md_pair_but_keeps_a_bare_agents_import() {
     );
     let after2 = std::fs::read_to_string(dir.join("CLAUDE.md")).unwrap();
     assert_eq!(after2, "# Notes\n\n@AGENTS.md\n");
+}
+
+// adr: c304b7da-1843-43ad-930c-b01b3310483d
+// A file (.claude/settings.json) that holds nothing but what install
+// wrote is deleted on uninstall, and the directory install created goes
+// too once it's empty.
+#[test]
+fn uninstall_deletes_settings_json_that_held_only_the_deny_entries() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    assert!(dir.join(".claude/settings.json").is_file());
+
+    let out = adr_owner(&dir, &["uninstall"], "");
+    assert!(out.status.success(), "uninstall failed: {}", stderr(&out));
+
+    assert!(
+        !dir.join(".claude/settings.json").exists(),
+        "settings.json should be deleted once it holds only the deny entries"
+    );
+    assert!(
+        !dir.join(".claude").exists(),
+        "empty .claude should be removed"
+    );
+}
+
+// adr: c304b7da-1843-43ad-930c-b01b3310483d
+// A settings.json with anything else in it (another top-level key, or an
+// extra deny entry) keeps the rest: only install's own deny entries come
+// out, the file and directory stay.
+#[test]
+fn uninstall_keeps_settings_json_with_other_content() {
+    let dir = init_repo();
+    std::fs::create_dir_all(dir.join(".claude")).unwrap();
+    std::fs::write(
+        dir.join(".claude/settings.json"),
+        r#"{
+  "model": "opus",
+  "permissions": {
+    "deny": [
+      "Bash(rm -rf*)"
+    ]
+  }
+}
+"#,
+    )
+    .unwrap();
+    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+
+    let out = adr_owner(&dir, &["uninstall"], "");
+    assert!(out.status.success(), "uninstall failed: {}", stderr(&out));
+
+    assert!(
+        dir.join(".claude/settings.json").is_file(),
+        "settings.json with other content must not be deleted"
+    );
+    let settings: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join(".claude/settings.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(settings["model"], "opus");
+    let deny: Vec<&str> = settings["permissions"]["deny"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert_eq!(
+        deny,
+        vec!["Bash(rm -rf*)"],
+        "the owner's own deny entry must stay, install's must go: {:?}",
+        deny
+    );
 }
 
 #[test]

@@ -213,10 +213,13 @@ fn remove_codex_rules(root: &Path) -> Vec<String> {
 }
 
 /// Removes every `deny_entries()` string from `.claude/settings.json`'s
-/// `permissions.deny`, leaving every other key and entry untouched. Does
-/// nothing when the file doesn't exist.
+/// `permissions.deny`, leaving every other key and entry untouched. Deletes
+/// the file when nothing but what install wrote remains (an empty
+/// `permissions.deny` and no other key anywhere), then removes `.claude`
+/// once that leaves it empty. Does nothing when the file doesn't exist.
 fn remove_settings_deny(root: &Path) -> Result<Vec<String>, String> {
-    let path = root.join(".claude/settings.json");
+    let dir = root.join(".claude");
+    let path = dir.join("settings.json");
     if !path.exists() {
         return Ok(Vec::new());
     }
@@ -246,9 +249,42 @@ fn remove_settings_deny(root: &Path) -> Result<Vec<String>, String> {
         return Ok(messages);
     }
 
+    if settings_holds_only_deny(&value) {
+        fs::remove_file(&path).map_err(|e| e.to_string())?;
+        messages.push(msg::settings_json_deleted());
+        if let Ok(mut entries) = fs::read_dir(&dir) {
+            if entries.next().is_none() && fs::remove_dir(&dir).is_ok() {
+                messages.push(msg::claude_dir_removed());
+            }
+        }
+        return Ok(messages);
+    }
+
     let mut pretty = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
     pretty.push('\n');
     fs::write(&path, pretty).map_err(|e| e.to_string())?;
 
     Ok(messages)
+}
+
+/// True when `value` holds nothing but the shape install writes: a top
+/// level with only `permissions`, a `permissions` with only `deny`, and an
+/// empty `deny` array.
+fn settings_holds_only_deny(value: &serde_json::Value) -> bool {
+    let Some(obj) = value.as_object() else {
+        return false;
+    };
+    if obj.len() != 1 {
+        return false;
+    }
+    let Some(permissions) = obj.get("permissions").and_then(|p| p.as_object()) else {
+        return false;
+    };
+    if permissions.len() != 1 {
+        return false;
+    }
+    permissions
+        .get("deny")
+        .and_then(|d| d.as_array())
+        .is_some_and(|deny| deny.is_empty())
 }

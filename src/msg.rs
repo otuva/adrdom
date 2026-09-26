@@ -1379,6 +1379,15 @@ pub fn deny_entry_removed(entry: &str) -> String {
     )
 }
 
+pub fn settings_json_deleted() -> String {
+    "uninstall: .claude/settings.json: deleted (held only the deny entries install added)"
+        .to_string()
+}
+
+pub fn claude_dir_removed() -> String {
+    "uninstall: removed empty .claude".to_string()
+}
+
 pub fn codex_rules_up_to_date() -> String {
     "install: .codex/rules/adrdom.rules: already up to date".to_string()
 }
