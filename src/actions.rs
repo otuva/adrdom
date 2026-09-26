@@ -1107,8 +1107,8 @@ fn do_approve_record(
 
     // Refuse up front, before a single `depends:` entry is resolved, when
     // adrdom/terms.md is missing, shape-broken, or not yet approved (the
-    // review finding this fixes): the same gate `ask`/`do_answer` apply via
-    // `require_terms`. Without this, a real term with no id minted yet (an
+    // review finding this fixes): the same gate `ask` applies via
+    // `require_terms` (`do_answer`/`do_refuse` use `terms_for_answer`). Without this, a real term with no id minted yet (an
     // unapproved terms.md mints nothing to disk) silently fails to resolve
     // and every depends entry naming it refuses "which is no term" instead
     // of the one clear "terms not approved" line.
