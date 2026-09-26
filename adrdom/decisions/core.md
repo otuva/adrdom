@@ -234,3 +234,14 @@ Standard: a dependency graph records which outcome each node needs and drops the
 ### Does check at a commit read the staged files?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, cd83e277-ebf0-4458-a77a-c526ab4cfeca
 id: 34e81f57-9b3c-4dc4-a2ba-ca227523177d
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answered=b36113a1-1384-4e4c-a798-8399f4181366, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, question=277a8338-c57a-43cc-8b28-6b42e9347f6a
+
+Problem: a changed answered question can be staged while the working tree holds the old text, and check reads the working tree, so the commit passes.
+Standard: pre-commit hooks judge the content the commit records, the way the pre-commit framework and lint-staged set unstaged changes aside first.
+
+- A) Yes: at a commit, check reads every file it judges from the staged content, and the working tree only when it runs outside a commit.
+  Why: what check passes is exactly what enters git.
+  Costs: a fix left unstaged does not count until it is staged.
+- B) No: check reads the working tree at a commit as it does outside one.
+  Why: one way of reading, and the result matches what the agent sees on disk.
+  Costs: a staged file that differs from the working tree enters git unchecked.
