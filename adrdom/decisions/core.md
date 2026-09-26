@@ -230,3 +230,7 @@ Standard: a dependency graph records which outcome each node needs and drops the
   Costs: every moot question costs the owner a move.
 
 **Answer:** A
+
+### Does check at a commit read the staged files?
+depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, cd83e277-ebf0-4458-a77a-c526ab4cfeca
+id: 34e81f57-9b3c-4dc4-a2ba-ca227523177d
