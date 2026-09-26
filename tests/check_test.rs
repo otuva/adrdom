@@ -405,6 +405,45 @@ fn check_fails_an_answered_question_whose_text_changed_since_answering() {
     assert!(text.contains("3.1 Does this pass?"), "{}", text);
 }
 
+// adr: cd83e277-ebf0-4458-a77a-c526ab4cfeca
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// Same standard as the Problem-line edit above, but the edit lands on the
+// option letters themselves: option A (the answered one) is renamed to C
+// after the fact, while the `**Answer:** A` line is left untouched. The
+// section's `answer_letter()` no longer resolves (there is no longer an
+// option A to point at), which must never be read as "no genuine answer
+// exists" -- the `answered` ledger row is still there for this id, so the
+// text moved since answering, same as any other post-answer edit.
+#[test]
+fn check_fails_on_a_renamed_answered_option_never_as_answer_without_row() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let (record, id) = answer_one_question(&dir);
+    write_test_comment(&dir, &id);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "check should pass before any edit: {}", stdout(&out));
+
+    // Rename option A to C -- the `**Answer:** A` line still says A, but
+    // there is no longer an option A in the section.
+    let content = std::fs::read_to_string(&record).unwrap();
+    let edited = content.replacen("- A) Yes it passes.", "- C) Yes it passes.", 1);
+    assert_ne!(content, edited, "fixture edit should have changed something");
+    std::fs::write(&record, &edited).unwrap();
+
+    let out2 = adr(&dir, &["check"], &[], "");
+    assert!(!out2.status.success());
+    let text = stdout(&out2);
+    assert!(text.contains("answers:"), "{}", text);
+    assert!(text.contains("text changed since being answered"), "{}", text);
+    assert!(
+        !text.contains("answer line without ledger row"),
+        "a genuine answer line must never be reported as hand-written just because its option letter moved: {}",
+        text
+    );
+}
+
 // adr: 0b962bc8-05a8-48da-9fe8-bf77c7aa6e4a
 //
 // "a comment `adr: <id>` inside the test, found by text search in every

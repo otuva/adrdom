@@ -978,7 +978,7 @@ pub fn section_no_terms_line(rel: &str, heading: &str, id: &str, answered: bool)
 pub fn section_term_not_found(rel: &str, heading: &str, uuid: &str, id: &str, answered: bool) -> String {
     let next = if answered {
         Next::agent(format!(
-            "restores the term in adrdom/terms.md (marked retired: yes if it should stay gone), or writes a question that supersedes {} with a new terms pairing",
+            "restores the term in adrdom/terms.md, or writes a question that supersedes {} with a new terms pairing",
             id
         ))
     } else {
@@ -1543,5 +1543,26 @@ mod tests {
                 o
             );
         }
+    }
+
+    // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+    //
+    // "every refusal names what failed, the command that clears it and who
+    // runs that command". `section_term_not_found`'s answered branch used to
+    // add a parenthetical suggesting the restored term be marked `retired:
+    // yes` -- doing that immediately trips `section_term_retired` instead,
+    // so it was never a real move. The next move is exactly the two given
+    // in `section_term_retired`'s own answered branch: restore the term
+    // (live), or write a question that supersedes the decision.
+    #[test]
+    fn section_term_not_found_answered_never_suggests_restoring_as_retired() {
+        let out = section_term_not_found("x.md", "heading", "uuid-1", "id-1", true);
+        assert!(!out.contains("retired"), "{}", out);
+        assert!(out.contains("restores the term in adrdom/terms.md"), "{}", out);
+        assert!(
+            out.contains("writes a question that supersedes id-1 with a new terms pairing"),
+            "{}",
+            out
+        );
     }
 }
