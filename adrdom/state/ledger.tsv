@@ -175,3 +175,9 @@
 2026-09-26T06:33:51Z	approved	-	c859bedfd3df400238cd0594db3bac60e218bb84f4e29892ca4776fde0ff42cf	adrdom/decisions/ban.md	0.1.0
 2026-09-26T06:33:54Z	approved	-	4dd21beb56c809fed9f53237207de15c2e2b34fefd897a4d14667f86b9d276d9	adrdom/decisions/terms.md	0.1.0
 2026-09-26T06:33:59Z	approved	-	2fb959901085bfe19f1c66fef83e779c6c530f3a6508b05eea3f7120a80e544b	adrdom/decisions/owner.md	0.1.0
+2026-09-26T06:35:25Z	asked	c3127af2-4c96-48d5-a164-bac49a9a09ec	c1d21ed7c28aa7863680bac41561d1a3f96090083a50d8c288926e64ffe71d50	Does the agent build what no current decision covers?	0.1.0
+2026-09-26T06:35:25Z	asked	b0e865b4-9204-4c55-9f5b-dcb755b3a03b	2e787565dbde5eee037bc6164c4b61c57cbc88852c42ef3e0da44a06df9b1b35	Does a refusal name the command that clears it?	0.1.0
+2026-09-26T06:35:25Z	asked	4f04bae4-98e3-48eb-9403-3257268e2d87	250ff79df19b544cbf0ada6a3c58e28997cb0f9d5d5a838dee648cd8ddd035a8	Does ban refuse a word that appears in the repository?	0.1.0
+2026-09-26T06:35:25Z	asked	711a7636-9f4d-402d-ae62-265208adf0ac	31c6d050b4b495ecaf61eb6028f27186101aa1feb60ab7a8cc395130c563f201	Does ask refuse a question with no term?	0.1.0
+2026-09-26T06:35:25Z	asked	03b2853b-4379-4f4b-9cbf-ec6e06aad7fd	57f77b798e9c8af2b49c5908f3a89af78bba0e299aea2830e1b451e42fe7e650	Does check fail a terms file that differs from its latest approval?	0.1.0
+2026-09-26T06:35:25Z	asked	11be073c-ce91-44d8-833a-ef0b5e0b1672	3912ce8c61796f7c0490809b623342641448b9126e8ee9aa2893843b5918a273	Does an answer carry the version of the question the owner read?	0.1.0

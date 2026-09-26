@@ -119,3 +119,17 @@ Standard: local admin pages bind to loopback, print a one-time token at start, s
 ### Does an answer carry the version of the question the owner read?
 depends: 644b43ce-be10-4e9a-a7d5-71b27c51e365, b36113a1-1384-4e4c-a798-8399f4181366, 277a8338-c57a-43cc-8b28-6b42e9347f6a, 1d7e59ea-99e3-4d4b-9928-5dabca62723d
 id: 11be073c-ce91-44d8-833a-ef0b5e0b1672
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answer=b36113a1-1384-4e4c-a798-8399f4181366, approval=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, asked=3c8d4c9c-abca-4faa-b7c1-aae39951376c, asks=3c8d4c9c-abca-4faa-b7c1-aae39951376c, depends=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, refuses=0942e445-0163-423e-8ba7-84dd8ac07045, withdraws=e4a2ef0c-3354-4c9b-a8d9-9e204e544d85
+
+Problem: an asked question may be edited and asked again while the owner reads it, and the answer then lands on text the owner never read.
+Standard: optimistic concurrency control has a write carry the version it was based on and refuses it when that version is stale, as with an HTTP If-Match header or review votes bound to one patch set.
+
+- A) Yes: show and the page print a short version of each asked question, answer takes that version from the terminal and the page alike, and a version that no longer matches refuses the answer.
+  Why: an answer always lands on the text the owner read, and an asked question can still be fixed and asked again.
+  Costs: the owner carries one more value with each answer.
+- B) No: an asked question never changes, and to change it the agent withdraws it and asks a new question.
+  Why: the text the owner reads cannot move.
+  Costs: every fix to an asked question costs a plan approval and breaks the depends lines that name it.
+- C) No: answer takes only the letter and goes to the text last asked.
+  Why: nothing more to carry.
+  Costs: an edit made while the owner reads puts the answer on text the owner never read.
