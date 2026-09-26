@@ -1,17 +1,27 @@
 use super::Failure;
 use crate::msg;
+use crate::repo::Source;
 use std::path::Path;
 
-pub(super) fn check_install(root: &Path) -> Vec<Failure> {
+/// Read through `source` -- the index when `check` is judging a commit,
+/// the working tree otherwise (per "Does check at a commit read the
+/// staged files?"): AGENTS.md/CLAUDE.md/settings.json/the Codex rules are
+/// files `check` judges the same as any other, so a copy `adr install`
+/// wrote but the owner hasn't yet staged doesn't satisfy a staged check --
+/// matching the answer's own "a fix left unstaged does not count until it
+/// is staged" (an agent-side classifier refusing to let an agent stage
+/// these itself is environment friction outside this tool, not a reason
+/// for `check` to treat them differently from any other judged file).
+pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
     let mut out = Vec::new();
 
     // AGENTS.md is checked unconditionally; CLAUDE.md's import is checked
     // only when .claude/ exists, the same condition used below for the
     // deny entries (4f925b13-ad16-48b8-acd1-3e30d6e308b6, answer A: the
     // CLAUDE.md import is Claude-specific, gated on --claude at install).
-    let agents_content = std::fs::read_to_string(root.join("AGENTS.md"));
+    let agents_content = source.read(root, "AGENTS.md");
     match &agents_content {
-        Ok(content) => {
+        Some(content) => {
             let parts: Vec<&str> = content.split('\n').collect();
             match crate::commands::install::find_markers(&parts) {
                 Some((begin, end)) => {
@@ -37,15 +47,15 @@ pub(super) fn check_install(root: &Path) -> Vec<Failure> {
                 }),
             }
         }
-        Err(_) => out.push(Failure {
+        None => out.push(Failure {
             check: "install".to_string(),
             id: None,
             message: msg::agents_md_missing_brief(),
         }),
     }
 
-    if root.join(".claude").is_dir() {
-        if let Ok(content) = std::fs::read_to_string(root.join("CLAUDE.md")) {
+    if source.is_dir(root, ".claude") {
+        if let Some(content) = source.read(root, "CLAUDE.md") {
             if !content
                 .lines()
                 .any(|l| l == crate::commands::install::CLAUDE_MD_IMPORT)
@@ -58,8 +68,7 @@ pub(super) fn check_install(root: &Path) -> Vec<Failure> {
             }
         }
 
-        let settings_path = root.join(".claude/settings.json");
-        let content = std::fs::read_to_string(&settings_path).unwrap_or_default();
+        let content = source.read(root, ".claude/settings.json").unwrap_or_default();
         if content.trim().is_empty() {
             for entry in crate::commands::deny_entries() {
                 out.push(missing_deny_entry(&entry));
@@ -82,7 +91,7 @@ pub(super) fn check_install(root: &Path) -> Vec<Failure> {
                 Err(_) => out.push(Failure {
                     check: "install".to_string(),
                     id: None,
-                    message: msg::settings_unparseable(&settings_path.display().to_string()),
+                    message: msg::settings_unparseable(&root.join(".claude/settings.json").display().to_string()),
                 }),
             }
         }
@@ -91,10 +100,9 @@ pub(super) fn check_install(root: &Path) -> Vec<Failure> {
     // .codex/rules/adrdom.rules (per "What does install write for one
     // agent?", the Codex flag): checked only when
     // .codex/ exists, same as the Claude deny entries above.
-    if root.join(".codex").is_dir() {
-        let rules_path = root.join(".codex/rules/adrdom.rules");
-        match std::fs::read_to_string(&rules_path) {
-            Ok(content) => {
+    if source.is_dir(root, ".codex") {
+        match source.read(root, ".codex/rules/adrdom.rules") {
+            Some(content) => {
                 if content != crate::commands::install::codex_rules_content() {
                     out.push(Failure {
                         check: "install".to_string(),
@@ -103,7 +111,7 @@ pub(super) fn check_install(root: &Path) -> Vec<Failure> {
                     });
                 }
             }
-            Err(_) => out.push(Failure {
+            None => out.push(Failure {
                 check: "install".to_string(),
                 id: None,
                 message: msg::codex_rules_missing(),

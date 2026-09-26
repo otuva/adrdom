@@ -740,7 +740,7 @@ fn build_terms_view(root: &Path, led: &Ledger, tf: terms::TermsFile) -> TermsVie
 pub fn snapshot(root: &Path) -> Snapshot {
     let ledger_path = root.join("adrdom/state/ledger.tsv");
     let led = ledger::read(&ledger_path);
-    let test_idx = check::test_index(root);
+    let test_idx = check::test_index(root, &crate::repo::Source::WorkingTree);
 
     let terms_opt = state::load_terms(root);
     let terms_list: Vec<Term> = terms_opt

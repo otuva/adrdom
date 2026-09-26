@@ -31,9 +31,20 @@ pub fn git(root: &Path, args: &[&str]) -> Option<String> {
 }
 
 pub fn list_decision_files(root: &Path) -> Vec<PathBuf> {
-    let dir = root.join("adrdom/decisions");
-    let mut out = Vec::new();
-    walk_md(&dir, &mut out);
+    list_decision_files_via(root, &Source::WorkingTree)
+}
+
+/// Like `list_decision_files`, but through `source`: every `.md` path
+/// under `adrdom/decisions/` that `source` considers to exist. `check`'s
+/// only caller of this form -- everything else always wants the working
+/// tree, so it keeps calling the plain function above.
+pub fn list_decision_files_via(root: &Path, source: &Source) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = source
+        .list_under(root, "adrdom/decisions")
+        .into_iter()
+        .filter(|p| p.ends_with(".md"))
+        .map(|rel| root.join(rel))
+        .collect();
     out.sort();
     out
 }
@@ -59,16 +70,86 @@ pub fn valid_topic_file_name(name: &str) -> bool {
         .all(|word| !word.is_empty() && word.chars().all(|c| c.is_ascii_lowercase()))
 }
 
-fn walk_md(dir: &Path, out: &mut Vec<PathBuf>) {
+/// Every file under `dir` (any extension), found recursively on disk.
+/// `list_decision_files` filters this to `.md` itself; kept unfiltered
+/// here so `Source::WorkingTree`'s other uses (the `.claude`/`.codex`
+/// directory checks) can share it.
+fn walk_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
     for entry in entries.flatten() {
         let p = entry.path();
         if p.is_dir() {
-            walk_md(&p, out);
-        } else if p.extension().map(|e| e == "md").unwrap_or(false) {
+            walk_files(&p, out);
+        } else {
             out.push(p);
+        }
+    }
+}
+
+/// Where `check` reads a file's bytes, and which files it considers to
+/// exist, for every check that reads one (per "Does check at a commit
+/// read the staged files?", 34e81f57 A): `Index` reads the git index --
+/// exactly the content and file set about to enter the commit -- and is
+/// used whenever `check` is running at a commit (`--staged`, or
+/// `--message`, since the commit-msg hook's full report judges the same
+/// staged tree the pre-commit hook already saw, not just the message
+/// text). `WorkingTree` reads the filesystem: used outside a commit, and
+/// unconditionally by every other command (`ask`, `approve`, `show`,
+/// `serve`, ...), which never take this type at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Source {
+    WorkingTree,
+    Index,
+}
+
+impl Source {
+    pub fn for_check(staged: bool, message: bool) -> Source {
+        if staged || message {
+            Source::Index
+        } else {
+            Source::WorkingTree
+        }
+    }
+
+    /// `rel`'s content (a path relative to `root`, forward slashes), or
+    /// `None` when it doesn't exist in this source at all.
+    pub fn read(&self, root: &Path, rel: &str) -> Option<String> {
+        match self {
+            Source::WorkingTree => std::fs::read_to_string(root.join(rel)).ok(),
+            Source::Index => git(root, &["show", &format!(":{}", rel)]),
+        }
+    }
+
+    /// Whether `rel` (a path relative to `root`) is a directory holding at
+    /// least one file in this source.
+    pub fn is_dir(&self, root: &Path, rel: &str) -> bool {
+        match self {
+            Source::WorkingTree => root.join(rel).is_dir(),
+            Source::Index => !self.list_under(root, rel).is_empty(),
+        }
+    }
+
+    /// Every file path (relative to `root`, forward slashes) this source
+    /// considers to exist under `rel_dir`, unsorted.
+    pub fn list_under(&self, root: &Path, rel_dir: &str) -> Vec<String> {
+        match self {
+            Source::WorkingTree => {
+                let mut out = Vec::new();
+                walk_files(&root.join(rel_dir), &mut out);
+                out.into_iter()
+                    .map(|p| {
+                        p.strip_prefix(root)
+                            .unwrap_or(&p)
+                            .to_string_lossy()
+                            .replace('\\', "/")
+                    })
+                    .collect()
+            }
+            Source::Index => git(root, &["ls-files", "--", rel_dir])
+                .map(|s| s.lines().map(|l| l.to_string()).collect())
+                .unwrap_or_default(),
         }
     }
 }

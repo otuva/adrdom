@@ -245,3 +245,5 @@ Standard: pre-commit hooks judge the content the commit records, the way the pre
 - B) No: check reads the working tree at a commit as it does outside one.
   Why: one way of reading, and the result matches what the agent sees on disk.
   Costs: a staged file that differs from the working tree enters git unchecked.
+
+**Answer:** A

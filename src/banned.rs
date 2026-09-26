@@ -52,8 +52,16 @@ pub fn read_set(path: &Path) -> HashSet<String> {
 /// Every line of the ban list, in file order: the hash, and the term uuid
 /// on the line, if any.
 pub fn read_entries(path: &Path) -> Vec<(String, Option<String>)> {
-    fs::read_to_string(path)
-        .unwrap_or_default()
+    parse_entries(&fs::read_to_string(path).unwrap_or_default())
+}
+
+/// Parses ban-list entries straight from `content`, without touching the
+/// filesystem: what `read_entries` does after its own
+/// `fs::read_to_string`, split out so a caller reading through
+/// `repo::Source` (`check`, so a staged edit to the ban list is judged
+/// too) doesn't have to write the bytes to a temp file first.
+pub fn parse_entries(content: &str) -> Vec<(String, Option<String>)> {
+    content
         .lines()
         .filter(|l| !l.trim().is_empty())
         .map(parse_line)

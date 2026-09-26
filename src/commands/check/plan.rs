@@ -4,7 +4,7 @@ use crate::depends::{self, DepTarget};
 use crate::ledger::Ledger;
 use crate::msg;
 use crate::record::{AnswerSet, RecordFile};
-use crate::repo;
+use crate::repo::{self, Source};
 use crate::state;
 use crate::terms;
 use std::collections::HashMap;
@@ -29,6 +29,7 @@ use std::path::Path;
 #[allow(clippy::too_many_arguments)]
 pub(super) fn check_plan(
     root: &Path,
+    source: &Source,
     records: &[RecordFile],
     led: &Ledger,
     refusals: &[Vec<Refusal>],
@@ -43,11 +44,11 @@ pub(super) fn check_plan(
 
     // Naming half of the same decision as the cross-file duplicate-heading
     // check below (76bd7ef0 A: "each file holds one topic and is named by
-    // it..."): every file `repo::list_decision_files` lists, by its own
-    // base name alone -- checked straight off the listing rather than off
-    // `records`, so a file whose name is wrong is still told so even when
-    // its content also fails to parse into one.
-    for f in repo::list_decision_files(root) {
+    // it..."): every file `repo::list_decision_files_via` lists through
+    // `source`, by its own base name alone -- checked straight off the
+    // listing rather than off `records`, so a file whose name is wrong is
+    // still told so even when its content also fails to parse into one.
+    for f in repo::list_decision_files_via(root, source) {
         let name = f.file_name().and_then(|n| n.to_str()).unwrap_or("");
         if !repo::valid_topic_file_name(name) {
             out.push(Failure {

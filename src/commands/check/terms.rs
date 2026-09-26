@@ -3,15 +3,16 @@ use crate::actions;
 use crate::ledger::Ledger;
 use crate::msg;
 use crate::record::{self, RecordFile};
-use crate::repo;
+use crate::repo::{self, Source};
 use crate::state::{self, rel_path};
 use crate::terms;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::Path;
 
-/// `terms`: shape/approval failures on `adrdom/terms.md` (read from the
-/// index when `staged` and the file is staged there, otherwise the working
-/// tree). Missing entirely is a failure once any topic file exists, and a
+/// `terms`: shape/approval failures on `adrdom/terms.md` (read through
+/// `source` -- the index when `check` is judging a commit, the working
+/// tree otherwise, per "Does check at a commit read the staged files?").
+/// Missing entirely is a failure once any topic file exists, and a
 /// note otherwise. Unapproved or differing from the latest approval is, on
 /// its own, only ever a note ("waiting") -- per "Does check fail a terms
 /// file that differs from its latest approval?" (03b2853b A) it becomes a
@@ -27,13 +28,13 @@ pub(super) fn check_terms(
     root: &Path,
     records: &[RecordFile],
     led: &Ledger,
-    staged: bool,
+    source: &Source,
 ) -> (Vec<Failure>, bool, Vec<String>) {
     let mut out = Vec::new();
     let mut notes = Vec::new();
-    let has_records = !repo::list_decision_files(root).is_empty();
+    let has_records = !repo::list_decision_files_via(root, source).is_empty();
 
-    let Some(content) = read_terms_content(root, staged) else {
+    let Some(content) = source.read(root, "adrdom/terms.md") else {
         if has_records {
             out.push(Failure {
                 check: "terms".to_string(),
@@ -67,7 +68,7 @@ pub(super) fn check_terms(
     // `adrdom/state/`) or otherwise fell out of sync with the ledger.
     // Checked unconditionally, before anything below trusts the snapshot as
     // the file's latest approved text.
-    let snapshot = state::load_terms_snapshot(root);
+    let snapshot = state::load_terms_snapshot_via(root, source);
     if let Some(snap) = &snapshot {
         let snapshot_hash = terms::file_hash(snap);
         let ledger_hash = led.latest_for_path("terms", "adrdom/terms.md").map(|r| r.hash.clone());
@@ -383,25 +384,3 @@ fn affected_by_edit(
     )
 }
 
-/// `adrdom/terms.md`'s content for `check`: when `staged`, the index copy
-/// whenever the file is tracked in the index at all (whether or not this
-/// commit changes it), so a dirty unstaged working-tree edit never leaks
-/// into a staged check; the working tree is used only when the path isn't
-/// in the index. When not `staged`, always the working tree. `None` when
-/// the file exists in neither place.
-fn read_terms_content(root: &Path, staged: bool) -> Option<String> {
-    if staged {
-        let tracked = repo::git(
-            root,
-            &["ls-files", "--error-unmatch", "adrdom/terms.md"],
-        )
-        .is_some();
-        if tracked {
-            // In the index: the index copy is the answer either way -- a
-            // read failure here is not a reason to fall back to the
-            // (untrusted, possibly dirty) working tree.
-            return repo::git(root, &["show", ":adrdom/terms.md"]);
-        }
-    }
-    std::fs::read_to_string(root.join("adrdom/terms.md")).ok()
-}

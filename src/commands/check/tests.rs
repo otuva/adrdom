@@ -2,23 +2,27 @@ use super::Failure;
 use crate::ledger::Ledger;
 use crate::msg;
 use crate::record::RecordFile;
-use crate::repo;
+use crate::repo::{self, Source};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 /// Every id that appears after `adr: ` in a tracked, non-`adrdom/` file, as
 /// a full uuid token, mapped to every `path:line` location it was found at
 /// (4.10-adjacent bookkeeping used by both `check`'s `tested` check and the
-/// page's decision view for a tested count per id).
-pub fn test_index(root: &Path) -> HashMap<String, Vec<String>> {
+/// page's decision view for a tested count per id). Which files are
+/// tracked always comes from `git ls-files` (the index), in both `source`s
+/// alike -- a tracked-only scan, deliberately, so this never walks a
+/// gitignored build directory; only each file's *content* is read through
+/// `source`, so a staged edit to a tie is judged, not whatever is left on
+/// disk (per "Does check at a commit read the staged files?").
+pub fn test_index(root: &Path, source: &Source) -> HashMap<String, Vec<String>> {
     let mut test_ids: HashMap<String, Vec<String>> = HashMap::new();
     if let Some(list) = repo::git(root, &["ls-files"]) {
         for path in list.lines() {
             if path.starts_with("adrdom/") {
                 continue;
             }
-            let full = root.join(path);
-            let Ok(content) = std::fs::read_to_string(&full) else {
+            let Some(content) = source.read(root, path) else {
                 continue;
             };
             for (i, line) in content.lines().enumerate() {
@@ -43,6 +47,7 @@ pub(super) fn check_tests(
     records: &[RecordFile],
     led: &Ledger,
     tests: Option<&HashMap<String, Vec<String>>>,
+    source: &Source,
 ) -> (Vec<Failure>, usize) {
     let mut out = Vec::new();
 
@@ -56,7 +61,7 @@ pub(super) fn check_tests(
     let test_ids: &HashMap<String, Vec<String>> = match tests {
         Some(t) => t,
         None => {
-            owned = test_index(root);
+            owned = test_index(root, source);
             &owned
         }
     };

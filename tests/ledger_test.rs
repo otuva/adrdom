@@ -40,8 +40,12 @@ fn ledger_append_only_violation_is_detected_after_a_commit() {
         .status
         .success());
 
-    // Commit the ledger as it stands.
-    run_git(&dir, &["add", "adrdom"]);
+    // Commit everything install wrote too, not just adrdom/: the
+    // pre-commit hook now judges the same staged tree `check --staged`
+    // would (per "Does check at a commit read the staged files?"), and
+    // AGENTS.md sitting on disk but unstaged would otherwise refuse this
+    // commit before it ever reaches the ledger.
+    run_git(&dir, &["add", "-A"]);
     run_git(&dir, &["commit", "-q", "-m", "ask"]);
 
     // A clean check should still pass the ledger check (no divergence yet).
@@ -70,8 +74,9 @@ fn ledger_append_only_violation_is_detected_after_a_commit() {
     std::fs::write(&ledger_path, new_content).unwrap();
 
     let out2 = adr(&dir, &["check"], &[], "");
-    assert!(!out2.status.success());
     let out2_text = stdout(&out2);
+    eprintln!("DEBUG out2 status={:?} text={}", out2.status, out2_text);
+    assert!(!out2.status.success());
     assert!(out2_text.contains("ledger:"), "{}", out2_text);
     assert!(out2_text.contains("not append-only"), "{}", out2_text);
 }
@@ -204,7 +209,11 @@ fn ledger_deleted_committed_row_fails_check_but_a_new_appended_row_still_passes(
         .status
         .success());
 
-    run_git(&dir, &["add", "adrdom"]);
+    // Everything install wrote staged too (see the comment in
+    // `ledger_append_only_violation_is_detected_after_a_commit`): the
+    // pre-commit hook now reads the same staged tree `check --staged`
+    // does.
+    run_git(&dir, &["add", "-A"]);
     run_git(&dir, &["commit", "-q", "-m", "ask"]);
 
     let ledger_path = dir.join("adrdom/state/ledger.tsv");
