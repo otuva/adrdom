@@ -542,14 +542,25 @@ pub fn terms_refusals(
             if dep.check_word_drift {
                 let still_resolves = lookup.get(word) == Some(uuid);
                 if !still_resolves {
-                    // Same split as the retired case just above: a decision
-                    // dependent re-asks so its terms line matches the current
-                    // wording; a term dependent's own definition is reworded
-                    // and the owner re-approves.
+                    // A decision dependent here is always current, since
+                    // only `is_current` sections become one above -- so it
+                    // can never be re-asked (per "Does a decision change
+                    // after it is answered?"; "Does a refusal name the
+                    // command that clears it?" means a refusal about an
+                    // answered question never tells the agent to re-ask it,
+                    // since that can't clear it). What moved is
+                    // adrdom/terms.md, not the decision's own text, so the
+                    // fix is there: restore the wording so the word
+                    // resolves to this term again, or, when the move is
+                    // meant, supersede the decision with a new question
+                    // that pairs the new wording. A term dependent (its own
+                    // definition still carries the drifted word) is
+                    // reworded by the agent and the owner re-approves, same
+                    // as the retired case above.
                     let next = match &dep.id {
                         Some(id) => Next::agent(format!(
-                            "re-asks {} so its terms line matches the current wording",
-                            id
+                            "restores the wording in adrdom/terms.md so \"{}\" still names \"{}\", or writes a question that supersedes {} with a new terms pairing",
+                            word, target.name, id
                         )),
                         None => msg::term_reword_and_approve(),
                     };

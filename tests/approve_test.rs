@@ -901,6 +901,7 @@ Standard: plain words.
 "#;
 
 // adr: 7cf81ded-be48-4777-b83e-f8a2998c1ab5
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 //
 // `approve stops a terms edit that takes a word off an entry while a
 // current decision pairs the word to it, and names those decisions`:
@@ -908,7 +909,12 @@ Standard: plain words.
 // pairing the word "choice" to term "decision"; moving the "choice" alias
 // off "decision" onto "verdict" is refused, naming exactly that current
 // decision by heading text, and the terms.md ledger row count below shows
-// nothing was written on the refusal.
+// nothing was written on the refusal. The decision behind it is answered
+// (current), so it can never be re-asked -- the next move named is
+// restoring the wording in adrdom/terms.md or superseding the decision by
+// id, never "re-asks" (per "Does a refusal name the command that clears
+// it?": a refusal about an answered question never tells the agent to
+// re-ask it, since that can't clear it).
 #[test]
 fn approve_refuses_a_terms_edit_that_moves_a_word_off_a_term_carried_by_a_current_decision() {
     let dir = init_repo();
@@ -943,6 +949,15 @@ fn approve_refuses_a_terms_edit_that_moves_a_word_off_a_term_carried_by_a_curren
         "{}",
         err
     );
+    assert!(
+        err.contains(&format!(
+            "agent restores the wording in adrdom/terms.md so \"choice\" still names \"decision\", or writes a question that supersedes {} with a new terms pairing",
+            id
+        )),
+        "an answered decision's next move must be restore-or-supersede, never re-ask: {}",
+        err
+    );
+    assert!(!err.contains("re-asks"), "an answered decision can never be re-asked: {}", err);
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert_eq!(ledger.lines().filter(|l| l.contains("\tterms\t")).count(), 1);
