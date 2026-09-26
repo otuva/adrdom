@@ -54,7 +54,7 @@ fn show_lists_every_question_with_its_state_and_tier() {
     assert_eq!(ids.len(), 2);
     let answered_id = &ids[0];
 
-    let answer_out = adr_owner(&dir, &["answer", answered_id, "A"], "");
+    let answer_out = adr_answer(&dir, answered_id, "A");
     assert!(
         answer_out.status.success(),
         "answer failed: {}",
@@ -71,7 +71,18 @@ fn show_lists_every_question_with_its_state_and_tier() {
     assert!(shown.contains("Yes it is current."), "{}", shown);
     // The second question is still open (asked, not answered): it is now
     // listed too, with its state, rather than left out.
-    assert!(shown.contains("[open] 1.2 Is this only asked?"), "{}", shown);
+    //
+    // adr: 11be073c-ce91-44d8-833a-ef0b5e0b1672
+    //
+    // It also carries its version ("show ... print[s] a short version of
+    // each asked question"), so an answer to it can be checked against the
+    // text the owner is reading right now.
+    let version = current_version(&dir, &ids[1]);
+    assert!(
+        shown.contains(&format!("[open @{}] 1.2 Is this only asked?", version)),
+        "{}",
+        shown
+    );
     assert!(!shown.contains("Yes only asked."), "no chosen sentence for an unanswered question: {}", shown);
 }
 
@@ -136,6 +147,12 @@ fn show_prints_tiers_states_stands_on_and_chosen_sentence() {
     assert!(out.status.success(), "stderr: {}", stderr(&out));
     let shown = stdout(&out);
 
+    // "id-open"'s version is the current section hash's own prefix (per
+    // "Does an answer carry the version of the question the owner read?"):
+    // computed live off the topic file text, not off the hand-written
+    // `asked` row's placeholder hash ("h-open") above, so it prints
+    // regardless of that row being a fixture stand-in rather than a real
+    // `adr ask` hash.
     let expected = "\
 # Tiered Topic
 tier 1
@@ -144,7 +161,7 @@ tier 1
   [unasked] 1.2 Unasked root?
   [skeleton] 1.3 Skeleton?
 tier 2
-  [open] 2.1 Depends on root?
+  [open @11024127] 2.1 Depends on root?
     stands on: 1.1 Root?=A
   [refused] 2.2 Also depends?
     stands on: 1.1 Root?=A

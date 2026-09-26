@@ -80,8 +80,9 @@ stands for.
 **3. Run `adr ask <file>`.** It writes each question's `terms:` line, or
 refuses and says why (a question outside the open tier, a missing answer
 set, a question with no term in it, and so on). Commit, post your lean for
-each question in chat, and stop. The owner runs `adr answer <id> <letter>`
-or `adr answer <id> refuse`.
+each question in chat, and stop. `adr show` prints each asked question's
+version; post the command with that version, and the owner runs
+`adr answer <id>@<version> <letter>` or `adr answer <id>@<version> refuse`.
 
 **4. After the answer.** Tie the decision to a test: put a comment
 `adr: <id>` inside a test, outside `adrdom/`, that shows the code follows the

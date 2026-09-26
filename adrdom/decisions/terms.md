@@ -143,3 +143,41 @@ Standard: terminology systems let a deprecated term's label pass to a new concep
   Costs: a split or merge loses the word.
 
 **Answer:** A
+
+### Does ask refuse a question with no term?
+depends: f571a454-3e6c-46c1-b754-0822a5d1d667, 3c8d4c9c-abca-4faa-b7c1-aae39951376c, 277a8338-c57a-43cc-8b28-6b42e9347f6a, f590059d-b681-40ec-8a1c-c8916d71f6bb
+id: 711a7636-9f4d-402d-ae62-265208adf0ac
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answer=b36113a1-1384-4e4c-a798-8399f4181366, answered=b36113a1-1384-4e4c-a798-8399f4181366, approves=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, asked=3c8d4c9c-abca-4faa-b7c1-aae39951376c, asks=3c8d4c9c-abca-4faa-b7c1-aae39951376c, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, refuse=0942e445-0163-423e-8ba7-84dd8ac07045, refuses=0942e445-0163-423e-8ba7-84dd8ac07045, stands on=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, term=f590059d-b681-40ec-8a1c-c8916d71f6bb, terms=f590059d-b681-40ec-8a1c-c8916d71f6bb
+
+Problem: a question whose words pair to no term gets an empty terms line, so nothing fixes what its words mean and check has nothing to hold after the answer.
+Standard: controlled vocabulary indexing gives every indexed record at least one term from the vocabulary.
+
+- A) Yes: ask refuses a question none of whose words pair to a term, and the agent rewords it or adds a term the owner approves.
+  Why: every answered question carries at least one term, so its meaning is fixed and check can hold it.
+  Costs: a question on a new subject waits for its term.
+- B) No: ask asks the question with an empty terms line.
+  Why: a new subject is asked without waiting for a term.
+  Costs: the answer stands on words whose meaning nothing fixes.
+
+**Answer:** A
+
+### Does check fail a terms file that differs from its latest approval?
+depends: 7cf81ded-be48-4777-b83e-f8a2998c1ab5, 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 528fe6f6-6d77-42d5-9086-017048d1448d, 607cb55f-c0fa-40af-b290-c17f3ba0f812
+id: 03b2853b-4379-4f4b-9cbf-ec6e06aad7fd
+terms: agents=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answered=b36113a1-1384-4e4c-a798-8399f4181366, approval=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approved=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approves=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, current=e2533580-1486-4dc9-8697-e6c53605fe72, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, decisions=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, definition=607cb55f-c0fa-40af-b290-c17f3ba0f812, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, term=f590059d-b681-40ec-8a1c-c8916d71f6bb, terms=f590059d-b681-40ec-8a1c-c8916d71f6bb, terms file=528fe6f6-6d77-42d5-9086-017048d1448d, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
+supersedes: 767a1402-b079-4565-bf21-467236732478
+
+Problem: failing every commit while the terms file waits for approval holds work that has nothing to do with terms, yet a changed definition under answered questions moves what those decisions mean.
+Standard: change control gates the step that uses a change, such as merge, submit or apply, not the recording of a draft.
+
+- A) Only when the definition of a term a current decision pairs, directly or through another term's definition, differs from its approved text; otherwise check reports the file as waiting, ask stops until the owner approves the whole file with approve, and approve writes one event over its hash and prints the current decisions paired to a changed term.
+  Why: a draft term is committed like a draft plan, and the one edit that moves an answered decision's meaning still stops.
+  Costs: check needs each term's approved text and not only the file hash, and a typo in a paired definition still waits for the owner.
+- B) Yes: check fails every terms file that differs from its latest approval, whether or not a topic file exists, and approve and ask work as in A.
+  Why: nothing in the terms file is committed without the owner.
+  Costs: every commit waits while a terms edit waits for approval, including work that has nothing to do with terms.
+- C) No: check only reports a terms file that differs from its latest approval, and approve and ask work as in A.
+  Why: a terms draft never holds a commit.
+  Costs: a changed definition under answered questions lands unapproved, and agents build on it.
+
+**Answer:** A

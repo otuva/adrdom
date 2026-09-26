@@ -272,7 +272,7 @@ fn plan_lifecycle_end_to_end() {
     std::fs::write(&record, &state_3).unwrap();
 
     // --- 4. owner answers Q1; Q2's frozen set A is now moot; Q3's * asks --
-    let out = adr_owner(&dir, &["answer", &q1_id, "B"], "");
+    let out = adr_answer(&dir, &q1_id, "B");
     assert!(out.status.success(), "answer failed: {}", stderr(&out));
     write_test_comment(&dir, &q1_id);
 
@@ -342,7 +342,7 @@ fn plan_lifecycle_end_to_end() {
     std::fs::write(&record, &state_7).unwrap();
 
     // --- 6. owner refuses Q3 ------------------------------------------------
-    let out = adr_owner(&dir, &["answer", &q3_id, "refuse"], "");
+    let out = adr_answer(&dir, &q3_id, "refuse");
     assert!(out.status.success(), "refuse failed: {}", stderr(&out));
 
     let state_8 = std::fs::read_to_string(&record).unwrap();
@@ -408,7 +408,7 @@ fn plan_lifecycle_end_to_end() {
     assert_eq!(id_for_heading(&state_10, "### 1.1"), q1_id);
     let q4_id = id_for_heading(&state_10, "### 1.4");
 
-    let out = adr_owner(&dir, &["answer", &q4_id, "A"], "");
+    let out = adr_answer(&dir, &q4_id, "A");
     assert!(out.status.success(), "answer failed: {}", stderr(&out));
 
     write_test_comment(&dir, &q1_id);

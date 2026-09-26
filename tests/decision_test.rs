@@ -483,7 +483,7 @@ fn ledger_rows_for_ask_and_answer_carry_no_lean() {
 
     let after_ask = std::fs::read_to_string(&record).unwrap();
     let question_id = extract_ids(&after_ask)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &question_id, "A"], "")
+    assert!(adr_answer(&dir, &question_id, "A")
         .status
         .success());
 

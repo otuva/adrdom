@@ -39,3 +39,37 @@ Standard: staged delivery builds a layer once the layer is specified, not per se
   Costs: the slowest question holds every build in the topic.
 
 **Answer:** A
+
+### Does the agent build what no current decision covers?
+depends: f90dbd5b-8fbe-4899-8588-f8762795c2e2, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, e2533580-1486-4dc9-8697-e6c53605fe72
+id: c3127af2-4c96-48d5-a164-bac49a9a09ec
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answer=b36113a1-1384-4e4c-a798-8399f4181366, answers=b36113a1-1384-4e4c-a798-8399f4181366, asks=3c8d4c9c-abca-4faa-b7c1-aae39951376c, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, current=e2533580-1486-4dc9-8697-e6c53605fe72, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a
+
+Problem: code built before its decision turns the later question into a request to confirm what exists, and the list of what needs deciding passes to the agent.
+Standard: spec-driven development builds only what the spec states and sends a gap in the spec back to the spec's owner.
+
+- A) No: the agent writes the question and stops that work until the owner answers, names a current decision that looks wrong and stops, and code built without a decision is caught at review because the tool cannot see it.
+  Why: the owner keeps the list of what needs deciding and every answer, and no question is written after the code it asks about.
+  Costs: work waits on the owner, and the check against building without a decision is review, not the tool.
+- B) Yes: the agent builds, says what it built, and the owner decides it afterwards or has it undone.
+  Why: work never waits on an answer.
+  Costs: the question comes after the code and asks the owner to confirm what exists.
+
+**Answer:** A
+
+### Does a refusal name the command that clears it?
+depends: 0942e445-0163-423e-8ba7-84dd8ac07045, 1d7e59ea-99e3-4d4b-9928-5dabca62723d, f90dbd5b-8fbe-4899-8588-f8762795c2e2
+id: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, refusal=0942e445-0163-423e-8ba7-84dd8ac07045
+
+Problem: a refusal that names only what failed leaves the agent to guess the next move, and a guess can route around a decision or take a step that belongs to the owner.
+Standard: actionable error messages state what failed and what to do next.
+
+- A) Yes: every refusal names what failed, the command that clears it and who runs that command, the agent or the owner.
+  Why: the agent's next move is given, and a line ending in the owner's command tells the agent to stop and hand that command over.
+  Costs: every new refusal needs a known next move before it can be written.
+- B) No: a refusal names what failed, and the agent works out the fix.
+  Why: messages stay short and prescribe nothing for cases nobody foresaw.
+  Costs: the agent guesses, and nothing marks a step as the owner's.
+
+**Answer:** A

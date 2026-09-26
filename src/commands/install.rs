@@ -1,6 +1,8 @@
 use crate::commands::{deny_entries, OWNER_COMMANDS};
+use crate::ledger;
 use crate::msg::{self, Actor, Next};
 use crate::repo;
+use crate::terms;
 use std::fs;
 use std::path::Path;
 
@@ -71,14 +73,26 @@ pub fn run(claude: bool, codex: bool) -> i32 {
     create_if_missing(&state.join("ledger.tsv"), "");
     create_if_missing(&state.join("banned.sha256"), "");
 
+    let mut messages = Vec::new();
+
+    match backfill_terms_snapshot(&root) {
+        Ok(Some(m)) => messages.push(m),
+        Ok(None) => {}
+        Err(e) => {
+            eprintln!(
+                "install: {}",
+                msg::write_failed("adrdom/state/terms.approved.md", e, retry())
+            );
+            return 1;
+        }
+    }
+
     let hooks = root.join(".githooks");
     fs::create_dir_all(&hooks).ok();
     create_hook(&hooks.join("pre-commit"), PRE_COMMIT_HOOK);
     create_hook(&hooks.join("commit-msg"), COMMIT_MSG_HOOK);
 
     repo::git(&root, &["config", "core.hooksPath", ".githooks"]);
-
-    let mut messages = Vec::new();
 
     match install_agents_md(&root) {
         Ok(m) => messages.push(m),
@@ -128,6 +142,52 @@ pub fn run(claude: bool, codex: bool) -> i32 {
         println!("{}", m);
     }
     0
+}
+
+/// `adrdom/state/terms.approved.md` (per items 1+2 of the bootstrap-gaps
+/// review, "Does check fail a terms file that differs from its latest
+/// approval?"): a repo that approved `adrdom/terms.md` before this snapshot
+/// mechanism existed carries a `terms` ledger row but never got the
+/// snapshot file itself written. Restoring it here, once, is what lets
+/// `check` tell a real edit apart from the mere absence of a file this
+/// build introduced -- without it, `check` fails safe (`terms_snapshot_missing`)
+/// on the very next `adrdom/terms.md` edit, no matter how small, since it
+/// has nothing to diff against.
+///
+/// Only backfilled when the snapshot is missing AND the file's current
+/// parsed hash equals the latest `terms` ledger row's hash for
+/// `adrdom/terms.md` -- so the current file IS what was approved. When
+/// there is no terms file, no `terms` ledger row, or the file has already
+/// moved since that row (an edit sitting on top of the last approval),
+/// nothing is written: a snapshot restored from the wrong text would be
+/// worse than none, since `check` would then trust it as ground truth.
+fn backfill_terms_snapshot(root: &Path) -> Result<Option<String>, String> {
+    let snapshot_path = root.join("adrdom/state/terms.approved.md");
+    if snapshot_path.exists() {
+        return Ok(None);
+    }
+    let terms_path = root.join("adrdom/terms.md");
+    if !terms_path.exists() {
+        return Ok(None);
+    }
+    let tf = match terms::load(&terms_path) {
+        Ok(tf) => tf,
+        Err(_) => return Ok(None),
+    };
+    let file_hash = terms::file_hash(&tf);
+
+    let ledger_path = root.join("adrdom/state/ledger.tsv");
+    let led = ledger::read(&ledger_path);
+    let approved = led
+        .latest_for_path("terms", "adrdom/terms.md")
+        .map(|r| r.hash == file_hash)
+        .unwrap_or(false);
+    if !approved {
+        return Ok(None);
+    }
+
+    fs::write(&snapshot_path, tf.lines.join("\n")).map_err(|e| e.to_string())?;
+    Ok(Some(msg::terms_snapshot_backfilled()))
 }
 
 fn create_if_missing(path: &Path, content: &str) {

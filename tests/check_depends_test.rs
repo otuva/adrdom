@@ -119,7 +119,14 @@ fn check_fails_a_depends_entry_that_resolves_no_term() {
 // E1.3: a `depends:` entry naming a real term in a terms.md that has never
 // been approved (so it carries no id on disk yet) must not be reported as
 // "which is no term" -- that flooded one line per entry in the lab run,
-// drowning out the single `terms: adrdom/terms.md not approved` line.
+// drowning out what the file's approval state is.
+//
+// Updated for "Does check fail a terms file that differs from its latest
+// approval?" (03b2853b A, supersedes "Does the owner approve the terms
+// file as a whole?"): nothing here is a current decision yet (the record
+// was never approved either), so an unapproved terms.md is now only a
+// waiting note, not a failure -- `check` passes outright, and the
+// suppression this test is actually about still holds.
 #[test]
 fn check_does_not_report_no_term_for_a_real_term_in_an_unapproved_terms_file() {
     let dir = init_repo();
@@ -137,15 +144,9 @@ fn check_does_not_report_no_term_for_a_real_term_in_an_unapproved_terms_file() {
     );
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
+    assert!(out.status.success(), "{}", stdout(&out));
     let text = stdout(&out);
-    assert!(
-        text.contains(
-            "terms: adrdom/terms.md not approved; owner runs: adr approve adrdom/terms.md"
-        ),
-        "{}",
-        text
-    );
+    assert!(text.contains("terms: awaiting approval"), "{}", text);
     assert!(!text.contains("no term"), "{}", text);
 }
 

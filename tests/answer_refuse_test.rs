@@ -67,7 +67,7 @@ fn answer_refuse_writes_the_line_and_the_refused_row() {
             .to_string()
     };
 
-    let out = adr_owner(&dir, &["answer", &id, "refuse"], "");
+    let out = adr_answer(&dir, &id, "refuse");
     assert!(out.status.success(), "refuse failed: {}", stderr(&out));
     assert_eq!(
         stdout(&out).trim_end(),
@@ -101,9 +101,9 @@ fn answer_letter_after_refused_refuses() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &id, "refuse"], "").status.success());
+    assert!(adr_answer(&dir, &id, "refuse").status.success());
 
-    let out = adr_owner(&dir, &["answer", &id, "A"], "");
+    let out = adr_answer(&dir, &id, "A");
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
@@ -128,9 +128,9 @@ fn answer_refuse_twice_gives_the_already_refused_message() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &id, "refuse"], "").status.success());
+    assert!(adr_answer(&dir, &id, "refuse").status.success());
 
-    let out = adr_owner(&dir, &["answer", &id, "refuse"], "");
+    let out = adr_answer(&dir, &id, "refuse");
     assert!(!out.status.success(), "second refuse should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
@@ -162,7 +162,7 @@ fn answer_refuse_ignores_supersedes_with_a_printed_note_and_writes_no_superseded
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &old_id, "A"], "").status.success());
+    assert!(adr_answer(&dir, &old_id, "A").status.success());
 
     // Q2 carries `supersedes:` naming the now-answered Q1, but will be
     // refused rather than answered.
@@ -188,7 +188,7 @@ fn answer_refuse_ignores_supersedes_with_a_printed_note_and_writes_no_superseded
         .find(|id| id != &old_id)
         .expect("second id assigned");
 
-    let out = adr_owner(&dir, &["answer", &new_id, "refuse"], "");
+    let out = adr_answer(&dir, &new_id, "refuse");
     assert!(out.status.success(), "refuse failed: {}", stderr(&out));
     let printed = stdout(&out);
     assert!(

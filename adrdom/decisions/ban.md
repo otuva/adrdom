@@ -96,3 +96,20 @@ Standard: secret scanners have no mention form; a hit is a hit, and allowing one
   Costs: any sentence can carry the word by quoting it.
 
 **Answer:** A
+
+### Does ban refuse a word that appears in the repository?
+depends: d8a9dfff-de89-442c-a08c-8276efab3f36, ef83beae-6857-4200-b251-a0fcc3c72f9d
+id: 4f04bae4-98e3-48eb-9403-3257268e2d87
+terms: answered=b36113a1-1384-4e4c-a798-8399f4181366, ban=ef83beae-6857-4200-b251-a0fcc3c72f9d, banned=ef83beae-6857-4200-b251-a0fcc3c72f9d, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, installed=1b98cdea-dc1b-4789-8f67-68d130d7a49d, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, refuse=0942e445-0163-423e-8ba7-84dd8ac07045, refused=0942e445-0163-423e-8ba7-84dd8ac07045, superseding=2bae531b-c4df-48a0-89a0-3d52726741ea
+
+Problem: a ban on a word the repository holds fails the CI scan on every tracked file that holds it, and a hit in text nobody can edit, such as the installed brief or an answered question, keeps CI failing until the ban is lifted.
+Standard: a new lint rule lands on a clean tree, with every violation fixed before or in the same change.
+
+- A) Yes: ban scans every tracked file first and, on a hit, names the file and line and writes nothing.
+  Why: the repository never holds a ban it breaks, and a word it cannot drop is refused before it is banned.
+  Costs: every use is cleaned before the ban, and a word in an answered question needs a superseding decision first.
+- B) No: ban writes the hash at once and lists the files and lines that hold the word.
+  Why: the ban takes effect at once.
+  Costs: CI fails until every hit is cleaned, and a hit nobody can clean keeps it failing until the owner lifts the ban.
+
+**Answer:** A

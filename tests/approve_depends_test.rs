@@ -529,7 +529,7 @@ fn ask_and_check_refuse_a_cross_file_depends_line_reverted_by_hand_after_approve
     let ask_a = adr(&dir, &["ask", record_a.to_str().unwrap()], &[], "");
     assert!(ask_a.status.success(), "asking A failed: {}", stderr(&ask_a));
     assert!(
-        adr_owner(&dir, &["answer", &a_id, "A"], "").status.success(),
+        adr_answer(&dir, &a_id, "A").status.success(),
         "answering A failed"
     );
 

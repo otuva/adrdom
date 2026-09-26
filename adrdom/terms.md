@@ -90,7 +90,7 @@ aliases:
 id: e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd
 terms: owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, terms file=528fe6f6-6d77-42d5-9086-017048d1448d, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
 definition: The owner's act of accepting a topic file's headings and prose, or the terms file, as they stand.
-aliases: approves, approved, approving, approval
+aliases: approves, approved, approving, approval, approvals
 
 ## plan
 id: 94677ed8-eaf6-46e2-bc71-7392fa0805bf
@@ -158,7 +158,7 @@ aliases: stands on
 id: 0942e445-0163-423e-8ba7-84dd8ac07045
 terms: asked=3c8d4c9c-abca-4faa-b7c1-aae39951376c, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a
 definition: The owner's ruling that a question cannot be settled as asked.
-aliases: refuse, refused, refusing
+aliases: refuse, refuses, refused, refusing
 
 ## answer set
 id: 9d634996-475e-4ddc-8113-05c404ad9d5c

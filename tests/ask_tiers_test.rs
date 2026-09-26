@@ -117,7 +117,7 @@ fn ask_blocks_a_higher_tier_candidate_naming_the_open_tier_blocker() {
     assert_eq!(asked_row_count(&dir), 1, "only Q1 should be asked so far");
 
     // Now answer Q1: the same ask on Q2 succeeds.
-    let answer_out = adr_owner(&dir, &["answer", &q1_id, "A"], "");
+    let answer_out = adr_answer(&dir, &q1_id, "A");
     assert!(answer_out.status.success(), "{}", stderr(&answer_out));
 
     let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
@@ -137,7 +137,7 @@ fn ask_prefers_the_specific_stands_on_refused_message_over_the_generic_blocker()
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let q1_id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &q1_id, "refuse"], "")
+    assert!(adr_answer(&dir, &q1_id, "refuse")
         .status
         .success());
 
@@ -220,7 +220,7 @@ Standard: plain words.
         .find_map(|l| l.strip_prefix("id: "))
         .unwrap()
         .to_string();
-    assert!(adr_owner(&dir, &["answer", &qx_id, "refuse"], "")
+    assert!(adr_answer(&dir, &qx_id, "refuse")
         .status
         .success());
 
@@ -247,7 +247,7 @@ Standard: plain words.
     approve_record(&dir, "adrdom/decisions/example.md");
 
     let q1_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
-    assert!(adr_owner(&dir, &["answer", &q1_id, "A"], "").status.success());
+    assert!(adr_answer(&dir, &q1_id, "A").status.success());
 
     let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(
@@ -370,7 +370,7 @@ Standard: plain words.
         .find_map(|l| l.strip_prefix("id: "))
         .unwrap()
         .to_string();
-    assert!(adr_owner(&dir, &["answer", &q1_id, "refuse"], "")
+    assert!(adr_answer(&dir, &q1_id, "refuse")
         .status
         .success());
 
@@ -408,7 +408,7 @@ fn ask_refuses_a_moot_candidate() {
     let content = std::fs::read_to_string(&record).unwrap();
     let q1_id = extract_ids(&content)[0].clone();
     // Answer B, but Q2 will only stand on A.
-    assert!(adr_owner(&dir, &["answer", &q1_id, "B"], "").status.success());
+    assert!(adr_answer(&dir, &q1_id, "B").status.success());
 
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(&q2_depends_on_q1("=A"));
@@ -551,7 +551,7 @@ fn ask_refuses_when_a_refused_section_was_edited_since_refusal() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &id, "refuse"], "").status.success());
+    assert!(adr_answer(&dir, &id, "refuse").status.success());
 
     // Edit the section's body after it was refused: the Problem line's text
     // moves the section hash while `**Answer:** refused` stays untouched.

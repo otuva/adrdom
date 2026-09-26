@@ -59,7 +59,7 @@ fn require_terms(root: &Path, led: &Ledger, rel: &str) -> Result<terms::TermsFil
     }
 }
 
-pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String> {
+pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<Outcome, String> {
     let ledger_path = root.join("adrdom/state/ledger.tsv");
     let led = ledger::read(&ledger_path);
 
@@ -98,6 +98,25 @@ pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String>
             return Err(msg::letter_not_an_option(letter, &sec.heading_text));
         }
         cur_hash = record::section_hash(&rf.lines, sec);
+        // Per "Does an answer carry the version of the question the owner
+        // read?": the version on the answer must match this question's
+        // current text before anything else about ledger state is even
+        // considered -- a mismatch means the text moved since it was read,
+        // regardless of what the ledger currently says. The given version
+        // is lowercased first (hex case shouldn't matter) and validated as
+        // exactly `VERSION_LEN` hex characters before ever being compared
+        // to the hash -- a malformed argument (wrong length, non-hex
+        // characters) is a different problem than a real version that has
+        // gone stale, so it earns its own message.
+        let version_lower = version.to_lowercase();
+        if version_lower.len() != record::VERSION_LEN
+            || !version_lower.chars().all(|c| c.is_ascii_hexdigit())
+        {
+            return Err(msg::invalid_version_format(version));
+        }
+        if version_lower != cur_hash[..record::VERSION_LEN] {
+            return Err(msg::stale_version(&sec.heading_text));
+        }
         match led.latest_state(id) {
             Some(row) if row.event == "asked" && row.hash == cur_hash => {}
             _ => {
@@ -174,7 +193,7 @@ pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String>
         msg::write_failed(
             "topic file",
             e,
-            Next::owner_runs(format!("adr answer {} <letter> again", id)),
+            Next::owner_runs(format!("adr answer {}@{} <letter> again", id, version)),
         )
     })?;
 
@@ -200,7 +219,7 @@ pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String>
         msg::update_failed(
             "ledger",
             e,
-            Next::owner_runs(format!("adr answer {} <letter> again", id)),
+            Next::owner_runs(format!("adr answer {}@{} <letter> again", id, version)),
         )
     })?;
 
@@ -209,8 +228,8 @@ pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String>
     })
 }
 
-/// `adr answer <id> refuse` (per "Does the owner answer a question with a
-/// refusal?"). The refusals shared with the letter
+/// `adr answer <id>@<version> refuse` (per "Does the owner answer a
+/// question with a refusal?"). The refusals shared with the letter
 /// path (id not found, already answered, terms, hash state) apply; the
 /// letter-specific option check and the section's own terms-line/pairing
 /// checks do not, since a refusal commits no decision sentence bound to a
@@ -219,7 +238,7 @@ pub fn do_answer(root: &Path, id: &str, letter: char) -> Result<Outcome, String>
 /// before the insert, detail = heading). A `supersedes:` line on a refused
 /// question is never acted on (no target is checked, no `superseded` row
 /// is written); its presence only earns a printed note.
-pub fn do_refuse(root: &Path, id: &str) -> Result<Outcome, String> {
+pub fn do_refuse(root: &Path, id: &str, version: &str) -> Result<Outcome, String> {
     let ledger_path = root.join("adrdom/state/ledger.tsv");
     let led = ledger::read(&ledger_path);
 
@@ -253,6 +272,20 @@ pub fn do_refuse(root: &Path, id: &str) -> Result<Outcome, String> {
             return Err(msg::already_answered(&sec.heading_text));
         }
         cur_hash = record::section_hash(&rf.lines, sec);
+        // Same version check as the letter path (per "Does an answer carry
+        // the version of the question the owner read?"), ahead of the
+        // ledger-state check for the same reason: lowercased and validated
+        // as exactly `VERSION_LEN` hex characters before it is ever
+        // compared to the hash.
+        let version_lower = version.to_lowercase();
+        if version_lower.len() != record::VERSION_LEN
+            || !version_lower.chars().all(|c| c.is_ascii_hexdigit())
+        {
+            return Err(msg::invalid_version_format(version));
+        }
+        if version_lower != cur_hash[..record::VERSION_LEN] {
+            return Err(msg::stale_version(&sec.heading_text));
+        }
         match led.latest_state(id) {
             Some(row) if row.event == "asked" && row.hash == cur_hash => {}
             _ => {
@@ -284,7 +317,7 @@ pub fn do_refuse(root: &Path, id: &str) -> Result<Outcome, String> {
         msg::write_failed(
             "topic file",
             e,
-            Next::owner_runs(format!("adr answer {} refuse again", id)),
+            Next::owner_runs(format!("adr answer {}@{} refuse again", id, version)),
         )
     })?;
 
@@ -300,7 +333,7 @@ pub fn do_refuse(root: &Path, id: &str) -> Result<Outcome, String> {
         msg::update_failed(
             "ledger",
             e,
-            Next::owner_runs(format!("adr answer {} refuse again", id)),
+            Next::owner_runs(format!("adr answer {}@{} refuse again", id, version)),
         )
     })?;
 
@@ -604,6 +637,10 @@ fn do_approve_terms(
     // The pre-existing latest `terms` row, captured before anything below
     // can change what "latest" means, for step 7's before/after compare.
     let prev_terms_row = led.latest_for_path("terms", "adrdom/terms.md").cloned();
+    // The snapshot as it stood before this approve overwrites it, for the
+    // same before/after compare -- read once, up front, before step 6's
+    // write (see below) replaces it with this run's own content.
+    let prev_snapshot = state::load_terms_snapshot(root);
 
     // Step 2: mint ids in memory only; nothing is written to disk yet.
     let inserted = terms::mint_ids(&mut tf);
@@ -642,7 +679,39 @@ fn do_approve_terms(
         out.push(msg::terms_ids_filled(inserted));
     }
 
+    // The snapshot (`adrdom/state/terms.approved.md`), byte for byte what
+    // was just written to `adrdom/terms.md` above -- `check` reads this
+    // instead of walking `git log` to recover the file's latest approved
+    // text (per "Does check fail a terms file that differs from its latest
+    // approval?"). Written every successful approve, including the
+    // "already approved" no-new-row case, so a repo upgrading onto this
+    // mechanism backfills the snapshot the next time the owner approves
+    // rather than staying without one forever. Written only after the
+    // ledger row below is appended (when one is written at all): a failed
+    // append must never leave the snapshot claiming an approval the ledger
+    // doesn't yet have.
+    let write_snapshot = || -> Result<(), String> {
+        std::fs::write(
+            root.join("adrdom/state/terms.approved.md"),
+            tf.lines.join("\n"),
+        )
+        .map_err(|e| {
+            format!(
+                "approve: {}",
+                msg::write_failed(
+                    "adrdom/state/terms.approved.md",
+                    e,
+                    Next::owner_runs("adr approve adrdom/terms.md again"),
+                )
+            )
+        })
+    };
+
     if state::terms_approved(led, &tf) {
+        // No new ledger row is written in this branch, so there is nothing
+        // for the snapshot to race: the file already matches the ledger's
+        // latest `terms` row, so it is safe to (re)write right away.
+        write_snapshot()?;
         out.push(msg::terms_already_approved());
     } else {
         let row = ledger::Row {
@@ -663,17 +732,17 @@ fn do_approve_terms(
                 )
             )
         })?;
+        write_snapshot()?;
         out.push(msg::terms_approved_now());
     }
 
-    // Step 7: informational, never a refusal. Only when the version on
-    // HEAD is genuinely the one just superseded (its hash matches the
+    // Step 7: informational, never a refusal. Only when the pre-existing
+    // snapshot is genuinely the one just superseded (its hash matches the
     // ledger row that was latest before this call) do we have anything
     // trustworthy to diff definitions against.
     if let Some(prev_row) = &prev_terms_row {
-        if let Some(head_content) = repo::git(root, &["show", "HEAD:adrdom/terms.md"]) {
-            let old_tf = terms::parse(&record::split_lines(&head_content));
-            if terms::file_hash(&old_tf) == prev_row.hash {
+        if let Some(old_tf) = &prev_snapshot {
+            if terms::file_hash(old_tf) == prev_row.hash {
                 for t in &tf.terms {
                     let Some(tid) = &t.id else { continue };
                     let Some(old_t) = old_tf.terms.iter().find(|o| o.id.as_deref() == Some(tid.as_str()))

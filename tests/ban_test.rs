@@ -2,6 +2,12 @@ mod common;
 
 use common::*;
 
+// adr: 4f04bae4-98e3-48eb-9403-3257268e2d87
+//
+// "Does ban refuse a word that appears in the repository?": ban scans
+// every tracked file first, and a hit refuses naming the file and line --
+// never the matched word itself -- and writes nothing to either the
+// banned-word hash file or the ledger.
 #[test]
 fn ban_refuses_on_a_word_already_in_use_and_writes_nothing() {
     let dir = init_repo();

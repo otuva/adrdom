@@ -119,17 +119,27 @@ id: 11111111-1111-1111-1111-111111111111\n\
 definition: A choice answered by the owner.\n\
 aliases: \n";
 
+// "Does check fail a terms file that differs from its latest approval?"
+// (03b2853b A, supersedes "Does the owner approve the terms file as a
+// whole?") deliberately breaks this parity for the terms-not-approved
+// case: `approve` on a *new* record still refuses outright while
+// adrdom/terms.md isn't approved (`require_terms`, unchanged -- minting a
+// fresh id/pairing needs a stable terms file), but `check` no longer fails
+// just because it's unapproved. Nothing here is a current decision yet
+// (the record was never approved, let alone asked or answered), so
+// nothing is paired and `check` only notes the wait.
 #[test]
-fn parity_unapproved_terms() {
+fn parity_unapproved_terms_diverges_from_approve_when_nothing_is_paired_yet() {
     let dir = init_repo();
     setup(&dir);
     // `adrdom/terms.md` exists (with a hand-written id, so a naive depends
     // resolution would silently succeed) but is never approved -- no
-    // `terms` ledger row. This is the review finding itself: `approve` on
-    // the record must refuse on terms not being approved (not "which is no
-    // term"), the same substance `check` already prints.
+    // `terms` ledger row. A skeleton heading (no body yet): the only thing
+    // standing between this and a clean `check` is terms approval, so the
+    // divergence from `approve`'s own (unchanged, stricter) gate is
+    // visible with nothing else in the way.
     write_record(&dir, "adrdom/terms.md", TERMS_BASIC);
-    let content = "# Example\n\n### 1.1 Q?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let content = "# Example\n\n### 1.1 Q?\ndepends: decision\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let approve_out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -147,14 +157,9 @@ fn parity_unapproved_terms() {
     );
 
     let check_out = adr(&dir, &["check"], &[], "");
-    assert!(!check_out.status.success());
+    assert!(check_out.status.success(), "{}", stdout(&check_out));
     let check_text = stdout(&check_out);
-    assert!(check_text.contains("not approved"), "{}", check_text);
-    assert!(
-        check_text.contains("owner runs: adr approve adrdom/terms.md"),
-        "{}",
-        check_text
-    );
+    assert!(check_text.contains("terms: awaiting approval"), "{}", check_text);
 }
 
 // --- terms: a definition longer than two sentences refuses -------------

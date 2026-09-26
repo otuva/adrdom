@@ -88,6 +88,46 @@ pub fn adr_owner(dir: &Path, args: &[&str], stdin: &str) -> Output {
     adr(dir, args, &[("ADR_OWNER_BYPASS", "1")], stdin)
 }
 
+/// The version the owner would read off `adr show` for `id` right now (per
+/// "Does an answer carry the version of the question the owner read?"):
+/// the first 8 hex characters of `id`'s latest `asked` row's hash in the
+/// ledger (the same prefix `record::version_of` computes from the topic
+/// file directly -- reading it from the ledger instead lets a test ask for
+/// the version without re-deriving `record::hash_range`/`section_hash`
+/// itself). Panics if `id` was never asked: every caller uses this right
+/// after asking (or re-asking) the question it names.
+pub fn current_version(dir: &Path, id: &str) -> String {
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap_or_default();
+    let hash = ledger
+        .lines()
+        .filter_map(|line| {
+            let cols: Vec<&str> = line.split('\t').collect();
+            if cols.len() >= 4 && cols[1] == "asked" && cols[2] == id {
+                Some(cols[3].to_string())
+            } else {
+                None
+            }
+        })
+        .last()
+        .unwrap_or_else(|| panic!("current_version: no asked row for id {}", id));
+    hash[..8].to_string()
+}
+
+/// `<id>@<version>`, the argument shape `adr answer` now takes (per "Does
+/// an answer carry the version of the question the owner read?").
+pub fn id_at_version(dir: &Path, id: &str) -> String {
+    format!("{}@{}", id, current_version(dir, id))
+}
+
+/// Runs `adr answer <id>@<version> <letter>` as the owner, reading the
+/// current version off the ledger first (`current_version`): what every
+/// caller that used to run `adr answer <id> <letter>` directly now needs,
+/// since a bare id is refused (per "Does an answer carry the version of
+/// the question the owner read?").
+pub fn adr_answer(dir: &Path, id: &str, letter: &str) -> Output {
+    adr_owner(dir, &["answer", &id_at_version(dir, id), letter], "")
+}
+
 pub fn stdout(out: &Output) -> String {
     String::from_utf8_lossy(&out.stdout).to_string()
 }
