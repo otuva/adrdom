@@ -192,3 +192,7 @@
 2026-09-26T11:50:46Z	approved	-	2f12222ed479a40ab91c5923bfe3d88109fdd342114df8db2cbc225802b2420d	adrdom/decisions/core.md	0.1.0
 2026-09-26T11:51:16Z	asked	34e81f57-9b3c-4dc4-a2ba-ca227523177d	c4b212782d0db22a1d56d4e294d0267de9af2024e81d215950c039078687d62e	Does check at a commit read the staged files?	0.1.0
 2026-09-26T11:51:59Z	answered	34e81f57-9b3c-4dc4-a2ba-ca227523177d	c4b212782d0db22a1d56d4e294d0267de9af2024e81d215950c039078687d62e	A	0.1.0
+2026-09-26T18:32:21Z	approved	-	5dccba4748efc81977c5cc7e4f1f95c88d1270ea830f9e2b94838f43bce7a3e8	adrdom/decisions/core.md	0.1.0
+2026-09-26T18:32:25Z	approved	-	d8437db28b2f91187714a587b1b43d5f53a67a002cf6cd1c24b8aef83966c1e5	adrdom/decisions/terms.md	0.1.0
+2026-09-26T18:32:50Z	asked	b871e776-2da5-4f1e-b4c4-fb8229657e25	1a9385c4caa019cfefcc616b209d40ffa2de875e554e5c383e4ce539690145c1	Does check fail a test tied to a decision that is not current?	0.1.0
+2026-09-26T18:32:50Z	asked	cd450764-bacd-4378-82ba-19edfc5a9edb	052fb50669ec3acdbd8d2145eba34e62aa2b6a9f0048860290e5cfe26cf057db	Does answer stop while the terms file waits for approval?	0.1.0
