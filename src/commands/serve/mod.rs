@@ -190,11 +190,17 @@ fn handle_approve(root: &Path, form: &HashMap<String, String>) -> Reply {
 
 fn handle_answer(root: &Path, form: &HashMap<String, String>) -> Reply {
     let id = form.get("id").cloned().unwrap_or_default();
+    // Per "Does an answer carry the version of the question the owner
+    // read?": the page's hidden `v` field carries the version shown on the
+    // form it displayed; a missing field (never happens from this page's
+    // own form, only from a hand-crafted POST) never matches a real
+    // section's hash and so refuses the same way a stale one does.
+    let version = form.get("v").cloned().unwrap_or_default();
     let value = form.get("answer").map(|s| s.trim().to_string()).unwrap_or_default();
 
     // The Refuse button posts `answer=refuse`; everything else is a letter.
     let outcome = if value == "refuse" {
-        Some(actions::do_refuse(root, &id))
+        Some(actions::do_refuse(root, &id, &version))
     } else {
         None
     };
@@ -225,7 +231,7 @@ fn handle_answer(root: &Path, form: &HashMap<String, String>) -> Reply {
         );
     };
 
-    match actions::do_answer(root, &id, letter) {
+    match actions::do_answer(root, &id, &version, letter) {
         Ok(o) => Reply::Redirect(
             format!(
                 "/next?after={}&m={}",

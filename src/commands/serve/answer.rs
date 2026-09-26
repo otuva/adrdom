@@ -38,7 +38,12 @@ pub(super) fn render_next(
         .tier
         .map(|t| t.to_string())
         .unwrap_or_else(|| "?".to_string());
-    body.push_str(&format!("{}, tier {}", esc(&file.topic), esc(&tier)));
+    body.push_str(&format!(
+        "{}, tier {} @{}",
+        esc(&file.topic),
+        esc(&tier),
+        esc(&q.version)
+    ));
     if let Some(p) = position {
         body.push_str(&format!(". Question {} of {} open", p, open_ids.len()));
     }
@@ -108,8 +113,9 @@ pub(super) fn render_next(
     body.push_str("</aside>\n");
 
     body.push_str(&format!(
-        "<form method=\"post\" action=\"/answer\" id=\"answer-form\">\n<input type=\"hidden\" name=\"id\" value=\"{}\">\n<input type=\"hidden\" name=\"t\" value=\"{}\">\n",
+        "<form method=\"post\" action=\"/answer\" id=\"answer-form\">\n<input type=\"hidden\" name=\"id\" value=\"{}\">\n<input type=\"hidden\" name=\"v\" value=\"{}\">\n<input type=\"hidden\" name=\"t\" value=\"{}\">\n",
         esc(&id),
+        esc(&q.version),
         esc(token)
     ));
     body.push_str("<div class=\"options\" role=\"radiogroup\">\n");

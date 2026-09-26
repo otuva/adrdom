@@ -325,7 +325,7 @@ fn ask_refuses_group_two_while_group_one_unanswered_then_passes_after_answer() {
     );
 
     // Answer group one, then ask succeeds for group two.
-    let answer_out = adr_owner(&dir, &["answer", &first_id, "A"], "");
+    let answer_out = adr_answer(&dir, &first_id, "A");
     assert!(answer_out.status.success(), "answer failed: {}", stderr(&answer_out));
 
     let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
@@ -400,7 +400,7 @@ fn approve_withdraws_a_struck_refused_heading() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &id, "refuse"], "").status.success());
+    assert!(adr_answer(&dir, &id, "refuse").status.success());
 
     // While the refused section still sits in the file, marked refused,
     // check is clean over it -- no decision, no test, nothing owed.
@@ -454,7 +454,7 @@ fn approve_refuses_when_answered_heading_gone_and_not_superseded() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &id, "A"], "").status.success());
+    assert!(adr_answer(&dir, &id, "A").status.success());
 
     std::fs::write(&record, HEADING_REMOVED).unwrap();
 
@@ -488,7 +488,7 @@ fn approve_leaves_file_and_ledger_unchanged_when_missing_answered_id_refuses() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &id, "A"], "").status.success());
+    assert!(adr_answer(&dir, &id, "A").status.success());
 
     std::fs::write(&record, HEADING_REMOVED).unwrap();
     let ledger_path = dir.join("adrdom/state/ledger.tsv");
@@ -538,7 +538,7 @@ fn approve_allows_a_vanished_heading_once_superseded() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &old_id, "A"], "").status.success());
+    assert!(adr_answer(&dir, &old_id, "A").status.success());
     let old_answered_row = {
         let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
         ledger
@@ -566,7 +566,7 @@ fn approve_allows_a_vanished_heading_once_superseded() {
         .into_iter()
         .find(|i| i != &old_id)
         .expect("new id assigned");
-    assert!(adr_owner(&dir, &["answer", &new_id, "A"], "").status.success());
+    assert!(adr_answer(&dir, &new_id, "A").status.success());
 
     // Now drop the (superseded) 1.1 heading entirely, keeping only 1.2.
     let content4 = std::fs::read_to_string(&record).unwrap();
@@ -613,7 +613,7 @@ fn check_stays_clean_once_an_emptied_topic_file_is_deleted() {
         .success());
     let content_a = std::fs::read_to_string(&record_a).unwrap();
     let old_id = extract_ids(&content_a)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &old_id, "A"], "").status.success());
+    assert!(adr_answer(&dir, &old_id, "A").status.success());
     let old_answered_row = {
         let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
         ledger
@@ -639,7 +639,7 @@ fn check_stays_clean_once_an_emptied_topic_file_is_deleted() {
         .success());
     let content_b = std::fs::read_to_string(&record_b).unwrap();
     let new_id = extract_ids(&content_b)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &new_id, "A"], "").status.success());
+    assert!(adr_answer(&dir, &new_id, "A").status.success());
 
     // a.md's only heading is superseded now: an approved edit may drop it,
     // leaving a.md with no current or open question left at all.
@@ -699,7 +699,7 @@ fn approve_refuses_a_text_depends_edit_in_a_superseded_section() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &old_id, "A"], "").status.success());
+    assert!(adr_answer(&dir, &old_id, "A").status.success());
 
     let superseding = format!(
         "\n### 1.2 Replacement question?\ndepends: decision\n\nsupersedes: {}\n\nProblem: the decision needs revisiting.\n\nStandard: s2.\n\n- A) New answer.\n  Why: reasons.\n  Costs: costs.\n- B) Other new answer.\n  Why: other reasons.\n  Costs: other costs.\n",
@@ -721,7 +721,7 @@ fn approve_refuses_a_text_depends_edit_in_a_superseded_section() {
         .expect("new id assigned");
     // Answering 1.2 (which carries `supersedes: <old_id>`) is what writes
     // the `superseded` ledger row for 1.1's id.
-    assert!(adr_owner(&dir, &["answer", &new_id, "A"], "").status.success());
+    assert!(adr_answer(&dir, &new_id, "A").status.success());
 
     // 1.1's heading is kept in the file (unlike
     // `approve_allows_a_vanished_heading_once_superseded`), but its
@@ -928,7 +928,7 @@ fn approve_refuses_a_terms_edit_that_moves_a_word_off_a_term_carried_by_a_curren
 
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &id, "A"], "").status.success());
+    assert!(adr_answer(&dir, &id, "A").status.success());
 
     // Move the "choice" alias from `decision` to `verdict`.
     std::fs::write(&terms, TERMS_ALIAS_MOVED).unwrap();
@@ -970,12 +970,12 @@ id: 11111111-1111-1111-1111-111111111111\n\
 definition: A choice answered by the owner, in writing.\n\
 aliases: \n";
 
-// adr: 767a1402-b079-4565-bf21-467236732478
+// adr: 03b2853b-4379-4f4b-9cbf-ec6e06aad7fd
 //
-// `the owner approves the whole file with approve, which writes one event
-// over its hash`: each distinct content of adrdom/terms.md that `approve`
-// accepts gets exactly one `terms` ledger row, keyed to that content's
-// hash -- the first approve writes row 1 (asserted just above via
+// `approve writes one event over its hash`: each distinct content of
+// adrdom/terms.md that `approve` accepts gets exactly one `terms` ledger
+// row, keyed to that content's hash -- the first approve writes row 1
+// (asserted just above via
 // `approve_terms_reruns_as_already_approved_with_no_new_row`'s sibling
 // check), and approving the edited `TERMS_V2` content writes exactly one
 // more row (2 total), not one per file or per term inside it.
@@ -1181,7 +1181,7 @@ fn approve_refuses_removing_a_term_carried_by_a_current_decision() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &id, "A"], "").status.success());
+    assert!(adr_answer(&dir, &id, "A").status.success());
 
     std::fs::write(&terms, TERMS_DECISION_REMOVED).unwrap();
     let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
@@ -1217,7 +1217,7 @@ fn approve_refuses_retiring_a_term_carried_by_a_current_decision() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &id, "A"], "").status.success());
+    assert!(adr_answer(&dir, &id, "A").status.success());
 
     std::fs::write(&terms, TERMS_DECISION_RETIRED).unwrap();
     let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
@@ -1305,7 +1305,7 @@ fn approve_refuses_retiring_a_term_named_only_by_a_current_decisions_depends_lin
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &id, "A"], "").status.success());
+    assert!(adr_answer(&dir, &id, "A").status.success());
     // Its `terms:` line, once written, pairs "step" but has no pairing for
     // "flag" at all: the only thing standing on "flag" is the `depends:`
     // line.
@@ -1410,7 +1410,7 @@ fn approve_allows_retiring_a_term_once_its_only_current_decision_is_superseded_a
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &old_id, "A"], "").status.success());
+    assert!(adr_answer(&dir, &old_id, "A").status.success());
     // No test tie for `old_id`: once it is superseded below it is no
     // longer a *current* decision, and the `tested` check only requires
     // (and only tolerates) a tie for a current one.
@@ -1447,7 +1447,7 @@ fn approve_allows_retiring_a_term_once_its_only_current_decision_is_superseded_a
         .into_iter()
         .find(|i| i != &old_id)
         .expect("new id assigned");
-    assert!(adr_owner(&dir, &["answer", &new_id, "A"], "").status.success());
+    assert!(adr_answer(&dir, &new_id, "A").status.success());
     write_test_comment(&dir, &new_id);
 
     // 1.1 is now superseded, not current: retiring "decision" (and giving
@@ -1508,7 +1508,7 @@ fn approve_allows_a_rename_that_keeps_the_old_name_as_an_alias() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &id, "A"], "").status.success());
+    assert!(adr_answer(&dir, &id, "A").status.success());
 
     // The question's own terms line, written by `ask` before the rename,
     // pairs the word "decision" to the term's identifier -- not its name.
@@ -1608,7 +1608,7 @@ fn approve_refuses_two_current_entries_sharing_a_word() {
     assert!(err.contains("word \"verdict\""), "{}", err);
 }
 
-// adr: 767a1402-b079-4565-bf21-467236732478
+// adr: 03b2853b-4379-4f4b-9cbf-ec6e06aad7fd
 //
 // `on a definition change approve prints the current decisions paired to
 // that term`: "decision"'s definition text changes here (same id, same
@@ -1642,7 +1642,7 @@ fn approve_prints_dependents_when_a_definition_changes() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &id, "A"], "").status.success());
+    assert!(adr_answer(&dir, &id, "A").status.success());
 
     let terms_v2 = "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice answered by the owner, revised.\naliases: \n";
     std::fs::write(&terms, terms_v2).unwrap();

@@ -38,7 +38,8 @@ fn answer_one_question(dir: &std::path::Path) -> (std::path::PathBuf, String) {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
-    let out = adr_owner(dir, &["answer", &id, "A"], "");
+    let arg = id_at_version(dir, &id);
+    let out = adr_owner(dir, &["answer", &arg, "A"], "");
     assert!(out.status.success(), "answer failed: {}", stderr(&out));
     (record, id)
 }
@@ -587,6 +588,37 @@ fn installed_brief_tells_the_owner_may_edit_or_write_the_plan() {
     assert!(
         agents.contains(
             "The owner may\nstrike, add or reorder headings before approving, or write the plan itself\nand approve it the same way."
+        ),
+        "{}",
+        agents
+    );
+}
+
+// adr: c3127af2-4c96-48d5-a164-bac49a9a09ec
+//
+// "Does the agent build what no current decision covers?": the tool
+// cannot enforce this itself (there is no build step it runs), so the
+// decision is implemented entirely as the installed brief's instruction to
+// the agent -- checked here the same way `check` verifies the rest of the
+// brief's text landed in AGENTS.md verbatim. Three things the brief must
+// say: don't build without a covering decision, write the question and
+// stop, and say so and stop when a current decision looks wrong.
+#[test]
+fn installed_brief_tells_the_agent_not_to_build_without_a_covering_decision() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let agents = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
+    assert!(
+        agents.contains(
+            "If no current decision covers what you are about to build, do not build\n   it. Write the question (below) and stop until the owner answers."
+        ),
+        "{}",
+        agents
+    );
+    assert!(
+        agents.contains(
+            "If a current decision looks wrong, say so in chat and stop. Never edit an\n   answered question and never work around a decision."
         ),
         "{}",
         agents
@@ -1161,7 +1193,8 @@ Standard: clear yes or no.\n\n\
         .find(|i| i != &id)
         .expect("a second id should now exist");
 
-    let out = adr_owner(&dir, &["answer", &new_id, "A"], "");
+    let new_id_arg = id_at_version(&dir, &new_id);
+    let out = adr_owner(&dir, &["answer", &new_id_arg, "A"], "");
     assert!(out.status.success(), "answer failed: {}", stderr(&out));
     write_test_comment(&dir, &new_id);
 
@@ -1230,14 +1263,22 @@ fn check_passes_when_terms_missing_and_no_records_exist() {
     assert!(!stdout(&out).contains("terms:"), "{}", stdout(&out));
 }
 
+// adr: 03b2853b-4379-4f4b-9cbf-ec6e06aad7fd
+//
+// "Does check fail a terms file that differs from its latest approval?":
+// this record is never asked, so nothing current pairs "decision" to
+// anything -- an unapproved term nothing reaches is a draft like any
+// other, not a risk, and `check` passes with only a waiting note (name and
+// assertion updated from the pre-03b2853b version of this test, which
+// expected an outright failure here).
 #[test]
-fn check_fails_when_terms_unapproved_and_a_record_exists() {
+fn check_passes_with_a_waiting_note_when_terms_unapproved_and_nothing_pairs_it() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(
         &dir,
         "adrdom/decisions/example.md",
-        "# Example\n\n### 1.1 Some question?\n",
+        "# Example\n\n### 1.1 Some question?\ndepends: decision\n",
     );
     std::fs::write(
         dir.join("adrdom/terms.md"),
@@ -1247,53 +1288,42 @@ fn check_fails_when_terms_unapproved_and_a_record_exists() {
     // No `terms` ledger row: unapproved.
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
-    let text = stdout(&out);
-    assert!(
-        text.contains(
-            "terms: adrdom/terms.md not approved; owner runs: adr approve adrdom/terms.md"
-        ),
-        "{}",
-        text
-    );
+    assert!(out.status.success(), "{}", stdout(&out));
+    assert!(stdout(&out).contains("terms: awaiting approval"), "{}", stdout(&out));
 }
 
-// adr: 767a1402-b079-4565-bf21-467236732478
+// adr: 03b2853b-4379-4f4b-9cbf-ec6e06aad7fd
 //
-// `check fails a terms file that differs from its latest approval`: here
-// `adrdom/terms.md` was genuinely approved once (a real `terms` ledger row
-// hashing its original text), then hand-edited afterwards without a new
-// `approve` -- not the "never approved at all" case above, but "approved,
-// then moved on". `check`'s own file hash no longer matches that latest
-// approval's hash, so it reports the same "not approved" failure, and
-// `ask` refuses the same way on a record that would otherwise be askable.
+// "Does check fail a terms file that differs from its latest approval?":
+// unlike the note above, 1.1 here is actually asked and answered
+// (`answer_one_question`), pairing "pass" to a current decision -- so once
+// `adrdom/terms.md` is hand-edited afterward, it is no longer a harmless
+// draft. `answer_one_question` approves terms.md only via a hand-written
+// ledger row, so no real `adrdom/state/terms.approved.md` snapshot ever
+// lands on disk; with a current decision reaching "pass" and no snapshot
+// to compare against, `check` fails safe ("the approved copy is missing")
+// rather than the "definition of ... changed" wording it would print with
+// a real snapshot on hand. `ask` keeps refusing outright while terms.md
+// waits, exactly as before this decision -- that gate never depended on
+// what is reachable.
 #[test]
 fn check_and_ask_fail_when_terms_file_was_edited_after_its_latest_approval() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    let approved_content =
-        "# Terms\n\n## pass\nid: 11111111-1111-1111-1111-111111111111\ndefinition: Whether something is accepted.\naliases: \n";
-    write_record(&dir, "adrdom/terms.md", approved_content);
-    approve_terms_via_ledger(&dir, approved_content);
+    let (record, id) = answer_one_question(&dir);
+    write_test_comment(&dir, &id);
 
-    // Approve the record while terms.md still matches its latest
-    // approval -- `approve` itself gates on terms approval, so this has to
-    // happen before the hand-edit below breaks it.
-    let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
-    approve_record(&dir, "adrdom/decisions/example.md");
-
-    // Hand-edit the definition after that approval, with no new `terms`
-    // ledger row: the file on disk now differs from what the latest
-    // approval hashed.
-    let edited_content = approved_content
-        .replace("Whether something is accepted.", "Whether something clears review.");
-    std::fs::write(dir.join("adrdom/terms.md"), &edited_content).unwrap();
+    // Hand-edit the definition after that answer, with no new `terms`
+    // ledger row: the file on disk now differs from what the ledger says
+    // was approved.
+    let edited_content = "# Terms\n\n## pass\nid: 11111111-1111-1111-1111-111111111111\ndefinition: Whether something clears review.\naliases: \n";
+    std::fs::write(dir.join("adrdom/terms.md"), edited_content).unwrap();
 
     let check_out = adr(&dir, &["check"], &[], "");
     assert!(!check_out.status.success());
     assert!(
         stdout(&check_out).contains(
-            "terms: adrdom/terms.md not approved; owner runs: adr approve adrdom/terms.md"
+            "terms: adrdom/terms.md not approved: the approved copy is missing, so a paired definition's change can't be ruled out; agent runs: adr install, which restores the copy when this file still matches its last approval, owner runs: adr approve adrdom/terms.md when it doesn't"
         ),
         "{}",
         stdout(&check_out)

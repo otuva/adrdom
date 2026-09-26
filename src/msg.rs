@@ -155,11 +155,78 @@ pub fn terms_not_approved(rel: &str) -> String {
 }
 
 /// The same "not approved" state, reported about `adrdom/terms.md` itself
-/// rather than a dependent topic file (`check`'s own terms check, when no
-/// topic file exists yet to name).
+/// rather than a dependent topic file. No longer reachable from `check`
+/// (per "Does check fail a terms file that differs from its latest
+/// approval?", 03b2853b A: an unapproved file alone is only ever a note
+/// now, never this failure) -- kept for `every_refusal_names_its_next_move`
+/// below, which still exercises every message shape this module defines.
+#[allow(dead_code)]
 pub fn terms_md_not_approved() -> String {
     refuse(
         "adrdom/terms.md not approved".to_string(),
+        Next::owner_runs("adr approve adrdom/terms.md"),
+    )
+}
+
+/// `adrdom/terms.md` differs from its latest approval, and that change
+/// reaches a current decision -- directly, or through another term's own
+/// definition (per "Does check fail a terms file that differs from its
+/// latest approval?", which supersedes "Does the owner approve the terms
+/// file as a whole?"): unlike `terms_awaiting`, this is a failure, since
+/// the one edit that moves an answered decision's meaning still stops the
+/// commit even though an unrelated draft edit no longer does.
+pub fn terms_definition_moved(terms: &str, decisions: &str) -> String {
+    refuse(
+        format!(
+            "adrdom/terms.md not approved: definition of {} changed since the latest approval, paired by {}",
+            terms, decisions
+        ),
+        Next::owner_runs("adr approve adrdom/terms.md"),
+    )
+}
+
+/// The approved snapshot (`adrdom/state/terms.approved.md`) is missing
+/// while at least one term some current decision reaches (directly, or
+/// through another term's own definition) can't be checked against its
+/// latest approved text at all: fails safe rather than assuming nothing
+/// moved (see `check::terms::EditImpact::SnapshotMissing`). Names the
+/// agent's move first (`adr install` backfills the snapshot when this file
+/// still matches its last approval -- the upgrade-path gap where a repo
+/// approved before the snapshot mechanism existed never got one written)
+/// with the owner's re-approve as the fallback for when the file has
+/// actually moved since then and a fresh snapshot has to be re-established.
+pub fn terms_snapshot_missing() -> String {
+    refuse(
+        "adrdom/terms.md not approved: the approved copy is missing, so a paired definition's change can't be ruled out".to_string(),
+        Next::agent("runs: adr install, which restores the copy when this file still matches its last approval")
+            .and_owner_runs("adr approve adrdom/terms.md when it doesn't"),
+    )
+}
+
+/// A term some current decision reaches (directly, or through another
+/// term's own definition) is present in the current draft but absent from
+/// the approved snapshot entirely -- distinct from `terms_definition_moved`,
+/// whose paired term is present in both but whose definition text differs
+/// (03b2853b A; `affected_by_edit` used to fold this case into that one via
+/// `unwrap_or(true)`).
+pub fn terms_term_missing_from_approved_copy(terms: &str, decisions: &str) -> String {
+    refuse(
+        format!(
+            "adrdom/terms.md not approved: {} is not in the approved copy, paired by {}",
+            terms, decisions
+        ),
+        Next::owner_runs("adr approve adrdom/terms.md"),
+    )
+}
+
+/// The approved snapshot's own parsed hash no longer matches the ledger's
+/// latest `terms` row for `adrdom/terms.md`: the two are written together by
+/// `approve`, so this means the snapshot was edited directly (never an
+/// agent's or owner's move -- it lives under `adrdom/state/`) or otherwise
+/// fell out of sync with the ledger.
+pub fn terms_snapshot_mismatch() -> String {
+    refuse(
+        "adrdom/state/terms.approved.md does not match the ledger".to_string(),
         Next::owner_runs("adr approve adrdom/terms.md"),
     )
 }
@@ -466,6 +533,41 @@ pub fn not_in_asked_state(heading: &str) -> String {
             heading
         ),
         Next::agent("runs adr ask so it is asked again at the current hash"),
+    )
+}
+
+/// `adr answer <id> <letter>` with no `@<version>` (per "Does an answer
+/// carry the version of the question the owner read?"): a bare id is
+/// refused before it is ever looked up, since there is nothing yet to
+/// check it against.
+pub fn answer_missing_version(id: &str) -> String {
+    refuse(
+        format!("{}: no version given", id),
+        Next::owner_runs("adr show to read the question and answer with the printed id@version"),
+    )
+}
+
+/// The version on an answer (from the terminal's `<id>@<version>` or the
+/// page's hidden field) no longer matches the question's current text (per
+/// "Does an answer carry the version of the question the owner read?"):
+/// the question moved -- usually a re-ask after an edit -- since that
+/// version was read.
+pub fn stale_version(heading: &str) -> String {
+    refuse(
+        format!("\"{}\" has moved since that version was read", heading),
+        Next::owner_runs("adr show to read it again and answer with the printed id@version"),
+    )
+}
+
+/// The version on `<id>@<version>` is not exactly `record::VERSION_LEN`
+/// hex characters once lowercased (per "Does an answer carry the version
+/// of the question the owner read?"): a malformed argument, never a
+/// question that moved after being read, so it gets its own message
+/// instead of `stale_version`.
+pub fn invalid_version_format(version: &str) -> String {
+    refuse(
+        format!("\"{}\" is not a valid version", version),
+        Next::owner_runs("adr show and copies the printed id@version"),
     )
 }
 
@@ -1125,6 +1227,15 @@ pub fn banned_added(n: usize) -> String {
     format!("added {} entries", n)
 }
 
+/// `adr install` backfilled `adrdom/state/terms.approved.md` for a repo
+/// that approved `adrdom/terms.md` before the snapshot mechanism existed
+/// (the upgrade-path gap, items 1+2): the file on disk still matched its
+/// latest `terms` ledger row, so its own text is the approved content.
+pub fn terms_snapshot_backfilled() -> String {
+    "install: adrdom/state/terms.approved.md: restored from the approved adrdom/terms.md"
+        .to_string()
+}
+
 pub fn agents_md_created() -> String {
     "install: AGENTS.md: created with the brief".to_string()
 }
@@ -1230,12 +1341,15 @@ mod tests {
     /// this is the second guard -- the rendered text must actually name
     /// the agent's move or a command the owner runs.
     // adr: 48f4647d-8c81-4e8a-a936-6b32f5fb0699
+    // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
     //
-    // "every stop names the move that clears it and who makes it": every
-    // refusal/failure built in this module is asserted below to contain
-    // either "; agent " or "owner runs: ", so a stop with no legal move
-    // (the failure mode an override would otherwise paper over) is a
-    // compile-time-checked impossibility, not something callers can forget.
+    // "every stop names the move that clears it and who makes it" /
+    // "every refusal names what failed, the command that clears it and who
+    // runs that command, the agent or the owner": every refusal/failure
+    // built in this module is asserted below to contain either "; agent "
+    // or "owner runs: ", so a stop with no legal move (the failure mode an
+    // override would otherwise paper over) is a compile-time-checked
+    // impossibility, not something callers can forget.
     #[test]
     fn every_refusal_names_its_next_move() {
         let e = "boom";
@@ -1287,6 +1401,10 @@ mod tests {
             already_answered("heading"),
             letter_not_an_option('Z', "heading"),
             not_in_asked_state("heading"),
+            answer_missing_version("id-1"),
+            stale_version("heading"),
+            invalid_version_format("Z0ZZZZZZ"),
+            terms_term_missing_from_approved_copy("pass", "x.md: \"heading\""),
             no_terms_line("id-1"),
             malformed_terms_line("id-1"),
             terms_line_names_gone_term("id-1", "uuid-1"),

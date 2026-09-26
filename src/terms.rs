@@ -353,21 +353,14 @@ fn is_boundary_ok(chars: &[char], start: usize, len: usize) -> bool {
     before_ok && after_ok
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum MatchKind {
-    Exact,
-    Es,
-    S,
-}
-
-/// Every name and alias in `terms` (and its "s"/"es" plural forms),
-/// lowercased, mapped to the id of the term that owns it. Built with the
-/// same priority `resolve` uses when a string is a candidate match for more
-/// than one term: exact beats the "es" plural beats the "s" plural, and
-/// among candidates of equal priority the first one built (terms in
-/// `terms` order, name before its aliases) wins. Terms without an id, and
-/// retired terms, are skipped (per "Does a retired term keep its words?"): a lookup never lands on a retired
-/// term, so a new pairing sees current terms only.
+/// Every name and alias in `terms`, lowercased, mapped to the id of the term
+/// that owns it. A word pairs to a term only when it equals the term's name
+/// or one of its aliases exactly -- no implicit plural or other stemming
+/// (per "Does a term word keep its plain sense in the records?"): every form
+/// that should pair is written as an explicit alias. Terms without an id,
+/// and retired terms, are skipped (per "Does a retired term keep its
+/// words?"): a lookup never lands on a retired term, so a new pairing sees
+/// current terms only.
 ///
 /// A single lookup against this map answers whether a whole word/phrase
 /// still resolves to a given id exactly as `resolve(word, terms)` would
@@ -375,7 +368,7 @@ enum MatchKind {
 /// full-string candidate can produce it); built once and reused across
 /// many words instead of rebuilding `resolve`'s phrase list per word.
 pub fn phrase_lookup(terms: &[Term]) -> HashMap<String, String> {
-    let mut map: HashMap<String, (String, MatchKind)> = HashMap::new();
+    let mut map: HashMap<String, String> = HashMap::new();
     for t in terms {
         if t.retired {
             continue;
@@ -388,22 +381,10 @@ pub fn phrase_lookup(terms: &[Term]) -> HashMap<String, String> {
             if nl.is_empty() {
                 continue;
             }
-            for (key, kind) in [
-                (nl.clone(), MatchKind::Exact),
-                (format!("{}es", nl), MatchKind::Es),
-                (format!("{}s", nl), MatchKind::S),
-            ] {
-                let should_insert = match map.get(&key) {
-                    None => true,
-                    Some((_, existing_kind)) => kind < *existing_kind,
-                };
-                if should_insert {
-                    map.insert(key, (id.clone(), kind));
-                }
-            }
+            map.entry(nl).or_insert_with(|| id.clone());
         }
     }
-    map.into_iter().map(|(k, (id, _))| (k, id)).collect()
+    map
 }
 
 /// Whole-word/phrase, case-insensitive, longest-phrase-first, non-overlapping
@@ -413,12 +394,12 @@ pub fn phrase_lookup(terms: &[Term]) -> HashMap<String, String> {
 /// is free to take that same name or alias). Terms without an id are
 /// skipped. Returned pairs are unique and sorted by matched word.
 ///
-/// A word also matches a name or alias when it equals that name/alias with a
-/// trailing "s" or "es" appended (simple plural), tried in that order after
-/// the exact match; the matched text is stored as-is (e.g. `decisions=<id>`).
-/// Irregular plurals are ordinary aliases and match exactly.
+/// A word matches a name or alias only when it equals that name/alias
+/// exactly (per "Does a term word keep its plain sense in the records?"):
+/// there is no implicit plural or other stemming, so a plural or other
+/// variant form pairs only when it is itself written as an alias.
 pub fn resolve(text: &str, terms: &[Term]) -> Vec<(String, String)> {
-    let mut phrases: Vec<(Vec<char>, String, MatchKind)> = Vec::new();
+    let mut phrases: Vec<(Vec<char>, String)> = Vec::new();
     for t in terms {
         if t.retired {
             continue;
@@ -434,15 +415,12 @@ pub fn resolve(text: &str, terms: &[Term]) -> Vec<(String, String)> {
             if nl.is_empty() {
                 continue;
             }
-            phrases.push((nl.chars().collect(), id.clone(), MatchKind::Exact));
-            phrases.push((format!("{}es", nl).chars().collect(), id.clone(), MatchKind::Es));
-            phrases.push((format!("{}s", nl).chars().collect(), id.clone(), MatchKind::S));
+            phrases.push((nl.chars().collect(), id.clone()));
         }
     }
-    // Longest phrase first; then exact over "es"-plural over "s"-plural;
-    // ties broken lexicographically for determinism.
+    // Longest phrase first; ties broken lexicographically for determinism.
     phrases.sort_by(|a, b| {
-        b.0.len().cmp(&a.0.len()).then_with(|| a.2.cmp(&b.2)).then_with(|| {
+        b.0.len().cmp(&a.0.len()).then_with(|| {
             let sa: String = a.0.iter().collect();
             let sb: String = b.0.iter().collect();
             sa.cmp(&sb)
@@ -456,7 +434,7 @@ pub fn resolve(text: &str, terms: &[Term]) -> Vec<(String, String)> {
     let mut i = 0;
     while i < n {
         let mut matched_len = 0;
-        for (phrase, id, _kind) in &phrases {
+        for (phrase, id) in &phrases {
             let plen = phrase.len();
             if plen == 0 || i + plen > n {
                 continue;
@@ -977,19 +955,23 @@ aliases: \n"
     }
 
     // adr: 521e6211-344a-4b56-a1aa-07be956b3b29
+    //
+    // "a term word always means the term in the records; its plain sense
+    // leaves them, forms that mean the term are aliases, and plain use of
+    // the same form is caught at review": there is no implicit "s"/"es"
+    // plural match any more, so a plural that is not listed as an alias is
+    // a plain word, and the exact same form pairs once it is added as an
+    // alias.
     #[test]
-    fn resolve_matches_simple_plural() {
+    fn a_plural_form_pairs_only_when_it_is_an_explicit_alias() {
         let terms = sample_terms();
-        let pairs = resolve("the decisions were many", &terms);
-        assert!(
-            pairs
-                .iter()
-                .any(|(w, id)| w == "decisions" && id == "id-decision"),
-            "{:?}",
-            pairs
-        );
 
-        // Not a plural of anything registered: no arbitrary stemming.
+        // "decisions" is not an alias of "decision" here: a plain word,
+        // caught at review rather than paired.
+        let pairs = resolve("the decisions were many", &terms);
+        assert!(pairs.iter().all(|(_, id)| id != "id-decision"), "{:?}", pairs);
+
+        // Not a plural of anything registered either: no arbitrary stemming.
         let pairs2 = resolve("a decisional matter", &terms);
         assert!(pairs2.iter().all(|(_, id)| id != "id-decision"));
 
@@ -998,6 +980,21 @@ aliases: \n"
         assert_eq!(
             pairs3,
             vec![("decision".to_string(), "id-decision".to_string())]
+        );
+
+        // The same plural form pairs once it is written as an explicit
+        // alias.
+        let mut terms_with_alias = terms.clone();
+        terms_with_alias
+            .iter_mut()
+            .find(|t| t.name == "decision")
+            .unwrap()
+            .aliases
+            .push("decisions".to_string());
+        let pairs4 = resolve("the decisions were many", &terms_with_alias);
+        assert_eq!(
+            pairs4,
+            vec![("decisions".to_string(), "id-decision".to_string())]
         );
     }
 
@@ -1050,8 +1047,8 @@ aliases: \n"
         }];
         let pairs = resolve("the mice ran", &terms);
         assert_eq!(pairs, vec![("mice".to_string(), "id-mouse".to_string())]);
-        // The auto-plural of "mouse" ("mouses") is not what appears in the
-        // text, and "mouse" itself doesn't appear either.
+        // No automatic plural is formed from "mouse" at all; "mice" pairs
+        // only because it is listed as an explicit alias.
         let pairs2 = resolve("a mouse ran", &terms);
         assert_eq!(pairs2, vec![("mouse".to_string(), "id-mouse".to_string())]);
     }
@@ -1130,7 +1127,7 @@ aliases: \n"
     }
 
     #[test]
-    fn phrase_lookup_word_resolves_a_current_term_exactly_and_as_a_plural() {
+    fn phrase_lookup_word_resolves_a_current_term_by_name_or_phrase() {
         let terms = sample_terms();
         let lookup = phrase_lookup(&terms);
         assert_eq!(lookup.get("terms"), Some(&"id-terms".to_string()));

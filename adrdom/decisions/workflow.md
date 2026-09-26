@@ -55,6 +55,8 @@ Standard: spec-driven development builds only what the spec states and sends a g
   Why: work never waits on an answer.
   Costs: the question comes after the code and asks the owner to confirm what exists.
 
+**Answer:** A
+
 ### Does a refusal name the command that clears it?
 depends: 0942e445-0163-423e-8ba7-84dd8ac07045, 1d7e59ea-99e3-4d4b-9928-5dabca62723d, f90dbd5b-8fbe-4899-8588-f8762795c2e2
 id: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
@@ -69,3 +71,5 @@ Standard: actionable error messages state what failed and what to do next.
 - B) No: a refusal names what failed, and the agent works out the fix.
   Why: messages stay short and prescribe nothing for cases nobody foresaw.
   Costs: the agent guesses, and nothing marks a step as the owner's.
+
+**Answer:** A

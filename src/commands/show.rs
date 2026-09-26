@@ -104,7 +104,21 @@ fn print_question(
     all_headings: &HashMap<String, String>,
 ) {
     let state = view::qstate(led, sec);
-    println!("  [{}] {}", state_label(state, sec), sec.heading_text);
+    // Per "Does an answer carry the version of the question the owner
+    // read?": an asked (`Open`), unanswered question also prints the
+    // version `answer` and the page's POST both check against -- the
+    // owner's next move is `adr answer <id>@<version> <letter>`.
+    if state == QState::Open {
+        let version = record::version_of(&rf.lines, sec);
+        println!(
+            "  [{} @{}] {}",
+            state_label(state, sec),
+            version,
+            sec.heading_text
+        );
+    } else {
+        println!("  [{}] {}", state_label(state, sec), sec.heading_text);
+    }
     if !sec.depends.is_empty() {
         let entries: Vec<String> = sec
             .depends

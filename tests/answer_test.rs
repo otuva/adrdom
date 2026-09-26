@@ -71,7 +71,7 @@ fn answer_writes_answer_line_and_ledger_row() {
     let ids = extract_ids(&content);
     let question_id = &ids[0];
 
-    let out = adr_owner(&dir, &["answer", question_id, "A"], "");
+    let out = adr_answer(&dir, question_id, "A");
     assert!(out.status.success(), "answer failed: {}", stderr(&out));
     assert!(stdout(&out).contains("The authoritative sentence is a decision"));
 
@@ -148,7 +148,7 @@ fn answer_with_supersedes_writes_superseded_row_and_show_hides_old() {
     let ids = extract_ids(&content);
     let old_id = ids[0].clone();
 
-    let answer_out = adr_owner(&dir, &["answer", &old_id, "A"], "");
+    let answer_out = adr_answer(&dir, &old_id, "A");
     assert!(
         answer_out.status.success(),
         "answer A failed: {}",
@@ -182,7 +182,7 @@ fn answer_with_supersedes_writes_superseded_row_and_show_hides_old() {
         .expect("new id assigned")
         .clone();
 
-    let answer_out = adr_owner(&dir, &["answer", &new_id, "A"], "");
+    let answer_out = adr_answer(&dir, &new_id, "A");
     assert!(
         answer_out.status.success(),
         "answer B failed: {}",
@@ -237,7 +237,7 @@ fn answered_question_text_is_immutable_until_a_later_decision_supersedes_it() {
     let original = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&original)[0].clone();
 
-    let answer_out = adr_owner(&dir, &["answer", &old_id, "A"], "");
+    let answer_out = adr_answer(&dir, &old_id, "A");
     assert!(
         answer_out.status.success(),
         "answer A failed: {}",
@@ -307,7 +307,7 @@ fn answered_question_text_is_immutable_until_a_later_decision_supersedes_it() {
         .find(|id| id != &old_id)
         .expect("new id assigned");
 
-    let answer_out = adr_owner(&dir, &["answer", &new_id, "A"], "");
+    let answer_out = adr_answer(&dir, &new_id, "A");
     assert!(
         answer_out.status.success(),
         "answer on the superseding question failed: {}",
@@ -346,7 +346,7 @@ fn answer_with_two_id_supersedes_writes_a_row_per_id() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id_1 = extract_ids(&content)[0].clone();
-    let answer_out = adr_owner(&dir, &["answer", &old_id_1, "A"], "");
+    let answer_out = adr_answer(&dir, &old_id_1, "A");
     assert!(answer_out.status.success(), "answer 1.1 failed: {}", stderr(&answer_out));
 
     let mut content = std::fs::read_to_string(&record).unwrap();
@@ -361,7 +361,7 @@ fn answer_with_two_id_supersedes_writes_a_row_per_id() {
         .into_iter()
         .find(|id| id != &old_id_1)
         .expect("second id assigned");
-    let answer_out = adr_owner(&dir, &["answer", &old_id_2, "A"], "");
+    let answer_out = adr_answer(&dir, &old_id_2, "A");
     assert!(answer_out.status.success(), "answer 1.2 failed: {}", stderr(&answer_out));
 
     // Add a third question that supersedes both prior ids at once,
@@ -388,7 +388,7 @@ fn answer_with_two_id_supersedes_writes_a_row_per_id() {
         .find(|id| id != &old_id_1 && id != &old_id_2)
         .expect("third id assigned");
 
-    let answer_out = adr_owner(&dir, &["answer", &new_id, "A"], "");
+    let answer_out = adr_answer(&dir, &new_id, "A");
     assert!(answer_out.status.success(), "answer 1.3 failed: {}", stderr(&answer_out));
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
@@ -418,13 +418,13 @@ fn answer_refuses_a_second_time_with_already_answered_message() {
     let content = std::fs::read_to_string(&record).unwrap();
     let question_id = extract_ids(&content)[0].clone();
 
-    let first = adr_owner(&dir, &["answer", &question_id, "A"], "");
+    let first = adr_answer(&dir, &question_id, "A");
     assert!(first.status.success(), "first answer failed: {}", stderr(&first));
 
     // Answering the same, now-answered id again must refuse with the same
     // "already answered" message the pre-refactor command produced, and
     // must not append a second `answered` row.
-    let second = adr_owner(&dir, &["answer", &question_id, "A"], "");
+    let second = adr_answer(&dir, &question_id, "A");
     assert!(!second.status.success(), "second answer should have refused");
     assert!(
         stderr(&second).contains("is already answered"),
@@ -470,7 +470,7 @@ fn ask_refuses_a_two_id_supersedes_when_one_target_is_not_current() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id_1 = extract_ids(&content)[0].clone();
-    let answer_out = adr_owner(&dir, &["answer", &old_id_1, "A"], "");
+    let answer_out = adr_answer(&dir, &old_id_1, "A");
     assert!(answer_out.status.success(), "answer 1.1 failed: {}", stderr(&answer_out));
 
     // 1.2 is asked but never answered, so it is not current.
@@ -551,7 +551,7 @@ fn answer_refuses_a_supersedes_target_already_superseded() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
-    let answer_out = adr_owner(&dir, &["answer", &old_id, "A"], "");
+    let answer_out = adr_answer(&dir, &old_id, "A");
     assert!(answer_out.status.success(), "answer 1.1 failed: {}", stderr(&answer_out));
 
     // The second question supersedes the first and is answered: the first
@@ -575,7 +575,7 @@ fn answer_refuses_a_supersedes_target_already_superseded() {
         .into_iter()
         .find(|id| id != &old_id)
         .expect("second id assigned");
-    let answer_out = adr_owner(&dir, &["answer", &second_id, "A"], "");
+    let answer_out = adr_answer(&dir, &second_id, "A");
     assert!(answer_out.status.success(), "answer 1.2 failed: {}", stderr(&answer_out));
 
     // Add and really ask the third question with no `supersedes:` line yet
@@ -620,7 +620,7 @@ fn answer_refuses_a_supersedes_target_already_superseded() {
         "1.3 What is the third unit of authority called?",
     );
 
-    let answer_out = adr_owner(&dir, &["answer", &third_id, "A"], "");
+    let answer_out = adr_answer(&dir, &third_id, "A");
     assert!(
         !answer_out.status.success(),
         "answer should have refused: {}",
@@ -673,7 +673,7 @@ fn answer_accepts_a_split_where_two_questions_asked_together_name_the_same_targe
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
-    let answer_out = adr_owner(&dir, &["answer", &old_id, "A"], "");
+    let answer_out = adr_answer(&dir, &old_id, "A");
     assert!(answer_out.status.success(), "answer 1.1 failed: {}", stderr(&answer_out));
 
     // Both the second and third questions supersede old_id while it is
@@ -706,13 +706,13 @@ fn answer_accepts_a_split_where_two_questions_asked_together_name_the_same_targe
     let second_id = ids[0].clone();
     let third_id = ids[1].clone();
 
-    let first_answer = adr_owner(&dir, &["answer", &second_id, "A"], "");
+    let first_answer = adr_answer(&dir, &second_id, "A");
     assert!(
         first_answer.status.success(),
         "first half of the split failed: {}",
         stderr(&first_answer)
     );
-    let second_answer = adr_owner(&dir, &["answer", &third_id, "A"], "");
+    let second_answer = adr_answer(&dir, &third_id, "A");
     assert!(
         second_answer.status.success(),
         "second half of the split failed: {}",
@@ -749,7 +749,7 @@ fn ask_refuses_a_candidate_whose_supersedes_target_is_stale() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
-    let answer_out = adr_owner(&dir, &["answer", &old_id, "A"], "");
+    let answer_out = adr_answer(&dir, &old_id, "A");
     assert!(answer_out.status.success(), "answer 1.1 failed: {}", stderr(&answer_out));
 
     // The second question supersedes old_id and is answered: old_id is
@@ -773,7 +773,7 @@ fn ask_refuses_a_candidate_whose_supersedes_target_is_stale() {
         .into_iter()
         .find(|id| id != &old_id)
         .expect("second id assigned");
-    let answer_out = adr_owner(&dir, &["answer", &second_id, "A"], "");
+    let answer_out = adr_answer(&dir, &second_id, "A");
     assert!(answer_out.status.success(), "answer 1.2 failed: {}", stderr(&answer_out));
 
     // The third question names the already-superseded old_id: `ask`
@@ -831,7 +831,7 @@ fn answer_accepts_a_supersedes_target_that_is_current() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_id = extract_ids(&content)[0].clone();
-    let answer_out = adr_owner(&dir, &["answer", &old_id, "A"], "");
+    let answer_out = adr_answer(&dir, &old_id, "A");
     assert!(answer_out.status.success(), "answer 1.1 failed: {}", stderr(&answer_out));
 
     // The second question supersedes the first while it is still current
@@ -855,7 +855,7 @@ fn answer_accepts_a_supersedes_target_that_is_current() {
         .into_iter()
         .find(|id| id != &old_id)
         .expect("second id assigned");
-    let answer_out = adr_owner(&dir, &["answer", &second_id, "A"], "");
+    let answer_out = adr_answer(&dir, &second_id, "A");
     assert!(answer_out.status.success(), "answer 1.2 failed: {}", stderr(&answer_out));
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
@@ -886,7 +886,7 @@ fn answer_refuses_when_terms_md_is_missing() {
     // Remove terms.md entirely after the id was asked.
     std::fs::remove_file(dir.join("adrdom/terms.md")).unwrap();
 
-    let out = adr_owner(&dir, &["answer", &id, "A"], "");
+    let out = adr_answer(&dir, &id, "A");
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
@@ -912,7 +912,7 @@ fn answer_refuses_when_terms_md_has_a_shape_error() {
     terms.push_str("notes: extra\n");
     std::fs::write(dir.join("adrdom/terms.md"), terms).unwrap();
 
-    let out = adr_owner(&dir, &["answer", &id, "A"], "");
+    let out = adr_answer(&dir, &id, "A");
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(err.starts_with("answer: adrdom/terms.md:"), "{}", err);
@@ -938,7 +938,7 @@ fn answer_refuses_when_terms_md_is_not_approved() {
     let edited = terms.replace("A fixture term for tests.", "A fixture term, edited.");
     std::fs::write(&terms_path, edited).unwrap();
 
-    let out = adr_owner(&dir, &["answer", &id, "A"], "");
+    let out = adr_answer(&dir, &id, "A");
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(err.contains("terms not approved"), "{}", err);
@@ -980,7 +980,7 @@ fn answer_refuses_a_section_with_no_terms_line() {
     let new_hash = mirror_section_hash(section_text);
     append_ledger_row(&dir, "asked", &id, &new_hash, "1.1 What is the authority?");
 
-    let out = adr_owner(&dir, &["answer", &id, "A"], "");
+    let out = adr_answer(&dir, &id, "A");
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
@@ -1031,7 +1031,7 @@ fn answer_refuses_a_malformed_terms_line() {
         "terms: authority",
     );
 
-    let out = adr_owner(&dir, &["answer", &id, "A"], "");
+    let out = adr_answer(&dir, &id, "A");
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
@@ -1060,7 +1060,7 @@ fn answer_refuses_a_terms_line_naming_a_nonexistent_term() {
         "terms: authority=00000000-0000-0000-0000-000000000000",
     );
 
-    let out = adr_owner(&dir, &["answer", &id, "A"], "");
+    let out = adr_answer(&dir, &id, "A");
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
@@ -1092,7 +1092,7 @@ fn answer_refuses_a_terms_line_naming_a_retired_term() {
     std::fs::write(dir.join("adrdom/terms.md"), retired_terms).unwrap();
     approve_terms_via_ledger(&dir, retired_terms);
 
-    let out = adr_owner(&dir, &["answer", &id, "A"], "");
+    let out = adr_answer(&dir, &id, "A");
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
@@ -1201,4 +1201,234 @@ fn owner_commands_refuse_without_a_tty_and_run_with_one() {
             stdout(&out)
         );
     }
+}
+
+// --- version on the answer (11be073c-ce91-44d8-833a-ef0b5e0b1672) ---------
+//
+// "show and the page print a short version of each asked question, answer
+// takes that version from the terminal and the page alike, and a version
+// that no longer matches refuses the answer": the three cases below cover
+// the terminal half (the page's own POST is covered in tests/serve_test.rs).
+
+// adr: 11be073c-ce91-44d8-833a-ef0b5e0b1672
+//
+// The happy path: `<id>@<version>`, with the version the owner would read
+// off `adr show` right now, answers exactly like a bare id used to.
+#[test]
+fn answer_with_the_current_version_succeeds() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let ids = extract_ids(&content);
+    let question_id = &ids[0];
+    let arg = id_at_version(&dir, question_id);
+
+    let out = adr_owner(&dir, &["answer", &arg, "A"], "");
+    assert!(out.status.success(), "answer failed: {}", stderr(&out));
+
+    let after = std::fs::read_to_string(&record).unwrap();
+    assert!(after.contains("**Answer:** A"), "{}", after);
+
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        ledger
+            .lines()
+            .any(|l| l.contains("\tanswered\t") && l.contains(question_id.as_str())),
+        "ledger missing answered row: {}",
+        ledger
+    );
+}
+
+// adr: 11be073c-ce91-44d8-833a-ef0b5e0b1672
+//
+// A bare id -- no `@version` at all -- is refused before it is even
+// looked up, and writes nothing: not the topic file, not the ledger.
+#[test]
+fn answer_with_a_bare_id_is_refused_and_writes_nothing() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let ids = extract_ids(&content);
+    let question_id = &ids[0];
+
+    let out = adr_owner(&dir, &["answer", question_id, "A"], "");
+    assert!(!out.status.success(), "a bare id must be refused");
+    let err = stderr(&out);
+    assert!(err.contains("no version given"), "{}", err);
+    assert!(
+        err.contains("owner runs: adr show"),
+        "expected the next move to name adr show: {}",
+        err
+    );
+
+    let after = std::fs::read_to_string(&record).unwrap();
+    assert!(
+        !after.contains("**Answer:**"),
+        "nothing should be written to the topic file: {}",
+        after
+    );
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        !ledger.lines().any(|l| l.contains("\tanswered\t")),
+        "nothing should be written to the ledger: {}",
+        ledger
+    );
+}
+
+// adr: 11be073c-ce91-44d8-833a-ef0b5e0b1672
+//
+// "a version that no longer matches refuses the answer": editing the
+// question's text and re-asking it moves its hash (and so its version) --
+// the version read before the edit is refused, and nothing is written.
+#[test]
+fn answer_with_a_stale_version_is_refused_and_writes_nothing() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let ids = extract_ids(&content);
+    let question_id = ids[0].clone();
+    let stale_version = current_version(&dir, &question_id);
+
+    // Edit the question's Problem text (inside the hashed range, before any
+    // Answer) and re-ask: the section's hash -- and so its version -- moves.
+    let edited = content.replace(
+        "names leaked into decisions.",
+        "names leaked into decisions, badly.",
+    );
+    std::fs::write(&record, edited).unwrap();
+    let reask = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(reask.status.success(), "reask failed: {}", stderr(&reask));
+    assert_ne!(
+        current_version(&dir, &question_id),
+        stale_version,
+        "the re-ask should have moved the version"
+    );
+
+    let stale_arg = format!("{}@{}", question_id, stale_version);
+    let out = adr_owner(&dir, &["answer", &stale_arg, "A"], "");
+    assert!(!out.status.success(), "a stale version must be refused");
+    let err = stderr(&out);
+    assert!(
+        err.contains("has moved since that version was read"),
+        "{}",
+        err
+    );
+
+    let after = std::fs::read_to_string(&record).unwrap();
+    assert!(
+        !after.contains("**Answer:**"),
+        "nothing should be written to the topic file: {}",
+        after
+    );
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        !ledger.lines().any(|l| l.contains("\tanswered\t")),
+        "nothing should be written to the ledger: {}",
+        ledger
+    );
+}
+
+// adr: 11be073c-ce91-44d8-833a-ef0b5e0b1672
+//
+// The version comparison is case-insensitive: an uppercased version (hex
+// case shouldn't matter) still answers successfully.
+#[test]
+fn answer_with_an_uppercased_version_still_succeeds() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let ids = extract_ids(&content);
+    let question_id = &ids[0];
+    let version = current_version(&dir, question_id);
+    let arg = format!("{}@{}", question_id, version.to_uppercase());
+
+    let out = adr_owner(&dir, &["answer", &arg, "A"], "");
+    assert!(out.status.success(), "answer failed: {}", stderr(&out));
+
+    let after = std::fs::read_to_string(&record).unwrap();
+    assert!(after.contains("**Answer:** A"), "{}", after);
+}
+
+// adr: 11be073c-ce91-44d8-833a-ef0b5e0b1672
+//
+// A version that is not exactly 8 hex characters is a malformed argument,
+// not a question that moved since it was read: it gets its own message,
+// distinct from `stale_version`, and writes nothing.
+#[test]
+fn answer_with_a_malformed_version_is_refused_with_its_own_message_and_writes_nothing() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let ids = extract_ids(&content);
+    let question_id = &ids[0];
+
+    for bad_version in ["zzzzzzzz", "abc", "1234567", "123456789"] {
+        let arg = format!("{}@{}", question_id, bad_version);
+        let out = adr_owner(&dir, &["answer", &arg, "A"], "");
+        assert!(
+            !out.status.success(),
+            "a malformed version must be refused: {}",
+            bad_version
+        );
+        let err = stderr(&out);
+        assert!(
+            err.contains("is not a valid version"),
+            "bad_version={}: {}",
+            bad_version,
+            err
+        );
+        assert!(
+            !err.contains("has moved since that version was read"),
+            "a malformed version is not the same failure as a stale one: {}",
+            err
+        );
+    }
+
+    let after = std::fs::read_to_string(&record).unwrap();
+    assert!(
+        !after.contains("**Answer:**"),
+        "nothing should be written to the topic file: {}",
+        after
+    );
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        !ledger.lines().any(|l| l.contains("\tanswered\t")),
+        "nothing should be written to the ledger: {}",
+        ledger
+    );
 }

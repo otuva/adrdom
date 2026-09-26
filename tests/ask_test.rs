@@ -95,7 +95,8 @@ fn ask_refuses_to_edit_an_answered_section() {
     let ids = extract_ids(&content);
     let question_id = &ids[0];
 
-    let answer_out = adr_owner(&dir, &["answer", question_id, "A"], "");
+    let answer_arg = id_at_version(&dir, question_id);
+    let answer_out = adr_owner(&dir, &["answer", &answer_arg, "A"], "");
     assert!(
         answer_out.status.success(),
         "answer failed: {}",
@@ -501,6 +502,11 @@ aliases: authority\n";
     );
 }
 
+// adr: 711a7636-9f4d-402d-ae62-265208adf0ac
+// `ask refuses a question none of whose words pair to a term`: no word of
+// the heading, problem, standard or options below pairs to the one term
+// approved ("authority"), so ask refuses instead of writing an empty terms
+// line, and the refusal names the agent's next move.
 #[test]
 fn ask_refuses_a_candidate_that_pairs_no_term() {
     let dir = init_repo();
@@ -509,6 +515,7 @@ fn ask_refuses_a_candidate_that_pairs_no_term() {
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", content);
     approve_minimal_terms(&dir, "authority");
+    let ledger_before = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
@@ -518,20 +525,35 @@ fn ask_refuses_a_candidate_that_pairs_no_term() {
         "{}",
         err
     );
+    // The refusal names the next move, and it is the agent's to make.
     assert!(err.contains("adds the term to adrdom/terms.md"), "{}", err);
+    assert!(err.contains("agent "), "{}", err);
 
-    // Nothing written.
+    // No terms line written to the record...
     let after = std::fs::read_to_string(&record).unwrap();
     assert_eq!(after, content);
+    assert!(!after.lines().any(|l| l.starts_with("terms:")));
+
+    // ...and no `asked` row written to the ledger.
+    let ledger_after = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert_eq!(
+        ledger_before, ledger_after,
+        "ask should write nothing to the ledger on refusal"
+    );
 }
 
 #[test]
-fn ask_writes_the_terms_line_with_a_plural_word() {
+fn ask_writes_the_terms_line_with_an_explicit_alias_plural() {
+    // adr: 521e6211-344a-4b56-a1aa-07be956b3b29 -- "decisions" pairs only
+    // because it is written as an explicit alias of "decision"; there is no
+    // implicit "s"/"es" plural match any more.
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     // The term must exist before `approve` runs, so it can resolve the
     // heading's own `depends: decision` line.
-    approve_minimal_terms(&dir, "decision");
+    let terms_content = "# Terms\n\n## decision\nid: 99999999-9999-9999-9999-999999999999\ndefinition: A fixture term for tests.\naliases: decisions\n";
+    std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
+    approve_terms_via_ledger(&dir, terms_content);
     let record = write_record(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
     approve_record(&dir, "adrdom/decisions/example.md");
 
@@ -543,7 +565,7 @@ fn ask_writes_the_terms_line_with_a_plural_word() {
         content
             .lines()
             .any(|l| l.starts_with("terms: ") && l.contains("decisions=99999999-9999-9999-9999-999999999999")),
-        "expected a plural match on the terms line: {}",
+        "expected the explicit alias to pair on the terms line: {}",
         content
     );
 }

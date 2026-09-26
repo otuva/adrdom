@@ -143,7 +143,7 @@ fn approve_and_answer_write_without_committing_and_the_next_commit_carries_them(
 
     // A real, owner-gated `answer`: writes the `**Answer:**` line into the
     // topic file and appends an `answered` ledger row.
-    let answer_out = adr_owner(&dir, &["answer", &id, "A"], "");
+    let answer_out = adr_answer(&dir, &id, "A");
     assert!(
         answer_out.status.success(),
         "answer failed: {}",
@@ -280,7 +280,7 @@ fn ledger_rows_from_ask_approve_answer_are_six_fields_with_correct_meaning() {
 
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
-    let answer_out = adr_owner(&dir, &["answer", &id, "A"], "");
+    let answer_out = adr_answer(&dir, &id, "A");
     assert!(answer_out.status.success(), "{}", stderr(&answer_out));
 
     let ledger_content = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();

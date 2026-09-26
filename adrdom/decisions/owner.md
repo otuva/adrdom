@@ -133,3 +133,5 @@ Standard: optimistic concurrency control has a write carry the version it was ba
 - C) No: answer takes only the letter and goes to the text last asked.
   Why: nothing more to carry.
   Costs: an edit made while the owner reads puts the answer on text the owner never read.
+
+**Answer:** A

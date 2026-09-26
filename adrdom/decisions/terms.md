@@ -159,6 +159,8 @@ Standard: controlled vocabulary indexing gives every indexed record at least one
   Why: a new subject is asked without waiting for a term.
   Costs: the answer stands on words whose meaning nothing fixes.
 
+**Answer:** A
+
 ### Does check fail a terms file that differs from its latest approval?
 depends: 7cf81ded-be48-4777-b83e-f8a2998c1ab5, 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 528fe6f6-6d77-42d5-9086-017048d1448d, 607cb55f-c0fa-40af-b290-c17f3ba0f812
 id: 03b2853b-4379-4f4b-9cbf-ec6e06aad7fd
@@ -177,3 +179,5 @@ Standard: change control gates the step that uses a change, such as merge, submi
 - C) No: check only reports a terms file that differs from its latest approval, and approve and ask work as in A.
   Why: a terms draft never holds a commit.
   Costs: a changed definition under answered questions lands unapproved, and agents build on it.
+
+**Answer:** A

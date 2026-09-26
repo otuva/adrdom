@@ -88,6 +88,21 @@ pub fn load_terms(root: &Path) -> Option<TermsFile> {
     terms::load(&path).ok()
 }
 
+/// `adrdom/state/terms.approved.md`: the exact bytes `approve
+/// adrdom/terms.md` last wrote to `adrdom/terms.md`, snapshotted in the same
+/// run as its ledger event (`actions::do_approve_terms`). `check`'s only
+/// source for what the terms file looked like at its latest approval (per
+/// "Does check fail a terms file that differs from its latest approval?") --
+/// unlike walking `git log`, this is a plain tracked file, so it survives a
+/// shallow checkout, a squash merge, or a rebase that a commit-by-commit
+/// history search would lose. `None` when the file has never been
+/// approved (no snapshot has ever been written) or can't be read.
+pub fn load_terms_snapshot(root: &Path) -> Option<TermsFile> {
+    let path = root.join("adrdom/state/terms.approved.md");
+    let content = std::fs::read_to_string(path).ok()?;
+    Some(terms::parse(&record::split_lines(&content)))
+}
+
 /// The three ways a caller that requires `adrdom/terms.md` (`ask`, `answer`)
 /// can find it: missing outright, present but unreadable/shape-invalid, or
 /// loaded cleanly.

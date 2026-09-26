@@ -111,3 +111,5 @@ Standard: a new lint rule lands on a clean tree, with every violation fixed befo
 - B) No: ban writes the hash at once and lists the files and lines that hold the word.
   Why: the ban takes effect at once.
   Costs: CI fails until every hit is cleaned, and a hit nobody can clean keeps it failing until the owner lifts the ban.
+
+**Answer:** A

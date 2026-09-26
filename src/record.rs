@@ -990,6 +990,21 @@ pub fn section_hash(lines: &[String], sec: &Section) -> String {
     sha256_hex(&text)
 }
 
+/// How many hex characters of `section_hash` the tool prints and checks as
+/// a question's "version" (per "Does an answer carry the version of the
+/// question the owner read?"): short enough to type on the `adr answer
+/// <id>@<version>` command, long enough that two different texts for the
+/// same question never collide by chance.
+pub const VERSION_LEN: usize = 8;
+
+/// The first `VERSION_LEN` hex characters of `section_hash(lines, sec)`:
+/// what `show` and the page print next to an asked question, and what
+/// `answer`/the page's POST handler check the owner's `<id>@<version>`
+/// against.
+pub fn version_of(lines: &[String], sec: &Section) -> String {
+    section_hash(lines, sec)[..VERSION_LEN].to_string()
+}
+
 /// For each option in `sec`, its letter plus the `  Why: ` and `  Costs: `
 /// lines immediately following it (up to the next non-blank, non-matching
 /// line — typically the next option, the answer line, or the section end).

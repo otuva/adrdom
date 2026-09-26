@@ -205,6 +205,11 @@ fn nav_has_terms_link() {
     let _ = child.wait();
 }
 
+// adr: 11be073c-ce91-44d8-833a-ef0b5e0b1672
+//
+// "answer takes that version from the terminal and the page alike": the
+// page's POST with the current version -- the same hidden `v` field
+// `render_next` writes -- answers, same as the terminal.
 #[test]
 fn post_answer_with_cookie_and_token_answers_and_redirects() {
     let dir = setup_repo_with_open_question();
@@ -216,7 +221,8 @@ fn post_answer_with_cookie_and_token_answers_and_redirects() {
     let (port, token) = read_open_line(&mut child);
     let cookie = format!("adr_t={}", token);
 
-    let form = format!("id={}&answer=A&t={}", question_id, token);
+    let version = current_version(&dir, &question_id);
+    let form = format!("id={}&v={}&answer=A&t={}", question_id, version, token);
     let resp = post(port, "/answer", Some(&cookie), &form);
     assert_eq!(resp.status, 302, "body: {}", resp.body);
     let location = header(&resp, "Location").expect("Location header");
@@ -233,6 +239,69 @@ fn post_answer_with_cookie_and_token_answers_and_redirects() {
             .any(|l| l.contains("\tanswered\t") && l.contains(question_id.as_str())),
         "ledger missing answered row: {}",
         ledger
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+// adr: 11be073c-ce91-44d8-833a-ef0b5e0b1672
+//
+// "a version that no longer matches refuses the answer", from the page:
+// editing the question and re-asking it moves its version; POSTing back
+// the stale one refuses and writes nothing, the same as the terminal.
+#[test]
+fn post_answer_with_a_stale_version_is_refused_and_writes_nothing() {
+    let dir = setup_repo_with_open_question();
+    let record_path = dir.join("adrdom/decisions/example.md");
+    let content = std::fs::read_to_string(&record_path).unwrap();
+    let ids = extract_ids(&content);
+    let question_id = ids[0].clone();
+    let stale_version = current_version(&dir, &question_id);
+
+    // Edit the question's Problem text (inside the hashed range, before any
+    // Answer) and re-ask: the section's hash -- and so its version -- moves.
+    let edited = content.replace(
+        "names leaked into decisions.",
+        "names leaked into decisions, badly.",
+    );
+    std::fs::write(&record_path, edited).unwrap();
+    let reask = adr(&dir, &["ask", record_path.to_str().unwrap()], &[], "");
+    assert!(reask.status.success(), "reask failed: {}", stderr(&reask));
+    assert_ne!(
+        current_version(&dir, &question_id),
+        stale_version,
+        "the re-ask should have moved the version"
+    );
+
+    let before_record = std::fs::read_to_string(&record_path).unwrap();
+    let before_ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let form = format!("id={}&v={}&answer=A&t={}", question_id, stale_version, token);
+    let resp = post(port, "/answer", Some(&cookie), &form);
+    assert_eq!(resp.status, 302, "body: {}", resp.body);
+    let location = header(&resp, "Location").expect("Location header");
+    let followed = get(port, location, Some(&cookie));
+    assert_eq!(followed.status, 200, "body: {}", followed.body);
+    assert!(
+        followed.body.contains("has moved since that version was read"),
+        "page did not surface the stale-version stop: {}",
+        followed.body
+    );
+
+    let after_record = std::fs::read_to_string(&record_path).unwrap();
+    let after_ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert_eq!(
+        before_record, after_record,
+        "the page must write nothing to the topic file on a stale version"
+    );
+    assert_eq!(
+        before_ledger, after_ledger,
+        "the page must write nothing to the ledger on a stale version"
     );
 
     let _ = child.kill();
@@ -358,10 +427,81 @@ fn get_next_shows_question_words_and_no_entry() {
         "no-term line: {}",
         no_entry_line
     );
-    // Nor does a plural of a paired term ("decisions" resolves the same
-    // term as "decision").
+    // "decisions" also never shows here, but only because "decision" is
+    // itself a shipped common word (assets/common_words.txt) whose "s"
+    // strips clean -- see get_next_no_entry_list_shows_an_unaliased_plural
+    // for the actual term-plural rule.
     assert!(
         !no_entry_line.contains("decisions"),
+        "no-term line: {}",
+        no_entry_line
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+const PLURAL_TERMS_MD: &str = "# Terms\n\n\
+## widget\n\
+id: 22222222-2222-2222-2222-222222222222\n\
+definition: A fixture term with no alias.\n\
+aliases: \n";
+
+const PLURAL_RECORD: &str = r#"# Topic
+
+Context prose.
+
+### 1.1 What counts as a widget?
+depends: widget
+
+Problem: the count of widgets is unclear.
+
+Standard: widgets must be counted plainly.
+
+- A) A widget is one unit.
+  Why: reasons.
+  Costs: costs.
+- B) A widget is a batch.
+  Why: other reasons.
+  Costs: other costs.
+"#;
+
+#[test]
+fn get_next_no_entry_list_shows_an_unaliased_plural() {
+    // adr: 521e6211-344a-4b56-a1aa-07be956b3b29 -- a word pairs to a term
+    // only by its name or an explicit alias (src/terms.rs); the "No term"
+    // list (src/view.rs no_entry_words) follows the same rule, so an
+    // un-aliased plural of a term name ("widgets" next to the term
+    // "widget", whose alias list is empty) still shows up as no-term.
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let record = write_record(&dir, "adrdom/decisions/example.md", PLURAL_RECORD);
+    let terms = write_record(&dir, "adrdom/terms.md", PLURAL_TERMS_MD);
+    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let resp = get(port, "/next", Some(&cookie));
+    assert_eq!(resp.status, 200, "body: {}", resp.body);
+
+    // The singular pairs to the term and shows under "Terms in this question".
+    assert!(resp.body.contains("<dt>widget"), "body: {}", resp.body);
+
+    let no_entry_start = resp.body.find("No term:").expect("No term line present");
+    let no_entry_line = &resp.body[no_entry_start..];
+    let no_entry_line = &no_entry_line[..no_entry_line.find("</p>").unwrap_or(no_entry_line.len())];
+    assert!(
+        no_entry_line.contains("widgets"),
         "no-term line: {}",
         no_entry_line
     );
@@ -482,7 +622,7 @@ fn terms_article_lists_entries_with_dependents_count() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let question_id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &question_id, "A"], "")
+    assert!(adr_answer(&dir, &question_id, "A")
         .status
         .success());
 
@@ -851,7 +991,7 @@ fn page_answer_and_cli_answer_write_the_same_shaped_file_line_and_ledger_row_and
     let page_hash = asked_hash(&page_id);
 
     // The CLI path: `adr answer <id> A`.
-    let answer_out = adr_owner(&dir, &["answer", &cli_id, "A"], "");
+    let answer_out = adr_answer(&dir, &cli_id, "A");
     assert!(
         answer_out.status.success(),
         "cli answer failed: {}",
@@ -862,7 +1002,10 @@ fn page_answer_and_cli_answer_write_the_same_shaped_file_line_and_ledger_row_and
     let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
     let (port, token) = read_open_line(&mut child);
     let cookie = format!("adr_t={}", token);
-    let form = format!("id={}&answer=A&t={}", page_id, token);
+    // Per "Does an answer carry the version of the question the owner
+    // read?": the page's POST carries the version, the same 8 hex
+    // characters computed from `page_hash` above.
+    let form = format!("id={}&v={}&answer=A&t={}", page_id, &page_hash[..8], token);
     let resp = post(port, "/answer", Some(&cookie), &form);
     assert_eq!(resp.status, 302, "body: {}", resp.body);
 
@@ -910,7 +1053,7 @@ fn page_answer_and_cli_answer_write_the_same_shaped_file_line_and_ledger_row_and
 
     // Same stop, both ways: re-answering an already-answered id refuses,
     // with the identical "is already answered" text, whichever side asks.
-    let cli_stop = adr_owner(&dir, &["answer", &cli_id, "B"], "");
+    let cli_stop = adr_answer(&dir, &cli_id, "B");
     assert!(!cli_stop.status.success());
     let cli_stop_err = stderr(&cli_stop);
     assert!(
@@ -1176,7 +1319,7 @@ fn page_shows_question_options_and_the_decisions_list() {
     // with the sentence the owner picked.
     let content = std::fs::read_to_string(dir.join("adrdom/decisions/example.md")).unwrap();
     let question_id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &question_id, "A"], "")
+    assert!(adr_answer(&dir, &question_id, "A")
         .status
         .success());
 
@@ -1268,7 +1411,7 @@ fn page_prints_the_tiers_as_the_topic_advances() {
 
     let content = std::fs::read_to_string(&record).unwrap();
     let q1_id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &q1_id, "A"], "")
+    assert!(adr_answer(&dir, &q1_id, "A")
         .status
         .success());
 
@@ -1321,7 +1464,7 @@ fn page_shows_a_heading_depends_entry_by_name_not_id() {
 
     let content = std::fs::read_to_string(&record).unwrap();
     let q1_id = extract_ids(&content)[0].clone();
-    assert!(adr_owner(&dir, &["answer", &q1_id, "A"], "")
+    assert!(adr_answer(&dir, &q1_id, "A")
         .status
         .success());
 
@@ -1379,7 +1522,11 @@ fn post_answer_through_the_page_writes_the_answer_to_the_file_and_ledger() {
     let (port, token) = read_open_line(&mut child);
     let cookie = format!("adr_t={}", token);
 
-    let form = format!("id={}&answer=A&t={}", question_id, token);
+    // Per "Does an answer carry the version of the question the owner
+    // read?": the page's POST carries the version shown on the form it
+    // displayed.
+    let version = current_version(&dir, &question_id);
+    let form = format!("id={}&v={}&answer=A&t={}", question_id, version, token);
     let resp = post(port, "/answer", Some(&cookie), &form);
     assert_eq!(resp.status, 302, "body: {}", resp.body);
 
@@ -1437,7 +1584,7 @@ fn page_shows_a_reverted_cross_file_depends_line_as_not_approved() {
     let ask_a = adr(&dir, &["ask", record_a.to_str().unwrap()], &[], "");
     assert!(ask_a.status.success(), "asking A failed: {}", stderr(&ask_a));
     assert!(
-        adr_owner(&dir, &["answer", &a_id, "A"], "").status.success(),
+        adr_answer(&dir, &a_id, "A").status.success(),
         "answering A failed"
     );
 

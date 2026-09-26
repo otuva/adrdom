@@ -60,6 +60,13 @@ pub struct WordPair {
 pub struct QuestionView {
     pub id: Option<String>,
     pub heading: String,
+    /// The first `record::VERSION_LEN` hex characters of this section's
+    /// current hash (per "Does an answer carry the version of the question
+    /// the owner read?"): what `show` and the page print next to an asked
+    /// question, and what the page's answer form carries as its hidden `v`
+    /// field. Computed for every question regardless of state; only shown
+    /// to the owner while the question is `Open`.
+    pub version: String,
     /// The section's derived tier (per "Does the tool derive tiers from
     /// the depends lines?"), or `None` when tier derivation
     /// failed for the file (`RecordFile::derive_error`).
@@ -80,7 +87,7 @@ pub struct QuestionView {
     pub words: Vec<WordPair>,
     /// Distinct words (lowercased) in the section text that pair no term:
     /// not common English, not a uuid or number, not shorter than three
-    /// letters, and not already covered (plural rule included) by `words`.
+    /// letters, and not already covered by `words`.
     pub no_entry: Vec<String>,
 }
 
@@ -341,9 +348,11 @@ fn open_tier_and_waits_on(rf: &RecordFile, led: &Ledger) -> (Option<usize>, Opti
 /// Every word=term pairing for `sec` (from its terms line if it has one,
 /// else computed live over its text) plus the distinct words in that text
 /// that pair no term (7.9): not common English, not a uuid or number, not
-/// shorter than three letters, and not covered by a pairing (the plural
-/// rule applies: a word whose trailing "s"/"es" strips to a current name or
-/// alias counts as covered even if it isn't itself a pairing's word).
+/// shorter than three letters, and not covered by a pairing. A word pairs
+/// to a term only by its name or an explicit alias
+/// (521e6211-344a-4b56-a1aa-07be956b3b29, mirrored from `terms::resolve`):
+/// an un-aliased plural of a term name is not covered, and still shows up
+/// here as "no term".
 fn section_words(
     rf: &RecordFile,
     sec: &Section,
@@ -369,7 +378,7 @@ fn section_words(
         }
     }
 
-    let no_entry = no_entry_words(&text, &pairs, terms_list);
+    let no_entry = no_entry_words(&text, &pairs);
     (words, no_entry)
 }
 
@@ -468,18 +477,11 @@ fn is_common_word(w: &str) -> bool {
     false
 }
 
-fn no_entry_words(text: &str, pairs: &[(String, String)], terms_list: &[Term]) -> Vec<String> {
+fn no_entry_words(text: &str, pairs: &[(String, String)]) -> Vec<String> {
     let mut pair_words: HashSet<String> = HashSet::new();
     for (w, _) in pairs {
         for part in w.to_lowercase().split_whitespace() {
             pair_words.insert(part.to_string());
-        }
-    }
-    let mut name_alias: HashSet<String> = HashSet::new();
-    for t in terms_list {
-        name_alias.insert(t.name.trim().to_lowercase());
-        for a in &t.aliases {
-            name_alias.insert(a.trim().to_lowercase());
         }
     }
 
@@ -502,16 +504,6 @@ fn no_entry_words(text: &str, pairs: &[(String, String)], terms_list: &[Term]) -
                 continue;
             }
             if pair_words.contains(&w) {
-                continue;
-            }
-            let plural_covered = w
-                .strip_suffix("es")
-                .map(|s| name_alias.contains(s))
-                .unwrap_or(false)
-                || w.strip_suffix('s')
-                    .map(|s| name_alias.contains(s))
-                    .unwrap_or(false);
-            if plural_covered {
                 continue;
             }
             found.insert(w);
@@ -562,10 +554,12 @@ fn build_question_view(
         .map(|v| v.len())
         .unwrap_or(0);
     let (words, no_entry) = section_words(rf, sec, terms_list);
+    let version = record::version_of(&rf.lines, sec);
 
     QuestionView {
         id: sec.id.clone(),
         heading: sec.heading_text.clone(),
+        version,
         tier,
         depends,
         state,
