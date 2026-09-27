@@ -73,7 +73,7 @@ pub fn context_approved(led: &Ledger, rf: &RecordFile, rel: &str) -> bool {
 /// True when the terms file's current hash matches the latest `terms`
 /// ledger row for `adrdom/terms.md`.
 pub fn terms_approved(led: &Ledger, tf: &TermsFile) -> bool {
-    match led.latest_for_path("terms", "adrdom/terms.md") {
+    match led.latest_for_path("terms", crate::repo::TERMS_PATH) {
         Some(row) => row.hash == terms::file_hash(tf),
         None => false,
     }
@@ -82,7 +82,7 @@ pub fn terms_approved(led: &Ledger, tf: &TermsFile) -> bool {
 /// Loads `adrdom/terms.md` under `root`, or `None` when the repo has no
 /// terms file at all (terms are optional).
 pub fn load_terms(root: &Path) -> Option<TermsFile> {
-    let path = root.join("adrdom/terms.md");
+    let path = root.join(crate::repo::TERMS_PATH);
     if !path.exists() {
         return None;
     }
@@ -96,9 +96,9 @@ pub fn load_terms(root: &Path) -> Option<TermsFile> {
 /// `serve`) keeps calling `load_terms`, which always wants the working
 /// tree.
 pub fn load_terms_via(root: &Path, source: &crate::repo::Source) -> Option<TermsFile> {
-    let content = source.read(root, "adrdom/terms.md")?;
+    let content = source.read(root, crate::repo::TERMS_PATH)?;
     let mut tf = terms::parse(&record::split_lines(&content));
-    tf.path = root.join("adrdom/terms.md");
+    tf.path = root.join(crate::repo::TERMS_PATH);
     Some(tf)
 }
 
@@ -116,7 +116,7 @@ pub fn load_terms_via(root: &Path, source: &crate::repo::Source) -> Option<Terms
 /// never been approved (no snapshot has ever been written) or can't be
 /// read this way.
 pub fn approved_terms(root: &Path, source: &crate::repo::Source) -> Option<TermsFile> {
-    let content = source.read(root, "adrdom/state/terms.approved.md")?;
+    let content = source.read(root, crate::repo::TERMS_APPROVED_PATH)?;
     Some(terms::parse(&record::split_lines(&content)))
 }
 
@@ -331,7 +331,7 @@ pub enum TermsLoad {
 /// differently on each (`ask` 3.1/3.2, `answer` 6) don't have to duplicate
 /// the `Path::exists` check `load_terms` collapses away.
 pub fn load_terms_checked(root: &Path) -> TermsLoad {
-    let path = root.join("adrdom/terms.md");
+    let path = root.join(crate::repo::TERMS_PATH);
     if !path.exists() {
         return TermsLoad::Missing;
     }

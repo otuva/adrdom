@@ -17,9 +17,10 @@ use std::path::Path;
 /// disk (per "Does check at a commit read the staged files?").
 pub fn test_index(root: &Path, source: &Source) -> HashMap<String, Vec<String>> {
     let mut test_ids: HashMap<String, Vec<String>> = HashMap::new();
+    let adrdom_prefix = format!("{}/", repo::ADRDOM_DIR);
     if let Some(list) = repo::git(root, &["ls-files"]) {
         for path in list.lines() {
-            if path.starts_with("adrdom/") {
+            if path.starts_with(&adrdom_prefix) {
                 continue;
             }
             let Some(content) = source.read(root, path) else {

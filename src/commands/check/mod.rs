@@ -64,7 +64,7 @@ fn build(
     // `--staged` itself.
     let source = Source::for_check(staged, message.is_some());
 
-    let ledger_rel = "adrdom/state/ledger.tsv";
+    let ledger_rel = repo::LEDGER_PATH;
     let ledger_content = source.read(root, ledger_rel).unwrap_or_default();
     let led = crate::ledger::parse(&ledger_content);
 

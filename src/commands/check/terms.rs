@@ -49,11 +49,11 @@ pub(super) fn check_terms(
     let tf = terms::parse(&lines);
 
     // A missing id is not a shape error the agent can fix: only approve
-    // mints ids. It is reported once, as part of the approval state below,
-    // and only fails when a topic file exists -- never as one of
+    // mints ids. It is reported once, as part of the approval state below
+    // (`has_records` plays no part in that path) -- never as one of
     // `terms_refusals`' shape messages, which run on a minted copy (see
     // below) and so never see it.
-    let missing_ids = tf.errors.iter().any(|e| e.contains("missing id"));
+    let missing_ids = !tf.missing_ids().is_empty();
 
     let approved = state::terms_approved(led, &tf);
 

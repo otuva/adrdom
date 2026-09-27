@@ -4,9 +4,10 @@ use std::io::Write;
 use std::path::Path;
 
 /// Where the hashed ban list lives, relative to the repo root: the one
-/// literal for this path, used by every site that reads or writes it
-/// (`ban`, `unban`, `ask`, `check --banned`, `terms_refusals`, `install`).
-pub const BAN_LIST: &str = "adrdom/state/banned.sha256";
+/// constant for this path (defined in `repo.rs` alongside every other
+/// governed path), used by every site that reads or writes it (`ban`,
+/// `unban`, `ask`, `check --banned`, `terms_refusals`, `install`).
+pub use crate::repo::BAN_LIST;
 
 /// Same tokenization for `ban` and `check --banned`: the whole trimmed,
 /// lowercased line, plus each maximal run of Unicode alphanumerics in it

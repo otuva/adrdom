@@ -54,8 +54,8 @@ pub fn run(claude: bool, codex: bool) -> i32 {
         }
     };
 
-    let decisions = root.join("adrdom/decisions");
-    let state = root.join("adrdom/state");
+    let decisions = root.join(repo::DECISIONS_DIR);
+    let state = root.join(repo::STATE_DIR);
     if let Err(e) = fs::create_dir_all(&decisions) {
         eprintln!(
             "install: {}",
@@ -71,7 +71,7 @@ pub fn run(claude: bool, codex: bool) -> i32 {
         return 1;
     }
 
-    create_if_missing(&state.join("ledger.tsv"), "");
+    create_if_missing(&root.join(repo::LEDGER_PATH), "");
     create_if_missing(&root.join(banned::BAN_LIST), "");
 
     let mut messages = Vec::new();
@@ -82,7 +82,7 @@ pub fn run(claude: bool, codex: bool) -> i32 {
         Err(e) => {
             eprintln!(
                 "install: {}",
-                msg::write_failed("adrdom/state/terms.approved.md", e, retry())
+                msg::write_failed(repo::TERMS_APPROVED_PATH, e, retry())
             );
             return 1;
         }
@@ -163,11 +163,11 @@ pub fn run(claude: bool, codex: bool) -> i32 {
 /// nothing is written: a snapshot restored from the wrong text would be
 /// worse than none, since `check` would then trust it as ground truth.
 fn backfill_terms_snapshot(root: &Path) -> Result<Option<String>, String> {
-    let snapshot_path = root.join("adrdom/state/terms.approved.md");
+    let snapshot_path = root.join(repo::TERMS_APPROVED_PATH);
     if snapshot_path.exists() {
         return Ok(None);
     }
-    let terms_path = root.join("adrdom/terms.md");
+    let terms_path = root.join(repo::TERMS_PATH);
     if !terms_path.exists() {
         return Ok(None);
     }
@@ -176,7 +176,7 @@ fn backfill_terms_snapshot(root: &Path) -> Result<Option<String>, String> {
         Err(_) => return Ok(None),
     };
 
-    let ledger_path = root.join("adrdom/state/ledger.tsv");
+    let ledger_path = root.join(repo::LEDGER_PATH);
     let led = ledger::read(&ledger_path);
     if !crate::state::terms_approved(&led, &tf) {
         return Ok(None);

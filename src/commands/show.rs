@@ -20,7 +20,7 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
             return 1;
         }
     };
-    let ledger_path = root.join("adrdom/state/ledger.tsv");
+    let ledger_path = root.join(repo::LEDGER_PATH);
     let led = ledger::read(&ledger_path);
     let terms_list: Vec<Term> = state::load_terms(&root).map(|tf| tf.terms).unwrap_or_default();
     // A depends `Id` entry is printed as words -- a heading in this file, a

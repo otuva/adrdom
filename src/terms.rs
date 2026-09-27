@@ -33,6 +33,16 @@ pub struct TermsFile {
     pub errors: Vec<String>,
 }
 
+impl TermsFile {
+    /// Every entry with no `id` field at all (per `parse`'s "missing id"
+    /// error): the typed form of that same fact, so a caller that only
+    /// needs to know whether one exists doesn't have to match on the error
+    /// text.
+    pub fn missing_ids(&self) -> Vec<&Term> {
+        self.terms.iter().filter(|t| t.id.is_none()).collect()
+    }
+}
+
 /// `"key:value"` or `"key: value"`, trimmed: unlike `record::kv`, the space
 /// after the colon is optional, since a real `adrdom/terms.md` field with
 /// an empty value is written with no trailing space at all (e.g. an

@@ -20,7 +20,7 @@ pub fn run(record_path: PathBuf) -> i32 {
             return 1;
         }
     };
-    let ledger_path = root.join("adrdom/state/ledger.tsv");
+    let ledger_path = root.join(repo::LEDGER_PATH);
     let led = ledger::read(&ledger_path);
     let rel = state::rel_path(&root, &record_path);
 

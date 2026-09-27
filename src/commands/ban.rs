@@ -39,7 +39,7 @@ pub fn run(term: Option<String>) -> i32 {
         }
     };
     let banned_path = root.join(banned::BAN_LIST);
-    let ledger_path = root.join("adrdom/state/ledger.tsv");
+    let ledger_path = root.join(repo::LEDGER_PATH);
 
     let uuid: Option<String> = match &term {
         Some(name) => match resolve_term_uuid(&root, name) {

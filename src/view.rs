@@ -632,7 +632,7 @@ fn build_terms_view(root: &Path, led: &Ledger, tf: terms::TermsFile) -> TermsVie
 
     let count = tf.terms.len();
     TermsView {
-        path: "adrdom/terms.md".to_string(),
+        path: repo::TERMS_PATH.to_string(),
         approved,
         count,
         errors,
@@ -642,7 +642,7 @@ fn build_terms_view(root: &Path, led: &Ledger, tf: terms::TermsFile) -> TermsVie
 }
 
 pub fn snapshot(root: &Path) -> Snapshot {
-    let ledger_path = root.join("adrdom/state/ledger.tsv");
+    let ledger_path = root.join(repo::LEDGER_PATH);
     let led = ledger::read(&ledger_path);
     let test_idx = check::test_index(root, &crate::repo::Source::WorkingTree);
 
@@ -760,8 +760,8 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ));
-        std::fs::create_dir_all(dir.join("adrdom/decisions")).unwrap();
-        std::fs::create_dir_all(dir.join("adrdom/state")).unwrap();
+        std::fs::create_dir_all(dir.join(repo::DECISIONS_DIR)).unwrap();
+        std::fs::create_dir_all(dir.join(repo::STATE_DIR)).unwrap();
         Command::new("git")
             .current_dir(&dir)
             .args(["init", "-q"])
@@ -777,7 +777,7 @@ mod tests {
             .args(["config", "user.name", "Test"])
             .output()
             .unwrap();
-        std::fs::write(dir.join("adrdom/state/ledger.tsv"), "").unwrap();
+        std::fs::write(dir.join(repo::LEDGER_PATH), "").unwrap();
         dir
     }
 
@@ -788,7 +788,7 @@ mod tests {
     }
 
     fn append_row(dir: &Path, event: &str, id: &str, hash: &str, detail: &str) {
-        let path = dir.join("adrdom/state/ledger.tsv");
+        let path = dir.join(repo::LEDGER_PATH);
         let mut existing = std::fs::read_to_string(&path).unwrap_or_default();
         existing.push_str(&format!(
             "2024-01-01T00:00:00Z\t{}\t{}\t{}\t{}\n",
@@ -818,7 +818,7 @@ Standard: s2.\n\n\
         append_row(&dir, "asked", "id-1", "hash-1", "1.1 First question?");
 
         let rf = record::load(&record).unwrap();
-        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let led = ledger::read(&dir.join(repo::LEDGER_PATH));
 
         // 1.1 has id-1, asked -> Open.
         let sec1 = rf
@@ -842,7 +842,7 @@ Standard: s2.\n\n\
     #[test]
     fn qstate_answered_superseded_and_withdrawn() {
         let dir = temp_repo();
-        let led_path = dir.join("adrdom/state/ledger.tsv");
+        let led_path = dir.join(repo::LEDGER_PATH);
         append_row(&dir, "asked", "id-a", "h", "A?");
         append_row(&dir, "answered", "id-a", "h", "A");
         append_row(&dir, "asked", "id-b", "h", "B?");
@@ -910,7 +910,7 @@ Standard: s2.\n\n\
         let content = "# Topic\n\n### 1.1 Not written yet?\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
         let rf = record::load(&record).unwrap();
-        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let led = ledger::read(&dir.join(repo::LEDGER_PATH));
         assert_eq!(qstate(&led, &rf.sections[0]), QState::Skeleton);
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -1022,7 +1022,7 @@ Standard: s2.\n\n\
         let dir = temp_repo();
         let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP);
         let rf = record::load(&record).unwrap();
-        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let led = ledger::read(&dir.join(repo::LEDGER_PATH));
         let test_idx = HashMap::new();
 
         // Nothing approved yet, nothing answered: not done.
@@ -1060,7 +1060,7 @@ Standard: s2.\n\n\
             "adrdom/decisions/example.md",
         );
         append_row(&dir, "context", "-", &ctx_h, "adrdom/decisions/example.md");
-        let led2 = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let led2 = ledger::read(&dir.join(repo::LEDGER_PATH));
         assert!(
             rf2.sections.iter().all(|s| s.answer_line.is_some()),
             "fixture should have every section answered"
@@ -1126,7 +1126,7 @@ Standard: s2.\n\n\
             "adrdom/decisions/example.md",
         );
         append_row(&dir, "context", "-", &ctx_h, "adrdom/decisions/example.md");
-        let led2 = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let led2 = ledger::read(&dir.join(repo::LEDGER_PATH));
         assert!(
             rf2.sections.iter().all(|s| s.answer_line.is_some()),
             "fixture should have every section carrying an Answer line (one letter, one refused)"
@@ -1234,7 +1234,7 @@ Standard: s2.\n\n\
         let dir = temp_repo();
         let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP);
         let rf = record::load(&record).unwrap();
-        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let led = ledger::read(&dir.join(repo::LEDGER_PATH));
         let test_idx = HashMap::new();
 
         let path = state::rel_path(&dir, &rf.path);
@@ -1293,7 +1293,7 @@ Standard: s2.\n\n\
         append_row(&dir, "answered", "id-root", "h", "B");
 
         let rf = record::load(&record).unwrap();
-        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let led = ledger::read(&dir.join(repo::LEDGER_PATH));
 
         let notes = moot_notes(&rf, &led);
         assert_eq!(
@@ -1329,7 +1329,7 @@ Standard: s2.\n\n\
         append_row(&dir, "answered", "id-root", "h", "A");
 
         let rf = record::load(&record).unwrap();
-        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let led = ledger::read(&dir.join(repo::LEDGER_PATH));
 
         assert!(moot_notes(&rf, &led).is_empty());
 

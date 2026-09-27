@@ -131,7 +131,7 @@ struct Located {
 }
 
 fn locate_asked(root: &Path, id: &str, version: &str) -> Result<Located, String> {
-    let ledger_path = root.join("adrdom/state/ledger.tsv");
+    let ledger_path = root.join(crate::repo::LEDGER_PATH);
     let led = ledger::read(&ledger_path);
 
     let mut found = None;
@@ -210,7 +210,7 @@ fn finish_answer(
     answer_text: &str,
     rows: Vec<ledger::Row>,
 ) -> Result<(), String> {
-    let ledger_path = root.join("adrdom/state/ledger.tsv");
+    let ledger_path = root.join(crate::repo::LEDGER_PATH);
 
     let hash_end = {
         let sec = &rf.sections[idx];
@@ -374,11 +374,11 @@ pub fn do_refuse(root: &Path, id: &str, version: &str) -> Result<Outcome, String
 }
 
 pub fn do_approve(root: &Path, file: &Path) -> Result<Outcome, String> {
-    let ledger_path = root.join("adrdom/state/ledger.tsv");
+    let ledger_path = root.join(crate::repo::LEDGER_PATH);
     let led = ledger::read(&ledger_path);
     let rel = state::rel_path(root, file);
 
-    if rel == "adrdom/terms.md" {
+    if rel == crate::repo::TERMS_PATH {
         do_approve_terms(root, file, &led, &ledger_path)
     } else {
         do_approve_record(root, file, &rel, &led, &ledger_path)
@@ -447,9 +447,7 @@ pub fn terms_refusals(
     // Step 3: definition pairings; a self-pairing or any cycle refuses.
     // Every cycle is reported, not just the first.
     for cycle in terms::cycles(tf) {
-        let mut chain = cycle.clone();
-        chain.push(cycle[0].clone());
-        refusals.push(msg::circular_definition(&chain.join(" -> ")));
+        refusals.push(msg::circular_definition(&msg::cycle_chain(&cycle)));
     }
 
     // Fresh definition pairs for every term (never re-derived from a stale
@@ -536,10 +534,7 @@ pub fn terms_refusals(
                 banned_entries.into_iter().collect();
             let text = tf.lines.join("\n");
             for hit in crate::banned::hits(&text, &hash_map, &tf.terms) {
-                let suffix = hit
-                    .term
-                    .map(|n| format!(" (term {})", n))
-                    .unwrap_or_default();
+                let suffix = msg::term_suffix(hit.term.as_deref());
                 refusals.push(msg::terms_banned_word(hit.line, &suffix));
             }
         }
@@ -574,29 +569,21 @@ fn do_approve_terms(
 ) -> Result<Outcome, String> {
     // Step 1: parse.
     let mut tf = terms::load(file).map_err(|e| {
-        format!(
-            "approve: {}",
-            msg::read_failed(
-                &file.display().to_string(),
-                e,
-                Next::owner_runs("adr approve adrdom/terms.md again"),
-            )
-        )
+        msg::approve_prefixed(msg::read_failed(
+            &file.display().to_string(),
+            e,
+            Next::owner_runs("adr approve adrdom/terms.md again"),
+        ))
     })?;
 
     // Every topic file, parsed once here and reused both by
     // `terms_refusals` (no re-reading them from disk itself) and by
     // step 7's dependent report below.
-    let mut records: Vec<RecordFile> = Vec::new();
-    for f in &repo::list_decision_files(root) {
-        if let Ok(rf) = record::load_in(root, f) {
-            records.push(rf);
-        }
-    }
+    let records: Vec<RecordFile> = record::load_all(root);
 
     // The pre-existing latest `terms` row, captured before anything below
     // can change what "latest" means, for step 7's before/after compare.
-    let prev_terms_row = led.latest_for_path("terms", "adrdom/terms.md").cloned();
+    let prev_terms_row = led.latest_for_path("terms", crate::repo::TERMS_PATH).cloned();
     // The snapshot as it stood before this approve overwrites it, for the
     // same before/after compare -- read once, up front, before step 6's
     // write (see below) replaces it with this run's own content.
@@ -612,7 +599,7 @@ fn do_approve_terms(
     if !refusals.is_empty() {
         let msg = refusals
             .iter()
-            .map(|r| format!("approve: {}", r))
+            .map(msg::approve_prefixed)
             .collect::<Vec<_>>()
             .join("\n");
         return Err(msg);
@@ -625,14 +612,11 @@ fn do_approve_terms(
     tf.lines = new_lines;
 
     terms::save(&tf).map_err(|e| {
-        format!(
-            "approve: {}",
-            msg::write_failed(
-                &file.display().to_string(),
-                e,
-                Next::owner_runs("adr approve adrdom/terms.md again"),
-            )
-        )
+        msg::approve_prefixed(msg::write_failed(
+            &file.display().to_string(),
+            e,
+            Next::owner_runs("adr approve adrdom/terms.md again"),
+        ))
     })?;
 
     let mut out: Vec<String> = Vec::new();
@@ -653,18 +637,15 @@ fn do_approve_terms(
     // doesn't yet have.
     let write_snapshot = || -> Result<(), String> {
         std::fs::write(
-            root.join("adrdom/state/terms.approved.md"),
+            root.join(crate::repo::TERMS_APPROVED_PATH),
             tf.lines.join("\n"),
         )
         .map_err(|e| {
-            format!(
-                "approve: {}",
-                msg::write_failed(
-                    "adrdom/state/terms.approved.md",
-                    e,
-                    Next::owner_runs("adr approve adrdom/terms.md again"),
-                )
-            )
+            msg::approve_prefixed(msg::write_failed(
+                crate::repo::TERMS_APPROVED_PATH,
+                e,
+                Next::owner_runs("adr approve adrdom/terms.md again"),
+            ))
         })
     };
 
@@ -680,18 +661,15 @@ fn do_approve_terms(
             event: "terms".to_string(),
             id: "-".to_string(),
             hash: terms::file_hash(&tf),
-            detail: "adrdom/terms.md".to_string(),
+            detail: crate::repo::TERMS_PATH.to_string(),
             version: crate::version::VERSION.to_string(),
         };
         ledger::append(ledger_path, &[row]).map_err(|e| {
-            format!(
-                "approve: {}",
-                msg::update_failed(
-                    "ledger",
-                    e,
-                    Next::owner_runs("adr approve adrdom/terms.md again"),
-                )
-            )
+            msg::approve_prefixed(msg::update_failed(
+                "ledger",
+                e,
+                Next::owner_runs("adr approve adrdom/terms.md again"),
+            ))
         })?;
         write_snapshot()?;
         out.push(msg::terms_approved_now());
@@ -999,12 +977,12 @@ fn do_approve_record(
     })?;
 
     // Refuse up front, before a single `depends:` entry is resolved, when
-    // adrdom/terms.md is missing, shape-broken, or not yet approved (the
-    // review finding this fixes): the same gate `ask` applies via
-    // `require_terms` (`do_answer`/`do_refuse` use `terms_for_answer`). Without this, a real term with no id minted yet (an
-    // unapproved terms.md mints nothing to disk) silently fails to resolve
-    // and every depends entry naming it refuses "which is no term" instead
-    // of the one clear "terms not approved" line.
+    // adrdom/terms.md is missing, shape-broken, or not yet approved: the
+    // same gate `ask` applies via `require_terms` (`do_answer`/`do_refuse`
+    // use `terms_for_answer`). Without this, a real term with no id minted
+    // yet (an unapproved terms.md mints nothing to disk) silently fails to
+    // resolve and every depends entry naming it refuses "which is no term"
+    // instead of the one clear "terms not approved" line.
     let tf = require_terms(root, led, rel).map_err(msg::approve_prefixed)?;
     let terms_list: &[terms::Term] = &tf.terms;
     // Built once per command run (not per depends entry): `resolve_dep`
@@ -1313,7 +1291,7 @@ fn rewrite_dep_entry(
 
 pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
     let banned_path = root.join(crate::banned::BAN_LIST);
-    let ledger_path = root.join("adrdom/state/ledger.tsv");
+    let ledger_path = root.join(crate::repo::LEDGER_PATH);
 
     let mut to_remove: HashSet<String> = HashSet::new();
     for line in input.lines() {

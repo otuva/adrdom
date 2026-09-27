@@ -150,12 +150,12 @@ pub(crate) fn collect_targets(
 
 fn skip_path(p: &str) -> bool {
     p == banned::BAN_LIST
-        || p == "adrdom/state/ledger.tsv"
+        || p == repo::LEDGER_PATH
         // A banned word removed from adrdom/terms.md would otherwise stay
         // visible in the snapshot (`adrdom/state/terms.approved.md`) until
         // the next approve: skipped here the same way ledger.tsv is, since
         // it holds terms text from a point in time, not an agent's own
         // words to scan.
-        || p == "adrdom/state/terms.approved.md"
+        || p == repo::TERMS_APPROVED_PATH
         || p.starts_with(".git/")
 }
