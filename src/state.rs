@@ -143,25 +143,20 @@ pub struct DependentEntry {
 }
 
 /// Every current decision's, and (when `include_terms`) every non-retired
-/// term's, declared use of a term in `tf` -- the widest reach any of the
-/// five readers of this need: a current decision's own `terms:` line
-/// always counts; a `depends:` entry naming a term directly counts too when
+/// term's, declared use of a term in `tf` -- the widest reach any of its
+/// three readers need: a current decision's own `terms:` line always
+/// counts; a `depends:` entry naming a term directly counts too when
 /// `include_depends_ids` is set (skipped when the same id is already on
 /// that decision's terms line, so retiring a term used both ways earns one
-/// entry, not two); a non-retired term's own recorded pairing counts when
-/// `include_terms` is set, from `term_pairs_override` when the caller
-/// supplies one (`approve`'s step 7, reporting against pairs about to be
-/// written rather than what is already on disk, indexed the same as
-/// `tf.terms`) or from the term's own `terms_line` otherwise. Never
-/// transitive on its own -- these pairs are not walked further through the
-/// term graph.
+/// entry, not two); a non-retired term's own recorded pairing, from its own
+/// `terms_line`, counts when `include_terms` is set. Never transitive on
+/// its own -- these pairs are not walked further through the term graph.
 pub fn dependent_entries(
     records: &[RecordFile],
     led: &Ledger,
     tf: &TermsFile,
     include_depends_ids: bool,
     include_terms: bool,
-    term_pairs_override: Option<&[Vec<(String, String)>]>,
 ) -> Vec<DependentEntry> {
     let mut out = Vec::new();
     for rf in records {
@@ -208,18 +203,15 @@ pub fn dependent_entries(
         }
     }
     if include_terms {
-        for (i, t) in tf.terms.iter().enumerate() {
+        for t in tf.terms.iter() {
             if t.retired {
                 continue;
             }
-            let pairs = match term_pairs_override {
-                Some(fresh) => fresh.get(i).cloned().unwrap_or_default(),
-                None => t
-                    .terms_line
-                    .as_deref()
-                    .and_then(terms::parse_terms_line)
-                    .unwrap_or_default(),
-            };
+            let pairs = t
+                .terms_line
+                .as_deref()
+                .and_then(terms::parse_terms_line)
+                .unwrap_or_default();
             if pairs.is_empty() {
                 continue;
             }

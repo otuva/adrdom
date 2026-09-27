@@ -436,9 +436,9 @@ pub fn terms_refusals(
     // Every current decision's terms line, every current decision's
     // `depends:` line (once approved, an id -- possibly a term's), and
     // every non-retired term's recorded pairing, is a dependent -- the
-    // widest reach of `state::dependent_entries`' five readers.
+    // widest reach of `state::dependent_entries`' three readers.
     let dependents: Vec<state::DependentEntry> =
-        state::dependent_entries(records, led, tf, true, true, None);
+        state::dependent_entries(records, led, tf, true, true);
 
     // Step 4: every pair on a dependent must still hold in the new file.
     // `lookup` answers "what does this exact word/phrase resolve to" for

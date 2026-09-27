@@ -173,7 +173,7 @@ pub(super) fn check_terms(
     // decision's terms line, and no non-retired term's own terms line,
     // pairs against (the narrower, non-transitive reach: no `depends:`
     // ids, since a bare `depends:` entry is not a "pairing").
-    let used: HashSet<String> = state::dependent_entries(records, led, &tf, false, true, None)
+    let used: HashSet<String> = state::dependent_entries(records, led, &tf, false, true)
         .into_iter()
         .flat_map(|dep| dep.pairs.into_iter().map(|(_, uuid)| uuid))
         .collect();

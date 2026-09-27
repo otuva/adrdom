@@ -570,7 +570,7 @@ fn format_cycle(names: &[String]) -> String {
 fn dependents_by_entry(root: &Path, led: &Ledger, tf: &terms::TermsFile) -> HashMap<String, Vec<String>> {
     let records = record::load_all(root);
     let mut dependents: HashMap<String, Vec<String>> = HashMap::new();
-    for dep in state::dependent_entries(&records, led, tf, false, false, None) {
+    for dep in state::dependent_entries(&records, led, tf, false, false) {
         let label = dep.source.label();
         let mut seen_here: HashSet<String> = HashSet::new();
         for (_, tid) in dep.pairs {
