@@ -1363,6 +1363,48 @@ fn check_fails_a_topic_file_name_that_does_not_match_its_topic() {
     );
 }
 
+// adr: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
+//
+// "with no number": a topic whose text holds a digit has no name any file
+// can carry, so check refuses the topic text itself, whatever the file is
+// called; no rename clears it, and rewording the topic does.
+#[test]
+fn check_fails_a_topic_whose_text_no_file_name_can_carry() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let body = "# Rule 2\n\n### 1.1 Not written yet?\ndepends: widget\n";
+    write_record(&dir, "adrdom/decisions/rule.md", body);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(
+        text.contains(
+            "plan: adrdom/decisions/rule.md: topic \"Rule 2\" has no file name: a name holds lowercase words only, no number; agent rewords the topic line"
+        ),
+        "{}",
+        text
+    );
+    assert!(
+        !text.contains("does not match its topic"),
+        "no rename is offered for a topic that cannot be named: {}",
+        text
+    );
+
+    write_record(
+        &dir,
+        "adrdom/decisions/rule.md",
+        "# Rule\n\n### 1.1 Not written yet?\ndepends: widget\n",
+    );
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(
+        out.status.success(),
+        "the reworded topic under its own name must pass check: {}",
+        stdout(&out)
+    );
+}
+
 #[test]
 fn check_passes_when_a_superseded_id_is_missing_from_every_record() {
     let dir = init_repo();

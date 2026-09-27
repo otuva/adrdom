@@ -1234,6 +1234,23 @@ pub fn topic_file_name_mismatch(rel: &str, topic: &str, expected: &str) -> Strin
     )
 }
 
+/// 76bd7ef0 A names a topic file by its topic "in lowercase words joined by
+/// hyphens, with no number": a topic whose text lowercased and hyphenated
+/// (`repo::expected_topic_file_stem`) holds a digit, or holds no letter at
+/// all, has no name any file can carry, so no rename clears it and the
+/// topic line itself has to change. Check-only, like `bad_topic_file_name`.
+pub fn topic_unnameable(rel: &str, topic: &str) -> String {
+    refuse(
+        format!(
+            "{}: topic \"{}\" has no file name: a name holds lowercase words only, no number",
+            rel, topic
+        ),
+        Next::agent(
+            "rewords the topic line to letters and spaces only and names the file by it; if the file had already been approved, the owner re-approves it, since approval is keyed to the path",
+        ),
+    )
+}
+
 pub fn body_under_unapproved_heading(rel: &str, heading: &str) -> String {
     refuse(
         format!("{}: body under unapproved heading \"{}\"", rel, heading),
@@ -1606,6 +1623,7 @@ mod tests {
             duplicate_heading_across_files("heading", "x.md", "y.md"),
             bad_topic_file_name("adrdom/decisions/Bad_Name.md"),
             topic_file_name_mismatch("adrdom/decisions/x.md", "Y", "y"),
+            topic_unnameable("adrdom/decisions/rule.md", "Rule 2"),
             body_under_unapproved_heading("x.md", "heading"),
             bind_failed(7357, e),
             missing_answer_selection("id-1", "abcd1234"),

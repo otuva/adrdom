@@ -66,7 +66,15 @@ pub(super) fn check_plan(
         let topic = records_by_rel.get(rel.as_str()).and_then(|rf| rf.topic.as_deref());
         if let Some(topic) = topic {
             let expected = repo::expected_topic_file_stem(topic);
-            if name.strip_suffix(".md") != Some(expected.as_str()) {
+            // A topic whose derived stem no file name can carry (a digit,
+            // or nothing left once non-letters go) has no legal name under
+            // 76bd7ef0 A: the topic text is what has to change.
+            if !repo::valid_topic_file_name(&format!("{}.md", expected)) {
+                out.push(Failure {
+                    check: "plan".to_string(),
+                    message: msg::topic_unnameable(&rel, topic),
+                });
+            } else if name.strip_suffix(".md") != Some(expected.as_str()) {
                 out.push(Failure {
                     check: "plan".to_string(),
                     message: msg::topic_file_name_mismatch(&rel, topic, &expected),
