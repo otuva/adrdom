@@ -257,3 +257,37 @@ fn a_copy_of_a_missing_path_refuses() {
     assert!(stderr(&out).contains("no file in the working tree"), "{}", stderr(&out));
     assert_eq!(blame_row_count(&dir), 0);
 }
+
+// adr: 34f0202a-0be4-4049-94de-d3886f4f8ffc
+// The blob line is a content hash, not a promise that the object is in the
+// store: an origin that was never staged or committed (the first blame file
+// of a fresh repository) approves from the file at its path.
+#[test]
+fn an_unstaged_origin_approves_from_its_path() {
+    let (dir, _id1, _id2) = setup();
+    let rel = "docs/fresh.md";
+    std::fs::create_dir_all(dir.join("docs")).unwrap();
+    std::fs::write(dir.join(rel), "one\ntwo\n").unwrap();
+    // Hash only, nothing written to the object store.
+    let out = run_git(&dir, &["hash-object", rel]);
+    let blob = stdout(&out).trim().to_string();
+    let path = write_blame_file(&dir, "adrdom/blame/fresh.md", rel, &blob, "1-2\tdropped: dead\n");
+
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(blame_row_count(&dir), 1);
+}
+
+// adr: 34f0202a-0be4-4049-94de-d3886f4f8ffc
+#[test]
+fn a_blob_that_differs_from_the_origin_at_its_path_refuses() {
+    let (dir, _id1, _id2) = setup();
+    let blob = write_origin(&dir, "docs/drift.md", "one\ntwo\n");
+    std::fs::write(dir.join("docs/drift.md"), "one\ntwo\nthree\n").unwrap();
+    let path = write_blame_file(&dir, "adrdom/blame/drift.md", "docs/drift.md", &blob, "1-2\tdropped: dead\n");
+
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(!out.status.success());
+    assert!(stderr(&out).contains("blob does not match the content of docs/drift.md"), "{}", stderr(&out));
+    assert_eq!(blame_row_count(&dir), 0);
+}

@@ -402,8 +402,24 @@ fn do_approve_blame(
     // only leaves either `None` alongside the shape error that reports it).
     let blob = bf.blob.clone().expect("no shape error means blob is set");
 
-    let Some(content) = repo::git(root, &["cat-file", "-p", &blob]) else {
-        return Err(msg::approve_prefixed(msg::blame_blob_not_found(rel, &blob)));
+    // The origin's content comes from the file at its path when it is
+    // there, checked against the blob line by `git hash-object`; only a
+    // gone origin falls back to the object store. A blob reaches the store
+    // only through a stage or a commit, and a fresh repository's first
+    // blame file is approved before either.
+    let origin_rel = bf.origin.clone().expect("no shape error means origin is set");
+    let content = match std::fs::read_to_string(root.join(&origin_rel)) {
+        Ok(text) => {
+            let actual = repo::git_hash_object_stdin(root, &text).unwrap_or_default();
+            if actual != blob {
+                return Err(msg::approve_prefixed(msg::blame_blob_differs(rel, &origin_rel)));
+            }
+            text
+        }
+        Err(_) => match repo::git(root, &["cat-file", "-p", &blob]) {
+            Some(text) => text,
+            None => return Err(msg::approve_prefixed(msg::blame_blob_not_found(rel, &blob))),
+        },
     };
     let n = content.lines().count();
 

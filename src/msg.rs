@@ -1233,8 +1233,20 @@ pub fn blame_shape_error(rel: &str, e: &str) -> String {
 
 pub fn blame_blob_not_found(rel: &str, blob: &str) -> String {
     refuse(
-        format!("{}: blob {} not found", rel, blob),
-        Next::agent("fixes the blob identifier, or restores the origin at that content"),
+        format!("{}: origin is missing and blob {} is not in git", rel, blob),
+        Next::agent("restores the origin at its path, or fixes the blob identifier"),
+    )
+}
+
+/// The origin sits at its path but its content hashes to a different blob
+/// than the blame file names (per "What does a blame file hold?").
+pub fn blame_blob_differs(rel: &str, origin: &str) -> String {
+    refuse(
+        format!("{}: blob does not match the content of {}", rel, origin),
+        Next::agent(&format!(
+            "fixes the blob identifier to the hash of {}, or restores {} to the content the rows map",
+            origin, origin
+        )),
     )
 }
 
@@ -1767,6 +1779,7 @@ mod tests {
             missing_answer_selection("id-1", "abcd1234"),
             blame_shape_error("adrdom/blame/x.md", "line 1: missing \"origin: <path>\""),
             blame_blob_not_found("adrdom/blame/x.md", "abc123"),
+            blame_blob_differs("adrdom/blame/x.md", "docs/x.md"),
             blame_coverage_gap("adrdom/blame/x.md", 3, 5),
             blame_range_beyond("adrdom/blame/x.md", 1, 10, 5),
             blame_row_unknown_heading("adrdom/blame/x.md", "Does X?"),
