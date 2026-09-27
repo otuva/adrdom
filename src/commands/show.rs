@@ -208,13 +208,16 @@ fn print_blame_file(
     any_headings: &HashMap<String, Vec<(String, String)>>,
     known_ids: &HashSet<String>,
 ) {
+    println!("# blame: {}", bf.rel);
+    // A shape-broken blame file is still printed (7b05f8df A: "each blame
+    // file"): its shape errors first, then whatever parsed. `check` is
+    // where the shape error is refused.
+    for e in &bf.shape_errors {
+        println!("  shape: {}", e);
+    }
     let Some(origin) = &bf.origin else {
-        // A shape-broken blame file: `check` is where that is refused;
-        // `show` just skips it rather than guessing at a header it never
-        // parsed.
         return;
     };
-    println!("# blame: {}", bf.rel);
     let content = record::join_lines(&bf.lines);
     let status = if state::blame_approved(led, &bf.rel, &content) {
         "approved"
@@ -293,11 +296,10 @@ fn classify_dropped(
     known_ids: &HashSet<String>,
 ) -> Option<String> {
     let t = dest.trim();
-    if t == "dropped: dead" {
-        return Some("dead".to_string());
-    }
-    if t == "dropped: detail" {
-        return Some("detail".to_string());
+    match blame::classify(t) {
+        Some(blame::Kind::DroppedDead) => return Some("dead".to_string()),
+        Some(blame::Kind::DroppedDetail) => return Some("detail".to_string()),
+        _ => {}
     }
     let target = blame::copy_target(t)?;
     if record::is_uuid(target) || target.trim_end().ends_with('?') {
