@@ -155,8 +155,7 @@ destinations: `decision:` for text that lives in a question's section
 topic file's first question, and `dropped:` with one reason: `dead`
 (contradicted or obsolete), `detail` (the code is the record), or `copy of`
 what says the same thing elsewhere: a question by its heading (any state),
-or, while the other file has no blame file of its own yet, that origin by
-its path. Nothing else is accepted; approve lists every gap and unknown destination in one
+or another origin by its path. Nothing else is accepted; approve lists every gap and unknown destination in one
 run. The owner runs `adr approve adrdom/blame/<name>.md`; after that,
 every edit to the file makes it a draft again, reported as a count and not
 a failure. Verification passes by other agents edit the rows; the owner
