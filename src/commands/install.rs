@@ -1,8 +1,7 @@
+use crate::banned;
 use crate::commands::{deny_entries, OWNER_COMMANDS};
-use crate::ledger;
 use crate::msg::{self, Actor, Next};
 use crate::repo;
-use crate::terms;
 use std::fs;
 use std::path::Path;
 
@@ -53,8 +52,8 @@ pub fn run(claude: bool, codex: bool) -> i32 {
         }
     };
 
-    let decisions = root.join("adrdom/decisions");
-    let state = root.join("adrdom/state");
+    let decisions = root.join(repo::DECISIONS_DIR);
+    let state = root.join(repo::STATE_DIR);
     if let Err(e) = fs::create_dir_all(&decisions) {
         eprintln!(
             "install: {}",
@@ -70,27 +69,39 @@ pub fn run(claude: bool, codex: bool) -> i32 {
         return 1;
     }
 
-    create_if_missing(&state.join("ledger.tsv"), "");
-    create_if_missing(&state.join("banned.sha256"), "");
+    create_if_missing(&root.join(repo::LEDGER_PATH), "");
+    create_if_missing(&root.join(banned::BAN_LIST), "");
 
     let mut messages = Vec::new();
 
-    match backfill_terms_snapshot(&root) {
-        Ok(Some(m)) => messages.push(m),
-        Ok(None) => {}
+    let hooks = root.join(".githooks");
+    if let Err(e) = fs::create_dir_all(&hooks) {
+        eprintln!(
+            "install: {}",
+            msg::create_failed(&hooks.display().to_string(), e, retry())
+        );
+        return 1;
+    }
+    match create_hook(&root, repo::PRE_COMMIT_HOOK_PATH, PRE_COMMIT_HOOK) {
+        Ok(m) => messages.push(m),
         Err(e) => {
             eprintln!(
                 "install: {}",
-                msg::write_failed("adrdom/state/terms.approved.md", e, retry())
+                msg::write_failed(repo::PRE_COMMIT_HOOK_PATH, e, retry())
             );
             return 1;
         }
     }
-
-    let hooks = root.join(".githooks");
-    fs::create_dir_all(&hooks).ok();
-    create_hook(&hooks.join("pre-commit"), PRE_COMMIT_HOOK);
-    create_hook(&hooks.join("commit-msg"), COMMIT_MSG_HOOK);
+    match create_hook(&root, repo::COMMIT_MSG_HOOK_PATH, COMMIT_MSG_HOOK) {
+        Ok(m) => messages.push(m),
+        Err(e) => {
+            eprintln!(
+                "install: {}",
+                msg::write_failed(repo::COMMIT_MSG_HOOK_PATH, e, retry())
+            );
+            return 1;
+        }
+    }
 
     repo::git(&root, &["config", "core.hooksPath", ".githooks"]);
 
@@ -144,52 +155,6 @@ pub fn run(claude: bool, codex: bool) -> i32 {
     0
 }
 
-/// `adrdom/state/terms.approved.md` (per items 1+2 of the bootstrap-gaps
-/// review, "Does check fail a terms file that differs from its latest
-/// approval?"): a repo that approved `adrdom/terms.md` before this snapshot
-/// mechanism existed carries a `terms` ledger row but never got the
-/// snapshot file itself written. Restoring it here, once, is what lets
-/// `check` tell a real edit apart from the mere absence of a file this
-/// build introduced -- without it, `check` fails safe (`terms_snapshot_missing`)
-/// on the very next `adrdom/terms.md` edit, no matter how small, since it
-/// has nothing to diff against.
-///
-/// Only backfilled when the snapshot is missing AND the file's current
-/// parsed hash equals the latest `terms` ledger row's hash for
-/// `adrdom/terms.md` -- so the current file IS what was approved. When
-/// there is no terms file, no `terms` ledger row, or the file has already
-/// moved since that row (an edit sitting on top of the last approval),
-/// nothing is written: a snapshot restored from the wrong text would be
-/// worse than none, since `check` would then trust it as ground truth.
-fn backfill_terms_snapshot(root: &Path) -> Result<Option<String>, String> {
-    let snapshot_path = root.join("adrdom/state/terms.approved.md");
-    if snapshot_path.exists() {
-        return Ok(None);
-    }
-    let terms_path = root.join("adrdom/terms.md");
-    if !terms_path.exists() {
-        return Ok(None);
-    }
-    let tf = match terms::load(&terms_path) {
-        Ok(tf) => tf,
-        Err(_) => return Ok(None),
-    };
-    let file_hash = terms::file_hash(&tf);
-
-    let ledger_path = root.join("adrdom/state/ledger.tsv");
-    let led = ledger::read(&ledger_path);
-    let approved = led
-        .latest_for_path("terms", "adrdom/terms.md")
-        .map(|r| r.hash == file_hash)
-        .unwrap_or(false);
-    if !approved {
-        return Ok(None);
-    }
-
-    fs::write(&snapshot_path, tf.lines.join("\n")).map_err(|e| e.to_string())?;
-    Ok(Some(msg::terms_snapshot_backfilled()))
-}
-
 fn create_if_missing(path: &Path, content: &str) {
     if !path.exists() {
         if let Err(e) = fs::write(path, content) {
@@ -198,14 +163,39 @@ fn create_if_missing(path: &Path, content: &str) {
     }
 }
 
-fn create_hook(path: &Path, content: &str) {
-    if path.exists() {
-        return;
+/// Writes/refreshes `rel` (a hook path relative to `root`, e.g.
+/// `repo::PRE_COMMIT_HOOK_PATH`) with `content`: writes it when missing,
+/// rewrites it when the content on disk differs, and leaves it untouched
+/// (reporting "up to date") when it already matches -- the same
+/// missing/stale/current shape as `install_agents_md`. "Matches" is
+/// `text::lines_match_trimmed`, the same comparison `check`'s `check_hook`
+/// judges this same file with, so this call and `adr check` can never
+/// disagree about whether the file on disk is already current.
+fn create_hook(root: &Path, rel: &str, content: &str) -> Result<String, String> {
+    let path = root.join(rel);
+    if let Ok(existing) = fs::read_to_string(&path) {
+        let existing_lines: Vec<&str> = existing.split('\n').collect();
+        let want_lines: Vec<&str> = content.split('\n').collect();
+        if crate::text::lines_match_trimmed(&existing_lines, &want_lines) {
+            // Content current, but git runs a hook only when it is
+            // executable (`repo::hook_is_executable`, the same test
+            // `check` applies): repair the mode rather than report a hook
+            // git would silently skip as up to date.
+            if repo::hook_is_executable(&path) {
+                return Ok(msg::hook_up_to_date(rel));
+            }
+            make_executable(&path);
+            return Ok(msg::hook_written(rel));
+        }
     }
-    if let Err(e) = fs::write(path, content) {
-        eprintln!("install: {}", msg::write_failed(&path.display().to_string(), e, retry()));
-        return;
-    }
+    fs::write(&path, content).map_err(|e| e.to_string())?;
+    make_executable(&path);
+    Ok(msg::hook_written(rel))
+}
+
+/// Sets the mode git requires to run a hook (0o755 on unix; a no-op
+/// elsewhere, where `repo::hook_is_executable` is always true).
+fn make_executable(path: &Path) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -214,6 +204,10 @@ fn create_hook(path: &Path, content: &str) {
             perms.set_mode(0o755);
             fs::set_permissions(path, perms).ok();
         }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
     }
 }
 

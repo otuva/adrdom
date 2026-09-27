@@ -38,8 +38,8 @@ pub fn run(term: Option<String>) -> i32 {
             return 1;
         }
     };
-    let banned_path = root.join("adrdom/state/banned.sha256");
-    let ledger_path = root.join("adrdom/state/ledger.tsv");
+    let banned_path = root.join(banned::BAN_LIST);
+    let ledger_path = root.join(repo::LEDGER_PATH);
 
     let uuid: Option<String> = match &term {
         Some(name) => match resolve_term_uuid(&root, name) {
@@ -83,16 +83,20 @@ pub fn run(term: Option<String>) -> i32 {
     }
 
     // Refuse before writing anything if any new word is already in use
-    // anywhere the non-staged `check` scan looks.
-    let new_hash_set: HashSet<String> = new_hashes.iter().cloned().collect();
+    // anywhere the non-staged `check` scan looks. Flagged once per line,
+    // even when more than one of the new words lands on it: this only
+    // ever needs a yes/no per line, never `banned::hits`' per-token/term
+    // detail, so a plain membership check over each line's tokens is all
+    // it takes.
+    let new_hash_set: HashSet<&str> = new_hashes.iter().map(|h| h.as_str()).collect();
     let mut hits: Vec<String> = Vec::new();
     for (name, content) in collect_targets(&root, false, None) {
         for (i, line) in content.lines().enumerate() {
             if banned::tokenize(line)
                 .iter()
-                .any(|tok| new_hash_set.contains(&record::sha256_hex(tok)))
+                .any(|tok| new_hash_set.contains(record::sha256_hex(tok).as_str()))
             {
-                hits.push(format!("{}:{}", name, i + 1));
+                hits.push(msg::location(&name, i + 1));
             }
         }
     }

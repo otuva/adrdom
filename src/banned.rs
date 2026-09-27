@@ -1,27 +1,24 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Write;
 use std::path::Path;
 
+/// Where the hashed ban list lives, relative to the repo root: the one
+/// constant for this path (defined in `repo.rs` alongside every other
+/// governed path), used by every site that reads or writes it (`ban`,
+/// `unban`, `ask`, `check --banned`, `terms_refusals`, `install`).
+pub use crate::repo::BAN_LIST;
+
 /// Same tokenization for `ban` and `check --banned`: the whole trimmed,
-/// lowercased line, plus each maximal run of Unicode alphanumerics in it.
+/// lowercased line, plus each maximal run of Unicode alphanumerics in it
+/// (`crate::text::word_runs`).
 pub fn tokenize(line: &str) -> Vec<String> {
     let trimmed = line.trim().to_lowercase();
     if trimmed.is_empty() {
         return Vec::new();
     }
     let mut tokens = vec![trimmed.clone()];
-    let mut current = String::new();
-    for c in trimmed.chars() {
-        if c.is_alphanumeric() {
-            current.push(c);
-        } else if !current.is_empty() {
-            tokens.push(std::mem::take(&mut current));
-        }
-    }
-    if !current.is_empty() {
-        tokens.push(current);
-    }
+    tokens.extend(crate::text::word_runs(&trimmed));
     tokens
 }
 
@@ -66,6 +63,92 @@ pub fn parse_entries(content: &str) -> Vec<(String, Option<String>)> {
         .filter(|l| !l.trim().is_empty())
         .map(parse_line)
         .collect()
+}
+
+/// Like `read_entries`, but through `source` (per "Does check at a commit
+/// read the staged files?"): a staged edit to the ban list is judged, not
+/// whatever is left on disk. Every caller that scans on `check`'s behalf
+/// (directly or through `terms_refusals`) reads the list this way; every
+/// other caller (`ban`, `unban`, `ask`, `approve`) keeps calling
+/// `read_entries`, which always wants the working tree.
+pub fn read_entries_via(root: &Path, source: &crate::repo::Source) -> Vec<(String, Option<String>)> {
+    parse_entries(&source.read(root, BAN_LIST).unwrap_or_default())
+}
+
+/// One line's hit against the ban list: the 1-based line number within the
+/// scanned text, the exact banned token as `tokenize` returns it, and the
+/// term name when the hash's ban-list entry carries a uuid that still names
+/// a term in `terms`.
+pub struct Hit {
+    pub line: usize,
+    pub token: String,
+    pub term: Option<String>,
+}
+
+/// The name of the term a banned-list entry was banned under: `uuid` is
+/// the list's value for the hash (None for a word banned on its own), and
+/// `terms` the terms file it may name. Shared by `hits` and `first_hit` so
+/// every hit names its term the same way.
+fn term_name(uuid: Option<&str>, terms: &[crate::terms::Term]) -> Option<String> {
+    let uuid = uuid?;
+    terms
+        .iter()
+        .find(|t| t.id.as_deref() == Some(uuid))
+        .map(|t| t.name.clone())
+}
+
+/// The one banned-word scan: split `text` into lines, tokenize each line
+/// with `tokenize`, hash every token and look it up in `hash_map` (a ban
+/// list hash to the term uuid it was banned under, if any, exactly as
+/// `read_entries`/`read_entries_via` return it, collected into a map). A
+/// token repeated on the same line is reported once; every distinct hit is
+/// returned in the order it appears. `terms` names a hit's term by its
+/// uuid; pass `&[]` when no terms file applies (a hit then never carries a
+/// name).
+pub fn hits(
+    text: &str,
+    hash_map: &HashMap<String, Option<String>>,
+    terms: &[crate::terms::Term],
+) -> Vec<Hit> {
+    let mut out = Vec::new();
+    for (i, line) in text.lines().enumerate() {
+        let mut seen: HashSet<String> = HashSet::new();
+        for tok in tokenize(line) {
+            let h = crate::record::sha256_hex(&tok);
+            let Some(uuid_opt) = hash_map.get(&h) else {
+                continue;
+            };
+            if !seen.insert(tok.clone()) {
+                continue;
+            }
+            let term = term_name(uuid_opt.as_deref(), terms);
+            out.push(Hit { line: i + 1, token: tok, term });
+        }
+    }
+    out
+}
+
+/// Like `hits`, but stops at the first hit instead of scanning the rest of
+/// `text`: for a caller (`ask`'s candidate-body scan) that only acts on
+/// whether a banned word is present at all, never on every place it
+/// appears, so it never pays to hash every remaining token once one hit is
+/// already enough to refuse.
+pub fn first_hit(
+    text: &str,
+    hash_map: &HashMap<String, Option<String>>,
+    terms: &[crate::terms::Term],
+) -> Option<Hit> {
+    for (i, line) in text.lines().enumerate() {
+        for tok in tokenize(line) {
+            let h = crate::record::sha256_hex(&tok);
+            let Some(uuid_opt) = hash_map.get(&h) else {
+                continue;
+            };
+            let term = term_name(uuid_opt.as_deref(), terms);
+            return Some(Hit { line: i + 1, token: tok, term });
+        }
+    }
+    None
 }
 
 pub fn append(path: &Path, entries: &[(String, Option<String>)]) -> std::io::Result<()> {

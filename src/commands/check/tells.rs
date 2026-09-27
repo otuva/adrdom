@@ -29,7 +29,6 @@ pub(super) fn check_tells(root: &Path, records: &[RecordFile], led: &Ledger, ref
             if r.category == "tells" {
                 out.push(Failure {
                     check: "tells".to_string(),
-                    id: None,
                     message: r.message.clone(),
                 });
             }
@@ -46,7 +45,6 @@ pub(super) fn check_tells(root: &Path, records: &[RecordFile], led: &Ledger, ref
             for (line, phrase, what) in tells::prose_tells_in(&rf.lines, s + 1, e) {
                 out.push(Failure {
                     check: "tells".to_string(),
-                    id: sec.id.clone(),
                     message: msg::tell(&rel, line, &sec.heading_text, &phrase, what),
                 });
             }

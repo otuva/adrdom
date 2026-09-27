@@ -308,6 +308,61 @@ fn post_answer_with_a_stale_version_is_refused_and_writes_nothing() {
     let _ = child.wait();
 }
 
+// adr: 11be073c-ce91-44d8-833a-ef0b5e0b1672
+//
+// The page runs the same letter parsing the CLI does (`actions::parse_letter`),
+// so a lowercase `answer=a` refuses with `invalid_letter`, the redirect
+// itself carrying the message in its `m` query param -- and, followed, the
+// page shows it. Nothing is written to the topic file or the ledger.
+#[test]
+fn post_answer_with_an_invalid_letter_redirects_with_invalid_letter_text() {
+    let dir = setup_repo_with_open_question();
+    let record_path = dir.join("adrdom/decisions/example.md");
+    let content = std::fs::read_to_string(&record_path).unwrap();
+    let ids = extract_ids(&content);
+    let question_id = ids[0].clone();
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let before_record = std::fs::read_to_string(&record_path).unwrap();
+    let before_ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+
+    let version = current_version(&dir, &question_id);
+    let form = format!("id={}&v={}&answer=a&t={}", question_id, version, token);
+    let resp = post(port, "/answer", Some(&cookie), &form);
+    assert_eq!(resp.status, 302, "body: {}", resp.body);
+    let location = header(&resp, "Location").expect("Location header");
+    assert!(
+        location.contains("invalid%20letter%20a"),
+        "redirect location does not carry the invalid_letter text: {}",
+        location
+    );
+
+    let followed = get(port, location, Some(&cookie));
+    assert_eq!(followed.status, 200, "body: {}", followed.body);
+    assert!(
+        followed.body.contains("invalid letter a"),
+        "page did not surface the invalid_letter stop: {}",
+        followed.body
+    );
+
+    let after_record = std::fs::read_to_string(&record_path).unwrap();
+    let after_ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert_eq!(
+        before_record, after_record,
+        "the page must write nothing to the topic file on an invalid letter"
+    );
+    assert_eq!(
+        before_ledger, after_ledger,
+        "the page must write nothing to the ledger on an invalid letter"
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
 #[test]
 fn post_answer_without_t_field_is_forbidden() {
     let dir = setup_repo_with_open_question();
@@ -672,23 +727,27 @@ id: 11111111-1111-1111-1111-111111111111\n\
 definition: A choice the owner answers in, once, in writing.\n\
 aliases: \n";
 
+// Per "Does the tool stop while the terms file waits for approval?"
+// (aa475aa3 A): the page shows the file's own current text plus a "waiting
+// for approval" note and the approve button, never a before/after diff --
+// there is no more approved snapshot on disk for it to diff against.
 #[test]
-fn terms_article_shows_before_after_when_unapproved() {
+fn terms_article_shows_waiting_for_approval_when_unapproved() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms = write_record(&dir, "adrdom/terms.md", WORDS_TERMS_MD);
     assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
         .status
         .success());
-    // AGENTS.md staged too: the pre-commit hook now judges the same
-    // staged tree `check --staged` does (per "Does check at a commit read
-    // the staged files?"), and it sits on disk, unstaged, since install.
-    run_git(&dir, &["add", "adrdom/terms.md", "adrdom/state/ledger.tsv", "AGENTS.md"]);
+    // AGENTS.md and the hooks staged too: the pre-commit hook judges the
+    // staged tree (per "Does check at a commit read the staged files?"),
+    // and check holds every file install wrote, which sit on disk,
+    // unstaged, since install.
+    run_git(&dir, &["add", "adrdom/terms.md", "adrdom/state/ledger.tsv", "AGENTS.md", ".githooks"]);
     let commit_out = run_git(&dir, &["commit", "-q", "-m", "approve terms v1"]);
     assert!(commit_out.status.success(), "{:?}", commit_out);
 
-    // Edit the definition without re-approving: HEAD still matches the
-    // last `terms` ledger row, so the page can diff against it.
+    // Edit the definition without re-approving.
     write_record(&dir, "adrdom/terms.md", WORDS_TERMS_MD_V2);
 
     let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
@@ -707,8 +766,13 @@ fn terms_article_shows_before_after_when_unapproved() {
     let resp = get(port, "/terms", Some(&cookie));
     assert_eq!(resp.status, 200, "body: {}", resp.body);
     assert!(
-        resp.body.contains("class=\"changed-box\""),
-        "changed-box missing: {}",
+        !resp.body.contains("class=\"changed-box\""),
+        "changed-box should be gone: {}",
+        resp.body
+    );
+    assert!(
+        resp.body.contains("waiting for approval"),
+        "waiting note missing: {}",
         resp.body
     );
     assert!(
@@ -716,15 +780,17 @@ fn terms_article_shows_before_after_when_unapproved() {
         "approve button missing: {}",
         resp.body
     );
+    // The page shows the file's own (unapproved, working-tree) text, not
+    // the last approved text.
     assert!(
-        resp.body.contains("A choice answered by the owner."),
-        "before text missing: {}",
+        !resp.body.contains("A choice answered by the owner."),
+        "should not show the old approved text: {}",
         resp.body
     );
     assert!(
         resp.body
             .contains("A choice the owner answers in, once, in writing."),
-        "after text missing: {}",
+        "current text missing: {}",
         resp.body
     );
 
@@ -765,7 +831,7 @@ fn serve_refuses_without_an_interactive_terminal() {
     );
 }
 
-// --- tiers, "stands on", refuse, refused, moot (spec §7) -----------------
+// --- tiers, "stands on", refuse, refused, moot ----------------------------
 
 #[test]
 fn get_next_shows_tier_and_stands_on_and_a_refuse_button() {
@@ -1343,6 +1409,34 @@ fn page_shows_question_options_and_the_decisions_list() {
             "The authoritative sentence is a decision, and the question that produced it is a question."
         ),
         "chosen sentence missing from /decisions: {}",
+        decisions.body
+    );
+
+    // adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
+    // A supersedes entry is written as an id; the page turns it back into
+    // the heading it names, never printing the bare id.
+    let superseding = format!(
+        "# Second\n\n### 2.1 Is the decision revisited?\ndepends: decision\n\nsupersedes: {}\n\nProblem: the decision needs revisiting.\n\nStandard: s2.\n\n- A) Yes: the decision is revisited.\n  Why: reasons.\n  Costs: costs.\n- B) No: the decision stands.\n  Why: other reasons.\n  Costs: other costs.\n",
+        question_id
+    );
+    let second = write_record(&dir, "adrdom/decisions/second.md", &superseding);
+    approve_record(&dir, "adrdom/decisions/second.md");
+    let ask_out = adr(&dir, &["ask", second.to_str().unwrap()], &[], "");
+    assert!(ask_out.status.success(), "ask failed: {}", stderr(&ask_out));
+    let second_content = std::fs::read_to_string(&second).unwrap();
+    let second_id = extract_ids(&second_content)[0].clone();
+    assert!(adr_answer(&dir, &second_id, "A").status.success());
+
+    let decisions = get(port, "/decisions", Some(&cookie));
+    assert_eq!(decisions.status, 200, "body: {}", decisions.body);
+    assert!(
+        decisions.body.contains("supersedes 1.1 What is the unit of authority called?"),
+        "superseded heading missing from /decisions: {}",
+        decisions.body
+    );
+    assert!(
+        !decisions.body.contains(&question_id),
+        "bare id printed on /decisions: {}",
         decisions.body
     );
 

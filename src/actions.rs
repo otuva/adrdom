@@ -28,102 +28,118 @@ pub struct Refusal {
     pub message: String,
 }
 
+/// The missing/unreadable half of the terms.md gate, shared by every
+/// `require_terms` caller: missing entirely, or present but a read/shape
+/// error, each refuses the same way regardless of which caller hit it. The
+/// next move is the agent's either way (agents edit `adrdom/terms.md`, per
+/// "ask's next step is right" -- there is no owner re-run that fixes a
+/// file only an edit can fix).
+fn load_terms_or_refuse(root: &Path) -> Result<terms::TermsFile, String> {
+    match state::load_terms_checked(root) {
+        TermsLoad::Missing => Err(msg::terms_missing()),
+        TermsLoad::LoadError(e) => Err(msg::terms_load_error(
+            &e,
+            Next::agent("fixes adrdom/terms.md and retries"),
+        )),
+        TermsLoad::Ok(tf) => Ok(tf),
+    }
+}
+
 /// The strict terms.md gates (5): missing, present but unreadable/
 /// shape-invalid, or not approved, each refusing with the same message the
 /// caller would print. `rel` is the topic file's path, named in the
 /// not-approved message exactly as the caller already prints it. On
-/// success, the loaded, approved terms file is returned. Used by
-/// `do_approve_record` only -- `do_answer`/`do_refuse` use the more
-/// tolerant `terms_for_answer` instead (per "Does answer wait for terms
-/// approval?", cd450764 B).
-fn require_terms(root: &Path, led: &Ledger, rel: &str) -> Result<terms::TermsFile, String> {
-    match state::load_terms_checked(root) {
-        TermsLoad::Missing => Err(msg::terms_missing()),
-        TermsLoad::LoadError(e) => Err(msg::terms_load_error(
-            &e,
-            Next::owner_runs("the same command again once adrdom/terms.md can be read"),
-        )),
-        TermsLoad::Ok(tf) => {
-            if !tf.errors.is_empty() {
-                let out = tf
-                    .errors
-                    .iter()
-                    .map(|e| msg::terms_shape_error(e))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                return Err(out);
-            }
-            if !state::terms_approved(led, &tf) {
-                return Err(msg::terms_not_approved(rel));
-            }
-            Ok(tf)
-        }
+/// success, the loaded, approved terms file is returned. The one gate for
+/// `ask`, `answer`, `refuse`, and approve-of-a-topic-file (per "Does the
+/// tool stop while the terms file waits for approval?", aa475aa3 A).
+pub fn require_terms(root: &Path, led: &Ledger, rel: &str) -> Result<terms::TermsFile, String> {
+    let tf = load_terms_or_refuse(root)?;
+    if !tf.errors.is_empty() {
+        let out = tf
+            .errors
+            .iter()
+            .map(|e| msg::terms_shape_error(e))
+            .collect::<Vec<_>>()
+            .join("\n");
+        return Err(out);
+    }
+    if !state::terms_approved(led, &tf) {
+        return Err(msg::terms_not_approved(rel));
+    }
+    Ok(tf)
+}
+
+/// Exactly one ASCII uppercase character; anything else (empty, more than
+/// one character, lowercase, a digit, punctuation) is not a letter. Shared
+/// by the CLI (`commands/answer.rs`) and the page (`commands/serve/mod.rs`)
+/// so "answer takes that version from the terminal and the page alike"
+/// extends to how the letter itself is read: the page refuses a lowercase
+/// or multi-character selection the same way the CLI does.
+pub fn parse_letter(s: &str) -> Option<char> {
+    let mut chars = s.chars();
+    let c = chars.next()?;
+    if chars.next().is_some() {
+        return None;
+    }
+    if c.is_ascii_uppercase() {
+        Some(c)
+    } else {
+        None
     }
 }
 
-/// The terms.md gate for `do_answer`/`do_refuse` (per "Does answer wait for
-/// terms approval?", cd450764 B: no -- answer checks the question's terms
-/// line against the approved terms and proceeds). Missing entirely, or a
-/// read error, refuse exactly as `require_terms` does. Otherwise: when the
-/// file on disk still matches its latest approval, that file itself is
-/// returned, same as `require_terms` always did. When it doesn't -- a draft
-/// sitting on top of the last approval, which may carry its own shape
-/// errors (an added term with no id yet, say) that are none of this
-/// command's business -- the file itself is never consulted for validity;
-/// instead the last approved snapshot (`adrdom/state/terms.approved.md`,
-/// the exact text `approve` wrote) is returned, so the question's terms
-/// line is judged against what the owner actually approved, not against
-/// whatever the file happens to hold right now. No snapshot at all (the
-/// file has never been approved) refuses the same "not approved" way this
-/// always has.
-fn terms_for_answer(root: &Path, led: &Ledger, rel: &str) -> Result<terms::TermsFile, String> {
-    match state::load_terms_checked(root) {
-        TermsLoad::Missing => Err(msg::terms_missing()),
-        TermsLoad::LoadError(e) => Err(msg::terms_load_error(
-            &e,
-            Next::owner_runs("the same command again once adrdom/terms.md can be read"),
-        )),
-        TermsLoad::Ok(tf) => {
-            if state::terms_approved(led, &tf) {
-                return Ok(tf);
-            }
-            match state::load_terms_snapshot(root) {
-                Some(snapshot) => Ok(snapshot),
-                None => Err(msg::terms_not_approved(rel)),
-            }
-        }
-    }
+/// What `do_answer` and `do_refuse` both need once a question has been
+/// found, gated on terms, and confirmed to still be in the `asked` state at
+/// the version given -- the steps neither letter-specific nor refusal-
+/// specific (id lookup, terms gate, already-refused/already-answered,
+/// section hash, version format/staleness, ledger state). `tf` is unused by
+/// `do_refuse`, which has no terms-line pairing of its own to check.
+struct Located {
+    led: Ledger,
+    rf: RecordFile,
+    idx: usize,
+    rel: String,
+    tf: terms::TermsFile,
+    cur_hash: String,
 }
 
-pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<Outcome, String> {
-    let ledger_path = root.join("adrdom/state/ledger.tsv");
+/// `letter` is the option `do_answer` will pick; it is checked against the
+/// section's options right after the already-answered checks and before
+/// the version check, as before answer and refuse shared this path.
+/// `do_refuse` passes `None`.
+fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> Result<Located, String> {
+    let ledger_path = root.join(crate::repo::LEDGER_PATH);
     let led = ledger::read(&ledger_path);
 
-    let files = repo::list_decision_files(root);
+    // Loaded one file at a time, stopping at the first match, rather than
+    // `record::load_all` (every topic file, parsed up front): an id names
+    // exactly one section in exactly one file, so answer/refuse -- unlike
+    // check or ask, which always need every file -- never has a reason to
+    // parse the rest once it is found.
     let mut found = None;
-    for f in &files {
-        if let Ok(rf) = record::load(f) {
+    for f in crate::repo::list_decision_files(root) {
+        if let Ok(rf) = record::load(&f) {
             if let Some(idx) = rf.sections.iter().position(|s| s.id.as_deref() == Some(id)) {
                 found = Some((rf, idx));
                 break;
             }
         }
     }
-    let Some((mut rf, idx)) = found else {
+    let Some((rf, idx)) = found else {
         return Err(msg::id_not_found(id));
     };
-    let rel = state::rel_path(root, &rf.path);
+    // `record::load` (unlike `load_all`/`load_all_via`) leaves `rf.rel` as
+    // the raw path it was given, so it is recomputed here the way every
+    // other caller of the single-file loader already does.
+    let rel = crate::state::rel_path(root, &rf.path);
 
-    // Refuse when terms.md is missing or unreadable; otherwise check the
-    // question's terms line against whichever text is currently approved
-    // (`terms_for_answer`, per cd450764 B) -- the file itself when it
-    // matches its latest approval, the snapshot when a draft sits on top of
-    // it. The returned terms file is kept for the terms-line validity check
-    // below.
-    let tf = terms_for_answer(root, &led, &rel)?;
+    // Refuse when terms.md is missing, unreadable, or not approved (per
+    // "Does the tool stop while the terms file waits for approval?",
+    // aa475aa3 A) -- the same gate `ask` applies. The returned terms file is
+    // kept for the terms-line validity check `do_answer` makes afterward.
+    let tf = require_terms(root, &led, &rel)?;
 
     let cur_hash;
-    let supersedes_val;
     {
         let sec = &rf.sections[idx];
         if sec.is_refused() {
@@ -132,8 +148,10 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
         if sec.answer_line.is_some() {
             return Err(msg::already_answered(&sec.heading_text));
         }
-        if !sec.options.iter().any(|o| o.letter == letter) {
-            return Err(msg::letter_not_an_option(letter, &sec.heading_text));
+        if let Some(letter) = letter {
+            if !sec.options.iter().any(|o| o.letter == letter) {
+                return Err(msg::letter_not_an_option(letter, &sec.heading_text));
+            }
         }
         cur_hash = record::section_hash(&rf.lines, sec);
         // Per "Does an answer carry the version of the question the owner
@@ -161,22 +179,76 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
                 return Err(msg::not_in_asked_state(&sec.heading_text));
             }
         }
+    }
+
+    Ok(Located { led, rf, idx, rel, tf, cur_hash })
+}
+
+/// The write step `do_answer` and `do_refuse` both end with: splice the
+/// `**Answer:** <answer_text>` line in at the end of the section's hash
+/// range, save the topic file, then append `rows` to the ledger -- with the
+/// same error handling and the same "try again" command shape either way,
+/// `retry_words` filling in the part that differs (`"A again"` for the
+/// letter, `"refuse again"` for a refusal). Eight plain, once-each
+/// arguments over a params struct: the same shape `check_plan` accepts
+/// this same lint for.
+#[allow(clippy::too_many_arguments)]
+fn finish_answer(
+    root: &Path,
+    id: &str,
+    version: &str,
+    retry_words: &str,
+    mut rf: RecordFile,
+    idx: usize,
+    answer_text: &str,
+    rows: Vec<ledger::Row>,
+) -> Result<(), String> {
+    let ledger_path = root.join(crate::repo::LEDGER_PATH);
+
+    let hash_end = {
+        let sec = &rf.sections[idx];
+        record::hash_range(&rf.lines, sec).1
+    };
+    rf.lines.splice(
+        hash_end..hash_end,
+        [String::new(), format!("**Answer:** {}", answer_text)],
+    );
+
+    record::save(&rf).map_err(|e| {
+        msg::write_failed(
+            "topic file",
+            e,
+            Next::owner_runs(format!("adr answer {}@{} {}", id, version, retry_words)),
+        )
+    })?;
+
+    ledger::append(&ledger_path, &rows).map_err(|e| {
+        msg::update_failed(
+            "ledger",
+            e,
+            Next::owner_runs(format!("adr answer {}@{} {}", id, version, retry_words)),
+        )
+    })?;
+
+    Ok(())
+}
+
+pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<Outcome, String> {
+    let Located { led, rf, idx, tf, cur_hash, .. } = locate_asked(root, id, version, Some(letter))?;
+
+    let supersedes_val;
+    {
+        let sec = &rf.sections[idx];
         let Some(terms_line_idx) = sec.terms_line else {
             return Err(msg::no_terms_line(id));
         };
-        let Some(pairs) = terms::parse_terms_line(rf.lines[terms_line_idx].trim_end()) else {
-            return Err(msg::malformed_terms_line(id));
-        };
-        for (_, uuid) in &pairs {
-            match tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str())) {
-                None => {
-                    return Err(msg::terms_line_names_gone_term(id, uuid));
-                }
-                Some(t) if t.retired => {
-                    return Err(msg::terms_line_names_retired_term(id, &t.name));
-                }
-                _ => {}
-            }
+        let problems = terms::validate_pairs(rf.lines[terms_line_idx].trim_end(), &tf)
+            .map_err(|_| msg::malformed_terms_line(id))?;
+        if let Some(p) = problems.first() {
+            return Err(match &p.kind {
+                terms::ProblemKind::Gone => msg::terms_line_names_gone_term(id, &p.uuid),
+                terms::ProblemKind::Retired(name) => msg::terms_line_names_retired_term(id, name),
+            });
         }
         supersedes_val = sec.supersedes.clone();
         for old in &supersedes_val {
@@ -209,31 +281,13 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
         }
     }
 
-    let heading_for_print;
-    let sentence_for_print;
-    {
-        let sec = &rf.sections[idx];
-        let (_, hash_end) = record::hash_range(&rf.lines, sec);
-        heading_for_print = sec.heading_text.clone();
-        sentence_for_print = sec
-            .options
-            .iter()
-            .find(|o| o.letter == letter)
-            .and_then(|o| o.sentence.clone())
-            .unwrap_or_default();
-        rf.lines.splice(
-            hash_end..hash_end,
-            [String::new(), format!("**Answer:** {}", letter)],
-        );
-    }
-
-    record::save(&rf).map_err(|e| {
-        msg::write_failed(
-            "topic file",
-            e,
-            Next::owner_runs(format!("adr answer {}@{} <letter> again", id, version)),
-        )
-    })?;
+    let heading_for_print = rf.sections[idx].heading_text.clone();
+    let sentence_for_print = rf.sections[idx]
+        .options
+        .iter()
+        .find(|o| o.letter == letter)
+        .and_then(|o| o.sentence.clone())
+        .unwrap_or_default();
 
     let mut rows = vec![ledger::Row {
         time: ledger::now_rfc3339(),
@@ -253,16 +307,12 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
             version: crate::version::VERSION.to_string(),
         });
     }
-    ledger::append(&ledger_path, &rows).map_err(|e| {
-        msg::update_failed(
-            "ledger",
-            e,
-            Next::owner_runs(format!("adr answer {}@{} <letter> again", id, version)),
-        )
-    })?;
+
+    let letter_str = letter.to_string();
+    finish_answer(root, id, version, &format!("{} again", letter_str), rf, idx, &letter_str, rows)?;
 
     Ok(Outcome {
-        summary: format!("answered: {}\n  {}", heading_for_print, sentence_for_print),
+        summary: msg::answered_summary(&heading_for_print, &sentence_for_print),
     })
 }
 
@@ -277,88 +327,21 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
 /// question is never acted on (no target is checked, no `superseded` row
 /// is written); its presence only earns a printed note.
 pub fn do_refuse(root: &Path, id: &str, version: &str) -> Result<Outcome, String> {
-    let ledger_path = root.join("adrdom/state/ledger.tsv");
-    let led = ledger::read(&ledger_path);
+    // Same lookup, terms gate, already-refused/already-answered, hash,
+    // version, and ledger-state checks as the letter path (`locate_asked`).
+    // The section's own terms-line/pairing checks are not shared (5), so
+    // the returned terms file has no further use here.
+    let Located { rf, idx, rel, cur_hash, .. } = locate_asked(root, id, version, None)?;
 
-    let files = repo::list_decision_files(root);
-    let mut found = None;
-    for f in &files {
-        if let Ok(rf) = record::load(f) {
-            if let Some(idx) = rf.sections.iter().position(|s| s.id.as_deref() == Some(id)) {
-                found = Some((rf, idx));
-                break;
-            }
-        }
-    }
-    let Some((mut rf, idx)) = found else {
-        return Err(msg::id_not_found(id));
-    };
-    let rel = state::rel_path(root, &rf.path);
-
-    // Same terms.md gate as the letter path (`terms_for_answer`, cd450764
-    // B); the section's own terms-line/pairing checks are not shared (5),
-    // so the returned terms file has no further use here.
-    terms_for_answer(root, &led, &rel)?;
-
-    let cur_hash;
-    let supersedes_val;
-    {
-        let sec = &rf.sections[idx];
-        if sec.is_refused() {
-            return Err(msg::already_refused(&sec.heading_text));
-        }
-        if sec.answer_line.is_some() {
-            return Err(msg::already_answered(&sec.heading_text));
-        }
-        cur_hash = record::section_hash(&rf.lines, sec);
-        // Same version check as the letter path (per "Does an answer carry
-        // the version of the question the owner read?"), ahead of the
-        // ledger-state check for the same reason: lowercased and validated
-        // as exactly `VERSION_LEN` hex characters before it is ever
-        // compared to the hash.
-        let version_lower = version.to_lowercase();
-        if version_lower.len() != record::VERSION_LEN
-            || !version_lower.chars().all(|c| c.is_ascii_hexdigit())
-        {
-            return Err(msg::invalid_version_format(version));
-        }
-        if version_lower != cur_hash[..record::VERSION_LEN] {
-            return Err(msg::stale_version(&sec.heading_text));
-        }
-        match led.latest_state(id) {
-            Some(row) if row.event == "asked" && row.hash == cur_hash => {}
-            _ => {
-                return Err(msg::not_in_asked_state(&sec.heading_text));
-            }
-        }
-        supersedes_val = sec.supersedes.clone();
-    }
-
-    let heading_for_print;
+    let supersedes_val = rf.sections[idx].supersedes.clone();
+    let heading_for_print = rf.sections[idx].heading_text.clone();
     let mut note: Option<String> = None;
-    {
-        let sec = &rf.sections[idx];
-        let (_, hash_end) = record::hash_range(&rf.lines, sec);
-        heading_for_print = sec.heading_text.clone();
-        if !supersedes_val.is_empty() {
-            note = Some(format!(
-                "answer: {}",
-                msg::supersedes_ignored_on_refusal(&heading_for_print)
-            ));
-        }
-        rf.lines.splice(
-            hash_end..hash_end,
-            [String::new(), "**Answer:** refused".to_string()],
-        );
+    if !supersedes_val.is_empty() {
+        note = Some(format!(
+            "answer: {}",
+            msg::supersedes_ignored_on_refusal(&heading_for_print)
+        ));
     }
-
-    record::save(&rf).map_err(|e| {
-        msg::write_failed(
-            "topic file",
-            e,
-            Next::owner_runs(format!("adr answer {}@{} refuse again", id, version)),
-        )
-    })?;
 
     let row = ledger::Row {
         time: ledger::now_rfc3339(),
@@ -368,13 +351,8 @@ pub fn do_refuse(root: &Path, id: &str, version: &str) -> Result<Outcome, String
         detail: heading_for_print.clone(),
         version: crate::version::VERSION.to_string(),
     };
-    ledger::append(&ledger_path, &[row]).map_err(|e| {
-        msg::update_failed(
-            "ledger",
-            e,
-            Next::owner_runs(format!("adr answer {}@{} refuse again", id, version)),
-        )
-    })?;
+
+    finish_answer(root, id, version, "refuse again", rf, idx, "refused", vec![row])?;
 
     let mut summary = format!("answer: {}", msg::refused_summary(&heading_for_print, &rel));
     if let Some(n) = note {
@@ -386,38 +364,15 @@ pub fn do_refuse(root: &Path, id: &str, version: &str) -> Result<Outcome, String
 }
 
 pub fn do_approve(root: &Path, file: &Path) -> Result<Outcome, String> {
-    let ledger_path = root.join("adrdom/state/ledger.tsv");
+    let ledger_path = root.join(crate::repo::LEDGER_PATH);
     let led = ledger::read(&ledger_path);
     let rel = state::rel_path(root, file);
 
-    if rel == "adrdom/terms.md" {
+    if rel == crate::repo::TERMS_PATH {
         do_approve_terms(root, file, &led, &ledger_path)
     } else {
         do_approve_record(root, file, &rel, &led, &ledger_path)
     }
-}
-
-/// One dependent's pairs (`word=uuid`), together with a description of
-/// where they were carried, for approve's step 4.
-struct Dependent {
-    /// `<rel>: "<heading>"` for a decision, or `term "<name>"` for a term:
-    /// in both cases the recorded pairing, read from the dependent's own
-    /// `terms:` line exactly as it stood in the file before this approve,
-    /// never re-resolved from today's definition/section text.
-    source: String,
-    /// The dependent's own decision id when it is a decision (`Some`), so a
-    /// retired-term refusal can point at the exact question to supersede;
-    /// `None` for a term dependent, which has no id and nothing to
-    /// supersede.
-    id: Option<String>,
-    pairs: Vec<(String, String)>,
-    /// True for a terms-line/definition dependent, whose pair's word can
-    /// drift off a term when a name/alias moves elsewhere (checked below);
-    /// false for a `depends:`-line dependent, whose pair is an id read
-    /// straight from the depends entry, never a resolved word, so nothing
-    /// about it can "move" -- only the target's removal or retirement
-    /// (checked either way) applies to it.
-    check_word_drift: bool,
 }
 
 /// Every refusal `adrdom/terms.md` earns under steps 1, 3, 4 and 5 of
@@ -452,11 +407,24 @@ struct Dependent {
 /// that same parse for its step-7 report; `check` passes the same
 /// `RecordFile`s it built for its own record checks. Neither re-reads a
 /// topic file from disk just to compute a dependent's terms line here.
+///
+/// `source` is who the ban list (step 5) is read through: `approve` passes
+/// `Source::WorkingTree` (it always reads `adrdom/terms.md` straight off
+/// disk), `check` passes whichever source it is judging (per "Does check at
+/// a commit read the staged files?"), so a staged edit to the ban list is
+/// judged, not whatever is left on disk. `scan_banned` is false only for
+/// `check`'s own call: `check_banned` already scans `adrdom/terms.md` as a
+/// tracked file, so step 5 would otherwise report the same hit twice, once
+/// prefixed `banned:` and once prefixed `terms:`; `approve` (the one caller
+/// that never runs `check_banned` itself) always passes `true`, since step 5
+/// is its only banned-word gate on the file.
 pub fn terms_refusals(
     root: &Path,
     records: &[RecordFile],
     tf: &terms::TermsFile,
     led: &Ledger,
+    source: &repo::Source,
+    scan_banned: bool,
 ) -> (Vec<String>, Vec<Vec<(String, String)>>) {
     let mut refusals: Vec<String> = Vec::new();
 
@@ -469,9 +437,7 @@ pub fn terms_refusals(
     // Step 3: definition pairings; a self-pairing or any cycle refuses.
     // Every cycle is reported, not just the first.
     for cycle in terms::cycles(tf) {
-        let mut chain = cycle.clone();
-        chain.push(cycle[0].clone());
-        refusals.push(msg::circular_definition(&chain.join(" -> ")));
+        refusals.push(msg::circular_definition(&msg::cycle_chain(&cycle)));
     }
 
     // Fresh definition pairs for every term (never re-derived from a stale
@@ -482,82 +448,21 @@ pub fn terms_refusals(
 
     // Every current decision's terms line, every current decision's
     // `depends:` line (once approved, an id -- possibly a term's), and
-    // every non-retired term's fresh definition pairs, is a dependent.
-    let mut dependents: Vec<Dependent> = Vec::new();
-    for rf in records {
-        let frel = &rf.rel;
-        for sec in &rf.sections {
-            let Some(id) = &sec.id else { continue };
-            if !state::is_current(led, id) {
-                continue;
-            }
-            let terms_line_pairs: Vec<(String, String)> = sec
-                .terms_line
-                .and_then(|tl| terms::parse_terms_line(rf.lines[tl].trim_end()))
-                .unwrap_or_default();
-            if !terms_line_pairs.is_empty() {
-                dependents.push(Dependent {
-                    source: format!("{}: \"{}\"", frel, sec.heading_text),
-                    id: Some(id.clone()),
-                    pairs: terms_line_pairs.clone(),
-                    check_word_drift: true,
-                });
-            }
-            // A `depends:` entry naming a term directly (by id, since a
-            // depends line holds only ids once its file has been
-            // approved): a current decision can stand on a term with no
-            // mention of it anywhere in its prose/terms line at all, so
-            // that terms line alone would miss this use entirely. Skipped
-            // when the terms line already carries the same id (its own
-            // check above already covers it) so retiring a term used both
-            // ways refuses with one message, not two.
-            for d in &sec.depends {
-                let record::Dep::Id { id: dep_id, .. } = d else { continue };
-                if terms_line_pairs.iter().any(|(_, u)| u == dep_id) {
-                    continue;
-                }
-                if !tf.terms.iter().any(|t| t.id.as_deref() == Some(dep_id.as_str())) {
-                    continue;
-                }
-                dependents.push(Dependent {
-                    source: format!("{}: \"{}\"", frel, sec.heading_text),
-                    id: Some(id.clone()),
-                    pairs: vec![(dep_id.clone(), dep_id.clone())],
-                    check_word_drift: false,
-                });
-            }
-        }
-    }
-    for t in &tf.terms {
-        if t.retired {
-            continue;
-        }
-        // The recorded pairing, exactly as decisions' frozen dependents are
-        // read: the term's own `terms:` line as it already stood in the
-        // file before this approve, not a fresh re-resolve (per "Does a
-        // retired term keep its words?"; terms-walk: "definitions are
-        // dependents for retire/move refusals"). A term with no terms line
-        // yet has no dependents.
-        let Some(pairs) = t.terms_line.as_deref().and_then(terms::parse_terms_line) else {
-            continue;
-        };
-        dependents.push(Dependent {
-            source: format!("term \"{}\"", t.name),
-            id: None,
-            pairs,
-            check_word_drift: true,
-        });
-    }
+    // every non-retired term's recorded pairing, is a dependent -- the
+    // widest reach of `state::dependent_entries`' three readers.
+    let dependents: Vec<state::DependentEntry> =
+        state::dependent_entries(records, led, tf, true, true);
 
     // Step 4: every pair on a dependent must still hold in the new file.
     // `lookup` answers "what does this exact word/phrase resolve to" for
     // every dependent pair, built once rather than once per pair.
     let lookup = terms::phrase_lookup(&tf.terms);
     for dep in &dependents {
+        let label = dep.source.label();
         for (word, uuid) in &dep.pairs {
             let Some(target) = tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str()))
             else {
-                refusals.push(msg::term_removed_but_carried(uuid, &dep.source));
+                refusals.push(msg::term_removed_but_carried(uuid, &label));
                 continue;
             };
             if target.retired {
@@ -567,18 +472,18 @@ pub fn terms_refusals(
                 // carries the retired word) is never superseded (per "Does
                 // a retired term keep its words?"): the agent rewords the
                 // definition and the owner re-approves.
-                let next = match &dep.id {
+                let next = match dep.source.decision_id() {
                     Some(id) => Next::agent(format!("supersedes {} with a new question first", id)),
                     None => msg::term_reword_and_approve(),
                 };
-                refusals.push(msg::term_retired_but_carried(&target.name, &dep.source, next));
+                refusals.push(msg::term_retired_but_carried(&target.name, &label, next));
                 continue;
             }
             // A `depends:`-line dependent's pair is an id read straight off
             // the entry, never a resolved word -- there is no word to
             // drift, only the target's removal/retirement above, so this
-            // check is skipped for it (`check_word_drift` is false).
-            if dep.check_word_drift {
+            // check is skipped for it (`from_word` is false).
+            if dep.from_word {
                 let still_resolves = lookup.get(word) == Some(uuid);
                 if !still_resolves {
                     // A decision dependent here is always current, since
@@ -596,41 +501,31 @@ pub fn terms_refusals(
                     // definition still carries the drifted word) is
                     // reworded by the agent and the owner re-approves, same
                     // as the retired case above.
-                    let next = match &dep.id {
+                    let next = match dep.source.decision_id() {
                         Some(id) => Next::agent(format!(
                             "restores the wording in adrdom/terms.md so \"{}\" still names \"{}\", or writes a question that supersedes {} with a new terms pairing",
                             word, target.name, id
                         )),
                         None => msg::term_reword_and_approve(),
                     };
-                    refusals.push(msg::word_moved_off_term(word, &target.name, &dep.source, next));
+                    refusals.push(msg::word_moved_off_term(word, &target.name, &label, next));
                 }
             }
         }
     }
 
-    // Step 5: banned hits in terms.md's own text, from the single ban list.
-    let banned_path = root.join("adrdom/state/banned.sha256");
-    let banned_entries = crate::banned::read_entries(&banned_path);
-    if !banned_entries.is_empty() {
-        let hash_map: std::collections::HashMap<String, Option<String>> =
-            banned_entries.into_iter().collect();
-        for (i, line) in tf.lines.iter().enumerate() {
-            for tok in crate::banned::tokenize(line) {
-                let h = record::sha256_hex(&tok);
-                if let Some(uuid_opt) = hash_map.get(&h) {
-                    let suffix = uuid_opt
-                        .as_ref()
-                        .and_then(|u| {
-                            tf.terms
-                                .iter()
-                                .find(|t| t.id.as_deref() == Some(u.as_str()))
-                                .map(|t| t.name.clone())
-                        })
-                        .map(|n| format!(" (term {})", n))
-                        .unwrap_or_default();
-                    refusals.push(msg::terms_banned_word(i + 1, &suffix));
-                }
+    // Step 5: banned hits in terms.md's own text, from the single ban list
+    // (skipped for `check`'s call -- see `scan_banned` above -- since
+    // `check_banned` already scans this same file as a tracked file).
+    if scan_banned {
+        let banned_entries = crate::banned::read_entries_via(root, source);
+        if !banned_entries.is_empty() {
+            let hash_map: std::collections::HashMap<String, Option<String>> =
+                banned_entries.into_iter().collect();
+            let text = tf.lines.join("\n");
+            for hit in crate::banned::hits(&text, &hash_map, &tf.terms) {
+                let suffix = msg::term_suffix(hit.term.as_deref());
+                refusals.push(msg::terms_banned_word(hit.line, &suffix));
             }
         }
     }
@@ -651,8 +546,8 @@ pub fn terms_refusals(
 }
 
 /// `adrdom/terms.md` (per "Does the owner approve the terms file as a
-/// whole?"): the seven steps below, in order, nothing written to disk
-/// before step 6 (a shape/cycle/dependent/banned refusal leaves the file
+/// whole?"): the six steps below, in order, nothing written to disk before
+/// step 6 (a shape/cycle/dependent/banned refusal leaves the file
 /// byte-identical to what was on disk before the call). Steps 1, 3, 4 and 5
 /// (plus the definition-length check above them) are `terms_refusals`,
 /// shared with `check`.
@@ -664,44 +559,28 @@ fn do_approve_terms(
 ) -> Result<Outcome, String> {
     // Step 1: parse.
     let mut tf = terms::load(file).map_err(|e| {
-        format!(
-            "approve: {}",
-            msg::read_failed(
-                &file.display().to_string(),
-                e,
-                Next::owner_runs("adr approve adrdom/terms.md again"),
-            )
-        )
+        msg::approve_prefixed(msg::read_failed(
+            &file.display().to_string(),
+            e,
+            Next::owner_runs("adr approve adrdom/terms.md again"),
+        ))
     })?;
 
-    // Every topic file, parsed once here and reused both by
-    // `terms_refusals` (no re-reading them from disk itself) and by
-    // step 7's dependent report below.
-    let mut records: Vec<RecordFile> = Vec::new();
-    for f in &repo::list_decision_files(root) {
-        if let Ok(rf) = record::load_in(root, f) {
-            records.push(rf);
-        }
-    }
-
-    // The pre-existing latest `terms` row, captured before anything below
-    // can change what "latest" means, for step 7's before/after compare.
-    let prev_terms_row = led.latest_for_path("terms", "adrdom/terms.md").cloned();
-    // The snapshot as it stood before this approve overwrites it, for the
-    // same before/after compare -- read once, up front, before step 6's
-    // write (see below) replaces it with this run's own content.
-    let prev_snapshot = state::load_terms_snapshot(root);
+    // Every topic file, parsed once here and reused by `terms_refusals`
+    // (no re-reading them from disk itself).
+    let records: Vec<RecordFile> = record::load_all(root);
 
     // Step 2: mint ids in memory only; nothing is written to disk yet.
     let inserted = terms::mint_ids(&mut tf);
 
     // Steps 1 (shape, post-mint), 3 (cycles), 4 (dependents), 5 (banned):
     // every refusal, all at once.
-    let (refusals, pairs_per_entry) = terms_refusals(root, &records, &tf, led);
+    let (refusals, pairs_per_entry) =
+        terms_refusals(root, &records, &tf, led, &repo::Source::WorkingTree, true);
     if !refusals.is_empty() {
         let msg = refusals
             .iter()
-            .map(|r| format!("approve: {}", r))
+            .map(msg::approve_prefixed)
             .collect::<Vec<_>>()
             .join("\n");
         return Err(msg);
@@ -714,14 +593,11 @@ fn do_approve_terms(
     tf.lines = new_lines;
 
     terms::save(&tf).map_err(|e| {
-        format!(
-            "approve: {}",
-            msg::write_failed(
-                &file.display().to_string(),
-                e,
-                Next::owner_runs("adr approve adrdom/terms.md again"),
-            )
-        )
+        msg::approve_prefixed(msg::write_failed(
+            &file.display().to_string(),
+            e,
+            Next::owner_runs("adr approve adrdom/terms.md again"),
+        ))
     })?;
 
     let mut out: Vec<String> = Vec::new();
@@ -729,39 +605,9 @@ fn do_approve_terms(
         out.push(msg::terms_ids_filled(inserted));
     }
 
-    // The snapshot (`adrdom/state/terms.approved.md`), byte for byte what
-    // was just written to `adrdom/terms.md` above -- `check` reads this
-    // instead of walking `git log` to recover the file's latest approved
-    // text (per "Does check fail a terms file that differs from its latest
-    // approval?"). Written every successful approve, including the
-    // "already approved" no-new-row case, so a repo upgrading onto this
-    // mechanism backfills the snapshot the next time the owner approves
-    // rather than staying without one forever. Written only after the
-    // ledger row below is appended (when one is written at all): a failed
-    // append must never leave the snapshot claiming an approval the ledger
-    // doesn't yet have.
-    let write_snapshot = || -> Result<(), String> {
-        std::fs::write(
-            root.join("adrdom/state/terms.approved.md"),
-            tf.lines.join("\n"),
-        )
-        .map_err(|e| {
-            format!(
-                "approve: {}",
-                msg::write_failed(
-                    "adrdom/state/terms.approved.md",
-                    e,
-                    Next::owner_runs("adr approve adrdom/terms.md again"),
-                )
-            )
-        })
-    };
-
     if state::terms_approved(led, &tf) {
-        // No new ledger row is written in this branch, so there is nothing
-        // for the snapshot to race: the file already matches the ledger's
-        // latest `terms` row, so it is safe to (re)write right away.
-        write_snapshot()?;
+        // No new ledger row is written in this branch: the file already
+        // matches the ledger's latest `terms` row.
         out.push(msg::terms_already_approved());
     } else {
         let row = ledger::Row {
@@ -769,65 +615,17 @@ fn do_approve_terms(
             event: "terms".to_string(),
             id: "-".to_string(),
             hash: terms::file_hash(&tf),
-            detail: "adrdom/terms.md".to_string(),
+            detail: crate::repo::TERMS_PATH.to_string(),
             version: crate::version::VERSION.to_string(),
         };
         ledger::append(ledger_path, &[row]).map_err(|e| {
-            format!(
-                "approve: {}",
-                msg::update_failed(
-                    "ledger",
-                    e,
-                    Next::owner_runs("adr approve adrdom/terms.md again"),
-                )
-            )
+            msg::approve_prefixed(msg::update_failed(
+                "ledger",
+                e,
+                Next::owner_runs("adr approve adrdom/terms.md again"),
+            ))
         })?;
-        write_snapshot()?;
         out.push(msg::terms_approved_now());
-    }
-
-    // Step 7: informational, never a refusal. Only when the pre-existing
-    // snapshot is genuinely the one just superseded (its hash matches the
-    // ledger row that was latest before this call) do we have anything
-    // trustworthy to diff definitions against.
-    if let Some(prev_row) = &prev_terms_row {
-        if let Some(old_tf) = &prev_snapshot {
-            if terms::file_hash(old_tf) == prev_row.hash {
-                for t in &tf.terms {
-                    let Some(tid) = &t.id else { continue };
-                    let Some(old_t) = old_tf.terms.iter().find(|o| o.id.as_deref() == Some(tid.as_str()))
-                    else {
-                        continue;
-                    };
-                    if old_t.definition == t.definition {
-                        continue;
-                    }
-                    out.push(msg::term_definition_changed(&t.name));
-                    for rf in &records {
-                        for sec in &rf.sections {
-                            let Some(id) = &sec.id else { continue };
-                            if !state::is_current(led, id) {
-                                continue;
-                            }
-                            let Some(tl) = sec.terms_line else { continue };
-                            let pairs =
-                                terms::parse_terms_line(rf.lines[tl].trim_end()).unwrap_or_default();
-                            if pairs.iter().any(|(_, pid)| pid == tid) {
-                                out.push(msg::term_used_by_current(&rf.rel, &sec.heading_text));
-                            }
-                        }
-                    }
-                    for (i, t2) in tf.terms.iter().enumerate() {
-                        if t2.retired {
-                            continue;
-                        }
-                        if pairs_per_entry[i].iter().any(|(_, pid)| pid == tid) {
-                            out.push(msg::term_used_by_term(&t2.name));
-                        }
-                    }
-                }
-            }
-        }
     }
 
     Ok(Outcome {
@@ -1067,7 +865,7 @@ fn insert_missing_ids(rf: &RecordFile, mut work_lines: Vec<String>) -> Result<Ve
             let sec = &rf.sections[i];
             let depends_idx = (sec.start + 1..sec.end)
                 .find(|&j| work_lines[j].starts_with("depends: "))
-                .ok_or_else(|| format!("approve: {}", msg::no_depends_line_bare(&sec.heading_text)))?;
+                .ok_or_else(|| msg::approve_prefixed(msg::no_depends_line_bare(&sec.heading_text)))?;
             let new_id = Uuid::new_v4().to_string();
             work_lines.insert(depends_idx + 1, format!("id: {}", new_id));
         }
@@ -1095,24 +893,21 @@ fn do_approve_record(
     ledger_path: &Path,
 ) -> Result<Outcome, String> {
     let mut rf = record::load(file).map_err(|e| {
-        format!(
-            "approve: {}",
-            msg::read_failed(
-                &file.display().to_string(),
-                e,
-                Next::owner_runs(format!("adr approve {} again", rel)),
-            )
-        )
+        msg::approve_prefixed(msg::read_failed(
+            &file.display().to_string(),
+            e,
+            Next::owner_runs(format!("adr approve {} again", rel)),
+        ))
     })?;
 
     // Refuse up front, before a single `depends:` entry is resolved, when
-    // adrdom/terms.md is missing, shape-broken, or not yet approved (the
-    // review finding this fixes): the same gate `ask` applies via
-    // `require_terms` (`do_answer`/`do_refuse` use `terms_for_answer`). Without this, a real term with no id minted yet (an
-    // unapproved terms.md mints nothing to disk) silently fails to resolve
-    // and every depends entry naming it refuses "which is no term" instead
-    // of the one clear "terms not approved" line.
-    let tf = require_terms(root, led, rel).map_err(|e| format!("approve: {}", e))?;
+    // adrdom/terms.md is missing, shape-broken, or not yet approved: the
+    // same gate `ask`/`answer`/`refuse` apply via `require_terms`. Without
+    // this, a real term with no id minted yet (an unapproved terms.md mints
+    // nothing to disk) silently fails to resolve and every depends entry
+    // naming it refuses "which is no term" instead of the one clear "terms
+    // not approved" line.
+    let tf = require_terms(root, led, rel).map_err(msg::approve_prefixed)?;
     let terms_list: &[terms::Term] = &tf.terms;
     // Built once per command run (not per depends entry): `resolve_dep`
     // used to call `terms::resolve_word`, which rebuilt this same map from
@@ -1123,18 +918,13 @@ fn do_approve_record(
     // loaded again, further down, only for `missing_answered_refusals` --
     // after `cross_file_heading_index` had already loaded every file
     // itself to build its own copy of the same thing. Loaded via
-    // `load_in` (root-relative `.rel`, matching what `cross_file_heading_index`
+    // `record::load_all` (root-relative `.rel`, matching what `cross_file_heading_index`
     // always printed) straight off disk, still unwritten at this point, so
     // its ids are exactly what's on disk; minting new ids for skeleton
     // headings below never removes an id already in the ledger's
     // `state_ids`, so loading before that rewrite changes nothing either
     // read below depends on.
-    let mut all_records: Vec<RecordFile> = Vec::new();
-    for f in &repo::list_decision_files(root) {
-        if let Ok(rf2) = record::load_in(root, f) {
-            all_records.push(rf2);
-        }
-    }
+    let all_records: Vec<RecordFile> = record::load_all(root);
     // Every current decision's heading text, repo-wide (the cross-file gap
     // "Does a reference in a topic file carry the identifier of what it
     // names?" left open): built once here too, from `all_records` above,
@@ -1165,7 +955,7 @@ fn do_approve_record(
     let mut refusals: Vec<String> =
         record_refusals(rel, &rf, terms_list, &phrase_lookup, &cross_file_headings, led)
             .into_iter()
-            .map(|r| format!("approve: {}", r.message))
+            .map(|r| msg::approve_prefixed(r.message))
             .collect();
 
     // A letter-set suffix naming a current decision elsewhere
@@ -1187,7 +977,7 @@ fn do_approve_record(
                 for m in
                     depends::bad_letters_for_decision(rel, &sec.heading_text, &all_records, &id, letters)
                 {
-                    refusals.push(format!("approve: {}", m));
+                    refusals.push(msg::approve_prefixed(m));
                 }
             }
         }
@@ -1203,7 +993,7 @@ fn do_approve_record(
     // nothing is written when a check refuses). `all_records`, loaded
     // above, is still exactly what's on disk at this point.
     for r in missing_answered_refusals(&all_records, led) {
-        refusals.push(format!("approve: {}", r.message));
+        refusals.push(msg::approve_prefixed(r.message));
     }
 
     let present_ids: HashSet<String> = all_records
@@ -1280,14 +1070,11 @@ fn do_approve_record(
     let context_hash = record::context_hash(&work_rf);
 
     record::save(&work_rf).map_err(|e| {
-        format!(
-            "approve: {}",
-            msg::write_failed(
-                &file.display().to_string(),
-                e,
-                Next::owner_runs(format!("adr approve {} again", rel)),
-            )
-        )
+        msg::approve_prefixed(msg::write_failed(
+            &file.display().to_string(),
+            e,
+            Next::owner_runs(format!("adr approve {} again", rel)),
+        ))
     })?;
 
     let mut rows: Vec<ledger::Row> = Vec::new();
@@ -1330,28 +1117,22 @@ fn do_approve_record(
     }
 
     ledger::append(ledger_path, &rows).map_err(|e| {
-        format!(
-            "approve: {}",
-            msg::update_failed(
-                "ledger",
-                e,
-                Next::owner_runs(format!("adr approve {} again", rel)),
-            )
-        )
+        msg::approve_prefixed(msg::update_failed(
+            "ledger",
+            e,
+            Next::owner_runs(format!("adr approve {} again", rel)),
+        ))
     })?;
 
     // `withdrawn_rows` was computed, and any refusal already returned,
     // above -- before either write this function has made so far.
     if !withdrawn_rows.is_empty() {
         ledger::append(ledger_path, &withdrawn_rows).map_err(|e| {
-            format!(
-                "approve: {}",
-                msg::update_failed(
-                    "ledger",
-                    e,
-                    Next::owner_runs(format!("adr approve {} again", rel)),
-                )
-            )
+            msg::approve_prefixed(msg::update_failed(
+                "ledger",
+                e,
+                Next::owner_runs(format!("adr approve {} again", rel)),
+            ))
         })?;
         for r in &withdrawn_rows {
             messages.push(msg::withdrawn(&r.detail));
@@ -1401,13 +1182,8 @@ fn rewrite_dep_entry(
     cross_file_headings: &HashMap<String, Vec<(String, String)>>,
     led: &Ledger,
 ) -> String {
-    let set_suffix = |set: &Option<record::AnswerSet>| {
-        set.as_ref()
-            .map(|s| format!("={}", record::canonical_set(s)))
-            .unwrap_or_default()
-    };
     match d {
-        record::Dep::Id { id, set } => format!("{}{}", id, set_suffix(set)),
+        record::Dep::Id { id, set } => format!("{}{}", id, record::set_suffix(set)),
         record::Dep::Text { text, set } => {
             let resolved = depends::resolve_dep(
                 d,
@@ -1425,16 +1201,16 @@ fn rewrite_dep_entry(
                     DepTarget::Term(id) | DepTarget::Decision(id) => Some(id),
                 });
             match resolved {
-                Some(id) => format!("{}{}", id, set_suffix(set)),
-                None => format!("{}{}", text, set_suffix(set)),
+                Some(id) => format!("{}{}", id, record::set_suffix(set)),
+                None => format!("{}{}", text, record::set_suffix(set)),
             }
         }
     }
 }
 
 pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
-    let banned_path = root.join("adrdom/state/banned.sha256");
-    let ledger_path = root.join("adrdom/state/ledger.tsv");
+    let banned_path = root.join(crate::banned::BAN_LIST);
+    let ledger_path = root.join(crate::repo::LEDGER_PATH);
 
     let mut to_remove: HashSet<String> = HashSet::new();
     for line in input.lines() {

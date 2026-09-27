@@ -5,37 +5,12 @@ use crate::ledger;
 use crate::msg::{self, Actor, Next};
 use crate::record;
 use crate::repo;
-use crate::state::{self, TermsLoad};
+use crate::state;
 use crate::tells;
 use crate::terms;
+use crate::view;
 use std::collections::HashMap;
 use std::path::PathBuf;
-
-/// The first banned-word hit in `text` against the ban list, tokenizing
-/// each line the way `ban`/`check` do: the word as `banned::tokenize`
-/// returns it (already lowercased), and the term name when the hash's
-/// entry carries a uuid that still names a current term.
-fn first_banned_hit(
-    text: &str,
-    hash_map: &HashMap<String, Option<String>>,
-    terms_list: &[terms::Term],
-) -> Option<(String, Option<String>)> {
-    for line in text.split('\n') {
-        for tok in banned::tokenize(line) {
-            let h = record::sha256_hex(&tok);
-            if let Some(uuid_opt) = hash_map.get(&h) {
-                let name = uuid_opt.as_ref().and_then(|u| {
-                    terms_list
-                        .iter()
-                        .find(|t| t.id.as_deref() == Some(u.as_str()))
-                        .map(|t| t.name.clone())
-                });
-                return Some((tok, name));
-            }
-        }
-    }
-    None
-}
 
 pub fn run(record_path: PathBuf) -> i32 {
     let root = match repo::find_root() {
@@ -45,39 +20,21 @@ pub fn run(record_path: PathBuf) -> i32 {
             return 1;
         }
     };
-    let ledger_path = root.join("adrdom/state/ledger.tsv");
+    let ledger_path = root.join(repo::LEDGER_PATH);
     let led = ledger::read(&ledger_path);
     let rel = state::rel_path(&root, &record_path);
 
     // Refusals 1-3: adrdom/terms.md missing, unreadable/shape errors, or
     // not approved. These come before anything about the topic file itself is
-    // even loaded, since none of them depend on it.
-    let tf = match state::load_terms_checked(&root) {
-        TermsLoad::Missing => {
-            eprintln!("ask: {}", msg::terms_missing());
+    // even loaded, since none of them depend on it. Shared with `approve`
+    // (`actions::require_terms`).
+    let tf = match actions::require_terms(&root, &led, &rel) {
+        Ok(tf) => tf,
+        Err(e) => {
+            eprintln!("ask: {}", e);
             return 1;
-        }
-        TermsLoad::LoadError(e) => {
-            eprintln!(
-                "ask: {}",
-                msg::terms_load_error(&e, Next::agent("fixes adrdom/terms.md and retries"))
-            );
-            return 1;
-        }
-        TermsLoad::Ok(tf) => {
-            if !tf.errors.is_empty() {
-                for e in &tf.errors {
-                    eprintln!("ask: {}", msg::terms_shape_error(e));
-                }
-                return 1;
-            }
-            tf
         }
     };
-    if !state::terms_approved(&led, &tf) {
-        eprintln!("ask: {}", msg::terms_not_approved(&rel));
-        return 1;
-    }
     let terms_list: Vec<terms::Term> = tf.terms.clone();
 
     let mut rf = match record::load(&record_path) {
@@ -108,10 +65,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     // `record_refusals`. `ask` has nothing else loaded repo-wide (only
     // `rf`, the one file it was asked about), so this is the one caller
     // that still has to load every topic file for it.
-    let all_records: Vec<record::RecordFile> = repo::list_decision_files(&root)
-        .iter()
-        .filter_map(|f| record::load_in(&root, f).ok())
-        .collect();
+    let all_records: Vec<record::RecordFile> = record::load_all(&root);
     let cross_file_headings = depends::cross_file_heading_index(&all_records, &led);
 
     // Plan/context approval state must be read off `rf` exactly as loaded,
@@ -154,30 +108,30 @@ pub fn run(record_path: PathBuf) -> i32 {
     }
 
     // Refuse (and change nothing) if any answered or refused section was
-    // edited since it was answered/refused.
+    // edited since it was answered/refused: the same comparison check's
+    // `answers.rs` makes (every ledger row for the id at that event, not
+    // only the latest, since a genuine re-answer at the same letter after a
+    // harmless edit adds a second row rather than rewriting the first),
+    // shared through `state::closed_match`.
     for sec in &rf.sections {
-        if let Some(id) = &sec.id {
-            if let Some(row) = led.latest_state(id) {
-                if row.event == "answered" {
-                    let cur = record::section_hash(&rf.lines, sec);
-                    if cur != row.hash {
-                        eprintln!(
-                            "ask: {}",
-                            msg::edited_after_answered(&record_path.display().to_string(), &sec.heading_text)
-                        );
-                        return 1;
-                    }
-                } else if row.event == "refused" && sec.is_refused() {
-                    let cur = record::section_hash(&rf.lines, sec);
-                    if cur != row.hash {
-                        eprintln!(
-                            "ask: {}",
-                            msg::edited_after_refused(&record_path.display().to_string(), &sec.heading_text)
-                        );
-                        return 1;
-                    }
-                }
+        let Some(id) = &sec.id else { continue };
+        if sec.answer_line.is_none() {
+            continue;
+        }
+        let cur = record::section_hash(&rf.lines, sec);
+        if let state::ClosedMatch::Edited = state::closed_match(&led, &cur, sec, id) {
+            if sec.is_refused() {
+                eprintln!(
+                    "ask: {}",
+                    msg::edited_after_refused(&record_path.display().to_string(), &sec.heading_text)
+                );
+            } else {
+                eprintln!(
+                    "ask: {}",
+                    msg::edited_after_answered(&record_path.display().to_string(), &sec.heading_text)
+                );
             }
+            return 1;
         }
     }
 
@@ -240,18 +194,14 @@ pub fn run(record_path: PathBuf) -> i32 {
     }
 
     // The open tier (per "Does the tool derive tiers from the depends
-    // lines?"): the lowest tier holding a non-skeleton
-    // question without a letter answer (a refused question counts as
-    // without one). Every candidate is non-skeleton and has no letter
-    // answer by construction, so whenever any candidate exists, it names a
-    // tier in this set and `open_tier` is never `None`.
-    let open_tier: Option<usize> = rf
-        .sections
-        .iter()
-        .enumerate()
-        .filter(|(_, s)| !s.is_skeleton && s.answer_letter().is_none())
-        .filter_map(|(i, _)| rf.tier_of(i))
-        .min();
+    // lines?"): the lowest tier holding an unresolved section
+    // (`state::open_tier`; a refused question counts as unresolved, and so
+    // does a skeleton heading with no answer -- per "Does the owner answer
+    // a question with a refusal?" and "Does a topic file close?"). Every
+    // candidate has no letter answer by construction, so whenever any
+    // candidate exists, it names a tier in this set and `open_tier` is
+    // never `None`.
+    let open_tier: Option<usize> = state::open_tier(&rf);
 
     // Answer sets mandatory (per "Does a depends entry carry the answers
     // it holds under?"): before asking any candidate in the
@@ -268,7 +218,17 @@ pub fn run(record_path: PathBuf) -> i32 {
             .any(|(i, _)| candidate[i] && rf.tier_of(i) == Some(n));
         if asking_in_open_tier {
             for (ti, target) in rf.sections.iter().enumerate() {
-                if rf.tier_of(ti) != Some(n) {
+                // Every open-tier target with no letter answer yet, not
+                // only the ones being newly asked or re-asked this run
+                // (per "Does a depends entry carry the answers it holds
+                // under?": the assumption is declared before the answer
+                // exists, so a target that was asked in an earlier run and
+                // is still open still demands a set on every entry naming
+                // it). A target that already carries a letter answer froze
+                // its dependents' sets when it was itself asked, so it is
+                // skipped here: an answered target's dependents are never
+                // edited on its account.
+                if rf.tier_of(ti) != Some(n) || !state::tier_unresolved(target) {
                     continue;
                 }
                 for (di, set) in rf.dependents_of(ti) {
@@ -283,19 +243,13 @@ pub fn run(record_path: PathBuf) -> i32 {
                         }
                         Some(record::AnswerSet::Any) => {}
                         Some(record::AnswerSet::Letters(letters)) => {
-                            for l in letters {
-                                if !target.options.iter().any(|o| o.letter == *l) {
-                                    eprintln!(
-                                        "ask: {}",
-                                        msg::bad_option_letter(
-                                            &rel,
-                                            &dependent.heading_text,
-                                            &target.heading_text,
-                                            *l
-                                        )
-                                    );
-                                    return 1;
-                                }
+                            if let Some(m) =
+                                depends::bad_letters(&rel, &dependent.heading_text, target, letters)
+                                    .into_iter()
+                                    .next()
+                            {
+                                eprintln!("ask: {}", m);
+                                return 1;
                             }
                         }
                     }
@@ -304,9 +258,16 @@ pub fn run(record_path: PathBuf) -> i32 {
         }
     }
 
-    let banned_path = root.join("adrdom/state/banned.sha256");
+    let banned_path = root.join(banned::BAN_LIST);
     let banned_entries: HashMap<String, Option<String>> =
         banned::read_entries(&banned_path).into_iter().collect();
+
+    // Per "Does a depends entry carry the answers it holds under?": every
+    // moot heading dep in the file, gated on the ledger's `qstate` rather
+    // than just the file's letter (shared with `check`/the page through
+    // `view::moot_pairs`, so the two can never diverge on what counts as
+    // moot). Computed once, ahead of the per-candidate loop.
+    let moot_pairs = view::moot_pairs(&rf, &led);
 
     for (i, sec) in rf.sections.iter().enumerate() {
         if !candidate[i] {
@@ -347,67 +308,79 @@ pub fn run(record_path: PathBuf) -> i32 {
         }
 
         // Tier rule (per "Does the tool derive tiers from the depends
-        // lines?"): a candidate outside the open tier
-        // refuses, naming the tier's blocker (the first non-skeleton,
-        // unanswered section in the open tier, by file order) and whether
-        // that blocker is refused.
+        // lines?"): a candidate outside the open tier refuses, naming the
+        // tier's blocker (`state::tier_blocker`: the first non-skeleton
+        // unresolved section in the open tier, by file order, or the
+        // tier's own skeleton heading when it holds nothing else) and
+        // whether that blocker is refused.
         let cand_tier = rf.tier_of(i).unwrap_or(1);
         if let Some(open_n) = open_tier {
             if cand_tier != open_n {
-                let blocker = rf.sections.iter().enumerate().find(|(bi, s)| {
-                    !s.is_skeleton && s.answer_letter().is_none() && rf.tier_of(*bi) == Some(open_n)
-                }).map(|(_, s)| s);
-                if let Some(blocker) = blocker {
-                    if blocker.is_refused() {
-                        eprintln!(
-                            "ask: {}",
-                            msg::tier_blocked_refused(
-                                &rel,
-                                &sec.heading_text,
-                                cand_tier,
-                                open_n,
-                                &blocker.heading_text,
-                            )
-                        );
+                if let Some(blocker) = state::tier_blocker(&rf, open_n) {
+                    // The next move depends on where the blocker stands:
+                    // refused -> the plan changes; asked -> the owner
+                    // answers it (by id@version, the form `answer`
+                    // takes); anything else -> the agent asks it first,
+                    // writing a body first only when the blocker is a bare
+                    // skeleton (`state::tier_blocker` returns a non-skeleton
+                    // section whenever the open tier has one, so a blocker
+                    // that reaches here unrefused and unasked already has a
+                    // body exactly when it is not a skeleton).
+                    let blocker_state = blocker
+                        .id
+                        .as_deref()
+                        .and_then(|bid| led.latest_state(bid))
+                        .map(|r| r.event.clone());
+                    let m = if blocker.is_refused() {
+                        msg::tier_blocked_refused(
+                            &rel,
+                            &sec.heading_text,
+                            cand_tier,
+                            open_n,
+                            &blocker.heading_text,
+                        )
+                    } else if blocker_state.as_deref() == Some("asked") {
+                        let bhash = record::section_hash(&rf.lines, blocker);
+                        msg::tier_blocked_waiting(
+                            &rel,
+                            &sec.heading_text,
+                            cand_tier,
+                            open_n,
+                            &blocker.heading_text,
+                            blocker.id.as_deref().unwrap_or("<id>"),
+                            &bhash[..record::VERSION_LEN],
+                        )
+                    } else if blocker.is_skeleton {
+                        msg::tier_blocked_unasked(
+                            &rel,
+                            &sec.heading_text,
+                            cand_tier,
+                            open_n,
+                            &blocker.heading_text,
+                        )
                     } else {
-                        eprintln!(
-                            "ask: {}",
-                            msg::tier_blocked_waiting(
-                                &rel,
-                                &sec.heading_text,
-                                cand_tier,
-                                open_n,
-                                &blocker.heading_text,
-                                blocker.id.as_deref().unwrap_or("<id>"),
-                            )
-                        );
-                    }
+                        msg::tier_blocked_needs_ask(
+                            &rel,
+                            &sec.heading_text,
+                            cand_tier,
+                            open_n,
+                            &blocker.heading_text,
+                        )
+                    };
+                    eprintln!("ask: {}", m);
                     return 1;
                 }
             }
         }
 
-        // Moot refusal (per "Does a depends entry carry the answers it
-        // holds under?"): a heading dep carrying a set whose target
-        // is now answered with a letter outside that set.
-        for d in &sec.depends {
-            if let Some(record::AnswerSet::Letters(letters)) = d.set() {
-                if let Some(ti) = rf.dep_target(d) {
-                    let target = &rf.sections[ti];
-                    if let Some(c) = target.answer_letter() {
-                        if !letters.contains(&c) {
-                            let set_str = record::canonical_set(&record::AnswerSet::Letters(
-                                letters.clone(),
-                            ));
-                            eprintln!(
-                                "ask: {}",
-                                msg::moot_candidate(&rel, &sec.heading_text, &target.heading_text, &set_str, c)
-                            );
-                            return 1;
-                        }
-                    }
-                }
-            }
+        // Moot refusal: this candidate's own entry in `moot_pairs`, matched
+        // by section index since two sections may share a heading text.
+        if let Some(p) = moot_pairs.iter().find(|p| p.section_idx == i) {
+            eprintln!(
+                "ask: {}",
+                msg::moot_candidate(&rel, &sec.heading_text, &p.target_heading, &p.set_text, p.letter)
+            );
+            return 1;
         }
 
         // Per "Does the tool stop loaded phrases in a question?": a
@@ -427,11 +400,9 @@ pub fn run(record_path: PathBuf) -> i32 {
         let text = state::section_text_excluding_terms_line(&rf.lines, sec);
 
         // Refusal 5: a banned word in the candidate's own text, from the
-        // single hash-based ban list scanner.
-        if let Some((_word, term_name)) = first_banned_hit(&text, &banned_entries, &terms_list) {
-            let suffix = term_name
-                .map(|n| format!(" (term {})", n))
-                .unwrap_or_default();
+        // single hash-based ban list scanner. `ask` stops at the first hit.
+        if let Some(hit) = banned::first_hit(&text, &banned_entries, &terms_list) {
+            let suffix = msg::term_suffix(hit.term.as_deref());
             eprintln!(
                 "ask: {}",
                 msg::banned_word_in_candidate(&rel, &sec.heading_text, &suffix)

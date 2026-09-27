@@ -17,9 +17,10 @@ use std::path::Path;
 /// disk (per "Does check at a commit read the staged files?").
 pub fn test_index(root: &Path, source: &Source) -> HashMap<String, Vec<String>> {
     let mut test_ids: HashMap<String, Vec<String>> = HashMap::new();
+    let adrdom_prefix = format!("{}/", repo::ADRDOM_DIR);
     if let Some(list) = repo::git(root, &["ls-files"]) {
         for path in list.lines() {
-            if path.starts_with("adrdom/") {
+            if path.starts_with(&adrdom_prefix) {
                 continue;
             }
             let Some(content) = source.read(root, path) else {
@@ -29,11 +30,11 @@ pub fn test_index(root: &Path, source: &Source) -> HashMap<String, Vec<String>> 
                 if let Some(pos) = line.find("adr: ") {
                     let rest = &line[pos + 5..];
                     let id_tok: String = rest.chars().take_while(|c| !c.is_whitespace()).collect();
-                    if is_uuid(&id_tok) {
+                    if crate::record::is_uuid(&id_tok) {
                         test_ids
                             .entry(id_tok)
                             .or_default()
-                            .push(format!("{}:{}", path, i + 1));
+                            .push(msg::location(path, i + 1));
                     }
                 }
             }
@@ -74,7 +75,6 @@ pub(super) fn check_tests(
         } else {
             out.push(Failure {
                 check: "tested".to_string(),
-                id: Some(id.clone()),
                 message: msg::untested(id),
             });
         }
@@ -84,7 +84,6 @@ pub(super) fn check_tests(
         if !current.contains(id) {
             out.push(Failure {
                 check: "tested".to_string(),
-                id: Some(id.clone()),
                 message: msg::stale_test(id),
             });
         }
@@ -93,13 +92,3 @@ pub(super) fn check_tests(
     (out, tested_count)
 }
 
-/// A test only counts when the token after `adr: ` is a full uuid
-/// (8-4-4-4-12 lowercase hex); any other text after `adr:` is prose.
-fn is_uuid(s: &str) -> bool {
-    let parts: Vec<&str> = s.split('-').collect();
-    parts.len() == 5
-        && [8, 4, 4, 4, 12]
-            .iter()
-            .zip(&parts)
-            .all(|(n, p)| p.len() == *n && p.chars().all(|c| c.is_ascii_hexdigit()))
-}

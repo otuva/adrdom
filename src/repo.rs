@@ -2,6 +2,33 @@ use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// The single directory every governed file lives under.
+pub const ADRDOM_DIR: &str = "adrdom";
+/// Where topic files live, relative to the repo root.
+pub const DECISIONS_DIR: &str = "adrdom/decisions";
+/// Where the tool's own state (ledger, ban list) lives, relative to the
+/// repo root.
+pub const STATE_DIR: &str = "adrdom/state";
+/// The append-only ledger of every act (`ask`, `answer`, `approve`, ...).
+pub const LEDGER_PATH: &str = "adrdom/state/ledger.tsv";
+/// The repo's own terms file.
+pub const TERMS_PATH: &str = "adrdom/terms.md";
+/// Where the hashed ban list lives, relative to the repo root: the one
+/// literal for this path, used by every site that reads or writes it
+/// (`ban`, `unban`, `ask`, `check --banned`, `terms_refusals`, `install`).
+pub const BAN_LIST: &str = "adrdom/state/banned.sha256";
+
+/// Where `adr install` writes the pre-commit hook, relative to the repo
+/// root. Its content is `commands::install::PRE_COMMIT_HOOK`; `check`'s
+/// `install` check reads this path the same way it reads AGENTS.md (per
+/// "Does check hold the files install writes?", 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
+/// answer A, extended by the owner to cover the git hooks).
+pub const PRE_COMMIT_HOOK_PATH: &str = ".githooks/pre-commit";
+/// Where `adr install` writes the commit-msg hook, relative to the repo
+/// root. Its content is `commands::install::COMMIT_MSG_HOOK`; checked the
+/// same way as `PRE_COMMIT_HOOK_PATH`.
+pub const COMMIT_MSG_HOOK_PATH: &str = ".githooks/commit-msg";
+
 pub fn find_root() -> Option<PathBuf> {
     let mut dir = std::env::current_dir().ok()?;
     loop {
@@ -40,13 +67,34 @@ pub fn list_decision_files(root: &Path) -> Vec<PathBuf> {
 /// tree, so it keeps calling the plain function above.
 pub fn list_decision_files_via(root: &Path, source: &Source) -> Vec<PathBuf> {
     let mut out: Vec<PathBuf> = source
-        .list_under(root, "adrdom/decisions")
+        .list_under(root, DECISIONS_DIR)
         .into_iter()
         .filter(|p| p.ends_with(".md"))
         .map(|rel| root.join(rel))
         .collect();
     out.sort();
     out
+}
+
+/// Whether git would run the hook at `path` at all: git skips a hook file
+/// that is not executable, silently, so a hook whose content is current
+/// but whose mode is not is no hook. On unix this is the owner execute
+/// bit of the working-tree file (the file git runs, whatever `check` is
+/// reading content from); elsewhere there is no such bit and every hook
+/// counts as executable.
+pub fn hook_is_executable(path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::metadata(path)
+            .map(|m| m.permissions().mode() & 0o100 != 0)
+            .unwrap_or(false)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        true
+    }
 }
 
 /// The naming half of 76bd7ef0 A ("each file holds one topic and is named
@@ -68,6 +116,65 @@ pub fn valid_topic_file_name(name: &str) -> bool {
     }
     stem.split('-')
         .all(|word| !word.is_empty() && word.chars().all(|c| c.is_ascii_lowercase()))
+}
+
+/// The other half of 76bd7ef0 A's naming rule ("is named by it"): the file
+/// stem a topic file with h1 text `topic` must carry -- the text lowercased,
+/// every run of characters that are not ASCII letters or digits turned into
+/// one hyphen, leading and trailing hyphens dropped. "Ban" gives "ban",
+/// "Two Words" gives "two-words", "Rule 2" gives "rule-2". A digit stays:
+/// `valid_topic_file_name` accepts none, so a topic whose stem holds one
+/// has no name any file can carry, and check refuses the topic text itself
+/// (`msg::topic_unnameable`) rather than inventing a name the decision's
+/// "named by it" would not give. Check compares the stem to the file's own
+/// only once `valid_topic_file_name` has accepted the name.
+pub fn expected_topic_file_stem(topic: &str) -> String {
+    let mut out = String::new();
+    let mut gap = false;
+    for c in topic.chars() {
+        if c.is_ascii_alphanumeric() {
+            if gap && !out.is_empty() {
+                out.push('-');
+            }
+            gap = false;
+            out.push(c.to_ascii_lowercase());
+        } else {
+            gap = true;
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod topic_name_tests {
+    use super::expected_topic_file_stem;
+
+    #[test]
+    fn expected_stem_lowercases_and_hyphenates_runs() {
+        assert_eq!(expected_topic_file_stem("Ban"), "ban");
+        assert_eq!(expected_topic_file_stem("Two Words"), "two-words");
+        assert_eq!(expected_topic_file_stem("  A -- b_C  "), "a-b-c");
+        assert_eq!(expected_topic_file_stem(""), "");
+    }
+
+    // A digit stays in the derived stem, and that stem is then one no
+    // file name can carry (`valid_topic_file_name`, 76bd7ef0 A, accepts no
+    // digit): check refuses such a topic outright instead of deriving a
+    // name the topic text does not give.
+    #[test]
+    fn expected_stem_keeps_digits_and_is_then_unnameable() {
+        use super::valid_topic_file_name;
+
+        assert_eq!(expected_topic_file_stem("Rule 2"), "rule-2");
+        assert_eq!(expected_topic_file_stem("OAuth2"), "oauth2");
+        for topic in ["Rule 2", "OAuth2"] {
+            assert!(
+                !valid_topic_file_name(&format!("{}.md", expected_topic_file_stem(topic))),
+                "{}",
+                topic
+            );
+        }
+    }
 }
 
 /// Every file under `dir` (any extension), found recursively on disk.
@@ -139,12 +246,7 @@ impl Source {
                 let mut out = Vec::new();
                 walk_files(&root.join(rel_dir), &mut out);
                 out.into_iter()
-                    .map(|p| {
-                        p.strip_prefix(root)
-                            .unwrap_or(&p)
-                            .to_string_lossy()
-                            .replace('\\', "/")
-                    })
+                    .map(|p| crate::state::rel_path(root, &p))
                     .collect()
             }
             Source::Index => git(root, &["ls-files", "--", rel_dir])

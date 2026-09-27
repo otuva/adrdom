@@ -80,6 +80,10 @@ pub struct QuestionView {
     pub standard: Option<String>,
     pub options: Vec<OptionView>,
     pub answer: Option<char>,
+    /// Each supersedes entry as the heading text it names (per "Does a
+    /// reference in a topic file carry the identifier of what it names?":
+    /// the page turns the id back into the name), or the bare id when no
+    /// topic file holds that heading any more.
     pub supersedes: Vec<String>,
     pub tests: usize,
     /// Every word=term pairing on this section's terms line (answered or
@@ -120,19 +124,6 @@ pub struct TermEntryView {
     pub dependents: usize,
 }
 
-/// A term whose definition or aliases differ from the last approved
-/// (HEAD) version of `adrdom/terms.md`, shown only while the working
-/// copy is unapproved.
-pub struct TermDiffView {
-    pub name: String,
-    pub before_definition: String,
-    pub after_definition: String,
-    pub before_aliases: Vec<String>,
-    pub after_aliases: Vec<String>,
-    /// "<path>: <heading>" for every current decision carrying this term.
-    pub dependents: Vec<String>,
-}
-
 pub struct TermsView {
     pub path: String,
     pub approved: bool,
@@ -141,7 +132,6 @@ pub struct TermsView {
     /// a" line per cycle `terms::cycles` finds.
     pub errors: Vec<String>,
     pub entries: Vec<TermEntryView>,
-    pub diffs: Vec<TermDiffView>,
 }
 
 pub struct CheckReport {
@@ -186,12 +176,10 @@ pub(crate) fn qstate(led: &Ledger, sec: &Section) -> QState {
 /// heading text, for `format_dep`.
 pub fn all_heading_texts(root: &Path) -> HashMap<String, String> {
     let mut out = HashMap::new();
-    for f in repo::list_decision_files(root) {
-        if let Ok(rf) = record::load(&f) {
-            for sec in &rf.sections {
-                if let Some(id) = &sec.id {
-                    out.insert(id.clone(), sec.heading_text.clone());
-                }
+    for rf in record::load_all(root) {
+        for sec in &rf.sections {
+            if let Some(id) = &sec.id {
+                out.insert(id.clone(), sec.heading_text.clone());
             }
         }
     }
@@ -199,19 +187,7 @@ pub fn all_heading_texts(root: &Path) -> HashMap<String, String> {
 }
 
 fn dep_with_set(text: &str, set: &Option<record::AnswerSet>) -> String {
-    match set {
-        None => text.to_string(),
-        Some(record::AnswerSet::Any) => format!("{}=*", text),
-        Some(record::AnswerSet::Letters(letters)) => format!(
-            "{}={}",
-            text,
-            letters
-                .iter()
-                .map(|c| c.to_string())
-                .collect::<Vec<_>>()
-                .join("|")
-        ),
-    }
+    format!("{}{}", text, record::set_suffix(set))
 }
 
 /// A `depends:` entry's text as words (per "Does a reference in a topic
@@ -247,16 +223,32 @@ pub fn format_dep(
     }
 }
 
-/// One note per heading dep in `rf` whose declared answer set excludes the
-/// letter its target was actually answered with (per "Does a depends entry
-/// carry the answers it holds under?", "moot"; mirrors
-/// `check`'s `moot.rs`, computed independently here since `record.rs` has
-/// no ledger access): `"<h>" stands on "<other>"=A|B, answered C`, `<h>`
-/// the dependent's heading and `<other>` the target's. A target that is
-/// unanswered, or a set of `=*`, never produces a note.
-pub(crate) fn moot_notes(rf: &RecordFile, led: &Ledger) -> Vec<String> {
+/// One entry per heading dep in `rf` whose declared answer set excludes
+/// the letter its target was actually answered with (per "Does a depends
+/// entry carry the answers it holds under?", "moot"; mirrors `check`'s
+/// `moot.rs`, computed independently here since `record.rs` has no ledger
+/// access).
+pub(crate) struct MootPair {
+    /// The dependent's own index in `rf.sections`: lets `ask` match a
+    /// candidate by identity, since two sections may share a heading text
+    /// until `check` refuses the duplicate.
+    pub section_idx: usize,
+    pub dependent_heading: String,
+    pub target_heading: String,
+    pub set_text: String,
+    pub letter: char,
+}
+
+/// Every `MootPair` in `rf`. A target that is unanswered (gated on the
+/// ledger's `qstate`, not the raw file text, so a body edited to show a
+/// letter that was never actually asked/answered through the ledger never
+/// counts), or a set of `=*`, never produces an entry. Shared by
+/// `moot_notes` (its formatted-string wrapper, read by `check`/the page)
+/// and `ask`'s moot refusal, so the two can never diverge on what counts
+/// as moot.
+pub(crate) fn moot_pairs(rf: &RecordFile, led: &Ledger) -> Vec<MootPair> {
     let mut out = Vec::new();
-    for sec in &rf.sections {
+    for (si, sec) in rf.sections.iter().enumerate() {
         for d in &sec.depends {
             let Some(record::AnswerSet::Letters(letters)) = d.set() else {
                 continue;
@@ -274,17 +266,32 @@ pub(crate) fn moot_notes(rf: &RecordFile, led: &Ledger) -> Vec<String> {
                 continue;
             };
             if !letters.contains(&c) {
-                out.push(format!(
-                    "\"{}\" stands on \"{}\"={}, answered {}",
-                    sec.heading_text,
-                    target.heading_text,
-                    letters.iter().map(|c| c.to_string()).collect::<Vec<_>>().join("|"),
-                    c
-                ));
+                out.push(MootPair {
+                    section_idx: si,
+                    dependent_heading: sec.heading_text.clone(),
+                    target_heading: target.heading_text.clone(),
+                    set_text: record::canonical_set(&record::AnswerSet::Letters(letters.clone())),
+                    letter: c,
+                });
             }
         }
     }
     out
+}
+
+/// `"<h>" stands on "<other>"=A|B, answered C`, `<h>` the dependent's
+/// heading and `<other>` the target's -- `moot_pairs`, formatted for
+/// `check`'s note and the page.
+pub(crate) fn moot_notes(rf: &RecordFile, led: &Ledger) -> Vec<String> {
+    moot_pairs(rf, led)
+        .into_iter()
+        .map(|p| {
+            format!(
+                "\"{}\" stands on \"{}\"={}, answered {}",
+                p.dependent_heading, p.target_heading, p.set_text, p.letter
+            )
+        })
+        .collect()
 }
 
 /// The text following `prefix` (e.g. `"Problem: "`) on the first matching
@@ -295,53 +302,21 @@ fn body_field(lines: &[String], sec: &Section, prefix: &str) -> Option<String> {
         .find_map(|l| l.strip_prefix(prefix).map(|v| v.trim().to_string()))
 }
 
-/// `open_tier`: the lowest derived tier that still has a non-skeleton
-/// question without a letter answer — Open, Unasked, or Refused all count
-/// (per "Does the owner answer a question with a refusal?": a refusal is
-/// unanswered for the tier rule) — or `None` when
-/// every tier is clear or tier derivation failed
+/// `open_tier`: the lowest derived tier holding an unresolved section
+/// (`state::open_tier` -- text-only, a skeleton heading with no answer
+/// keeps its tier open exactly as a refused or still-open question does),
+/// or `None` when every tier is clear or tier derivation failed
 /// (`RecordFile::derive_error`; `check`/`approve`/`ask` report why). This
 /// is the "Tier N is open" tier the overview names.
 ///
-/// `waits_on`: the heading of the first Open/Unasked/Refused question in a
-/// tier earlier than the lowest tier that has an Unasked/Skeleton question
-/// waiting to be asked — i.e. the heading `ask` would name in its tier
-/// refusal — or `None` when nothing is waiting on an earlier tier.
-fn open_tier_and_waits_on(rf: &RecordFile, led: &Ledger) -> (Option<usize>, Option<String>) {
-    let Some(tiers) = &rf.tiers else {
-        return (None, None);
-    };
-    let max_tier = tiers.iter().copied().max().unwrap_or(0);
-    let mut tier_states: Vec<Vec<(String, QState)>> = vec![Vec::new(); max_tier + 1];
-    for (i, sec) in rf.sections.iter().enumerate() {
-        let t = tiers[i];
-        tier_states[t].push((sec.heading_text.clone(), qstate(led, sec)));
-    }
-
-    // "Without a letter answer": Open, Unasked, and Refused all block a
-    // later tier from being the open one; Skeleton, Answered, Superseded,
-    // and Withdrawn don't.
-    let unresolved = |s: &QState| matches!(s, QState::Open | QState::Unasked | QState::Refused);
-
-    let open_tier = (1..=max_tier).find(|&t| tier_states[t].iter().any(|(_, s)| unresolved(s)));
-
-    let waiting_tier = (1..=max_tier).find(|&t| {
-        tier_states[t]
-            .iter()
-            .any(|(_, s)| matches!(s, QState::Unasked | QState::Skeleton))
-    });
-
-    let waits_on = waiting_tier.and_then(|wt| {
-        for t in 1..wt {
-            for (heading, s) in &tier_states[t] {
-                if unresolved(s) {
-                    return Some(heading.clone());
-                }
-            }
-        }
-        None
-    });
-
+/// `waits_on`: the heading `state::tier_blocker` names for `open_tier` --
+/// the same section `ask`'s tier-blocked refusal would name -- or `None`
+/// when there is no open tier at all.
+fn open_tier_and_waits_on(rf: &RecordFile) -> (Option<usize>, Option<String>) {
+    let open_tier = state::open_tier(rf);
+    let waits_on = open_tier
+        .and_then(|t| state::tier_blocker(rf, t))
+        .map(|s| s.heading_text.clone());
     (open_tier, waits_on)
 }
 
@@ -382,22 +357,6 @@ fn section_words(
     (words, no_entry)
 }
 
-fn tokenize(text: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut cur = String::new();
-    for c in text.chars() {
-        if c.is_alphanumeric() {
-            cur.push(c);
-        } else if !cur.is_empty() {
-            out.push(std::mem::take(&mut cur));
-        }
-    }
-    if !cur.is_empty() {
-        out.push(cur);
-    }
-    out
-}
-
 /// Removes every dashed uuid (8-4-4-4-12 hex, case-insensitive, on a
 /// non-alphanumeric boundary) from `text`, replacing each with a single
 /// space. `tokenize` splits a dashed uuid into hex fragments at the
@@ -426,25 +385,15 @@ fn strip_uuid_tokens(text: &str) -> String {
 }
 
 /// If a uuid (8-4-4-4-12 hex groups separated by `-`) starts at `start`,
-/// returns the index just past it.
+/// returns the index just past it (`record::is_uuid`, run on the
+/// fixed-length candidate slice this shape always is).
 fn match_uuid_at(chars: &[char], start: usize) -> Option<usize> {
-    const GROUP_LENS: [usize; 5] = [8, 4, 4, 4, 12];
-    let mut pos = start;
-    for (gi, &len) in GROUP_LENS.iter().enumerate() {
-        for _ in 0..len {
-            if pos >= chars.len() || !chars[pos].is_ascii_hexdigit() {
-                return None;
-            }
-            pos += 1;
-        }
-        if gi < GROUP_LENS.len() - 1 {
-            if pos >= chars.len() || chars[pos] != '-' {
-                return None;
-            }
-            pos += 1;
-        }
+    let end = start + 36;
+    if end > chars.len() {
+        return None;
     }
-    Some(pos)
+    let candidate: String = chars[start..end].iter().collect();
+    record::is_uuid(&candidate).then_some(end)
 }
 
 /// A word counts as common (and so never shows up as "No term") when it
@@ -488,11 +437,10 @@ fn no_entry_words(text: &str, pairs: &[(String, String)]) -> Vec<String> {
     let stripped = strip_uuid_tokens(text);
     let mut found: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for line in stripped.split('\n') {
-        let trimmed = line.trim_start();
-        if trimmed.starts_with("id:") || trimmed.starts_with("supersedes:") {
+        if crate::tells::starts_with_any(line, &[crate::tells::ID_PREFIX, crate::tells::SUPERSEDES_PREFIX]) {
             continue;
         }
-        for tok in tokenize(line) {
+        for tok in crate::text::word_runs(line) {
             let w = tok.to_lowercase();
             if w.chars().count() < 3 {
                 continue;
@@ -567,7 +515,11 @@ fn build_question_view(
         standard,
         options,
         answer: sec.answer_letter(),
-        supersedes: sec.supersedes.clone(),
+        supersedes: sec
+            .supersedes
+            .iter()
+            .map(|id| all_headings.get(id).cloned().unwrap_or_else(|| id.clone()))
+            .collect(),
         tests,
         words,
         no_entry,
@@ -595,10 +547,8 @@ fn build_file_view(
     context_approved: bool,
 ) -> FileView {
     let path = state::rel_path(root, &rf.path);
-    let done = plan_approved
-        && context_approved
-        && rf.sections.iter().all(|s| s.answer_letter().is_some());
-    let (open_tier, waits_on) = open_tier_and_waits_on(rf, led);
+    let done = state::file_done(rf, plan_approved, context_approved);
+    let (open_tier, waits_on) = open_tier_and_waits_on(rf);
     let moot = moot_notes(rf, led);
     let questions = rf
         .sections
@@ -623,47 +573,33 @@ fn build_file_view(
 /// "circular definition: a -> b -> a" (the cycle's names, in traversal
 /// order, closed by repeating the first at the end).
 fn format_cycle(names: &[String]) -> String {
-    let mut chain = names.to_vec();
-    if let Some(first) = names.first() {
-        chain.push(first.clone());
-    }
-    format!("circular definition: {}", chain.join(" -> "))
+    format!("circular definition: {}", crate::msg::cycle_chain(names))
 }
 
-/// Every current decision's terms-line pairing, id -> "<path>: <heading>"
-/// per decision that carries it (a decision counted once per term even if
-/// its line pairs the term through more than one word).
-fn dependents_by_entry(root: &Path, led: &Ledger) -> HashMap<String, Vec<String>> {
+/// Every current decision's terms-line pairing, term id -> its dependents'
+/// labels (a decision counted once per term even if its line pairs the
+/// term through more than one word). The narrowest reach of the five
+/// `state::dependent_entries` readers: decisions' own terms lines only, no
+/// `depends:` ids and no term-to-term pairing.
+fn dependents_by_entry(root: &Path, led: &Ledger, tf: &terms::TermsFile) -> HashMap<String, Vec<String>> {
+    let records = record::load_all(root);
     let mut dependents: HashMap<String, Vec<String>> = HashMap::new();
-    for f in repo::list_decision_files(root) {
-        let Ok(rf) = record::load(&f) else { continue };
-        let rel = state::rel_path(root, &rf.path);
-        for sec in &rf.sections {
-            let Some(id) = &sec.id else { continue };
-            if !state::is_current(led, id) {
-                continue;
-            }
-            let Some(tl) = sec.terms_line else { continue };
-            let pairs = terms::parse_terms_line(rf.lines[tl].trim_end()).unwrap_or_default();
-            let mut seen_here: HashSet<String> = HashSet::new();
-            for (_, tid) in pairs {
-                if seen_here.insert(tid.clone()) {
-                    dependents
-                        .entry(tid)
-                        .or_default()
-                        .push(format!("{}: {}", rel, sec.heading_text));
-                }
+    for dep in state::dependent_entries(&records, led, tf, false, false) {
+        let label = dep.source.label();
+        let mut seen_here: HashSet<String> = HashSet::new();
+        for (_, tid) in dep.pairs {
+            if seen_here.insert(tid.clone()) {
+                dependents.entry(tid).or_default().push(label.clone());
             }
         }
     }
     dependents
 }
 
-/// Terms, dependents-per-term, and (while unapproved) before/after diffs
-/// against the last approved (HEAD) version of `adrdom/terms.md` (7.9).
+/// Terms and dependents-per-term.
 fn build_terms_view(root: &Path, led: &Ledger, tf: terms::TermsFile) -> TermsView {
     let approved = state::terms_approved(led, &tf);
-    let dependents = dependents_by_entry(root, led);
+    let dependents = dependents_by_entry(root, led, &tf);
 
     let mut errors = tf.errors.clone();
     for c in terms::cycles(&tf) {
@@ -687,58 +623,18 @@ fn build_terms_view(root: &Path, led: &Ledger, tf: terms::TermsFile) -> TermsVie
         })
         .collect();
 
-    let mut diffs: Vec<TermDiffView> = Vec::new();
-    if !approved {
-        if let Some(latest) = led.latest_for_path("terms", "adrdom/terms.md") {
-            if let Some(head_content) = repo::git(root, &["show", "HEAD:adrdom/terms.md"]) {
-                let head_tf = terms::parse(&record::split_lines(&head_content));
-                if terms::file_hash(&head_tf) == latest.hash {
-                    for t in &tf.terms {
-                        let old =
-                            t.id.as_ref()
-                                .and_then(|id| {
-                                    head_tf
-                                        .terms
-                                        .iter()
-                                        .find(|o| o.id.as_deref() == Some(id.as_str()))
-                                })
-                                .or_else(|| head_tf.terms.iter().find(|o| o.name == t.name));
-                        let Some(old_t) = old else { continue };
-                        if old_t.definition == t.definition && old_t.aliases == t.aliases {
-                            continue;
-                        }
-                        diffs.push(TermDiffView {
-                            name: t.name.clone(),
-                            before_definition: old_t.definition.clone(),
-                            after_definition: t.definition.clone(),
-                            before_aliases: old_t.aliases.clone(),
-                            after_aliases: t.aliases.clone(),
-                            dependents: t
-                                .id
-                                .as_ref()
-                                .and_then(|id| dependents.get(id))
-                                .cloned()
-                                .unwrap_or_default(),
-                        });
-                    }
-                }
-            }
-        }
-    }
-
     let count = tf.terms.len();
     TermsView {
-        path: "adrdom/terms.md".to_string(),
+        path: repo::TERMS_PATH.to_string(),
         approved,
         count,
         errors,
         entries,
-        diffs,
     }
 }
 
 pub fn snapshot(root: &Path) -> Snapshot {
-    let ledger_path = root.join("adrdom/state/ledger.tsv");
+    let ledger_path = root.join(repo::LEDGER_PATH);
     let led = ledger::read(&ledger_path);
     let test_idx = check::test_index(root, &crate::repo::Source::WorkingTree);
 
@@ -766,12 +662,7 @@ pub fn snapshot(root: &Path) -> Snapshot {
     // Every topic file, loaded once: `cross_file_heading_index` used to
     // reload every one of them itself, then this loop reloaded whichever
     // one it was about to build a `FileView` for all over again.
-    let mut records: Vec<RecordFile> = Vec::new();
-    for f in repo::list_decision_files(root) {
-        if let Ok(rf) = record::load_in(root, &f) {
-            records.push(rf);
-        }
-    }
+    let records: Vec<RecordFile> = record::load_all(root);
     let cross_file_headings = depends::cross_file_heading_index(&records, &led);
     let mut files: Vec<FileView> = Vec::new();
     for mut rf in records {
@@ -861,8 +752,8 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ));
-        std::fs::create_dir_all(dir.join("adrdom/decisions")).unwrap();
-        std::fs::create_dir_all(dir.join("adrdom/state")).unwrap();
+        std::fs::create_dir_all(dir.join(repo::DECISIONS_DIR)).unwrap();
+        std::fs::create_dir_all(dir.join(repo::STATE_DIR)).unwrap();
         Command::new("git")
             .current_dir(&dir)
             .args(["init", "-q"])
@@ -878,7 +769,7 @@ mod tests {
             .args(["config", "user.name", "Test"])
             .output()
             .unwrap();
-        std::fs::write(dir.join("adrdom/state/ledger.tsv"), "").unwrap();
+        std::fs::write(dir.join(repo::LEDGER_PATH), "").unwrap();
         dir
     }
 
@@ -889,7 +780,7 @@ mod tests {
     }
 
     fn append_row(dir: &Path, event: &str, id: &str, hash: &str, detail: &str) {
-        let path = dir.join("adrdom/state/ledger.tsv");
+        let path = dir.join(repo::LEDGER_PATH);
         let mut existing = std::fs::read_to_string(&path).unwrap_or_default();
         existing.push_str(&format!(
             "2024-01-01T00:00:00Z\t{}\t{}\t{}\t{}\n",
@@ -919,7 +810,7 @@ Standard: s2.\n\n\
         append_row(&dir, "asked", "id-1", "hash-1", "1.1 First question?");
 
         let rf = record::load(&record).unwrap();
-        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let led = ledger::read(&dir.join(repo::LEDGER_PATH));
 
         // 1.1 has id-1, asked -> Open.
         let sec1 = rf
@@ -943,7 +834,7 @@ Standard: s2.\n\n\
     #[test]
     fn qstate_answered_superseded_and_withdrawn() {
         let dir = temp_repo();
-        let led_path = dir.join("adrdom/state/ledger.tsv");
+        let led_path = dir.join(repo::LEDGER_PATH);
         append_row(&dir, "asked", "id-a", "h", "A?");
         append_row(&dir, "answered", "id-a", "h", "A");
         append_row(&dir, "asked", "id-b", "h", "B?");
@@ -958,7 +849,6 @@ Standard: s2.\n\n\
             end: 1,
             heading_text: "x".to_string(),
             id: Some(id.to_string()),
-            id_dup: false,
             supersedes: vec![],
             depends: vec![],
             options: vec![],
@@ -982,14 +872,13 @@ Standard: s2.\n\n\
         let dir = temp_repo();
         append_row(&dir, "asked", "id-r", "h", "R?");
         append_row(&dir, "refused", "id-r", "h", "R?");
-        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let led = ledger::read(&dir.join(repo::LEDGER_PATH));
 
         let sec = Section {
             start: 0,
             end: 1,
             heading_text: "x".to_string(),
             id: Some("id-r".to_string()),
-            id_dup: false,
             supersedes: vec![],
             depends: vec![],
             options: vec![],
@@ -1011,7 +900,7 @@ Standard: s2.\n\n\
         let content = "# Topic\n\n### 1.1 Not written yet?\n";
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
         let rf = record::load(&record).unwrap();
-        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let led = ledger::read(&dir.join(repo::LEDGER_PATH));
         assert_eq!(qstate(&led, &rf.sections[0]), QState::Skeleton);
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -1020,38 +909,40 @@ Standard: s2.\n\n\
     fn open_tier_and_waits_on_for_unanswered_tier_one() {
         let dir = temp_repo();
         let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP);
-        append_row(&dir, "asked", "id-1", "hash-1", "1.1 First question?");
 
         let rf = record::load(&record).unwrap();
-        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
 
-        let (open_tier, waits_on) = open_tier_and_waits_on(&rf, &led);
-        // Tier 1's question is Open, so it is the lowest open tier.
+        let (open_tier, waits_on) = open_tier_and_waits_on(&rf);
+        // Tier 1's question has no letter answer, so it is the lowest open
+        // tier.
         assert_eq!(open_tier, Some(1));
-        // Tier 2's question is Unasked (waiting), and tier 1's question is
-        // Open (unanswered) and in an earlier tier: that is what `ask`
-        // would name.
+        // Tier 2's question has no answer either, but tier 1's is earlier
+        // and also unresolved: that is what `ask` would name.
         assert_eq!(waits_on.as_deref(), Some("1.1 First question?"));
 
         std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
-    fn waits_on_is_none_once_tier_one_is_answered() {
+    fn waits_on_names_tier_twos_own_question_once_tier_one_is_answered() {
         let dir = temp_repo();
-        let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP);
-        append_row(&dir, "asked", "id-1", "hash-1", "1.1 First question?");
-        append_row(&dir, "answered", "id-1", "hash-1", "A");
+        // Q1 gets a real `**Answer:**` line; Q2 stays unanswered.
+        let content = TWO_GROUP.replacen(
+            "\n\n### 2.1 Second question?",
+            "\n\n**Answer:** A\n\n### 2.1 Second question?",
+            1,
+        );
+        let record = write_record(&dir, "adrdom/decisions/example.md", &content);
 
         let rf = record::load(&record).unwrap();
-        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
 
-        let (open_tier, waits_on) = open_tier_and_waits_on(&rf, &led);
-        // Tier one is fully answered; tier two (Unasked) is now the lowest
-        // tier with an open/unasked question.
+        let (open_tier, waits_on) = open_tier_and_waits_on(&rf);
+        // Tier one is fully answered; tier two (unanswered) is now the
+        // lowest open tier, and its own question is what `waits_on` names
+        // -- the same section `ask` would name if a later tier existed and
+        // tried to jump ahead of it.
         assert_eq!(open_tier, Some(2));
-        // Nothing earlier than tier two is unanswered any more.
-        assert_eq!(waits_on, None);
+        assert_eq!(waits_on.as_deref(), Some("2.1 Second question?"));
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -1059,15 +950,19 @@ Standard: s2.\n\n\
     #[test]
     fn open_tier_counts_a_refused_question_as_unresolved() {
         let dir = temp_repo();
-        let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP);
-        append_row(&dir, "asked", "id-1", "hash-1", "1.1 First question?");
-        append_row(&dir, "refused", "id-1", "hash-1", "1.1 First question?");
+        // Q1 is refused in the file text itself (a refused `**Answer:**`
+        // line never parses as a letter, so it stays unresolved).
+        let content = TWO_GROUP.replacen(
+            "\n\n### 2.1 Second question?",
+            "\n\n**Answer:** refused\n\n### 2.1 Second question?",
+            1,
+        );
+        let record = write_record(&dir, "adrdom/decisions/example.md", &content);
 
         let rf = record::load(&record).unwrap();
-        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
 
-        let (open_tier, waits_on) = open_tier_and_waits_on(&rf, &led);
-        // Tier 1's question is Refused, not answered: tier 1 still counts
+        let (open_tier, waits_on) = open_tier_and_waits_on(&rf);
+        // Tier 1's question is refused, not answered: tier 1 still counts
         // as the open (stuck) tier, and it still blocks tier 2 by name.
         assert_eq!(open_tier, Some(1));
         assert_eq!(waits_on.as_deref(), Some("1.1 First question?"));
@@ -1117,7 +1012,7 @@ Standard: s2.\n\n\
         let dir = temp_repo();
         let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP);
         let rf = record::load(&record).unwrap();
-        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let led = ledger::read(&dir.join(repo::LEDGER_PATH));
         let test_idx = HashMap::new();
 
         // Nothing approved yet, nothing answered: not done.
@@ -1155,7 +1050,7 @@ Standard: s2.\n\n\
             "adrdom/decisions/example.md",
         );
         append_row(&dir, "context", "-", &ctx_h, "adrdom/decisions/example.md");
-        let led2 = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let led2 = ledger::read(&dir.join(repo::LEDGER_PATH));
         assert!(
             rf2.sections.iter().all(|s| s.answer_line.is_some()),
             "fixture should have every section answered"
@@ -1221,7 +1116,7 @@ Standard: s2.\n\n\
             "adrdom/decisions/example.md",
         );
         append_row(&dir, "context", "-", &ctx_h, "adrdom/decisions/example.md");
-        let led2 = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let led2 = ledger::read(&dir.join(repo::LEDGER_PATH));
         assert!(
             rf2.sections.iter().all(|s| s.answer_line.is_some()),
             "fixture should have every section carrying an Answer line (one letter, one refused)"
@@ -1329,7 +1224,7 @@ Standard: s2.\n\n\
         let dir = temp_repo();
         let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP);
         let rf = record::load(&record).unwrap();
-        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let led = ledger::read(&dir.join(repo::LEDGER_PATH));
         let test_idx = HashMap::new();
 
         let path = state::rel_path(&dir, &rf.path);
@@ -1388,7 +1283,7 @@ Standard: s2.\n\n\
         append_row(&dir, "answered", "id-root", "h", "B");
 
         let rf = record::load(&record).unwrap();
-        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let led = ledger::read(&dir.join(repo::LEDGER_PATH));
 
         let notes = moot_notes(&rf, &led);
         assert_eq!(
@@ -1424,7 +1319,7 @@ Standard: s2.\n\n\
         append_row(&dir, "answered", "id-root", "h", "A");
 
         let rf = record::load(&record).unwrap();
-        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let led = ledger::read(&dir.join(repo::LEDGER_PATH));
 
         assert!(moot_notes(&rf, &led).is_empty());
 

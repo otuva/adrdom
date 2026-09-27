@@ -102,6 +102,20 @@ fn parity_two_depends_lines() {
     assert_parity(&dir, &record, "second depends line");
 }
 
+// adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a supersedes list split
+// across two lines is refused by both `adr approve` and `adr check`, not
+// silently cut to its first line.
+#[test]
+fn parity_two_supersedes_lines() {
+    let dir = init_repo();
+    setup(&dir);
+    approve_minimal_terms(&dir, "decision");
+    let content = "# Example\n\n### 1.1 Q?\ndepends: decision\nsupersedes: aaa\nsupersedes: bbb\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let record = write_record(&dir, "adrdom/decisions/example.md", content);
+
+    assert_parity(&dir, &record, "second supersedes line");
+}
+
 #[test]
 fn parity_missing_depends_line() {
     let dir = init_repo();
@@ -119,47 +133,26 @@ id: 11111111-1111-1111-1111-111111111111\n\
 definition: A choice answered by the owner.\n\
 aliases: \n";
 
-// "Does check fail a terms file that differs from its latest approval?"
-// (03b2853b A, supersedes "Does the owner approve the terms file as a
-// whole?") deliberately breaks this parity for the terms-not-approved
-// case: `approve` on a *new* record still refuses outright while
-// adrdom/terms.md isn't approved (`require_terms`, unchanged -- minting a
-// fresh id/pairing needs a stable terms file), but `check` no longer fails
-// just because it's unapproved. Nothing here is a current decision yet
-// (the record was never approved, let alone asked or answered), so
-// nothing is paired and `check` only notes the wait.
+// adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
+//
+// "Does the tool stop while the terms file waits for approval?" (A,
+// supersedes "Does check fail a terms file that differs from its latest
+// approval?"): parity now holds for the terms-not-approved case too --
+// `approve` on a *new* record refuses outright while adrdom/terms.md isn't
+// approved (`require_terms`), and `check` now fails the same file outright
+// for the same reason, even with nothing yet paired to any of its terms.
 #[test]
-fn parity_unapproved_terms_diverges_from_approve_when_nothing_is_paired_yet() {
+fn parity_unapproved_terms() {
     let dir = init_repo();
     setup(&dir);
     // `adrdom/terms.md` exists (with a hand-written id, so a naive depends
     // resolution would silently succeed) but is never approved -- no
-    // `terms` ledger row. A skeleton heading (no body yet): the only thing
-    // standing between this and a clean `check` is terms approval, so the
-    // divergence from `approve`'s own (unchanged, stricter) gate is
-    // visible with nothing else in the way.
+    // `terms` ledger row.
     write_record(&dir, "adrdom/terms.md", TERMS_BASIC);
     let content = "# Example\n\n### 1.1 Q?\ndepends: decision\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-    let approve_out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(
-        !approve_out.status.success(),
-        "approve should have refused: {}",
-        stdout(&approve_out)
-    );
-    let approve_err = stderr(&approve_out);
-    assert!(approve_err.contains("terms not approved"), "{}", approve_err);
-    assert!(
-        approve_err.contains("owner runs: adr approve adrdom/terms.md"),
-        "{}",
-        approve_err
-    );
-
-    let check_out = adr(&dir, &["check"], &[], "");
-    assert!(check_out.status.success(), "{}", stdout(&check_out));
-    let check_text = stdout(&check_out);
-    assert!(check_text.contains("terms: awaiting approval"), "{}", check_text);
+    assert_parity(&dir, &record, "owner runs: adr approve adrdom/terms.md");
 }
 
 // --- terms: a definition longer than two sentences refuses -------------
@@ -167,14 +160,22 @@ fn parity_unapproved_terms_diverges_from_approve_when_nothing_is_paired_yet() {
 
 const TERMS_THREE_SENTENCE_DEFINITION: &str = "# Terms\n\n\
 ## decision\n\
+id: 11111111-1111-1111-1111-111111111111\n\
 definition: A choice answered by the owner. It stays current until reversed. It is never made twice.\n\
 aliases: \n";
 
+// `check` only reaches the definition-length check once the file is
+// approved (per "Does the tool stop while the terms file waits for
+// approval?", aa475aa3 A) -- faking that approval via a hand-written
+// ledger row matching this exact (still invalid) content is what lets
+// `check`'s own validation run at all, the same defense-in-depth case as a
+// cycle check finds.
 #[test]
 fn parity_definition_over_two_sentences() {
     let dir = init_repo();
     setup(&dir);
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_THREE_SENTENCE_DEFINITION);
+    approve_terms_via_ledger(&dir, TERMS_THREE_SENTENCE_DEFINITION);
 
     assert_parity(
         &dir,

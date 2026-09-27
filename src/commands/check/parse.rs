@@ -16,7 +16,6 @@ pub(super) fn check_parse(refusals: &[Vec<Refusal>]) -> Vec<Failure> {
             if r.category == "parse" {
                 out.push(Failure {
                     check: "parse".to_string(),
-                    id: None,
                     message: r.message.clone(),
                 });
             }

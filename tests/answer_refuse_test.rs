@@ -1,4 +1,4 @@
-// Wave 2, answer (spec §5): `adr answer <id> refuse`.
+// `adr answer <id>@<version> refuse`.
 mod common;
 
 use common::*;

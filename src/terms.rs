@@ -33,6 +33,21 @@ pub struct TermsFile {
     pub errors: Vec<String>,
 }
 
+impl TermsFile {
+    /// Every entry with no `id` field at all (per `parse`'s "missing id"
+    /// error): the typed form of that same fact, so a caller that only
+    /// needs to know whether one exists doesn't have to match on the error
+    /// text.
+    pub fn missing_ids(&self) -> Vec<&Term> {
+        self.terms.iter().filter(|t| t.id.is_none()).collect()
+    }
+}
+
+/// `"key:value"` or `"key: value"`, trimmed: unlike `record::kv`, the space
+/// after the colon is optional, since a real `adrdom/terms.md` field with
+/// an empty value is written with no trailing space at all (e.g. an
+/// aliases-less term's bare `aliases:` line) -- `record::kv` would treat
+/// that as not matching the key at all.
 fn kv(line: &str, key: &str) -> Option<String> {
     let prefix = format!("{}:", key);
     line.strip_prefix(&prefix).map(|v| v.trim().to_string())
@@ -348,8 +363,8 @@ pub fn minted_copy(tf: &TermsFile) -> TermsFile {
 }
 
 fn is_boundary_ok(chars: &[char], start: usize, len: usize) -> bool {
-    let before_ok = start == 0 || !chars[start - 1].is_alphanumeric();
-    let after_ok = start + len == chars.len() || !chars[start + len].is_alphanumeric();
+    let before_ok = start == 0 || !crate::text::is_word_char(chars[start - 1]);
+    let after_ok = start + len == chars.len() || !crate::text::is_word_char(chars[start + len]);
     before_ok && after_ok
 }
 
@@ -710,6 +725,52 @@ pub fn parse_terms_line(line: &str) -> Option<Vec<(String, String)>> {
         out.push((w.to_string(), id.to_string()));
     }
     Some(out)
+}
+
+/// A single uuid on a `terms:` line that no longer names an existing,
+/// non-retired term.
+pub enum ProblemKind {
+    /// The uuid names no term in the file at all.
+    Gone,
+    /// The uuid names a term, but it is retired; carries the term's name.
+    Retired(String),
+}
+
+/// One `Problem` per uuid `validate_pairs` finds wrong on a line.
+pub struct Problem {
+    pub uuid: String,
+    pub kind: ProblemKind,
+}
+
+/// The line does not parse as a `terms:` line at all (per
+/// `parse_terms_line`: missing the `terms: ` prefix, or nothing after it).
+#[derive(Debug)]
+pub struct Malformed;
+
+/// Validates every uuid on one `terms:` line (`line`, exactly as it stands
+/// in the file) against `tf`: `Err(Malformed)` when the line itself doesn't
+/// parse, otherwise `Ok` with one `Problem`, in the line's own order, for
+/// every uuid that no longer names an existing, non-retired term. Shared by
+/// every reader that judges a single terms line this way: `actions::do_answer`
+/// (refuses on the first problem it finds), and `check` (reports every one,
+/// for both a section's terms line and a term's own).
+pub fn validate_pairs(line: &str, tf: &TermsFile) -> Result<Vec<Problem>, Malformed> {
+    let pairs = parse_terms_line(line).ok_or(Malformed)?;
+    let mut problems = Vec::new();
+    for (_, uuid) in pairs {
+        match tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str())) {
+            None => problems.push(Problem {
+                uuid,
+                kind: ProblemKind::Gone,
+            }),
+            Some(t) if t.retired => problems.push(Problem {
+                uuid,
+                kind: ProblemKind::Retired(t.name.clone()),
+            }),
+            _ => {}
+        }
+    }
+    Ok(problems)
 }
 
 #[cfg(test)]
@@ -1202,6 +1263,44 @@ aliases: \n"
     #[test]
     fn parse_terms_line_rejects_non_terms_lines() {
         assert!(parse_terms_line("id: abc").is_none());
+    }
+
+    #[test]
+    fn validate_pairs_reports_malformed_on_a_line_that_does_not_parse() {
+        let tf = parse(&lines_of(&well_formed()));
+        assert!(validate_pairs("id: abc", &tf).is_err());
+        assert!(validate_pairs("terms: ", &tf).is_err());
+    }
+
+    #[test]
+    fn validate_pairs_reports_a_gone_uuid() {
+        let tf = parse(&lines_of(&well_formed()));
+        let problems = validate_pairs("terms: decision=99999999-9999-9999-9999-999999999999", &tf).unwrap();
+        assert_eq!(problems.len(), 1);
+        assert!(matches!(problems[0].kind, ProblemKind::Gone));
+        assert_eq!(problems[0].uuid, "99999999-9999-9999-9999-999999999999");
+    }
+
+    #[test]
+    fn validate_pairs_reports_a_retired_term() {
+        let mut s = well_formed();
+        s = s.replacen("aliases: choice\n", "aliases: choice\nretired: yes\n", 1);
+        let tf = parse(&lines_of(&s));
+        let problems =
+            validate_pairs("terms: decision=11111111-1111-1111-1111-111111111111", &tf).unwrap();
+        assert_eq!(problems.len(), 1);
+        match &problems[0].kind {
+            ProblemKind::Retired(name) => assert_eq!(name, "decision"),
+            ProblemKind::Gone => panic!("expected Retired"),
+        }
+    }
+
+    #[test]
+    fn validate_pairs_is_empty_when_every_pair_still_resolves() {
+        let tf = parse(&lines_of(&well_formed()));
+        let problems =
+            validate_pairs("terms: decision=11111111-1111-1111-1111-111111111111", &tf).unwrap();
+        assert!(problems.is_empty());
     }
 
     #[test]

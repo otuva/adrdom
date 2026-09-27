@@ -8,7 +8,7 @@ fn example_record_round_trips_and_ask_assigns_ids() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_terms_with(&dir, &["decision", "example"]);
     let record = write_record(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
-    // 9.1 A: `approve`, not `ask`, mints the heading's id now.
+    // `approve`, not `ask`, mints the heading's id now.
     approve_record(&dir, "adrdom/decisions/example.md");
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
@@ -46,11 +46,7 @@ fn ask_reasks_on_edit() {
         .status
         .success());
 
-    let ledger_before = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    let asked_before = ledger_before
-        .lines()
-        .filter(|l| l.contains("\tasked\t"))
-        .count();
+    let asked_before = asked_row_count(&dir);
 
     // Edit the question's Problem text (inside the hashed range, before any Answer).
     let content = std::fs::read_to_string(&record).unwrap();
@@ -68,11 +64,7 @@ fn ask_reasks_on_edit() {
         stdout(&out)
     );
 
-    let ledger_after = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    let asked_after = ledger_after
-        .lines()
-        .filter(|l| l.contains("\tasked\t"))
-        .count();
+    let asked_after = asked_row_count(&dir);
     assert_eq!(
         asked_after,
         asked_before + 1,
@@ -274,7 +266,7 @@ fn ask_refuses_a_question_with_four_options() {
 
 #[test]
 fn ask_leaves_a_skeleton_heading_unasked_though_approve_gave_it_an_id() {
-    // 9.1 A point 1: `approve` gives every heading an id, skeletons
+    // `approve` gives every heading an id, skeletons
     // included -- but `ask` still never asks a skeleton, so it gets no
     // ledger row for it.
     let dir = init_repo();
@@ -423,25 +415,7 @@ fn ask_pairs_nothing_for_a_word_only_on_a_retired_term() {
     let record = write_record(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", AUTHORITY_QUESTION);
     let terms = "# Terms\n\n## authority\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A fixture term.\naliases: \nretired: yes\n";
-    write_record(&dir, "adrdom/terms.md", terms);
-    let ledger_path = dir.join("adrdom/state/ledger.tsv");
-    let hash = {
-        // Mirror terms::file_hash for this fixed content: each line
-        // right-trimmed before joining (e.g. the "aliases: " line's
-        // trailing space is dropped).
-        use sha2::{Digest, Sha256};
-        let trimmed = terms
-            .split('\n')
-            .map(|l| l.trim_end())
-            .collect::<Vec<_>>()
-            .join("\n");
-        let mut h = Sha256::new();
-        h.update(trimmed.as_bytes());
-        h.finalize().iter().map(|b| format!("{:02x}", b)).collect::<String>()
-    };
-    let mut existing = std::fs::read_to_string(&ledger_path).unwrap();
-    existing.push_str(&format!("2024-01-01T00:00:00Z\tterms\t-\t{}\tadrdom/terms.md\n", hash));
-    std::fs::write(&ledger_path, existing).unwrap();
+    approve_terms_via_ledger(&dir, terms);
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());

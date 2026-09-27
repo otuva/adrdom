@@ -1,20 +1,7 @@
-mod actions;
-mod banned;
-mod commands;
-mod depends;
-mod ledger;
-mod msg;
-mod record;
-mod repo;
-mod state;
-mod tells;
-mod terms;
-mod version;
-mod view;
-
+use adr::commands;
+use adr::version::VERSION;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
-use version::VERSION;
 
 /// adr: a control layer between AI coding agents and a repository.
 #[derive(Parser)]
@@ -41,13 +28,13 @@ enum Command {
     },
     /// Owner-only: remove what `adr install` wrote outside adrdom/.
     Uninstall,
-    /// Assign ids and record `asked` for every unasked/changed question in a topic file.
+    /// Record `asked` for every unasked/changed question in an approved topic file.
     Ask { topic_file: PathBuf },
     /// Owner-only: approve a topic file's plan/context, or the terms file.
     Approve { file: PathBuf },
-    /// Owner-only: answer a question by id with an option letter.
+    /// Owner-only: answer a question, identified by `<id>@<version>`, with an option letter or `refuse`.
     Answer { id: String, letter: String },
-    /// Print every current decision.
+    /// Print every question, with its state and tier.
     Show { topic_file: Option<PathBuf> },
     /// Read lines from stdin and ban them (and their tokens) from the repo.
     Ban {

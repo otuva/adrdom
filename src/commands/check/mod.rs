@@ -26,28 +26,8 @@ use crate::view;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-/// Loads one topic file through `source` instead of `record::load_in`,
-/// which always reads the filesystem: the one place `check` builds a
-/// `RecordFile` from bytes, so every category below judges the same
-/// staged-or-working-tree text (per "Does check at a commit read the
-/// staged files?", 34e81f57 A). `path` is one of `source`'s own file
-/// listing (`repo::list_decision_files_via`), so it may not exist on disk
-/// at all (a file only staged, never `git add`ed to disk... never mind,
-/// always on disk if staged; but never committed either) -- only
-/// `source.read` is ever asked for its bytes.
-fn load_record(root: &Path, path: &Path, source: &Source) -> Result<RecordFile, String> {
-    let rel = state::rel_path(root, path);
-    match source.read(root, &rel) {
-        Some(content) => Ok(record::build(path.to_path_buf(), rel, record::split_lines(&content))),
-        None => Err("not found".to_string()),
-    }
-}
-
 struct Failure {
     check: String,
-    /// The decision a failure is about, kept so the page can group by it.
-    #[allow(dead_code)]
-    id: Option<String>,
     message: String,
 }
 
@@ -57,16 +37,17 @@ fn push_failures(out: &mut Vec<String>, fs: Vec<Failure>) {
     }
 }
 
-/// Everything `check` reports, computed against `root` with the default
-/// (non-staged, no message file) banned-word scan. Used by `run` (which
-/// layers the CLI's `--staged`/`--message` modes on top) and by the `serve`
-/// page, which always wants the plain repo-wide scan.
 /// The full check report for the owner's page, reusing a test index the
 /// caller already computed so the repo's tracked files are scanned once.
+/// Always runs the plain repo-wide scan (non-staged, no message file):
+/// `serve` has no commit to check "at", unlike `run`.
 pub fn collect_with_tests(root: &Path, tests: &HashMap<String, Vec<String>>) -> view::CheckReport {
     build(root, false, None, Some(tests))
 }
 
+/// Everything `check` reports, computed against `root`. `run` passes
+/// `staged`/`message` on for the pre-commit/commit-msg hook modes;
+/// `collect_with_tests` always passes the plain non-staged, no-message scan.
 fn build(
     root: &Path,
     staged: bool,
@@ -81,19 +62,15 @@ fn build(
     // `--staged` itself.
     let source = Source::for_check(staged, message.is_some());
 
-    let ledger_rel = "adrdom/state/ledger.tsv";
+    let ledger_rel = repo::LEDGER_PATH;
     let ledger_content = source.read(root, ledger_rel).unwrap_or_default();
     let led = crate::ledger::parse(&ledger_content);
 
-    let files = repo::list_decision_files_via(root, &source);
-    let mut records = Vec::new();
-    let mut notes: Vec<String> = Vec::new();
-    for f in &files {
-        match load_record(root, f, &source) {
-            Ok(rf) => records.push(rf),
-            Err(e) => notes.push(msg::topic_file_unreadable(&f.display().to_string(), e)),
-        }
-    }
+    let (mut records, unreadable) = record::load_all_via(root, &source);
+    let mut notes: Vec<String> = unreadable
+        .into_iter()
+        .map(|(f, e)| msg::topic_file_unreadable(&f.display().to_string(), e))
+        .collect();
 
     // Terms minted in memory: a terms file that has never been
     // approved carries no ids on disk yet, and `phrase_lookup` only
@@ -172,7 +149,7 @@ fn build(
         &raw_hashes,
     );
     push_failures(&mut failures, plan_failures);
-    let (terms_failures, terms_awaiting, terms_notes) = terms::check_terms(root, &records, &led, &source);
+    let (terms_failures, terms_notes) = terms::check_terms(root, &records, &led, &source);
     push_failures(&mut failures, terms_failures);
     let (test_failures, tested_count) = tests::check_tests(root, &records, &led, tests, &source);
     push_failures(&mut failures, test_failures);
@@ -198,9 +175,6 @@ fn build(
 
     if !awaiting.is_empty() {
         notes.push(msg::plan_awaiting(awaiting.len(), &awaiting.join(", ")));
-    }
-    if terms_awaiting {
-        notes.push(msg::terms_awaiting());
     }
     notes.extend(terms_notes);
     for d in done::check_done(&records, &led, &raw_hashes) {

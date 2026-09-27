@@ -16,9 +16,11 @@ pub const OWNER_COMMANDS: &[&str] = &["answer", "approve", "unban", "serve", "un
 
 /// The deny entries `adr install` installs into `.claude/settings.json` and
 /// `adr check`'s `install` check verifies are present: two `Bash` patterns
-/// per `OWNER_COMMANDS` entry, in that order, then the two `adrdom/state/**`
-/// entries -- the exact strings and order already installed, so existing
-/// installs stay valid.
+/// per `OWNER_COMMANDS` entry, then the two `adrdom/state/**` entries.
+/// `check` (`commands/check/install.rs`) compares this list against
+/// `.claude/settings.json` by membership only, not by order, so an install
+/// with the entries in a different order (or interleaved with owner-added
+/// ones) still passes.
 pub fn deny_entries() -> Vec<String> {
     let mut out = Vec::new();
     for cmd in OWNER_COMMANDS {

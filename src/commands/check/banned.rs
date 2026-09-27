@@ -2,7 +2,6 @@ use super::Failure;
 use crate::banned;
 use crate::ledger::Ledger;
 use crate::msg;
-use crate::record;
 use crate::repo::{self, Source};
 use crate::state;
 use std::collections::{HashMap, HashSet};
@@ -16,36 +15,15 @@ pub(super) fn check_banned(root: &Path, staged: bool, message: Option<&Path>, so
     }
     let hash_map: HashMap<String, Option<String>> = entries.into_iter().collect();
     let tf = state::load_terms_via(root, source);
+    let terms_list: &[crate::terms::Term] = tf.as_ref().map(|f| f.terms.as_slice()).unwrap_or(&[]);
 
     for (name, content) in collect_targets(root, staged, message) {
-        for (i, line) in content.lines().enumerate() {
-            let mut seen: HashSet<String> = HashSet::new();
-            for tok in banned::tokenize(line) {
-                let h = record::sha256_hex(&tok);
-                let Some(uuid_opt) = hash_map.get(&h) else {
-                    continue;
-                };
-                if !seen.insert(tok.clone()) {
-                    continue;
-                }
-                let suffix = uuid_opt
-                    .as_ref()
-                    .and_then(|uuid| {
-                        tf.as_ref().and_then(|f| {
-                            f.terms
-                                .iter()
-                                .find(|t| t.id.as_deref() == Some(uuid.as_str()))
-                                .map(|t| t.name.clone())
-                        })
-                    })
-                    .map(|n| format!(" (term {})", n))
-                    .unwrap_or_default();
-                out.push(Failure {
-                    check: "banned".to_string(),
-                    id: None,
-                    message: msg::banned_word_at(&format!("{}:{}", name, i + 1), &suffix),
-                });
-            }
+        for hit in banned::hits(&content, &hash_map, terms_list) {
+            let suffix = msg::term_suffix(hit.term.as_deref());
+            out.push(Failure {
+                check: "banned".to_string(),
+                message: msg::banned_word_at(&msg::location(&name, hit.line), &suffix),
+            });
         }
     }
     out
@@ -86,7 +64,6 @@ pub(super) fn check_banned_ledger(led: &Ledger, root: &Path, source: &Source) ->
     for h in missing_from_file {
         out.push(Failure {
             check: "banned".to_string(),
-            id: None,
             message: msg::banned_missing_from_file(hash_prefix(h)),
         });
     }
@@ -99,7 +76,6 @@ pub(super) fn check_banned_ledger(led: &Ledger, root: &Path, source: &Source) ->
     for h in missing_from_ledger {
         out.push(Failure {
             check: "banned".to_string(),
-            id: None,
             message: msg::banned_missing_from_ledger(hash_prefix(h)),
         });
     }
@@ -116,7 +92,7 @@ fn hash_prefix(h: &str) -> &str {
 /// judged, not whatever is left on disk. Every entry, hash plus term uuid;
 /// empty when the file doesn't exist in `source` at all.
 fn read_banned_entries(root: &Path, source: &Source) -> Vec<(String, Option<String>)> {
-    banned::parse_entries(&source.read(root, "adrdom/state/banned.sha256").unwrap_or_default())
+    banned::read_entries_via(root, source)
 }
 
 pub(crate) fn collect_targets(
@@ -152,14 +128,6 @@ pub(crate) fn collect_targets(
     if let Some(list) = repo::git(root, &["ls-files"]) {
         paths.extend(list.lines().map(|s| s.to_string()));
     }
-    for f in repo::list_decision_files(root) {
-        if let Ok(rel) = f.strip_prefix(root) {
-            let s = rel.to_string_lossy().replace('\\', "/");
-            if !paths.contains(&s) {
-                paths.push(s);
-            }
-        }
-    }
     for p in paths {
         if skip_path(&p) {
             continue;
@@ -172,13 +140,5 @@ pub(crate) fn collect_targets(
 }
 
 fn skip_path(p: &str) -> bool {
-    p == "adrdom/state/banned.sha256"
-        || p == "adrdom/state/ledger.tsv"
-        // A banned word removed from adrdom/terms.md would otherwise stay
-        // visible in the snapshot (`adrdom/state/terms.approved.md`) until
-        // the next approve: skipped here the same way ledger.tsv is, since
-        // it holds terms text from a point in time, not an agent's own
-        // words to scan.
-        || p == "adrdom/state/terms.approved.md"
-        || p.starts_with(".git/")
+    p == banned::BAN_LIST || p == repo::LEDGER_PATH || p.starts_with(".git/")
 }

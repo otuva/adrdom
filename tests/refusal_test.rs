@@ -1,11 +1,12 @@
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 //
 // "Does a refusal name the command that clears it?": src/msg.rs's own unit
-// test (`every_refusal_names_its_next_move`) proves that every message
-// *built through `msg::`* carries a next-move clause, because `msg::`'s
-// private `refuse()` is the one place that assembles the "<what>; <next>"
-// text and every public function in that module routes through it. That
-// leaves one gap a unit test inside msg.rs cannot see: a command that
+// test (`every_refusal_names_its_next_move`) proves that every refusal or
+// failure *built through `msg::`* carries a next-move clause, because
+// `msg::`'s private `refuse()` is the one place that assembles the
+// "<what>; <next>" text and every refusal/failure function in that module
+// routes through it (a plain note, with no next move to name, does not).
+// That leaves one gap a unit test inside msg.rs cannot see: a command that
 // prints its own ad hoc refusal text instead of calling into `msg::` at
 // all. This test closes that gap from the outside, by reading the source
 // of every command and of src/actions.rs (the shared refusal-building code

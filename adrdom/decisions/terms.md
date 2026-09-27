@@ -198,3 +198,21 @@ Standard: change control gates the step that uses a change, not steps that never
   Costs: the owner may answer while a terms edit waits unread.
 
 **Answer:** B
+
+### Does the tool stop while the terms file waits for approval?
+depends: 7cf81ded-be48-4777-b83e-f8a2998c1ab5, 528fe6f6-6d77-42d5-9086-017048d1448d, 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, b36113a1-1384-4e4c-a798-8399f4181366
+id: aa475aa3-05b2-429a-b33a-46b1dcb52049
+terms: answer=b36113a1-1384-4e4c-a798-8399f4181366, approval=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approved=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approves=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, depends=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, terms=f590059d-b681-40ec-8a1c-c8916d71f6bb, terms file=528fe6f6-6d77-42d5-9086-017048d1448d
+supersedes: 03b2853b-4379-4f4b-9cbf-ec6e06aad7fd, cd450764-bacd-4378-82ba-19edfc5a9edb
+
+Problem: while a terms edit waits for approval, any command that reads terms needs a second copy of the approved text to work from.
+Standard: a single source of truth; a pending change is either approved or blocks what depends on it.
+
+- A) Yes: ask, answer and check stop while the terms file differs from its latest approval, and the owner approves it first.
+  Why: the terms file is the one source, and nothing keeps or looks up an older copy of it.
+  Costs: an unrelated terms edit holds every answer and every commit until the owner approves it.
+- B) No: the tool keeps the approved text beside the ledger and works from it while the edit waits.
+  Why: an unrelated terms edit never holds an answer or a commit.
+  Costs: a second copy of the terms file, and the code that keeps it in step with the ledger.
+
+**Answer:** A

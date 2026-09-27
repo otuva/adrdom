@@ -59,6 +59,13 @@ fn refuse(what: String, next: Next) -> String {
     format!("{}; {}", what, next.render())
 }
 
+/// Prefixes `s` with `approve: `, the command prefix `do_approve_record`
+/// puts on every refusal and failure it returns (the same shape `check`'s
+/// own per-category prefix follows, but fixed to one command here).
+pub fn approve_prefixed(s: impl Display) -> String {
+    format!("approve: {}", s)
+}
+
 // --- generic I/O failures --------------------------------------------------
 // Shared by actions.rs, ask.rs, install.rs, uninstall.rs, ban.rs: the
 // `Next` is always supplied by the caller, since the same shape of failure
@@ -154,81 +161,27 @@ pub fn terms_not_approved(rel: &str) -> String {
     )
 }
 
-/// The same "not approved" state, reported about `adrdom/terms.md` itself
-/// rather than a dependent topic file. No longer reachable from `check`
-/// (per "Does check fail a terms file that differs from its latest
-/// approval?", 03b2853b A: an unapproved file alone is only ever a note
-/// now, never this failure) -- kept for `every_refusal_names_its_next_move`
-/// below, which still exercises every message shape this module defines.
-#[allow(dead_code)]
-pub fn terms_md_not_approved() -> String {
+/// `adrdom/terms.md` exists and parses, but isn't approved at its current
+/// hash (per "Does the tool stop while the terms file waits for approval?",
+/// aa475aa3 A): `check`'s own report of the same fact `terms_not_approved`
+/// names from a dependent topic file -- this one names the file itself,
+/// since `check` judges it on its own, not on behalf of one dependent.
+pub fn terms_file_not_approved() -> String {
     refuse(
         "adrdom/terms.md not approved".to_string(),
         Next::owner_runs("adr approve adrdom/terms.md"),
     )
 }
 
-/// `adrdom/terms.md` differs from its latest approval, and that change
-/// reaches a current decision -- directly, or through another term's own
-/// definition (per "Does check fail a terms file that differs from its
-/// latest approval?", which supersedes "Does the owner approve the terms
-/// file as a whole?"): unlike `terms_awaiting`, this is a failure, since
-/// the one edit that moves an answered decision's meaning still stops the
-/// commit even though an unrelated draft edit no longer does.
-pub fn terms_definition_moved(terms: &str, decisions: &str) -> String {
-    refuse(
-        format!(
-            "adrdom/terms.md not approved: definition of {} changed since the latest approval, paired by {}",
-            terms, decisions
-        ),
-        Next::owner_runs("adr approve adrdom/terms.md"),
-    )
-}
-
-/// The approved snapshot (`adrdom/state/terms.approved.md`) is missing
-/// while at least one term some current decision reaches (directly, or
-/// through another term's own definition) can't be checked against its
-/// latest approved text at all: fails safe rather than assuming nothing
-/// moved (see `check::terms::EditImpact::SnapshotMissing`). Names the
-/// agent's move first (`adr install` backfills the snapshot when this file
-/// still matches its last approval -- the upgrade-path gap where a repo
-/// approved before the snapshot mechanism existed never got one written)
-/// with the owner's re-approve as the fallback for when the file has
-/// actually moved since then and a fresh snapshot has to be re-established.
-pub fn terms_snapshot_missing() -> String {
-    refuse(
-        "adrdom/terms.md not approved: the approved copy is missing, so a paired definition's change can't be ruled out".to_string(),
-        Next::agent("runs: adr install, which restores the copy when this file still matches its last approval")
-            .and_owner_runs("adr approve adrdom/terms.md when it doesn't"),
-    )
-}
-
-/// A term some current decision reaches (directly, or through another
-/// term's own definition) is present in the current draft but absent from
-/// the approved snapshot entirely -- distinct from `terms_definition_moved`,
-/// whose paired term is present in both but whose definition text differs
-/// (03b2853b A; `affected_by_edit` used to fold this case into that one via
-/// `unwrap_or(true)`).
-pub fn terms_term_missing_from_approved_copy(terms: &str, decisions: &str) -> String {
-    refuse(
-        format!(
-            "adrdom/terms.md not approved: {} is not in the approved copy, paired by {}",
-            terms, decisions
-        ),
-        Next::owner_runs("adr approve adrdom/terms.md"),
-    )
-}
-
-/// The approved snapshot's own parsed hash no longer matches the ledger's
-/// latest `terms` row for `adrdom/terms.md`: the two are written together by
-/// `approve`, so this means the snapshot was edited directly (never an
-/// agent's or owner's move -- it lives under `adrdom/state/`) or otherwise
-/// fell out of sync with the ledger.
-pub fn terms_snapshot_mismatch() -> String {
-    refuse(
-        "adrdom/state/terms.approved.md does not match the ledger".to_string(),
-        Next::owner_runs("adr approve adrdom/terms.md"),
-    )
+/// A cycle's names, in traversal order, closed by repeating the first at
+/// the end: "a -> b -> a" -- what `circular_definition` names, and what the
+/// page's own display of the same cycle names too.
+pub fn cycle_chain(names: &[String]) -> String {
+    let mut chain = names.to_vec();
+    if let Some(first) = names.first() {
+        chain.push(first.clone());
+    }
+    chain.join(" -> ")
 }
 
 pub fn circular_definition(chain: &str) -> String {
@@ -599,6 +552,13 @@ pub fn terms_line_names_retired_term(id: &str, name: &str) -> String {
     )
 }
 
+/// Printed after `adr answer <id>@<version> <letter>` succeeds: the heading
+/// and the decision sentence the owner picked. Not a refusal, so it never
+/// goes through `refuse()` -- there is no next move to name.
+pub fn answered_summary(heading: &str, sentence: &str) -> String {
+    format!("answered: {}\n  {}", heading, sentence)
+}
+
 /// Printed after `adr answer <id> refuse` succeeds: the heading is closed,
 /// the plan around it likely needs another pass.
 pub fn refused_summary(heading: &str, rel: &str) -> String {
@@ -698,13 +658,59 @@ pub fn tier_blocked_waiting(
     open_tier: usize,
     blocker: &str,
     blocker_id: &str,
+    blocker_version: &str,
 ) -> String {
     refuse(
         format!(
             "{}: \"{}\" is in tier {}; tier {} is open, waiting on \"{}\"",
             rel, heading, cand_tier, open_tier, blocker
         ),
-        Next::owner_runs(format!("adr answer {} <letter> on it first", blocker_id)),
+        Next::owner_runs(format!("adr answer {}@{} <letter> on it first", blocker_id, blocker_version)),
+    )
+}
+
+/// The open tier still holds a bare skeleton heading (no body yet), so a
+/// later tier's candidate waits on the agent, not the owner, to write one.
+pub fn tier_blocked_unasked(
+    rel: &str,
+    heading: &str,
+    cand_tier: usize,
+    open_tier: usize,
+    blocker: &str,
+) -> String {
+    tier_blocked_on(rel, heading, cand_tier, open_tier, blocker, "writes its body and asks it first")
+}
+
+/// The open tier still holds a question with a real body -- `state::
+/// tier_blocker` only ever returns one, so this is never a skeleton --
+/// that nobody has run `ask` on yet, so a later tier's candidate waits on
+/// the agent to ask it, not to write a body that already exists.
+pub fn tier_blocked_needs_ask(
+    rel: &str,
+    heading: &str,
+    cand_tier: usize,
+    open_tier: usize,
+    blocker: &str,
+) -> String {
+    tier_blocked_on(rel, heading, cand_tier, open_tier, blocker, "asks it first")
+}
+
+/// The one sentence both tier-blocked refusals share; only the agent's
+/// next move differs.
+fn tier_blocked_on(
+    rel: &str,
+    heading: &str,
+    cand_tier: usize,
+    open_tier: usize,
+    blocker: &str,
+    next: &str,
+) -> String {
+    refuse(
+        format!(
+            "{}: \"{}\" is in tier {}; tier {} is open, waiting on unasked \"{}\"",
+            rel, heading, cand_tier, open_tier, blocker
+        ),
+        Next::agent(next),
     )
 }
 
@@ -922,6 +928,17 @@ pub fn answer_set_changed(rel: &str, dep_heading: &str, heading: &str) -> String
     )
 }
 
+/// The `"path:line"` location a failure names, one-based.
+pub fn location(name: &str, line: usize) -> String {
+    format!("{}:{}", name, line)
+}
+
+/// The `" (term {})"` suffix a banned-word hit carries when the word was
+/// banned with `--term`; empty when it wasn't.
+pub fn term_suffix(term: Option<&str>) -> String {
+    term.map(|n| format!(" (term {})", n)).unwrap_or_default()
+}
+
 pub fn banned_word_at(location: &str, suffix: &str) -> String {
     refuse(
         format!("{}: banned word{}", location, suffix),
@@ -968,6 +985,21 @@ pub fn section_no_terms_line(rel: &str, heading: &str, id: &str, answered: bool)
         Next::agent("re-asks so the terms line is written")
     };
     refuse(format!("{}: {}: no terms line", rel, heading), next)
+}
+
+/// A section's `terms:` line is present but doesn't parse (per
+/// `terms::validate_pairs`'s `Malformed`). Same answered/asked split as
+/// `section_no_terms_line`.
+pub fn section_terms_line_malformed(rel: &str, heading: &str, id: &str, answered: bool) -> String {
+    let next = if answered {
+        Next::agent(format!(
+            "restores the terms line from git (e.g. git checkout -- {}), or writes a question that supersedes {}",
+            rel, id
+        ))
+    } else {
+        Next::agent("re-asks so the terms line is written correctly")
+    };
+    refuse(format!("{}: {}: malformed terms line", rel, heading), next)
 }
 
 /// A section's `terms:` line names a uuid that isn't in `adrdom/terms.md`
@@ -1027,6 +1059,17 @@ pub fn term_definition_term_retired(name: &str, retired_name: &str) -> String {
     )
 }
 
+/// A term's own `terms:` line (machine-written by `approve` from its
+/// definition) doesn't parse at all (per `terms::validate_pairs`'s
+/// `Malformed`) -- never an agent's line to hand-fix, since only `approve`
+/// ever writes it; the move is the same re-approve that regenerates it.
+pub fn term_definition_terms_line_malformed(name: &str) -> String {
+    refuse(
+        format!("adrdom/terms.md: \"{}\": malformed terms line", name),
+        Next::owner_runs("adr approve adrdom/terms.md"),
+    )
+}
+
 pub fn agents_md_stale() -> String {
     refuse(
         "AGENTS.md brief differs from this binary's".to_string(),
@@ -1044,7 +1087,7 @@ pub fn agents_md_missing_brief() -> String {
 pub fn claude_md_missing_import() -> String {
     refuse(
         "CLAUDE.md does not import AGENTS.md".to_string(),
-        Next::agent("runs: adr install"),
+        Next::agent("runs: adr install --claude"),
     )
 }
 
@@ -1059,6 +1102,34 @@ pub fn settings_unparseable(path: &str) -> String {
     refuse(
         format!("{} cannot be parsed", path),
         Next::agent("runs: adr install --claude"),
+    )
+}
+
+/// `check`'s `install` check on a git hook (`.githooks/pre-commit` or
+/// `.githooks/commit-msg`, per `path`): the file exists but its content
+/// differs from what `adr install` writes.
+pub fn hook_differs(path: &str) -> String {
+    refuse(
+        format!("{} differs from what install writes", path),
+        Next::agent("runs: adr install"),
+    )
+}
+
+/// Same check as `hook_differs`, but the hook's content is current and the
+/// file is not executable, so git would skip it without a word; install
+/// repairs the mode.
+pub fn hook_not_executable(path: &str) -> String {
+    refuse(
+        format!("{} is not executable, git skips it", path),
+        Next::agent("runs: adr install"),
+    )
+}
+
+/// Same check as `hook_differs`, but the hook file is missing outright.
+pub fn hook_missing(path: &str) -> String {
+    refuse(
+        format!("{} is missing", path),
+        Next::agent("runs: adr install"),
     )
 }
 
@@ -1163,6 +1234,40 @@ pub fn bad_topic_file_name(rel: &str) -> String {
     )
 }
 
+/// The "named by it" half of 76bd7ef0 A: a topic file whose name is well
+/// formed (`repo::valid_topic_file_name`) but is not its h1 topic text
+/// lowercased and hyphenated (`repo::expected_topic_file_stem`). Check-only,
+/// like `bad_topic_file_name`.
+pub fn topic_file_name_mismatch(rel: &str, topic: &str, expected: &str) -> String {
+    refuse(
+        format!(
+            "{}: file name does not match its topic \"{}\"",
+            rel, topic
+        ),
+        Next::agent(format!(
+            "renames the file to {}.md or changes the topic line to match the name; if it had already been approved, the owner re-approves it under the new name, since approval is keyed to the path",
+            expected
+        )),
+    )
+}
+
+/// 76bd7ef0 A names a topic file by its topic "in lowercase words joined by
+/// hyphens, with no number": a topic whose text lowercased and hyphenated
+/// (`repo::expected_topic_file_stem`) holds a digit, or holds no letter at
+/// all, has no name any file can carry, so no rename clears it and the
+/// topic line itself has to change. Check-only, like `bad_topic_file_name`.
+pub fn topic_unnameable(rel: &str, topic: &str) -> String {
+    refuse(
+        format!(
+            "{}: topic \"{}\" has no file name: a name holds lowercase words only, no number",
+            rel, topic
+        ),
+        Next::agent(
+            "rewords the topic line to letters and spaces only and names the file by it; if the file had already been approved, the owner re-approves it, since approval is keyed to the path",
+        ),
+    )
+}
+
 pub fn body_under_unapproved_heading(rel: &str, heading: &str) -> String {
     refuse(
         format!("{}: body under unapproved heading \"{}\"", rel, heading),
@@ -1179,10 +1284,10 @@ pub fn bind_failed(port: u16, e: impl Display) -> String {
     )
 }
 
-pub fn missing_answer_selection(id: &str) -> String {
+pub fn missing_answer_selection(id: &str, version: &str) -> String {
     refuse(
         "missing answer selection".to_string(),
-        Next::owner_runs(format!("adr answer {} <letter>", id)),
+        Next::owner_runs(format!("adr answer {}@{} <letter>", id, version)),
     )
 }
 
@@ -1194,10 +1299,6 @@ pub fn tested_count(n: usize) -> String {
 
 pub fn plan_awaiting(count: usize, list: &str) -> String {
     format!("plan: {} file(s) awaiting approval: {}", count, list)
-}
-
-pub fn terms_awaiting() -> String {
-    "terms: awaiting approval".to_string()
 }
 
 pub fn done(rel: &str) -> String {
@@ -1234,18 +1335,6 @@ pub fn terms_already_approved() -> String {
 
 pub fn terms_approved_now() -> String {
     "approve: adrdom/terms.md: approved".to_string()
-}
-
-pub fn term_definition_changed(name: &str) -> String {
-    format!("approve: term \"{}\" definition changed", name)
-}
-
-pub fn term_used_by_current(rel: &str, heading: &str) -> String {
-    format!("  current: {}: {}", rel, heading)
-}
-
-pub fn term_used_by_term(name: &str) -> String {
-    format!("  term: {}", name)
 }
 
 pub fn plan_approved(rel: &str) -> String {
@@ -1288,15 +1377,6 @@ pub fn banned_added(n: usize) -> String {
     format!("added {} entries", n)
 }
 
-/// `adr install` backfilled `adrdom/state/terms.approved.md` for a repo
-/// that approved `adrdom/terms.md` before the snapshot mechanism existed
-/// (the upgrade-path gap, items 1+2): the file on disk still matched its
-/// latest `terms` ledger row, so its own text is the approved content.
-pub fn terms_snapshot_backfilled() -> String {
-    "install: adrdom/state/terms.approved.md: restored from the approved adrdom/terms.md"
-        .to_string()
-}
-
 pub fn agents_md_created() -> String {
     "install: AGENTS.md: created with the brief".to_string()
 }
@@ -1319,6 +1399,18 @@ pub fn claude_md_created() -> String {
 
 pub fn claude_md_import_added() -> String {
     "install: CLAUDE.md: added the AGENTS.md import".to_string()
+}
+
+/// `adr install` wrote a hook (`path`, e.g. `.githooks/pre-commit`) that
+/// was either missing or held stale content.
+pub fn hook_written(path: &str) -> String {
+    format!("install: {}: written", path)
+}
+
+/// `adr install` found a hook (`path`) already holding exactly what it
+/// writes, and left it untouched.
+pub fn hook_up_to_date(path: &str) -> String {
+    format!("install: {}: already up to date", path)
 }
 
 pub fn agents_md_removed_whole() -> String {
@@ -1418,8 +1510,8 @@ mod tests {
     // runs that command, the agent or the owner": every refusal/failure
     // built in this module is asserted below to contain either "; agent "
     // or "owner runs: ", so a stop with no legal move (the failure mode an
-    // override would otherwise paper over) is a compile-time-checked
-    // impossibility, not something callers can forget.
+    // override would otherwise paper over) is caught here rather than left
+    // for callers to notice.
     #[test]
     fn every_refusal_names_its_next_move() {
         let e = "boom";
@@ -1438,7 +1530,7 @@ mod tests {
             terms_load_error(e, Next::agent("retries")),
             terms_shape_error(e),
             terms_not_approved("adrdom/decisions/x.md"),
-            terms_md_not_approved(),
+            terms_file_not_approved(),
             circular_definition("a -> b -> a"),
             term_removed_but_carried("uuid-1", "term \"x\""),
             term_retired_but_carried("x", "term \"y\"", term_reword_and_approve()),
@@ -1460,12 +1552,15 @@ mod tests {
             refused_summary("heading", "x.md"),
             section_no_terms_line("x.md", "heading", "id-1", false),
             section_no_terms_line("x.md", "heading", "id-1", true),
+            section_terms_line_malformed("x.md", "heading", "id-1", false),
+            section_terms_line_malformed("x.md", "heading", "id-1", true),
             section_term_not_found("x.md", "heading", "uuid-1", "id-1", false),
             section_term_not_found("x.md", "heading", "uuid-1", "id-1", true),
             section_term_retired("x.md", "heading", "term", "id-1", false),
             section_term_retired("x.md", "heading", "term", "id-1", true),
             term_definition_term_not_found("term", "uuid-1"),
             term_definition_term_retired("term", "retired-term"),
+            term_definition_terms_line_malformed("term"),
             frozen_depends_edited("x.md", "heading"),
             dep_not_current_decision("x.md", "heading", "id-1"),
             dep_no_term("x.md", "heading", "widget"),
@@ -1482,7 +1577,6 @@ mod tests {
             answer_missing_version("id-1"),
             stale_version("heading"),
             invalid_version_format("Z0ZZZZZZ"),
-            terms_term_missing_from_approved_copy("pass", "x.md: \"heading\""),
             no_terms_line("id-1"),
             malformed_terms_line("id-1"),
             terms_line_names_gone_term("id-1", "uuid-1"),
@@ -1496,7 +1590,9 @@ mod tests {
             depends_on_refused("x.md", "heading", "target"),
             ask_supersedes_not_current("x.md", "heading", "id-1"),
             tier_blocked_refused("x.md", "heading", 2, 1, "blocker"),
-            tier_blocked_waiting("x.md", "heading", 2, 1, "blocker", "id-1"),
+            tier_blocked_waiting("x.md", "heading", 2, 1, "blocker", "id-1", "abcd1234"),
+            tier_blocked_unasked("x.md", "heading", 2, 1, "blocker"),
+            tier_blocked_needs_ask("x.md", "heading", 2, 1, "blocker"),
             moot_candidate("x.md", "heading", "target", "A", 'B'),
             banned_word_in_candidate("x.md", "heading", ""),
             pairs_no_term("x.md", "heading"),
@@ -1532,6 +1628,9 @@ mod tests {
             settings_unparseable(".claude/settings.json"),
             codex_rules_stale(),
             codex_rules_missing(),
+            hook_differs(".githooks/pre-commit"),
+            hook_missing(".githooks/pre-commit"),
+            hook_not_executable(".githooks/pre-commit"),
             malformed_ledger_row(3, "bad row"),
             ledger_not_append_only(),
             ledger_asked_id_missing("id-1"),
@@ -1541,9 +1640,11 @@ mod tests {
             duplicate_heading_in_file("heading", "x.md"),
             duplicate_heading_across_files("heading", "x.md", "y.md"),
             bad_topic_file_name("adrdom/decisions/Bad_Name.md"),
+            topic_file_name_mismatch("adrdom/decisions/x.md", "Y", "y"),
+            topic_unnameable("adrdom/decisions/rule.md", "Rule 2"),
             body_under_unapproved_heading("x.md", "heading"),
             bind_failed(7357, e),
-            missing_answer_selection("id-1"),
+            missing_answer_selection("id-1", "abcd1234"),
         ];
         for o in &outputs {
             assert!(

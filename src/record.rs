@@ -8,7 +8,6 @@ use std::path::{Path, PathBuf};
 pub struct OptionRec {
     pub letter: char,
     pub sentence: Option<String>,
-    #[allow(dead_code)]
     pub line: usize,
 }
 
@@ -87,8 +86,6 @@ pub struct Section {
     pub end: usize,
     pub heading_text: String,
     pub id: Option<String>,
-    #[allow(dead_code)]
-    pub id_dup: bool,
     /// `supersedes: ` ids, comma-separated in the source, in file order (4.14).
     pub supersedes: Vec<String>,
     /// `depends: ` entries, in file order (8.3/8.4).
@@ -96,7 +93,7 @@ pub struct Section {
     pub options: Vec<OptionRec>,
     pub answer_line: Option<usize>,
     pub answer_value: Option<String>,
-    /// Errors from the pre-existing parser: duplicate id line, an option
+    /// Errors from the parser: duplicate id line, an option
     /// with no decision sentence, and an answer naming a missing option.
     /// The option-count rules ("at most three" / "at least two") live in
     /// `shape_errors` instead, since `ask` and `approve` must refuse on
@@ -109,15 +106,12 @@ pub struct Section {
     /// `ask` and `approve` both refuse on this slice (plus the file-level
     /// `RecordFile::shape_errors`) before doing anything else; `check`'s
     /// `parse` check reads this and `parse_errors` together.
-    #[allow(dead_code)]
     pub shape_errors: Vec<String>,
     /// True when the heading has no non-blank line before the next
-    /// heading other than `depends:` lines: no id, no body, never a
-    /// failure.
-    #[allow(dead_code)]
+    /// heading other than `depends:` lines: no body, never a failure --
+    /// `approve` still gives a skeleton heading an id.
     pub is_skeleton: bool,
     /// Line index of this section's `terms: ` line, if any.
-    #[allow(dead_code)]
     pub terms_line: Option<usize>,
 }
 
@@ -156,22 +150,20 @@ impl Section {
 pub struct RecordFile {
     pub path: PathBuf,
     /// The path as printed: relative to the repo root with forward slashes
-    /// when loaded through `load_in`, otherwise the path as given.
+    /// when loaded through `load_all`/`load_all_via`, otherwise the path as
+    /// given (`load`).
     pub rel: String,
     pub lines: Vec<String>,
     pub sections: Vec<Section>,
     /// The h1 topic text, or `None` if the file has no h1 (a shape error).
-    #[allow(dead_code)]
     pub topic: Option<String>,
     /// [start, end) line range of the context prose: everything between
     /// the h1 and the first `### ` question heading (or end of file, if no
     /// h1/questions).
-    #[allow(dead_code)]
     pub context_range: (usize, usize),
-    /// File-level shape errors (spec point: missing/duplicate h1, text
+    /// File-level shape errors: missing/duplicate h1, text
     /// before h1, a `## ` tier heading — tiers are derived now, never
-    /// written by hand).
-    #[allow(dead_code)]
+    /// written by hand.
     pub shape_errors: Vec<String>,
     /// Each section's 1-based tier (index-aligned with `sections`), filled
     /// when `derive_tiers` succeeds; `None` when `derive_error` is set
@@ -251,15 +243,31 @@ pub fn load(path: &Path) -> std::io::Result<RecordFile> {
     Ok(build(path.to_path_buf(), rel, lines))
 }
 
-/// Like `load`, with the printed path made relative to `root`.
-pub fn load_in(root: &Path, path: &Path) -> std::io::Result<RecordFile> {
-    let mut rf = load(path)?;
-    rf.rel = path
-        .strip_prefix(root)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .replace('\\', "/");
-    Ok(rf)
+/// Every topic file under `root` (`repo::list_decision_files`), loaded off
+/// the filesystem by `load_all_via` building the `RecordFile` directly; a
+/// file that fails to load is left out silently, matching every caller of
+/// this before it except `check` (`load_all_via`, which needs to name each
+/// one that failed and why).
+pub fn load_all(root: &Path) -> Vec<RecordFile> {
+    load_all_via(root, &crate::repo::Source::WorkingTree).0
+}
+
+/// Like `load_all`, but through `source` (so `check` at a staged or
+/// working-tree commit reads exactly what it is checking, not always the
+/// filesystem -- `repo::list_decision_files_via`/`Source::read`), and
+/// keeping every file that failed to read instead of dropping it, each
+/// paired with why.
+pub fn load_all_via(root: &Path, source: &crate::repo::Source) -> (Vec<RecordFile>, Vec<(PathBuf, String)>) {
+    let mut records = Vec::new();
+    let mut errors = Vec::new();
+    for f in crate::repo::list_decision_files_via(root, source) {
+        let rel = crate::state::rel_path(root, &f);
+        match source.read(root, &rel) {
+            Some(content) => records.push(build(f, rel, split_lines(&content))),
+            None => errors.push((f, "not found".to_string())),
+        }
+    }
+    (records, errors)
 }
 
 /// Rebuilds a `RecordFile` from an in-memory line buffer (re-parsing
@@ -299,7 +307,7 @@ fn is_h1(line: &str) -> bool {
     line.starts_with("# ")
 }
 
-/// A `## ` line: no longer a valid tier heading (spec point 1 — tiers are
+/// A `## ` line: no longer a valid tier heading (tiers are
 /// derived from `depends:` lines), but still recognized so it can be
 /// reported as a shape error instead of silently becoming stray text or
 /// (worse) being mistaken for something else.
@@ -357,6 +365,12 @@ fn detail_line(line: &str) -> Option<(Detail, &str)> {
     None
 }
 
+/// `"key: value"`, trimmed: `None` when `line` doesn't start with `key`
+/// followed by a colon and a space. `terms::parse` keeps its own version of
+/// this (`terms::kv`) rather than sharing it: a real `adrdom/terms.md`
+/// field left empty is written with no space after the colon at all (a
+/// bare `aliases:`), which this stricter form would treat as not naming
+/// the field.
 fn kv(line: &str, key: &str) -> Option<String> {
     let prefix = format!("{}: ", key);
     line.strip_prefix(&prefix).map(|v| v.trim().to_string())
@@ -367,8 +381,10 @@ fn answer_value(line: &str) -> Option<String> {
         .map(|v| v.trim().to_string())
 }
 
-/// True when `s` (already trimmed) is a uuid: 8-4-4-4-12 hex, dashed.
-fn is_uuid(s: &str) -> bool {
+/// True when `s` (already trimmed) is a uuid: 8-4-4-4-12 hex, dashed
+/// (upper or lower case -- the same shape `check`'s test-tie scan and the
+/// page's uuid-stripping pass also match).
+pub fn is_uuid(s: &str) -> bool {
     let bytes: Vec<char> = s.chars().collect();
     if bytes.len() != 36 {
         return false;
@@ -484,7 +500,8 @@ fn parse_depends_entry(raw: &str) -> Result<Dep, String> {
 }
 
 /// Whether two successfully-parsed deps name the same target (ignoring any
-/// answer set): used to catch a `depends:` line repeated under one heading.
+/// answer set): used to catch the same entry repeated within one `depends:`
+/// line, not a repeated `depends:` line (a second one is its own error).
 fn dep_identity_eq(a: &Dep, b: &Dep) -> bool {
     match (a, b) {
         (Dep::Id { id: x, .. }, Dep::Id { id: y, .. }) => x == y,
@@ -538,6 +555,11 @@ struct BodyScan {
     supersedes: Vec<String>,
     depends: Vec<Dep>,
     depends_errors: Vec<String>,
+    /// "supersedes: second supersedes line, line N" / "terms: second terms
+    /// line, line N": 5892981c holds every reference list on one line, so
+    /// a second line of either is refused, the same as a second depends
+    /// line, rather than silently ignored.
+    reference_line_errors: Vec<String>,
     terms_line: Option<usize>,
     options: Vec<OptionRec>,
     answer_line: Option<usize>,
@@ -563,6 +585,8 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
     let mut depends: Vec<Dep> = Vec::new();
     let mut depends_errors: Vec<String> = Vec::new();
     let mut depends_line_seen = false;
+    let mut reference_line_errors: Vec<String> = Vec::new();
+    let mut supersedes_line_seen = false;
     let mut terms_line = None;
     let mut options: Vec<OptionRec> = Vec::new();
     let mut answer_line = None;
@@ -614,19 +638,25 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
             continue;
         }
         if let Some(v) = kv(line, "supersedes") {
-            if supersedes.is_empty() {
-                supersedes = v
-                    .split(',')
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-                    .collect();
+            if supersedes_line_seen {
+                reference_line_errors
+                    .push(format!("supersedes: second supersedes line, line {}", j + 1));
+                continue;
             }
+            supersedes_line_seen = true;
+            supersedes = v
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
             continue;
         }
         if kv(line, "terms").is_some() {
-            if terms_line.is_none() {
-                terms_line = Some(j);
+            if terms_line.is_some() {
+                reference_line_errors.push(format!("terms: second terms line, line {}", j + 1));
+                continue;
             }
+            terms_line = Some(j);
             continue;
         }
         if kv(line, "Problem").is_some() {
@@ -722,6 +752,7 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
         supersedes,
         depends,
         depends_errors,
+        reference_line_errors,
         terms_line,
         options,
         answer_line,
@@ -744,7 +775,7 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
 fn is_skeleton_range(lines: &[String], start: usize, end: usize) -> bool {
     ((start + 1)..end).all(|j| {
         let t = lines[j].trim();
-        // Same prefix `kv` requires (line 299): "depends:"/"id:" with no
+        // Same prefix `kv` requires: "depends:"/"id:" with no
         // space after the colon is a typo, not a real field, so it must not
         // be silently swallowed as skeleton -- it falls through and
         // `scan_body` reports it as a stray line instead.
@@ -780,6 +811,7 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
 
     let mut shape_errors = scan.stray_errors;
     shape_errors.extend(scan.depends_errors);
+    shape_errors.extend(scan.reference_line_errors);
     if !is_skeleton {
         // A missing field (count 0) and a repeated one (count > 1) are
         // different mistakes and get different messages: a zero count is
@@ -816,7 +848,6 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
         end,
         heading_text,
         id: scan.id,
-        id_dup: scan.id_count > 1,
         supersedes: scan.supersedes,
         depends: scan.depends,
         options: scan.options,
@@ -890,7 +921,6 @@ fn analyze_shape(lines: &[String], sections: &[Section]) -> (Option<String>, (us
 /// reordered, or renamed heading, a heading gaining/losing/swapping its id,
 /// or a changed/added/removed depends target; unaffected by a body edit or
 /// a depends entry's answer set.
-#[allow(dead_code)]
 pub fn plan_hash(rf: &RecordFile) -> String {
     let mut out: Vec<String> = Vec::new();
     for s in &rf.sections {
@@ -911,8 +941,7 @@ pub fn plan_hash(rf: &RecordFile) -> String {
 
 /// sha256 of the context prose lines with leading/trailing blank lines
 /// trimmed, joined with `\n`; the empty string hashes when there is no
-/// prose (spec point 9).
-#[allow(dead_code)]
+/// prose.
 pub fn context_hash(rf: &RecordFile) -> String {
     let (s, e) = rf.context_range;
     let e = e.min(rf.lines.len());
@@ -967,6 +996,14 @@ pub fn canonical_set(set: &AnswerSet) -> String {
             sorted.into_iter().map(|c| c.to_string()).collect::<Vec<_>>().join("|")
         }
     }
+}
+
+/// The `=<set>` suffix a `depends:` entry prints after its id/text: `=*`,
+/// `=A`, `=A|B` (`canonical_set`, prefixed with `=`), or an empty string
+/// for `None`. Shared by every place that rewrites or prints a depends
+/// entry's answer set back into text.
+pub fn set_suffix(set: &Option<AnswerSet>) -> String {
+    set.as_ref().map(|s| format!("={}", canonical_set(s))).unwrap_or_default()
 }
 
 /// sha256 of `<dependent key>=<canonical set>` (per "Does a depends entry
@@ -1254,7 +1291,7 @@ mod tests {
 
     #[test]
     fn depends_typo_missing_the_space_is_not_a_skeleton_line() {
-        // `kv` only recognizes "depends: " (with the space, line 299); a
+        // `kv` only recognizes "depends: " (with the space); a
         // heading whose only body line is the typo "depends:widget" (no
         // space) must not be silently accepted as a skeleton -- it falls
         // through `scan_body` and is reported as a stray line instead, so
@@ -1804,6 +1841,44 @@ mod tests {
             sec.shape_errors
                 .iter()
                 .any(|e| e == "depends: second depends line, line 5"),
+            "{:?}",
+            sec.shape_errors
+        );
+    }
+
+    // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a supersedes list split
+    // across two lines is refused (a shape error), not silently dropped.
+    #[test]
+    fn two_supersedes_lines_under_one_heading_is_a_shape_error() {
+        let rf = rf_from(
+            "# Topic\n\n### 1.1 Q?\ndepends: widget\nsupersedes: aaa, bbb\nsupersedes: ccc\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        let sec = &rf.sections[0];
+        // Only the first line's entries are read.
+        assert_eq!(sec.supersedes, vec!["aaa".to_string(), "bbb".to_string()]);
+        assert!(
+            sec.shape_errors
+                .iter()
+                .any(|e| e == "supersedes: second supersedes line, line 6"),
+            "{:?}",
+            sec.shape_errors
+        );
+    }
+
+    // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a terms list split
+    // across two lines is refused (a shape error), not silently dropped.
+    #[test]
+    fn two_terms_lines_under_one_heading_is_a_shape_error() {
+        let rf = rf_from(
+            "# Topic\n\n### 1.1 Q?\ndepends: widget\nterms: widget=aaa\nterms: gadget=bbb\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        let sec = &rf.sections[0];
+        // The first terms line stays the one the section records.
+        assert_eq!(sec.terms_line, Some(4));
+        assert!(
+            sec.shape_errors
+                .iter()
+                .any(|e| e == "terms: second terms line, line 6"),
             "{:?}",
             sec.shape_errors
         );

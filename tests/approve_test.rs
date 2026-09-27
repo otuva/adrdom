@@ -189,7 +189,7 @@ fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
     // Edited on the file as `approve` actually left it (with the heading's
     // id already minted) -- not the original text-form constant, which
     // would wipe that id back out and make the *plan* look unapproved too
-    // (9.1 A: an id is part of the plan).
+    // (an id is part of the plan).
     let approved_content = std::fs::read_to_string(&record).unwrap();
     let edited = approved_content.replace(
         "Context prose line one.",
@@ -314,15 +314,10 @@ fn ask_refuses_group_two_while_group_one_unanswered_then_passes_after_answer() {
     assert!(err.contains("First question?"), "{}", err);
 
     // Nothing newly asked: `approve` already gave group two's heading an
-    // id too (9.1 A), so `extract_ids` no longer tells asked apart from
+    // id too, so `extract_ids` no longer tells asked apart from
     // merely approved -- the ledger's `asked` row count does.
     let ledger_still = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    assert_eq!(
-        ledger_still.lines().filter(|l| l.contains("\tasked\t")).count(),
-        1,
-        "{}",
-        ledger_still
-    );
+    assert_eq!(asked_row_count(&dir), 1, "{}", ledger_still);
 
     // Answer group one, then ask succeeds for group two.
     let answer_out = adr_answer(&dir, &first_id, "A");
@@ -331,12 +326,7 @@ fn ask_refuses_group_two_while_group_one_unanswered_then_passes_after_answer() {
     let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out2.status.success(), "ask failed: {}", stderr(&out2));
     let ledger_final = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    assert_eq!(
-        ledger_final.lines().filter(|l| l.contains("\tasked\t")).count(),
-        2,
-        "{}",
-        ledger_final
-    );
+    assert_eq!(asked_row_count(&dir), 2, "{}", ledger_final);
 }
 
 // --- a struck asked heading is withdrawn on approve ---------------------
@@ -391,7 +381,7 @@ fn approve_withdraws_a_struck_refused_heading() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
-    let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
+    let record = write_record(&dir, "adrdom/decisions/topic.md", ONE_QUESTION_RECORD);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
         .success());
@@ -627,7 +617,7 @@ fn check_stays_clean_once_an_emptied_topic_file_is_deleted() {
     // question is now superseded, not answered by anything a.md still
     // holds.
     let superseding = format!(
-        "# Other Topic\n\n### 2.1 Replacement in another file?\ndepends: decision\n\nsupersedes: {}\n\nProblem: the decision needs revisiting from elsewhere.\n\nStandard: s2.\n\n- A) New answer.\n  Why: reasons.\n  Costs: costs.\n- B) Other new answer.\n  Why: other reasons.\n  Costs: other costs.\n",
+        "# B\n\n### 2.1 Replacement in another file?\ndepends: decision\n\nsupersedes: {}\n\nProblem: the decision needs revisiting from elsewhere.\n\nStandard: s2.\n\n- A) New answer.\n  Why: reasons.\n  Costs: costs.\n- B) Other new answer.\n  Why: other reasons.\n  Costs: other costs.\n",
         old_id
     );
     let record_b = write_record(&dir, "adrdom/decisions/b.md", &superseding);
@@ -765,13 +755,13 @@ fn ask_refuses_while_terms_unapproved() {
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
     write_record(&dir, "adrdom/terms.md", TERMS_BASIC);
     // A real `adr approve` on the record now refuses up front while
-    // `adrdom/terms.md` itself is unapproved (the review finding this
-    // fixes: it used to succeed here since the hand-written id in
-    // `TERMS_BASIC` let depends resolution go through despite there being
-    // no `terms` ledger row at all). `approve_via_ledger` gets the record
-    // "looks approved" to `ask` the same way real approve's write step
-    // would have, without depending on the now-refusing terms gate --
-    // `ask`'s own terms gate fires before it ever needs the section's id.
+    // `adrdom/terms.md` itself is unapproved: it used to succeed here since
+    // the hand-written id in `TERMS_BASIC` let depends resolution go
+    // through despite there being no `terms` ledger row at all.
+    // `approve_via_ledger` gets the record "looks approved" to `ask` the
+    // same way real approve's write step would have, without depending on
+    // the now-refusing terms gate -- `ask`'s own terms gate fires before it
+    // ever needs the section's id.
     approve_via_ledger(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
@@ -985,8 +975,6 @@ id: 11111111-1111-1111-1111-111111111111\n\
 definition: A choice answered by the owner, in writing.\n\
 aliases: \n";
 
-// adr: 03b2853b-4379-4f4b-9cbf-ec6e06aad7fd
-//
 // `approve writes one event over its hash`: each distinct content of
 // adrdom/terms.md that `approve` accepts gets exactly one `terms` ledger
 // row, keyed to that content's hash -- the first approve writes row 1
@@ -1073,8 +1061,7 @@ fn approve_refuses_a_circular_definition() {
 
 // E1.1: two independent problems (a self-cycle on `alpha`, a missing
 // `aliases` field on `beta`) must both come back from one `approve` call,
-// not just the first found, and `check` (which never writes) must report
-// the same set.
+// not just the first found.
 const TERMS_CYCLE_AND_SHAPE_ERROR: &str = "# Terms\n\n\
 ## alpha\n\
 id: 11111111-1111-1111-1111-111111111111\n\
@@ -1085,8 +1072,15 @@ aliases: \n\
 id: 22222222-2222-2222-2222-222222222222\n\
 definition: Something else.\n";
 
+// adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
+//
+// `approve` (which reads the file directly) reports both problems; `check`
+// (per "Does the tool stop while the terms file waits for approval?", A)
+// fails on the same terms.md and reports the same two problems, so the
+// agent reads them before the owner runs `approve`. It does not name the
+// owner's move while `approve` would refuse the file.
 #[test]
-fn approve_and_check_report_a_cycle_and_a_shape_error_from_one_run() {
+fn approve_and_check_report_a_cycle_and_a_shape_error() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_CYCLE_AND_SHAPE_ERROR);
@@ -1105,7 +1099,8 @@ fn approve_and_check_report_a_cycle_and_a_shape_error_from_one_run() {
         "{}",
         text
     );
-    assert!(text.contains("terms: adrdom/terms.md: line 8: missing field \"aliases\""), "{}", text);
+    assert!(text.contains("missing field \"aliases\""), "{}", text);
+    assert!(!text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
 }
 
 #[test]
@@ -1410,7 +1405,7 @@ fn approve_allows_retiring_a_term_once_its_only_current_decision_is_superseded_a
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(
         &dir,
-        "adrdom/decisions/example.md",
+        "adrdom/decisions/topic.md",
         DECISION_RECORD_DEPENDS_ELSEWHERE,
     );
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_TWO_ENTRIES);
@@ -1621,99 +1616,6 @@ fn approve_refuses_two_current_entries_sharing_a_word() {
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(err.contains("word \"verdict\""), "{}", err);
-}
-
-// adr: 03b2853b-4379-4f4b-9cbf-ec6e06aad7fd
-//
-// `on a definition change approve prints the current decisions paired to
-// that term`: "decision"'s definition text changes here (same id, same
-// name), and the re-approve prints both "term \"decision\" definition
-// changed" and the current decision -- DECISION_RECORD_FOR_DEPENDENTS'
-// 1.1, answered and still current -- that pairs it, by heading text.
-#[test]
-fn approve_prints_dependents_when_a_definition_changes() {
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    let record = write_record(&dir, "adrdom/decisions/example.md", DECISION_RECORD_FOR_DEPENDENTS);
-    let terms = write_record(&dir, "adrdom/terms.md", TERMS_BASIC);
-    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
-        .status
-        .success());
-    // Commit the approved terms.md so HEAD matches the ledger's latest
-    // terms row: only then does approve have a trustworthy "before" text
-    // to diff definitions against.
-    // `--no-verify`: the repo's own pre-commit hook runs `adr check
-    // --staged`, which would fail here purely because the record hasn't
-    // been asked yet at this point in the test; that governance gate is
-    // not what this test is about.
-    run_git(&dir, &["add", "adrdom/terms.md"]);
-    run_git(&dir, &["commit", "--no-verify", "-q", "-m", "approve terms"]);
-
-    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
-        .status
-        .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
-    let content = std::fs::read_to_string(&record).unwrap();
-    let id = extract_ids(&content)[0].clone();
-    assert!(adr_answer(&dir, &id, "A").status.success());
-
-    let terms_v2 = "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice answered by the owner, revised.\naliases: \n";
-    std::fs::write(&terms, terms_v2).unwrap();
-    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
-    assert!(out.status.success(), "approve failed: {}", stderr(&out));
-    let text = stdout(&out);
-    assert!(text.contains("term \"decision\" definition changed"), "{}", text);
-    assert!(
-        text.contains("current: adrdom/decisions/example.md: 1.1 What is the decision?"),
-        "{}",
-        text
-    );
-}
-
-const TERMS_ENTRY_DEPENDENT_V1: &str = "# Terms\n\n\
-## decision\n\
-id: 11111111-1111-1111-1111-111111111111\n\
-definition: A choice answered by the owner.\n\
-aliases: \n\
-\n\
-## question\n\
-id: 22222222-2222-2222-2222-222222222222\n\
-definition: A thing bound to a decision.\n\
-aliases: \n";
-
-/// The spec's dependents (step 7) also include a non-retired term whose
-/// own terms line carries the changed term's id, not only current
-/// decisions. Here "question"'s definition pairs "decision", so approving a
-/// changed "decision" definition should print a `term: question` line.
-#[test]
-fn approve_prints_a_term_dependent_when_a_definition_changes() {
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    let terms = write_record(&dir, "adrdom/terms.md", TERMS_ENTRY_DEPENDENT_V1);
-    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
-        .status
-        .success());
-    // Commit the approved terms.md (with its machine-written "question"
-    // terms line intact) so HEAD matches the ledger's latest terms row.
-    run_git(&dir, &["add", "adrdom/terms.md"]);
-    run_git(&dir, &["commit", "--no-verify", "-q", "-m", "approve terms"]);
-
-    // Revise only "decision"'s definition text; leave "question"'s block
-    // (and its terms line) untouched, as an owner hand-edit would.
-    let content = std::fs::read_to_string(&terms).unwrap();
-    let terms_v2 = content.replace(
-        "definition: A choice answered by the owner.",
-        "definition: A choice answered by the owner, revised.",
-    );
-    std::fs::write(&terms, &terms_v2).unwrap();
-
-    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
-    assert!(out.status.success(), "approve failed: {}", stderr(&out));
-    let text = stdout(&out);
-    assert!(text.contains("term \"decision\" definition changed"), "{}", text);
-    assert!(text.contains("  term: question"), "{}", text);
 }
 
 const TERMS_CROSS_REF: &str = "# Terms\n\n\

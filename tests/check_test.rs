@@ -78,7 +78,7 @@ fn check_parse_failure() {
 
 #[test]
 fn check_ids_failure_missing_id() {
-    // 9.1 A point 9: a missing id means the plan was never approved --
+    // a missing id means the plan was never approved --
     // `approve`, not `ask`, is what gives a heading one, so the message
     // points at `approve`.
     let dir = init_repo();
@@ -139,7 +139,7 @@ fn check_answers_failure_hand_written_answer_line() {
 
 #[test]
 fn check_passes_a_skeleton_that_got_an_id_from_approve_but_was_never_asked() {
-    // 9.1 A: `approve` gives every heading an id, skeletons included --
+    // `approve` gives every heading an id, skeletons included --
     // `check`'s answers check must not mistake "has an id but was never
     // asked" for "edited after asking" just because a ledger `asked` row
     // for that id doesn't exist yet.
@@ -299,6 +299,74 @@ fn check_banned_scanner_catches_word_in_quotes_and_backticks() {
         !stderr(&out).to_lowercase().contains("forbiddenword"),
         "the matched word must never reach stderr: {}",
         stderr(&out)
+    );
+}
+
+// adr: d8a9dfff-de89-442c-a08c-8276efab3f36
+//
+// "What does the ban scan read?": `adrdom/terms.md` is a tracked file like
+// any other, so a banned word inside its content is caught by the same
+// scan and reported once, prefixed `banned:` -- `check_terms`'s own
+// section/term terms-line reads never re-scan for banned words
+// (`scan_banned: false`), so there is no second, `terms:`-prefixed hit for
+// the same line. Both the default (working-tree) scan and `--staged`
+// catch it, once each.
+#[test]
+fn check_reports_a_banned_word_inside_terms_md_exactly_once() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let ban_out = adr(&dir, &["ban"], &[], "forbiddenword\n");
+    assert!(ban_out.status.success(), "ban failed: {}", stderr(&ban_out));
+
+    let terms_content = "# Terms\n\n## widget\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A gadget also known as forbiddenword.\naliases: \n";
+    std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
+    // Stage everything, not just terms.md: `--staged` reads the ban list
+    // itself (`adrdom/state/banned.sha256`, written by `adr ban` above)
+    // through the index too, so it has to be staged for the scan to have
+    // anything to compare against (mirrors `check_banned_default_and_message_modes_name_the_line`'s
+    // `git add -A` before its own `--message` scan).
+    run_git(&dir, &["add", "-A"]);
+
+    // Default (working-tree) scan.
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(
+        text.contains("banned: adrdom/terms.md:5: banned word"),
+        "{}",
+        text
+    );
+    // One failure line for the location, not one per category: count
+    // lines that name this location at all (the message itself says
+    // "banned word" twice -- once in "what happened", once in the next
+    // move -- so counting that phrase would over-count a single hit).
+    assert_eq!(
+        text.lines().filter(|l| l.contains("adrdom/terms.md:5:")).count(),
+        1,
+        "the hit must be reported exactly once, no terms:-prefixed duplicate: {}",
+        text
+    );
+    assert!(
+        !text.contains("terms: adrdom/terms.md:5: banned word"),
+        "check_terms must not re-scan and duplicate the banned-word hit: {}",
+        text
+    );
+
+    // `--staged`, with the same content staged.
+    let out2 = adr(&dir, &["check", "--staged"], &[], "");
+    assert!(!out2.status.success());
+    let text2 = stdout(&out2);
+    assert!(
+        text2.contains("banned: adrdom/terms.md:5: banned word"),
+        "{}",
+        text2
+    );
+    assert_eq!(
+        text2.lines().filter(|l| l.contains("adrdom/terms.md:5:")).count(),
+        1,
+        "the staged hit must also be reported exactly once: {}",
+        text2
     );
 }
 
@@ -648,9 +716,153 @@ fn check_install_fails_when_claude_md_does_not_import_agents_md() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("install: CLAUDE.md does not import AGENTS.md; agent runs: adr install"),
+        stdout(&out).contains("install: CLAUDE.md does not import AGENTS.md; agent runs: adr install --claude"),
         "{}",
         stdout(&out)
+    );
+}
+
+// adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
+// check fails when the pre-commit hook differs from what install writes
+// (an agent's installed block, extended by the owner to cover the git
+// hooks); the move is running install again, which restores it.
+#[test]
+fn check_install_fails_when_pre_commit_hook_differs_and_passes_after_reinstall() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    std::fs::write(dir.join(".githooks/pre-commit"), "#!/bin/sh\necho edited\n").unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    assert!(
+        stdout(&out).contains(
+            "install: .githooks/pre-commit differs from what install writes; agent runs: adr install"
+        ),
+        "{}",
+        stdout(&out)
+    );
+
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    assert_eq!(
+        std::fs::read_to_string(dir.join(".githooks/pre-commit")).unwrap(),
+        "#!/bin/sh\nadr check --staged\nexit $?\n",
+        "reinstall should restore the hook"
+    );
+
+    let out2 = adr(&dir, &["check"], &[], "");
+    assert!(
+        !stdout(&out2).contains("install:"),
+        "install check should pass after re-install: {}",
+        stdout(&out2)
+    );
+}
+
+// adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
+// check fails when the pre-commit hook's content is current but the file
+// is not executable, since git skips such a hook without a word; install
+// repairs the mode without rewriting the content.
+#[cfg(unix)]
+#[test]
+fn check_install_fails_when_pre_commit_hook_is_not_executable_and_install_repairs_it() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let hook = dir.join(".githooks/pre-commit");
+    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    assert!(
+        stdout(&out).contains(
+            "install: .githooks/pre-commit is not executable, git skips it; agent runs: adr install"
+        ),
+        "{}",
+        stdout(&out)
+    );
+
+    let out = adr(&dir, &["install"], &[], "");
+    assert!(out.status.success());
+    assert!(
+        stdout(&out).contains(".githooks/pre-commit"),
+        "install must report the repaired hook, not up to date: {}",
+        stdout(&out)
+    );
+    assert!(
+        std::fs::metadata(&hook).unwrap().permissions().mode() & 0o100 != 0,
+        "install should restore the execute bit"
+    );
+
+    let out2 = adr(&dir, &["check"], &[], "");
+    assert!(
+        !stdout(&out2).contains("install:"),
+        "install check should pass after re-install: {}",
+        stdout(&out2)
+    );
+}
+
+// adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
+// check fails when the commit-msg hook is deleted outright, and install
+// recreates it.
+#[test]
+fn check_install_fails_when_commit_msg_hook_missing_and_passes_after_reinstall() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    std::fs::remove_file(dir.join(".githooks/commit-msg")).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    assert!(
+        stdout(&out).contains(
+            "install: .githooks/commit-msg is missing; agent runs: adr install"
+        ),
+        "{}",
+        stdout(&out)
+    );
+
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    assert!(dir.join(".githooks/commit-msg").is_file());
+
+    let out2 = adr(&dir, &["check"], &[], "");
+    assert!(
+        !stdout(&out2).contains("install:"),
+        "install check should pass after re-install: {}",
+        stdout(&out2)
+    );
+}
+
+// adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
+// check --staged judges the staged hook, not the working tree: the good
+// hook is staged, then the working-tree copy is corrupted, and the staged
+// check still passes (per 34e81f57 A, the same source rule as AGENTS.md).
+#[test]
+fn check_staged_judges_the_staged_hook_not_the_working_tree_copy() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    run_git(&dir, &["add", "-A"]);
+
+    std::fs::write(dir.join(".githooks/pre-commit"), "#!/bin/sh\necho edited\n").unwrap();
+
+    let out = adr(&dir, &["check", "--staged"], &[], "");
+    assert!(
+        out.status.success(),
+        "staged check should judge the staged (good) hook, not the corrupted working tree: {}",
+        stdout(&out)
+    );
+
+    let out2 = adr(&dir, &["check"], &[], "");
+    assert!(
+        !out2.status.success(),
+        "plain check reads the working tree, where the hook is now bad"
+    );
+    assert!(
+        stdout(&out2).contains(
+            "install: .githooks/pre-commit differs from what install writes; agent runs: adr install"
+        ),
+        "{}",
+        stdout(&out2)
     );
 }
 
@@ -917,8 +1129,9 @@ Standard: s2.\n\n\
 
 // adr: f97e62a4-45ab-46c6-b4b1-a674792a4493
 //
-// "... (also: a file with no prose passes)": nothing sits between the h1
-// and the first `### ` heading here, and check passes clean.
+// A skeleton heading -- one with a `depends:` line but no id and no body --
+// is never a failure: check passes clean, with no `ids:` or `parse:`
+// failure reported for it.
 #[test]
 fn check_passes_a_skeleton_heading_with_no_id_or_body() {
     let dir = init_repo();
@@ -1160,6 +1373,82 @@ fn check_passes_a_good_topic_file_name() {
     );
 }
 
+// adr: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
+//
+// "is named by it": a well-formed name that is not the h1 topic,
+// lowercased and hyphenated, fails check; the same file under the name
+// its topic gives passes.
+#[test]
+fn check_fails_a_topic_file_name_that_does_not_match_its_topic() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let body = "# Two Words\n\n### 1.1 Not written yet?\ndepends: widget\n";
+    write_record(&dir, "adrdom/decisions/other-name.md", body);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(
+        text.contains(
+            "plan: adrdom/decisions/other-name.md: file name does not match its topic \"Two Words\"; agent renames the file to two-words.md"
+        ),
+        "{}",
+        text
+    );
+
+    std::fs::remove_file(dir.join("adrdom/decisions/other-name.md")).unwrap();
+    write_record(&dir, "adrdom/decisions/two-words.md", body);
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(
+        out.status.success(),
+        "a file named by its topic must pass check: {}",
+        stdout(&out)
+    );
+}
+
+// adr: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
+//
+// "with no number": a topic whose text holds a digit has no name any file
+// can carry, so check refuses the topic text itself, whatever the file is
+// called; no rename clears it, and rewording the topic does.
+#[test]
+fn check_fails_a_topic_whose_text_no_file_name_can_carry() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let body = "# Rule 2\n\n### 1.1 Not written yet?\ndepends: widget\n";
+    write_record(&dir, "adrdom/decisions/rule.md", body);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(
+        text.contains(
+            "plan: adrdom/decisions/rule.md: topic \"Rule 2\" has no file name: a name holds lowercase words only, no number; agent rewords the topic line"
+        ),
+        "{}",
+        text
+    );
+    assert!(
+        !text.contains("does not match its topic"),
+        "no rename is offered for a topic that cannot be named: {}",
+        text
+    );
+
+    write_record(
+        &dir,
+        "adrdom/decisions/rule.md",
+        "# Rule\n\n### 1.1 Not written yet?\ndepends: widget\n",
+    );
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(
+        out.status.success(),
+        "the reworded topic under its own name must pass check: {}",
+        stdout(&out)
+    );
+}
+
 #[test]
 fn check_passes_when_a_superseded_id_is_missing_from_every_record() {
     let dir = init_repo();
@@ -1310,6 +1599,10 @@ Standard: clear yes or no.\n\n\
 // staged reading, and circular definitions.
 // ---------------------------------------------------------------------
 
+// A shape-broken terms.md is also never approved (its hash can never match
+// a real `terms` ledger row), so `check` fails it (per "Does the tool stop
+// while the terms file waits for approval?", aa475aa3 A) and reports the
+// shape error `approve` would refuse instead of naming the owner's move.
 #[test]
 fn check_fails_on_a_terms_file_shape_error() {
     let dir = init_repo();
@@ -1324,8 +1617,12 @@ fn check_fails_on_a_terms_file_shape_error() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let text = stdout(&out);
-    assert!(text.contains("terms: adrdom/terms.md:"), "{}", text);
-    assert!(text.contains("missing h1"), "{}", text);
+    assert!(
+        text.contains("terms: adrdom/terms.md: line 1: missing h1 \"# Terms\""),
+        "{}",
+        text
+    );
+    assert!(!text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
 }
 
 #[test]
@@ -1359,16 +1656,15 @@ fn check_passes_when_terms_missing_and_no_records_exist() {
     assert!(!stdout(&out).contains("terms:"), "{}", stdout(&out));
 }
 
-// adr: 03b2853b-4379-4f4b-9cbf-ec6e06aad7fd
+// adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
 //
-// "Does check fail a terms file that differs from its latest approval?":
-// this record is never asked, so nothing current pairs "decision" to
-// anything -- an unapproved term nothing reaches is a draft like any
-// other, not a risk, and `check` passes with only a waiting note (name and
-// assertion updated from the pre-03b2853b version of this test, which
-// expected an outright failure here).
+// "Does the tool stop while the terms file waits for approval?" (A): an
+// unapproved terms.md fails outright even when nothing current pairs any
+// of its terms -- there is no "harmless draft" case any more, unlike the
+// pre-aa475aa3 version of this test, which expected a passing "waiting"
+// note here.
 #[test]
-fn check_passes_with_a_waiting_note_when_terms_unapproved_and_nothing_pairs_it() {
+fn check_fails_outright_when_terms_is_unapproved_even_if_nothing_pairs_it() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(
@@ -1384,26 +1680,29 @@ fn check_passes_with_a_waiting_note_when_terms_unapproved_and_nothing_pairs_it()
     // No `terms` ledger row: unapproved.
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(out.status.success(), "{}", stdout(&out));
-    assert!(stdout(&out).contains("terms: awaiting approval"), "{}", stdout(&out));
+    assert!(!out.status.success(), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains("terms: adrdom/terms.md not approved"),
+        "{}",
+        stdout(&out)
+    );
+    assert!(
+        stdout(&out).contains("owner runs: adr approve adrdom/terms.md"),
+        "{}",
+        stdout(&out)
+    );
 }
 
-// adr: 03b2853b-4379-4f4b-9cbf-ec6e06aad7fd
+// adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
 //
-// "Does check fail a terms file that differs from its latest approval?":
-// unlike the note above, 1.1 here is actually asked and answered
-// (`answer_one_question`), pairing "pass" to a current decision -- so once
-// `adrdom/terms.md` is hand-edited afterward, it is no longer a harmless
-// draft. `answer_one_question` approves terms.md only via a hand-written
-// ledger row, so no real `adrdom/state/terms.approved.md` snapshot ever
-// lands on disk; with a current decision reaching "pass" and no snapshot
-// to compare against, `check` fails safe ("the approved copy is missing")
-// rather than the "definition of ... changed" wording it would print with
-// a real snapshot on hand. `ask` keeps refusing outright while terms.md
-// waits, exactly as before this decision -- that gate never depended on
-// what is reachable.
+// "Does the tool stop while the terms file waits for approval?" (A): once
+// `adrdom/terms.md` is hand-edited on top of its latest approval, both
+// `check` and `ask` stop the same way regardless of whether anything
+// current reaches the edited term -- there is no separate "approved copy
+// is missing" case any more, since check no longer trusts anything but the
+// ledger's own hash.
 #[test]
-fn check_and_ask_fail_when_terms_file_was_edited_after_its_latest_approval() {
+fn check_and_ask_fail_when_terms_is_edited_after_its_latest_approval() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let (record, id) = answer_one_question(&dir);
@@ -1418,9 +1717,12 @@ fn check_and_ask_fail_when_terms_file_was_edited_after_its_latest_approval() {
     let check_out = adr(&dir, &["check"], &[], "");
     assert!(!check_out.status.success());
     assert!(
-        stdout(&check_out).contains(
-            "terms: adrdom/terms.md not approved: the approved copy is missing, so a paired definition's change can't be ruled out; agent runs: adr install, which restores the copy when this file still matches its last approval, owner runs: adr approve adrdom/terms.md when it doesn't"
-        ),
+        stdout(&check_out).contains("terms: adrdom/terms.md not approved"),
+        "{}",
+        stdout(&check_out)
+    );
+    assert!(
+        stdout(&check_out).contains("owner runs: adr approve adrdom/terms.md"),
         "{}",
         stdout(&check_out)
     );
@@ -1432,22 +1734,43 @@ fn check_and_ask_fail_when_terms_file_was_edited_after_its_latest_approval() {
     assert!(err.contains("adr approve adrdom/terms.md"), "{}", err);
 }
 
+// adr: 6108b8b2-911e-443b-abe0-4c6f8b407384
 #[test]
-fn check_notes_awaiting_approval_when_terms_unapproved_and_no_records() {
+fn check_fails_an_asked_section_whose_terms_line_is_malformed() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    std::fs::write(
-        dir.join("adrdom/terms.md"),
-        "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice.\naliases: \n",
-    )
-    .unwrap();
+
+    let term_id = "55555555-5555-5555-5555-555555555555";
+    let terms_content = format!(
+        "# Terms\n\n## decision\nid: {}\ndefinition: A choice answered by the owner.\naliases: \n",
+        term_id
+    );
+    std::fs::write(dir.join("adrdom/terms.md"), &terms_content).unwrap();
+    approve_terms_via_ledger(&dir, &terms_content);
+
+    let question_id = "66666666-6666-6666-6666-666666666666";
+    // No `=uuid` after the word at all: `terms::parse_terms_line` fails to
+    // parse this as a `terms:` line, so `validate_pairs` returns
+    // `Err(Malformed)` rather than a per-uuid `Problem`.
+    let record_content = format!(
+        "# Example\n\n### 1.1 Some question?\n\nid: {}\n\nterms: foo\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
+        question_id
+    );
+    write_record(&dir, "adrdom/decisions/example.md", &record_content);
+    append_ledger_row(&dir, "asked", question_id, "deadbeef", "1.1 Some question?");
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(out.status.success(), "{}", stdout(&out));
+    assert!(!out.status.success());
+    let text = stdout(&out);
     assert!(
-        stdout(&out).contains("terms: awaiting approval"),
+        text.contains("adrdom/decisions/example.md: 1.1 Some question?: malformed terms line"),
         "{}",
-        stdout(&out)
+        text
+    );
+    assert!(
+        text.contains("agent re-asks so the terms line is written correctly"),
+        "{}",
+        text
     );
 }
 
@@ -1680,42 +2003,61 @@ fn check_notes_a_term_paired_by_nothing() {
 const GOOD_TERMS: &str = "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice.\naliases: \n";
 const BAD_TERMS: &str = "not a terms file at all\n";
 
+// Per "Does the tool stop while the terms file waits for approval?"
+// (aa475aa3 A), a terms.md that differs from its latest approval is always
+// a failure now, and BAD_TERMS's shape error is what this test reads as
+// "the bad copy was seen" -- GOOD_TERMS is approved for real up front so
+// the two sides genuinely differ (approved vs not).
 #[test]
 fn check_staged_reads_terms_from_the_index() {
     // A bad staged copy is caught even though the working tree looks
-    // fine: `check --staged` must read the index, not the working file.
+    // approved: `check --staged` must read the index, not the working file.
     {
         let dir = init_repo();
         assert!(adr(&dir, &["install"], &[], "").status.success());
+        let terms_path = write_record(&dir, "adrdom/terms.md", GOOD_TERMS);
+        let approve_out = adr_owner(&dir, &["approve", terms_path.to_str().unwrap()], "");
+        assert!(approve_out.status.success(), "{}", stderr(&approve_out));
+        run_git(&dir, &["add", "-A"]);
+        run_git(&dir, &["commit", "--no-verify", "-q", "-m", "approve terms"]);
 
-        std::fs::write(dir.join("adrdom/terms.md"), BAD_TERMS).unwrap();
+        std::fs::write(&terms_path, BAD_TERMS).unwrap();
         run_git(&dir, &["add", "adrdom/terms.md"]);
-        // The working tree copy is fixed, but that fix was never staged.
-        std::fs::write(dir.join("adrdom/terms.md"), GOOD_TERMS).unwrap();
+        // The working tree copy is restored to the approved text, but that
+        // fix was never staged.
+        std::fs::write(&terms_path, GOOD_TERMS).unwrap();
 
         let out = adr(&dir, &["check", "--staged"], &[], "");
-        let text = stdout(&out);
-        assert!(text.contains("missing h1"), "{}", text);
+        assert!(!out.status.success(), "{}", stdout(&out));
+        assert!(
+            stdout(&out).contains("terms: adrdom/terms.md: line 1: missing h1 \"# Terms\""),
+            "{}",
+            stdout(&out)
+        );
     }
 
-    // A good copy already committed -- not part of this commit's staged
-    // diff at all -- is still read from the index: a dirty, unstaged
-    // working-tree edit must not fail `check --staged` for a commit that
-    // does not include it.
+    // A good, approved copy already committed -- not part of this commit's
+    // staged diff at all -- is still read from the index: a dirty,
+    // unstaged working-tree edit must not fail `check --staged` for a
+    // commit that does not include it.
     {
         let dir = init_repo();
         assert!(adr(&dir, &["install"], &[], "").status.success());
-
-        std::fs::write(dir.join("adrdom/terms.md"), GOOD_TERMS).unwrap();
-        run_git(&dir, &["add", "adrdom/terms.md"]);
+        let terms_path = write_record(&dir, "adrdom/terms.md", GOOD_TERMS);
+        let approve_out = adr_owner(&dir, &["approve", terms_path.to_str().unwrap()], "");
+        assert!(approve_out.status.success(), "{}", stderr(&approve_out));
+        run_git(&dir, &["add", "-A"]);
         run_git(&dir, &["commit", "--no-verify", "-q", "-m", "approve terms"]);
 
         // Dirty, unstaged edit: not part of any staged diff.
-        std::fs::write(dir.join("adrdom/terms.md"), BAD_TERMS).unwrap();
+        std::fs::write(&terms_path, BAD_TERMS).unwrap();
 
         let out = adr(&dir, &["check", "--staged"], &[], "");
-        let text = stdout(&out);
-        assert!(!text.contains("missing h1"), "{}", text);
+        assert!(
+            !stdout(&out).contains("terms: adrdom/terms.md not approved"),
+            "{}",
+            stdout(&out)
+        );
     }
 }
 
@@ -1876,6 +2218,14 @@ fn check_staged_reads_a_newly_staged_test_files_tie_from_the_index() {
 }
 
 // adr: fcc1c1ec-d8e8-428e-9731-9817cdeb8e76
+//
+// Per "Does the tool stop while the terms file waits for approval?"
+// (aa475aa3 A): `check` only ever reaches the cycle check once the file is
+// approved (a real `adr approve` would itself refuse to write a cycle, so
+// this is the defense-in-depth case -- a hand-written ledger row, standing
+// in for one written before cycle detection existed). Faking the approval
+// via `approve_terms_via_ledger`, matching this exact cyclic content, is
+// what still lets `check` reach it.
 #[test]
 fn check_fails_a_circular_definition() {
     let dir = init_repo();
@@ -1890,7 +2240,7 @@ aliases: \n\
 id: 22222222-2222-2222-2222-222222222222\n\
 definition: See alpha.\n\
 aliases: \n";
-    std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
+    approve_terms_via_ledger(&dir, terms_content);
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
@@ -1902,13 +2252,13 @@ aliases: \n";
     );
 }
 
-// E1.1: `terms::cycles` only follows an edge between terms that have an id,
-// so a terms file that has never been approved -- and so carries no `id:`
-// line at all -- used to show no cycle to `check`, only to `approve` (which
-// mints ids in memory before looking). Same fixture as
-// `check_fails_a_circular_definition`, with every `id:` line dropped.
+// A terms file with no `id:` line at all is never approved, whatever the
+// ledger says (per "Does the tool stop while the terms file waits for
+// approval?", aa475aa3 A): `check` fails it even when a ledger row happens
+// to match its exact (id-less) hash, and reports the cycle `approve` would
+// refuse instead of naming the owner's move.
 #[test]
-fn check_fails_a_circular_definition_in_an_id_less_terms_file() {
+fn check_fails_an_id_less_terms_file_with_its_cycle_even_with_a_matching_ledger_row() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms_content = "# Terms\n\n\
@@ -1919,7 +2269,7 @@ aliases: \n\
 ## beta\n\
 definition: See alpha.\n\
 aliases: \n";
-    std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
+    approve_terms_via_ledger(&dir, terms_content);
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
@@ -1929,6 +2279,7 @@ aliases: \n";
         "{}",
         text
     );
+    assert!(!text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
 }
 
 // adr: b871e776-2da5-4f1e-b4c4-fb8229657e25

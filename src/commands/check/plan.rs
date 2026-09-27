@@ -41,6 +41,8 @@ pub(super) fn check_plan(
     let mut out = Vec::new();
     let mut awaiting: Vec<String> = Vec::new();
     let mut heading_files: HashMap<String, Vec<String>> = HashMap::new();
+    let records_by_rel: HashMap<&str, &RecordFile> =
+        records.iter().map(|rf| (rf.rel.as_str(), rf)).collect();
 
     // Naming half of the same decision as the cross-file duplicate-heading
     // check below (76bd7ef0 A: "each file holds one topic and is named by
@@ -53,9 +55,31 @@ pub(super) fn check_plan(
         if !repo::valid_topic_file_name(name) {
             out.push(Failure {
                 check: "plan".to_string(),
-                id: None,
                 message: msg::bad_topic_file_name(&state::rel_path(root, &f)),
             });
+            continue;
+        }
+        // "is named by it": a well-formed name must also be the file's h1
+        // topic, lowercased and hyphenated. A file with no h1 already fails
+        // its shape check, so it is skipped here.
+        let rel = state::rel_path(root, &f);
+        let topic = records_by_rel.get(rel.as_str()).and_then(|rf| rf.topic.as_deref());
+        if let Some(topic) = topic {
+            let expected = repo::expected_topic_file_stem(topic);
+            // A topic whose derived stem no file name can carry (a digit,
+            // or nothing left once non-letters go) has no legal name under
+            // 76bd7ef0 A: the topic text is what has to change.
+            if !repo::valid_topic_file_name(&format!("{}.md", expected)) {
+                out.push(Failure {
+                    check: "plan".to_string(),
+                    message: msg::topic_unnameable(&rel, topic),
+                });
+            } else if name.strip_suffix(".md") != Some(expected.as_str()) {
+                out.push(Failure {
+                    check: "plan".to_string(),
+                    message: msg::topic_file_name_mismatch(&rel, topic, &expected),
+                });
+            }
         }
     }
 
@@ -69,7 +93,6 @@ pub(super) fn check_plan(
                 if !sec.is_skeleton {
                     out.push(Failure {
                         check: "plan".to_string(),
-                        id: sec.id.clone(),
                         message: msg::body_under_unapproved_heading(&rel, &sec.heading_text),
                     });
                 }
@@ -83,7 +106,6 @@ pub(super) fn check_plan(
             if r.category == "plan" {
                 out.push(Failure {
                     check: "plan".to_string(),
-                    id: None,
                     message: r.message.clone(),
                 });
             }
@@ -110,7 +132,6 @@ pub(super) fn check_plan(
                         {
                             out.push(Failure {
                                 check: "plan".to_string(),
-                                id: sec.id.clone(),
                                 message: msg,
                             });
                         }
@@ -125,7 +146,6 @@ pub(super) fn check_plan(
                         ) {
                             out.push(Failure {
                                 check: "plan".to_string(),
-                                id: sec.id.clone(),
                                 message: msg,
                             });
                         }
@@ -157,7 +177,6 @@ pub(super) fn check_plan(
         for heading in dup_headings {
             out.push(Failure {
                 check: "plan".to_string(),
-                id: None,
                 message: msg::duplicate_heading_in_file(heading, &rel),
             });
         }
@@ -172,7 +191,6 @@ pub(super) fn check_plan(
         if paths.len() > 1 {
             out.push(Failure {
                 check: "plan".to_string(),
-                id: None,
                 message: msg::duplicate_heading_across_files(heading, &paths[0], &paths[1]),
             });
         }

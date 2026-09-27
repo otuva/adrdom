@@ -1,6 +1,7 @@
 use super::file_approval;
 use crate::ledger::Ledger;
 use crate::record::RecordFile;
+use crate::state;
 use std::collections::HashMap;
 
 /// `done`: every file whose plan and context are approved and whose every
@@ -15,10 +16,7 @@ pub(super) fn check_done(
     let mut out = Vec::new();
     for rf in records {
         let (rel, plan_ok, ctx_ok) = file_approval(rf, raw_hashes, led);
-        if !plan_ok || !ctx_ok {
-            continue;
-        }
-        if rf.sections.iter().all(|s| s.answer_letter().is_some()) {
+        if state::file_done(rf, plan_ok, ctx_ok) {
             out.push(rel);
         }
     }

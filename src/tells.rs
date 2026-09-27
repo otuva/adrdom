@@ -65,25 +65,35 @@ pub const DATE_WHAT: &str = "carries a date";
 pub const LOADED_OPENING_WHAT: &str = "opens assuming an answer";
 pub const JOIN_WHAT: &str = "joins two questions";
 
+pub const ID_PREFIX: &str = "id: ";
+pub const TERMS_PREFIX: &str = "terms: ";
+pub const DEPENDS_PREFIX: &str = "depends: ";
+pub const SUPERSEDES_PREFIX: &str = "supersedes: ";
+pub const ANSWER_PREFIX: &str = "**Answer:**";
+
+/// Every prefix a line the tool writes can start with. `is_tool_line`
+/// checks all five; a caller that wants only some of them (e.g.
+/// id/supersedes, or id/depends/supersedes without the terms line) calls
+/// `starts_with_any` with its own subset of these constants instead.
+pub const TOOL_LINE_PREFIXES: &[&str] = &[ID_PREFIX, TERMS_PREFIX, DEPENDS_PREFIX, SUPERSEDES_PREFIX, ANSWER_PREFIX];
+
+/// True when `line`, trimmed of leading whitespace, starts with any of
+/// `prefixes` (each an exact prefix, e.g. `tells::ID_PREFIX`).
+pub fn starts_with_any(line: &str, prefixes: &[&str]) -> bool {
+    let t = line.trim_start();
+    prefixes.iter().any(|p| t.starts_with(p))
+}
+
 /// A line the tool writes, or that only points at other text by id: never
 /// the agent's own prose, so never scanned for a tell.
 pub fn is_tool_line(line: &str) -> bool {
-    let t = line.trim_start();
-    t.starts_with("id: ")
-        || t.starts_with("terms: ")
-        || t.starts_with("depends: ")
-        || t.starts_with("supersedes: ")
-        || t.starts_with("**Answer:**")
+    starts_with_any(line, TOOL_LINE_PREFIXES)
 }
 
 /// Lowercased runs of alphanumerics: the words of a line, so a tell matches
 /// whole words only ("as is" never matches inside "has issues").
 pub fn words(text: &str) -> Vec<String> {
-    text.to_lowercase()
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|w| !w.is_empty())
-        .map(str::to_string)
-        .collect()
+    crate::text::word_runs(&text.to_lowercase())
 }
 
 /// Whether `tell`'s words occur contiguously in `line_words`.
