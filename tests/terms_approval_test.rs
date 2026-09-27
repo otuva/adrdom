@@ -66,15 +66,6 @@ id: 44444444-4444-4444-4444-444444444444\n\
 definition: An unused fixture term.\n\
 aliases: \n";
 
-/// Real `adr approve adrdom/terms.md`. Panics if the real approve refuses,
-/// since every fixture here is meant to be one it accepts.
-fn approve_terms(dir: &std::path::Path, content: &str) -> std::path::PathBuf {
-    let path = write_record(dir, "adrdom/terms.md", content);
-    let out = adr_owner(dir, &["approve", path.to_str().unwrap()], "");
-    assert!(out.status.success(), "approve terms failed: {}", stderr(&out));
-    path
-}
-
 // adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
 //
 // `check` fails outright while adrdom/terms.md differs from its latest
@@ -102,7 +93,8 @@ fn check_fails_naming_the_owners_move_while_terms_is_unapproved() {
 fn ask_refuses_while_terms_is_unapproved() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_terms(&dir, TERMS_PASS_V1);
+    write_record(&dir, "adrdom/terms.md", TERMS_PASS_V1);
+    approve_record(&dir, "adrdom/terms.md");
     let record = write_record(&dir, "adrdom/decisions/example.md", PASS_RECORD);
     approve_record(&dir, "adrdom/decisions/example.md");
 
@@ -124,7 +116,8 @@ fn ask_refuses_while_terms_is_unapproved() {
 fn answer_and_refuse_stop_while_terms_is_unapproved() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_terms(&dir, TERMS_PASS_V1);
+    write_record(&dir, "adrdom/terms.md", TERMS_PASS_V1);
+    approve_record(&dir, "adrdom/terms.md");
 
     let mut content = PASS_RECORD.to_string();
     content.push_str(SECOND_QUESTION);
@@ -158,7 +151,8 @@ fn answer_and_refuse_stop_while_terms_is_unapproved() {
 fn approving_the_terms_file_clears_check_answer_refuse_and_ask() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_terms(&dir, TERMS_PASS_V1);
+    write_record(&dir, "adrdom/terms.md", TERMS_PASS_V1);
+    approve_record(&dir, "adrdom/terms.md");
 
     let mut content = PASS_RECORD.to_string();
     content.push_str(SECOND_QUESTION);
