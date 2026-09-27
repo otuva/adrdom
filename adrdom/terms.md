@@ -176,3 +176,9 @@ id: 108053a8-c2c3-4561-874c-2f573a5409f2
 terms: origin=ecb18413-cb3e-437e-9444-3cdd406ed67d
 definition: A file holding, for one origin, its line ranges and what each range went to in the records.
 aliases: blame file, blame files
+
+## terms brief
+id: 7d44030a-3589-4f29-aaa6-12fa09908ab8
+terms: aliases=1929dc82-4128-4621-af0e-043ac181459f, definition=607cb55f-c0fa-40af-b290-c17f3ba0f812, retired=c584a68d-e54a-4ad2-8a6b-9d64ed098ae5, term=f590059d-b681-40ec-8a1c-c8916d71f6bb
+definition: The file under adrdom/state holding the name, aliases and definition of every term that is not retired, one term per line.
+aliases: terms briefs
