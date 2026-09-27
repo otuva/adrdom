@@ -72,3 +72,49 @@ Standard: append-only logs are verified against their last committed state; anyt
   Costs: history the owner made can be rewritten in one commit.
 
 **Answer:** A
+
+### Does the tool take the order of ledger rows from their time?
+depends: e18b82d8-5271-4385-bbab-2b89e5da278f, f3e64c4e-21ab-442f-8c40-6060591e2b77=A|B
+id: 385a57d5-5f76-454a-ae5d-9b0d6f5c1492
+terms: depends=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f
+
+Problem: a merge joins the ledger rows of two branches in an order the merge sets, and the tool reads the last row in the file as the latest.
+Standard: logs merged from several writers order their events by the time each event carries, not by where the event sits in the file.
+
+- A) Yes: the latest row is the one with the latest time, and the place of a row in the file carries no meaning.
+  Why: the result is the same whichever way two branches are merged.
+  Costs: the result rests on the clock of the machine that wrote the row.
+- B) No: the latest row is the last one in the file, and the time is a record only.
+  Why: nothing rests on a clock.
+  Costs: the result of a merge depends on which branch has its rows last.
+
+### Does check at a merge look for the ledger rows of both branches?
+depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e18b82d8-5271-4385-bbab-2b89e5da278f, bf6697e3-8832-4b90-b036-8fecedb55406=A
+id: 1c27f2d6-ab62-4c5a-91b2-1488722f3c48
+terms: check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d
+
+Problem: check compares the ledger with one side of a merge only, so a row of the other branch can be dropped while the merge is resolved and nothing reports it.
+Standard: a merge of append-only logs is verified against every parent; the entries of each parent must all be present in the result.
+
+- A) Yes: at a merge commit check fails unless every ledger row of each of the two branches is in the merged ledger.
+  Why: no row is lost in a merge, whoever resolves it.
+  Costs: check reads a second commit at every merge.
+- B) No: check compares the ledger with the branch the merge runs on only.
+  Why: check has one rule fewer.
+  Costs: a row the owner wrote on the other branch can vanish at a merge with no failure.
+
+### Does a command write a time later than the last ledger row?
+depends: e18b82d8-5271-4385-bbab-2b89e5da278f, 385a57d5-5f76-454a-ae5d-9b0d6f5c1492=A
+id: aefa7f3c-70c3-412e-8d73-16ff9e2b703a
+
+### Does check fail a ledger whose rows changed place?
+depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e18b82d8-5271-4385-bbab-2b89e5da278f, 385a57d5-5f76-454a-ae5d-9b0d6f5c1492=*
+id: c10c3a49-e993-4c9f-a46b-4a1ba3646dcf
+
+### Does install write a merge rule for the ledger?
+depends: 1b98cdea-dc1b-4789-8f67-68d130d7a49d, e18b82d8-5271-4385-bbab-2b89e5da278f, 385a57d5-5f76-454a-ae5d-9b0d6f5c1492=A
+id: db56a285-946f-48b1-b073-bb1e90192185
+
+### Does check hold the merge rule install writes for the ledger?
+depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 1b98cdea-dc1b-4789-8f67-68d130d7a49d, db56a285-946f-48b1-b073-bb1e90192185
+id: 76c6adc6-c018-4df4-b49a-ddcd0a03a48c

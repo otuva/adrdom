@@ -113,3 +113,33 @@ Standard: a new lint rule lands on a clean tree, with every violation fixed befo
   Costs: CI fails until every hit is cleaned, and a hit nobody can clean keeps it failing until the owner lifts the ban.
 
 **Answer:** A
+
+### Does check hold the ban list equal to the ledger?
+depends: ef83beae-6857-4200-b251-a0fcc3c72f9d, 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e18b82d8-5271-4385-bbab-2b89e5da278f, ef7ec04d-9cdd-40a1-8246-42a4a0200828=A
+id: 06b7e003-4d9f-427a-a798-c1af97865411
+terms: ban=ef83beae-6857-4200-b251-a0fcc3c72f9d, banned=ef83beae-6857-4200-b251-a0fcc3c72f9d, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d
+
+Problem: after a merge the ban list can hold the hash of a word whose ban the owner lifted, and check passes.
+Standard: a file derived from a log is compared with the log in both directions, and any difference fails.
+
+- A) Yes: check fails unless the ban list holds exactly the hashes the ledger says are banned now, no more and no fewer.
+  Why: a lifted ban cannot come back without a ledger row.
+  Costs: a ban list merged wrongly stops every commit until it is put right.
+- B) No: check looks only for a banned hash missing from the ban list and for a hash the ledger never banned.
+  Why: check has one rule fewer.
+  Costs: a lifted ban that returns in a merge is enforced again and nothing reports it.
+
+### Does the tool write the ban list in one fixed order?
+depends: ef83beae-6857-4200-b251-a0fcc3c72f9d, c6da863d-5085-402f-815a-9bb832b4df7e=A
+id: bf27b020-4e60-48e0-8d3b-5f818e6bf6d8
+terms: ban=ef83beae-6857-4200-b251-a0fcc3c72f9d, banned=ef83beae-6857-4200-b251-a0fcc3c72f9d, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f
+
+Problem: ban adds a hash at the end of the ban list and unban rewrites the whole list, so two branches that touch it conflict at every merge.
+Standard: list files under version control are kept sorted, so that lines added and removed on two branches fall in different places and merge cleanly.
+
+- A) Yes: ban and unban both write the ban list sorted by hash.
+  Why: most changes from two branches to the ban list merge with no conflict.
+  Costs: the ban list no longer shows the order in which words were banned; the ledger still does.
+- B) No: ban adds at the end and unban rewrites the list.
+  Why: ban writes one line and touches nothing else.
+  Costs: every merge of two branches that ban or unban conflicts.
