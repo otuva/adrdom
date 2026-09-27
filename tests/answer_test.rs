@@ -3,7 +3,7 @@ mod common;
 use common::*;
 use std::path::Path;
 
-// 9.1 A: every heading needs a `depends:` line for the real `adr approve`
+// Every heading needs a `depends:` line for the real `adr approve`
 // these tests now go through (see `approve_record` in tests/common/mod.rs);
 // `depends: authority` reuses the term `approve_minimal_terms(&dir,
 // "authority")` sets up in every test below.

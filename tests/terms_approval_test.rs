@@ -435,8 +435,9 @@ fn edited_snapshot_fails_check() {
 
 // adr: 03b2853b-4379-4f4b-9cbf-ec6e06aad7fd
 //
-// Items 1+2 of the bootstrap-gaps review: a repo that approved
-// adrdom/terms.md before this snapshot mechanism existed carries a real
+// Per "Does check fail a terms file that differs from its latest
+// approval?": a repo that approved adrdom/terms.md before this snapshot
+// mechanism existed carries a real
 // `terms` ledger row but never got adrdom/state/terms.approved.md written
 // (approve_terms_via_ledger recreates exactly that shape -- a hand-written
 // ledger row with no real `adr approve` run to also snapshot the file).

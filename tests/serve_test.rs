@@ -765,7 +765,7 @@ fn serve_refuses_without_an_interactive_terminal() {
     );
 }
 
-// --- tiers, "stands on", refuse, refused, moot (spec §7) -----------------
+// --- tiers, "stands on", refuse, refused, moot ----------------------------
 
 #[test]
 fn get_next_shows_tier_and_stands_on_and_a_refuse_button() {

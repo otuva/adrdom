@@ -87,7 +87,7 @@ fn ban_writes_two_column_lines_with_term() {
         ledger
             .lines()
             // detail is the 5th (not last) tab-separated field now that
-            // every row carries a trailing version column (8.1 A).
+            // every row carries a trailing version column.
             .any(|l| l.contains("\tbanned\t") && l.contains(&format!("\t{}\t", term_id))),
         "expected a banned row with the term uuid as detail: {}",
         ledger

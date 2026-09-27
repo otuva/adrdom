@@ -145,9 +145,9 @@ pub fn run(claude: bool, codex: bool) -> i32 {
     0
 }
 
-/// `adrdom/state/terms.approved.md` (per items 1+2 of the bootstrap-gaps
-/// review, "Does check fail a terms file that differs from its latest
-/// approval?"): a repo that approved `adrdom/terms.md` before this snapshot
+/// `adrdom/state/terms.approved.md` (per "Does check fail a terms file that
+/// differs from its latest approval?"): a repo that approved
+/// `adrdom/terms.md` before this snapshot
 /// mechanism existed carries a `terms` ledger row but never got the
 /// snapshot file itself written. Restoring it here, once, is what lets
 /// `check` tell a real edit apart from the mere absence of a file this

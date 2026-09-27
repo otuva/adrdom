@@ -78,7 +78,7 @@ fn check_parse_failure() {
 
 #[test]
 fn check_ids_failure_missing_id() {
-    // 9.1 A point 9: a missing id means the plan was never approved --
+    // a missing id means the plan was never approved --
     // `approve`, not `ask`, is what gives a heading one, so the message
     // points at `approve`.
     let dir = init_repo();
@@ -139,7 +139,7 @@ fn check_answers_failure_hand_written_answer_line() {
 
 #[test]
 fn check_passes_a_skeleton_that_got_an_id_from_approve_but_was_never_asked() {
-    // 9.1 A: `approve` gives every heading an id, skeletons included --
+    // `approve` gives every heading an id, skeletons included --
     // `check`'s answers check must not mistake "has an id but was never
     // asked" for "edited after asking" just because a ledger `asked` row
     // for that id doesn't exist yet.
@@ -917,8 +917,9 @@ Standard: s2.\n\n\
 
 // adr: f97e62a4-45ab-46c6-b4b1-a674792a4493
 //
-// "... (also: a file with no prose passes)": nothing sits between the h1
-// and the first `### ` heading here, and check passes clean.
+// A skeleton heading -- one with a `depends:` line but no id and no body --
+// is never a failure: check passes clean, with no `ids:` or `parse:`
+// failure reported for it.
 #[test]
 fn check_passes_a_skeleton_heading_with_no_id_or_body() {
     let dir = init_repo();
@@ -1403,7 +1404,7 @@ fn check_passes_with_a_waiting_note_when_terms_unapproved_and_nothing_pairs_it()
 // waits, exactly as before this decision -- that gate never depended on
 // what is reachable.
 #[test]
-fn check_and_ask_fail_when_terms_file_was_edited_after_its_latest_approval() {
+fn check_and_ask_fail_when_the_approved_snapshot_is_missing_after_a_terms_edit() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let (record, id) = answer_one_question(&dir);
@@ -1430,25 +1431,6 @@ fn check_and_ask_fail_when_terms_file_was_edited_after_its_latest_approval() {
     let err = stderr(&ask_out);
     assert!(err.contains("terms not approved"), "{}", err);
     assert!(err.contains("adr approve adrdom/terms.md"), "{}", err);
-}
-
-#[test]
-fn check_notes_awaiting_approval_when_terms_unapproved_and_no_records() {
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    std::fs::write(
-        dir.join("adrdom/terms.md"),
-        "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice.\naliases: \n",
-    )
-    .unwrap();
-
-    let out = adr(&dir, &["check"], &[], "");
-    assert!(out.status.success(), "{}", stdout(&out));
-    assert!(
-        stdout(&out).contains("terms: awaiting approval"),
-        "{}",
-        stdout(&out)
-    );
 }
 
 // adr: 6108b8b2-911e-443b-abe0-4c6f8b407384

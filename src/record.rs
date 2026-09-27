@@ -86,8 +86,6 @@ pub struct Section {
     pub end: usize,
     pub heading_text: String,
     pub id: Option<String>,
-    #[allow(dead_code)]
-    pub id_dup: bool,
     /// `supersedes: ` ids, comma-separated in the source, in file order (4.14).
     pub supersedes: Vec<String>,
     /// `depends: ` entries, in file order (8.3/8.4).
@@ -95,7 +93,7 @@ pub struct Section {
     pub options: Vec<OptionRec>,
     pub answer_line: Option<usize>,
     pub answer_value: Option<String>,
-    /// Errors from the pre-existing parser: duplicate id line, an option
+    /// Errors from the parser: duplicate id line, an option
     /// with no decision sentence, and an answer naming a missing option.
     /// The option-count rules ("at most three" / "at least two") live in
     /// `shape_errors` instead, since `ask` and `approve` must refuse on
@@ -110,8 +108,8 @@ pub struct Section {
     /// `parse` check reads this and `parse_errors` together.
     pub shape_errors: Vec<String>,
     /// True when the heading has no non-blank line before the next
-    /// heading other than `depends:` lines: no id, no body, never a
-    /// failure.
+    /// heading other than `depends:` lines: no body, never a failure --
+    /// `approve` still gives a skeleton heading an id.
     pub is_skeleton: bool,
     /// Line index of this section's `terms: ` line, if any.
     pub terms_line: Option<usize>,
@@ -162,9 +160,9 @@ pub struct RecordFile {
     /// the h1 and the first `### ` question heading (or end of file, if no
     /// h1/questions).
     pub context_range: (usize, usize),
-    /// File-level shape errors (spec point: missing/duplicate h1, text
+    /// File-level shape errors: missing/duplicate h1, text
     /// before h1, a `## ` tier heading — tiers are derived now, never
-    /// written by hand).
+    /// written by hand.
     pub shape_errors: Vec<String>,
     /// Each section's 1-based tier (index-aligned with `sections`), filled
     /// when `derive_tiers` succeeds; `None` when `derive_error` is set
@@ -314,7 +312,7 @@ fn is_h1(line: &str) -> bool {
     line.starts_with("# ")
 }
 
-/// A `## ` line: no longer a valid tier heading (spec point 1 — tiers are
+/// A `## ` line: no longer a valid tier heading (tiers are
 /// derived from `depends:` lines), but still recognized so it can be
 /// reported as a shape error instead of silently becoming stray text or
 /// (worse) being mistaken for something else.
@@ -507,7 +505,8 @@ fn parse_depends_entry(raw: &str) -> Result<Dep, String> {
 }
 
 /// Whether two successfully-parsed deps name the same target (ignoring any
-/// answer set): used to catch a `depends:` line repeated under one heading.
+/// answer set): used to catch the same entry repeated within one `depends:`
+/// line, not a repeated `depends:` line (a second one is its own error).
 fn dep_identity_eq(a: &Dep, b: &Dep) -> bool {
     match (a, b) {
         (Dep::Id { id: x, .. }, Dep::Id { id: y, .. }) => x == y,
@@ -767,7 +766,7 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
 fn is_skeleton_range(lines: &[String], start: usize, end: usize) -> bool {
     ((start + 1)..end).all(|j| {
         let t = lines[j].trim();
-        // Same prefix `kv` requires (line 299): "depends:"/"id:" with no
+        // Same prefix `kv` requires: "depends:"/"id:" with no
         // space after the colon is a typo, not a real field, so it must not
         // be silently swallowed as skeleton -- it falls through and
         // `scan_body` reports it as a stray line instead.
@@ -839,7 +838,6 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
         end,
         heading_text,
         id: scan.id,
-        id_dup: scan.id_count > 1,
         supersedes: scan.supersedes,
         depends: scan.depends,
         options: scan.options,
@@ -933,7 +931,7 @@ pub fn plan_hash(rf: &RecordFile) -> String {
 
 /// sha256 of the context prose lines with leading/trailing blank lines
 /// trimmed, joined with `\n`; the empty string hashes when there is no
-/// prose (spec point 9).
+/// prose.
 pub fn context_hash(rf: &RecordFile) -> String {
     let (s, e) = rf.context_range;
     let e = e.min(rf.lines.len());
@@ -1275,7 +1273,7 @@ mod tests {
 
     #[test]
     fn depends_typo_missing_the_space_is_not_a_skeleton_line() {
-        // `kv` only recognizes "depends: " (with the space, line 299); a
+        // `kv` only recognizes "depends: " (with the space); a
         // heading whose only body line is the typo "depends:widget" (no
         // space) must not be silently accepted as a skeleton -- it falls
         // through `scan_body` and is reported as a stray line instead, so

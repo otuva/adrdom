@@ -271,7 +271,7 @@ fn approve_accepts_two_new_headings_when_two_in_the_tier_are_dead() {
     // Tier 1 starts with four questions, already approved and frozen:
     // "Dead A" refused, "Dead B" superseded, "Live C"/"Live D" still asked.
     // The frozen ones carry their depends entry already resolved to the
-    // term's id (9.1 A), as a real prior approve would have left it. Two
+    // term's id, as a real prior approve would have left it. Two
     // brand new skeleton headings are added to the same tier.
     let content = format!(
         "# Example\n\n\
@@ -393,7 +393,7 @@ fn approve_plan_hash_is_unaffected_by_changing_only_an_answer_set() {
     // Edited on the file as `approve` actually left it (with 1.2's depends
     // line already rewritten to 1.1's id) -- not the original text-form
     // content, which would make `approve` mint fresh ids all over again and
-    // move the plan hash for an unrelated reason (9.1 A: an id is part of
+    // move the plan hash for an unrelated reason (an id is part of
     // the plan).
     let approved_content = std::fs::read_to_string(&record).unwrap();
     assert!(

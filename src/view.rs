@@ -857,7 +857,6 @@ Standard: s2.\n\n\
             end: 1,
             heading_text: "x".to_string(),
             id: Some(id.to_string()),
-            id_dup: false,
             supersedes: vec![],
             depends: vec![],
             options: vec![],
@@ -881,14 +880,13 @@ Standard: s2.\n\n\
         let dir = temp_repo();
         append_row(&dir, "asked", "id-r", "h", "R?");
         append_row(&dir, "refused", "id-r", "h", "R?");
-        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let led = ledger::read(&dir.join(repo::LEDGER_PATH));
 
         let sec = Section {
             start: 0,
             end: 1,
             heading_text: "x".to_string(),
             id: Some("id-r".to_string()),
-            id_dup: false,
             supersedes: vec![],
             depends: vec![],
             options: vec![],

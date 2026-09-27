@@ -27,14 +27,12 @@ pub(super) fn check_ids(
                 // `approve`, not `ask`, is what gives it one.
                 None => out.push(Failure {
                     check: "ids".to_string(),
-                    id: None,
                     message: msg::heading_plan_not_approved(&rf.rel, &sec.heading_text),
                 }),
                 Some(id) => {
                     if let Some(prev) = seen.get(id) {
                         out.push(Failure {
                             check: "ids".to_string(),
-                            id: Some(id.clone()),
                             message: msg::duplicate_id(id, prev, &rf.rel, &sec.heading_text),
                         });
                     } else {
@@ -128,14 +126,12 @@ pub(super) fn check_ids(
             };
             out.push(Failure {
                 check: "ids".to_string(),
-                id: Some(id.clone()),
                 message: msg::removed_from_plan(&id, &heading, event.unwrap_or("unknown"), removed_file),
             });
             continue;
         }
         out.push(Failure {
             check: "ids".to_string(),
-            id: Some(id.clone()),
             message: msg::ledger_id_not_found(&id),
         });
     }
@@ -143,7 +139,6 @@ pub(super) fn check_ids(
     for r in missing_answered {
         out.push(Failure {
             check: "ids".to_string(),
-            id: None,
             message: r.message.clone(),
         });
     }
@@ -155,7 +150,6 @@ pub(super) fn check_ids(
                 if row.event == "withdrawn" {
                     out.push(Failure {
                         check: "ids".to_string(),
-                        id: Some(id.clone()),
                         message: msg::withdrawn_id_present(id, &rf.rel),
                     });
                 }

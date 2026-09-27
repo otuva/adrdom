@@ -1,15 +1,15 @@
-// Wave 2, ask (spec §4): the derived tier rule, the cap, the two
-// refused-dependency refusals (generic blocker + specific "stands on
-// refused"), the moot refusal, the mandatory-set refusals, and the
-// `assumes` rows/tier print that come out of a successful ask.
+// `ask`: the derived tier rule, the cap, the two refused-dependency
+// refusals (generic blocker + specific "stands on refused"), the moot
+// refusal, the mandatory-set refusals, and the `assumes` rows/tier print
+// that come out of a successful ask.
 //
-// 9.1 A: every fixture now goes through a real `adr approve` (`approve_record`)
-// before `ask` touches it, since `approve` -- not `ask` any more -- is what
-// mints a heading's id, and `ask` refuses outright on a section with none.
+// Every fixture now goes through a real `adr approve` (`approve_record`)
+// before `ask` touches it, since `approve` -- not `ask` -- is what mints a
+// heading's id, and `ask` refuses outright on a section with none.
 // Every heading here needs its own `depends:` line for `approve` to accept
-// it (batch 8's pre-existing rule); `depends: widget` (a term
-// `approve_minimal_terms` already sets up) covers a root-tier heading that
-// has no other natural dependency. Because every heading already has an id
+// it; `depends: widget` (a term `approve_minimal_terms` already sets up)
+// covers a root-tier heading that has no other natural dependency. Because
+// every heading already has an id
 // the moment it is approved, `extract_ids(...).len()` no longer tracks
 // "how many questions have been asked" -- a count of `\tasked\t` ledger
 // rows, or a before/after file-content comparison, is what these tests use
@@ -506,7 +506,7 @@ fn ask_prints_the_tier_and_writes_an_assumes_row_per_dependent() {
         .unwrap()
         .to_string();
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    // 9.1 A point 3: an `assumes` row keys on the dependent's own heading
+    // an `assumes` row keys on the dependent's own heading
     // id, not its heading text.
     let expected_hash = sha256_hex(&format!("{}=A|B", q2_id));
     let row = ledger

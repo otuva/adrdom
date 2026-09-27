@@ -15,7 +15,7 @@ pub fn adr_bin() -> PathBuf {
 
 /// How many `asked` ledger rows exist so far: a count of `\tasked\t` lines
 /// in `adrdom/state/ledger.tsv`, since every heading already has an id the
-/// moment it is approved (9.1 A), so `extract_ids(...).len()` no longer
+/// moment it is approved, so `extract_ids(...).len()` no longer
 /// tracks "how many questions have been asked".
 pub fn asked_row_count(dir: &Path) -> usize {
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap_or_default();
@@ -203,7 +203,7 @@ pub fn write_test_comment(dir: &Path, id: &str) {
 /// Writes `approved`/`context` ledger rows for `content` as if `adr
 /// approve` had just run on `rel` (path relative to `dir`, forward
 /// slashes) -- without minting a heading id or rewriting a single depends
-/// line to one (9.1 A: real `approve` now does both). Call this only for a
+/// line to one. Call this only for a
 /// file that a test wants to look "plan/context approved" to `check`
 /// without ever really being approvable (e.g. deliberately missing a
 /// depends line, or naming a term that doesn't exist) -- `check`'s own
@@ -228,7 +228,7 @@ pub fn approve_via_ledger(dir: &Path, rel: &str, content: &str) {
     append_ledger_row(dir, "context", "-", &ctx, rel);
 }
 
-/// Runs the real, owner-gated `adr approve <rel>` (9.1 A: `approve` mints
+/// Runs the real, owner-gated `adr approve <rel>` (`approve` mints
 /// every heading's id and rewrites its depends entries to ids). Use this,
 /// not `approve_via_ledger`, for any fixture that a test then hands to a
 /// real `adr ask`/`adr answer` call, since those now require a section to
@@ -266,10 +266,11 @@ pub fn append_ledger_row(dir: &Path, event: &str, id: &str, hash: &str, detail: 
     std::fs::write(&ledger_path, existing).unwrap();
 }
 
-/// Writes and approves a term-less `adrdom/terms.md`. Since `check`
-/// (5) fails once any record exists and `adrdom/terms.md` is missing or
-/// unapproved, tests that write a record but don't care about terms at
-/// all call this to satisfy that gate without adding any actual term.
+/// Writes and approves a term-less `adrdom/terms.md`. Since `check` fails
+/// once any record exists and `adrdom/terms.md` is missing (an unapproved
+/// file alone is only a note now, never a failure), tests that write a
+/// record but don't care about terms at all call this to satisfy that gate
+/// without adding any actual term.
 pub fn approve_empty_terms(dir: &Path) {
     let content = "# Terms\n";
     std::fs::write(dir.join("adrdom/terms.md"), content).unwrap();
@@ -323,7 +324,7 @@ pub fn approve_terms_with(dir: &Path, words: &[&str]) {
     approve_terms_via_ledger(dir, &content);
 }
 
-/// An `assumes` row's hash (see src/commands/check/answers.rs, spec §2):
+/// An `assumes` row's hash (see src/commands/check/answers.rs):
 /// `record::assumes_hash` of `dependent_key` against the answer set `set`
 /// spells out in the shape `check` renders it and this helper's callers
 /// already pass: a single letter, letters joined by `|`, or `*` for "any".

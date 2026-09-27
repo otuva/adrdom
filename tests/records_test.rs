@@ -205,7 +205,7 @@ fn check_passes_a_frozen_answered_section_with_a_tell() {
 /// Like `frozen_tell_section`, but its `depends:` line is already the
 /// term's uuid rather than the word "widget": a real approve of a frozen
 /// section refuses a still-text depends entry regardless of the tell
-/// question this test is about (9.1 A point 5), so this fixture is
+/// question this test is about, so this fixture is
 /// pre-resolved the way a real approve would have left it, matching
 /// `approve_minimal_terms`'s fixed term id.
 fn frozen_tell_section_resolved() -> String {

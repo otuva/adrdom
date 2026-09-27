@@ -8,7 +8,7 @@ fn example_record_round_trips_and_ask_assigns_ids() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_terms_with(&dir, &["decision", "example"]);
     let record = write_record(&dir, "adrdom/decisions/example.md", EXAMPLE_RECORD);
-    // 9.1 A: `approve`, not `ask`, mints the heading's id now.
+    // `approve`, not `ask`, mints the heading's id now.
     approve_record(&dir, "adrdom/decisions/example.md");
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
@@ -266,7 +266,7 @@ fn ask_refuses_a_question_with_four_options() {
 
 #[test]
 fn ask_leaves_a_skeleton_heading_unasked_though_approve_gave_it_an_id() {
-    // 9.1 A point 1: `approve` gives every heading an id, skeletons
+    // `approve` gives every heading an id, skeletons
     // included -- but `ask` still never asks a skeleton, so it gets no
     // ledger row for it.
     let dir = init_repo();

@@ -33,7 +33,7 @@ Standard: clear yes or no.
   Costs: other costs.
 "#;
 
-/// Every question is listed now (spec §7: `show` prints every derived
+/// Every question is listed now (`show` prints every derived
 /// tier's questions with their state), not only the current, answered
 /// ones — the old (pre-tier) `show` filtered down to just those. Both
 /// headings here are root (no `depends:` heading entry, only the fixture

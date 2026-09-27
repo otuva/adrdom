@@ -16,7 +16,6 @@ pub(super) fn check_ledger(
     for (lineno, raw) in &led.malformed {
         out.push(Failure {
             check: "ledger".to_string(),
-            id: None,
             message: msg::malformed_ledger_row(*lineno, raw),
         });
     }
@@ -26,11 +25,10 @@ pub(super) fn check_ledger(
     // commit read the staged files?") -- rather than re-reading the
     // filesystem here, so this never disagrees with `led` about which copy
     // of the ledger it is judging.
-    if let Some(head_content) = repo::git(root, &["show", "HEAD:adrdom/state/ledger.tsv"]) {
+    if let Some(head_content) = repo::git(root, &["show", &format!("HEAD:{}", repo::LEDGER_PATH)]) {
         if !ledger_content.starts_with(&head_content) {
             out.push(Failure {
                 check: "ledger".to_string(),
-                id: None,
                 message: msg::ledger_not_append_only(),
             });
         }
@@ -45,7 +43,6 @@ pub(super) fn check_ledger(
         if row.event == "asked" && !all_ids.contains(&row.id) && !dropped_state(led, &row.id) {
             out.push(Failure {
                 check: "ledger".to_string(),
-                id: Some(row.id.clone()),
                 message: msg::ledger_asked_id_missing(&row.id),
             });
         }
@@ -60,7 +57,6 @@ pub(super) fn check_ledger(
             if !has_match {
                 out.push(Failure {
                     check: "ledger".to_string(),
-                    id: Some(row.id.clone()),
                     message: msg::ledger_answered_without_asked(&row.id),
                 });
             }

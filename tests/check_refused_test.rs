@@ -1,10 +1,9 @@
-// Batch 8.1/8.2 (`answer <id> refuse`): the refusal-line/ledger-row
+// `adr answer <id>@<version> refuse`: the refusal-line/ledger-row
 // consistency checks, `done` excluding a refused section, `tested`
 // treating a refused id as never-untested but its ties as stale, and a
 // refused id still having to live in a topic file until `approve`
 // withdraws it. Fixtures are hand-written (record content plus
-// `append_ledger_row`), never through `adr answer refuse` (built in a
-// separate slice at the same time).
+// `append_ledger_row`) rather than run through a real `adr answer refuse`.
 
 mod common;
 

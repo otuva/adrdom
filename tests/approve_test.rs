@@ -189,7 +189,7 @@ fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
     // Edited on the file as `approve` actually left it (with the heading's
     // id already minted) -- not the original text-form constant, which
     // would wipe that id back out and make the *plan* look unapproved too
-    // (9.1 A: an id is part of the plan).
+    // (an id is part of the plan).
     let approved_content = std::fs::read_to_string(&record).unwrap();
     let edited = approved_content.replace(
         "Context prose line one.",
@@ -314,7 +314,7 @@ fn ask_refuses_group_two_while_group_one_unanswered_then_passes_after_answer() {
     assert!(err.contains("First question?"), "{}", err);
 
     // Nothing newly asked: `approve` already gave group two's heading an
-    // id too (9.1 A), so `extract_ids` no longer tells asked apart from
+    // id too, so `extract_ids` no longer tells asked apart from
     // merely approved -- the ledger's `asked` row count does.
     let ledger_still = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert_eq!(asked_row_count(&dir), 1, "{}", ledger_still);
@@ -755,13 +755,13 @@ fn ask_refuses_while_terms_unapproved() {
     let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
     write_record(&dir, "adrdom/terms.md", TERMS_BASIC);
     // A real `adr approve` on the record now refuses up front while
-    // `adrdom/terms.md` itself is unapproved (the review finding this
-    // fixes: it used to succeed here since the hand-written id in
-    // `TERMS_BASIC` let depends resolution go through despite there being
-    // no `terms` ledger row at all). `approve_via_ledger` gets the record
-    // "looks approved" to `ask` the same way real approve's write step
-    // would have, without depending on the now-refusing terms gate --
-    // `ask`'s own terms gate fires before it ever needs the section's id.
+    // `adrdom/terms.md` itself is unapproved: it used to succeed here since
+    // the hand-written id in `TERMS_BASIC` let depends resolution go
+    // through despite there being no `terms` ledger row at all.
+    // `approve_via_ledger` gets the record "looks approved" to `ask` the
+    // same way real approve's write step would have, without depending on
+    // the now-refusing terms gate -- `ask`'s own terms gate fires before it
+    // ever needs the section's id.
     approve_via_ledger(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");

@@ -24,7 +24,6 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                 ) {
                     out.push(Failure {
                         check: "answers".to_string(),
-                        id: Some(id.clone()),
                         message: msg::refusal_without_row(&rf.rel, &sec.heading_text),
                     });
                 }
@@ -56,7 +55,6 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                         // whose fix would remove a real answer.
                         out.push(Failure {
                             check: "answers".to_string(),
-                            id: Some(id.clone()),
                             message: msg::answered_text_changed(&rf.rel, &sec.heading_text, id),
                         });
                     }
@@ -66,7 +64,6 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                         // nothing backing it.
                         out.push(Failure {
                             check: "answers".to_string(),
-                            id: Some(id.clone()),
                             message: msg::answer_without_row(&rf.rel, &sec.heading_text),
                         });
                     }
@@ -80,7 +77,6 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                 if has_answered_row {
                     out.push(Failure {
                         check: "answers".to_string(),
-                        id: Some(id.clone()),
                         message: msg::answered_row_without_line(&rf.rel, &sec.heading_text),
                     });
                 } else if has_refused_row {
@@ -90,7 +86,6 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                     // `**Answer:** refused` line.
                     out.push(Failure {
                         check: "answers".to_string(),
-                        id: Some(id.clone()),
                         message: msg::refused_row_without_line(&rf.rel, &sec.heading_text),
                     });
                 } else if let Some(latest_asked_hash) = led.latest_asked(id).map(|r| r.hash.clone()) {
@@ -103,7 +98,6 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                     if latest_asked_hash != cur {
                         out.push(Failure {
                             check: "answers".to_string(),
-                            id: Some(id.clone()),
                             message: msg::edited_after_asking(&rf.rel, &sec.heading_text),
                         });
                     }
@@ -155,9 +149,9 @@ fn check_frozen_sets(
         };
         let dep_heading = rf.sections[*di].heading_text.clone();
         // No set at all (the depends line lost its `=...` suffix since
-        // asking) hashes the same empty-set text `set_text`/`canonical_set`
-        // used to: never a match against a recorded `assumes` hash, which
-        // is always written for a determined set.
+        // asking) hashes `"<dep_id>="`, an empty-set text that never
+        // matches a recorded `assumes` hash, which is always written for a
+        // determined set.
         let expected = match set {
             Some(s) => record::assumes_hash(dep_id, s),
             None => record::sha256_hex(&format!("{}=", dep_id)),
@@ -165,7 +159,6 @@ fn check_frozen_sets(
         if expected != row.hash {
             out.push(Failure {
                 check: "answers".to_string(),
-                id: Some(id.to_string()),
                 message: msg::answer_set_changed(&rf.rel, &dep_heading, &sec.heading_text),
             });
         }

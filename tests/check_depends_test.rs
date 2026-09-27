@@ -1,9 +1,8 @@
-// Batch 8 (8.3/8.4/8.8): the `## ` tier-heading shape error, the "no
-// depends line" rule, entry resolution (term/decision/dangling/cycle), the
-// tier cap, and the per-file `tiers:` note. Fixtures are hand-written and
-// approved via hand-written ledger rows (`approve_via_ledger`,
-// `approve_minimal_terms`), never through `adr ask`/`adr approve`, which are
-// being built in a separate slice at the same time.
+// The `## ` tier-heading shape error, the "no depends line" rule, entry
+// resolution (term/decision/dangling/cycle), the tier cap, and the
+// per-file `tiers:` note. Fixtures are hand-written and approved via
+// hand-written ledger rows (`approve_via_ledger`, `approve_minimal_terms`),
+// never through a real `adr ask`/`adr approve`.
 
 mod common;
 

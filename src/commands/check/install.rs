@@ -35,21 +35,18 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
                     if !matches {
                         out.push(Failure {
                             check: "install".to_string(),
-                            id: None,
                             message: msg::agents_md_stale(),
                         });
                     }
                 }
                 None => out.push(Failure {
                     check: "install".to_string(),
-                    id: None,
                     message: msg::agents_md_missing_brief(),
                 }),
             }
         }
         None => out.push(Failure {
             check: "install".to_string(),
-            id: None,
             message: msg::agents_md_missing_brief(),
         }),
     }
@@ -62,7 +59,6 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
             {
                 out.push(Failure {
                     check: "install".to_string(),
-                    id: None,
                     message: msg::claude_md_missing_import(),
                 });
             }
@@ -90,7 +86,6 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
                 }
                 Err(_) => out.push(Failure {
                     check: "install".to_string(),
-                    id: None,
                     message: msg::settings_unparseable(&root.join(".claude/settings.json").display().to_string()),
                 }),
             }
@@ -106,14 +101,12 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
                 if content != crate::commands::install::codex_rules_content() {
                     out.push(Failure {
                         check: "install".to_string(),
-                        id: None,
                         message: msg::codex_rules_stale(),
                     });
                 }
             }
             None => out.push(Failure {
                 check: "install".to_string(),
-                id: None,
                 message: msg::codex_rules_missing(),
             }),
         }
@@ -125,7 +118,6 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
 fn missing_deny_entry(entry: &str) -> Failure {
     Failure {
         check: "install".to_string(),
-        id: None,
         message: msg::missing_deny_entry(entry),
     }
 }

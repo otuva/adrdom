@@ -53,7 +53,6 @@ pub(super) fn check_plan(
         if !repo::valid_topic_file_name(name) {
             out.push(Failure {
                 check: "plan".to_string(),
-                id: None,
                 message: msg::bad_topic_file_name(&state::rel_path(root, &f)),
             });
         }
@@ -69,7 +68,6 @@ pub(super) fn check_plan(
                 if !sec.is_skeleton {
                     out.push(Failure {
                         check: "plan".to_string(),
-                        id: sec.id.clone(),
                         message: msg::body_under_unapproved_heading(&rel, &sec.heading_text),
                     });
                 }
@@ -83,7 +81,6 @@ pub(super) fn check_plan(
             if r.category == "plan" {
                 out.push(Failure {
                     check: "plan".to_string(),
-                    id: None,
                     message: r.message.clone(),
                 });
             }
@@ -110,7 +107,6 @@ pub(super) fn check_plan(
                         {
                             out.push(Failure {
                                 check: "plan".to_string(),
-                                id: sec.id.clone(),
                                 message: msg,
                             });
                         }
@@ -125,7 +121,6 @@ pub(super) fn check_plan(
                         ) {
                             out.push(Failure {
                                 check: "plan".to_string(),
-                                id: sec.id.clone(),
                                 message: msg,
                             });
                         }
@@ -157,7 +152,6 @@ pub(super) fn check_plan(
         for heading in dup_headings {
             out.push(Failure {
                 check: "plan".to_string(),
-                id: None,
                 message: msg::duplicate_heading_in_file(heading, &rel),
             });
         }
@@ -172,7 +166,6 @@ pub(super) fn check_plan(
         if paths.len() > 1 {
             out.push(Failure {
                 check: "plan".to_string(),
-                id: None,
                 message: msg::duplicate_heading_across_files(heading, &paths[0], &paths[1]),
             });
         }

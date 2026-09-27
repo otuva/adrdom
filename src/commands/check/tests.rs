@@ -75,7 +75,6 @@ pub(super) fn check_tests(
         } else {
             out.push(Failure {
                 check: "tested".to_string(),
-                id: Some(id.clone()),
                 message: msg::untested(id),
             });
         }
@@ -85,7 +84,6 @@ pub(super) fn check_tests(
         if !current.contains(id) {
             out.push(Failure {
                 check: "tested".to_string(),
-                id: Some(id.clone()),
                 message: msg::stale_test(id),
             });
         }

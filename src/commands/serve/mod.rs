@@ -1,4 +1,4 @@
-//! The owner's page (7.x): served by the binary on loopback, token-gated.
+//! The owner's page: served by the binary on loopback, token-gated.
 mod answer;
 mod decisions;
 mod html;

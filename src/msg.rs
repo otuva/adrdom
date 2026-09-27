@@ -161,20 +161,6 @@ pub fn terms_not_approved(rel: &str) -> String {
     )
 }
 
-/// The same "not approved" state, reported about `adrdom/terms.md` itself
-/// rather than a dependent topic file. No longer reachable from `check`
-/// (per "Does check fail a terms file that differs from its latest
-/// approval?", 03b2853b A: an unapproved file alone is only ever a note
-/// now, never this failure) -- kept for `every_refusal_names_its_next_move`
-/// below, which still exercises every message shape this module defines.
-#[allow(dead_code)]
-pub fn terms_md_not_approved() -> String {
-    refuse(
-        "adrdom/terms.md not approved".to_string(),
-        Next::owner_runs("adr approve adrdom/terms.md"),
-    )
-}
-
 /// `adrdom/terms.md` differs from its latest approval, and that change
 /// reaches a current decision -- directly, or through another term's own
 /// definition (per "Does check fail a terms file that differs from its
@@ -198,10 +184,10 @@ pub fn terms_definition_moved(terms: &str, decisions: &str) -> String {
 /// latest approved text at all: fails safe rather than assuming nothing
 /// moved (see `check::terms::EditImpact::SnapshotMissing`). Names the
 /// agent's move first (`adr install` backfills the snapshot when this file
-/// still matches its last approval -- the upgrade-path gap where a repo
-/// approved before the snapshot mechanism existed never got one written)
-/// with the owner's re-approve as the fallback for when the file has
-/// actually moved since then and a fresh snapshot has to be re-established.
+/// still matches its last approval -- a repo that approved before the
+/// snapshot mechanism existed never got one written) with the owner's
+/// re-approve as the fallback for when the file has actually moved since
+/// then and a fresh snapshot has to be re-established.
 pub fn terms_snapshot_missing() -> String {
     refuse(
         "adrdom/terms.md not approved: the approved copy is missing, so a paired definition's change can't be ruled out".to_string(),
@@ -1371,9 +1357,9 @@ pub fn banned_added(n: usize) -> String {
 }
 
 /// `adr install` backfilled `adrdom/state/terms.approved.md` for a repo
-/// that approved `adrdom/terms.md` before the snapshot mechanism existed
-/// (the upgrade-path gap, items 1+2): the file on disk still matched its
-/// latest `terms` ledger row, so its own text is the approved content.
+/// that approved `adrdom/terms.md` before the snapshot mechanism existed:
+/// the file on disk still matched its latest `terms` ledger row, so its
+/// own text is the approved content.
 pub fn terms_snapshot_backfilled() -> String {
     "install: adrdom/state/terms.approved.md: restored from the approved adrdom/terms.md"
         .to_string()
@@ -1500,8 +1486,8 @@ mod tests {
     // runs that command, the agent or the owner": every refusal/failure
     // built in this module is asserted below to contain either "; agent "
     // or "owner runs: ", so a stop with no legal move (the failure mode an
-    // override would otherwise paper over) is a compile-time-checked
-    // impossibility, not something callers can forget.
+    // override would otherwise paper over) is caught here rather than left
+    // for callers to notice.
     #[test]
     fn every_refusal_names_its_next_move() {
         let e = "boom";
@@ -1520,7 +1506,9 @@ mod tests {
             terms_load_error(e, Next::agent("retries")),
             terms_shape_error(e),
             terms_not_approved("adrdom/decisions/x.md"),
-            terms_md_not_approved(),
+            terms_definition_moved("pass", "x.md: \"heading\""),
+            terms_snapshot_missing(),
+            terms_snapshot_mismatch(),
             circular_definition("a -> b -> a"),
             term_removed_but_carried("uuid-1", "term \"x\""),
             term_retired_but_carried("x", "term \"y\"", term_reword_and_approve()),

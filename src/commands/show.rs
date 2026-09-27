@@ -1,6 +1,5 @@
 //! `adr show`: per topic file, each derived tier and its questions,
-//! plainly. No HTML, no snapshot — reads the file and ledger directly,
-//! the same way the old (pre-tier) `show` did.
+//! plainly. No HTML, no snapshot — reads the file and ledger directly.
 use crate::depends;
 use crate::ledger::{self, Ledger};
 use crate::msg::{self, Actor};

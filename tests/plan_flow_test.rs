@@ -1,5 +1,5 @@
-// End-to-end walk of the whole plan lifecycle (plan-build-spec.md §1-§6)
-// through the built binary: approve derives and caps tiers, ask enforces
+// End-to-end walk of the whole plan lifecycle through the built binary:
+// approve derives and caps tiers, ask enforces
 // the derived tier order plus mandatory/moot answer sets and writes
 // `assumes` rows, answer accepts a refusal, check freezes a dependent's
 // answer set and reports moot notes/done, and a plan change (dropping
@@ -9,7 +9,7 @@
 // behaviour, since each step's file state depends on the ids/rows the
 // previous step minted.
 //
-// 9.1 A: `approve` -- not `ask` -- mints every heading's id now, all at
+// `approve` -- not `ask` -- mints every heading's id now, all at
 // once, skeletons included, and rewrites a heading-shaped `depends:` line
 // to that id. Every step below that "grows" a heading (skeleton into a
 // full body, or a set onto a depends line) does so by editing the file as
@@ -46,12 +46,12 @@ const WIDGET_ID: &str = "99999990-9999-9999-9999-999999999999";
 const PAINT_ID: &str = "99999991-9999-9999-9999-999999999999";
 
 /// `approve` rewrites every `Text` depends entry to the id it resolves to
-/// (9.1 A) -- a term entry to the term's id, a heading entry to the target
+/// -- a term entry to the term's id, a heading entry to the target
 /// heading's own id -- so every marker/insert pair below that edits an
 /// already-approved file is built from those ids, never the original words.
 /// Each marker also carries the heading's own id line, which `approve` now
 /// writes directly after the (single, comma-separated) depends line rather
-/// than before it (8.1 A point 4), so every marker below needs that
+/// than before it, so every marker below needs that
 /// section's own id too, not just the ids its depends line names.
 fn q1_marker(q1_id: &str) -> String {
     format!("depends: {}\nid: {}\n\n### 1.2", WIDGET_ID, q1_id)

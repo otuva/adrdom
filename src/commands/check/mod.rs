@@ -28,9 +28,6 @@ use std::path::{Path, PathBuf};
 
 struct Failure {
     check: String,
-    /// The decision a failure is about, kept so the page can group by it.
-    #[allow(dead_code)]
-    id: Option<String>,
     message: String,
 }
 
@@ -40,16 +37,17 @@ fn push_failures(out: &mut Vec<String>, fs: Vec<Failure>) {
     }
 }
 
-/// Everything `check` reports, computed against `root` with the default
-/// (non-staged, no message file) banned-word scan. Used by `run` (which
-/// layers the CLI's `--staged`/`--message` modes on top) and by the `serve`
-/// page, which always wants the plain repo-wide scan.
 /// The full check report for the owner's page, reusing a test index the
 /// caller already computed so the repo's tracked files are scanned once.
+/// Always runs the plain repo-wide scan (non-staged, no message file):
+/// `serve` has no commit to check "at", unlike `run`.
 pub fn collect_with_tests(root: &Path, tests: &HashMap<String, Vec<String>>) -> view::CheckReport {
     build(root, false, None, Some(tests))
 }
 
+/// Everything `check` reports, computed against `root`. `run` passes
+/// `staged`/`message` on for the pre-commit/commit-msg hook modes;
+/// `collect_with_tests` always passes the plain non-staged, no-message scan.
 fn build(
     root: &Path,
     staged: bool,

@@ -58,7 +58,7 @@ pub fn list_decision_files(root: &Path) -> Vec<PathBuf> {
 /// tree, so it keeps calling the plain function above.
 pub fn list_decision_files_via(root: &Path, source: &Source) -> Vec<PathBuf> {
     let mut out: Vec<PathBuf> = source
-        .list_under(root, "adrdom/decisions")
+        .list_under(root, DECISIONS_DIR)
         .into_iter()
         .filter(|p| p.ends_with(".md"))
         .map(|rel| root.join(rel))

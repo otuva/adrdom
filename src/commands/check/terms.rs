@@ -34,11 +34,10 @@ pub(super) fn check_terms(
     let mut notes = Vec::new();
     let has_records = !repo::list_decision_files_via(root, source).is_empty();
 
-    let Some(content) = source.read(root, "adrdom/terms.md") else {
+    let Some(content) = source.read(root, repo::TERMS_PATH) else {
         if has_records {
             out.push(Failure {
                 check: "terms".to_string(),
-                id: None,
                 message: msg::terms_missing(),
             });
         }
@@ -69,7 +68,6 @@ pub(super) fn check_terms(
         if !state::terms_approved(led, snap) {
             out.push(Failure {
                 check: "terms".to_string(),
-                id: None,
                 message: msg::terms_snapshot_mismatch(),
             });
         }
@@ -88,21 +86,18 @@ pub(super) fn check_terms(
             EditImpact::DefinitionMoved(terms_list, decisions) => {
                 out.push(Failure {
                     check: "terms".to_string(),
-                    id: None,
                     message: msg::terms_definition_moved(&terms_list, &decisions),
                 });
             }
             EditImpact::MissingFromApprovedCopy(terms_list, decisions) => {
                 out.push(Failure {
                     check: "terms".to_string(),
-                    id: None,
                     message: msg::terms_term_missing_from_approved_copy(&terms_list, &decisions),
                 });
             }
             EditImpact::SnapshotMissing => {
                 out.push(Failure {
                     check: "terms".to_string(),
-                    id: None,
                     message: msg::terms_snapshot_missing(),
                 });
             }
@@ -125,7 +120,6 @@ pub(super) fn check_terms(
     for r in refusals {
         out.push(Failure {
             check: "terms".to_string(),
-            id: None,
             message: r,
         });
     }
@@ -149,7 +143,6 @@ pub(super) fn check_terms(
             let Some(tl) = sec.terms_line else {
                 out.push(Failure {
                     check: "terms".to_string(),
-                    id: Some(id.clone()),
                     message: msg::section_no_terms_line(&rel, &sec.heading_text, id, answered),
                 });
                 continue;
@@ -157,7 +150,6 @@ pub(super) fn check_terms(
             match terms::validate_pairs(rf.lines[tl].trim_end(), &tf) {
                 Err(_) => out.push(Failure {
                     check: "terms".to_string(),
-                    id: Some(id.clone()),
                     message: msg::section_terms_line_malformed(&rel, &sec.heading_text, id, answered),
                 }),
                 Ok(problems) => {
@@ -165,7 +157,6 @@ pub(super) fn check_terms(
                         match p.kind {
                             terms::ProblemKind::Gone => out.push(Failure {
                                 check: "terms".to_string(),
-                                id: Some(id.clone()),
                                 message: msg::section_term_not_found(
                                     &rel,
                                     &sec.heading_text,
@@ -176,7 +167,6 @@ pub(super) fn check_terms(
                             }),
                             terms::ProblemKind::Retired(name) => out.push(Failure {
                                 check: "terms".to_string(),
-                                id: Some(id.clone()),
                                 message: msg::section_term_retired(&rel, &sec.heading_text, &name, id, answered),
                             }),
                         }
@@ -195,7 +185,6 @@ pub(super) fn check_terms(
         match terms::validate_pairs(tl, &tf) {
             Err(_) => out.push(Failure {
                 check: "terms".to_string(),
-                id: None,
                 message: msg::term_definition_terms_line_malformed(&t.name),
             }),
             Ok(problems) => {
@@ -203,12 +192,10 @@ pub(super) fn check_terms(
                     match p.kind {
                         terms::ProblemKind::Gone => out.push(Failure {
                             check: "terms".to_string(),
-                            id: None,
                             message: msg::term_definition_term_not_found(&t.name, &p.uuid),
                         }),
                         terms::ProblemKind::Retired(name) => out.push(Failure {
                             check: "terms".to_string(),
-                            id: None,
                             message: msg::term_definition_term_retired(&t.name, &name),
                         }),
                     }

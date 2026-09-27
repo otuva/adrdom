@@ -1,17 +1,17 @@
-// Batch 8.7 A: the frozen-set check on `assumes` rows (a depends line's
-// answer set must not silently change after the target was asked, but a
-// dependent heading that vanished entirely is fine), and the `moot` note
-// for a dependent whose set excludes the letter its target was actually
-// answered with. Fixtures are hand-written (record content plus
-// `append_ledger_row`/`assumes_hash`), never through `adr ask` (built in a
-// separate slice at the same time).
+// The frozen-set check on `assumes` rows (a depends line's answer set must
+// not silently change after the target was asked, but a dependent heading
+// that vanished entirely is fine), and the `moot` note for a dependent
+// whose set excludes the letter its target was actually answered with.
+// Most fixtures are hand-written (record content plus
+// `append_ledger_row`/`assumes_hash`) rather than through a real `adr ask`,
+// though some tests below do run `adr approve`/`adr ask` for real.
 
 mod common;
 
 use common::*;
 
 const TARGET_ID: &str = "44444444-4444-4444-4444-444444444444";
-// 9.1 A point 3: an `assumes` row keys on the dependent's own heading id,
+// an `assumes` row keys on the dependent's own heading id,
 // not its heading text -- so a fixture that hand-writes such a row (rather
 // than going through real `ask`) needs the dependent heading to carry a
 // fixed id of its own, used as that key.
@@ -175,7 +175,7 @@ fn check_passes_when_the_dependents_heading_has_extra_leading_whitespace() {
     // must not itself become a candidate blocked by the tier rule, but it
     // still counts as a dependent of "Which color?" for the assumes row
     // this ask writes.
-    // 9.1 A point 8: the term-pairing scan now leaves out `depends:` lines
+    // the term-pairing scan now leaves out `depends:` lines
     // (they hold references, not prose), so "widget" has to appear in the
     // heading/Problem/Standard/option text itself for this to pair the term.
     let content = "# Colors\n\n\

@@ -22,7 +22,6 @@ pub(super) fn check_banned(root: &Path, staged: bool, message: Option<&Path>, so
             let suffix = msg::term_suffix(hit.term.as_deref());
             out.push(Failure {
                 check: "banned".to_string(),
-                id: None,
                 message: msg::banned_word_at(&msg::location(&name, hit.line), &suffix),
             });
         }
@@ -65,7 +64,6 @@ pub(super) fn check_banned_ledger(led: &Ledger, root: &Path, source: &Source) ->
     for h in missing_from_file {
         out.push(Failure {
             check: "banned".to_string(),
-            id: None,
             message: msg::banned_missing_from_file(hash_prefix(h)),
         });
     }
@@ -78,7 +76,6 @@ pub(super) fn check_banned_ledger(led: &Ledger, root: &Path, source: &Source) ->
     for h in missing_from_ledger {
         out.push(Failure {
             check: "banned".to_string(),
-            id: None,
             message: msg::banned_missing_from_ledger(hash_prefix(h)),
         });
     }
