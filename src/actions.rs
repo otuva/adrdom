@@ -485,6 +485,7 @@ fn do_approve_blame(
         phrase_lookup: &phrase_lookup,
         decision_stems,
         known_origins,
+        own_origin: origin_rel.clone(),
         root: root.to_path_buf(),
     };
 

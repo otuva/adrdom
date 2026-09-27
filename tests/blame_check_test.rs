@@ -32,6 +32,138 @@ fn check_fails_when_the_origin_was_edited_after_approval() {
     assert!(text.contains("docs/x.md"), "{}", text);
 }
 
+// adr: 5fddeeb5-cf54-4550-a701-dd9e4a6a81d6
+//
+// "a mismatch fails until the agent updates the rows and the owner
+// approves again": once the blame file's `blob:` line is updated to the
+// origin's current hash and the owner re-approves, `check` passes again --
+// no blame failure, and no awaiting-approval note either (the file is
+// approved, not a draft).
+#[test]
+fn check_passes_after_the_blob_line_is_updated_and_reapproved() {
+    let (dir, _id1, _id2) = blame_setup();
+    let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
+    let rows = "1-1\tdropped: dead\n2-2\tdropped: detail\n";
+    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+
+    // Edited in place, same line count, so the existing rows still cover
+    // the whole origin once the blob line is updated below.
+    std::fs::write(dir.join("docs/x.md"), "one\ntwo-edited\n").unwrap();
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    assert!(stdout(&out).contains("no longer matches"), "{}", stdout(&out));
+
+    // The agent updates the blob line to the edited content's current hash.
+    let new_blob_out = run_git(&dir, &["hash-object", "docs/x.md"]);
+    let new_blob = stdout(&new_blob_out).trim().to_string();
+    let content = std::fs::read_to_string(&path).unwrap();
+    let updated = content.replacen(&format!("blob: {}", blob), &format!("blob: {}", new_blob), 1);
+    std::fs::write(&path, &updated).unwrap();
+
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "check should pass: {}", stdout(&out));
+    assert!(!stdout(&out).contains("no longer matches"), "{}", stdout(&out));
+    assert!(!stdout(&out).contains("awaiting approval"), "{}", stdout(&out));
+}
+
+// adr: 5fddeeb5-cf54-4550-a701-dd9e4a6a81d6
+//
+// `check --staged`, the command the pre-commit hook runs, reads a tracked
+// origin as a file: an approved blame file whose origin is staged with the
+// content its blob names passes, with no path failure.
+#[test]
+fn check_staged_passes_on_an_approved_blame_file_whose_origin_is_tracked() {
+    let (dir, _id1, _id2) = blame_setup();
+    let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
+    let rows = "1-1\tdropped: dead\n2-2\tdropped: detail\n";
+    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    run_git(&dir, &["add", "-A"]);
+
+    let out = adr(&dir, &["check", "--staged"], &[], "");
+    let text = stdout(&out);
+    assert!(!text.contains("blame:"), "{}", text);
+    assert!(!text.contains("is not a regular file"), "{}", text);
+}
+
+// adr: 5fddeeb5-cf54-4550-a701-dd9e4a6a81d6
+//
+// `check --staged` reads the origin from the index: an edit to the origin
+// staged there fails with the mismatch even with the old content restored
+// on disk; plain `check` reads the working-tree copy and reports none.
+#[test]
+fn check_staged_reads_the_origin_from_the_index_not_the_working_tree() {
+    let (dir, _id1, _id2) = blame_setup();
+    let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
+    let rows = "1-1\tdropped: dead\n2-2\tdropped: detail\n";
+    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    run_git(&dir, &["add", "-A"]);
+
+    std::fs::write(dir.join("docs/x.md"), "one\ntwo-edited\n").unwrap();
+    run_git(&dir, &["add", "docs/x.md"]);
+    // Restore the old content on disk; only the index still holds the edit.
+    std::fs::write(dir.join("docs/x.md"), "one\ntwo\n").unwrap();
+
+    let staged_out = adr(&dir, &["check", "--staged"], &[], "");
+    assert!(!staged_out.status.success());
+    assert!(
+        stdout(&staged_out).contains("no longer matches"),
+        "{}",
+        stdout(&staged_out)
+    );
+
+    let plain_out = adr(&dir, &["check"], &[], "");
+    assert!(
+        !stdout(&plain_out).contains("no longer matches"),
+        "{}",
+        stdout(&plain_out)
+    );
+}
+
+// adr: 5fddeeb5-cf54-4550-a701-dd9e4a6a81d6
+//
+// `check --staged` also reads the blame file itself from the index: a
+// shape error staged there is caught even with a good copy restored on
+// disk; plain `check` reads the good working-tree copy and reports no
+// shape error.
+#[test]
+fn check_staged_reads_the_blame_file_from_the_index_not_the_working_tree() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
+    let rows = "1-1\tdropped: dead\n2-2\tdropped: detail\n";
+    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
+    let good = std::fs::read_to_string(&path).unwrap();
+    run_git(&dir, &["add", "-A"]);
+    run_git(&dir, &["commit", "-q", "-m", "seed blame file"]);
+
+    // Stage a shape error: a row with no tab.
+    let bad = good.replacen("1-1\tdropped: dead\n", "1-1 dropped: dead\n", 1);
+    std::fs::write(&path, &bad).unwrap();
+    run_git(&dir, &["add", "adrdom/blame/x.md"]);
+    // Restore the good file on disk; only the index still holds the bad shape.
+    std::fs::write(&path, &good).unwrap();
+
+    let staged_out = adr(&dir, &["check", "--staged"], &[], "");
+    assert!(!staged_out.status.success());
+    assert!(stdout(&staged_out).contains("not a row"), "{}", stdout(&staged_out));
+
+    let plain_out = adr(&dir, &["check"], &[], "");
+    assert!(
+        !stdout(&plain_out).contains("not a row"),
+        "{}",
+        stdout(&plain_out)
+    );
+}
+
 // --- 4bb5ef1b A: an origin leaving while its blame file has an open row --
 
 // adr: 4bb5ef1b-da16-4206-a7d2-c7380c36a4cc
@@ -52,6 +184,31 @@ fn check_fails_when_the_origin_is_gone_with_an_open_decision_row() {
     assert!(saved.contains(&format!("decision: {}", id2)), "{}", saved);
 
     std::fs::remove_file(dir.join("docs/x.md")).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(text.contains("blame:"), "{}", text);
+    assert!(text.contains("is missing"), "{}", text);
+    assert!(text.contains("docs/x.md"), "{}", text);
+}
+
+// adr: 4bb5ef1b-da16-4206-a7d2-c7380c36a4cc
+//
+// A renamed origin counts as missing too: the blame file still names the
+// old path, and nothing sits there any more.
+#[test]
+fn a_renamed_origin_counts_as_missing_and_names_the_old_path() {
+    let (dir, _id1, id2) = blame_setup();
+    let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
+    let rows = "1-1\tdecision: Does this also pass?\n2-2\tdropped: dead\n";
+    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    let saved = std::fs::read_to_string(&path).unwrap();
+    assert!(saved.contains(&format!("decision: {}", id2)), "{}", saved);
+
+    std::fs::rename(dir.join("docs/x.md"), dir.join("docs/x-renamed.md")).unwrap();
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());

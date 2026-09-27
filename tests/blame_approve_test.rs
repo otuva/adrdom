@@ -363,6 +363,193 @@ fn a_copy_of_path_under_adrdom_refuses_with_the_shape_wording() {
     assert_eq!(blame_row_count(&dir), 0);
 }
 
+// --- an origin with no trailing newline on its last line ------------------
+//
+// adr: 5c399a14-1e5c-48eb-b502-b57524c01c24
+//
+// "the ranges reach every line of the origin": a file's last line with no
+// trailing newline is still one more line to cover, the same way `wc -l`
+// would miss it but `content.lines().count()` does not.
+#[test]
+fn an_origin_with_no_trailing_newline_on_its_last_line_covers_and_gaps_correctly() {
+    let (dir, _id1, _id2) = setup();
+    let blob = write_origin(&dir, "docs/notail.md", "one\ntwo\nthree");
+    let rows = "1-1\tdropped: dead\n2-2\tdropped: dead\n3-3\tdropped: dead\n";
+    let path = write_blame_file(&dir, "adrdom/blame/notail.md", "docs/notail.md", &blob, rows);
+
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(blame_row_count(&dir), 1);
+}
+
+// adr: 5c399a14-1e5c-48eb-b502-b57524c01c24
+//
+// The same origin, with rows covering only its first two lines: the third
+// line (the one with no trailing newline) is still counted, and still a
+// gap, naming line 3 specifically.
+#[test]
+fn an_origin_with_no_trailing_newline_leaves_its_last_line_a_gap_when_uncovered() {
+    let (dir, _id1, _id2) = setup();
+    let blob = write_origin(&dir, "docs/notail2.md", "one\ntwo\nthree");
+    let rows = "1-2\tdropped: dead\n";
+    let path = write_blame_file(&dir, "adrdom/blame/notail2.md", "docs/notail2.md", &blob, rows);
+
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(!out.status.success());
+    assert!(
+        stderr(&out).contains("line(s) 3 of the origin are covered by no row"),
+        "{}",
+        stderr(&out)
+    );
+    assert_eq!(blame_row_count(&dir), 0);
+}
+
+// adr: 5c399a14-1e5c-48eb-b502-b57524c01c24
+//
+// One `approve` run lists every refusal it finds, not just the first: a
+// coverage gap and a row with an unknown destination together, and neither
+// writes anything.
+#[test]
+fn approve_lists_a_coverage_gap_and_an_unknown_destination_together() {
+    let (dir, _id1, _id2) = setup();
+    let blob = write_origin(&dir, "docs/both.md", "a\nb\nc\nd\n");
+    // Lines 1-2: an unrecognized destination. Line 3: covered by no row.
+    // Line 4: a good row.
+    let rows = "1-2\tsomething else entirely\n4-4\tdropped: dead\n";
+    let path = write_blame_file(&dir, "adrdom/blame/both.md", "docs/both.md", &blob, rows);
+    let before = std::fs::read_to_string(&path).unwrap();
+
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(!out.status.success());
+    let err = stderr(&out);
+    assert!(err.contains("covered by no row"), "{}", err);
+    assert!(err.contains("blame row names no known destination"), "{}", err);
+    assert_eq!(blame_row_count(&dir), 0);
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        before,
+        "nothing written on refusal"
+    );
+}
+
+// --- a copy target naming this blame file's own origin ---------------------
+//
+// adr: 38216d39-b064-4927-ab60-951a3c89e388
+//
+// "a copy is of a question or of another origin": a `dropped: copy of`
+// row naming this blame file's own origin refuses.
+#[test]
+fn a_copy_of_this_files_own_origin_refuses() {
+    let (dir, _id1, _id2) = setup();
+    let blob = write_origin(&dir, "docs/x.md", "one\n");
+    let rows = "1-1\tdropped: copy of docs/x.md\n";
+    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
+
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(!out.status.success());
+    assert!(
+        stderr(&out).contains("is this blame file's own origin"),
+        "{}",
+        stderr(&out)
+    );
+    assert_eq!(blame_row_count(&dir), 0);
+}
+
+// adr: 38216d39-b064-4927-ab60-951a3c89e388
+//
+// The same refusal when the copy target is spelled with a leading "./".
+#[test]
+fn a_copy_of_this_files_own_origin_with_a_leading_dot_slash_refuses() {
+    let (dir, _id1, _id2) = setup();
+    let blob = write_origin(&dir, "docs/x.md", "one\n");
+    let rows = "1-1\tdropped: copy of ./docs/x.md\n";
+    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
+
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(!out.status.success());
+    assert!(
+        stderr(&out).contains("is this blame file's own origin"),
+        "{}",
+        stderr(&out)
+    );
+    assert_eq!(blame_row_count(&dir), 0);
+}
+
+// --- a draft row with extra whitespace after the prefix ---------------------
+//
+// adr: 38216d39-b064-4927-ab60-951a3c89e388
+//
+// A row written with extra spaces after the "dropped:" prefix approves and
+// is rewritten to its canonical, single-spaced form.
+#[test]
+fn a_dropped_row_with_extra_spaces_after_the_prefix_approves_and_is_rewritten_canonically() {
+    let (dir, _id1, _id2) = setup();
+    let blob = write_origin(&dir, "docs/spaced.md", "one\n");
+    let rows = "1-1\tdropped:  dead\n"; // two spaces after "dropped:"
+    let path = write_blame_file(&dir, "adrdom/blame/spaced.md", "docs/spaced.md", &blob, rows);
+
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    let saved = std::fs::read_to_string(&path).unwrap();
+    assert!(saved.contains("1-1\tdropped: dead\n"), "{}", saved);
+    assert!(!saved.contains("dropped:  dead"), "{}", saved);
+    assert_eq!(blame_row_count(&dir), 1);
+}
+
+// --- an origin line spelled with a leading "./" under adrdom ---------------
+//
+// adr: 34f0202a-0be4-4049-94de-d3886f4f8ffc
+//
+// The "origin" term: "a prose file outside adrdom". A path under adrdom
+// spelled with a leading "./" is still under adrdom.
+#[test]
+fn an_origin_spelled_with_a_leading_dot_slash_under_adrdom_refuses() {
+    let (dir, _id1, _id2) = setup();
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/self2.md",
+        "./adrdom/terms.md",
+        "0".repeat(40).as_str(),
+        "1-1\tdropped: dead\n",
+    );
+
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(!out.status.success());
+    assert!(
+        stderr(&out).contains("is not a regular file outside adrdom"),
+        "{}",
+        stderr(&out)
+    );
+    assert_eq!(blame_row_count(&dir), 0);
+}
+
+// --- the owner-command gate applies to a blame file too ---------------------
+//
+// adr: e879fe72-ec07-48cd-9902-2b158aaae726
+//
+// "approve takes a blame file": the same owner-command gate every `adr
+// approve` call is held to applies here too. Without the owner bypass,
+// `approve` on a blame file refuses as the owner's command, exit code 2,
+// and writes nothing.
+#[test]
+fn approve_without_the_owner_bypass_refuses_as_an_owner_command() {
+    let (dir, _id1, _id2) = setup();
+    let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
+    let rows = "1-1\tdropped: dead\n2-2\tdropped: detail\n";
+    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
+    let before = std::fs::read_to_string(&path).unwrap();
+
+    let out = adr(&dir, &["approve", path.to_str().unwrap()], &[], "");
+    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("this is the owner's command"),
+        "{}",
+        stderr(&out)
+    );
+    assert_eq!(blame_row_count(&dir), 0);
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
+}
+
 // --- fail-open: a present origin that cannot be read never falls back to
 // the object store ----------------------------------------------------------
 //

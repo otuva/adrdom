@@ -300,7 +300,12 @@ impl Source {
     pub fn is_dir(&self, root: &Path, rel: &str) -> bool {
         match self {
             Source::WorkingTree => root.join(rel).is_dir(),
-            Source::Index => !self.list_under(root, rel).is_empty(),
+            // `git ls-files -- <rel>` also lists `rel` itself when it is a
+            // tracked file, so only a path below `rel` makes it a directory.
+            Source::Index => {
+                let prefix = format!("{}/", rel.trim_end_matches('/'));
+                self.list_under(root, rel).iter().any(|p| p.starts_with(&prefix))
+            }
         }
     }
 
