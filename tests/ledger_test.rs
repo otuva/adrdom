@@ -469,10 +469,9 @@ fn msg_ledger_asked_id_missing(id: &str) -> String {
 // version; the binary embeds it, `adr --version` prints it, every ledger
 // row carries it": `adr --version` prints exactly the repo-root VERSION
 // file's content, and a real `approve`-written ledger row's version
-// column is that same string. `src/version.rs`'s
-// `version_matches_cargo_pkg_version` (already tied to this id) covers
-// the sibling clause -- Cargo.toml's own version is held to the same
-// VERSION file.
+// column is that same string. Cargo.toml's own `version` field is an
+// explicit placeholder, not a second source, so there is no sibling
+// clause to cover here.
 #[test]
 fn version_flag_and_ledger_rows_use_the_repository_version_file() {
     let dir = init_repo();

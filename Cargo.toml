@@ -1,6 +1,9 @@
 [package]
 name = "adr"
-version = "0.1.0"
+# Placeholder: the tool's version lives in the repo-root VERSION file
+# (see src/version.rs and "Does every ledger row carry the tool version?"),
+# not here.
+version = "0.0.0"
 edition = "2021"
 
 [lib]
