@@ -261,6 +261,35 @@ fn install_rewrites_a_stale_hook_and_leaves_a_current_one_untouched() {
     );
 }
 
+// install's "already up to date" and check's "hook differs" both compare a
+// hook's on-disk content to what install writes; a hook that differs only
+// by trailing whitespace on one line must read the same way on both sides,
+// or install would rewrite a hook check calls current (or the reverse).
+#[test]
+fn install_and_check_agree_a_hook_with_trailing_whitespace_is_current() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    std::fs::write(
+        dir.join(".githooks/pre-commit"),
+        "#!/bin/sh \nadr check --staged\nexit $?\n",
+    )
+    .unwrap();
+
+    let out = adr(&dir, &["install"], &[], "");
+    assert!(out.status.success());
+    assert!(
+        stdout(&out).contains("install: .githooks/pre-commit: already up to date"),
+        "install must not rewrite a hook that differs only by trailing whitespace: {}",
+        stdout(&out)
+    );
+
+    assert!(
+        adr(&dir, &["check"], &[], "").status.success(),
+        "check must agree the same hook is current"
+    );
+}
+
 // --- AGENTS.md ---------------------------------------------------------
 
 #[test]

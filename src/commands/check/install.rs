@@ -45,11 +45,7 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
                 Some((begin, end)) => {
                     let section = &parts[begin + 1..end];
                     let brief_lines: Vec<&str> = crate::commands::install::BRIEF.lines().collect();
-                    let matches = section.len() == brief_lines.len()
-                        && section
-                            .iter()
-                            .zip(brief_lines.iter())
-                            .all(|(a, b)| a.trim_end() == b.trim_end());
+                    let matches = crate::text::lines_match_trimmed(section, &brief_lines);
                     if !matches {
                         out.push(Failure {
                             check: "install".to_string(),
@@ -133,20 +129,18 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
     out
 }
 
-/// Compares `path`'s content in `source` against `content`, line by line
-/// with `trim_end` (the same tolerance `check_install`'s AGENTS.md brief
-/// comparison uses), and pushes a failure when the file is missing or
-/// differs.
+/// Compares `path`'s content in `source` against `content` with
+/// `text::lines_match_trimmed` -- the same comparison `create_hook` (the
+/// function that writes this same content) uses to decide whether it is
+/// already up to date, so `install` and `check` can never disagree about
+/// whether a hook file is current -- and pushes a failure when the file is
+/// missing or differs.
 fn check_hook(out: &mut Vec<Failure>, root: &Path, source: &Source, path: &str, content: &str) {
     match source.read(root, path) {
         Some(existing) => {
             let existing_lines: Vec<&str> = existing.split('\n').collect();
             let want_lines: Vec<&str> = content.split('\n').collect();
-            let matches = existing_lines.len() == want_lines.len()
-                && existing_lines
-                    .iter()
-                    .zip(want_lines.iter())
-                    .all(|(a, b)| a.trim_end() == b.trim_end());
+            let matches = crate::text::lines_match_trimmed(&existing_lines, &want_lines);
             if !matches {
                 out.push(Failure {
                     check: "install".to_string(),

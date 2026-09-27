@@ -12,6 +12,16 @@ pub fn is_word_char(c: char) -> bool {
     c.is_alphanumeric()
 }
 
+/// Whether `a` and `b` hold the same lines once each line's trailing
+/// whitespace is dropped: the one tolerance every governed-file-matches-its-
+/// canonical-content check uses (the AGENTS.md brief section, and the git
+/// hooks `adr install` writes and `adr check` verifies), so a file judged
+/// current by one is never judged stale by the other over nothing but a
+/// trailing space or a `\r` a checkout/editor left on a line.
+pub fn lines_match_trimmed(a: &[&str], b: &[&str]) -> bool {
+    a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| x.trim_end() == y.trim_end())
+}
+
 /// Every maximal run of word characters in `text`, in order, case
 /// preserved.
 pub fn word_runs(text: &str) -> Vec<String> {

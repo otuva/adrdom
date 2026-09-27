@@ -167,11 +167,16 @@ fn create_if_missing(path: &Path, content: &str) {
 /// `repo::PRE_COMMIT_HOOK_PATH`) with `content`: writes it when missing,
 /// rewrites it when the content on disk differs, and leaves it untouched
 /// (reporting "up to date") when it already matches -- the same
-/// missing/stale/current shape as `install_agents_md`.
+/// missing/stale/current shape as `install_agents_md`. "Matches" is
+/// `text::lines_match_trimmed`, the same comparison `check`'s `check_hook`
+/// judges this same file with, so this call and `adr check` can never
+/// disagree about whether the file on disk is already current.
 fn create_hook(root: &Path, rel: &str, content: &str) -> Result<String, String> {
     let path = root.join(rel);
     if let Ok(existing) = fs::read_to_string(&path) {
-        if existing == content {
+        let existing_lines: Vec<&str> = existing.split('\n').collect();
+        let want_lines: Vec<&str> = content.split('\n').collect();
+        if crate::text::lines_match_trimmed(&existing_lines, &want_lines) {
             return Ok(msg::hook_up_to_date(rel));
         }
     }
