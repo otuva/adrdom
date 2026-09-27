@@ -147,11 +147,6 @@ dl.entries dd { margin: 0.1rem 0 0; }
 dl.entries .meta { display: block; color: var(--muted); font-size: 0.9rem; }
 .retired { color: var(--refuse); font-weight: 400; font-size: 0.85em; }
 
-.diffs { margin-top: 1rem; }
-.diffs dt { font-weight: 700; margin-top: 0.8rem; }
-.diffs .before, .diffs .after { margin: 0.2rem 0; }
-.diffs .meta { display: block; color: var(--muted); font-size: 0.9rem; }
-
 textarea { width: 100%; font: inherit; font-size: 0.95rem; padding: 0.5em; background: var(--key); color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; }
 
 @media (max-width: 600px) {
