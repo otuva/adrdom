@@ -121,6 +121,34 @@ pub fn hits(
     out
 }
 
+/// Like `hits`, but stops at the first hit instead of scanning the rest of
+/// `text`: for a caller (`ask`'s candidate-body scan) that only acts on
+/// whether a banned word is present at all, never on every place it
+/// appears, so it never pays to hash every remaining token once one hit is
+/// already enough to refuse.
+pub fn first_hit(
+    text: &str,
+    hash_map: &HashMap<String, Option<String>>,
+    terms: &[crate::terms::Term],
+) -> Option<Hit> {
+    for (i, line) in text.lines().enumerate() {
+        for tok in tokenize(line) {
+            let h = crate::record::sha256_hex(&tok);
+            let Some(uuid_opt) = hash_map.get(&h) else {
+                continue;
+            };
+            let term = uuid_opt.as_ref().and_then(|uuid| {
+                terms
+                    .iter()
+                    .find(|t| t.id.as_deref() == Some(uuid.as_str()))
+                    .map(|t| t.name.clone())
+            });
+            return Some(Hit { line: i + 1, token: tok, term });
+        }
+    }
+    None
+}
+
 pub fn append(path: &Path, entries: &[(String, Option<String>)]) -> std::io::Result<()> {
     if entries.is_empty() {
         return Ok(());

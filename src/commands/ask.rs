@@ -401,7 +401,7 @@ pub fn run(record_path: PathBuf) -> i32 {
 
         // Refusal 5: a banned word in the candidate's own text, from the
         // single hash-based ban list scanner. `ask` stops at the first hit.
-        if let Some(hit) = banned::hits(&text, &banned_entries, &terms_list).into_iter().next() {
+        if let Some(hit) = banned::first_hit(&text, &banned_entries, &terms_list) {
             let suffix = msg::term_suffix(hit.term.as_deref());
             eprintln!(
                 "ask: {}",
