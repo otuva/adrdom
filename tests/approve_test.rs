@@ -1076,13 +1076,11 @@ definition: Something else.\n";
 //
 // `approve` (which reads the file directly) reports both problems; `check`
 // (per "Does the tool stop while the terms file waits for approval?", A)
-// never gets that far on a terms.md that was never approved in the first
-// place -- it fails outright on the one "not approved" gate instead,
-// leaving the cycle/shape detail to the real `approve` run that will
-// surface it. Supersedes the pre-aa475aa3 version of this test, which
-// expected `check` to report the same cycle/shape detail as `approve`.
+// fails on the same terms.md and reports the same two problems, so the
+// agent reads them before the owner runs `approve`. It does not name the
+// owner's move while `approve` would refuse the file.
 #[test]
-fn approve_reports_a_cycle_and_a_shape_error_check_reports_not_approved() {
+fn approve_and_check_report_a_cycle_and_a_shape_error() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_CYCLE_AND_SHAPE_ERROR);
@@ -1096,9 +1094,13 @@ fn approve_reports_a_cycle_and_a_shape_error_check_reports_not_approved() {
     let check_out = adr(&dir, &["check"], &[], "");
     assert!(!check_out.status.success());
     let text = stdout(&check_out);
-    assert!(text.contains("terms: adrdom/terms.md not approved"), "{}", text);
-    assert!(text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
-    assert!(!text.contains("circular definition"), "{}", text);
+    assert!(
+        text.contains("terms: adrdom/terms.md: circular definition: alpha -> alpha"),
+        "{}",
+        text
+    );
+    assert!(text.contains("missing field \"aliases\""), "{}", text);
+    assert!(!text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
 }
 
 #[test]

@@ -1556,10 +1556,9 @@ Standard: clear yes or no.\n\n\
 // ---------------------------------------------------------------------
 
 // A shape-broken terms.md is also never approved (its hash can never match
-// a real `terms` ledger row), so `check` fails it the same way it fails any
-// other unapproved terms.md (per "Does the tool stop while the terms file
-// waits for approval?", aa475aa3 A) -- the shape detail itself only
-// surfaces from a real `adr approve adrdom/terms.md` run.
+// a real `terms` ledger row), so `check` fails it (per "Does the tool stop
+// while the terms file waits for approval?", aa475aa3 A) and reports the
+// shape error `approve` would refuse instead of naming the owner's move.
 #[test]
 fn check_fails_on_a_terms_file_shape_error() {
     let dir = init_repo();
@@ -1574,8 +1573,12 @@ fn check_fails_on_a_terms_file_shape_error() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let text = stdout(&out);
-    assert!(text.contains("terms: adrdom/terms.md not approved"), "{}", text);
-    assert!(text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
+    assert!(
+        text.contains("terms: adrdom/terms.md: line 1: missing h1 \"# Terms\""),
+        "{}",
+        text
+    );
+    assert!(!text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
 }
 
 #[test]
@@ -1958,10 +1961,9 @@ const BAD_TERMS: &str = "not a terms file at all\n";
 
 // Per "Does the tool stop while the terms file waits for approval?"
 // (aa475aa3 A), a terms.md that differs from its latest approval is always
-// a failure now, so BAD_TERMS's unapproved hash mismatch, not a specific
-// shape message, is what this test reads as "the bad copy was seen" --
-// GOOD_TERMS is approved for real up front so the two sides genuinely
-// differ (approved vs not).
+// a failure now, and BAD_TERMS's shape error is what this test reads as
+// "the bad copy was seen" -- GOOD_TERMS is approved for real up front so
+// the two sides genuinely differ (approved vs not).
 #[test]
 fn check_staged_reads_terms_from_the_index() {
     // A bad staged copy is caught even though the working tree looks
@@ -1984,7 +1986,7 @@ fn check_staged_reads_terms_from_the_index() {
         let out = adr(&dir, &["check", "--staged"], &[], "");
         assert!(!out.status.success(), "{}", stdout(&out));
         assert!(
-            stdout(&out).contains("terms: adrdom/terms.md not approved"),
+            stdout(&out).contains("terms: adrdom/terms.md: line 1: missing h1 \"# Terms\""),
             "{}",
             stdout(&out)
         );
@@ -2208,12 +2210,11 @@ aliases: \n";
 
 // A terms file with no `id:` line at all is never approved, whatever the
 // ledger says (per "Does the tool stop while the terms file waits for
-// approval?", aa475aa3 A): `check` fails it the same generic "not
-// approved" way as any other unapproved file, even when a ledger row
-// happens to match its exact (id-less) hash -- the missing-id gate fires
-// before a cycle would ever be looked for.
+// approval?", aa475aa3 A): `check` fails it even when a ledger row happens
+// to match its exact (id-less) hash, and reports the cycle `approve` would
+// refuse instead of naming the owner's move.
 #[test]
-fn check_fails_an_id_less_terms_file_as_not_approved_even_with_a_matching_ledger_row() {
+fn check_fails_an_id_less_terms_file_with_its_cycle_even_with_a_matching_ledger_row() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms_content = "# Terms\n\n\
@@ -2229,8 +2230,12 @@ aliases: \n";
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let text = stdout(&out);
-    assert!(text.contains("terms: adrdom/terms.md not approved"), "{}", text);
-    assert!(!text.contains("circular definition"), "{}", text);
+    assert!(
+        text.contains("terms: adrdom/terms.md: circular definition: alpha -> beta -> alpha"),
+        "{}",
+        text
+    );
+    assert!(!text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
 }
 
 // adr: b871e776-2da5-4f1e-b4c4-fb8229657e25

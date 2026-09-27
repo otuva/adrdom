@@ -15,9 +15,9 @@ use std::path::Path;
 /// Missing entirely is a failure once any topic file exists, and a
 /// note otherwise. Present but not approved at its current hash is always a
 /// failure (per "Does the tool stop while the terms file waits for
-/// approval?", aa475aa3 A), naming the owner's move -- the shape,
-/// circular-definition, dependent-pairing, and banned-word checks below,
-/// which read the file as approved, only ever run once it is. Every
+/// approval?", aa475aa3 A): the refusals `approve` would give (shape,
+/// circular definition, dependent pairing), or, with none, the owner's
+/// move. Every
 /// asked/answered section's terms line, and every non-retired term's own
 /// terms line, is checked for an existing, non-retired uuid on each pair --
 /// never by re-resolving the underlying text. Circular definitions fail.
@@ -58,35 +58,41 @@ pub(super) fn check_terms(
     // (aa475aa3 A, supersedes "Does check fail a terms file that differs
     // from its latest approval?" and "Does the owner approve the terms file
     // as a whole?"): an unapproved (or shape-broken-on-ids) terms.md fails
-    // outright, naming the one move that clears it. Nothing below --
-    // shape/cycle/dependent/banned, section terms-line, term terms-line,
-    // "paired by nothing" -- runs while it does, since all of it reads the
-    // file as approved.
-    if !approved || missing_ids {
-        out.push(Failure {
-            check: "terms".to_string(),
-            message: msg::terms_file_not_approved(),
-        });
-        return (out, notes);
-    }
-
+    // outright. Nothing below the gate -- section terms-line, term
+    // terms-line, "paired by nothing" -- runs while it does, since all of
+    // it reads the file as approved.
+    //
     // Shared with approve: every shape, circular-definition,
     // dependent-pairing, and banned-word refusal `adrdom/terms.md` earns,
     // computed on a copy with every id minted in memory so a cycle or a
     // dependent's pairing in a terms file that has never been approved --
     // and so has no ids on disk -- is caught the same way `approve` catches
     // it (`terms::cycles` and `terms::phrase_lookup` only see a term that
-    // has an id).
+    // has an id). It runs on an unapproved file too: the agent reads here
+    // what `approve` would refuse, before the owner runs it.
     // `scan_banned: false` -- `check_banned` already scans `adrdom/terms.md`
     // as a tracked file, so step 5 would otherwise report the same hit
     // twice (once prefixed `banned:`, once prefixed `terms:`).
     let minted = terms::minted_copy(&tf);
     let (refusals, _pairs) = actions::terms_refusals(root, records, &minted, led, source, false);
+    let refused = !refusals.is_empty();
     for r in refusals {
         out.push(Failure {
             check: "terms".to_string(),
             message: r,
         });
+    }
+
+    if !approved || missing_ids {
+        // The owner's move is named only when `approve` would take the
+        // file: with a refusal above, the agent's move comes first.
+        if !refused {
+            out.push(Failure {
+                check: "terms".to_string(),
+                message: msg::terms_file_not_approved(),
+            });
+        }
+        return (out, notes);
     }
 
     // Every asked/answered section: must have a terms line; each uuid on
