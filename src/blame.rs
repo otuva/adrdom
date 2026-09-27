@@ -262,6 +262,9 @@ pub enum DestError {
     /// origin line itself is held to (`valid_origin_path`), per the
     /// "origin" term: "a prose file outside adrdom".
     BadPath(String),
+    /// A `dropped: copy of <path>` target that is this blame file's own
+    /// origin.
+    CopyOfOwnOrigin(String),
     Unrecognized(String),
 }
 
@@ -293,6 +296,10 @@ pub struct ResolveCtx<'a> {
     /// a passage whose decision lives in an origin not yet mapped still
     /// has a target").
     pub known_origins: HashSet<String>,
+    /// The `origin:` path of the blame file being resolved: what a
+    /// `dropped: copy of <path>` row may never name (38216d39 A: "another
+    /// origin").
+    pub own_origin: String,
     pub root: PathBuf,
 }
 
@@ -359,9 +366,28 @@ pub fn known_origins(root: &Path) -> HashSet<String> {
 /// `actions::do_approve_blame`, `commands::check::blame`, and
 /// `resolve_copy_target` below, so the rule lives in exactly one place.
 pub fn valid_origin_path(root: &Path, source: &repo::Source, path: &str) -> bool {
+    let plain = plain_path(path);
     let under_adrdom =
-        path == repo::ADRDOM_DIR || path.starts_with(&format!("{}/", repo::ADRDOM_DIR));
+        plain == repo::ADRDOM_DIR || plain.starts_with(&format!("{}/", repo::ADRDOM_DIR));
     !under_adrdom && !source.is_dir(root, path)
+}
+
+/// `path` with every empty and `.` component dropped and every `..`
+/// resolved against the component before it, so two spellings of one
+/// path (`docs/x.md`, `./docs/x.md`, `docs/../docs/x.md`) compare equal.
+/// Text only: nothing is read from disk.
+pub fn plain_path(path: &str) -> String {
+    let mut parts: Vec<&str> = Vec::new();
+    for part in path.trim().split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            p => parts.push(p),
+        }
+    }
+    parts.join("/")
 }
 
 fn resolve_decision(value: &str, ctx: &ResolveCtx) -> Result<String, DestError> {
@@ -425,6 +451,11 @@ fn resolve_copy_target(value: &str, ctx: &ResolveCtx) -> Result<Resolved, DestEr
     if !valid_origin_path(&ctx.root, &repo::Source::WorkingTree, value) {
         return Err(DestError::BadPath(value.to_string()));
     }
+    // 38216d39 A: "copy of ... another origin" -- never the origin this
+    // blame file itself maps.
+    if plain_path(value) == plain_path(&ctx.own_origin) {
+        return Err(DestError::CopyOfOwnOrigin(value.to_string()));
+    }
     if ctx.root.join(value).exists() || ctx.known_origins.contains(value) {
         Ok(Resolved::DroppedCopyOrigin(value.to_string()))
     } else {
@@ -479,6 +510,9 @@ pub fn dest_refusal_text(rel: &str, row: &Row, err: &DestError) -> String {
         DestError::MissingProseStem(stem) => msg::blame_row_missing_prose_stem(rel, stem),
         DestError::CopyPathMissing(path) => msg::blame_row_copy_path_missing(rel, path),
         DestError::BadPath(path) => msg::blame_bad_origin_path(rel, path),
+        DestError::CopyOfOwnOrigin(path) => {
+            msg::blame_row_copy_of_own_origin(rel, row.start, row.end, path)
+        }
         DestError::Unrecognized(text) => msg::blame_row_unknown_destination(rel, row.start, row.end, text),
     }
 }
@@ -578,6 +612,9 @@ pub fn classify(dest: &str) -> Option<Kind> {
     } else if t.starts_with(PROSE_PREFIX) {
         Some(Kind::Prose)
     } else if let Some(rest) = t.strip_prefix(DROPPED_PREFIX) {
+        // Trimmed the way `resolve_destination` trims it, so a draft row
+        // `approve` would accept is counted as the kind it will become.
+        let rest = rest.trim();
         if rest == DROPPED_DEAD {
             Some(Kind::DroppedDead)
         } else if rest == DROPPED_DETAIL {
@@ -615,7 +652,11 @@ pub fn decision_target(dest: &str) -> Option<&str> {
 
 /// The value after `dropped: copy of `, likewise either form.
 pub fn copy_target(dest: &str) -> Option<&str> {
-    dest.trim().strip_prefix(DROPPED_PREFIX)?.strip_prefix(COPY_OF_PREFIX)
+    dest.trim()
+        .strip_prefix(DROPPED_PREFIX)?
+        .trim()
+        .strip_prefix(COPY_OF_PREFIX)
+        .map(str::trim)
 }
 
 /// Resolves a `decision:`/`dropped: copy of <heading>` value -- already a
