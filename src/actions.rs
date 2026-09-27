@@ -111,17 +111,27 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
     let ledger_path = root.join(crate::repo::LEDGER_PATH);
     let led = ledger::read(&ledger_path);
 
+    // Loaded one file at a time, stopping at the first match, rather than
+    // `record::load_all` (every topic file, parsed up front): an id names
+    // exactly one section in exactly one file, so answer/refuse -- unlike
+    // check or ask, which always need every file -- never has a reason to
+    // parse the rest once it is found.
     let mut found = None;
-    for rf in record::load_all(root) {
-        if let Some(idx) = rf.sections.iter().position(|s| s.id.as_deref() == Some(id)) {
-            found = Some((rf, idx));
-            break;
+    for f in crate::repo::list_decision_files(root) {
+        if let Ok(rf) = record::load(&f) {
+            if let Some(idx) = rf.sections.iter().position(|s| s.id.as_deref() == Some(id)) {
+                found = Some((rf, idx));
+                break;
+            }
         }
     }
     let Some((rf, idx)) = found else {
         return Err(msg::id_not_found(id));
     };
-    let rel = rf.rel.clone();
+    // `record::load` (unlike `load_all`/`load_all_via`) leaves `rf.rel` as
+    // the raw path it was given, so it is recomputed here the way every
+    // other caller of the single-file loader already does.
+    let rel = crate::state::rel_path(root, &rf.path);
 
     // Refuse when terms.md is missing, unreadable, or not approved (per
     // "Does the tool stop while the terms file waits for approval?",
