@@ -408,6 +408,9 @@ fn do_approve_blame(
     // only through a stage or a commit, and a fresh repository's first
     // blame file is approved before either.
     let origin_rel = bf.origin.clone().expect("no shape error means origin is set");
+    if !blame::valid_origin_path(root, &repo::Source::WorkingTree, &origin_rel) {
+        return Err(msg::approve_prefixed(msg::blame_bad_origin_path(rel, &origin_rel)));
+    }
     let content = match std::fs::read_to_string(root.join(&origin_rel)) {
         Ok(text) => {
             let actual = repo::git_hash_object_stdin(root, &text).unwrap_or_default();
@@ -436,7 +439,6 @@ fn do_approve_blame(
     let all_records: Vec<RecordFile> = record::load_all(root);
     let any_headings = blame::any_headings_with_id(&all_records);
     let known_heading_ids = blame::known_heading_ids(&any_headings);
-    let current_headings = depends::cross_file_heading_index(&all_records, led);
     let terms_list: Vec<terms::Term> = state::load_terms(root)
         .map(|tf| terms::minted_copy(&tf).terms)
         .unwrap_or_default();
@@ -450,7 +452,6 @@ fn do_approve_blame(
     let ctx = blame::ResolveCtx {
         any_headings,
         known_heading_ids,
-        current_headings: &current_headings,
         terms_list: terms_list.as_slice(),
         phrase_lookup: &phrase_lookup,
         decision_stems,
@@ -460,7 +461,7 @@ fn do_approve_blame(
 
     let mut resolved: Vec<blame::Resolved> = Vec::new();
     for row in &bf.rows {
-        match blame::resolve_destination(&row.dest, led, &ctx) {
+        match blame::resolve_destination(&row.dest, &ctx) {
             Ok(r) => resolved.push(r),
             Err(e) => refusals.push(msg::approve_prefixed(blame::dest_refusal_text(rel, row, &e))),
         }

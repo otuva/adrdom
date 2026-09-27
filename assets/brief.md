@@ -15,6 +15,9 @@ hooks run `adr check` on every commit and refuse what breaks a decision.
 - **tier**: questions at the same depth. Tier 1 stands on no other question;
   tier 2 stands on tier 1, and so on. The tool works out the tiers from the
   `depends:` lines; you never write them.
+- **origin**: a prose file outside `adrdom/` whose text the records take in.
+- **blame file**: `adrdom/blame/<name>.md`, the map from one origin's lines
+  to where each went.
 
 ## Before you build anything
 
@@ -86,8 +89,9 @@ version; post the command with that version, and the owner runs
 
 **4. After the answer.** Tie the decision to a test: put a comment
 `adr: <id>` inside a test, outside `adrdom/`, that shows the code follows the
-decision. Write the test if none exists. `adr check` lists every decision
-still untested. The hook refuses every commit until each answered decision
+decision. Write the test if none exists, and stage it: check reads tracked
+files only, so a new test file counts once it is added to git. `adr check`
+lists every decision still untested. The hook refuses every commit until each answered decision
 is tied to a test, so commit answers together with their code and tests.
 
 Never write or edit `id:`, `terms:` or `**Answer:**` lines yourself.
@@ -116,10 +120,51 @@ definition: What the thing is, never what it does.
 aliases: other forms, comma separated
 ```
 
-To stop using a term, add `retired: yes` to its entry; its words are then
-free for a new term. Retiring is refused while a current decision or another
-term's definition still uses it. The owner runs `adr approve adrdom/terms.md`
-after any edit.
+The file starts with a `# Terms` line. To stop using a term, add
+`retired: yes` to its entry; its words are then free for a new term.
+Retiring is refused while a current decision or another term's definition
+still uses it. The owner runs `adr approve adrdom/terms.md` after any edit.
+
+## Blame
+
+An old prose file (an origin) enters the records through a blame file,
+`adrdom/blame/<name>.md`, which maps every line of the origin to where it
+went. Git keeps the text; the blame file is the proof that nothing was
+dropped in silence. Write it after the plan is approved, so the headings
+exist:
+
+```
+origin: docs/adr/old-file.md
+blob: <git hash-object docs/adr/old-file.md>
+
+1-9	dropped: dead
+10-14	prose: <topic file name>
+15-22	decision: <heading of a question in a topic file>
+23-23	term: <name>
+24-30	dropped: copy of <heading of a current decision>
+31-35	dropped: copy of docs/adr/other-file.md
+36-40	dropped: detail
+```
+
+A row is a line range, a tab, and one destination. Lines are counted as an
+editor shows them, so a last line with no newline still counts (`wc -l`
+misses it). The ranges must reach every line of the origin; a range may
+appear in more than one row. The
+destinations: `decision:` for text that lives in a question's section
+(its answer, its Why or its Costs), `term:`, `prose:` for the text above a
+topic file's first question, and `dropped:` with one reason: `dead`
+(contradicted or obsolete), `detail` (the code is the record), or `copy of`
+what says the same thing elsewhere: a current decision by its heading, or,
+while the other file has no blame file of its own yet, that origin by its
+path. Nothing else is accepted; approve lists every gap and unknown destination in one
+run. The owner runs `adr approve adrdom/blame/<name>.md`; after that,
+every edit to the file makes it a draft again, reported as a count and not
+a failure. Verification passes by other agents edit the rows; the owner
+approves once at the end. Check fails when the origin's content no longer
+matches the blob, and when the origin is missing while the blame file is
+unapproved or a row names a question that is not answered. A renamed
+origin counts as missing until the `origin:` line is updated and the file
+approved again. Once every row is closed, delete the origin.
 
 ## When a commit is refused
 

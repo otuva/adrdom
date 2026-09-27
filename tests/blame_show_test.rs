@@ -52,7 +52,7 @@ fn show_prints_the_blame_file_counts_dropped_rows_and_the_from_line() {
 
     // Under the topic decision itself.
     assert!(
-        text.contains(&format!("from: docs/x.md (1 rows)")),
+        text.contains("from: docs/x.md (1 row)"),
         "{}",
         text
     );
@@ -80,4 +80,29 @@ fn show_prints_awaiting_approval_for_a_draft_blame_file() {
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
     assert!(text.contains("awaiting approval"), "{}", text);
+}
+
+// adr: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
+//
+// The owner's follow-up: a `dropped: copy of <heading>` row earns the
+// same `[state]` tag a `decision:` row gets, e.g. `[answered A]`.
+#[test]
+fn show_tags_a_copy_of_heading_row_with_the_targets_state() {
+    let (dir, id1, _id2) = blame_setup();
+    let blob = write_origin(&dir, "docs/x.md", "one\n");
+    let rows = "1-1\tdropped: copy of Does this pass?\n";
+    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    let saved = std::fs::read_to_string(&path).unwrap();
+    assert!(saved.contains(&format!("dropped: copy of {}", id1)), "{}", saved);
+
+    let out = adr(&dir, &["show"], &[], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    let text = stdout(&out);
+    assert!(
+        text.contains("dropped: copy of Does this pass? [answered A]"),
+        "{}",
+        text
+    );
 }

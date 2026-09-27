@@ -189,19 +189,21 @@ fn a_retired_term_refuses() {
 
 // adr: 38216d39-b064-4927-ab60-951a3c89e388
 //
-// `dropped: copy of <heading>` must name a CURRENT decision: an asked but
-// unanswered heading refuses.
+// `dropped: copy of <heading>` resolves the same way a `decision:` row
+// does (per the owner's fix: "copy of a question", any state -- not only
+// a current one): an asked but unanswered heading still resolves.
 #[test]
-fn a_copy_target_that_is_not_a_current_decision_refuses() {
-    let (dir, _id1, _id2) = setup();
+fn a_copy_target_in_any_state_resolves() {
+    let (dir, _id1, id2) = setup();
     let blob = write_origin(&dir, "docs/noncurrent.md", "one\n");
     let rows = "1-1\tdropped: copy of Does this also pass?\n";
     let path = write_blame_file(&dir, "adrdom/blame/noncurrent.md", "docs/noncurrent.md", &blob, rows);
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
-    assert!(!out.status.success());
-    assert!(stderr(&out).contains("not a current decision"), "{}", stderr(&out));
-    assert_eq!(blame_row_count(&dir), 0);
+    assert!(out.status.success(), "{}", stderr(&out));
+    let saved = std::fs::read_to_string(&path).unwrap();
+    assert!(saved.contains(&format!("dropped: copy of {}", id2)), "{}", saved);
+    assert_eq!(blame_row_count(&dir), 1);
 }
 
 // adr: 38216d39-b064-4927-ab60-951a3c89e388
@@ -289,5 +291,74 @@ fn a_blob_that_differs_from_the_origin_at_its_path_refuses() {
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
     assert!(stderr(&out).contains("blob does not match the content of docs/drift.md"), "{}", stderr(&out));
+    assert_eq!(blame_row_count(&dir), 0);
+}
+
+// --- origin term: a path must be a regular file outside adrdom ----------
+//
+// adr: 34f0202a-0be4-4049-94de-d3886f4f8ffc
+//
+// The "origin" term: "a prose file outside adrdom whose text the records
+// take in". A directory is not a file.
+#[test]
+fn a_directory_origin_refuses_with_the_shape_wording() {
+    let (dir, _id1, _id2) = setup();
+    std::fs::create_dir_all(dir.join("docs")).unwrap();
+    let path = write_blame_file(&dir, "adrdom/blame/dir.md", "docs", "0".repeat(40).as_str(), "1-1\tdropped: dead\n");
+    let before = std::fs::read_to_string(&path).unwrap();
+
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(!out.status.success());
+    assert!(
+        stderr(&out).contains("is not a regular file outside adrdom"),
+        "{}",
+        stderr(&out)
+    );
+    assert_eq!(blame_row_count(&dir), 0);
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
+}
+
+// adr: 34f0202a-0be4-4049-94de-d3886f4f8ffc
+//
+// A path under `adrdom/` is never outside it.
+#[test]
+fn an_origin_under_adrdom_refuses_with_the_shape_wording() {
+    let (dir, _id1, _id2) = setup();
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/self.md",
+        "adrdom/terms.md",
+        "0".repeat(40).as_str(),
+        "1-1\tdropped: dead\n",
+    );
+
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(!out.status.success());
+    assert!(
+        stderr(&out).contains("is not a regular file outside adrdom"),
+        "{}",
+        stderr(&out)
+    );
+    assert_eq!(blame_row_count(&dir), 0);
+}
+
+// adr: 38216d39-b064-4927-ab60-951a3c89e388
+//
+// A `dropped: copy of <path>` target is held to the same rule: never
+// under `adrdom/`.
+#[test]
+fn a_copy_of_path_under_adrdom_refuses_with_the_shape_wording() {
+    let (dir, _id1, _id2) = setup();
+    let blob = write_origin(&dir, "docs/copy-under-adrdom.md", "one\n");
+    let rows = "1-1\tdropped: copy of adrdom/blame/notes.md\n";
+    let path = write_blame_file(&dir, "adrdom/blame/copy-under-adrdom.md", "docs/copy-under-adrdom.md", &blob, rows);
+
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(!out.status.success());
+    assert!(
+        stderr(&out).contains("is not a regular file outside adrdom"),
+        "{}",
+        stderr(&out)
+    );
     assert_eq!(blame_row_count(&dir), 0);
 }

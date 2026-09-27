@@ -85,6 +85,68 @@ fn check_passes_when_the_origin_is_gone_but_every_row_is_closed() {
 
 // adr: 4bb5ef1b-da16-4206-a7d2-c7380c36a4cc
 //
+// "the origin may go once every such row is closed": a decision row whose
+// target was answered and later superseded is closed, not open again --
+// the origin's row-holding claim is not revived by a later supersession.
+#[test]
+fn check_passes_when_the_origin_is_gone_and_the_decision_row_target_was_superseded() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_terms_via_ledger(&dir, BLAME_TERMS);
+    let record = write_record(&dir, "adrdom/decisions/example.md", BLAME_TOPIC);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let old_ids = extract_ids(&content);
+    let old_id = old_ids[0].clone(); // "Does this pass?"
+    let out = adr_answer(&dir, &old_id, "A");
+    assert!(out.status.success(), "{}", stderr(&out));
+    // Not tagged: `old_id` is about to be superseded, so it is never a
+    // current decision by the end of this test -- tagging it would earn
+    // check's own "stale" failure instead.
+
+    // A third question supersedes it.
+    let mut content = std::fs::read_to_string(&record).unwrap();
+    let third = format!(
+        "\n### Does this pass, revised?\ndepends: pass\nsupersedes: {}\n\n\
+Problem: revisiting.\n\nStandard: clear yes or no.\n\n\
+- A) Yes it still passes.\n  Why: reasons.\n  Costs: costs.\n\
+- B) No.\n  Why: other reasons.\n  Costs: other costs.\n",
+        old_id
+    );
+    content.push_str(&third);
+    std::fs::write(&record, &content).unwrap();
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let new_id = extract_ids(&content)
+        .into_iter()
+        .find(|id| !old_ids.contains(id))
+        .expect("new id assigned");
+    let out = adr_answer(&dir, &new_id, "A");
+    assert!(out.status.success(), "{}", stderr(&out));
+    write_test_comment(&dir, &new_id);
+
+    // `old_id`'s latest ledger state is now "superseded".
+    let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
+    let rows = format!("1-1\tdecision: {}\n2-2\tdropped: dead\n", old_id);
+    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, &rows);
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+
+    std::fs::remove_file(dir.join("docs/x.md")).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "check should pass: {}", stdout(&out));
+    assert!(!stdout(&out).contains("is missing"), "{}", stdout(&out));
+}
+
+// adr: 4bb5ef1b-da16-4206-a7d2-c7380c36a4cc
+//
 // A missing origin with no open decision row, but the blame file itself
 // still a draft, still fails: the blame file's own approval is one more
 // open reason.
@@ -173,4 +235,31 @@ fn check_fails_a_blame_file_with_a_shape_error() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(stdout(&out).contains("blame:"), "{}", stdout(&out));
+}
+
+// adr: 34f0202a-0be4-4049-94de-d3886f4f8ffc
+//
+// A draft blame file naming a directory as its origin: `check` prints the
+// shape failure (the "origin" term: "a prose file outside adrdom"), never
+// the missing-origin message -- a directory is never "missing", it is
+// just never a valid origin at all.
+#[test]
+fn check_prints_the_shape_failure_not_missing_origin_for_a_directory() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    std::fs::create_dir_all(dir.join("docs")).unwrap();
+    write_blame_file(
+        &dir,
+        "adrdom/blame/dir.md",
+        "docs",
+        "0".repeat(40).as_str(),
+        "1-1\tdropped: dead\n",
+    );
+    // Never approved.
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(text.contains("is not a regular file outside adrdom"), "{}", text);
+    assert!(!text.contains("is missing"), "{}", text);
 }

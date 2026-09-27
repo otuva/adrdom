@@ -1327,16 +1327,6 @@ pub fn blame_row_missing_prose_stem(rel: &str, stem: &str) -> String {
     )
 }
 
-pub fn blame_row_copy_target_not_current(rel: &str, text: &str) -> String {
-    refuse(
-        format!(
-            "{}: row's copy target \"{}\" is not a current decision",
-            rel, text
-        ),
-        Next::agent("names a current decision or rewrites the row"),
-    )
-}
-
 pub fn blame_row_copy_path_missing(rel: &str, path: &str) -> String {
     refuse(
         format!(
@@ -1344,6 +1334,19 @@ pub fn blame_row_copy_path_missing(rel: &str, path: &str) -> String {
             rel, path
         ),
         Next::agent("names an existing origin or rewrites the row"),
+    )
+}
+
+/// The origin line, or a `dropped: copy of <path>` row, names a path
+/// under `repo::ADRDOM_DIR`, or one that exists but is not a regular file
+/// (per the "origin" term: "a prose file outside adrdom whose text the
+/// records take in"). Shared by the origin line itself (34f0202a A) and a
+/// copy-of path (38216d39 A) -- `blame::valid_origin_path` is the one
+/// place both `approve` and `check` read this rule from.
+pub fn blame_bad_origin_path(rel: &str, path: &str) -> String {
+    refuse(
+        format!("{}: \"{}\" is not a regular file outside adrdom", rel, path),
+        Next::agent("names a regular file outside adrdom"),
     )
 }
 
@@ -1355,7 +1358,9 @@ pub fn blame_row_unknown_destination(rel: &str, start: usize, end: usize, text: 
             range_text(start, end),
             text
         ),
-        Next::agent("rewrites the row"),
+        Next::agent(
+            "rewrites the row as one of: decision: <heading>, term: <name>, prose: <topic file>, dropped: dead, dropped: detail, dropped: copy of <heading or origin path>",
+        ),
     )
 }
 
@@ -1789,11 +1794,11 @@ mod tests {
             blame_row_unknown_term("adrdom/blame/x.md", "widget"),
             blame_row_retired_term("adrdom/blame/x.md", "widget"),
             blame_row_missing_prose_stem("adrdom/blame/x.md", "no-such-topic"),
-            blame_row_copy_target_not_current("adrdom/blame/x.md", "Does X?"),
             blame_row_copy_path_missing("adrdom/blame/x.md", "docs/gone.md"),
             blame_row_unknown_destination("adrdom/blame/x.md", 1, 1, "free text"),
             blame_blob_mismatch("adrdom/blame/x.md", "docs/x.md"),
             blame_origin_missing("adrdom/blame/x.md", "docs/x.md", &["Does X?".to_string()]),
+            blame_bad_origin_path("adrdom/blame/x.md", "adrdom/blame/notes.md"),
         ];
         for o in &outputs {
             assert!(

@@ -17,7 +17,6 @@ use crate::ledger::Ledger;
 use crate::msg;
 use crate::record::{self, RecordFile};
 use crate::repo;
-use crate::state;
 use crate::terms::Term;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -227,8 +226,12 @@ pub enum DestError {
     UnknownTerm(String),
     RetiredTerm(String),
     MissingProseStem(String),
-    CopyTargetNotCurrent(String),
     CopyPathMissing(String),
+    /// A `dropped: copy of <path>` target that is under `repo::ADRDOM_DIR`,
+    /// or that exists but is not a regular file -- the same rule the
+    /// origin line itself is held to (`valid_origin_path`), per the
+    /// "origin" term: "a prose file outside adrdom".
+    BadPath(String),
     Unrecognized(String),
 }
 
@@ -243,13 +246,11 @@ pub struct ResolveCtx<'a> {
     /// by heading", not only a *current* one).
     pub any_headings: HashMap<String, Vec<(String, String)>>,
     /// Every id that names a section anywhere with an id -- what
-    /// `decision: <uuid>` (already in uuid form) is checked against.
+    /// `decision: <uuid>` (already in uuid form) is checked against, and
+    /// (per the owner's fix to 38216d39 A) what `dropped: copy of <heading
+    /// text>` resolves against too, the same way a `decision:` row does --
+    /// a copy target is any question with an id, not only a current one.
     pub known_heading_ids: HashSet<String>,
-    /// Every *current* decision's heading text, repo-wide
-    /// (`depends::cross_file_heading_index`): what
-    /// `dropped: copy of <heading text>` resolves against (5c399a14/38216d39:
-    /// a copy target "must be a CURRENT decision").
-    pub current_headings: &'a HashMap<String, Vec<(String, String)>>,
     pub terms_list: &'a [Term],
     pub phrase_lookup: &'a HashMap<String, String>,
     /// Every topic file's stem (its file name without `.md`): what
@@ -315,6 +316,22 @@ pub fn known_origins(root: &Path) -> HashSet<String> {
     out
 }
 
+/// Whether `path` (repo-root-relative, forward slashes) may name an
+/// origin, or a `dropped: copy of <path>` target: not under
+/// `repo::ADRDOM_DIR`, and not a directory in `source` (per the "origin"
+/// term: "a prose file outside adrdom whose text the records take in" --
+/// `adrdom/blame`'s own tree is never outside adrdom, and a directory is
+/// never a file). A path that simply does not exist at all is not this
+/// rule's problem: that is the missing-origin case (4bb5ef1b A) or the
+/// copy-path-missing case (38216d39 A), each checked on its own. Shared by
+/// `actions::do_approve_blame`, `commands::check::blame`, and
+/// `resolve_copy_target` below, so the rule lives in exactly one place.
+pub fn valid_origin_path(root: &Path, source: &repo::Source, path: &str) -> bool {
+    let under_adrdom =
+        path == repo::ADRDOM_DIR || path.starts_with(&format!("{}/", repo::ADRDOM_DIR));
+    !under_adrdom && !source.is_dir(root, path)
+}
+
 fn resolve_decision(value: &str, ctx: &ResolveCtx) -> Result<String, DestError> {
     if record::is_uuid(value) {
         return if ctx.known_heading_ids.contains(value) {
@@ -359,28 +376,23 @@ fn resolve_term(value: &str, ctx: &ResolveCtx) -> Result<String, DestError> {
     }
 }
 
-fn resolve_copy_target(value: &str, led: &Ledger, ctx: &ResolveCtx) -> Result<Resolved, DestError> {
-    if record::is_uuid(value) {
-        return if state::is_current(led, value) {
-            Ok(Resolved::DroppedCopyDecision(value.to_string()))
-        } else {
-            Err(DestError::CopyTargetNotCurrent(value.to_string()))
-        };
-    }
-    if value.trim_end().ends_with('?') {
-        return match ctx.current_headings.get(value).map(|v| v.as_slice()) {
-            None | Some([]) => Err(DestError::CopyTargetNotCurrent(value.to_string())),
-            Some([(_, id)]) => Ok(Resolved::DroppedCopyDecision(id.clone())),
-            Some(many) => {
-                let mut files: Vec<String> = many.iter().map(|(rel, _)| rel.clone()).collect();
-                files.sort();
-                files.dedup();
-                Err(DestError::AmbiguousHeading(value.to_string(), files))
-            }
-        };
+/// `dropped: copy of <heading or uuid>` resolves exactly like a
+/// `decision:` row (per the owner's fix to 38216d39 A: a copy target is
+/// "a question or of another origin" -- any question with an id, in any
+/// state, not only a current one; an approved copy row that is later
+/// superseded elsewhere must not stop this file's own re-approval). A path
+/// target is handled separately, below.
+fn resolve_copy_target(value: &str, ctx: &ResolveCtx) -> Result<Resolved, DestError> {
+    if record::is_uuid(value) || value.trim_end().ends_with('?') {
+        return resolve_decision(value, ctx).map(Resolved::DroppedCopyDecision);
     }
     // A path to another origin, not yet (or already) mapped by its own
-    // blame file (38216d39 A).
+    // blame file (38216d39 A) -- itself held to the same rule an origin's
+    // own path is (`valid_origin_path`): not under adrdom, not a
+    // directory.
+    if !valid_origin_path(&ctx.root, &repo::Source::WorkingTree, value) {
+        return Err(DestError::BadPath(value.to_string()));
+    }
     if ctx.root.join(value).exists() || ctx.known_origins.contains(value) {
         Ok(Resolved::DroppedCopyOrigin(value.to_string()))
     } else {
@@ -392,7 +404,7 @@ fn resolve_copy_target(value: &str, led: &Ledger, ctx: &ResolveCtx) -> Result<Re
 /// does a blame row name?", 38216d39 A). `text` is the raw text after the
 /// row's tab, exactly as written (or already in canonical/uuid form, on a
 /// second approve of an unchanged row).
-pub fn resolve_destination(text: &str, led: &Ledger, ctx: &ResolveCtx) -> Result<Resolved, DestError> {
+pub fn resolve_destination(text: &str, ctx: &ResolveCtx) -> Result<Resolved, DestError> {
     let t = text.trim();
     if let Some(rest) = t.strip_prefix("decision: ") {
         return resolve_decision(rest.trim(), ctx).map(Resolved::Decision);
@@ -417,7 +429,7 @@ pub fn resolve_destination(text: &str, led: &Ledger, ctx: &ResolveCtx) -> Result
             return Ok(Resolved::DroppedDetail);
         }
         if let Some(target) = rest.strip_prefix("copy of ") {
-            return resolve_copy_target(target.trim(), led, ctx);
+            return resolve_copy_target(target.trim(), ctx);
         }
     }
     Err(DestError::Unrecognized(t.to_string()))
@@ -433,8 +445,8 @@ pub fn dest_refusal_text(rel: &str, row: &Row, err: &DestError) -> String {
         DestError::UnknownTerm(text) => msg::blame_row_unknown_term(rel, text),
         DestError::RetiredTerm(name) => msg::blame_row_retired_term(rel, name),
         DestError::MissingProseStem(stem) => msg::blame_row_missing_prose_stem(rel, stem),
-        DestError::CopyTargetNotCurrent(text) => msg::blame_row_copy_target_not_current(rel, text),
         DestError::CopyPathMissing(path) => msg::blame_row_copy_path_missing(rel, path),
+        DestError::BadPath(path) => msg::blame_bad_origin_path(rel, path),
         DestError::Unrecognized(text) => msg::blame_row_unknown_destination(rel, row.start, row.end, text),
     }
 }
@@ -598,13 +610,16 @@ pub fn render_copy_target(value: &str, records: &[RecordFile]) -> String {
     }
 }
 
-/// Every `decision:` row in `bf` whose target is not answered (per "Does an
-/// origin leave the repository while its blame file has an open row?",
-/// 4bb5ef1b A: "latest state of that id is not `answered`"), named by its
-/// heading text (or the raw value when it resolves to no section at all --
-/// conservatively still open, never silently dropped). Sorted and deduped:
-/// `check`'s own message lists each open row once, not once per duplicate
-/// row naming the same question.
+/// Every `decision:` row in `bf` whose target is closed (per the owner's
+/// fix to "Does an origin leave the repository while its blame file has an
+/// open row?", 4bb5ef1b A): closed means the id has an answered row in the
+/// ledger at all -- latest state `answered` or `superseded` (a decision
+/// that was answered and later superseded is not open again); open means
+/// `asked`, `refused`, `withdrawn`, or no state row at all (a skeleton).
+/// Named by its heading text (or the raw value when it resolves to no
+/// section at all -- conservatively still open, never silently dropped).
+/// Sorted and deduped: `check`'s own message lists each open row once, not
+/// once per duplicate row naming the same question.
 pub fn open_decision_rows(
     bf: &BlameFile,
     records: &[RecordFile],
@@ -617,9 +632,11 @@ pub fn open_decision_rows(
         let Some(value) = decision_target(&row.dest) else { continue };
         let name = match resolve_heading_value(value, any_headings, known_ids) {
             Some(id) => {
-                let answered =
-                    matches!(led.latest_state(&id).map(|r| r.event.as_str()), Some("answered"));
-                if answered {
+                let closed = led
+                    .rows
+                    .iter()
+                    .any(|r| r.id == id && r.event == "answered");
+                if closed {
                     continue;
                 }
                 heading_text_for_id(records, &id).map(str::to_string).unwrap_or(id)

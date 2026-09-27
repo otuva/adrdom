@@ -54,6 +54,19 @@ pub(super) fn check_blame(
         let origin = bf.origin.clone().expect("no shape error means origin is set");
         let blob = bf.blob.clone().expect("no shape error means blob is set");
 
+        // Held to the same rule `resolve_copy_target` holds a copy-of path
+        // to: not under adrdom, not a directory. Checked before the
+        // missing/present branch below, so a directory (which `source.read`
+        // can never return content for) is never mistaken for a gone
+        // origin.
+        if !blame::valid_origin_path(root, source, &origin) {
+            out.push(Failure {
+                check: "blame".to_string(),
+                message: msg::blame_bad_origin_path(rel, &origin),
+            });
+            continue;
+        }
+
         match source.read(root, &origin) {
             None => {
                 // 4bb5ef1b A: the blame file's own draft state is one more

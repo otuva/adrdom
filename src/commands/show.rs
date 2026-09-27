@@ -225,24 +225,9 @@ fn print_blame_file(bf: &blame::BlameFile, led: &Ledger, records: &[RecordFile])
             format!("{}-{}", row.start, row.end)
         };
         if let Some(value) = blame::decision_target(&row.dest) {
-            let (heading, qstate_word) =
-                match blame::resolve_heading_value(value, &any_headings, &known_ids) {
-                    Some(id) => {
-                        let heading = blame::heading_text_for_id(records, &id)
-                            .map(str::to_string)
-                            .unwrap_or_else(|| id.clone());
-                        let word = records
-                            .iter()
-                            .flat_map(|rf| rf.sections.iter())
-                            .find(|s| s.id.as_deref() == Some(id.as_str()))
-                            .map(|sec| state_label(view::qstate(led, sec), sec))
-                            .unwrap_or_else(|| "unknown".to_string());
-                        (heading, word)
-                    }
-                    None => (value.to_string(), "unknown".to_string()),
-                };
+            let (heading, qstate_word) = heading_and_state(value, records, led, &any_headings, &known_ids);
             println!("  {}\tdecision: {} [{}]", range, heading, qstate_word);
-        } else if let Some(reason) = classify_dropped(&row.dest, records) {
+        } else if let Some(reason) = classify_dropped(&row.dest, records, led, &any_headings, &known_ids) {
             println!("  {}\tdropped: {}", range, reason);
         } else {
             // A term/prose row: print as written -- no id to turn back
@@ -252,13 +237,50 @@ fn print_blame_file(bf: &blame::BlameFile, led: &Ledger, records: &[RecordFile])
     }
 }
 
+/// A `decision:` or `dropped: copy of <heading>` value's heading text and
+/// question-state word (per "Does show print a blame file?", 7b05f8df A --
+/// and the owner's follow-up that a copy row's target earns the same state
+/// tag a decision row's does, e.g. `[superseded]`, `[answered A]`), turning
+/// an id back into words the way `view::format_dep` does for a depends
+/// entry. `("unknown", "unknown")`-shaped when `value` resolves to no
+/// section at all.
+fn heading_and_state(
+    value: &str,
+    records: &[RecordFile],
+    led: &Ledger,
+    any_headings: &HashMap<String, Vec<(String, String)>>,
+    known_ids: &HashSet<String>,
+) -> (String, String) {
+    match blame::resolve_heading_value(value, any_headings, known_ids) {
+        Some(id) => {
+            let heading = blame::heading_text_for_id(records, &id)
+                .map(str::to_string)
+                .unwrap_or_else(|| id.clone());
+            let word = records
+                .iter()
+                .flat_map(|rf| rf.sections.iter())
+                .find(|s| s.id.as_deref() == Some(id.as_str()))
+                .map(|sec| state_label(view::qstate(led, sec), sec))
+                .unwrap_or_else(|| "unknown".to_string());
+            (heading, word)
+        }
+        None => (value.to_string(), "unknown".to_string()),
+    }
+}
+
 /// The reason text `print_blame_file` prints after `dropped: ` for one
-/// row: `dead`/`detail` as written, a copy target rendered back to a
-/// heading text or a path (per "Does show print a blame file?": "copy
-/// targets rendered as the heading text or path, ids turned back into
-/// names the way depends entries are"). `None` when `dest` is not a
-/// `dropped:` row at all.
-fn classify_dropped(dest: &str, records: &[RecordFile]) -> Option<String> {
+/// row: `dead`/`detail` as written; a copy-of-heading target rendered as
+/// its heading text plus the same `[state]` tag a decision row gets; a
+/// copy-of-path target rendered as the path, unchanged, with no tag (a
+/// path names no question to have a state at all). `None` when `dest` is
+/// not a `dropped:` row.
+fn classify_dropped(
+    dest: &str,
+    records: &[RecordFile],
+    led: &Ledger,
+    any_headings: &HashMap<String, Vec<(String, String)>>,
+    known_ids: &HashSet<String>,
+) -> Option<String> {
     let t = dest.trim();
     if t == "dropped: dead" {
         return Some("dead".to_string());
@@ -267,6 +289,10 @@ fn classify_dropped(dest: &str, records: &[RecordFile]) -> Option<String> {
         return Some("detail".to_string());
     }
     let target = blame::copy_target(t)?;
+    if record::is_uuid(target) || target.trim_end().ends_with('?') {
+        let (heading, word) = heading_and_state(target, records, led, any_headings, known_ids);
+        return Some(format!("copy of {} [{}]", heading, word));
+    }
     Some(format!("copy of {}", blame::render_copy_target(target, records)))
 }
 
