@@ -83,10 +83,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     // `record_refusals`. `ask` has nothing else loaded repo-wide (only
     // `rf`, the one file it was asked about), so this is the one caller
     // that still has to load every topic file for it.
-    let all_records: Vec<record::RecordFile> = repo::list_decision_files(&root)
-        .iter()
-        .filter_map(|f| record::load_in(&root, f).ok())
-        .collect();
+    let all_records: Vec<record::RecordFile> = record::load_all(&root);
     let cross_file_headings = depends::cross_file_heading_index(&all_records, &led);
 
     // Plan/context approval state must be read off `rf` exactly as loaded,
@@ -400,10 +397,7 @@ pub fn run(record_path: PathBuf) -> i32 {
         // Refusal 5: a banned word in the candidate's own text, from the
         // single hash-based ban list scanner. `ask` stops at the first hit.
         if let Some(hit) = banned::hits(&text, &banned_entries, &terms_list).into_iter().next() {
-            let suffix = hit
-                .term
-                .map(|n| format!(" (term {})", n))
-                .unwrap_or_default();
+            let suffix = msg::term_suffix(hit.term.as_deref());
             eprintln!(
                 "ask: {}",
                 msg::banned_word_in_candidate(&rel, &sec.heading_text, &suffix)

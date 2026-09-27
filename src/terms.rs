@@ -33,6 +33,11 @@ pub struct TermsFile {
     pub errors: Vec<String>,
 }
 
+/// `"key:value"` or `"key: value"`, trimmed: unlike `record::kv`, the space
+/// after the colon is optional, since a real `adrdom/terms.md` field with
+/// an empty value is written with no trailing space at all (e.g. an
+/// aliases-less term's bare `aliases:` line) -- `record::kv` would treat
+/// that as not matching the key at all.
 fn kv(line: &str, key: &str) -> Option<String> {
     let prefix = format!("{}:", key);
     line.strip_prefix(&prefix).map(|v| v.trim().to_string())
@@ -348,8 +353,8 @@ pub fn minted_copy(tf: &TermsFile) -> TermsFile {
 }
 
 fn is_boundary_ok(chars: &[char], start: usize, len: usize) -> bool {
-    let before_ok = start == 0 || !chars[start - 1].is_alphanumeric();
-    let after_ok = start + len == chars.len() || !chars[start + len].is_alphanumeric();
+    let before_ok = start == 0 || !crate::text::is_word_char(chars[start - 1]);
+    let after_ok = start + len == chars.len() || !crate::text::is_word_char(chars[start + len]);
     before_ok && after_ok
 }
 

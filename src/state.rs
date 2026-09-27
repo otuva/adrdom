@@ -351,8 +351,10 @@ pub fn section_text_excluding_terms_line(lines: &[String], sec: &Section) -> Str
             if Some(idx) == sec.terms_line {
                 return false;
             }
-            let t = l.trim_start();
-            !(t.starts_with("id: ") || t.starts_with("depends: ") || t.starts_with("supersedes: "))
+            !crate::tells::starts_with_any(
+                l,
+                &[crate::tells::ID_PREFIX, crate::tells::DEPENDS_PREFIX, crate::tells::SUPERSEDES_PREFIX],
+            )
         })
         .map(|(_, l)| l.as_str())
         .collect::<Vec<_>>()

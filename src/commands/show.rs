@@ -46,10 +46,7 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
     // rather than inside `cross_file_heading_index` (which used to load
     // them all itself, then have the loop below load whichever of them it
     // was about to print all over again).
-    let all_records: Vec<RecordFile> = repo::list_decision_files(&root)
-        .iter()
-        .filter_map(|f| record::load_in(&root, f).ok())
-        .collect();
+    let all_records: Vec<RecordFile> = record::load_all(&root);
     let cross_file_headings = depends::cross_file_heading_index(&all_records, &led);
 
     let mut records: Vec<RecordFile> = match &record_arg {

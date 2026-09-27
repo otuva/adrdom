@@ -234,13 +234,6 @@ fn pick_next<'a>(
     all.iter().find(|(_, q)| q.state == QState::Open).copied()
 }
 
-/// A word, for `mark_terms`: a maximal run of alphabetic characters and
-/// apostrophes. Everything else (digits, punctuation, whitespace) is not
-/// part of a word.
-fn is_word_char(c: char) -> bool {
-    c.is_alphabetic() || c == '\''
-}
-
 /// Wraps every whole-word (case-insensitive) occurrence of a paired word
 /// in `text` with `<span class="t" title="<term name>: <definition>">
 /// ...</span>`, preserving the text's original casing inside the span. A
@@ -271,7 +264,7 @@ fn mark_terms(text: &str, words: &[view::WordPair]) -> String {
     let mut cur_is_word = false;
     let mut started = false;
     for c in text.chars() {
-        let is_word = is_word_char(c);
+        let is_word = crate::text::is_word_char(c);
         if started && is_word != cur_is_word {
             let taken = std::mem::take(&mut cur);
             pieces.push(if cur_is_word {

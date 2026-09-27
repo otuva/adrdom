@@ -247,12 +247,34 @@ pub fn load(path: &Path) -> std::io::Result<RecordFile> {
 /// Like `load`, with the printed path made relative to `root`.
 pub fn load_in(root: &Path, path: &Path) -> std::io::Result<RecordFile> {
     let mut rf = load(path)?;
-    rf.rel = path
-        .strip_prefix(root)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .replace('\\', "/");
+    rf.rel = crate::state::rel_path(root, path);
     Ok(rf)
+}
+
+/// Every topic file under `root` (`repo::list_decision_files`), loaded off
+/// the filesystem via `load_in`; a file that fails to load is left out
+/// silently, matching every caller of this before it except `check`
+/// (`load_all_via`, which needs to name each one that failed and why).
+pub fn load_all(root: &Path) -> Vec<RecordFile> {
+    load_all_via(root, &crate::repo::Source::WorkingTree).0
+}
+
+/// Like `load_all`, but through `source` (so `check` at a staged or
+/// working-tree commit reads exactly what it is checking, not always the
+/// filesystem -- `repo::list_decision_files_via`/`Source::read`), and
+/// keeping every file that failed to read instead of dropping it, each
+/// paired with why.
+pub fn load_all_via(root: &Path, source: &crate::repo::Source) -> (Vec<RecordFile>, Vec<(PathBuf, String)>) {
+    let mut records = Vec::new();
+    let mut errors = Vec::new();
+    for f in crate::repo::list_decision_files_via(root, source) {
+        let rel = crate::state::rel_path(root, &f);
+        match source.read(root, &rel) {
+            Some(content) => records.push(build(f, rel, split_lines(&content))),
+            None => errors.push((f, "not found".to_string())),
+        }
+    }
+    (records, errors)
 }
 
 /// Rebuilds a `RecordFile` from an in-memory line buffer (re-parsing
@@ -350,6 +372,12 @@ fn detail_line(line: &str) -> Option<(Detail, &str)> {
     None
 }
 
+/// `"key: value"`, trimmed: `None` when `line` doesn't start with `key`
+/// followed by a colon and a space. `terms::parse` keeps its own version of
+/// this (`terms::kv`) rather than sharing it: a real `adrdom/terms.md`
+/// field left empty is written with no space after the colon at all (a
+/// bare `aliases:`), which this stricter form would treat as not naming
+/// the field.
 fn kv(line: &str, key: &str) -> Option<String> {
     let prefix = format!("{}: ", key);
     line.strip_prefix(&prefix).map(|v| v.trim().to_string())
@@ -360,8 +388,10 @@ fn answer_value(line: &str) -> Option<String> {
         .map(|v| v.trim().to_string())
 }
 
-/// True when `s` (already trimmed) is a uuid: 8-4-4-4-12 hex, dashed.
-fn is_uuid(s: &str) -> bool {
+/// True when `s` (already trimmed) is a uuid: 8-4-4-4-12 hex, dashed
+/// (upper or lower case -- the same shape `check`'s test-tie scan and the
+/// page's uuid-stripping pass also match).
+pub fn is_uuid(s: &str) -> bool {
     let bytes: Vec<char> = s.chars().collect();
     if bytes.len() != 36 {
         return false;

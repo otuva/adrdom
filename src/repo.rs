@@ -139,12 +139,7 @@ impl Source {
                 let mut out = Vec::new();
                 walk_files(&root.join(rel_dir), &mut out);
                 out.into_iter()
-                    .map(|p| {
-                        p.strip_prefix(root)
-                            .unwrap_or(&p)
-                            .to_string_lossy()
-                            .replace('\\', "/")
-                    })
+                    .map(|p| crate::state::rel_path(root, &p))
                     .collect()
             }
             Source::Index => git(root, &["ls-files", "--", rel_dir])

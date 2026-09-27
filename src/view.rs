@@ -186,12 +186,10 @@ pub(crate) fn qstate(led: &Ledger, sec: &Section) -> QState {
 /// heading text, for `format_dep`.
 pub fn all_heading_texts(root: &Path) -> HashMap<String, String> {
     let mut out = HashMap::new();
-    for f in repo::list_decision_files(root) {
-        if let Ok(rf) = record::load(&f) {
-            for sec in &rf.sections {
-                if let Some(id) = &sec.id {
-                    out.insert(id.clone(), sec.heading_text.clone());
-                }
+    for rf in record::load_all(root) {
+        for sec in &rf.sections {
+            if let Some(id) = &sec.id {
+                out.insert(id.clone(), sec.heading_text.clone());
             }
         }
     }
@@ -354,22 +352,6 @@ fn section_words(
     (words, no_entry)
 }
 
-fn tokenize(text: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut cur = String::new();
-    for c in text.chars() {
-        if c.is_alphanumeric() {
-            cur.push(c);
-        } else if !cur.is_empty() {
-            out.push(std::mem::take(&mut cur));
-        }
-    }
-    if !cur.is_empty() {
-        out.push(cur);
-    }
-    out
-}
-
 /// Removes every dashed uuid (8-4-4-4-12 hex, case-insensitive, on a
 /// non-alphanumeric boundary) from `text`, replacing each with a single
 /// space. `tokenize` splits a dashed uuid into hex fragments at the
@@ -398,25 +380,15 @@ fn strip_uuid_tokens(text: &str) -> String {
 }
 
 /// If a uuid (8-4-4-4-12 hex groups separated by `-`) starts at `start`,
-/// returns the index just past it.
+/// returns the index just past it (`record::is_uuid`, run on the
+/// fixed-length candidate slice this shape always is).
 fn match_uuid_at(chars: &[char], start: usize) -> Option<usize> {
-    const GROUP_LENS: [usize; 5] = [8, 4, 4, 4, 12];
-    let mut pos = start;
-    for (gi, &len) in GROUP_LENS.iter().enumerate() {
-        for _ in 0..len {
-            if pos >= chars.len() || !chars[pos].is_ascii_hexdigit() {
-                return None;
-            }
-            pos += 1;
-        }
-        if gi < GROUP_LENS.len() - 1 {
-            if pos >= chars.len() || chars[pos] != '-' {
-                return None;
-            }
-            pos += 1;
-        }
+    let end = start + 36;
+    if end > chars.len() {
+        return None;
     }
-    Some(pos)
+    let candidate: String = chars[start..end].iter().collect();
+    record::is_uuid(&candidate).then_some(end)
 }
 
 /// A word counts as common (and so never shows up as "No term") when it
@@ -460,11 +432,10 @@ fn no_entry_words(text: &str, pairs: &[(String, String)]) -> Vec<String> {
     let stripped = strip_uuid_tokens(text);
     let mut found: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for line in stripped.split('\n') {
-        let trimmed = line.trim_start();
-        if trimmed.starts_with("id:") || trimmed.starts_with("supersedes:") {
+        if crate::tells::starts_with_any(line, &[crate::tells::ID_PREFIX, crate::tells::SUPERSEDES_PREFIX]) {
             continue;
         }
-        for tok in tokenize(line) {
+        for tok in crate::text::word_runs(line) {
             let w = tok.to_lowercase();
             if w.chars().count() < 3 {
                 continue;
@@ -736,12 +707,7 @@ pub fn snapshot(root: &Path) -> Snapshot {
     // Every topic file, loaded once: `cross_file_heading_index` used to
     // reload every one of them itself, then this loop reloaded whichever
     // one it was about to build a `FileView` for all over again.
-    let mut records: Vec<RecordFile> = Vec::new();
-    for f in repo::list_decision_files(root) {
-        if let Ok(rf) = record::load_in(root, &f) {
-            records.push(rf);
-        }
-    }
+    let records: Vec<RecordFile> = record::load_all(root);
     let cross_file_headings = depends::cross_file_heading_index(&records, &led);
     let mut files: Vec<FileView> = Vec::new();
     for mut rf in records {

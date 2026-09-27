@@ -9,24 +9,15 @@ use std::path::Path;
 pub const BAN_LIST: &str = "adrdom/state/banned.sha256";
 
 /// Same tokenization for `ban` and `check --banned`: the whole trimmed,
-/// lowercased line, plus each maximal run of Unicode alphanumerics in it.
+/// lowercased line, plus each maximal run of Unicode alphanumerics in it
+/// (`crate::text::word_runs`).
 pub fn tokenize(line: &str) -> Vec<String> {
     let trimmed = line.trim().to_lowercase();
     if trimmed.is_empty() {
         return Vec::new();
     }
     let mut tokens = vec![trimmed.clone()];
-    let mut current = String::new();
-    for c in trimmed.chars() {
-        if c.is_alphanumeric() {
-            current.push(c);
-        } else if !current.is_empty() {
-            tokens.push(std::mem::take(&mut current));
-        }
-    }
-    if !current.is_empty() {
-        tokens.push(current);
-    }
+    tokens.extend(crate::text::word_runs(&trimmed));
     tokens
 }
 

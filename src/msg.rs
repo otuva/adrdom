@@ -59,6 +59,13 @@ fn refuse(what: String, next: Next) -> String {
     format!("{}; {}", what, next.render())
 }
 
+/// Prefixes `s` with `approve: `, the command prefix `do_approve_record`
+/// puts on every refusal and failure it returns (the same shape `check`'s
+/// own per-category prefix follows, but fixed to one command here).
+pub fn approve_prefixed(s: impl Display) -> String {
+    format!("approve: {}", s)
+}
+
 // --- generic I/O failures --------------------------------------------------
 // Shared by actions.rs, ask.rs, install.rs, uninstall.rs, ban.rs: the
 // `Next` is always supplied by the caller, since the same shape of failure
@@ -229,6 +236,17 @@ pub fn terms_snapshot_mismatch() -> String {
         "adrdom/state/terms.approved.md does not match the ledger".to_string(),
         Next::owner_runs("adr approve adrdom/terms.md"),
     )
+}
+
+/// A cycle's names, in traversal order, closed by repeating the first at
+/// the end: "a -> b -> a" -- what `circular_definition` names, and what the
+/// page's own display of the same cycle names too.
+pub fn cycle_chain(names: &[String]) -> String {
+    let mut chain = names.to_vec();
+    if let Some(first) = names.first() {
+        chain.push(first.clone());
+    }
+    chain.join(" -> ")
 }
 
 pub fn circular_definition(chain: &str) -> String {
@@ -947,6 +965,17 @@ pub fn answer_set_changed(rel: &str, dep_heading: &str, heading: &str) -> String
         ),
         Next::agent("restores it, a change is a plan change"),
     )
+}
+
+/// The `"path:line"` location a failure names, one-based.
+pub fn location(name: &str, line: usize) -> String {
+    format!("{}:{}", name, line)
+}
+
+/// The `" (term {})"` suffix a banned-word hit carries when the word was
+/// banned with `--term`; empty when it wasn't.
+pub fn term_suffix(term: Option<&str>) -> String {
+    term.map(|n| format!(" (term {})", n)).unwrap_or_default()
 }
 
 pub fn banned_word_at(location: &str, suffix: &str) -> String {

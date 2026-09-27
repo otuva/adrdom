@@ -92,7 +92,7 @@ pub fn run(term: Option<String>) -> i32 {
         let mut last_line: Option<usize> = None;
         for hit in banned::hits(&content, &hash_map, &[]) {
             if last_line != Some(hit.line) {
-                hits.push(format!("{}:{}", name, hit.line));
+                hits.push(msg::location(&name, hit.line));
                 last_line = Some(hit.line);
             }
         }

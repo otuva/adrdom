@@ -9,5 +9,6 @@ pub mod repo;
 pub mod state;
 pub mod tells;
 pub mod terms;
+pub mod text;
 pub mod version;
 pub mod view;

@@ -133,20 +133,17 @@ fn locate_asked(root: &Path, id: &str, version: &str) -> Result<Located, String>
     let ledger_path = root.join("adrdom/state/ledger.tsv");
     let led = ledger::read(&ledger_path);
 
-    let files = repo::list_decision_files(root);
     let mut found = None;
-    for f in &files {
-        if let Ok(rf) = record::load(f) {
-            if let Some(idx) = rf.sections.iter().position(|s| s.id.as_deref() == Some(id)) {
-                found = Some((rf, idx));
-                break;
-            }
+    for rf in record::load_all(root) {
+        if let Some(idx) = rf.sections.iter().position(|s| s.id.as_deref() == Some(id)) {
+            found = Some((rf, idx));
+            break;
         }
     }
     let Some((rf, idx)) = found else {
         return Err(msg::id_not_found(id));
     };
-    let rel = state::rel_path(root, &rf.path);
+    let rel = rf.rel.clone();
 
     // Refuse when terms.md is missing or unreadable; otherwise check the
     // question's terms line against whichever text is currently approved
@@ -1070,7 +1067,7 @@ fn insert_missing_ids(rf: &RecordFile, mut work_lines: Vec<String>) -> Result<Ve
             let sec = &rf.sections[i];
             let depends_idx = (sec.start + 1..sec.end)
                 .find(|&j| work_lines[j].starts_with("depends: "))
-                .ok_or_else(|| format!("approve: {}", msg::no_depends_line_bare(&sec.heading_text)))?;
+                .ok_or_else(|| msg::approve_prefixed(msg::no_depends_line_bare(&sec.heading_text)))?;
             let new_id = Uuid::new_v4().to_string();
             work_lines.insert(depends_idx + 1, format!("id: {}", new_id));
         }
@@ -1098,14 +1095,11 @@ fn do_approve_record(
     ledger_path: &Path,
 ) -> Result<Outcome, String> {
     let mut rf = record::load(file).map_err(|e| {
-        format!(
-            "approve: {}",
-            msg::read_failed(
-                &file.display().to_string(),
-                e,
-                Next::owner_runs(format!("adr approve {} again", rel)),
-            )
-        )
+        msg::approve_prefixed(msg::read_failed(
+            &file.display().to_string(),
+            e,
+            Next::owner_runs(format!("adr approve {} again", rel)),
+        ))
     })?;
 
     // Refuse up front, before a single `depends:` entry is resolved, when
@@ -1132,12 +1126,7 @@ fn do_approve_record(
     // headings below never removes an id already in the ledger's
     // `state_ids`, so loading before that rewrite changes nothing either
     // read below depends on.
-    let mut all_records: Vec<RecordFile> = Vec::new();
-    for f in &repo::list_decision_files(root) {
-        if let Ok(rf2) = record::load_in(root, f) {
-            all_records.push(rf2);
-        }
-    }
+    let all_records: Vec<RecordFile> = record::load_all(root);
     // Every current decision's heading text, repo-wide (the cross-file gap
     // "Does a reference in a topic file carry the identifier of what it
     // names?" left open): built once here too, from `all_records` above,
@@ -1168,7 +1157,7 @@ fn do_approve_record(
     let mut refusals: Vec<String> =
         record_refusals(rel, &rf, terms_list, &phrase_lookup, &cross_file_headings, led)
             .into_iter()
-            .map(|r| format!("approve: {}", r.message))
+            .map(|r| msg::approve_prefixed(r.message))
             .collect();
 
     // A letter-set suffix naming a current decision elsewhere
@@ -1190,7 +1179,7 @@ fn do_approve_record(
                 for m in
                     depends::bad_letters_for_decision(rel, &sec.heading_text, &all_records, &id, letters)
                 {
-                    refusals.push(format!("approve: {}", m));
+                    refusals.push(msg::approve_prefixed(m));
                 }
             }
         }
@@ -1206,7 +1195,7 @@ fn do_approve_record(
     // nothing is written when a check refuses). `all_records`, loaded
     // above, is still exactly what's on disk at this point.
     for r in missing_answered_refusals(&all_records, led) {
-        refusals.push(format!("approve: {}", r.message));
+        refusals.push(msg::approve_prefixed(r.message));
     }
 
     let present_ids: HashSet<String> = all_records
@@ -1283,14 +1272,11 @@ fn do_approve_record(
     let context_hash = record::context_hash(&work_rf);
 
     record::save(&work_rf).map_err(|e| {
-        format!(
-            "approve: {}",
-            msg::write_failed(
-                &file.display().to_string(),
-                e,
-                Next::owner_runs(format!("adr approve {} again", rel)),
-            )
-        )
+        msg::approve_prefixed(msg::write_failed(
+            &file.display().to_string(),
+            e,
+            Next::owner_runs(format!("adr approve {} again", rel)),
+        ))
     })?;
 
     let mut rows: Vec<ledger::Row> = Vec::new();
@@ -1333,28 +1319,22 @@ fn do_approve_record(
     }
 
     ledger::append(ledger_path, &rows).map_err(|e| {
-        format!(
-            "approve: {}",
-            msg::update_failed(
-                "ledger",
-                e,
-                Next::owner_runs(format!("adr approve {} again", rel)),
-            )
-        )
+        msg::approve_prefixed(msg::update_failed(
+            "ledger",
+            e,
+            Next::owner_runs(format!("adr approve {} again", rel)),
+        ))
     })?;
 
     // `withdrawn_rows` was computed, and any refusal already returned,
     // above -- before either write this function has made so far.
     if !withdrawn_rows.is_empty() {
         ledger::append(ledger_path, &withdrawn_rows).map_err(|e| {
-            format!(
-                "approve: {}",
-                msg::update_failed(
-                    "ledger",
-                    e,
-                    Next::owner_runs(format!("adr approve {} again", rel)),
-                )
-            )
+            msg::approve_prefixed(msg::update_failed(
+                "ledger",
+                e,
+                Next::owner_runs(format!("adr approve {} again", rel)),
+            ))
         })?;
         for r in &withdrawn_rows {
             messages.push(msg::withdrawn(&r.detail));

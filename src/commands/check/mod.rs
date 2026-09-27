@@ -26,23 +26,6 @@ use crate::view;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-/// Loads one topic file through `source` instead of `record::load_in`,
-/// which always reads the filesystem: the one place `check` builds a
-/// `RecordFile` from bytes, so every category below judges the same
-/// staged-or-working-tree text (per "Does check at a commit read the
-/// staged files?", 34e81f57 A). `path` is one of `source`'s own file
-/// listing (`repo::list_decision_files_via`), so it may not exist on disk
-/// at all (a file only staged, never `git add`ed to disk... never mind,
-/// always on disk if staged; but never committed either) -- only
-/// `source.read` is ever asked for its bytes.
-fn load_record(root: &Path, path: &Path, source: &Source) -> Result<RecordFile, String> {
-    let rel = state::rel_path(root, path);
-    match source.read(root, &rel) {
-        Some(content) => Ok(record::build(path.to_path_buf(), rel, record::split_lines(&content))),
-        None => Err("not found".to_string()),
-    }
-}
-
 struct Failure {
     check: String,
     /// The decision a failure is about, kept so the page can group by it.
@@ -85,15 +68,11 @@ fn build(
     let ledger_content = source.read(root, ledger_rel).unwrap_or_default();
     let led = crate::ledger::parse(&ledger_content);
 
-    let files = repo::list_decision_files_via(root, &source);
-    let mut records = Vec::new();
-    let mut notes: Vec<String> = Vec::new();
-    for f in &files {
-        match load_record(root, f, &source) {
-            Ok(rf) => records.push(rf),
-            Err(e) => notes.push(msg::topic_file_unreadable(&f.display().to_string(), e)),
-        }
-    }
+    let (mut records, unreadable) = record::load_all_via(root, &source);
+    let mut notes: Vec<String> = unreadable
+        .into_iter()
+        .map(|(f, e)| msg::topic_file_unreadable(&f.display().to_string(), e))
+        .collect();
 
     // Terms minted in memory: a terms file that has never been
     // approved carries no ids on disk yet, and `phrase_lookup` only

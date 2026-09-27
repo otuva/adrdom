@@ -19,14 +19,11 @@ pub(super) fn check_banned(root: &Path, staged: bool, message: Option<&Path>, so
 
     for (name, content) in collect_targets(root, staged, message) {
         for hit in banned::hits(&content, &hash_map, terms_list) {
-            let suffix = hit
-                .term
-                .map(|n| format!(" (term {})", n))
-                .unwrap_or_default();
+            let suffix = msg::term_suffix(hit.term.as_deref());
             out.push(Failure {
                 check: "banned".to_string(),
                 id: None,
-                message: msg::banned_word_at(&format!("{}:{}", name, hit.line), &suffix),
+                message: msg::banned_word_at(&msg::location(&name, hit.line), &suffix),
             });
         }
     }
@@ -135,11 +132,9 @@ pub(crate) fn collect_targets(
         paths.extend(list.lines().map(|s| s.to_string()));
     }
     for f in repo::list_decision_files(root) {
-        if let Ok(rel) = f.strip_prefix(root) {
-            let s = rel.to_string_lossy().replace('\\', "/");
-            if !paths.contains(&s) {
-                paths.push(s);
-            }
+        let s = state::rel_path(root, &f);
+        if !paths.contains(&s) {
+            paths.push(s);
         }
     }
     for p in paths {
