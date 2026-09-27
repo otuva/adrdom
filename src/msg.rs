@@ -1398,8 +1398,10 @@ pub fn blame_origin_missing(rel: &str, origin: &str, open: &[String]) -> String 
             if open.len() == 1 { "this is" } else { "these are" },
             open.join(", ")
         ),
-        Next::agent(format!("restores {} from git until every row above is closed", origin))
-            .and_owner_runs(format!("adr approve {} and adr answer each open question, once ready", rel)),
+        Next::agent(format!(
+            "restores {} from git; it may go once the blame file is approved and every row above is answered",
+            origin
+        )),
     )
 }
 

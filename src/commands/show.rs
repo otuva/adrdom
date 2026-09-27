@@ -183,7 +183,7 @@ fn print_question(
     // by any row at all.
     if let Some(id) = &sec.id {
         for (origin, n) in blame::origins_for_decision(blame_files, any_headings_all, known_ids, id) {
-            println!("    from: {} ({} rows)", origin, n);
+            println!("    from: {} ({} {})", origin, n, if n == 1 { "row" } else { "rows" });
         }
     }
 }
