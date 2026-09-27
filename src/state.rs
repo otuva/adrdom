@@ -5,6 +5,7 @@
 use crate::ledger::{Ledger, Row};
 use crate::record::{self, RecordFile, Section};
 use crate::terms::{self, TermsFile};
+use std::collections::BTreeSet;
 use std::path::{Component, Path};
 
 /// `path` relative to `root`, with forward slashes, e.g.
@@ -103,24 +104,217 @@ pub fn load_terms_via(root: &Path, source: &crate::repo::Source) -> Option<Terms
 
 /// `adrdom/state/terms.approved.md`: the exact bytes `approve
 /// adrdom/terms.md` last wrote to `adrdom/terms.md`, snapshotted in the same
-/// run as its ledger event (`actions::do_approve_terms`). `check`'s only
-/// source for what the terms file looked like at its latest approval (per
-/// "Does check fail a terms file that differs from its latest approval?") --
-/// unlike walking `git log`, this is a plain tracked file, so it survives a
-/// shallow checkout, a squash merge, or a rebase that a commit-by-commit
-/// history search would lose. `None` when the file has never been
-/// approved (no snapshot has ever been written) or can't be read.
-pub fn load_terms_snapshot(root: &Path) -> Option<TermsFile> {
-    let path = root.join("adrdom/state/terms.approved.md");
-    let content = std::fs::read_to_string(path).ok()?;
+/// run as its ledger event (`actions::do_approve_terms`). Every reader that
+/// needs the terms file's text as it stood at its latest approval (per
+/// "Does check fail a terms file that differs from its latest approval?")
+/// reads it through here -- unlike walking `git log`, this is a plain
+/// tracked file, so it survives a shallow checkout, a squash merge, or a
+/// rebase that a commit-by-commit history search would lose. `source`
+/// picks where the bytes come from (`Source::WorkingTree` for every caller
+/// but `check`, which passes whichever source it is judging, per "Does
+/// check at a commit read the staged files?"). `None` when the file has
+/// never been approved (no snapshot has ever been written) or can't be
+/// read this way.
+pub fn approved_terms(root: &Path, source: &crate::repo::Source) -> Option<TermsFile> {
+    let content = source.read(root, "adrdom/state/terms.approved.md")?;
     Some(terms::parse(&record::split_lines(&content)))
 }
 
-/// Like `load_terms_snapshot`, but through `source`: `check`'s own copy,
-/// used the same way `load_terms_via` is.
-pub fn load_terms_snapshot_via(root: &Path, source: &crate::repo::Source) -> Option<TermsFile> {
-    let content = source.read(root, "adrdom/state/terms.approved.md")?;
-    Some(terms::parse(&record::split_lines(&content)))
+/// One term whose definition text in `current` differs from its text in
+/// `approved` -- matched by id only, never by name (per "What does a
+/// definition say?": the definition, not the aliases, is what a decision's
+/// meaning rests on). A term present in `current` but missing from
+/// `approved` entirely is not a "change" here and is left out; callers that
+/// need to tell the two apart (`check`'s `EditImpact::MissingFromApprovedCopy`)
+/// still make that distinction themselves.
+pub struct DefinitionChange {
+    pub id: String,
+    pub name: String,
+    pub old_definition: String,
+    pub new_definition: String,
+}
+
+/// Every term in `current` whose definition differs from its counterpart in
+/// `approved`, matched by id. Shared by `approve`'s step 7 report and the
+/// page's before/after diff.
+pub fn definition_changes(current: &TermsFile, approved: &TermsFile) -> Vec<DefinitionChange> {
+    let mut out = Vec::new();
+    for t in &current.terms {
+        let Some(tid) = &t.id else { continue };
+        let Some(old) = approved.terms.iter().find(|o| o.id.as_deref() == Some(tid.as_str())) else {
+            continue;
+        };
+        if old.definition == t.definition {
+            continue;
+        }
+        out.push(DefinitionChange {
+            id: tid.clone(),
+            name: t.name.clone(),
+            old_definition: old.definition.clone(),
+            new_definition: t.definition.clone(),
+        });
+    }
+    out
+}
+
+/// One current decision's, or one non-retired term's, declared use of a
+/// term: what to print (`label`, always the quoted form used everywhere a
+/// dependent is printed) and, for a decision, its own id -- named so a
+/// caller that must supersede it to clear a refusal has something to point
+/// at (a term has nothing to supersede, so `decision_id` is `None` for
+/// one).
+pub enum DependentSource {
+    Decision { rel: String, heading: String, id: String },
+    Term { name: String },
+}
+
+impl DependentSource {
+    /// `"<rel>: \"<heading>\""` for a decision, `"term \"<name>\""` for a
+    /// term -- the one label format used everywhere a dependent is printed.
+    pub fn label(&self) -> String {
+        match self {
+            DependentSource::Decision { rel, heading, .. } => format!("{}: \"{}\"", rel, heading),
+            DependentSource::Term { name } => format!("term \"{}\"", name),
+        }
+    }
+
+    pub fn decision_id(&self) -> Option<&str> {
+        match self {
+            DependentSource::Decision { id, .. } => Some(id),
+            DependentSource::Term { .. } => None,
+        }
+    }
+}
+
+/// One source's pairing to one or more terms: the pairs themselves, and
+/// whether each is a resolved word (subject to "did this word move off the
+/// term" checks, since a terms-line entry is a snapshot of what some prose
+/// used to resolve to) or a `depends:` id read straight off the entry
+/// (never a resolved word, so only the target's removal/retirement applies
+/// to it).
+pub struct DependentEntry {
+    pub source: DependentSource,
+    pub pairs: Vec<(String, String)>,
+    pub from_word: bool,
+}
+
+/// Every current decision's, and (when `include_terms`) every non-retired
+/// term's, declared use of a term in `tf` -- the widest reach any of the
+/// five readers of this need: a current decision's own `terms:` line
+/// always counts; a `depends:` entry naming a term directly counts too when
+/// `include_depends_ids` is set (skipped when the same id is already on
+/// that decision's terms line, so retiring a term used both ways earns one
+/// entry, not two); a non-retired term's own recorded pairing counts when
+/// `include_terms` is set, from `term_pairs_override` when the caller
+/// supplies one (`approve`'s step 7, reporting against pairs about to be
+/// written rather than what is already on disk, indexed the same as
+/// `tf.terms`) or from the term's own `terms_line` otherwise. Never
+/// transitive on its own -- a caller that needs the closure over the term
+/// graph runs `transitive_term_ids` on the pairs this returns.
+pub fn dependent_entries(
+    records: &[RecordFile],
+    led: &Ledger,
+    tf: &TermsFile,
+    include_depends_ids: bool,
+    include_terms: bool,
+    term_pairs_override: Option<&[Vec<(String, String)>]>,
+) -> Vec<DependentEntry> {
+    let mut out = Vec::new();
+    for rf in records {
+        for sec in &rf.sections {
+            let Some(id) = &sec.id else { continue };
+            if !is_current(led, id) {
+                continue;
+            }
+            let terms_line_pairs: Vec<(String, String)> = sec
+                .terms_line
+                .and_then(|tl| terms::parse_terms_line(rf.lines[tl].trim_end()))
+                .unwrap_or_default();
+            if !terms_line_pairs.is_empty() {
+                out.push(DependentEntry {
+                    source: DependentSource::Decision {
+                        rel: rf.rel.clone(),
+                        heading: sec.heading_text.clone(),
+                        id: id.clone(),
+                    },
+                    pairs: terms_line_pairs.clone(),
+                    from_word: true,
+                });
+            }
+            if include_depends_ids {
+                for d in &sec.depends {
+                    let record::Dep::Id { id: dep_id, .. } = d else { continue };
+                    if terms_line_pairs.iter().any(|(_, u)| u == dep_id) {
+                        continue;
+                    }
+                    if !tf.terms.iter().any(|t| t.id.as_deref() == Some(dep_id.as_str())) {
+                        continue;
+                    }
+                    out.push(DependentEntry {
+                        source: DependentSource::Decision {
+                            rel: rf.rel.clone(),
+                            heading: sec.heading_text.clone(),
+                            id: id.clone(),
+                        },
+                        pairs: vec![(dep_id.clone(), dep_id.clone())],
+                        from_word: false,
+                    });
+                }
+            }
+        }
+    }
+    if include_terms {
+        for (i, t) in tf.terms.iter().enumerate() {
+            if t.retired {
+                continue;
+            }
+            let pairs = match term_pairs_override {
+                Some(fresh) => fresh.get(i).cloned().unwrap_or_default(),
+                None => t
+                    .terms_line
+                    .as_deref()
+                    .and_then(terms::parse_terms_line)
+                    .unwrap_or_default(),
+            };
+            if pairs.is_empty() {
+                continue;
+            }
+            out.push(DependentEntry {
+                source: DependentSource::Term { name: t.name.clone() },
+                pairs,
+                from_word: true,
+            });
+        }
+    }
+    out
+}
+
+/// Every term id reached starting at `start` (already-resolved uuids) and,
+/// while `transitive`, repeatedly following each landed term's own
+/// recorded `terms:` line onward through `tf` -- cycle-safe. `start`
+/// themselves are always included. Non-transitive, this is just `start`
+/// deduplicated.
+pub fn transitive_term_ids(
+    start: impl IntoIterator<Item = String>,
+    tf: &TermsFile,
+    transitive: bool,
+) -> BTreeSet<String> {
+    let mut seen = BTreeSet::new();
+    let mut stack: Vec<String> = start.into_iter().collect();
+    while let Some(uuid) = stack.pop() {
+        if !seen.insert(uuid.clone()) {
+            continue;
+        }
+        if !transitive {
+            continue;
+        }
+        if let Some(t) = tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str())) {
+            if let Some(more) = t.terms_line.as_deref().and_then(terms::parse_terms_line) {
+                stack.extend(more.into_iter().map(|(_, u)| u));
+            }
+        }
+    }
+    seen
 }
 
 /// The three ways a caller that requires `adrdom/terms.md` (`ask`, `answer`)

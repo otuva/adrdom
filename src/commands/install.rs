@@ -175,15 +175,10 @@ fn backfill_terms_snapshot(root: &Path) -> Result<Option<String>, String> {
         Ok(tf) => tf,
         Err(_) => return Ok(None),
     };
-    let file_hash = terms::file_hash(&tf);
 
     let ledger_path = root.join("adrdom/state/ledger.tsv");
     let led = ledger::read(&ledger_path);
-    let approved = led
-        .latest_for_path("terms", "adrdom/terms.md")
-        .map(|r| r.hash == file_hash)
-        .unwrap_or(false);
-    if !approved {
+    if !crate::state::terms_approved(&led, &tf) {
         return Ok(None);
     }
 

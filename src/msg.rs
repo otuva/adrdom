@@ -1026,6 +1026,21 @@ pub fn section_no_terms_line(rel: &str, heading: &str, id: &str, answered: bool)
     refuse(format!("{}: {}: no terms line", rel, heading), next)
 }
 
+/// A section's `terms:` line is present but doesn't parse (per
+/// `terms::validate_pairs`'s `Malformed`). Same answered/asked split as
+/// `section_no_terms_line`.
+pub fn section_terms_line_malformed(rel: &str, heading: &str, id: &str, answered: bool) -> String {
+    let next = if answered {
+        Next::agent(format!(
+            "restores the terms line from git (e.g. git checkout -- {}), or writes a question that supersedes {}",
+            rel, id
+        ))
+    } else {
+        Next::agent("re-asks so the terms line is written correctly")
+    };
+    refuse(format!("{}: {}: malformed terms line", rel, heading), next)
+}
+
 /// A section's `terms:` line names a uuid that isn't in `adrdom/terms.md`
 /// at all. Same split as `section_no_terms_line`: an asked section can
 /// still be re-asked; an answered one is frozen, so the fix moves to
@@ -1080,6 +1095,17 @@ pub fn term_definition_term_retired(name: &str, retired_name: &str) -> String {
             name, retired_name
         ),
         Next::agent("rewords the definition so it no longer pairs the retired term"),
+    )
+}
+
+/// A term's own `terms:` line (machine-written by `approve` from its
+/// definition) doesn't parse at all (per `terms::validate_pairs`'s
+/// `Malformed`) -- never an agent's line to hand-fix, since only `approve`
+/// ever writes it; the move is the same re-approve that regenerates it.
+pub fn term_definition_terms_line_malformed(name: &str) -> String {
+    refuse(
+        format!("adrdom/terms.md: \"{}\": malformed terms line", name),
+        Next::owner_runs("adr approve adrdom/terms.md"),
     )
 }
 
@@ -1516,12 +1542,15 @@ mod tests {
             refused_summary("heading", "x.md"),
             section_no_terms_line("x.md", "heading", "id-1", false),
             section_no_terms_line("x.md", "heading", "id-1", true),
+            section_terms_line_malformed("x.md", "heading", "id-1", false),
+            section_terms_line_malformed("x.md", "heading", "id-1", true),
             section_term_not_found("x.md", "heading", "uuid-1", "id-1", false),
             section_term_not_found("x.md", "heading", "uuid-1", "id-1", true),
             section_term_retired("x.md", "heading", "term", "id-1", false),
             section_term_retired("x.md", "heading", "term", "id-1", true),
             term_definition_term_not_found("term", "uuid-1"),
             term_definition_term_retired("term", "retired-term"),
+            term_definition_terms_line_malformed("term"),
             frozen_depends_edited("x.md", "heading"),
             dep_not_current_decision("x.md", "heading", "id-1"),
             dep_no_term("x.md", "heading", "widget"),

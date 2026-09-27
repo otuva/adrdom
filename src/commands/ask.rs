@@ -5,7 +5,7 @@ use crate::ledger;
 use crate::msg::{self, Actor, Next};
 use crate::record;
 use crate::repo;
-use crate::state::{self, TermsLoad};
+use crate::state;
 use crate::tells;
 use crate::terms;
 use crate::view;
@@ -26,33 +26,15 @@ pub fn run(record_path: PathBuf) -> i32 {
 
     // Refusals 1-3: adrdom/terms.md missing, unreadable/shape errors, or
     // not approved. These come before anything about the topic file itself is
-    // even loaded, since none of them depend on it.
-    let tf = match state::load_terms_checked(&root) {
-        TermsLoad::Missing => {
-            eprintln!("ask: {}", msg::terms_missing());
+    // even loaded, since none of them depend on it. Shared with `approve`
+    // (`actions::require_terms`).
+    let tf = match actions::require_terms(&root, &led, &rel) {
+        Ok(tf) => tf,
+        Err(e) => {
+            eprintln!("ask: {}", e);
             return 1;
-        }
-        TermsLoad::LoadError(e) => {
-            eprintln!(
-                "ask: {}",
-                msg::terms_load_error(&e, Next::agent("fixes adrdom/terms.md and retries"))
-            );
-            return 1;
-        }
-        TermsLoad::Ok(tf) => {
-            if !tf.errors.is_empty() {
-                for e in &tf.errors {
-                    eprintln!("ask: {}", msg::terms_shape_error(e));
-                }
-                return 1;
-            }
-            tf
         }
     };
-    if !state::terms_approved(&led, &tf) {
-        eprintln!("ask: {}", msg::terms_not_approved(&rel));
-        return 1;
-    }
     let terms_list: Vec<terms::Term> = tf.terms.clone();
 
     let mut rf = match record::load(&record_path) {

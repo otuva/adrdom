@@ -55,11 +55,7 @@ pub(super) fn check_terms(
     // below) and so never see it.
     let missing_ids = tf.errors.iter().any(|e| e.contains("missing id"));
 
-    let file_hash = terms::file_hash(&tf);
-    let approved = led
-        .latest_for_path("terms", "adrdom/terms.md")
-        .map(|r| r.hash == file_hash)
-        .unwrap_or(false);
+    let approved = state::terms_approved(led, &tf);
 
     // The approved snapshot (`adrdom/state/terms.approved.md`) against the
     // ledger's own record of what was approved: they are written together,
@@ -68,11 +64,9 @@ pub(super) fn check_terms(
     // `adrdom/state/`) or otherwise fell out of sync with the ledger.
     // Checked unconditionally, before anything below trusts the snapshot as
     // the file's latest approved text.
-    let snapshot = state::load_terms_snapshot_via(root, source);
+    let snapshot = state::approved_terms(root, source);
     if let Some(snap) = &snapshot {
-        let snapshot_hash = terms::file_hash(snap);
-        let ledger_hash = led.latest_for_path("terms", "adrdom/terms.md").map(|r| r.hash.clone());
-        if ledger_hash.as_deref() != Some(snapshot_hash.as_str()) {
+        if !state::terms_approved(led, snap) {
             out.push(Failure {
                 check: "terms".to_string(),
                 id: None,
@@ -160,20 +154,33 @@ pub(super) fn check_terms(
                 });
                 continue;
             };
-            let pairs = terms::parse_terms_line(rf.lines[tl].trim_end()).unwrap_or_default();
-            for (_, uuid) in &pairs {
-                match tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str())) {
-                    None => out.push(Failure {
-                        check: "terms".to_string(),
-                        id: Some(id.clone()),
-                        message: msg::section_term_not_found(&rel, &sec.heading_text, uuid, id, answered),
-                    }),
-                    Some(t) if t.retired => out.push(Failure {
-                        check: "terms".to_string(),
-                        id: Some(id.clone()),
-                        message: msg::section_term_retired(&rel, &sec.heading_text, &t.name, id, answered),
-                    }),
-                    Some(_) => {}
+            match terms::validate_pairs(rf.lines[tl].trim_end(), &tf) {
+                Err(_) => out.push(Failure {
+                    check: "terms".to_string(),
+                    id: Some(id.clone()),
+                    message: msg::section_terms_line_malformed(&rel, &sec.heading_text, id, answered),
+                }),
+                Ok(problems) => {
+                    for p in problems {
+                        match p.kind {
+                            terms::ProblemKind::Gone => out.push(Failure {
+                                check: "terms".to_string(),
+                                id: Some(id.clone()),
+                                message: msg::section_term_not_found(
+                                    &rel,
+                                    &sec.heading_text,
+                                    &p.uuid,
+                                    id,
+                                    answered,
+                                ),
+                            }),
+                            terms::ProblemKind::Retired(name) => out.push(Failure {
+                                check: "terms".to_string(),
+                                id: Some(id.clone()),
+                                message: msg::section_term_retired(&rel, &sec.heading_text, &name, id, answered),
+                            }),
+                        }
+                    }
                 }
             }
         }
@@ -185,53 +192,39 @@ pub(super) fn check_terms(
             continue;
         }
         let Some(tl) = &t.terms_line else { continue };
-        let pairs = terms::parse_terms_line(tl).unwrap_or_default();
-        for (_, uuid) in &pairs {
-            match tf.terms.iter().find(|o| o.id.as_deref() == Some(uuid.as_str())) {
-                None => out.push(Failure {
-                    check: "terms".to_string(),
-                    id: None,
-                    message: msg::term_definition_term_not_found(&t.name, uuid),
-                }),
-                Some(o) if o.retired => out.push(Failure {
-                    check: "terms".to_string(),
-                    id: None,
-                    message: msg::term_definition_term_retired(&t.name, &o.name),
-                }),
-                Some(_) => {}
+        match terms::validate_pairs(tl, &tf) {
+            Err(_) => out.push(Failure {
+                check: "terms".to_string(),
+                id: None,
+                message: msg::term_definition_terms_line_malformed(&t.name),
+            }),
+            Ok(problems) => {
+                for p in problems {
+                    match p.kind {
+                        terms::ProblemKind::Gone => out.push(Failure {
+                            check: "terms".to_string(),
+                            id: None,
+                            message: msg::term_definition_term_not_found(&t.name, &p.uuid),
+                        }),
+                        terms::ProblemKind::Retired(name) => out.push(Failure {
+                            check: "terms".to_string(),
+                            id: None,
+                            message: msg::term_definition_term_retired(&t.name, &name),
+                        }),
+                    }
+                }
             }
         }
     }
 
     // Note (never a failure): every non-retired term that no current
     // decision's terms line, and no non-retired term's own terms line,
-    // pairs against.
-    let mut used: HashSet<String> = HashSet::new();
-    for rf in records {
-        for sec in &rf.sections {
-            let Some(id) = &sec.id else { continue };
-            if !state::is_current(led, id) {
-                continue;
-            }
-            let Some(tl) = sec.terms_line else { continue };
-            if let Some(pairs) = terms::parse_terms_line(rf.lines[tl].trim_end()) {
-                for (_, uuid) in pairs {
-                    used.insert(uuid);
-                }
-            }
-        }
-    }
-    for t in &tf.terms {
-        if t.retired {
-            continue;
-        }
-        let Some(tl) = &t.terms_line else { continue };
-        if let Some(pairs) = terms::parse_terms_line(tl) {
-            for (_, uuid) in pairs {
-                used.insert(uuid);
-            }
-        }
-    }
+    // pairs against (the narrower, non-transitive reach: no `depends:`
+    // ids, since a bare `depends:` entry is not a "pairing").
+    let used: HashSet<String> = state::dependent_entries(records, led, &tf, false, true, None)
+        .into_iter()
+        .flat_map(|dep| dep.pairs.into_iter().map(|(_, uuid)| uuid))
+        .collect();
     let mut unused: Vec<String> = tf
         .terms
         .iter()
@@ -267,32 +260,11 @@ fn reachable_terms(
     tf: &terms::TermsFile,
 ) -> HashMap<String, BTreeSet<String>> {
     let mut reach: HashMap<String, BTreeSet<String>> = HashMap::new();
-    for rf in records {
-        for sec in &rf.sections {
-            let Some(id) = &sec.id else { continue };
-            if !state::is_current(led, id) {
-                continue;
-            }
-            let Some(tl) = sec.terms_line else { continue };
-            let Some(pairs) = terms::parse_terms_line(rf.lines[tl].trim_end()) else {
-                continue;
-            };
-            let source = format!("{}: \"{}\"", rf.rel, sec.heading_text);
-            let mut seen: HashSet<String> = HashSet::new();
-            let mut stack: Vec<String> = pairs.into_iter().map(|(_, uuid)| uuid).collect();
-            while let Some(uuid) = stack.pop() {
-                if !seen.insert(uuid.clone()) {
-                    continue;
-                }
-                reach.entry(uuid.clone()).or_default().insert(source.clone());
-                let Some(t) = tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str()))
-                else {
-                    continue;
-                };
-                if let Some(more) = t.terms_line.as_deref().and_then(terms::parse_terms_line) {
-                    stack.extend(more.into_iter().map(|(_, u)| u));
-                }
-            }
+    for dep in state::dependent_entries(records, led, tf, false, false, None) {
+        let label = dep.source.label();
+        let ids: Vec<String> = dep.pairs.into_iter().map(|(_, uuid)| uuid).collect();
+        for uuid in state::transitive_term_ids(ids, tf, true) {
+            reach.entry(uuid).or_default().insert(label.clone());
         }
     }
     reach
@@ -327,7 +299,7 @@ enum EditImpact {
 /// The failure case of "Does check fail a terms file that differs from its
 /// latest approval?" (03b2853b A): compares every term a current decision
 /// reaches (`reachable_terms`) against its text in `old_tf` -- the terms
-/// file's latest approved snapshot (`state::load_terms_snapshot`), read by
+/// file's latest approved snapshot (`state::approved_terms`), read by
 /// the caller once and passed in here rather than reloaded per call.
 fn affected_by_edit(
     records: &[RecordFile],

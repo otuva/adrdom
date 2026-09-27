@@ -28,37 +28,46 @@ pub struct Refusal {
     pub message: String,
 }
 
-/// The strict terms.md gates (5): missing, present but unreadable/
-/// shape-invalid, or not approved, each refusing with the same message the
-/// caller would print. `rel` is the topic file's path, named in the
-/// not-approved message exactly as the caller already prints it. On
-/// success, the loaded, approved terms file is returned. Used by
-/// `do_approve_record` only -- `do_answer`/`do_refuse` use the more
-/// tolerant `terms_for_answer` instead (per "Does answer wait for terms
-/// approval?", cd450764 B).
-fn require_terms(root: &Path, led: &Ledger, rel: &str) -> Result<terms::TermsFile, String> {
+/// The missing/unreadable half of the terms.md gate, shared by
+/// `require_terms` and `terms_for_answer`: missing entirely, or present but
+/// a read/shape error, each refuses the same way regardless of which
+/// caller hit it. The next move is the agent's either way (agents edit
+/// `adrdom/terms.md`, per "ask's next step is right" -- there is no owner
+/// re-run that fixes a file only an edit can fix).
+fn load_terms_or_refuse(root: &Path) -> Result<terms::TermsFile, String> {
     match state::load_terms_checked(root) {
         TermsLoad::Missing => Err(msg::terms_missing()),
         TermsLoad::LoadError(e) => Err(msg::terms_load_error(
             &e,
-            Next::owner_runs("the same command again once adrdom/terms.md can be read"),
+            Next::agent("fixes adrdom/terms.md and retries"),
         )),
-        TermsLoad::Ok(tf) => {
-            if !tf.errors.is_empty() {
-                let out = tf
-                    .errors
-                    .iter()
-                    .map(|e| msg::terms_shape_error(e))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                return Err(out);
-            }
-            if !state::terms_approved(led, &tf) {
-                return Err(msg::terms_not_approved(rel));
-            }
-            Ok(tf)
-        }
+        TermsLoad::Ok(tf) => Ok(tf),
     }
+}
+
+/// The strict terms.md gates (5): missing, present but unreadable/
+/// shape-invalid, or not approved, each refusing with the same message the
+/// caller would print. `rel` is the topic file's path, named in the
+/// not-approved message exactly as the caller already prints it. On
+/// success, the loaded, approved terms file is returned. Used by `ask` and
+/// `do_approve_record` -- `do_answer`/`do_refuse` use the more tolerant
+/// `terms_for_answer` instead (per "Does answer wait for terms approval?",
+/// cd450764 B).
+pub fn require_terms(root: &Path, led: &Ledger, rel: &str) -> Result<terms::TermsFile, String> {
+    let tf = load_terms_or_refuse(root)?;
+    if !tf.errors.is_empty() {
+        let out = tf
+            .errors
+            .iter()
+            .map(|e| msg::terms_shape_error(e))
+            .collect::<Vec<_>>()
+            .join("\n");
+        return Err(out);
+    }
+    if !state::terms_approved(led, &tf) {
+        return Err(msg::terms_not_approved(rel));
+    }
+    Ok(tf)
 }
 
 /// The terms.md gate for `do_answer`/`do_refuse` (per "Does answer wait for
@@ -77,21 +86,13 @@ fn require_terms(root: &Path, led: &Ledger, rel: &str) -> Result<terms::TermsFil
 /// file has never been approved) refuses the same "not approved" way this
 /// always has.
 fn terms_for_answer(root: &Path, led: &Ledger, rel: &str) -> Result<terms::TermsFile, String> {
-    match state::load_terms_checked(root) {
-        TermsLoad::Missing => Err(msg::terms_missing()),
-        TermsLoad::LoadError(e) => Err(msg::terms_load_error(
-            &e,
-            Next::owner_runs("the same command again once adrdom/terms.md can be read"),
-        )),
-        TermsLoad::Ok(tf) => {
-            if state::terms_approved(led, &tf) {
-                return Ok(tf);
-            }
-            match state::load_terms_snapshot(root) {
-                Some(snapshot) => Ok(snapshot),
-                None => Err(msg::terms_not_approved(rel)),
-            }
-        }
+    let tf = load_terms_or_refuse(root)?;
+    if state::terms_approved(led, &tf) {
+        return Ok(tf);
+    }
+    match state::approved_terms(root, &repo::Source::WorkingTree) {
+        Some(snapshot) => Ok(snapshot),
+        None => Err(msg::terms_not_approved(rel)),
     }
 }
 
@@ -251,19 +252,13 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
         let Some(terms_line_idx) = sec.terms_line else {
             return Err(msg::no_terms_line(id));
         };
-        let Some(pairs) = terms::parse_terms_line(rf.lines[terms_line_idx].trim_end()) else {
-            return Err(msg::malformed_terms_line(id));
-        };
-        for (_, uuid) in &pairs {
-            match tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str())) {
-                None => {
-                    return Err(msg::terms_line_names_gone_term(id, uuid));
-                }
-                Some(t) if t.retired => {
-                    return Err(msg::terms_line_names_retired_term(id, &t.name));
-                }
-                _ => {}
-            }
+        let problems = terms::validate_pairs(rf.lines[terms_line_idx].trim_end(), &tf)
+            .map_err(|_| msg::malformed_terms_line(id))?;
+        if let Some(p) = problems.first() {
+            return Err(match &p.kind {
+                terms::ProblemKind::Gone => msg::terms_line_names_gone_term(id, &p.uuid),
+                terms::ProblemKind::Retired(name) => msg::terms_line_names_retired_term(id, name),
+            });
         }
         supersedes_val = sec.supersedes.clone();
         for old in &supersedes_val {
@@ -390,29 +385,6 @@ pub fn do_approve(root: &Path, file: &Path) -> Result<Outcome, String> {
     }
 }
 
-/// One dependent's pairs (`word=uuid`), together with a description of
-/// where they were carried, for approve's step 4.
-struct Dependent {
-    /// `<rel>: "<heading>"` for a decision, or `term "<name>"` for a term:
-    /// in both cases the recorded pairing, read from the dependent's own
-    /// `terms:` line exactly as it stood in the file before this approve,
-    /// never re-resolved from today's definition/section text.
-    source: String,
-    /// The dependent's own decision id when it is a decision (`Some`), so a
-    /// retired-term refusal can point at the exact question to supersede;
-    /// `None` for a term dependent, which has no id and nothing to
-    /// supersede.
-    id: Option<String>,
-    pairs: Vec<(String, String)>,
-    /// True for a terms-line/definition dependent, whose pair's word can
-    /// drift off a term when a name/alias moves elsewhere (checked below);
-    /// false for a `depends:`-line dependent, whose pair is an id read
-    /// straight from the depends entry, never a resolved word, so nothing
-    /// about it can "move" -- only the target's removal or retirement
-    /// (checked either way) applies to it.
-    check_word_drift: bool,
-}
-
 /// Every refusal `adrdom/terms.md` earns under steps 1, 3, 4 and 5 of
 /// `do_approve_terms` (shape errors, circular definitions, a dependent's
 /// pairing that no longer holds, banned words in the file's own text),
@@ -488,82 +460,21 @@ pub fn terms_refusals(
 
     // Every current decision's terms line, every current decision's
     // `depends:` line (once approved, an id -- possibly a term's), and
-    // every non-retired term's fresh definition pairs, is a dependent.
-    let mut dependents: Vec<Dependent> = Vec::new();
-    for rf in records {
-        let frel = &rf.rel;
-        for sec in &rf.sections {
-            let Some(id) = &sec.id else { continue };
-            if !state::is_current(led, id) {
-                continue;
-            }
-            let terms_line_pairs: Vec<(String, String)> = sec
-                .terms_line
-                .and_then(|tl| terms::parse_terms_line(rf.lines[tl].trim_end()))
-                .unwrap_or_default();
-            if !terms_line_pairs.is_empty() {
-                dependents.push(Dependent {
-                    source: format!("{}: \"{}\"", frel, sec.heading_text),
-                    id: Some(id.clone()),
-                    pairs: terms_line_pairs.clone(),
-                    check_word_drift: true,
-                });
-            }
-            // A `depends:` entry naming a term directly (by id, since a
-            // depends line holds only ids once its file has been
-            // approved): a current decision can stand on a term with no
-            // mention of it anywhere in its prose/terms line at all, so
-            // that terms line alone would miss this use entirely. Skipped
-            // when the terms line already carries the same id (its own
-            // check above already covers it) so retiring a term used both
-            // ways refuses with one message, not two.
-            for d in &sec.depends {
-                let record::Dep::Id { id: dep_id, .. } = d else { continue };
-                if terms_line_pairs.iter().any(|(_, u)| u == dep_id) {
-                    continue;
-                }
-                if !tf.terms.iter().any(|t| t.id.as_deref() == Some(dep_id.as_str())) {
-                    continue;
-                }
-                dependents.push(Dependent {
-                    source: format!("{}: \"{}\"", frel, sec.heading_text),
-                    id: Some(id.clone()),
-                    pairs: vec![(dep_id.clone(), dep_id.clone())],
-                    check_word_drift: false,
-                });
-            }
-        }
-    }
-    for t in &tf.terms {
-        if t.retired {
-            continue;
-        }
-        // The recorded pairing, exactly as decisions' frozen dependents are
-        // read: the term's own `terms:` line as it already stood in the
-        // file before this approve, not a fresh re-resolve (per "Does a
-        // retired term keep its words?"; terms-walk: "definitions are
-        // dependents for retire/move refusals"). A term with no terms line
-        // yet has no dependents.
-        let Some(pairs) = t.terms_line.as_deref().and_then(terms::parse_terms_line) else {
-            continue;
-        };
-        dependents.push(Dependent {
-            source: format!("term \"{}\"", t.name),
-            id: None,
-            pairs,
-            check_word_drift: true,
-        });
-    }
+    // every non-retired term's recorded pairing, is a dependent -- the
+    // widest reach of `state::dependent_entries`' five readers.
+    let dependents: Vec<state::DependentEntry> =
+        state::dependent_entries(records, led, tf, true, true, None);
 
     // Step 4: every pair on a dependent must still hold in the new file.
     // `lookup` answers "what does this exact word/phrase resolve to" for
     // every dependent pair, built once rather than once per pair.
     let lookup = terms::phrase_lookup(&tf.terms);
     for dep in &dependents {
+        let label = dep.source.label();
         for (word, uuid) in &dep.pairs {
             let Some(target) = tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str()))
             else {
-                refusals.push(msg::term_removed_but_carried(uuid, &dep.source));
+                refusals.push(msg::term_removed_but_carried(uuid, &label));
                 continue;
             };
             if target.retired {
@@ -573,18 +484,18 @@ pub fn terms_refusals(
                 // carries the retired word) is never superseded (per "Does
                 // a retired term keep its words?"): the agent rewords the
                 // definition and the owner re-approves.
-                let next = match &dep.id {
+                let next = match dep.source.decision_id() {
                     Some(id) => Next::agent(format!("supersedes {} with a new question first", id)),
                     None => msg::term_reword_and_approve(),
                 };
-                refusals.push(msg::term_retired_but_carried(&target.name, &dep.source, next));
+                refusals.push(msg::term_retired_but_carried(&target.name, &label, next));
                 continue;
             }
             // A `depends:`-line dependent's pair is an id read straight off
             // the entry, never a resolved word -- there is no word to
             // drift, only the target's removal/retirement above, so this
-            // check is skipped for it (`check_word_drift` is false).
-            if dep.check_word_drift {
+            // check is skipped for it (`from_word` is false).
+            if dep.from_word {
                 let still_resolves = lookup.get(word) == Some(uuid);
                 if !still_resolves {
                     // A decision dependent here is always current, since
@@ -602,14 +513,14 @@ pub fn terms_refusals(
                     // definition still carries the drifted word) is
                     // reworded by the agent and the owner re-approves, same
                     // as the retired case above.
-                    let next = match &dep.id {
+                    let next = match dep.source.decision_id() {
                         Some(id) => Next::agent(format!(
                             "restores the wording in adrdom/terms.md so \"{}\" still names \"{}\", or writes a question that supersedes {} with a new terms pairing",
                             word, target.name, id
                         )),
                         None => msg::term_reword_and_approve(),
                     };
-                    refusals.push(msg::word_moved_off_term(word, &target.name, &dep.source, next));
+                    refusals.push(msg::word_moved_off_term(word, &target.name, &label, next));
                 }
             }
         }
@@ -689,7 +600,7 @@ fn do_approve_terms(
     // The snapshot as it stood before this approve overwrites it, for the
     // same before/after compare -- read once, up front, before step 6's
     // write (see below) replaces it with this run's own content.
-    let prev_snapshot = state::load_terms_snapshot(root);
+    let prev_snapshot = state::approved_terms(root, &repo::Source::WorkingTree);
 
     // Step 2: mint ids in memory only; nothing is written to disk yet.
     let inserted = terms::mint_ids(&mut tf);
@@ -793,36 +704,21 @@ fn do_approve_terms(
     if let Some(prev_row) = &prev_terms_row {
         if let Some(old_tf) = &prev_snapshot {
             if terms::file_hash(old_tf) == prev_row.hash {
-                for t in &tf.terms {
-                    let Some(tid) = &t.id else { continue };
-                    let Some(old_t) = old_tf.terms.iter().find(|o| o.id.as_deref() == Some(tid.as_str()))
-                    else {
-                        continue;
-                    };
-                    if old_t.definition == t.definition {
-                        continue;
-                    }
-                    out.push(msg::term_definition_changed(&t.name));
-                    for rf in &records {
-                        for sec in &rf.sections {
-                            let Some(id) = &sec.id else { continue };
-                            if !state::is_current(led, id) {
-                                continue;
-                            }
-                            let Some(tl) = sec.terms_line else { continue };
-                            let pairs =
-                                terms::parse_terms_line(rf.lines[tl].trim_end()).unwrap_or_default();
-                            if pairs.iter().any(|(_, pid)| pid == tid) {
-                                out.push(msg::term_used_by_current(&rf.rel, &sec.heading_text));
-                            }
-                        }
-                    }
-                    for (i, t2) in tf.terms.iter().enumerate() {
-                        if t2.retired {
+                let deps: Vec<state::DependentEntry> =
+                    state::dependent_entries(&records, led, &tf, false, true, Some(&pairs_per_entry));
+                for change in state::definition_changes(&tf, old_tf) {
+                    out.push(msg::term_definition_changed(&change.name));
+                    for dep in &deps {
+                        if !dep.pairs.iter().any(|(_, pid)| pid == &change.id) {
                             continue;
                         }
-                        if pairs_per_entry[i].iter().any(|(_, pid)| pid == tid) {
-                            out.push(msg::term_used_by_term(&t2.name));
+                        match &dep.source {
+                            state::DependentSource::Decision { rel, heading, .. } => {
+                                out.push(msg::term_used_by_current(rel, heading));
+                            }
+                            state::DependentSource::Term { name } => {
+                                out.push(msg::term_used_by_term(name));
+                            }
                         }
                     }
                 }
@@ -1109,7 +1005,7 @@ fn do_approve_record(
     // unapproved terms.md mints nothing to disk) silently fails to resolve
     // and every depends entry naming it refuses "which is no term" instead
     // of the one clear "terms not approved" line.
-    let tf = require_terms(root, led, rel).map_err(|e| format!("approve: {}", e))?;
+    let tf = require_terms(root, led, rel).map_err(msg::approve_prefixed)?;
     let terms_list: &[terms::Term] = &tf.terms;
     // Built once per command run (not per depends entry): `resolve_dep`
     // used to call `terms::resolve_word`, which rebuilt this same map from

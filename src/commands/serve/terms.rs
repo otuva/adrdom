@@ -60,15 +60,6 @@ pub(super) fn render_terms(snap: &Snapshot, m: Option<&String>, token: &str) -> 
                 esc(&d.before_definition),
                 esc(&d.after_definition)
             ));
-            if d.before_aliases != d.after_aliases {
-                let before_aliases = d.before_aliases.join(", ");
-                let after_aliases = d.after_aliases.join(", ");
-                body.push_str(&format!(
-                    "<div class=\"row\"><span class=\"k\">aliases</span><span class=\"before\">{}</span><span class=\"k\">now</span><span>{}</span></div>\n",
-                    esc(&before_aliases),
-                    esc(&after_aliases)
-                ));
-            }
             if !d.dependents.is_empty() {
                 body.push_str(&format!(
                     "<p class=\"carried\">Carried by {}: {}</p>\n",

@@ -120,16 +120,16 @@ pub struct TermEntryView {
     pub dependents: usize,
 }
 
-/// A term whose definition or aliases differ from the last approved
-/// (HEAD) version of `adrdom/terms.md`, shown only while the working
-/// copy is unapproved.
+/// A term whose definition differs from the last approved copy
+/// (`state::approved_terms`) of `adrdom/terms.md`, shown only while the
+/// working copy is unapproved (per "What does a definition say?": the
+/// definition is what a decision's meaning rests on, so that -- not
+/// aliases -- is what this compares).
 pub struct TermDiffView {
     pub name: String,
     pub before_definition: String,
     pub after_definition: String,
-    pub before_aliases: Vec<String>,
-    pub after_aliases: Vec<String>,
-    /// "<path>: <heading>" for every current decision carrying this term.
+    /// "<path>: \"<heading>\"" for every current decision carrying this term.
     pub dependents: Vec<String>,
 }
 
@@ -564,36 +564,23 @@ fn build_file_view(
 /// "circular definition: a -> b -> a" (the cycle's names, in traversal
 /// order, closed by repeating the first at the end).
 fn format_cycle(names: &[String]) -> String {
-    let mut chain = names.to_vec();
-    if let Some(first) = names.first() {
-        chain.push(first.clone());
-    }
-    format!("circular definition: {}", chain.join(" -> "))
+    format!("circular definition: {}", crate::msg::cycle_chain(names))
 }
 
-/// Every current decision's terms-line pairing, id -> "<path>: <heading>"
-/// per decision that carries it (a decision counted once per term even if
-/// its line pairs the term through more than one word).
-fn dependents_by_entry(root: &Path, led: &Ledger) -> HashMap<String, Vec<String>> {
+/// Every current decision's terms-line pairing, term id -> its dependents'
+/// labels (a decision counted once per term even if its line pairs the
+/// term through more than one word). The narrowest reach of the five
+/// `state::dependent_entries` readers: decisions' own terms lines only, no
+/// `depends:` ids and no term-to-term pairing.
+fn dependents_by_entry(root: &Path, led: &Ledger, tf: &terms::TermsFile) -> HashMap<String, Vec<String>> {
+    let records = record::load_all(root);
     let mut dependents: HashMap<String, Vec<String>> = HashMap::new();
-    for f in repo::list_decision_files(root) {
-        let Ok(rf) = record::load(&f) else { continue };
-        let rel = state::rel_path(root, &rf.path);
-        for sec in &rf.sections {
-            let Some(id) = &sec.id else { continue };
-            if !state::is_current(led, id) {
-                continue;
-            }
-            let Some(tl) = sec.terms_line else { continue };
-            let pairs = terms::parse_terms_line(rf.lines[tl].trim_end()).unwrap_or_default();
-            let mut seen_here: HashSet<String> = HashSet::new();
-            for (_, tid) in pairs {
-                if seen_here.insert(tid.clone()) {
-                    dependents
-                        .entry(tid)
-                        .or_default()
-                        .push(format!("{}: {}", rel, sec.heading_text));
-                }
+    for dep in state::dependent_entries(&records, led, tf, false, false, None) {
+        let label = dep.source.label();
+        let mut seen_here: HashSet<String> = HashSet::new();
+        for (_, tid) in dep.pairs {
+            if seen_here.insert(tid.clone()) {
+                dependents.entry(tid).or_default().push(label.clone());
             }
         }
     }
@@ -601,10 +588,11 @@ fn dependents_by_entry(root: &Path, led: &Ledger) -> HashMap<String, Vec<String>
 }
 
 /// Terms, dependents-per-term, and (while unapproved) before/after diffs
-/// against the last approved (HEAD) version of `adrdom/terms.md` (7.9).
+/// against the last approved copy (`state::approved_terms`) of
+/// `adrdom/terms.md`.
 fn build_terms_view(root: &Path, led: &Ledger, tf: terms::TermsFile) -> TermsView {
     let approved = state::terms_approved(led, &tf);
-    let dependents = dependents_by_entry(root, led);
+    let dependents = dependents_by_entry(root, led, &tf);
 
     let mut errors = tf.errors.clone();
     for c in terms::cycles(&tf) {
@@ -630,39 +618,14 @@ fn build_terms_view(root: &Path, led: &Ledger, tf: terms::TermsFile) -> TermsVie
 
     let mut diffs: Vec<TermDiffView> = Vec::new();
     if !approved {
-        if let Some(latest) = led.latest_for_path("terms", "adrdom/terms.md") {
-            if let Some(head_content) = repo::git(root, &["show", "HEAD:adrdom/terms.md"]) {
-                let head_tf = terms::parse(&record::split_lines(&head_content));
-                if terms::file_hash(&head_tf) == latest.hash {
-                    for t in &tf.terms {
-                        let old =
-                            t.id.as_ref()
-                                .and_then(|id| {
-                                    head_tf
-                                        .terms
-                                        .iter()
-                                        .find(|o| o.id.as_deref() == Some(id.as_str()))
-                                })
-                                .or_else(|| head_tf.terms.iter().find(|o| o.name == t.name));
-                        let Some(old_t) = old else { continue };
-                        if old_t.definition == t.definition && old_t.aliases == t.aliases {
-                            continue;
-                        }
-                        diffs.push(TermDiffView {
-                            name: t.name.clone(),
-                            before_definition: old_t.definition.clone(),
-                            after_definition: t.definition.clone(),
-                            before_aliases: old_t.aliases.clone(),
-                            after_aliases: t.aliases.clone(),
-                            dependents: t
-                                .id
-                                .as_ref()
-                                .and_then(|id| dependents.get(id))
-                                .cloned()
-                                .unwrap_or_default(),
-                        });
-                    }
-                }
+        if let Some(old_tf) = state::approved_terms(root, &repo::Source::WorkingTree) {
+            for change in state::definition_changes(&tf, &old_tf) {
+                diffs.push(TermDiffView {
+                    name: change.name,
+                    before_definition: change.old_definition,
+                    after_definition: change.new_definition,
+                    dependents: dependents.get(&change.id).cloned().unwrap_or_default(),
+                });
             }
         }
     }
