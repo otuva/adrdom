@@ -120,19 +120,6 @@ pub struct TermEntryView {
     pub dependents: usize,
 }
 
-/// A term whose definition differs from the last approved copy
-/// (`state::approved_terms`) of `adrdom/terms.md`, shown only while the
-/// working copy is unapproved (per "What does a definition say?": the
-/// definition is what a decision's meaning rests on, so that -- not
-/// aliases -- is what this compares).
-pub struct TermDiffView {
-    pub name: String,
-    pub before_definition: String,
-    pub after_definition: String,
-    /// "<path>: \"<heading>\"" for every current decision carrying this term.
-    pub dependents: Vec<String>,
-}
-
 pub struct TermsView {
     pub path: String,
     pub approved: bool,
@@ -141,7 +128,6 @@ pub struct TermsView {
     /// a" line per cycle `terms::cycles` finds.
     pub errors: Vec<String>,
     pub entries: Vec<TermEntryView>,
-    pub diffs: Vec<TermDiffView>,
 }
 
 pub struct CheckReport {
@@ -587,9 +573,7 @@ fn dependents_by_entry(root: &Path, led: &Ledger, tf: &terms::TermsFile) -> Hash
     dependents
 }
 
-/// Terms, dependents-per-term, and (while unapproved) before/after diffs
-/// against the last approved copy (`state::approved_terms`) of
-/// `adrdom/terms.md`.
+/// Terms and dependents-per-term.
 fn build_terms_view(root: &Path, led: &Ledger, tf: terms::TermsFile) -> TermsView {
     let approved = state::terms_approved(led, &tf);
     let dependents = dependents_by_entry(root, led, &tf);
@@ -616,20 +600,6 @@ fn build_terms_view(root: &Path, led: &Ledger, tf: terms::TermsFile) -> TermsVie
         })
         .collect();
 
-    let mut diffs: Vec<TermDiffView> = Vec::new();
-    if !approved {
-        if let Some(old_tf) = state::approved_terms(root, &repo::Source::WorkingTree) {
-            for change in state::definition_changes(&tf, &old_tf) {
-                diffs.push(TermDiffView {
-                    name: change.name,
-                    before_definition: change.old_definition,
-                    after_definition: change.new_definition,
-                    dependents: dependents.get(&change.id).cloned().unwrap_or_default(),
-                });
-            }
-        }
-    }
-
     let count = tf.terms.len();
     TermsView {
         path: repo::TERMS_PATH.to_string(),
@@ -637,7 +607,6 @@ fn build_terms_view(root: &Path, led: &Ledger, tf: terms::TermsFile) -> TermsVie
         count,
         errors,
         entries,
-        diffs,
     }
 }
 

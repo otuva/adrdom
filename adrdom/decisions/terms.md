@@ -214,3 +214,5 @@ Standard: a single source of truth; a pending change is either approved or block
 - B) No: the tool keeps the approved text beside the ledger and works from it while the edit waits.
   Why: an unrelated terms edit never holds an answer or a commit.
   Costs: a second copy of the terms file, and the code that keeps it in step with the ledger.
+
+**Answer:** A

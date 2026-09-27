@@ -149,7 +149,7 @@ fn build(
         &raw_hashes,
     );
     push_failures(&mut failures, plan_failures);
-    let (terms_failures, terms_awaiting, terms_notes) = terms::check_terms(root, &records, &led, &source);
+    let (terms_failures, terms_notes) = terms::check_terms(root, &records, &led, &source);
     push_failures(&mut failures, terms_failures);
     let (test_failures, tested_count) = tests::check_tests(root, &records, &led, tests, &source);
     push_failures(&mut failures, test_failures);
@@ -175,9 +175,6 @@ fn build(
 
     if !awaiting.is_empty() {
         notes.push(msg::plan_awaiting(awaiting.len(), &awaiting.join(", ")));
-    }
-    if terms_awaiting {
-        notes.push(msg::terms_awaiting());
     }
     notes.extend(terms_notes);
     for d in done::check_done(&records, &led, &raw_hashes) {

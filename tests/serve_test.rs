@@ -672,8 +672,12 @@ id: 11111111-1111-1111-1111-111111111111\n\
 definition: A choice the owner answers in, once, in writing.\n\
 aliases: \n";
 
+// Per "Does the tool stop while the terms file waits for approval?"
+// (aa475aa3 A): the page shows the file's own current text plus a "waiting
+// for approval" note and the approve button, never a before/after diff --
+// there is no more approved snapshot on disk for it to diff against.
 #[test]
-fn terms_article_shows_before_after_when_unapproved() {
+fn terms_article_shows_waiting_for_approval_when_unapproved() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms = write_record(&dir, "adrdom/terms.md", WORDS_TERMS_MD);
@@ -687,8 +691,7 @@ fn terms_article_shows_before_after_when_unapproved() {
     let commit_out = run_git(&dir, &["commit", "-q", "-m", "approve terms v1"]);
     assert!(commit_out.status.success(), "{:?}", commit_out);
 
-    // Edit the definition without re-approving: HEAD still matches the
-    // last `terms` ledger row, so the page can diff against it.
+    // Edit the definition without re-approving.
     write_record(&dir, "adrdom/terms.md", WORDS_TERMS_MD_V2);
 
     let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
@@ -707,8 +710,13 @@ fn terms_article_shows_before_after_when_unapproved() {
     let resp = get(port, "/terms", Some(&cookie));
     assert_eq!(resp.status, 200, "body: {}", resp.body);
     assert!(
-        resp.body.contains("class=\"changed-box\""),
-        "changed-box missing: {}",
+        !resp.body.contains("class=\"changed-box\""),
+        "changed-box should be gone: {}",
+        resp.body
+    );
+    assert!(
+        resp.body.contains("waiting for approval"),
+        "waiting note missing: {}",
         resp.body
     );
     assert!(
@@ -716,15 +724,17 @@ fn terms_article_shows_before_after_when_unapproved() {
         "approve button missing: {}",
         resp.body
     );
+    // The page shows the file's own (unapproved, working-tree) text, not
+    // the last approved text.
     assert!(
-        resp.body.contains("A choice answered by the owner."),
-        "before text missing: {}",
+        !resp.body.contains("A choice answered by the owner."),
+        "should not show the old approved text: {}",
         resp.body
     );
     assert!(
         resp.body
             .contains("A choice the owner answers in, once, in writing."),
-        "after text missing: {}",
+        "current text missing: {}",
         resp.body
     );
 

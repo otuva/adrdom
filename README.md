@@ -41,12 +41,14 @@ runtime dependencies beyond `git` on `PATH`.
   question), a tier over the cap, a question standing on a refused question,
   a question left moot by an answer already given, a tier with a depends
   line into it that carries no answer set, a banned word, or a retired term.
-- `adr answer <id>@<version> <letter>` — owner-only. Answer a question by id
-  and letter; writes the `**Answer:**` line and an `answered` ledger row,
+- `adr answer <id>@<version> <letter>` — owner-only. Refuses while
+  `adrdom/terms.md` is unapproved; otherwise answers a question by id
+  and letter, writing the `**Answer:**` line and an `answered` ledger row,
   plus one `superseded` row per id named in the question's `supersedes:`
   line.
-- `adr answer <id>@<version> refuse` — owner-only. Refuse a question by id;
-  writes `**Answer:** refused` and a `refused` ledger row. A refused
+- `adr answer <id>@<version> refuse` — owner-only. Refuses while
+  `adrdom/terms.md` is unapproved; otherwise refuses a question by id,
+  writing `**Answer:** refused` and a `refused` ledger row. A refused
   question holds its tier until the owner approves a plan change.
 - `adr approve <file>` — owner-only. For a topic file: assign ids to any
   heading that has none, then approve its current plan and/or context (an
@@ -69,8 +71,10 @@ runtime dependencies beyond `git` on `PATH`.
   `127.0.0.1` (default port 7357), gated by a per-start token printed to
   stdout; shows status, open questions, decisions, and a `/terms` page
   listing every term, with forms to approve, answer, and unban.
-- `adr check [--staged] [--message <path>]` — run every governance check;
-  used by `.githooks/pre-commit` and `.githooks/commit-msg`.
+- `adr check [--staged] [--message <path>]` — run every governance check,
+  including failing outright while `adrdom/terms.md` differs from its
+  latest approval; used by `.githooks/pre-commit` and
+  `.githooks/commit-msg`.
 
 `adr answer`, `adr approve`, `adr unban`, `adr serve`, and `adr uninstall`
 refuse to run unless invoked interactively by a human (a real TTY on

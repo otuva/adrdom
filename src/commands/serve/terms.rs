@@ -1,4 +1,4 @@
-//! The `/terms` route: the terms list, filter box, and before/after diff.
+//! The `/terms` route: the terms list, filter box, and approval state.
 use super::html::{banner_html, esc, page, plural};
 use crate::view::{self, Snapshot};
 
@@ -23,8 +23,8 @@ pub(super) fn render_terms(snap: &Snapshot, m: Option<&String>, token: &str) -> 
 
     let unpaired = unpaired_count(t);
     let mut extra: Vec<String> = Vec::new();
-    if !t.approved && !t.diffs.is_empty() {
-        extra.push(format!("{} changed since approval", t.diffs.len()));
+    if !t.approved {
+        extra.push("waiting for approval".to_string());
     }
     if unpaired > 0 {
         extra.push(format!("{} paired by nothing", unpaired));
@@ -51,26 +51,6 @@ pub(super) fn render_terms(snap: &Snapshot, m: Option<&String>, token: &str) -> 
     body.push_str("</div>\n");
     body.push_str("</header>\n");
 
-    if !t.approved && !t.diffs.is_empty() {
-        body.push_str("<div class=\"changed-box\">\n<h2>Changed since approval</h2>\n");
-        for d in &t.diffs {
-            body.push_str(&format!(
-                "<div class=\"row\"><span class=\"k\">{}</span><span class=\"before\">{}</span><span class=\"k\">now</span><span>{}</span></div>\n",
-                esc(&d.name),
-                esc(&d.before_definition),
-                esc(&d.after_definition)
-            ));
-            if !d.dependents.is_empty() {
-                body.push_str(&format!(
-                    "<p class=\"carried\">Carried by {}: {}</p>\n",
-                    plural(d.dependents.len(), "current decision", "current decisions"),
-                    esc(&d.dependents.join(", "))
-                ));
-            }
-        }
-        body.push_str("</div>\n");
-    }
-
     if !t.errors.is_empty() {
         body.push_str("<ul class=\"failures\">\n");
         for e in &t.errors {
@@ -78,9 +58,6 @@ pub(super) fn render_terms(snap: &Snapshot, m: Option<&String>, token: &str) -> 
         }
         body.push_str("</ul>\n");
     }
-
-    let changed_names: std::collections::HashSet<&str> =
-        t.diffs.iter().map(|d| d.name.as_str()).collect();
 
     body.push_str("<ul class=\"terms-list\" id=\"terms\">\n");
     for e in &t.entries {
@@ -92,9 +69,6 @@ pub(super) fn render_terms(snap: &Snapshot, m: Option<&String>, token: &str) -> 
             esc(&data_k),
             esc(&e.name)
         ));
-        if changed_names.contains(e.name.as_str()) {
-            body.push_str("<span class=\"badge changed\">changed</span>");
-        }
         if e.retired {
             body.push_str("<span class=\"badge retired\">retired</span>");
         }

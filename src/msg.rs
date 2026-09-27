@@ -161,65 +161,14 @@ pub fn terms_not_approved(rel: &str) -> String {
     )
 }
 
-/// `adrdom/terms.md` differs from its latest approval, and that change
-/// reaches a current decision -- directly, or through another term's own
-/// definition (per "Does check fail a terms file that differs from its
-/// latest approval?", which supersedes "Does the owner approve the terms
-/// file as a whole?"): unlike `terms_awaiting`, this is a failure, since
-/// the one edit that moves an answered decision's meaning still stops the
-/// commit even though an unrelated draft edit no longer does.
-pub fn terms_definition_moved(terms: &str, decisions: &str) -> String {
+/// `adrdom/terms.md` exists and parses, but isn't approved at its current
+/// hash (per "Does the tool stop while the terms file waits for approval?",
+/// aa475aa3 A): `check`'s own report of the same fact `terms_not_approved`
+/// names from a dependent topic file -- this one names the file itself,
+/// since `check` judges it on its own, not on behalf of one dependent.
+pub fn terms_file_not_approved() -> String {
     refuse(
-        format!(
-            "adrdom/terms.md not approved: definition of {} changed since the latest approval, paired by {}",
-            terms, decisions
-        ),
-        Next::owner_runs("adr approve adrdom/terms.md"),
-    )
-}
-
-/// The approved snapshot (`adrdom/state/terms.approved.md`) is missing
-/// while at least one term some current decision reaches (directly, or
-/// through another term's own definition) can't be checked against its
-/// latest approved text at all: fails safe rather than assuming nothing
-/// moved (see `check::terms::EditImpact::SnapshotMissing`). Names the
-/// agent's move first (`adr install` backfills the snapshot when this file
-/// still matches its last approval -- a repo that approved before the
-/// snapshot mechanism existed never got one written) with the owner's
-/// re-approve as the fallback for when the file has actually moved since
-/// then and a fresh snapshot has to be re-established.
-pub fn terms_snapshot_missing() -> String {
-    refuse(
-        "adrdom/terms.md not approved: the approved copy is missing, so a paired definition's change can't be ruled out".to_string(),
-        Next::agent("runs: adr install, which restores the copy when this file still matches its last approval")
-            .and_owner_runs("adr approve adrdom/terms.md when it doesn't"),
-    )
-}
-
-/// A term some current decision reaches (directly, or through another
-/// term's own definition) is present in the current draft but absent from
-/// the approved snapshot entirely -- distinct from `terms_definition_moved`,
-/// whose paired term is present in both but whose definition text differs
-/// (03b2853b A; `affected_by_edit` used to fold this case into that one via
-/// `unwrap_or(true)`).
-pub fn terms_term_missing_from_approved_copy(terms: &str, decisions: &str) -> String {
-    refuse(
-        format!(
-            "adrdom/terms.md not approved: {} is not in the approved copy, paired by {}",
-            terms, decisions
-        ),
-        Next::owner_runs("adr approve adrdom/terms.md"),
-    )
-}
-
-/// The approved snapshot's own parsed hash no longer matches the ledger's
-/// latest `terms` row for `adrdom/terms.md`: the two are written together by
-/// `approve`, so this means the snapshot was edited directly (never an
-/// agent's or owner's move -- it lives under `adrdom/state/`) or otherwise
-/// fell out of sync with the ledger.
-pub fn terms_snapshot_mismatch() -> String {
-    refuse(
-        "adrdom/state/terms.approved.md does not match the ledger".to_string(),
+        "adrdom/terms.md not approved".to_string(),
         Next::owner_runs("adr approve adrdom/terms.md"),
     )
 }
@@ -1264,10 +1213,6 @@ pub fn plan_awaiting(count: usize, list: &str) -> String {
     format!("plan: {} file(s) awaiting approval: {}", count, list)
 }
 
-pub fn terms_awaiting() -> String {
-    "terms: awaiting approval".to_string()
-}
-
 pub fn done(rel: &str) -> String {
     format!("done: {}", rel)
 }
@@ -1302,18 +1247,6 @@ pub fn terms_already_approved() -> String {
 
 pub fn terms_approved_now() -> String {
     "approve: adrdom/terms.md: approved".to_string()
-}
-
-pub fn term_definition_changed(name: &str) -> String {
-    format!("approve: term \"{}\" definition changed", name)
-}
-
-pub fn term_used_by_current(rel: &str, heading: &str) -> String {
-    format!("  current: {}: {}", rel, heading)
-}
-
-pub fn term_used_by_term(name: &str) -> String {
-    format!("  term: {}", name)
 }
 
 pub fn plan_approved(rel: &str) -> String {
@@ -1354,15 +1287,6 @@ pub fn no_new_entries() -> String {
 
 pub fn banned_added(n: usize) -> String {
     format!("added {} entries", n)
-}
-
-/// `adr install` backfilled `adrdom/state/terms.approved.md` for a repo
-/// that approved `adrdom/terms.md` before the snapshot mechanism existed:
-/// the file on disk still matched its latest `terms` ledger row, so its
-/// own text is the approved content.
-pub fn terms_snapshot_backfilled() -> String {
-    "install: adrdom/state/terms.approved.md: restored from the approved adrdom/terms.md"
-        .to_string()
 }
 
 pub fn agents_md_created() -> String {
@@ -1506,9 +1430,7 @@ mod tests {
             terms_load_error(e, Next::agent("retries")),
             terms_shape_error(e),
             terms_not_approved("adrdom/decisions/x.md"),
-            terms_definition_moved("pass", "x.md: \"heading\""),
-            terms_snapshot_missing(),
-            terms_snapshot_mismatch(),
+            terms_file_not_approved(),
             circular_definition("a -> b -> a"),
             term_removed_but_carried("uuid-1", "term \"x\""),
             term_retired_but_carried("x", "term \"y\"", term_reword_and_approve()),
@@ -1555,7 +1477,6 @@ mod tests {
             answer_missing_version("id-1"),
             stale_version("heading"),
             invalid_version_format("Z0ZZZZZZ"),
-            terms_term_missing_from_approved_copy("pass", "x.md: \"heading\""),
             no_terms_line("id-1"),
             malformed_terms_line("id-1"),
             terms_line_names_gone_term("id-1", "uuid-1"),

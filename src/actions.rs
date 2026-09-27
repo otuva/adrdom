@@ -28,12 +28,12 @@ pub struct Refusal {
     pub message: String,
 }
 
-/// The missing/unreadable half of the terms.md gate, shared by
-/// `require_terms` and `terms_for_answer`: missing entirely, or present but
-/// a read/shape error, each refuses the same way regardless of which
-/// caller hit it. The next move is the agent's either way (agents edit
-/// `adrdom/terms.md`, per "ask's next step is right" -- there is no owner
-/// re-run that fixes a file only an edit can fix).
+/// The missing/unreadable half of the terms.md gate, shared by every
+/// `require_terms` caller: missing entirely, or present but a read/shape
+/// error, each refuses the same way regardless of which caller hit it. The
+/// next move is the agent's either way (agents edit `adrdom/terms.md`, per
+/// "ask's next step is right" -- there is no owner re-run that fixes a
+/// file only an edit can fix).
 fn load_terms_or_refuse(root: &Path) -> Result<terms::TermsFile, String> {
     match state::load_terms_checked(root) {
         TermsLoad::Missing => Err(msg::terms_missing()),
@@ -49,10 +49,9 @@ fn load_terms_or_refuse(root: &Path) -> Result<terms::TermsFile, String> {
 /// shape-invalid, or not approved, each refusing with the same message the
 /// caller would print. `rel` is the topic file's path, named in the
 /// not-approved message exactly as the caller already prints it. On
-/// success, the loaded, approved terms file is returned. Used by `ask` and
-/// `do_approve_record` -- `do_answer`/`do_refuse` use the more tolerant
-/// `terms_for_answer` instead (per "Does answer wait for terms approval?",
-/// cd450764 B).
+/// success, the loaded, approved terms file is returned. The one gate for
+/// `ask`, `answer`, `refuse`, and approve-of-a-topic-file (per "Does the
+/// tool stop while the terms file waits for approval?", aa475aa3 A).
 pub fn require_terms(root: &Path, led: &Ledger, rel: &str) -> Result<terms::TermsFile, String> {
     let tf = load_terms_or_refuse(root)?;
     if !tf.errors.is_empty() {
@@ -68,32 +67,6 @@ pub fn require_terms(root: &Path, led: &Ledger, rel: &str) -> Result<terms::Term
         return Err(msg::terms_not_approved(rel));
     }
     Ok(tf)
-}
-
-/// The terms.md gate for `do_answer`/`do_refuse` (per "Does answer wait for
-/// terms approval?", cd450764 B: no -- answer checks the question's terms
-/// line against the approved terms and proceeds). Missing entirely, or a
-/// read error, refuse exactly as `require_terms` does. Otherwise: when the
-/// file on disk still matches its latest approval, that file itself is
-/// returned, same as `require_terms` always did. When it doesn't -- a draft
-/// sitting on top of the last approval, which may carry its own shape
-/// errors (an added term with no id yet, say) that are none of this
-/// command's business -- the file itself is never consulted for validity;
-/// instead the last approved snapshot (`adrdom/state/terms.approved.md`,
-/// the exact text `approve` wrote) is returned, so the question's terms
-/// line is judged against what the owner actually approved, not against
-/// whatever the file happens to hold right now. No snapshot at all (the
-/// file has never been approved) refuses the same "not approved" way this
-/// always has.
-fn terms_for_answer(root: &Path, led: &Ledger, rel: &str) -> Result<terms::TermsFile, String> {
-    let tf = load_terms_or_refuse(root)?;
-    if state::terms_approved(led, &tf) {
-        return Ok(tf);
-    }
-    match state::approved_terms(root, &repo::Source::WorkingTree) {
-        Some(snapshot) => Ok(snapshot),
-        None => Err(msg::terms_not_approved(rel)),
-    }
 }
 
 /// Exactly one ASCII uppercase character; anything else (empty, more than
@@ -146,13 +119,11 @@ fn locate_asked(root: &Path, id: &str, version: &str) -> Result<Located, String>
     };
     let rel = rf.rel.clone();
 
-    // Refuse when terms.md is missing or unreadable; otherwise check the
-    // question's terms line against whichever text is currently approved
-    // (`terms_for_answer`, per cd450764 B) -- the file itself when it
-    // matches its latest approval, the snapshot when a draft sits on top of
-    // it. The returned terms file is kept for the terms-line validity check
-    // `do_answer` makes afterward.
-    let tf = terms_for_answer(root, &led, &rel)?;
+    // Refuse when terms.md is missing, unreadable, or not approved (per
+    // "Does the tool stop while the terms file waits for approval?",
+    // aa475aa3 A) -- the same gate `ask` applies. The returned terms file is
+    // kept for the terms-line validity check `do_answer` makes afterward.
+    let tf = require_terms(root, &led, &rel)?;
 
     let cur_hash;
     {
@@ -556,8 +527,8 @@ pub fn terms_refusals(
 }
 
 /// `adrdom/terms.md` (per "Does the owner approve the terms file as a
-/// whole?"): the seven steps below, in order, nothing written to disk
-/// before step 6 (a shape/cycle/dependent/banned refusal leaves the file
+/// whole?"): the six steps below, in order, nothing written to disk before
+/// step 6 (a shape/cycle/dependent/banned refusal leaves the file
 /// byte-identical to what was on disk before the call). Steps 1, 3, 4 and 5
 /// (plus the definition-length check above them) are `terms_refusals`,
 /// shared with `check`.
@@ -576,18 +547,9 @@ fn do_approve_terms(
         ))
     })?;
 
-    // Every topic file, parsed once here and reused both by
-    // `terms_refusals` (no re-reading them from disk itself) and by
-    // step 7's dependent report below.
+    // Every topic file, parsed once here and reused by `terms_refusals`
+    // (no re-reading them from disk itself).
     let records: Vec<RecordFile> = record::load_all(root);
-
-    // The pre-existing latest `terms` row, captured before anything below
-    // can change what "latest" means, for step 7's before/after compare.
-    let prev_terms_row = led.latest_for_path("terms", crate::repo::TERMS_PATH).cloned();
-    // The snapshot as it stood before this approve overwrites it, for the
-    // same before/after compare -- read once, up front, before step 6's
-    // write (see below) replaces it with this run's own content.
-    let prev_snapshot = state::approved_terms(root, &repo::Source::WorkingTree);
 
     // Step 2: mint ids in memory only; nothing is written to disk yet.
     let inserted = terms::mint_ids(&mut tf);
@@ -624,36 +586,9 @@ fn do_approve_terms(
         out.push(msg::terms_ids_filled(inserted));
     }
 
-    // The snapshot (`adrdom/state/terms.approved.md`), byte for byte what
-    // was just written to `adrdom/terms.md` above -- `check` reads this
-    // instead of walking `git log` to recover the file's latest approved
-    // text (per "Does check fail a terms file that differs from its latest
-    // approval?"). Written every successful approve, including the
-    // "already approved" no-new-row case, so a repo upgrading onto this
-    // mechanism backfills the snapshot the next time the owner approves
-    // rather than staying without one forever. Written only after the
-    // ledger row below is appended (when one is written at all): a failed
-    // append must never leave the snapshot claiming an approval the ledger
-    // doesn't yet have.
-    let write_snapshot = || -> Result<(), String> {
-        std::fs::write(
-            root.join(crate::repo::TERMS_APPROVED_PATH),
-            tf.lines.join("\n"),
-        )
-        .map_err(|e| {
-            msg::approve_prefixed(msg::write_failed(
-                crate::repo::TERMS_APPROVED_PATH,
-                e,
-                Next::owner_runs("adr approve adrdom/terms.md again"),
-            ))
-        })
-    };
-
     if state::terms_approved(led, &tf) {
-        // No new ledger row is written in this branch, so there is nothing
-        // for the snapshot to race: the file already matches the ledger's
-        // latest `terms` row, so it is safe to (re)write right away.
-        write_snapshot()?;
+        // No new ledger row is written in this branch: the file already
+        // matches the ledger's latest `terms` row.
         out.push(msg::terms_already_approved());
     } else {
         let row = ledger::Row {
@@ -671,37 +606,7 @@ fn do_approve_terms(
                 Next::owner_runs("adr approve adrdom/terms.md again"),
             ))
         })?;
-        write_snapshot()?;
         out.push(msg::terms_approved_now());
-    }
-
-    // Step 7: informational, never a refusal. Only when the pre-existing
-    // snapshot is genuinely the one just superseded (its hash matches the
-    // ledger row that was latest before this call) do we have anything
-    // trustworthy to diff definitions against.
-    if let Some(prev_row) = &prev_terms_row {
-        if let Some(old_tf) = &prev_snapshot {
-            if terms::file_hash(old_tf) == prev_row.hash {
-                let deps: Vec<state::DependentEntry> =
-                    state::dependent_entries(&records, led, &tf, false, true, Some(&pairs_per_entry));
-                for change in state::definition_changes(&tf, old_tf) {
-                    out.push(msg::term_definition_changed(&change.name));
-                    for dep in &deps {
-                        if !dep.pairs.iter().any(|(_, pid)| pid == &change.id) {
-                            continue;
-                        }
-                        match &dep.source {
-                            state::DependentSource::Decision { rel, heading, .. } => {
-                                out.push(msg::term_used_by_current(rel, heading));
-                            }
-                            state::DependentSource::Term { name } => {
-                                out.push(msg::term_used_by_term(name));
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 
     Ok(Outcome {
@@ -978,11 +883,11 @@ fn do_approve_record(
 
     // Refuse up front, before a single `depends:` entry is resolved, when
     // adrdom/terms.md is missing, shape-broken, or not yet approved: the
-    // same gate `ask` applies via `require_terms` (`do_answer`/`do_refuse`
-    // use `terms_for_answer`). Without this, a real term with no id minted
-    // yet (an unapproved terms.md mints nothing to disk) silently fails to
-    // resolve and every depends entry naming it refuses "which is no term"
-    // instead of the one clear "terms not approved" line.
+    // same gate `ask`/`answer`/`refuse` apply via `require_terms`. Without
+    // this, a real term with no id minted yet (an unapproved terms.md mints
+    // nothing to disk) silently fails to resolve and every depends entry
+    // naming it refuses "which is no term" instead of the one clear "terms
+    // not approved" line.
     let tf = require_terms(root, led, rel).map_err(msg::approve_prefixed)?;
     let terms_list: &[terms::Term] = &tf.terms;
     // Built once per command run (not per depends entry): `resolve_dep`

@@ -102,61 +102,6 @@ pub fn load_terms_via(root: &Path, source: &crate::repo::Source) -> Option<Terms
     Some(tf)
 }
 
-/// `adrdom/state/terms.approved.md`: the exact bytes `approve
-/// adrdom/terms.md` last wrote to `adrdom/terms.md`, snapshotted in the same
-/// run as its ledger event (`actions::do_approve_terms`). Every reader that
-/// needs the terms file's text as it stood at its latest approval (per
-/// "Does check fail a terms file that differs from its latest approval?")
-/// reads it through here -- unlike walking `git log`, this is a plain
-/// tracked file, so it survives a shallow checkout, a squash merge, or a
-/// rebase that a commit-by-commit history search would lose. `source`
-/// picks where the bytes come from (`Source::WorkingTree` for every caller
-/// but `check`, which passes whichever source it is judging, per "Does
-/// check at a commit read the staged files?"). `None` when the file has
-/// never been approved (no snapshot has ever been written) or can't be
-/// read this way.
-pub fn approved_terms(root: &Path, source: &crate::repo::Source) -> Option<TermsFile> {
-    let content = source.read(root, crate::repo::TERMS_APPROVED_PATH)?;
-    Some(terms::parse(&record::split_lines(&content)))
-}
-
-/// One term whose definition text in `current` differs from its text in
-/// `approved` -- matched by id only, never by name (per "What does a
-/// definition say?": the definition, not the aliases, is what a decision's
-/// meaning rests on). A term present in `current` but missing from
-/// `approved` entirely is not a "change" here and is left out; callers that
-/// need to tell the two apart (`check`'s `EditImpact::MissingFromApprovedCopy`)
-/// still make that distinction themselves.
-pub struct DefinitionChange {
-    pub id: String,
-    pub name: String,
-    pub old_definition: String,
-    pub new_definition: String,
-}
-
-/// Every term in `current` whose definition differs from its counterpart in
-/// `approved`, matched by id. Shared by `approve`'s step 7 report and the
-/// page's before/after diff.
-pub fn definition_changes(current: &TermsFile, approved: &TermsFile) -> Vec<DefinitionChange> {
-    let mut out = Vec::new();
-    for t in &current.terms {
-        let Some(tid) = &t.id else { continue };
-        let Some(old) = approved.terms.iter().find(|o| o.id.as_deref() == Some(tid.as_str())) else {
-            continue;
-        };
-        if old.definition == t.definition {
-            continue;
-        }
-        out.push(DefinitionChange {
-            id: tid.clone(),
-            name: t.name.clone(),
-            old_definition: old.definition.clone(),
-            new_definition: t.definition.clone(),
-        });
-    }
-    out
-}
-
 /// One current decision's, or one non-retired term's, declared use of a
 /// term: what to print (`label`, always the quoted form used everywhere a
 /// dependent is printed) and, for a decision, its own id -- named so a

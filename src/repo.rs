@@ -6,15 +6,13 @@ use std::process::Command;
 pub const ADRDOM_DIR: &str = "adrdom";
 /// Where topic files live, relative to the repo root.
 pub const DECISIONS_DIR: &str = "adrdom/decisions";
-/// Where the tool's own state (ledger, ban list, terms snapshot) lives,
-/// relative to the repo root.
+/// Where the tool's own state (ledger, ban list) lives, relative to the
+/// repo root.
 pub const STATE_DIR: &str = "adrdom/state";
 /// The append-only ledger of every act (`ask`, `answer`, `approve`, ...).
 pub const LEDGER_PATH: &str = "adrdom/state/ledger.tsv";
 /// The repo's own terms file.
 pub const TERMS_PATH: &str = "adrdom/terms.md";
-/// The exact bytes `adrdom/terms.md` held at its latest approval.
-pub const TERMS_APPROVED_PATH: &str = "adrdom/state/terms.approved.md";
 /// Where the hashed ban list lives, relative to the repo root: the one
 /// literal for this path, used by every site that reads or writes it
 /// (`ban`, `unban`, `ask`, `check --banned`, `terms_refusals`, `install`).

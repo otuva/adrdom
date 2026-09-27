@@ -200,3 +200,6 @@
 2026-09-26T18:33:14Z	answered	cd450764-bacd-4378-82ba-19edfc5a9edb	052fb50669ec3acdbd8d2145eba34e62aa2b6a9f0048860290e5cfe26cf057db	B	0.1.0
 2026-09-27T09:12:13Z	approved	-	d149c95e1e170a84c6b5dbf625c13daed797429c5774fec42b97fff01140ed48	adrdom/decisions/terms.md	0.2.0
 2026-09-27T09:15:58Z	asked	aa475aa3-05b2-429a-b33a-46b1dcb52049	fd3cc17f9c563de884694fe88abe20b427ba652659afbfc29a78d8ab828dc1ad	Does the tool stop while the terms file waits for approval?	0.2.0
+2026-09-27T09:18:17Z	answered	aa475aa3-05b2-429a-b33a-46b1dcb52049	fd3cc17f9c563de884694fe88abe20b427ba652659afbfc29a78d8ab828dc1ad	A	0.1.0
+2026-09-27T09:18:17Z	superseded	03b2853b-4379-4f4b-9cbf-ec6e06aad7fd	-	aa475aa3-05b2-429a-b33a-46b1dcb52049	0.1.0
+2026-09-27T09:18:17Z	superseded	cd450764-bacd-4378-82ba-19edfc5a9edb	-	aa475aa3-05b2-429a-b33a-46b1dcb52049	0.1.0

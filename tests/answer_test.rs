@@ -918,23 +918,19 @@ fn answer_refuses_when_terms_md_is_missing() {
     );
 }
 
-// adr: cd450764-bacd-4378-82ba-19edfc5a9edb
+// adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
 //
-// "Does answer wait for terms approval?" (cd450764 B): no -- once
-// terms.md has ever been approved for real (so a genuine
-// `adrdom/state/terms.approved.md` snapshot exists), a draft sitting on
-// top of that approval never blocks answer, even one with its own shape
-// error (an added term with no id yet, minted only by `approve`). This
-// used to be `answer_refuses_when_terms_md_has_a_shape_error`, which
-// showed the opposite of what the owner just decided.
+// "Does the tool stop while the terms file waits for approval?" (A): a
+// draft with its own shape error (an added term with no id yet, minted
+// only by `approve`) refuses answer the same as any other unapproved
+// terms.md -- `require_terms`'s shape gate catches it before approval is
+// even checked. Supersedes the cd450764 B behavior this test used to show
+// (answer falling back to the last approved snapshot and succeeding).
 #[test]
-fn answer_succeeds_when_terms_md_holds_an_unapproved_added_term_with_a_shape_error() {
+fn answer_refuses_when_terms_md_holds_an_unapproved_added_term_with_a_shape_error() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
-    // A real `adr approve adrdom/terms.md`, not the ledger-only
-    // `approve_minimal_terms` shortcut, so a genuine snapshot lands on
-    // disk for answer to fall back on below.
     let terms_path = write_record(
         &dir,
         "adrdom/terms.md",
@@ -959,17 +955,18 @@ fn answer_succeeds_when_terms_md_holds_an_unapproved_added_term_with_a_shape_err
     std::fs::write(&terms_path, &terms).unwrap();
 
     let out = adr_answer(&dir, &id, "A");
-    assert!(out.status.success(), "answer should have succeeded: {}", stderr(&out));
+    assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
+    assert!(stderr(&out).contains("missing id"), "{}", stderr(&out));
 }
 
-// adr: cd450764-bacd-4378-82ba-19edfc5a9edb
+// adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
 //
-// The exact case the owner's answer names: an asked question can be
-// answered, and another can be refused, while terms.md holds a term added
-// but never approved. This used to be `answer_refuses_when_terms_md_is_not_approved`,
-// which showed the opposite.
+// "Does the tool stop while the terms file waits for approval?" (A): an
+// asked question can be neither answered nor refused while terms.md holds
+// a term added but never approved -- supersedes the cd450764 B behavior
+// this test used to show (both succeeding regardless).
 #[test]
-fn answer_and_refuse_succeed_while_terms_md_holds_an_unapproved_added_term() {
+fn answer_and_refuse_stop_while_terms_md_holds_an_unapproved_added_term() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
@@ -994,32 +991,32 @@ fn answer_and_refuse_succeed_while_terms_md_holds_an_unapproved_added_term() {
 
     // A brand-new, unapproved term added on top of the real approval above.
     let mut terms = std::fs::read_to_string(&terms_path).unwrap();
-    terms.push_str("\n## widget\ndefinition: An unrelated fixture term.\naliases: \n");
+    terms.push_str(
+        "\n## widget\nid: 55555555-5555-5555-5555-555555555555\ndefinition: An unrelated fixture term.\naliases: \n",
+    );
     std::fs::write(&terms_path, &terms).unwrap();
 
     let answer_out = adr_answer(&dir, &id1, "A");
-    assert!(
-        answer_out.status.success(),
-        "answer should have succeeded: {}",
-        stderr(&answer_out)
-    );
+    assert!(!answer_out.status.success(), "answer should have refused: {}", stdout(&answer_out));
+    assert!(stderr(&answer_out).contains("terms not approved"), "{}", stderr(&answer_out));
+
     let refuse_out = adr_answer(&dir, &id2, "refuse");
-    assert!(
-        refuse_out.status.success(),
-        "refuse should have succeeded: {}",
-        stderr(&refuse_out)
-    );
+    assert!(!refuse_out.status.success(), "refuse should have refused: {}", stdout(&refuse_out));
+    assert!(stderr(&refuse_out).contains("terms not approved"), "{}", stderr(&refuse_out));
 }
 
-// adr: cd450764-bacd-4378-82ba-19edfc5a9edb
+// adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
 //
-// The other half of the owner's answer: a term retired in the terms
-// file's latest real approval still refuses a question paired against it,
-// even once a further, unapproved draft edit sits on top of that
-// retirement -- answer judges the question's terms line against the
-// approved snapshot, never the live file.
+// "Does the tool stop while the terms file waits for approval?" (A): a
+// term retired in the terms file's latest real approval, with a further,
+// unapproved draft edit sitting on top of that retirement, now refuses
+// answer with the generic "terms not approved" -- the hash-mismatch gate
+// fires before answer ever reaches the terms-line-specific retired check.
+// Supersedes the cd450764 B behavior this test used to show (answer
+// judging the terms line against the approved snapshot and refusing with
+// the more specific "names retired term" message).
 #[test]
-fn answer_refuses_a_terms_line_naming_a_term_retired_in_the_approved_terms() {
+fn answer_refuses_while_a_draft_sits_on_top_of_a_real_retirement() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
@@ -1051,21 +1048,18 @@ fn answer_refuses_a_terms_line_naming_a_term_retired_in_the_approved_terms() {
         stderr(&retire_out)
     );
 
-    // A further, unapproved draft edit on top of that retirement: the live
-    // file no longer matches its latest approval, so answer must fall
-    // back to the snapshot -- which still shows "authority" retired.
+    // A further, unapproved draft edit on top of that retirement.
     let mut draft = std::fs::read_to_string(&terms_path).unwrap();
-    draft.push_str("\n## widget\ndefinition: An unrelated fixture term.\naliases: \n");
+    draft.push_str(
+        "\n## widget\nid: 55555555-5555-5555-5555-555555555555\ndefinition: An unrelated fixture term.\naliases: \n",
+    );
     std::fs::write(&terms_path, &draft).unwrap();
 
     let out = adr_answer(&dir, &id, "A");
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
-        format!(
-            "answer: {}: terms line names retired term \"authority\"; agent re-asks",
-            id
-        )
+        "answer: adrdom/decisions/example.md: terms not approved; owner runs: adr approve adrdom/terms.md"
     );
 }
 

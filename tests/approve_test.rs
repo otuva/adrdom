@@ -975,8 +975,6 @@ id: 11111111-1111-1111-1111-111111111111\n\
 definition: A choice answered by the owner, in writing.\n\
 aliases: \n";
 
-// adr: 03b2853b-4379-4f4b-9cbf-ec6e06aad7fd
-//
 // `approve writes one event over its hash`: each distinct content of
 // adrdom/terms.md that `approve` accepts gets exactly one `terms` ledger
 // row, keyed to that content's hash -- the first approve writes row 1
@@ -1063,8 +1061,7 @@ fn approve_refuses_a_circular_definition() {
 
 // E1.1: two independent problems (a self-cycle on `alpha`, a missing
 // `aliases` field on `beta`) must both come back from one `approve` call,
-// not just the first found, and `check` (which never writes) must report
-// the same set.
+// not just the first found.
 const TERMS_CYCLE_AND_SHAPE_ERROR: &str = "# Terms\n\n\
 ## alpha\n\
 id: 11111111-1111-1111-1111-111111111111\n\
@@ -1075,8 +1072,17 @@ aliases: \n\
 id: 22222222-2222-2222-2222-222222222222\n\
 definition: Something else.\n";
 
+// adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
+//
+// `approve` (which reads the file directly) reports both problems; `check`
+// (per "Does the tool stop while the terms file waits for approval?", A)
+// never gets that far on a terms.md that was never approved in the first
+// place -- it fails outright on the one "not approved" gate instead,
+// leaving the cycle/shape detail to the real `approve` run that will
+// surface it. Supersedes the pre-aa475aa3 version of this test, which
+// expected `check` to report the same cycle/shape detail as `approve`.
 #[test]
-fn approve_and_check_report_a_cycle_and_a_shape_error_from_one_run() {
+fn approve_reports_a_cycle_and_a_shape_error_check_reports_not_approved() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_CYCLE_AND_SHAPE_ERROR);
@@ -1090,12 +1096,9 @@ fn approve_and_check_report_a_cycle_and_a_shape_error_from_one_run() {
     let check_out = adr(&dir, &["check"], &[], "");
     assert!(!check_out.status.success());
     let text = stdout(&check_out);
-    assert!(
-        text.contains("terms: adrdom/terms.md: circular definition: alpha -> alpha"),
-        "{}",
-        text
-    );
-    assert!(text.contains("terms: adrdom/terms.md: line 8: missing field \"aliases\""), "{}", text);
+    assert!(text.contains("terms: adrdom/terms.md not approved"), "{}", text);
+    assert!(text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
+    assert!(!text.contains("circular definition"), "{}", text);
 }
 
 #[test]
@@ -1611,99 +1614,6 @@ fn approve_refuses_two_current_entries_sharing_a_word() {
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(err.contains("word \"verdict\""), "{}", err);
-}
-
-// adr: 03b2853b-4379-4f4b-9cbf-ec6e06aad7fd
-//
-// `on a definition change approve prints the current decisions paired to
-// that term`: "decision"'s definition text changes here (same id, same
-// name), and the re-approve prints both "term \"decision\" definition
-// changed" and the current decision -- DECISION_RECORD_FOR_DEPENDENTS'
-// 1.1, answered and still current -- that pairs it, by heading text.
-#[test]
-fn approve_prints_dependents_when_a_definition_changes() {
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    let record = write_record(&dir, "adrdom/decisions/example.md", DECISION_RECORD_FOR_DEPENDENTS);
-    let terms = write_record(&dir, "adrdom/terms.md", TERMS_BASIC);
-    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
-        .status
-        .success());
-    // Commit the approved terms.md so HEAD matches the ledger's latest
-    // terms row: only then does approve have a trustworthy "before" text
-    // to diff definitions against.
-    // `--no-verify`: the repo's own pre-commit hook runs `adr check
-    // --staged`, which would fail here purely because the record hasn't
-    // been asked yet at this point in the test; that governance gate is
-    // not what this test is about.
-    run_git(&dir, &["add", "adrdom/terms.md"]);
-    run_git(&dir, &["commit", "--no-verify", "-q", "-m", "approve terms"]);
-
-    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
-        .status
-        .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
-    let content = std::fs::read_to_string(&record).unwrap();
-    let id = extract_ids(&content)[0].clone();
-    assert!(adr_answer(&dir, &id, "A").status.success());
-
-    let terms_v2 = "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice answered by the owner, revised.\naliases: \n";
-    std::fs::write(&terms, terms_v2).unwrap();
-    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
-    assert!(out.status.success(), "approve failed: {}", stderr(&out));
-    let text = stdout(&out);
-    assert!(text.contains("term \"decision\" definition changed"), "{}", text);
-    assert!(
-        text.contains("current: adrdom/decisions/example.md: 1.1 What is the decision?"),
-        "{}",
-        text
-    );
-}
-
-const TERMS_ENTRY_DEPENDENT_V1: &str = "# Terms\n\n\
-## decision\n\
-id: 11111111-1111-1111-1111-111111111111\n\
-definition: A choice answered by the owner.\n\
-aliases: \n\
-\n\
-## question\n\
-id: 22222222-2222-2222-2222-222222222222\n\
-definition: A thing bound to a decision.\n\
-aliases: \n";
-
-/// The spec's dependents (step 7) also include a non-retired term whose
-/// own terms line carries the changed term's id, not only current
-/// decisions. Here "question"'s definition pairs "decision", so approving a
-/// changed "decision" definition should print a `term: question` line.
-#[test]
-fn approve_prints_a_term_dependent_when_a_definition_changes() {
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    let terms = write_record(&dir, "adrdom/terms.md", TERMS_ENTRY_DEPENDENT_V1);
-    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
-        .status
-        .success());
-    // Commit the approved terms.md (with its machine-written "question"
-    // terms line intact) so HEAD matches the ledger's latest terms row.
-    run_git(&dir, &["add", "adrdom/terms.md"]);
-    run_git(&dir, &["commit", "--no-verify", "-q", "-m", "approve terms"]);
-
-    // Revise only "decision"'s definition text; leave "question"'s block
-    // (and its terms line) untouched, as an owner hand-edit would.
-    let content = std::fs::read_to_string(&terms).unwrap();
-    let terms_v2 = content.replace(
-        "definition: A choice answered by the owner.",
-        "definition: A choice answered by the owner, revised.",
-    );
-    std::fs::write(&terms, &terms_v2).unwrap();
-
-    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
-    assert!(out.status.success(), "approve failed: {}", stderr(&out));
-    let text = stdout(&out);
-    assert!(text.contains("term \"decision\" definition changed"), "{}", text);
-    assert!(text.contains("  term: question"), "{}", text);
 }
 
 const TERMS_CROSS_REF: &str = "# Terms\n\n\

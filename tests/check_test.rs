@@ -1311,6 +1311,11 @@ Standard: clear yes or no.\n\n\
 // staged reading, and circular definitions.
 // ---------------------------------------------------------------------
 
+// A shape-broken terms.md is also never approved (its hash can never match
+// a real `terms` ledger row), so `check` fails it the same way it fails any
+// other unapproved terms.md (per "Does the tool stop while the terms file
+// waits for approval?", aa475aa3 A) -- the shape detail itself only
+// surfaces from a real `adr approve adrdom/terms.md` run.
 #[test]
 fn check_fails_on_a_terms_file_shape_error() {
     let dir = init_repo();
@@ -1325,8 +1330,8 @@ fn check_fails_on_a_terms_file_shape_error() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let text = stdout(&out);
-    assert!(text.contains("terms: adrdom/terms.md:"), "{}", text);
-    assert!(text.contains("missing h1"), "{}", text);
+    assert!(text.contains("terms: adrdom/terms.md not approved"), "{}", text);
+    assert!(text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
 }
 
 #[test]
@@ -1360,16 +1365,15 @@ fn check_passes_when_terms_missing_and_no_records_exist() {
     assert!(!stdout(&out).contains("terms:"), "{}", stdout(&out));
 }
 
-// adr: 03b2853b-4379-4f4b-9cbf-ec6e06aad7fd
+// adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
 //
-// "Does check fail a terms file that differs from its latest approval?":
-// this record is never asked, so nothing current pairs "decision" to
-// anything -- an unapproved term nothing reaches is a draft like any
-// other, not a risk, and `check` passes with only a waiting note (name and
-// assertion updated from the pre-03b2853b version of this test, which
-// expected an outright failure here).
+// "Does the tool stop while the terms file waits for approval?" (A): an
+// unapproved terms.md fails outright even when nothing current pairs any
+// of its terms -- there is no "harmless draft" case any more, unlike the
+// pre-aa475aa3 version of this test, which expected a passing "waiting"
+// note here.
 #[test]
-fn check_passes_with_a_waiting_note_when_terms_unapproved_and_nothing_pairs_it() {
+fn check_fails_outright_when_terms_is_unapproved_even_if_nothing_pairs_it() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(
@@ -1385,26 +1389,29 @@ fn check_passes_with_a_waiting_note_when_terms_unapproved_and_nothing_pairs_it()
     // No `terms` ledger row: unapproved.
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(out.status.success(), "{}", stdout(&out));
-    assert!(stdout(&out).contains("terms: awaiting approval"), "{}", stdout(&out));
+    assert!(!out.status.success(), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains("terms: adrdom/terms.md not approved"),
+        "{}",
+        stdout(&out)
+    );
+    assert!(
+        stdout(&out).contains("owner runs: adr approve adrdom/terms.md"),
+        "{}",
+        stdout(&out)
+    );
 }
 
-// adr: 03b2853b-4379-4f4b-9cbf-ec6e06aad7fd
+// adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
 //
-// "Does check fail a terms file that differs from its latest approval?":
-// unlike the note above, 1.1 here is actually asked and answered
-// (`answer_one_question`), pairing "pass" to a current decision -- so once
-// `adrdom/terms.md` is hand-edited afterward, it is no longer a harmless
-// draft. `answer_one_question` approves terms.md only via a hand-written
-// ledger row, so no real `adrdom/state/terms.approved.md` snapshot ever
-// lands on disk; with a current decision reaching "pass" and no snapshot
-// to compare against, `check` fails safe ("the approved copy is missing")
-// rather than the "definition of ... changed" wording it would print with
-// a real snapshot on hand. `ask` keeps refusing outright while terms.md
-// waits, exactly as before this decision -- that gate never depended on
-// what is reachable.
+// "Does the tool stop while the terms file waits for approval?" (A): once
+// `adrdom/terms.md` is hand-edited on top of its latest approval, both
+// `check` and `ask` stop the same way regardless of whether anything
+// current reaches the edited term -- there is no separate "approved copy
+// is missing" case any more, since check no longer trusts anything but the
+// ledger's own hash.
 #[test]
-fn check_and_ask_fail_when_the_approved_snapshot_is_missing_after_a_terms_edit() {
+fn check_and_ask_fail_when_terms_is_edited_after_its_latest_approval() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let (record, id) = answer_one_question(&dir);
@@ -1419,9 +1426,12 @@ fn check_and_ask_fail_when_the_approved_snapshot_is_missing_after_a_terms_edit()
     let check_out = adr(&dir, &["check"], &[], "");
     assert!(!check_out.status.success());
     assert!(
-        stdout(&check_out).contains(
-            "terms: adrdom/terms.md not approved: the approved copy is missing, so a paired definition's change can't be ruled out; agent runs: adr install, which restores the copy when this file still matches its last approval, owner runs: adr approve adrdom/terms.md when it doesn't"
-        ),
+        stdout(&check_out).contains("terms: adrdom/terms.md not approved"),
+        "{}",
+        stdout(&check_out)
+    );
+    assert!(
+        stdout(&check_out).contains("owner runs: adr approve adrdom/terms.md"),
         "{}",
         stdout(&check_out)
     );
@@ -1662,42 +1672,62 @@ fn check_notes_a_term_paired_by_nothing() {
 const GOOD_TERMS: &str = "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice.\naliases: \n";
 const BAD_TERMS: &str = "not a terms file at all\n";
 
+// Per "Does the tool stop while the terms file waits for approval?"
+// (aa475aa3 A), a terms.md that differs from its latest approval is always
+// a failure now, so BAD_TERMS's unapproved hash mismatch, not a specific
+// shape message, is what this test reads as "the bad copy was seen" --
+// GOOD_TERMS is approved for real up front so the two sides genuinely
+// differ (approved vs not).
 #[test]
 fn check_staged_reads_terms_from_the_index() {
     // A bad staged copy is caught even though the working tree looks
-    // fine: `check --staged` must read the index, not the working file.
+    // approved: `check --staged` must read the index, not the working file.
     {
         let dir = init_repo();
         assert!(adr(&dir, &["install"], &[], "").status.success());
+        let terms_path = write_record(&dir, "adrdom/terms.md", GOOD_TERMS);
+        let approve_out = adr_owner(&dir, &["approve", terms_path.to_str().unwrap()], "");
+        assert!(approve_out.status.success(), "{}", stderr(&approve_out));
+        run_git(&dir, &["add", "-A"]);
+        run_git(&dir, &["commit", "--no-verify", "-q", "-m", "approve terms"]);
 
-        std::fs::write(dir.join("adrdom/terms.md"), BAD_TERMS).unwrap();
+        std::fs::write(&terms_path, BAD_TERMS).unwrap();
         run_git(&dir, &["add", "adrdom/terms.md"]);
-        // The working tree copy is fixed, but that fix was never staged.
-        std::fs::write(dir.join("adrdom/terms.md"), GOOD_TERMS).unwrap();
+        // The working tree copy is restored to the approved text, but that
+        // fix was never staged.
+        std::fs::write(&terms_path, GOOD_TERMS).unwrap();
 
         let out = adr(&dir, &["check", "--staged"], &[], "");
-        let text = stdout(&out);
-        assert!(text.contains("missing h1"), "{}", text);
+        assert!(!out.status.success(), "{}", stdout(&out));
+        assert!(
+            stdout(&out).contains("terms: adrdom/terms.md not approved"),
+            "{}",
+            stdout(&out)
+        );
     }
 
-    // A good copy already committed -- not part of this commit's staged
-    // diff at all -- is still read from the index: a dirty, unstaged
-    // working-tree edit must not fail `check --staged` for a commit that
-    // does not include it.
+    // A good, approved copy already committed -- not part of this commit's
+    // staged diff at all -- is still read from the index: a dirty,
+    // unstaged working-tree edit must not fail `check --staged` for a
+    // commit that does not include it.
     {
         let dir = init_repo();
         assert!(adr(&dir, &["install"], &[], "").status.success());
-
-        std::fs::write(dir.join("adrdom/terms.md"), GOOD_TERMS).unwrap();
-        run_git(&dir, &["add", "adrdom/terms.md"]);
+        let terms_path = write_record(&dir, "adrdom/terms.md", GOOD_TERMS);
+        let approve_out = adr_owner(&dir, &["approve", terms_path.to_str().unwrap()], "");
+        assert!(approve_out.status.success(), "{}", stderr(&approve_out));
+        run_git(&dir, &["add", "-A"]);
         run_git(&dir, &["commit", "--no-verify", "-q", "-m", "approve terms"]);
 
         // Dirty, unstaged edit: not part of any staged diff.
-        std::fs::write(dir.join("adrdom/terms.md"), BAD_TERMS).unwrap();
+        std::fs::write(&terms_path, BAD_TERMS).unwrap();
 
         let out = adr(&dir, &["check", "--staged"], &[], "");
-        let text = stdout(&out);
-        assert!(!text.contains("missing h1"), "{}", text);
+        assert!(
+            !stdout(&out).contains("terms: adrdom/terms.md not approved"),
+            "{}",
+            stdout(&out)
+        );
     }
 }
 
@@ -1858,6 +1888,14 @@ fn check_staged_reads_a_newly_staged_test_files_tie_from_the_index() {
 }
 
 // adr: fcc1c1ec-d8e8-428e-9731-9817cdeb8e76
+//
+// Per "Does the tool stop while the terms file waits for approval?"
+// (aa475aa3 A): `check` only ever reaches the cycle check once the file is
+// approved (a real `adr approve` would itself refuse to write a cycle, so
+// this is the defense-in-depth case -- a hand-written ledger row, standing
+// in for one written before cycle detection existed). Faking the approval
+// via `approve_terms_via_ledger`, matching this exact cyclic content, is
+// what still lets `check` reach it.
 #[test]
 fn check_fails_a_circular_definition() {
     let dir = init_repo();
@@ -1872,7 +1910,7 @@ aliases: \n\
 id: 22222222-2222-2222-2222-222222222222\n\
 definition: See alpha.\n\
 aliases: \n";
-    std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
+    approve_terms_via_ledger(&dir, terms_content);
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
@@ -1884,13 +1922,14 @@ aliases: \n";
     );
 }
 
-// E1.1: `terms::cycles` only follows an edge between terms that have an id,
-// so a terms file that has never been approved -- and so carries no `id:`
-// line at all -- used to show no cycle to `check`, only to `approve` (which
-// mints ids in memory before looking). Same fixture as
-// `check_fails_a_circular_definition`, with every `id:` line dropped.
+// A terms file with no `id:` line at all is never approved, whatever the
+// ledger says (per "Does the tool stop while the terms file waits for
+// approval?", aa475aa3 A): `check` fails it the same generic "not
+// approved" way as any other unapproved file, even when a ledger row
+// happens to match its exact (id-less) hash -- the missing-id gate fires
+// before a cycle would ever be looked for.
 #[test]
-fn check_fails_a_circular_definition_in_an_id_less_terms_file() {
+fn check_fails_an_id_less_terms_file_as_not_approved_even_with_a_matching_ledger_row() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms_content = "# Terms\n\n\
@@ -1901,16 +1940,13 @@ aliases: \n\
 ## beta\n\
 definition: See alpha.\n\
 aliases: \n";
-    std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
+    approve_terms_via_ledger(&dir, terms_content);
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let text = stdout(&out);
-    assert!(
-        text.contains("terms: adrdom/terms.md: circular definition: alpha -> beta -> alpha"),
-        "{}",
-        text
-    );
+    assert!(text.contains("terms: adrdom/terms.md not approved"), "{}", text);
+    assert!(!text.contains("circular definition"), "{}", text);
 }
 
 // adr: b871e776-2da5-4f1e-b4c4-fb8229657e25
