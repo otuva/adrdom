@@ -99,15 +99,19 @@ pub fn valid_topic_file_name(name: &str) -> bool {
 
 /// The other half of 76bd7ef0 A's naming rule ("is named by it"): the file
 /// stem a topic file with h1 text `topic` must carry -- the text lowercased,
-/// every run of characters that are not ASCII letters or digits turned into
-/// one hyphen, leading and trailing hyphens dropped. "Ban" gives "ban",
-/// "Two Words" gives "two-words". Check compares this to the file's own stem
-/// only once `valid_topic_file_name` has accepted the name.
+/// every run of characters that are not ASCII letters turned into one
+/// hyphen, leading and trailing hyphens dropped. "Ban" gives "ban", "Two
+/// Words" gives "two-words". A digit is dropped the same as any other
+/// non-letter (it never starts, joins, or ends a word here): the words this
+/// produces must stay nameable under `valid_topic_file_name`, which never
+/// accepts one, so "Rule 2" gives "rule", not "rule-2". Check compares this
+/// to the file's own stem only once `valid_topic_file_name` has accepted
+/// the name.
 pub fn expected_topic_file_stem(topic: &str) -> String {
     let mut out = String::new();
     let mut gap = false;
     for c in topic.chars() {
-        if c.is_ascii_alphanumeric() {
+        if c.is_ascii_alphabetic() {
             if gap && !out.is_empty() {
                 out.push('-');
             }
@@ -129,8 +133,25 @@ mod topic_name_tests {
         assert_eq!(expected_topic_file_stem("Ban"), "ban");
         assert_eq!(expected_topic_file_stem("Two Words"), "two-words");
         assert_eq!(expected_topic_file_stem("  A -- b_C  "), "a-b-c");
-        assert_eq!(expected_topic_file_stem("Topic 2"), "topic-2");
         assert_eq!(expected_topic_file_stem(""), "");
+    }
+
+    // A digit never reaches the derived stem: `valid_topic_file_name`
+    // (76bd7ef0 A) accepts no digit in a topic file name, so a stem that
+    // kept one could never be satisfied by any file name -- a topic
+    // titled with a digit anywhere (a word like "OAuth2", or a bare
+    // number like "Rule 2") still gets a nameable stem instead of a
+    // permanent check failure.
+    #[test]
+    fn expected_stem_drops_digits_so_the_result_stays_nameable() {
+        use super::valid_topic_file_name;
+
+        assert_eq!(expected_topic_file_stem("Rule 2"), "rule");
+        assert_eq!(expected_topic_file_stem("OAuth2"), "oauth");
+        assert!(valid_topic_file_name(&format!(
+            "{}.md",
+            expected_topic_file_stem("Rule 2")
+        )));
     }
 }
 
