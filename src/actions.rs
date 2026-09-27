@@ -452,11 +452,24 @@ struct Dependent {
 /// that same parse for its step-7 report; `check` passes the same
 /// `RecordFile`s it built for its own record checks. Neither re-reads a
 /// topic file from disk just to compute a dependent's terms line here.
+///
+/// `source` is who the ban list (step 5) is read through: `approve` passes
+/// `Source::WorkingTree` (it always reads `adrdom/terms.md` straight off
+/// disk), `check` passes whichever source it is judging (per "Does check at
+/// a commit read the staged files?"), so a staged edit to the ban list is
+/// judged, not whatever is left on disk. `scan_banned` is false only for
+/// `check`'s own call: `check_banned` already scans `adrdom/terms.md` as a
+/// tracked file, so step 5 would otherwise report the same hit twice, once
+/// prefixed `banned:` and once prefixed `terms:`; `approve` (the one caller
+/// that never runs `check_banned` itself) always passes `true`, since step 5
+/// is its only banned-word gate on the file.
 pub fn terms_refusals(
     root: &Path,
     records: &[RecordFile],
     tf: &terms::TermsFile,
     led: &Ledger,
+    source: &repo::Source,
+    scan_banned: bool,
 ) -> (Vec<String>, Vec<Vec<(String, String)>>) {
     let mut refusals: Vec<String> = Vec::new();
 
@@ -609,28 +622,21 @@ pub fn terms_refusals(
         }
     }
 
-    // Step 5: banned hits in terms.md's own text, from the single ban list.
-    let banned_path = root.join("adrdom/state/banned.sha256");
-    let banned_entries = crate::banned::read_entries(&banned_path);
-    if !banned_entries.is_empty() {
-        let hash_map: std::collections::HashMap<String, Option<String>> =
-            banned_entries.into_iter().collect();
-        for (i, line) in tf.lines.iter().enumerate() {
-            for tok in crate::banned::tokenize(line) {
-                let h = record::sha256_hex(&tok);
-                if let Some(uuid_opt) = hash_map.get(&h) {
-                    let suffix = uuid_opt
-                        .as_ref()
-                        .and_then(|u| {
-                            tf.terms
-                                .iter()
-                                .find(|t| t.id.as_deref() == Some(u.as_str()))
-                                .map(|t| t.name.clone())
-                        })
-                        .map(|n| format!(" (term {})", n))
-                        .unwrap_or_default();
-                    refusals.push(msg::terms_banned_word(i + 1, &suffix));
-                }
+    // Step 5: banned hits in terms.md's own text, from the single ban list
+    // (skipped for `check`'s call -- see `scan_banned` above -- since
+    // `check_banned` already scans this same file as a tracked file).
+    if scan_banned {
+        let banned_entries = crate::banned::read_entries_via(root, source);
+        if !banned_entries.is_empty() {
+            let hash_map: std::collections::HashMap<String, Option<String>> =
+                banned_entries.into_iter().collect();
+            let text = tf.lines.join("\n");
+            for hit in crate::banned::hits(&text, &hash_map, &tf.terms) {
+                let suffix = hit
+                    .term
+                    .map(|n| format!(" (term {})", n))
+                    .unwrap_or_default();
+                refusals.push(msg::terms_banned_word(hit.line, &suffix));
             }
         }
     }
@@ -697,7 +703,8 @@ fn do_approve_terms(
 
     // Steps 1 (shape, post-mint), 3 (cycles), 4 (dependents), 5 (banned):
     // every refusal, all at once.
-    let (refusals, pairs_per_entry) = terms_refusals(root, &records, &tf, led);
+    let (refusals, pairs_per_entry) =
+        terms_refusals(root, &records, &tf, led, &repo::Source::WorkingTree, true);
     if !refusals.is_empty() {
         let msg = refusals
             .iter()
@@ -1433,7 +1440,7 @@ fn rewrite_dep_entry(
 }
 
 pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
-    let banned_path = root.join("adrdom/state/banned.sha256");
+    let banned_path = root.join(crate::banned::BAN_LIST);
     let ledger_path = root.join("adrdom/state/ledger.tsv");
 
     let mut to_remove: HashSet<String> = HashSet::new();

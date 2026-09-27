@@ -1,3 +1,4 @@
+use crate::banned;
 use crate::commands::{deny_entries, OWNER_COMMANDS};
 use crate::ledger;
 use crate::msg::{self, Actor, Next};
@@ -71,7 +72,7 @@ pub fn run(claude: bool, codex: bool) -> i32 {
     }
 
     create_if_missing(&state.join("ledger.tsv"), "");
-    create_if_missing(&state.join("banned.sha256"), "");
+    create_if_missing(&root.join(banned::BAN_LIST), "");
 
     let mut messages = Vec::new();
 

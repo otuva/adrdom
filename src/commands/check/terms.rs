@@ -123,8 +123,11 @@ pub(super) fn check_terms(
     // and so has no ids on disk -- is caught the same way `approve` catches
     // it (`terms::cycles` and `terms::phrase_lookup` only see a term that
     // has an id).
+    // `scan_banned: false` -- `check_banned` already scans `adrdom/terms.md`
+    // as a tracked file, so step 5 would otherwise report the same hit
+    // twice (once prefixed `banned:`, once prefixed `terms:`).
     let minted = terms::minted_copy(&tf);
-    let (refusals, _pairs) = actions::terms_refusals(root, records, &minted, led);
+    let (refusals, _pairs) = actions::terms_refusals(root, records, &minted, led, source, false);
     for r in refusals {
         out.push(Failure {
             check: "terms".to_string(),

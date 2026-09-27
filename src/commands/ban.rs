@@ -5,7 +5,7 @@ use crate::msg::{self, Actor, Next};
 use crate::record;
 use crate::repo;
 use crate::state;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 
 /// Resolves `--term <name>` to that term's uuid, matched case-insensitively
@@ -38,7 +38,7 @@ pub fn run(term: Option<String>) -> i32 {
             return 1;
         }
     };
-    let banned_path = root.join("adrdom/state/banned.sha256");
+    let banned_path = root.join(banned::BAN_LIST);
     let ledger_path = root.join("adrdom/state/ledger.tsv");
 
     let uuid: Option<String> = match &term {
@@ -83,16 +83,17 @@ pub fn run(term: Option<String>) -> i32 {
     }
 
     // Refuse before writing anything if any new word is already in use
-    // anywhere the non-staged `check` scan looks.
-    let new_hash_set: HashSet<String> = new_hashes.iter().cloned().collect();
+    // anywhere the non-staged `check` scan looks. Flagged once per line,
+    // even when more than one of the new words lands on it.
+    let hash_map: HashMap<String, Option<String>> =
+        new_hashes.iter().map(|h| (h.clone(), None)).collect();
     let mut hits: Vec<String> = Vec::new();
     for (name, content) in collect_targets(&root, false, None) {
-        for (i, line) in content.lines().enumerate() {
-            if banned::tokenize(line)
-                .iter()
-                .any(|tok| new_hash_set.contains(&record::sha256_hex(tok)))
-            {
-                hits.push(format!("{}:{}", name, i + 1));
+        let mut last_line: Option<usize> = None;
+        for hit in banned::hits(&content, &hash_map, &[]) {
+            if last_line != Some(hit.line) {
+                hits.push(format!("{}:{}", name, hit.line));
+                last_line = Some(hit.line);
             }
         }
     }

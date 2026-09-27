@@ -11,32 +11,6 @@ use crate::terms;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-/// The first banned-word hit in `text` against the ban list, tokenizing
-/// each line the way `ban`/`check` do: the word as `banned::tokenize`
-/// returns it (already lowercased), and the term name when the hash's
-/// entry carries a uuid that still names a current term.
-fn first_banned_hit(
-    text: &str,
-    hash_map: &HashMap<String, Option<String>>,
-    terms_list: &[terms::Term],
-) -> Option<(String, Option<String>)> {
-    for line in text.split('\n') {
-        for tok in banned::tokenize(line) {
-            let h = record::sha256_hex(&tok);
-            if let Some(uuid_opt) = hash_map.get(&h) {
-                let name = uuid_opt.as_ref().and_then(|u| {
-                    terms_list
-                        .iter()
-                        .find(|t| t.id.as_deref() == Some(u.as_str()))
-                        .map(|t| t.name.clone())
-                });
-                return Some((tok, name));
-            }
-        }
-    }
-    None
-}
-
 pub fn run(record_path: PathBuf) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
@@ -304,7 +278,7 @@ pub fn run(record_path: PathBuf) -> i32 {
         }
     }
 
-    let banned_path = root.join("adrdom/state/banned.sha256");
+    let banned_path = root.join(banned::BAN_LIST);
     let banned_entries: HashMap<String, Option<String>> =
         banned::read_entries(&banned_path).into_iter().collect();
 
@@ -427,9 +401,10 @@ pub fn run(record_path: PathBuf) -> i32 {
         let text = state::section_text_excluding_terms_line(&rf.lines, sec);
 
         // Refusal 5: a banned word in the candidate's own text, from the
-        // single hash-based ban list scanner.
-        if let Some((_word, term_name)) = first_banned_hit(&text, &banned_entries, &terms_list) {
-            let suffix = term_name
+        // single hash-based ban list scanner. `ask` stops at the first hit.
+        if let Some(hit) = banned::hits(&text, &banned_entries, &terms_list).into_iter().next() {
+            let suffix = hit
+                .term
                 .map(|n| format!(" (term {})", n))
                 .unwrap_or_default();
             eprintln!(
