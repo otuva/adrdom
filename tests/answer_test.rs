@@ -1550,3 +1550,62 @@ fn answer_with_a_malformed_version_is_refused_with_its_own_message_and_writes_no
         ledger
     );
 }
+
+// adr: 11be073c-ce91-44d8-833a-ef0b5e0b1672
+//
+// "answer takes that version from the terminal ... and a version that no
+// longer matches refuses the answer": the version is only ever checked
+// once the letter itself parses. A letter that isn't a single uppercase
+// letter (a lowercase "a", or a multi-character "abc") is refused with
+// `invalid_letter` regardless of the version given, and writes nothing.
+#[test]
+fn answer_with_an_invalid_letter_is_refused_and_writes_nothing() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let ids = extract_ids(&content);
+    let question_id = &ids[0];
+
+    for bad_letter in ["a", "abc"] {
+        let arg = id_at_version(&dir, question_id);
+        let out = adr_owner(&dir, &["answer", &arg, bad_letter], "");
+        assert!(
+            !out.status.success(),
+            "an invalid letter must be refused: {}",
+            bad_letter
+        );
+        let err = stderr(&out);
+        assert!(
+            err.contains(&format!("invalid letter {}", bad_letter)),
+            "bad_letter={}: {}",
+            bad_letter,
+            err
+        );
+        assert!(
+            err.contains("owner runs: adr answer with a single uppercase letter, or \"refuse\""),
+            "bad_letter={}: {}",
+            bad_letter,
+            err
+        );
+    }
+
+    let after = std::fs::read_to_string(&record).unwrap();
+    assert!(
+        !after.contains("**Answer:**"),
+        "nothing should be written to the topic file: {}",
+        after
+    );
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(
+        !ledger.lines().any(|l| l.contains("\tanswered\t")),
+        "nothing should be written to the ledger: {}",
+        ledger
+    );
+}

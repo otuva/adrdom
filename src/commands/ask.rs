@@ -218,12 +218,17 @@ pub fn run(record_path: PathBuf) -> i32 {
             .any(|(i, _)| candidate[i] && rf.tier_of(i) == Some(n));
         if asking_in_open_tier {
             for (ti, target) in rf.sections.iter().enumerate() {
-                // Only the questions being asked this run: a set is
-                // frozen with the body it stands on, so an entry naming a
-                // sibling that was asked (or answered) earlier keeps
-                // whatever it froze then, and an answered sibling's
-                // dependents are never edited on its account.
-                if rf.tier_of(ti) != Some(n) || !candidate[ti] {
+                // Every open-tier target with no letter answer yet, not
+                // only the ones being newly asked or re-asked this run
+                // (per "Does a depends entry carry the answers it holds
+                // under?": the assumption is declared before the answer
+                // exists, so a target that was asked in an earlier run and
+                // is still open still demands a set on every entry naming
+                // it). A target that already carries a letter answer froze
+                // its dependents' sets when it was itself asked, so it is
+                // skipped here: an answered target's dependents are never
+                // edited on its account.
+                if rf.tier_of(ti) != Some(n) || !state::tier_unresolved(target) {
                     continue;
                 }
                 for (di, set) in rf.dependents_of(ti) {

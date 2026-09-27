@@ -308,6 +308,61 @@ fn post_answer_with_a_stale_version_is_refused_and_writes_nothing() {
     let _ = child.wait();
 }
 
+// adr: 11be073c-ce91-44d8-833a-ef0b5e0b1672
+//
+// The page runs the same letter parsing the CLI does (`actions::parse_letter`),
+// so a lowercase `answer=a` refuses with `invalid_letter`, the redirect
+// itself carrying the message in its `m` query param -- and, followed, the
+// page shows it. Nothing is written to the topic file or the ledger.
+#[test]
+fn post_answer_with_an_invalid_letter_redirects_with_invalid_letter_text() {
+    let dir = setup_repo_with_open_question();
+    let record_path = dir.join("adrdom/decisions/example.md");
+    let content = std::fs::read_to_string(&record_path).unwrap();
+    let ids = extract_ids(&content);
+    let question_id = ids[0].clone();
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let before_record = std::fs::read_to_string(&record_path).unwrap();
+    let before_ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+
+    let version = current_version(&dir, &question_id);
+    let form = format!("id={}&v={}&answer=a&t={}", question_id, version, token);
+    let resp = post(port, "/answer", Some(&cookie), &form);
+    assert_eq!(resp.status, 302, "body: {}", resp.body);
+    let location = header(&resp, "Location").expect("Location header");
+    assert!(
+        location.contains("invalid%20letter%20a"),
+        "redirect location does not carry the invalid_letter text: {}",
+        location
+    );
+
+    let followed = get(port, location, Some(&cookie));
+    assert_eq!(followed.status, 200, "body: {}", followed.body);
+    assert!(
+        followed.body.contains("invalid letter a"),
+        "page did not surface the invalid_letter stop: {}",
+        followed.body
+    );
+
+    let after_record = std::fs::read_to_string(&record_path).unwrap();
+    let after_ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert_eq!(
+        before_record, after_record,
+        "the page must write nothing to the topic file on an invalid letter"
+    );
+    assert_eq!(
+        before_ledger, after_ledger,
+        "the page must write nothing to the ledger on an invalid letter"
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
 #[test]
 fn post_answer_without_t_field_is_forbidden() {
     let dir = setup_repo_with_open_question();

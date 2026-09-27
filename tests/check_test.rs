@@ -302,6 +302,74 @@ fn check_banned_scanner_catches_word_in_quotes_and_backticks() {
     );
 }
 
+// adr: d8a9dfff-de89-442c-a08c-8276efab3f36
+//
+// "What does the ban scan read?": `adrdom/terms.md` is a tracked file like
+// any other, so a banned word inside its content is caught by the same
+// scan and reported once, prefixed `banned:` -- `check_terms`'s own
+// section/term terms-line reads never re-scan for banned words
+// (`scan_banned: false`), so there is no second, `terms:`-prefixed hit for
+// the same line. Both the default (working-tree) scan and `--staged`
+// catch it, once each.
+#[test]
+fn check_reports_a_banned_word_inside_terms_md_exactly_once() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let ban_out = adr(&dir, &["ban"], &[], "forbiddenword\n");
+    assert!(ban_out.status.success(), "ban failed: {}", stderr(&ban_out));
+
+    let terms_content = "# Terms\n\n## widget\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A gadget also known as forbiddenword.\naliases: \n";
+    std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
+    // Stage everything, not just terms.md: `--staged` reads the ban list
+    // itself (`adrdom/state/banned.sha256`, written by `adr ban` above)
+    // through the index too, so it has to be staged for the scan to have
+    // anything to compare against (mirrors `check_banned_default_and_message_modes_name_the_line`'s
+    // `git add -A` before its own `--message` scan).
+    run_git(&dir, &["add", "-A"]);
+
+    // Default (working-tree) scan.
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(
+        text.contains("banned: adrdom/terms.md:5: banned word"),
+        "{}",
+        text
+    );
+    // One failure line for the location, not one per category: count
+    // lines that name this location at all (the message itself says
+    // "banned word" twice -- once in "what happened", once in the next
+    // move -- so counting that phrase would over-count a single hit).
+    assert_eq!(
+        text.lines().filter(|l| l.contains("adrdom/terms.md:5:")).count(),
+        1,
+        "the hit must be reported exactly once, no terms:-prefixed duplicate: {}",
+        text
+    );
+    assert!(
+        !text.contains("terms: adrdom/terms.md:5: banned word"),
+        "check_terms must not re-scan and duplicate the banned-word hit: {}",
+        text
+    );
+
+    // `--staged`, with the same content staged.
+    let out2 = adr(&dir, &["check", "--staged"], &[], "");
+    assert!(!out2.status.success());
+    let text2 = stdout(&out2);
+    assert!(
+        text2.contains("banned: adrdom/terms.md:5: banned word"),
+        "{}",
+        text2
+    );
+    assert_eq!(
+        text2.lines().filter(|l| l.contains("adrdom/terms.md:5:")).count(),
+        1,
+        "the staged hit must also be reported exactly once: {}",
+        text2
+    );
+}
+
 // adr: 33a45b9e-8150-488e-be70-7ab2ca9adaa6
 //
 // core (0): "check fails while any current decision has no test tied to
@@ -1441,6 +1509,46 @@ fn check_and_ask_fail_when_terms_is_edited_after_its_latest_approval() {
     let err = stderr(&ask_out);
     assert!(err.contains("terms not approved"), "{}", err);
     assert!(err.contains("adr approve adrdom/terms.md"), "{}", err);
+}
+
+// adr: 6108b8b2-911e-443b-abe0-4c6f8b407384
+#[test]
+fn check_fails_an_asked_section_whose_terms_line_is_malformed() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let term_id = "55555555-5555-5555-5555-555555555555";
+    let terms_content = format!(
+        "# Terms\n\n## decision\nid: {}\ndefinition: A choice answered by the owner.\naliases: \n",
+        term_id
+    );
+    std::fs::write(dir.join("adrdom/terms.md"), &terms_content).unwrap();
+    approve_terms_via_ledger(&dir, &terms_content);
+
+    let question_id = "66666666-6666-6666-6666-666666666666";
+    // No `=uuid` after the word at all: `terms::parse_terms_line` fails to
+    // parse this as a `terms:` line, so `validate_pairs` returns
+    // `Err(Malformed)` rather than a per-uuid `Problem`.
+    let record_content = format!(
+        "# Example\n\n### 1.1 Some question?\n\nid: {}\n\nterms: foo\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
+        question_id
+    );
+    write_record(&dir, "adrdom/decisions/example.md", &record_content);
+    append_ledger_row(&dir, "asked", question_id, "deadbeef", "1.1 Some question?");
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(
+        text.contains("adrdom/decisions/example.md: 1.1 Some question?: malformed terms line"),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains("agent re-asks so the terms line is written correctly"),
+        "{}",
+        text
+    );
 }
 
 // adr: 6108b8b2-911e-443b-abe0-4c6f8b407384
