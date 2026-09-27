@@ -189,7 +189,10 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
 /// range, save the topic file, then append `rows` to the ledger -- with the
 /// same error handling and the same "try again" command shape either way,
 /// `retry_words` filling in the part that differs (`"A again"` for the
-/// letter, `"refuse again"` for a refusal).
+/// letter, `"refuse again"` for a refusal). Eight plain, once-each
+/// arguments over a params struct: the same shape `check_plan` accepts
+/// this same lint for.
+#[allow(clippy::too_many_arguments)]
 fn finish_answer(
     root: &Path,
     id: &str,
