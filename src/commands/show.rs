@@ -54,14 +54,13 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
     // full `all_records` the `record_arg` filter below is about to
     // consume, and kept for both the "from:" line under every decision and
     // the blame sections printed after every topic file's own.
-    let any_headings_all = blame::any_headings_with_id(&all_records);
-    let known_ids = blame::known_heading_ids(&any_headings_all);
-    let blame_files = blame::load_all(&root);
+    let (any_headings_all, known_ids) = blame::heading_ids(&all_records);
+    let (blame_files, unreadable_blame_files) = blame::load_all_with_errors(&root);
     // A record-id lookup independent of `record_arg`'s filter (`records`
     // below may end up holding only the one file asked for): blame
     // rendering always resolves against every topic file, not only the one
-    // being printed.
-    let blame_records: Vec<RecordFile> = record::load_all(&root);
+    // being printed. Cloned rather than loaded a second time off disk.
+    let blame_records: Vec<RecordFile> = all_records.clone();
 
     let mut records: Vec<RecordFile> = match &record_arg {
         Some(p) => {
@@ -90,8 +89,16 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
         );
     }
 
+    // Reuses `any_headings_all`/`known_ids` (built off `all_records`
+    // above, before the clone): `blame_records` is that same set of
+    // sections and ids, so the index would only be recomputed to the same
+    // content -- built once and passed to every file printed below,
+    // rather than rebuilt per file.
     for bf in &blame_files {
-        print_blame_file(bf, &led, &blame_records);
+        print_blame_file(bf, &led, &blame_records, &any_headings_all, &known_ids);
+    }
+    for (rel, e) in &unreadable_blame_files {
+        println!("# blame: {} (cannot be read: {})", rel, e);
     }
     0
 }
@@ -194,7 +201,13 @@ fn print_question(
 /// its range and reason, and every decision row with its range, the
 /// heading text, and the question's state -- the same state words
 /// `state_label` already gives a topic section.
-fn print_blame_file(bf: &blame::BlameFile, led: &Ledger, records: &[RecordFile]) {
+fn print_blame_file(
+    bf: &blame::BlameFile,
+    led: &Ledger,
+    records: &[RecordFile],
+    any_headings: &HashMap<String, Vec<(String, String)>>,
+    known_ids: &HashSet<String>,
+) {
     let Some(origin) = &bf.origin else {
         // A shape-broken blame file: `check` is where that is refused;
         // `show` just skips it rather than guessing at a header it never
@@ -216,8 +229,6 @@ fn print_blame_file(bf: &blame::BlameFile, led: &Ledger, records: &[RecordFile])
         println!("  {}", line.join(", "));
     }
 
-    let any_headings = blame::any_headings_with_id(records);
-    let known_ids = blame::known_heading_ids(&any_headings);
     for row in &bf.rows {
         let range = if row.start == row.end {
             row.start.to_string()

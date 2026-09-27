@@ -1327,11 +1327,20 @@ pub fn blame_row_missing_prose_stem(rel: &str, stem: &str) -> String {
     )
 }
 
+/// `path` had no trailing `?`, so it was read as a copy-of-origin path
+/// (per "What does a blame row name?"), not a heading -- the extra clause
+/// tells the agent that a heading is the other way to spell this row, in
+/// case the missing `?` was the actual mistake.
 pub fn blame_row_copy_path_missing(rel: &str, path: &str) -> String {
+    let hint = if path.trim_end().ends_with('?') {
+        ""
+    } else {
+        "; a question is named by its heading ending in ?"
+    };
     refuse(
         format!(
-            "{}: row's copy target \"{}\" is no file in the working tree and has no blame file of its own",
-            rel, path
+            "{}: row's copy target \"{}\" is no file in the working tree and has no blame file of its own{}",
+            rel, path, hint
         ),
         Next::agent("names an existing origin or rewrites the row"),
     )
@@ -1415,6 +1424,38 @@ pub fn blame_origin_missing(rel: &str, origin: &str, open: &[String]) -> String 
 /// gives an unapproved topic file).
 pub fn blame_awaiting(count: usize, list: &str) -> String {
     format!("blame: {} file(s) awaiting approval: {}", count, list)
+}
+
+/// A blame file itself (`rel`) could not be read as text at all (per "Does
+/// check hold a blame file to its origin?", 5fddeeb5 A: fail-open here
+/// means never silently skipping the file). Distinct from `blame_shape_error`
+/// -- there is no content to have a shape at all.
+pub fn blame_file_unreadable(rel: &str) -> String {
+    refuse(
+        format!("{}: cannot be read as text", rel),
+        Next::agent("fixes the file so it can be read as text (e.g. its encoding)"),
+    )
+}
+
+/// `git hash-object --stdin` itself failed on `origin`'s current content
+/// (5fddeeb5 A: the blob comparison must fail closed, never silently pass
+/// when git could not be asked at all).
+pub fn blame_hash_failed(rel: &str, origin: &str) -> String {
+    refuse(
+        format!("{}: git could not hash the current content of {}", rel, origin),
+        Next::agent(format!("retries; git must be able to read and hash {}", origin)),
+    )
+}
+
+/// `origin` sits at its path (per `Source::exists`) but its content could
+/// not be read as text (4bb5ef1b A: distinct from the origin being
+/// missing outright -- a present, unreadable origin is its own failure,
+/// never routed through the missing-origin branch).
+pub fn blame_origin_unreadable(rel: &str, origin: &str) -> String {
+    refuse(
+        format!("{}: origin {} exists but cannot be read as text", rel, origin),
+        Next::agent(format!("fixes {} so it can be read as text (e.g. its encoding)", origin)),
+    )
 }
 
 // --- serve/mod.rs ------------------------------------------------------
@@ -1799,6 +1840,9 @@ mod tests {
             blame_blob_mismatch("adrdom/blame/x.md", "docs/x.md"),
             blame_origin_missing("adrdom/blame/x.md", "docs/x.md", &["Does X?".to_string()]),
             blame_bad_origin_path("adrdom/blame/x.md", "adrdom/blame/notes.md"),
+            blame_file_unreadable("adrdom/blame/x.md"),
+            blame_hash_failed("adrdom/blame/x.md", "docs/x.md"),
+            blame_origin_unreadable("adrdom/blame/x.md", "docs/x.md"),
         ];
         for o in &outputs {
             assert!(

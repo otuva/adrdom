@@ -362,3 +362,32 @@ fn a_copy_of_path_under_adrdom_refuses_with_the_shape_wording() {
     );
     assert_eq!(blame_row_count(&dir), 0);
 }
+
+// --- fail-open: a present origin that cannot be read never falls back to
+// the object store ----------------------------------------------------------
+//
+// adr: 34f0202a-0be4-4049-94de-d3886f4f8ffc
+//
+// A present origin that fails to read as text (non-UTF-8, here) refuses
+// outright: it must never be treated the same as a gone origin, which
+// would fall back to `git cat-file` and silently pass on stale content.
+#[test]
+fn a_present_non_utf8_origin_refuses_and_writes_nothing() {
+    let (dir, _id1, _id2) = setup();
+    std::fs::create_dir_all(dir.join("docs")).unwrap();
+    std::fs::write(dir.join("docs/binary.md"), [0x66, 0x6f, 0xff, 0xfe, 0x0a]).unwrap();
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/binary.md",
+        "docs/binary.md",
+        "0".repeat(40).as_str(),
+        "1-1\tdropped: dead\n",
+    );
+    let before = std::fs::read_to_string(&path).unwrap();
+
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(!out.status.success());
+    assert!(stderr(&out).contains("cannot read"), "{}", stderr(&out));
+    assert_eq!(blame_row_count(&dir), 0);
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
+}

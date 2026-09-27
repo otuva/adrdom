@@ -263,3 +263,68 @@ fn check_prints_the_shape_failure_not_missing_origin_for_a_directory() {
     assert!(text.contains("is not a regular file outside adrdom"), "{}", text);
     assert!(!text.contains("is missing"), "{}", text);
 }
+
+// --- fail-open: check must never silently skip or pass -------------------
+
+// adr: 5fddeeb5-cf54-4550-a701-dd9e4a6a81d6
+//
+// "check holds a blame file to its origin": a blame file whose own content
+// cannot be read as text is a named failure, never silently skipped from
+// the listing.
+#[test]
+fn check_fails_naming_a_blame_file_that_cannot_be_read() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    std::fs::create_dir_all(dir.join("adrdom/blame")).unwrap();
+    std::fs::write(dir.join("adrdom/blame/binary.md"), [0x66, 0x6f, 0xff, 0xfe, 0x0a]).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(text.contains("blame:"), "{}", text);
+    assert!(text.contains("adrdom/blame/binary.md"), "{}", text);
+    assert!(text.contains("cannot be read"), "{}", text);
+}
+
+// adr: 4bb5ef1b-da16-4206-a7d2-c7380c36a4cc
+//
+// A truly missing origin (nothing at all at the path) still takes the
+// missing-origin branch, not the new unreadable-origin one -- pinning the
+// `Source::exists` split this fix introduced.
+#[test]
+fn check_still_takes_the_missing_branch_for_a_truly_gone_origin() {
+    let (dir, _id1, _id2) = blame_setup();
+    let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
+    let rows = "1-1\tdecision: Does this also pass?\n2-2\tdropped: dead\n";
+    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+
+    std::fs::remove_file(dir.join("docs/x.md")).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(text.contains("is missing"), "{}", text);
+    assert!(!text.contains("cannot be read"), "{}", text);
+}
+
+// adr: 4bb5ef1b-da16-4206-a7d2-c7380c36a4cc
+//
+// A present-but-unreadable origin (non-UTF-8) is its own failure, never
+// routed through the missing-origin branch: a present file is not "gone".
+#[test]
+fn check_fails_a_present_unreadable_origin_as_its_own_failure() {
+    let (dir, _id1, _id2) = blame_setup();
+    std::fs::create_dir_all(dir.join("docs")).unwrap();
+    std::fs::write(dir.join("docs/binary.md"), [0x66, 0x6f, 0xff, 0xfe, 0x0a]).unwrap();
+    let rows = "1-1\tdropped: dead\n";
+    write_blame_file(&dir, "adrdom/blame/binary.md", "docs/binary.md", "0".repeat(40).as_str(), rows);
+    // Never approved.
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(text.contains("exists but cannot be read"), "{}", text);
+    assert!(!text.contains("is missing"), "{}", text);
+}

@@ -45,8 +45,10 @@ pub struct BlameFile {
     pub shape_errors: Vec<String>,
 }
 
-fn is_hex40(s: &str) -> bool {
-    s.len() == 40 && s.chars().all(|c| c.is_ascii_hexdigit())
+/// A git object id: 40 hex characters (sha1) or 64 (sha256, per a
+/// `--object-format=sha256` repository).
+fn is_hex_oid(s: &str) -> bool {
+    (s.len() == 40 || s.len() == 64) && s.chars().all(|c| c.is_ascii_hexdigit())
 }
 
 /// `"<start>-<end>\t<destination>"`: `None` when the line doesn't have
@@ -67,7 +69,7 @@ fn parse_row(line: &str) -> Option<(usize, usize, String)> {
 }
 
 /// Parses a blame file's fixed shape (per "What does a blame file hold?"):
-/// `origin: <path>` on line 1, `blob: <40 hex>` on line 2, a blank line on
+/// `origin: <path>` on line 1, `blob: <40 or 64 hex>` on line 2, a blank line on
 /// line 3, then one row per non-blank line after that. Anything else is a
 /// shape error, collected here rather than returned at the first, the same
 /// way `terms::parse`/`record::build` collect every shape error at once.
@@ -83,9 +85,9 @@ pub fn parse(path: PathBuf, rel: String, lines: Vec<String>) -> BlameFile {
     };
 
     let blob = match lines.get(1).and_then(|l| l.strip_prefix("blob: ")) {
-        Some(v) if is_hex40(v.trim()) => Some(v.trim().to_string()),
+        Some(v) if is_hex_oid(v.trim()) => Some(v.trim().to_string()),
         _ => {
-            errors.push("line 2: missing \"blob: <40 hex>\"".to_string());
+            errors.push("line 2: missing \"blob: <40 or 64 hex>\"".to_string());
             None
         }
     };
@@ -189,6 +191,19 @@ pub fn coverage_errors(rows: &[Row], n: usize) -> (Vec<BeyondError>, Vec<GapErro
 
 // --- destination resolution -------------------------------------------------
 
+// The closed set's own prefixes (per "What does a blame row name?",
+// 38216d39 A): the one table both `resolve_destination` (parsing a row)
+// and `classify`/`Kind` (a row's coarse count, run over text that may
+// still be a draft) read from, so the two never drift into naming the
+// closed set differently.
+const DECISION_PREFIX: &str = "decision: ";
+const TERM_PREFIX: &str = "term: ";
+const PROSE_PREFIX: &str = "prose: ";
+const DROPPED_PREFIX: &str = "dropped: ";
+const DROPPED_DEAD: &str = "dead";
+const DROPPED_DETAIL: &str = "detail";
+const COPY_OF_PREFIX: &str = "copy of ";
+
 /// What one row's destination resolves to (per "What does a blame row
 /// name?", 38216d39 A): the canonical form `approve` writes back, holding
 /// an id wherever the closed set names one.
@@ -206,13 +221,28 @@ impl Resolved {
     /// The canonical text `approve` writes back after the tab.
     pub fn canonical(&self) -> String {
         match self {
-            Resolved::Decision(id) => format!("decision: {}", id),
-            Resolved::Term(id) => format!("term: {}", id),
-            Resolved::Prose(stem) => format!("prose: {}", stem),
-            Resolved::DroppedDead => "dropped: dead".to_string(),
-            Resolved::DroppedDetail => "dropped: detail".to_string(),
-            Resolved::DroppedCopyDecision(id) => format!("dropped: copy of {}", id),
-            Resolved::DroppedCopyOrigin(path) => format!("dropped: copy of {}", path),
+            Resolved::Decision(id) => format!("{}{}", DECISION_PREFIX, id),
+            Resolved::Term(id) => format!("{}{}", TERM_PREFIX, id),
+            Resolved::Prose(stem) => format!("{}{}", PROSE_PREFIX, stem),
+            Resolved::DroppedDead => format!("{}{}", DROPPED_PREFIX, DROPPED_DEAD),
+            Resolved::DroppedDetail => format!("{}{}", DROPPED_PREFIX, DROPPED_DETAIL),
+            Resolved::DroppedCopyDecision(id) => format!("{}{}{}", DROPPED_PREFIX, COPY_OF_PREFIX, id),
+            Resolved::DroppedCopyOrigin(path) => format!("{}{}{}", DROPPED_PREFIX, COPY_OF_PREFIX, path),
+        }
+    }
+
+    /// The `Kind` a resolved row counts as -- `classify` reaches the same
+    /// answer from raw text, since a row may still be a draft (unresolved
+    /// words) when `show` counts it, but the two share one meaning of
+    /// "what kind is this" through the prefixes above.
+    pub fn kind(&self) -> Kind {
+        match self {
+            Resolved::Decision(_) => Kind::Decision,
+            Resolved::Term(_) => Kind::Term,
+            Resolved::Prose(_) => Kind::Prose,
+            Resolved::DroppedDead => Kind::DroppedDead,
+            Resolved::DroppedDetail => Kind::DroppedDetail,
+            Resolved::DroppedCopyDecision(_) | Resolved::DroppedCopyOrigin(_) => Kind::DroppedCopy,
         }
     }
 }
@@ -268,24 +298,26 @@ pub struct ResolveCtx<'a> {
 
 /// Every heading text carrying an id, anywhere, any state -- `decision:`'s
 /// own index (wider than `depends::cross_file_heading_index`, which only
-/// counts current decisions).
+/// counts current decisions): the same traversal, `None` filter.
 pub fn any_headings_with_id(records: &[RecordFile]) -> HashMap<String, Vec<(String, String)>> {
-    let mut out: HashMap<String, Vec<(String, String)>> = HashMap::new();
-    for rf in records {
-        for sec in &rf.sections {
-            let Some(id) = &sec.id else { continue };
-            out.entry(sec.heading_text.trim().to_string())
-                .or_default()
-                .push((rf.rel.clone(), id.clone()));
-        }
-    }
-    out
+    crate::depends::heading_index(records, None)
 }
 
 /// Every id from `any_headings_with_id`'s own values, flattened -- what a
 /// `decision:` destination already in uuid form is checked against.
 pub fn known_heading_ids(index: &HashMap<String, Vec<(String, String)>>) -> HashSet<String> {
     index.values().flatten().map(|(_, id)| id.clone()).collect()
+}
+
+/// `any_headings_with_id(records)` paired with `known_heading_ids` of it:
+/// every caller that needs one needs the other too (`ResolveCtx`,
+/// `open_decision_rows`, `show`'s rendering), so this is the one place
+/// both are built from a records slice, rather than two separate calls
+/// repeated at each site.
+pub fn heading_ids(records: &[RecordFile]) -> (HashMap<String, Vec<(String, String)>>, HashSet<String>) {
+    let any_headings = any_headings_with_id(records);
+    let known_ids = known_heading_ids(&any_headings);
+    (any_headings, known_ids)
 }
 
 /// Every blame file's own `origin:` line, read straight off disk under
@@ -406,13 +438,13 @@ fn resolve_copy_target(value: &str, ctx: &ResolveCtx) -> Result<Resolved, DestEr
 /// second approve of an unchanged row).
 pub fn resolve_destination(text: &str, ctx: &ResolveCtx) -> Result<Resolved, DestError> {
     let t = text.trim();
-    if let Some(rest) = t.strip_prefix("decision: ") {
+    if let Some(rest) = t.strip_prefix(DECISION_PREFIX) {
         return resolve_decision(rest.trim(), ctx).map(Resolved::Decision);
     }
-    if let Some(rest) = t.strip_prefix("term: ") {
+    if let Some(rest) = t.strip_prefix(TERM_PREFIX) {
         return resolve_term(rest.trim(), ctx).map(Resolved::Term);
     }
-    if let Some(rest) = t.strip_prefix("prose: ") {
+    if let Some(rest) = t.strip_prefix(PROSE_PREFIX) {
         let stem = rest.trim();
         return if ctx.decision_stems.contains(stem) {
             Ok(Resolved::Prose(stem.to_string()))
@@ -420,15 +452,15 @@ pub fn resolve_destination(text: &str, ctx: &ResolveCtx) -> Result<Resolved, Des
             Err(DestError::MissingProseStem(stem.to_string()))
         };
     }
-    if let Some(rest) = t.strip_prefix("dropped: ") {
+    if let Some(rest) = t.strip_prefix(DROPPED_PREFIX) {
         let rest = rest.trim();
-        if rest == "dead" {
+        if rest == DROPPED_DEAD {
             return Ok(Resolved::DroppedDead);
         }
-        if rest == "detail" {
+        if rest == DROPPED_DETAIL {
             return Ok(Resolved::DroppedDetail);
         }
-        if let Some(target) = rest.strip_prefix("copy of ") {
+        if let Some(target) = rest.strip_prefix(COPY_OF_PREFIX) {
             return resolve_copy_target(target.trim(), ctx);
         }
     }
@@ -459,11 +491,17 @@ pub fn dest_refusal_text(rel: &str, row: &Row, err: &DestError) -> String {
 /// goes through `Source` instead (a staged blame file must be judged too,
 /// per "Does check at a commit read the staged files?"), so it is built in
 /// `commands::check::blame` rather than here.
-pub fn load_all(root: &Path) -> Vec<BlameFile> {
+/// Like `load_all`, but also naming every file that failed to read at all
+/// (`(rel, io error text)`), so a caller (`show`) can print a line for it
+/// instead of silently omitting it -- fail-open would otherwise hide a
+/// blame file's own read failure from the one command that has no `check`
+/// category to catch it.
+pub fn load_all_with_errors(root: &Path) -> (Vec<BlameFile>, Vec<(String, String)>) {
     let mut out = Vec::new();
+    let mut errors = Vec::new();
     let dir = root.join(repo::BLAME_DIR);
     let Ok(entries) = std::fs::read_dir(&dir) else {
-        return out;
+        return (out, errors);
     };
     let mut paths: Vec<PathBuf> = entries
         .flatten()
@@ -472,12 +510,20 @@ pub fn load_all(root: &Path) -> Vec<BlameFile> {
         .collect();
     paths.sort();
     for p in paths {
-        let Ok(content) = std::fs::read_to_string(&p) else { continue };
         let Some(name) = p.file_name().and_then(|n| n.to_str()) else { continue };
         let rel = format!("{}/{}", repo::BLAME_DIR, name);
-        out.push(parse(p.clone(), rel, record::split_lines(&content)));
+        match std::fs::read_to_string(&p) {
+            Ok(content) => out.push(parse(p.clone(), rel, record::split_lines(&content))),
+            Err(e) => errors.push((rel, e.to_string())),
+        }
     }
-    out
+    (out, errors)
+}
+
+/// Every parsed blame file, dropping any that failed to read entirely.
+/// Kept for a caller that has no use for the error list.
+pub fn load_all(root: &Path) -> Vec<BlameFile> {
+    load_all_with_errors(root).0
 }
 
 /// The kind of destination a row names, coarse enough for a count (per
@@ -518,20 +564,29 @@ impl Kind {
     ];
 }
 
+/// `dest`'s `Kind`, read straight off its text (never a full resolve: a
+/// row `show` counts may still be a draft, unresolved words rather than an
+/// id) -- through the same prefix constants `Resolved::kind` reads via
+/// `resolve_destination`, so the two can never name the closed set
+/// differently.
 pub fn classify(dest: &str) -> Option<Kind> {
     let t = dest.trim();
-    if t.starts_with("decision: ") {
+    if t.starts_with(DECISION_PREFIX) {
         Some(Kind::Decision)
-    } else if t.starts_with("term: ") {
+    } else if t.starts_with(TERM_PREFIX) {
         Some(Kind::Term)
-    } else if t.starts_with("prose: ") {
+    } else if t.starts_with(PROSE_PREFIX) {
         Some(Kind::Prose)
-    } else if t == "dropped: dead" {
-        Some(Kind::DroppedDead)
-    } else if t == "dropped: detail" {
-        Some(Kind::DroppedDetail)
-    } else if t.starts_with("dropped: copy of ") {
-        Some(Kind::DroppedCopy)
+    } else if let Some(rest) = t.strip_prefix(DROPPED_PREFIX) {
+        if rest == DROPPED_DEAD {
+            Some(Kind::DroppedDead)
+        } else if rest == DROPPED_DETAIL {
+            Some(Kind::DroppedDetail)
+        } else if rest.starts_with(COPY_OF_PREFIX) {
+            Some(Kind::DroppedCopy)
+        } else {
+            None
+        }
     } else {
         None
     }
@@ -555,12 +610,12 @@ pub fn counts_by_kind(rows: &[Row]) -> Vec<(Kind, usize)> {
 /// The value after `decision: `, from either a draft row (still the
 /// heading text) or a canonical one (the id `approve` rewrote it to).
 pub fn decision_target(dest: &str) -> Option<&str> {
-    dest.trim().strip_prefix("decision: ")
+    dest.trim().strip_prefix(DECISION_PREFIX)
 }
 
 /// The value after `dropped: copy of `, likewise either form.
 pub fn copy_target(dest: &str) -> Option<&str> {
-    dest.trim().strip_prefix("dropped: copy of ")
+    dest.trim().strip_prefix(DROPPED_PREFIX)?.strip_prefix(COPY_OF_PREFIX)
 }
 
 /// Resolves a `decision:`/`dropped: copy of <heading>` value -- already a
@@ -717,6 +772,19 @@ mod tests {
         );
         let bf = parse(PathBuf::from("x.md"), "x.md".to_string(), lines_of(&s));
         assert!(bf.shape_errors.iter().any(|e| e.contains("blob")));
+    }
+
+    // A sha256-object-format repo's blob ids are 64 hex characters, not 40.
+    #[test]
+    fn a_64_hex_blob_is_accepted() {
+        let s = sample().replacen(
+            "blob: 0000000000000000000000000000000000000000\n",
+            &format!("blob: {}\n", "0".repeat(64)),
+            1,
+        );
+        let bf = parse(PathBuf::from("x.md"), "x.md".to_string(), lines_of(&s));
+        assert!(bf.shape_errors.is_empty(), "{:?}", bf.shape_errors);
+        assert_eq!(bf.blob.as_deref(), Some("0".repeat(64).as_str()));
     }
 
     #[test]

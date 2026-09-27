@@ -34,11 +34,18 @@ pub(super) fn check_blame(
 
     // Built once for every file this run, not once per row (`decision:`/
     // `dropped: copy of <heading>` resolution needs both).
-    let any_headings = blame::any_headings_with_id(records);
-    let known_ids = blame::known_heading_ids(&any_headings);
+    let (any_headings, known_ids) = blame::heading_ids(records);
 
     for rel in &rels {
-        let Some(content) = source.read(root, rel) else { continue };
+        let Some(content) = source.read(root, rel) else {
+            // Present (it came from `list_under`) but unreadable as text:
+            // its own failure, named, never silently skipped.
+            out.push(Failure {
+                check: "blame".to_string(),
+                message: msg::blame_file_unreadable(rel),
+            });
+            continue;
+        };
         let bf = blame::parse(root.join(rel), rel.clone(), record::split_lines(&content));
 
         if !bf.shape_errors.is_empty() {
@@ -67,22 +74,33 @@ pub(super) fn check_blame(
             continue;
         }
 
+        if !source.exists(root, &origin) {
+            // Truly nothing at the path (4bb5ef1b A): the blame file's own
+            // draft state is one more "still open" reason, alongside any
+            // unanswered `decision:` row.
+            let mut open = blame::open_decision_rows(&bf, records, led, &any_headings, &known_ids);
+            if !state::blame_approved(led, rel, &content) {
+                open.push("the blame file's own approval".to_string());
+                open.sort();
+            }
+            if !open.is_empty() {
+                out.push(Failure {
+                    check: "blame".to_string(),
+                    message: msg::blame_origin_missing(rel, &origin, &open),
+                });
+            }
+            continue;
+        }
+
         match source.read(root, &origin) {
             None => {
-                // 4bb5ef1b A: the blame file's own draft state is one more
-                // "still open" reason, alongside any unanswered `decision:`
-                // row.
-                let mut open = blame::open_decision_rows(&bf, records, led, &any_headings, &known_ids);
-                if !state::blame_approved(led, rel, &content) {
-                    open.push("the blame file's own approval".to_string());
-                    open.sort();
-                }
-                if !open.is_empty() {
-                    out.push(Failure {
-                        check: "blame".to_string(),
-                        message: msg::blame_origin_missing(rel, &origin, &open),
-                    });
-                }
+                // Present, per `exists` above, but unreadable as text: its
+                // own failure (4bb5ef1b A), never the missing-origin
+                // branch -- a present origin is not "gone".
+                out.push(Failure {
+                    check: "blame".to_string(),
+                    message: msg::blame_origin_unreadable(rel, &origin),
+                });
             }
             Some(origin_content) => {
                 // 5fddeeb5 A: the origin is still here, so its current
@@ -90,14 +108,18 @@ pub(super) fn check_blame(
                 // names -- read through the same `source` as everything
                 // else `check` judges (a staged edit to the origin is
                 // judged too, per "Does check at a commit read the staged
-                // files?").
-                if let Some(actual) = repo::git_hash_object_stdin(root, &origin_content) {
-                    if actual != blob {
-                        out.push(Failure {
-                            check: "blame".to_string(),
-                            message: msg::blame_blob_mismatch(rel, &origin),
-                        });
-                    }
+                // files?"). Fails closed: git itself failing to hash the
+                // content is a failure, never a silent pass.
+                match repo::git_hash_object_stdin(root, &origin_content) {
+                    Some(actual) if actual != blob => out.push(Failure {
+                        check: "blame".to_string(),
+                        message: msg::blame_blob_mismatch(rel, &origin),
+                    }),
+                    Some(_) => {}
+                    None => out.push(Failure {
+                        check: "blame".to_string(),
+                        message: msg::blame_hash_failed(rel, &origin),
+                    }),
                 }
                 // 9c3cc17e A: a draft never fails on its own -- only a
                 // count, gathered below.

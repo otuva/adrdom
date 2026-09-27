@@ -411,18 +411,35 @@ fn do_approve_blame(
     if !blame::valid_origin_path(root, &repo::Source::WorkingTree, &origin_rel) {
         return Err(msg::approve_prefixed(msg::blame_bad_origin_path(rel, &origin_rel)));
     }
-    let content = match std::fs::read_to_string(root.join(&origin_rel)) {
-        Ok(text) => {
-            let actual = repo::git_hash_object_stdin(root, &text).unwrap_or_default();
-            if actual != blob {
-                return Err(msg::approve_prefixed(msg::blame_blob_differs(rel, &origin_rel)));
+    let origin_path = root.join(&origin_rel);
+    let content = if origin_path.exists() {
+        // Present: must read as text, or this refuses outright (fail
+        // closed, never a silent fall-through to the object store, which
+        // would let a present-but-corrupt origin sail through unnoticed).
+        match std::fs::read_to_string(&origin_path) {
+            Ok(text) => {
+                let actual = repo::git_hash_object_stdin(root, &text).unwrap_or_default();
+                if actual != blob {
+                    return Err(msg::approve_prefixed(msg::blame_blob_differs(rel, &origin_rel)));
+                }
+                text
             }
-            text
+            Err(e) => {
+                return Err(msg::approve_prefixed(msg::read_failed(
+                    &origin_rel,
+                    e,
+                    Next::agent("fixes the origin file so it reads as text (e.g. its encoding)"),
+                )))
+            }
         }
-        Err(_) => match repo::git(root, &["cat-file", "-p", &blob]) {
+    } else {
+        // Gone: fall back to the object store -- only reached when the
+        // path truly has nothing at all, never for a present file this
+        // just failed to read.
+        match repo::git(root, &["cat-file", "-p", &blob]) {
             Some(text) => text,
             None => return Err(msg::approve_prefixed(msg::blame_blob_not_found(rel, &blob))),
-        },
+        }
     };
     let n = content.lines().count();
 
@@ -437,8 +454,7 @@ fn do_approve_blame(
     // Every set `resolve_destination` reads, built once for this file's own
     // rows rather than once per row.
     let all_records: Vec<RecordFile> = record::load_all(root);
-    let any_headings = blame::any_headings_with_id(&all_records);
-    let known_heading_ids = blame::known_heading_ids(&any_headings);
+    let (any_headings, known_heading_ids) = blame::heading_ids(&all_records);
     let terms_list: Vec<terms::Term> = state::load_terms(root)
         .map(|tf| terms::minted_copy(&tf).terms)
         .unwrap_or_default();
