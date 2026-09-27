@@ -19,6 +19,10 @@ pub const LEDGER_PATH: &str = "adrdom/state/ledger.tsv";
 pub const BLAME_DIR: &str = "adrdom/blame";
 
 pub const TERMS_PATH: &str = "adrdom/terms.md";
+/// The terms brief (per "Does the tool write a terms brief for the agent?",
+/// ec0b9293 A): the file `approve` writes from the terms file, `check`
+/// holds to it, and the brief names for the agent to read.
+pub const TERMS_BRIEF_PATH: &str = "adrdom/state/terms-brief.md";
 /// Where the hashed ban list lives, relative to the repo root: the one
 /// literal for this path, used by every site that reads or writes it
 /// (`ban`, `unban`, `ask`, `check --banned`, `terms_refusals`, `install`).

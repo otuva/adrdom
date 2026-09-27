@@ -1,0 +1,32 @@
+- owner (owners): The person the repository belongs to.
+- agent (agents): A program that writes into the repository on the owner's behalf.
+- identifier (identifiers, uuid, uuids): A unique value the tool assigns once and never reuses.
+- ledger: The append-only file under adrdom/state with one row per event.
+- option (options): One lettered sentence under a heading that the owner may pick.
+- question (questions): One heading ending in ? followed by two or more options.
+- decision (decisions): The option the owner picked.
+- answer (answers, answered, answering): The owner's act of picking one option of a question or refusing it, and the line under the question that names the pick or the refusal.
+- ask (asks, asked, asking): The act that puts a question to the owner and writes that event to the ledger.
+- current: The state of a decision that is answered and not superseded.
+- supersede (supersedes, superseded, superseding): A newer decision naming an older one, which it replaces once answered.
+- topic (topics): One subject that a set of questions shares, one per file.
+- topic file (topic files): A markdown file under adrdom/decisions holding one topic.
+- tier (tiers): The questions the tool asks together, one above the highest question each of them stands on in its topic file.
+- terms file: The one file under adrdom that fixes the meaning of words.
+- approve (approves, approved, approving, approval, approvals): The owner's act of accepting a topic file's headings and prose, or the terms file, as they stand.
+- plan (plans): The approved headings of a topic file and what each stands on.
+- withdraw (withdraws, withdrawn, withdrawing): The event approve writes for a question that was asked and then struck from the plan.
+- check (checks, checked, checking): The command that reads the repository against the ledger and refuses what breaks a rule the owner answered.
+- term (terms): A word or phrase given one fixed meaning in the terms file, with an identifier, a definition, and aliases.
+- definition (definitions): One or two sentences saying what a thing is, never what it does.
+- alias (aliases): Another word or phrase with the same fixed meaning as a name.
+- retire (retires, retired, retiring): Marking a term so nothing new may pair it while old lines still find it.
+- ban (bans, banned, banning): Adding the hash of a word to the list nothing in the repository may contain.
+- install (installs, installed, installing): The act that puts the tool's hooks and brief into a repository.
+- ui (user interface, web ui): The part of the tool the owner sees and uses in a browser.
+- depends (stands on): The line under a question heading naming what the question rests on: a term, a question in the same topic file, or a current decision.
+- refusal (refuse, refuses, refused, refusing): The owner's ruling that a question cannot be settled as asked.
+- answer set (answer sets): The letters of a question's options under which a question standing on it is asked.
+- origin (origins): A prose file outside adrdom whose text the records take in.
+- blame (blame file, blame files): A file holding, for one origin, its line ranges and what each range went to in the records.
+- terms brief (terms briefs): The file under adrdom/state holding the name, aliases and definition of every term that is not retired, one term per line.

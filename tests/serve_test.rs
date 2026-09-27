@@ -743,7 +743,17 @@ fn terms_article_shows_waiting_for_approval_when_unapproved() {
     // staged tree (per "Does check at a commit read the staged files?"),
     // and check holds every file install wrote, which sit on disk,
     // unstaged, since install.
-    run_git(&dir, &["add", "adrdom/terms.md", "adrdom/state/ledger.tsv", "AGENTS.md", ".githooks"]);
+    run_git(
+        &dir,
+        &[
+            "add",
+            "adrdom/terms.md",
+            "adrdom/state/ledger.tsv",
+            "adrdom/state/terms-brief.md",
+            "AGENTS.md",
+            ".githooks",
+        ],
+    );
     let commit_out = run_git(&dir, &["commit", "-q", "-m", "approve terms v1"]);
     assert!(commit_out.status.success(), "{:?}", commit_out);
 

@@ -20,6 +20,13 @@ hooks run `adr check` on every commit and refuse what breaks a decision.
 - **blame file**: `adrdom/blame/<name>.md`, the map from one origin's lines
   to where each went.
 
+Every word the owner has given a fixed meaning is in the terms brief, one
+line for each: its name, its other forms in brackets, its definition. Read
+that file before you write a question, code or a reply. The next line is its
+path, and some agents load the file from it at the start of a session:
+
+@adrdom/state/terms-brief.md
+
 ## Before you build anything
 
 1. Run `adr show` and read every current decision. Build only a tier whose
