@@ -705,13 +705,33 @@ pub fn tier_blocked_waiting(
     open_tier: usize,
     blocker: &str,
     blocker_id: &str,
+    blocker_version: &str,
 ) -> String {
     refuse(
         format!(
             "{}: \"{}\" is in tier {}; tier {} is open, waiting on \"{}\"",
             rel, heading, cand_tier, open_tier, blocker
         ),
-        Next::owner_runs(format!("adr answer {} <letter> on it first", blocker_id)),
+        Next::owner_runs(format!("adr answer {}@{} <letter> on it first", blocker_id, blocker_version)),
+    )
+}
+
+/// The open tier still holds a question nobody has asked yet (a skeleton
+/// heading, or a body `ask` has not run on), so a later tier's candidate
+/// waits on the agent, not the owner.
+pub fn tier_blocked_unasked(
+    rel: &str,
+    heading: &str,
+    cand_tier: usize,
+    open_tier: usize,
+    blocker: &str,
+) -> String {
+    refuse(
+        format!(
+            "{}: \"{}\" is in tier {}; tier {} is open, waiting on unasked \"{}\"",
+            rel, heading, cand_tier, open_tier, blocker
+        ),
+        Next::agent("writes its body and asks it first"),
     )
 }
 
@@ -1186,10 +1206,10 @@ pub fn bind_failed(port: u16, e: impl Display) -> String {
     )
 }
 
-pub fn missing_answer_selection(id: &str) -> String {
+pub fn missing_answer_selection(id: &str, version: &str) -> String {
     refuse(
         "missing answer selection".to_string(),
-        Next::owner_runs(format!("adr answer {} <letter>", id)),
+        Next::owner_runs(format!("adr answer {}@{} <letter>", id, version)),
     )
 }
 
@@ -1503,7 +1523,8 @@ mod tests {
             depends_on_refused("x.md", "heading", "target"),
             ask_supersedes_not_current("x.md", "heading", "id-1"),
             tier_blocked_refused("x.md", "heading", 2, 1, "blocker"),
-            tier_blocked_waiting("x.md", "heading", 2, 1, "blocker", "id-1"),
+            tier_blocked_waiting("x.md", "heading", 2, 1, "blocker", "id-1", "abcd1234"),
+            tier_blocked_unasked("x.md", "heading", 2, 1, "blocker"),
             moot_candidate("x.md", "heading", "target", "A", 'B'),
             banned_word_in_candidate("x.md", "heading", ""),
             pairs_no_term("x.md", "heading"),
@@ -1550,7 +1571,7 @@ mod tests {
             bad_topic_file_name("adrdom/decisions/Bad_Name.md"),
             body_under_unapproved_heading("x.md", "heading"),
             bind_failed(7357, e),
-            missing_answer_selection("id-1"),
+            missing_answer_selection("id-1", "abcd1234"),
         ];
         for o in &outputs {
             assert!(

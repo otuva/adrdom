@@ -224,7 +224,7 @@ fn handle_answer(root: &Path, form: &HashMap<String, String>) -> Reply {
     // message, since there is nothing malformed to name.
     let Some(letter) = actions::parse_letter(&value) else {
         let banner = if value.is_empty() {
-            format!("serve: {}", msg::missing_answer_selection(&id))
+            format!("serve: {}", msg::missing_answer_selection(&id, &version))
         } else {
             format!("serve: {}", msg::invalid_letter(&value))
         };

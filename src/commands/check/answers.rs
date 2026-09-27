@@ -2,6 +2,7 @@ use super::Failure;
 use crate::ledger::Ledger;
 use crate::msg;
 use crate::record::{self, RecordFile};
+use crate::state;
 
 pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure> {
     let mut out = Vec::new();
@@ -12,15 +13,15 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
 
             if sec.is_refused() {
                 // Per "Does the owner answer a question with a refusal?":
-                // a `**Answer:** refused` line needs a matching
-                // `refused` row (same id, hash = the section hash before
-                // the insert -- the same `cur` a letter answer is checked
-                // against).
-                let has_row = led
-                    .rows
-                    .iter()
-                    .any(|r| r.event == "refused" && &r.id == id && r.hash == cur);
-                if !has_row {
+                // a `**Answer:** refused` line needs a matching `refused`
+                // row (same id, hash = the section hash before the insert
+                // -- the same `cur` a letter answer is checked against),
+                // shared with `ask`'s own edited-after-closed gate through
+                // `state::closed_match`.
+                if !matches!(
+                    state::closed_match(led, &cur, sec, id),
+                    state::ClosedMatch::Current
+                ) {
                     out.push(Failure {
                         check: "answers".to_string(),
                         id: Some(id.clone()),
@@ -28,58 +29,47 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                     });
                 }
             } else if sec.answer_line.is_some() {
-                let letter = sec.answer_letter();
-                // Every `answered` row for this id at all, so an edit that
-                // moves the letter the file's `**Answer:**` line names out
-                // from under `answer_letter()` (e.g. renaming the answered
-                // option) still finds the row: `letter` going `None` there
-                // is itself evidence the options changed, not evidence the
-                // answer was never genuine.
-                let rows_for_id: Vec<_> = led
-                    .rows
-                    .iter()
-                    .filter(|r| r.event == "answered" && &r.id == id)
-                    .collect();
-                // Among those, the ones at the letter the line currently
-                // names -- there may be more than one (a text edit followed
-                // by a genuine re-answer would add a second), so any of them
-                // matching the current hash is enough to call the line
-                // genuine.
-                let rows_for_letter: Vec<_> = letter
-                    .map(|l| {
-                        rows_for_id
-                            .iter()
-                            .filter(|r| r.detail == l.to_string())
-                            .copied()
-                            .collect::<Vec<_>>()
-                    })
-                    .unwrap_or_default();
-                if rows_for_letter.iter().any(|r| r.hash == cur) {
-                    // Genuine and current: nothing to report.
-                } else if !rows_for_id.is_empty() {
-                    // A genuine `answered` row exists for this id -- at the
-                    // line's letter but a different hash, at a different
-                    // letter entirely (a hand-changed answer line), or the
-                    // line's letter no longer parses at all (the answered
-                    // option was renamed) -- so the answer itself is real;
-                    // the question's text moved since (per "Does check fail
-                    // an answered question whose text changed?"). Never
-                    // `answer_without_row`, whose fix would remove a real
-                    // answer.
-                    out.push(Failure {
-                        check: "answers".to_string(),
-                        id: Some(id.clone()),
-                        message: msg::answered_text_changed(&rf.rel, &sec.heading_text, id),
-                    });
-                } else {
-                    // No genuine `answered` row for this id at all (at any
-                    // letter): a hand-written answer line with nothing
-                    // backing it.
-                    out.push(Failure {
-                        check: "answers".to_string(),
-                        id: Some(id.clone()),
-                        message: msg::answer_without_row(&rf.rel, &sec.heading_text),
-                    });
+                // `state::closed_match` mirrors this exactly: every
+                // `answered` row for this id at all, so an edit that moves
+                // the letter the file's `**Answer:**` line names out from
+                // under `answer_letter()` (e.g. renaming the answered
+                // option) still finds a row -- the letter going `None`
+                // there is itself evidence the options changed, not
+                // evidence the answer was never genuine -- and, among rows
+                // at the letter the line currently names, there may be
+                // more than one (a text edit followed by a genuine
+                // re-answer would add a second), so any of them matching
+                // the current hash is enough to call the line genuine.
+                match state::closed_match(led, &cur, sec, id) {
+                    state::ClosedMatch::Current => {
+                        // Genuine and current: nothing to report.
+                    }
+                    state::ClosedMatch::Edited => {
+                        // A genuine `answered` row exists for this id -- at
+                        // the line's letter but a different hash, at a
+                        // different letter entirely (a hand-changed answer
+                        // line), or the line's letter no longer parses at
+                        // all (the answered option was renamed) -- so the
+                        // answer itself is real; the question's text moved
+                        // since (per "Does check fail an answered question
+                        // whose text changed?"). Never `answer_without_row`,
+                        // whose fix would remove a real answer.
+                        out.push(Failure {
+                            check: "answers".to_string(),
+                            id: Some(id.clone()),
+                            message: msg::answered_text_changed(&rf.rel, &sec.heading_text, id),
+                        });
+                    }
+                    state::ClosedMatch::NotClosed => {
+                        // No genuine `answered` row for this id at all (at
+                        // any letter): a hand-written answer line with
+                        // nothing backing it.
+                        out.push(Failure {
+                            check: "answers".to_string(),
+                            id: Some(id.clone()),
+                            message: msg::answer_without_row(&rf.rel, &sec.heading_text),
+                        });
+                    }
                 }
             } else {
                 let has_answered_row = led

@@ -2,7 +2,7 @@
 // (`ask`, `approve`, and anything else that needs the same reads). Kept
 // here so `check` and other slices can reuse them instead of duplicating
 // this logic.
-use crate::ledger::Ledger;
+use crate::ledger::{Ledger, Row};
 use crate::record::{self, RecordFile, Section};
 use crate::terms::{self, TermsFile};
 use std::path::{Component, Path};
@@ -208,6 +208,129 @@ pub fn live_tiers(led: &Ledger, rf: &RecordFile, tiers: &[usize]) -> Vec<usize> 
         .filter(|(sec, _)| !is_dead(led, sec))
         .map(|(_, &t)| t)
         .collect()
+}
+
+/// `done` (per "Does a topic file close?"): a file is done once its plan
+/// and context are approved and every section carries a letter answer.
+/// `plan_ok`/`ctx_ok` are supplied by the caller (`check`'s `file_approval`
+/// reads them off a hash captured before any in-memory normalize pass,
+/// `view`'s off the working tree the same way) rather than recomputed here.
+pub fn file_done(rf: &RecordFile, plan_ok: bool, ctx_ok: bool) -> bool {
+    plan_ok && ctx_ok && rf.sections.iter().all(|s| s.answer_letter().is_some())
+}
+
+/// True when `sec` has no letter answer yet: no `**Answer:** <letter>`
+/// line at all (per "Does a topic file close?" and "Does the owner answer
+/// a question with a refusal?") -- a skeleton with nothing written, an
+/// unasked or asked-but-open question, and a refused question (whose
+/// `**Answer:** refused` line never parses as a letter) are all
+/// unresolved; only a genuine letter answer, or a superseded section's old
+/// letter still sitting in the file, resolves it. Read straight off the
+/// file text, no ledger needed: the one "is this section unresolved" test
+/// the tier rule reads.
+pub fn tier_unresolved(sec: &Section) -> bool {
+    sec.answer_letter().is_none()
+}
+
+/// The lowest derived tier (per "Does the tool derive tiers from the
+/// depends lines?") holding an unresolved section (`tier_unresolved`; a
+/// skeleton heading with no answer keeps its tier open exactly as a
+/// refused or still-open question does), or `None` when tier derivation
+/// failed (`rf.tiers` is `None`) or every section is resolved. What `ask`
+/// computes once for its tier rule, and what the page's `waits_on` reads
+/// too.
+pub fn open_tier(rf: &RecordFile) -> Option<usize> {
+    rf.sections
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| tier_unresolved(s))
+        .filter_map(|(i, _)| rf.tier_of(i))
+        .min()
+}
+
+/// The section in tier `t` of `rf` a candidate outside the open tier is
+/// blocked on, by file order: the first non-skeleton unresolved section,
+/// or, when the tier holds nothing but a skeleton, the first skeleton in
+/// it instead (naming a heading with nothing written yet is still more
+/// informative than naming nothing) -- so `ask`'s tier-blocked refusal
+/// always has something to name once `open_tier` returns `Some`. `None`
+/// only when tier `t` holds no section at all.
+pub fn tier_blocker(rf: &RecordFile, t: usize) -> Option<&Section> {
+    let in_tier = |i: &usize| rf.tier_of(*i) == Some(t);
+    rf.sections
+        .iter()
+        .enumerate()
+        .find(|(i, s)| !s.is_skeleton && tier_unresolved(s) && in_tier(i))
+        .or_else(|| {
+            rf.sections
+                .iter()
+                .enumerate()
+                .find(|(i, s)| s.is_skeleton && in_tier(i))
+        })
+        .map(|(_, s)| s)
+}
+
+/// What comparing a closed (answered or refused) section's current text
+/// against the ledger rows that back it finds (per "Does check fail an
+/// answered question whose text changed?" and "Does the owner answer a
+/// question with a refusal?"). `check`'s per-section answered/refused
+/// comparison and `ask`'s "edited after it closed" gate share this instead
+/// of each keeping its own copy, so a genuine re-answer -- a harmless edit
+/// followed by a real re-answer at the same letter, which adds a second
+/// `answered` row rather than rewriting the first -- never desyncs the
+/// two: every row for the id at the relevant event (and, for "answered",
+/// at the letter the file currently names) is checked, not only the
+/// latest.
+pub enum ClosedMatch {
+    /// No `**Answer:**` line at all, or one with nothing behind it in the
+    /// ledger, ever, at this event.
+    NotClosed,
+    /// A genuine row backs the current text exactly.
+    Current,
+    /// The section was genuinely closed at some point (a real row for this
+    /// id at this event), but none of those rows' hash matches the current
+    /// text: it moved since.
+    Edited,
+}
+
+/// `sec`'s `ClosedMatch`, from `id`'s ledger rows and `cur_hash` (the
+/// caller's already-computed `record::section_hash(lines, sec)`, passed in
+/// rather than recomputed here since both callers already have it).
+pub fn closed_match(led: &Ledger, cur_hash: &str, sec: &Section, id: &str) -> ClosedMatch {
+    if sec.is_refused() {
+        let rows_for_id: Vec<&Row> = led
+            .rows
+            .iter()
+            .filter(|r| r.event == "refused" && r.id == id)
+            .collect();
+        if rows_for_id.iter().any(|r| r.hash == cur_hash) {
+            ClosedMatch::Current
+        } else if !rows_for_id.is_empty() {
+            ClosedMatch::Edited
+        } else {
+            ClosedMatch::NotClosed
+        }
+    } else if sec.answer_line.is_some() {
+        let rows_for_id: Vec<&Row> = led
+            .rows
+            .iter()
+            .filter(|r| r.event == "answered" && r.id == id)
+            .collect();
+        let letter_matches = sec.answer_letter().is_some_and(|l| {
+            rows_for_id
+                .iter()
+                .any(|r| r.detail == l.to_string() && r.hash == cur_hash)
+        });
+        if letter_matches {
+            ClosedMatch::Current
+        } else if !rows_for_id.is_empty() {
+            ClosedMatch::Edited
+        } else {
+            ClosedMatch::NotClosed
+        }
+    } else {
+        ClosedMatch::NotClosed
+    }
 }
 
 /// The text a section's `terms:` line is (re)computed from, and what the

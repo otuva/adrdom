@@ -95,8 +95,9 @@ fn ask_blocks_a_higher_tier_candidate_naming_the_open_tier_blocker() {
     assert_eq!(
         err.trim_end(),
         format!(
-            "ask: adrdom/decisions/example.md: \"1.2 Does the widget's paint match its color?\" is in tier 2; tier 1 is open, waiting on \"1.1 What color is the widget?\"; owner runs: adr answer {} <letter> on it first",
-            q1_id
+            "ask: adrdom/decisions/example.md: \"1.2 Does the widget's paint match its color?\" is in tier 2; tier 1 is open, waiting on \"1.1 What color is the widget?\"; owner runs: adr answer {}@{} <letter> on it first",
+            q1_id,
+            current_version(&dir, &q1_id)
         )
     );
 

@@ -201,16 +201,7 @@ pub fn all_heading_texts(root: &Path) -> HashMap<String, String> {
 fn dep_with_set(text: &str, set: &Option<record::AnswerSet>) -> String {
     match set {
         None => text.to_string(),
-        Some(record::AnswerSet::Any) => format!("{}=*", text),
-        Some(record::AnswerSet::Letters(letters)) => format!(
-            "{}={}",
-            text,
-            letters
-                .iter()
-                .map(|c| c.to_string())
-                .collect::<Vec<_>>()
-                .join("|")
-        ),
+        Some(s) => format!("{}={}", text, record::canonical_set(s)),
     }
 }
 
@@ -247,14 +238,18 @@ pub fn format_dep(
     }
 }
 
-/// One note per heading dep in `rf` whose declared answer set excludes the
-/// letter its target was actually answered with (per "Does a depends entry
-/// carry the answers it holds under?", "moot"; mirrors
+/// One `(dependent heading, target heading, canonical set text, answered
+/// letter)` tuple per heading dep in `rf` whose declared answer set
+/// excludes the letter its target was actually answered with (per "Does a
+/// depends entry carry the answers it holds under?", "moot"; mirrors
 /// `check`'s `moot.rs`, computed independently here since `record.rs` has
-/// no ledger access): `"<h>" stands on "<other>"=A|B, answered C`, `<h>`
-/// the dependent's heading and `<other>` the target's. A target that is
-/// unanswered, or a set of `=*`, never produces a note.
-pub(crate) fn moot_notes(rf: &RecordFile, led: &Ledger) -> Vec<String> {
+/// no ledger access). A target that is unanswered (gated on the ledger's
+/// `qstate`, not the raw file text, so a body edited to show a letter that
+/// was never actually asked/answered through the ledger never counts), or
+/// a set of `=*`, never produces an entry. Shared by `moot_notes` (its
+/// formatted-string wrapper, read by `check`/the page) and `ask`'s moot
+/// refusal, so the two can never diverge on what counts as moot.
+pub(crate) fn moot_pairs(rf: &RecordFile, led: &Ledger) -> Vec<(String, String, String, char)> {
     let mut out = Vec::new();
     for sec in &rf.sections {
         for d in &sec.depends {
@@ -274,17 +269,26 @@ pub(crate) fn moot_notes(rf: &RecordFile, led: &Ledger) -> Vec<String> {
                 continue;
             };
             if !letters.contains(&c) {
-                out.push(format!(
-                    "\"{}\" stands on \"{}\"={}, answered {}",
-                    sec.heading_text,
-                    target.heading_text,
-                    letters.iter().map(|c| c.to_string()).collect::<Vec<_>>().join("|"),
-                    c
+                out.push((
+                    sec.heading_text.clone(),
+                    target.heading_text.clone(),
+                    record::canonical_set(&record::AnswerSet::Letters(letters.clone())),
+                    c,
                 ));
             }
         }
     }
     out
+}
+
+/// `"<h>" stands on "<other>"=A|B, answered C`, `<h>` the dependent's
+/// heading and `<other>` the target's -- `moot_pairs`, formatted for
+/// `check`'s note and the page.
+pub(crate) fn moot_notes(rf: &RecordFile, led: &Ledger) -> Vec<String> {
+    moot_pairs(rf, led)
+        .into_iter()
+        .map(|(h, t, set, c)| format!("\"{}\" stands on \"{}\"={}, answered {}", h, t, set, c))
+        .collect()
 }
 
 /// The text following `prefix` (e.g. `"Problem: "`) on the first matching
@@ -295,53 +299,21 @@ fn body_field(lines: &[String], sec: &Section, prefix: &str) -> Option<String> {
         .find_map(|l| l.strip_prefix(prefix).map(|v| v.trim().to_string()))
 }
 
-/// `open_tier`: the lowest derived tier that still has a non-skeleton
-/// question without a letter answer — Open, Unasked, or Refused all count
-/// (per "Does the owner answer a question with a refusal?": a refusal is
-/// unanswered for the tier rule) — or `None` when
-/// every tier is clear or tier derivation failed
+/// `open_tier`: the lowest derived tier holding an unresolved section
+/// (`state::open_tier` -- text-only, a skeleton heading with no answer
+/// keeps its tier open exactly as a refused or still-open question does),
+/// or `None` when every tier is clear or tier derivation failed
 /// (`RecordFile::derive_error`; `check`/`approve`/`ask` report why). This
 /// is the "Tier N is open" tier the overview names.
 ///
-/// `waits_on`: the heading of the first Open/Unasked/Refused question in a
-/// tier earlier than the lowest tier that has an Unasked/Skeleton question
-/// waiting to be asked — i.e. the heading `ask` would name in its tier
-/// refusal — or `None` when nothing is waiting on an earlier tier.
-fn open_tier_and_waits_on(rf: &RecordFile, led: &Ledger) -> (Option<usize>, Option<String>) {
-    let Some(tiers) = &rf.tiers else {
-        return (None, None);
-    };
-    let max_tier = tiers.iter().copied().max().unwrap_or(0);
-    let mut tier_states: Vec<Vec<(String, QState)>> = vec![Vec::new(); max_tier + 1];
-    for (i, sec) in rf.sections.iter().enumerate() {
-        let t = tiers[i];
-        tier_states[t].push((sec.heading_text.clone(), qstate(led, sec)));
-    }
-
-    // "Without a letter answer": Open, Unasked, and Refused all block a
-    // later tier from being the open one; Skeleton, Answered, Superseded,
-    // and Withdrawn don't.
-    let unresolved = |s: &QState| matches!(s, QState::Open | QState::Unasked | QState::Refused);
-
-    let open_tier = (1..=max_tier).find(|&t| tier_states[t].iter().any(|(_, s)| unresolved(s)));
-
-    let waiting_tier = (1..=max_tier).find(|&t| {
-        tier_states[t]
-            .iter()
-            .any(|(_, s)| matches!(s, QState::Unasked | QState::Skeleton))
-    });
-
-    let waits_on = waiting_tier.and_then(|wt| {
-        for t in 1..wt {
-            for (heading, s) in &tier_states[t] {
-                if unresolved(s) {
-                    return Some(heading.clone());
-                }
-            }
-        }
-        None
-    });
-
+/// `waits_on`: the heading `state::tier_blocker` names for `open_tier` --
+/// the same section `ask`'s tier-blocked refusal would name -- or `None`
+/// when there is no open tier at all.
+fn open_tier_and_waits_on(rf: &RecordFile) -> (Option<usize>, Option<String>) {
+    let open_tier = state::open_tier(rf);
+    let waits_on = open_tier
+        .and_then(|t| state::tier_blocker(rf, t))
+        .map(|s| s.heading_text.clone());
     (open_tier, waits_on)
 }
 
@@ -595,10 +567,8 @@ fn build_file_view(
     context_approved: bool,
 ) -> FileView {
     let path = state::rel_path(root, &rf.path);
-    let done = plan_approved
-        && context_approved
-        && rf.sections.iter().all(|s| s.answer_letter().is_some());
-    let (open_tier, waits_on) = open_tier_and_waits_on(rf, led);
+    let done = state::file_done(rf, plan_approved, context_approved);
+    let (open_tier, waits_on) = open_tier_and_waits_on(rf);
     let moot = moot_notes(rf, led);
     let questions = rf
         .sections
@@ -1020,38 +990,40 @@ Standard: s2.\n\n\
     fn open_tier_and_waits_on_for_unanswered_tier_one() {
         let dir = temp_repo();
         let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP);
-        append_row(&dir, "asked", "id-1", "hash-1", "1.1 First question?");
 
         let rf = record::load(&record).unwrap();
-        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
 
-        let (open_tier, waits_on) = open_tier_and_waits_on(&rf, &led);
-        // Tier 1's question is Open, so it is the lowest open tier.
+        let (open_tier, waits_on) = open_tier_and_waits_on(&rf);
+        // Tier 1's question has no letter answer, so it is the lowest open
+        // tier.
         assert_eq!(open_tier, Some(1));
-        // Tier 2's question is Unasked (waiting), and tier 1's question is
-        // Open (unanswered) and in an earlier tier: that is what `ask`
-        // would name.
+        // Tier 2's question has no answer either, but tier 1's is earlier
+        // and also unresolved: that is what `ask` would name.
         assert_eq!(waits_on.as_deref(), Some("1.1 First question?"));
 
         std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
-    fn waits_on_is_none_once_tier_one_is_answered() {
+    fn waits_on_names_tier_twos_own_question_once_tier_one_is_answered() {
         let dir = temp_repo();
-        let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP);
-        append_row(&dir, "asked", "id-1", "hash-1", "1.1 First question?");
-        append_row(&dir, "answered", "id-1", "hash-1", "A");
+        // Q1 gets a real `**Answer:**` line; Q2 stays unanswered.
+        let content = TWO_GROUP.replacen(
+            "\n\n### 2.1 Second question?",
+            "\n\n**Answer:** A\n\n### 2.1 Second question?",
+            1,
+        );
+        let record = write_record(&dir, "adrdom/decisions/example.md", &content);
 
         let rf = record::load(&record).unwrap();
-        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
 
-        let (open_tier, waits_on) = open_tier_and_waits_on(&rf, &led);
-        // Tier one is fully answered; tier two (Unasked) is now the lowest
-        // tier with an open/unasked question.
+        let (open_tier, waits_on) = open_tier_and_waits_on(&rf);
+        // Tier one is fully answered; tier two (unanswered) is now the
+        // lowest open tier, and its own question is what `waits_on` names
+        // -- the same section `ask` would name if a later tier existed and
+        // tried to jump ahead of it.
         assert_eq!(open_tier, Some(2));
-        // Nothing earlier than tier two is unanswered any more.
-        assert_eq!(waits_on, None);
+        assert_eq!(waits_on.as_deref(), Some("2.1 Second question?"));
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -1059,15 +1031,19 @@ Standard: s2.\n\n\
     #[test]
     fn open_tier_counts_a_refused_question_as_unresolved() {
         let dir = temp_repo();
-        let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP);
-        append_row(&dir, "asked", "id-1", "hash-1", "1.1 First question?");
-        append_row(&dir, "refused", "id-1", "hash-1", "1.1 First question?");
+        // Q1 is refused in the file text itself (a refused `**Answer:**`
+        // line never parses as a letter, so it stays unresolved).
+        let content = TWO_GROUP.replacen(
+            "\n\n### 2.1 Second question?",
+            "\n\n**Answer:** refused\n\n### 2.1 Second question?",
+            1,
+        );
+        let record = write_record(&dir, "adrdom/decisions/example.md", &content);
 
         let rf = record::load(&record).unwrap();
-        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
 
-        let (open_tier, waits_on) = open_tier_and_waits_on(&rf, &led);
-        // Tier 1's question is Refused, not answered: tier 1 still counts
+        let (open_tier, waits_on) = open_tier_and_waits_on(&rf);
+        // Tier 1's question is refused, not answered: tier 1 still counts
         // as the open (stuck) tier, and it still blocks tier 2 by name.
         assert_eq!(open_tier, Some(1));
         assert_eq!(waits_on.as_deref(), Some("1.1 First question?"));
