@@ -97,6 +97,43 @@ pub fn valid_topic_file_name(name: &str) -> bool {
         .all(|word| !word.is_empty() && word.chars().all(|c| c.is_ascii_lowercase()))
 }
 
+/// The other half of 76bd7ef0 A's naming rule ("is named by it"): the file
+/// stem a topic file with h1 text `topic` must carry -- the text lowercased,
+/// every run of characters that are not ASCII letters or digits turned into
+/// one hyphen, leading and trailing hyphens dropped. "Ban" gives "ban",
+/// "Two Words" gives "two-words". Check compares this to the file's own stem
+/// only once `valid_topic_file_name` has accepted the name.
+pub fn expected_topic_file_stem(topic: &str) -> String {
+    let mut out = String::new();
+    let mut gap = false;
+    for c in topic.chars() {
+        if c.is_ascii_alphanumeric() {
+            if gap && !out.is_empty() {
+                out.push('-');
+            }
+            gap = false;
+            out.push(c.to_ascii_lowercase());
+        } else {
+            gap = true;
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod topic_name_tests {
+    use super::expected_topic_file_stem;
+
+    #[test]
+    fn expected_stem_lowercases_and_hyphenates_runs() {
+        assert_eq!(expected_topic_file_stem("Ban"), "ban");
+        assert_eq!(expected_topic_file_stem("Two Words"), "two-words");
+        assert_eq!(expected_topic_file_stem("  A -- b_C  "), "a-b-c");
+        assert_eq!(expected_topic_file_stem("Topic 2"), "topic-2");
+        assert_eq!(expected_topic_file_stem(""), "");
+    }
+}
+
 /// Every file under `dir` (any extension), found recursively on disk.
 /// `list_decision_files` filters this to `.md` itself; kept unfiltered
 /// here so `Source::WorkingTree`'s other uses (the `.claude`/`.codex`

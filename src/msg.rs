@@ -1198,6 +1198,23 @@ pub fn bad_topic_file_name(rel: &str) -> String {
     )
 }
 
+/// The "named by it" half of 76bd7ef0 A: a topic file whose name is well
+/// formed (`repo::valid_topic_file_name`) but is not its h1 topic text
+/// lowercased and hyphenated (`repo::expected_topic_file_stem`). Check-only,
+/// like `bad_topic_file_name`.
+pub fn topic_file_name_mismatch(rel: &str, topic: &str, expected: &str) -> String {
+    refuse(
+        format!(
+            "{}: file name does not match its topic \"{}\"",
+            rel, topic
+        ),
+        Next::agent(format!(
+            "renames the file to {}.md or changes the topic line to match the name; if it had already been approved, the owner re-approves it under the new name, since approval is keyed to the path",
+            expected
+        )),
+    )
+}
+
 pub fn body_under_unapproved_heading(rel: &str, heading: &str) -> String {
     refuse(
         format!("{}: body under unapproved heading \"{}\"", rel, heading),
@@ -1568,6 +1585,7 @@ mod tests {
             duplicate_heading_in_file("heading", "x.md"),
             duplicate_heading_across_files("heading", "x.md", "y.md"),
             bad_topic_file_name("adrdom/decisions/Bad_Name.md"),
+            topic_file_name_mismatch("adrdom/decisions/x.md", "Y", "y"),
             body_under_unapproved_heading("x.md", "heading"),
             bind_failed(7357, e),
             missing_answer_selection("id-1", "abcd1234"),

@@ -1329,6 +1329,40 @@ fn check_passes_a_good_topic_file_name() {
     );
 }
 
+// adr: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
+//
+// "is named by it": a well-formed name that is not the h1 topic,
+// lowercased and hyphenated, fails check; the same file under the name
+// its topic gives passes.
+#[test]
+fn check_fails_a_topic_file_name_that_does_not_match_its_topic() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let body = "# Two Words\n\n### 1.1 Not written yet?\ndepends: widget\n";
+    write_record(&dir, "adrdom/decisions/other-name.md", body);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = stdout(&out);
+    assert!(
+        text.contains(
+            "plan: adrdom/decisions/other-name.md: file name does not match its topic \"Two Words\"; agent renames the file to two-words.md"
+        ),
+        "{}",
+        text
+    );
+
+    std::fs::remove_file(dir.join("adrdom/decisions/other-name.md")).unwrap();
+    write_record(&dir, "adrdom/decisions/two-words.md", body);
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(
+        out.status.success(),
+        "a file named by its topic must pass check: {}",
+        stdout(&out)
+    );
+}
+
 #[test]
 fn check_passes_when_a_superseded_id_is_missing_from_every_record() {
     let dir = init_repo();

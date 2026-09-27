@@ -381,7 +381,7 @@ fn approve_withdraws_a_struck_refused_heading() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
-    let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
+    let record = write_record(&dir, "adrdom/decisions/topic.md", ONE_QUESTION_RECORD);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
         .success());
@@ -617,7 +617,7 @@ fn check_stays_clean_once_an_emptied_topic_file_is_deleted() {
     // question is now superseded, not answered by anything a.md still
     // holds.
     let superseding = format!(
-        "# Other Topic\n\n### 2.1 Replacement in another file?\ndepends: decision\n\nsupersedes: {}\n\nProblem: the decision needs revisiting from elsewhere.\n\nStandard: s2.\n\n- A) New answer.\n  Why: reasons.\n  Costs: costs.\n- B) Other new answer.\n  Why: other reasons.\n  Costs: other costs.\n",
+        "# B\n\n### 2.1 Replacement in another file?\ndepends: decision\n\nsupersedes: {}\n\nProblem: the decision needs revisiting from elsewhere.\n\nStandard: s2.\n\n- A) New answer.\n  Why: reasons.\n  Costs: costs.\n- B) Other new answer.\n  Why: other reasons.\n  Costs: other costs.\n",
         old_id
     );
     let record_b = write_record(&dir, "adrdom/decisions/b.md", &superseding);
@@ -1403,7 +1403,7 @@ fn approve_allows_retiring_a_term_once_its_only_current_decision_is_superseded_a
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(
         &dir,
-        "adrdom/decisions/example.md",
+        "adrdom/decisions/topic.md",
         DECISION_RECORD_DEPENDS_ELSEWHERE,
     );
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_TWO_ENTRIES);

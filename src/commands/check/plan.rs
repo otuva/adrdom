@@ -55,6 +55,24 @@ pub(super) fn check_plan(
                 check: "plan".to_string(),
                 message: msg::bad_topic_file_name(&state::rel_path(root, &f)),
             });
+            continue;
+        }
+        // "is named by it": a well-formed name must also be the file's h1
+        // topic, lowercased and hyphenated. A file with no h1 already fails
+        // its shape check, so it is skipped here.
+        let rel = state::rel_path(root, &f);
+        let topic = records
+            .iter()
+            .find(|rf| rf.rel == rel)
+            .and_then(|rf| rf.topic.as_deref());
+        if let Some(topic) = topic {
+            let expected = repo::expected_topic_file_stem(topic);
+            if name.strip_suffix(".md") != Some(expected.as_str()) {
+                out.push(Failure {
+                    check: "plan".to_string(),
+                    message: msg::topic_file_name_mismatch(&rel, topic, &expected),
+                });
+            }
         }
     }
 
