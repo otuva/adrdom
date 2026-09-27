@@ -1440,6 +1440,21 @@ pub fn blame_bad_origin_path(rel: &str, path: &str) -> String {
     )
 }
 
+/// A `dropped: copy of <path>` row names the origin its own blame file
+/// maps (per "What does a blame row name?": a copy is of a question or of
+/// another origin).
+pub fn blame_row_copy_of_own_origin(rel: &str, start: usize, end: usize, path: &str) -> String {
+    refuse(
+        format!(
+            "{}: row {}: copy target \"{}\" is this blame file's own origin",
+            rel,
+            range_text(start, end),
+            path
+        ),
+        Next::agent("names the question or the other origin that says the same thing, or rewrites the row"),
+    )
+}
+
 pub fn blame_row_unknown_destination(rel: &str, start: usize, end: usize, text: &str) -> String {
     refuse(
         format!(
