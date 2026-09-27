@@ -173,6 +173,34 @@ pub fn terms_file_not_approved() -> String {
     )
 }
 
+/// `check`: no terms brief where the terms file is approved (per "Does
+/// check hold the terms brief to the terms file?", ec3f875c A). `approve`
+/// is the one writer (per "Does approve write the terms brief?", fcab4bf9
+/// A), so the move is the owner's.
+pub fn terms_brief_missing() -> String {
+    refuse(
+        format!("{} missing", crate::repo::TERMS_BRIEF_PATH),
+        Next::owner_runs("adr approve adrdom/terms.md"),
+    )
+}
+
+/// `check`: the terms brief does not hold what the terms file gives.
+pub fn terms_brief_differs() -> String {
+    refuse(
+        format!("{} differs from adrdom/terms.md", crate::repo::TERMS_BRIEF_PATH),
+        Next::owner_runs("adr approve adrdom/terms.md"),
+    )
+}
+
+/// `check` at a commit: the working tree holds the right terms brief and
+/// the staged files do not.
+pub fn terms_brief_not_staged() -> String {
+    refuse(
+        format!("{} not staged", crate::repo::TERMS_BRIEF_PATH),
+        Next::agent(format!("runs: git add {}", crate::repo::TERMS_BRIEF_PATH)),
+    )
+}
+
 /// A cycle's names, in traversal order, closed by repeating the first at
 /// the end: "a -> b -> a" -- what `circular_definition` names, and what the
 /// page's own display of the same cycle names too.
@@ -1767,6 +1795,9 @@ mod tests {
             terms_shape_error(e),
             terms_not_approved("adrdom/decisions/x.md"),
             terms_file_not_approved(),
+            terms_brief_missing(),
+            terms_brief_differs(),
+            terms_brief_not_staged(),
             circular_definition("a -> b -> a"),
             term_removed_but_carried("uuid-1", "term \"x\""),
             term_retired_but_carried("x", "term \"y\"", term_reword_and_approve()),

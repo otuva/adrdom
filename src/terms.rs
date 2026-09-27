@@ -72,6 +72,28 @@ pub fn save(tf: &TermsFile) -> io::Result<()> {
     fs::write(&tf.path, tf.lines.join("\n"))
 }
 
+/// The text of the terms brief for `tf` (per "What does the terms brief
+/// hold?", f1294391 A): one line per term that is not retired, in the
+/// order of the terms file, `- name (alias, alias): definition`, the
+/// brackets left out for a term with no aliases. The one place the text is
+/// built: `approve` writes it and `check` compares against it.
+pub fn brief_text(tf: &TermsFile) -> String {
+    let mut out = String::new();
+    for t in tf.terms.iter().filter(|t| !t.retired) {
+        out.push_str("- ");
+        out.push_str(&t.name);
+        if !t.aliases.is_empty() {
+            out.push_str(" (");
+            out.push_str(&t.aliases.join(", "));
+            out.push(')');
+        }
+        out.push_str(": ");
+        out.push_str(&t.definition);
+        out.push('\n');
+    }
+    out
+}
+
 pub fn file_hash(tf: &TermsFile) -> String {
     let text = tf
         .lines

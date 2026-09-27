@@ -379,7 +379,8 @@ pub fn approve_empty_terms(dir: &Path) {
 /// ledger row as if `adr approve adrdom/terms.md` had just run on exactly
 /// that content: writes `content` to disk (so it matches whatever the
 /// caller already wrote there) and hashes it back with the real
-/// `terms::file_hash`, through `terms::load`.
+/// `terms::file_hash`, through `terms::load`. Writes the terms brief too,
+/// as `approve` does.
 pub fn approve_terms_via_ledger(dir: &Path, content: &str) {
     let path = dir.join("adrdom/terms.md");
     std::fs::write(&path, content).unwrap();
@@ -387,6 +388,8 @@ pub fn approve_terms_via_ledger(dir: &Path, content: &str) {
         .unwrap_or_else(|e| panic!("approve_terms_via_ledger: failed to load terms.md: {}", e));
     let hash = terms::file_hash(&tf);
     append_ledger_row(dir, "terms", "-", &hash, "adrdom/terms.md");
+    std::fs::create_dir_all(dir.join("adrdom/state")).unwrap();
+    std::fs::write(dir.join("adrdom/state/terms-brief.md"), terms::brief_text(&tf)).unwrap();
 }
 
 // --- Terms approval, without depending on `adr approve` -------------------

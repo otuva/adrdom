@@ -95,6 +95,34 @@ pub(super) fn check_terms(
         return (out, notes);
     }
 
+    // Per "Does check hold the terms brief to the terms file?" (ec3f875c
+    // A): the terms brief is built again from the terms file and compared
+    // with the file this source holds. When only the working tree holds
+    // the right text at a commit, the move is the agent's: stage the file.
+    let want = terms::brief_text(&tf);
+    let matches = |got: Option<String>| {
+        got.is_some_and(|g| {
+            crate::text::lines_match_trimmed(
+                &g.lines().collect::<Vec<_>>(),
+                &want.lines().collect::<Vec<_>>(),
+            )
+        })
+    };
+    if !matches(source.read(root, repo::TERMS_BRIEF_PATH)) {
+        let on_disk = *source == Source::Index
+            && matches(Source::WorkingTree.read(root, repo::TERMS_BRIEF_PATH));
+        out.push(Failure {
+            check: "terms".to_string(),
+            message: if on_disk {
+                msg::terms_brief_not_staged()
+            } else if source.exists(root, repo::TERMS_BRIEF_PATH) {
+                msg::terms_brief_differs()
+            } else {
+                msg::terms_brief_missing()
+            },
+        });
+    }
+
     // Every asked/answered section: must have a terms line; each uuid on
     // it must name a term that exists and is not retired. No
     // re-resolution of the section text against today's terms.

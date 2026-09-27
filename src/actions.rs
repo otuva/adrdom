@@ -765,6 +765,24 @@ fn do_approve_terms(
         ))
     })?;
 
+    // Per "Does approve write the terms brief?" (fcab4bf9 A): written on
+    // every run, whether or not the terms file changed, so a repository
+    // whose terms file is approved gets its terms brief from one run.
+    let brief_path = root.join(crate::repo::TERMS_BRIEF_PATH);
+    let write_brief = || -> std::io::Result<()> {
+        if let Some(dir) = brief_path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        std::fs::write(&brief_path, terms::brief_text(&tf))
+    };
+    write_brief().map_err(|e| {
+        msg::approve_prefixed(msg::write_failed(
+            crate::repo::TERMS_BRIEF_PATH,
+            e,
+            Next::owner_runs("adr approve adrdom/terms.md again"),
+        ))
+    })?;
+
     let mut out: Vec<String> = Vec::new();
     if inserted > 0 {
         out.push(msg::terms_ids_filled(inserted));
