@@ -1108,6 +1108,16 @@ pub fn hook_differs(path: &str) -> String {
     )
 }
 
+/// Same check as `hook_differs`, but the hook's content is current and the
+/// file is not executable, so git would skip it without a word; install
+/// repairs the mode.
+pub fn hook_not_executable(path: &str) -> String {
+    refuse(
+        format!("{} is not executable, git skips it", path),
+        Next::agent("runs: adr install"),
+    )
+}
+
 /// Same check as `hook_differs`, but the hook file is missing outright.
 pub fn hook_missing(path: &str) -> String {
     refuse(
@@ -1613,6 +1623,7 @@ mod tests {
             codex_rules_missing(),
             hook_differs(".githooks/pre-commit"),
             hook_missing(".githooks/pre-commit"),
+            hook_not_executable(".githooks/pre-commit"),
             malformed_ledger_row(3, "bad row"),
             ledger_not_append_only(),
             ledger_asked_id_missing("id-1"),

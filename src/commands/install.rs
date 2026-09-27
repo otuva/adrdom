@@ -177,20 +177,38 @@ fn create_hook(root: &Path, rel: &str, content: &str) -> Result<String, String> 
         let existing_lines: Vec<&str> = existing.split('\n').collect();
         let want_lines: Vec<&str> = content.split('\n').collect();
         if crate::text::lines_match_trimmed(&existing_lines, &want_lines) {
-            return Ok(msg::hook_up_to_date(rel));
+            // Content current, but git runs a hook only when it is
+            // executable (`repo::hook_is_executable`, the same test
+            // `check` applies): repair the mode rather than report a hook
+            // git would silently skip as up to date.
+            if repo::hook_is_executable(&path) {
+                return Ok(msg::hook_up_to_date(rel));
+            }
+            make_executable(&path);
+            return Ok(msg::hook_written(rel));
         }
     }
     fs::write(&path, content).map_err(|e| e.to_string())?;
+    make_executable(&path);
+    Ok(msg::hook_written(rel))
+}
+
+/// Sets the mode git requires to run a hook (0o755 on unix; a no-op
+/// elsewhere, where `repo::hook_is_executable` is always true).
+fn make_executable(path: &Path) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if let Ok(meta) = fs::metadata(&path) {
+        if let Ok(meta) = fs::metadata(path) {
             let mut perms = meta.permissions();
             perms.set_mode(0o755);
-            fs::set_permissions(&path, perms).ok();
+            fs::set_permissions(path, perms).ok();
         }
     }
-    Ok(msg::hook_written(rel))
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+    }
 }
 
 /// Locates the marker lines in `lines` (as produced by `content.split('\n')`,

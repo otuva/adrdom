@@ -759,6 +759,50 @@ fn check_install_fails_when_pre_commit_hook_differs_and_passes_after_reinstall()
 }
 
 // adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
+// check fails when the pre-commit hook's content is current but the file
+// is not executable, since git skips such a hook without a word; install
+// repairs the mode without rewriting the content.
+#[cfg(unix)]
+#[test]
+fn check_install_fails_when_pre_commit_hook_is_not_executable_and_install_repairs_it() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let hook = dir.join(".githooks/pre-commit");
+    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    assert!(
+        stdout(&out).contains(
+            "install: .githooks/pre-commit is not executable, git skips it; agent runs: adr install"
+        ),
+        "{}",
+        stdout(&out)
+    );
+
+    let out = adr(&dir, &["install"], &[], "");
+    assert!(out.status.success());
+    assert!(
+        stdout(&out).contains(".githooks/pre-commit"),
+        "install must report the repaired hook, not up to date: {}",
+        stdout(&out)
+    );
+    assert!(
+        std::fs::metadata(&hook).unwrap().permissions().mode() & 0o100 != 0,
+        "install should restore the execute bit"
+    );
+
+    let out2 = adr(&dir, &["check"], &[], "");
+    assert!(
+        !stdout(&out2).contains("install:"),
+        "install check should pass after re-install: {}",
+        stdout(&out2)
+    );
+}
+
+// adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
 // check fails when the commit-msg hook is deleted outright, and install
 // recreates it.
 #[test]

@@ -76,6 +76,27 @@ pub fn list_decision_files_via(root: &Path, source: &Source) -> Vec<PathBuf> {
     out
 }
 
+/// Whether git would run the hook at `path` at all: git skips a hook file
+/// that is not executable, silently, so a hook whose content is current
+/// but whose mode is not is no hook. On unix this is the owner execute
+/// bit of the working-tree file (the file git runs, whatever `check` is
+/// reading content from); elsewhere there is no such bit and every hook
+/// counts as executable.
+pub fn hook_is_executable(path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::metadata(path)
+            .map(|m| m.permissions().mode() & 0o100 != 0)
+            .unwrap_or(false)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        true
+    }
+}
+
 /// The naming half of 76bd7ef0 A ("each file holds one topic and is named
 /// by it in lowercase words joined by hyphens, with no number or prefix"):
 /// whether `name` -- a file's own base name, e.g. from `Path::file_name`,

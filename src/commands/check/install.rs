@@ -146,6 +146,13 @@ fn check_hook(out: &mut Vec<Failure>, root: &Path, source: &Source, path: &str, 
                     check: "install".to_string(),
                     message: msg::hook_differs(path),
                 });
+            } else if !crate::repo::hook_is_executable(&root.join(path)) {
+                // Git runs the working-tree file, and only when it is
+                // executable: a current hook it would skip is no hook.
+                out.push(Failure {
+                    check: "install".to_string(),
+                    message: msg::hook_not_executable(path),
+                });
             }
         }
         None => out.push(Failure {
