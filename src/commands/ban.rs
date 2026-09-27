@@ -5,7 +5,7 @@ use crate::msg::{self, Actor, Next};
 use crate::record;
 use crate::repo;
 use crate::state;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::io::Read;
 
 /// Resolves `--term <name>` to that term's uuid, matched case-insensitively
@@ -84,16 +84,19 @@ pub fn run(term: Option<String>) -> i32 {
 
     // Refuse before writing anything if any new word is already in use
     // anywhere the non-staged `check` scan looks. Flagged once per line,
-    // even when more than one of the new words lands on it.
-    let hash_map: HashMap<String, Option<String>> =
-        new_hashes.iter().map(|h| (h.clone(), None)).collect();
+    // even when more than one of the new words lands on it: this only
+    // ever needs a yes/no per line, never `banned::hits`' per-token/term
+    // detail, so a plain membership check over each line's tokens is all
+    // it takes.
+    let new_hash_set: HashSet<&str> = new_hashes.iter().map(|h| h.as_str()).collect();
     let mut hits: Vec<String> = Vec::new();
     for (name, content) in collect_targets(&root, false, None) {
-        let mut last_line: Option<usize> = None;
-        for hit in banned::hits(&content, &hash_map, &[]) {
-            if last_line != Some(hit.line) {
-                hits.push(msg::location(&name, hit.line));
-                last_line = Some(hit.line);
+        for (i, line) in content.lines().enumerate() {
+            if banned::tokenize(line)
+                .iter()
+                .any(|tok| new_hash_set.contains(record::sha256_hex(tok).as_str()))
+            {
+                hits.push(msg::location(&name, i + 1));
             }
         }
     }
