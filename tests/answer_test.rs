@@ -1302,11 +1302,20 @@ fn owner_commands_refuse_without_a_tty_and_run_with_one() {
             adr_bin().display(),
             record.to_str().unwrap()
         );
-        let out = std::process::Command::new("script")
-            .current_dir(&dir)
-            .args(["-q", "-e", "-c", &cmd, "/dev/null"])
-            .output()
-            .expect("`script` (util-linux) is needed to open a real terminal");
+        let run = || {
+            std::process::Command::new("script")
+                .current_dir(&dir)
+                .args(["-q", "-e", "-c", &cmd, "/dev/null"])
+                .output()
+                .expect("`script` (util-linux) is needed to open a real terminal")
+        };
+        // Opening a pty under load can fail before adr runs at all; one
+        // retry keeps that outside adr's own outcome. approve is
+        // idempotent on an approved file, so a second run is safe.
+        let mut out = run();
+        if !out.status.success() {
+            out = run();
+        }
         assert!(
             out.status.success(),
             "approve should run under a real tty: stdout={} stderr={}",

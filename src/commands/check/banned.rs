@@ -128,12 +128,6 @@ pub(crate) fn collect_targets(
     if let Some(list) = repo::git(root, &["ls-files"]) {
         paths.extend(list.lines().map(|s| s.to_string()));
     }
-    for f in repo::list_decision_files(root) {
-        let s = state::rel_path(root, &f);
-        if !paths.contains(&s) {
-            paths.push(s);
-        }
-    }
     for p in paths {
         if skip_path(&p) {
             continue;

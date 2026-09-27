@@ -84,12 +84,12 @@ pub fn adr(dir: &Path, args: &[&str], envs: &[(&str, &str)], stdin: &str) -> Out
     let mut child = cmd.spawn().expect("adr should spawn");
     {
         use std::io::Write;
-        child
-            .stdin
-            .as_mut()
-            .unwrap()
-            .write_all(stdin.as_bytes())
-            .unwrap();
+        // A child that refuses before reading its input closes the pipe
+        // first; that broken pipe is the child's outcome, not a harness
+        // failure, so it is not unwrapped.
+        if let Err(e) = child.stdin.as_mut().unwrap().write_all(stdin.as_bytes()) {
+            assert_eq!(e.kind(), std::io::ErrorKind::BrokenPipe, "{}", e);
+        }
     }
     child.wait_with_output().expect("adr should finish")
 }
