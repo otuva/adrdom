@@ -80,6 +80,10 @@ pub struct QuestionView {
     pub standard: Option<String>,
     pub options: Vec<OptionView>,
     pub answer: Option<char>,
+    /// Each supersedes entry as the heading text it names (per "Does a
+    /// reference in a topic file carry the identifier of what it names?":
+    /// the page turns the id back into the name), or the bare id when no
+    /// topic file holds that heading any more.
     pub supersedes: Vec<String>,
     pub tests: usize,
     /// Every word=term pairing on this section's terms line (answered or
@@ -497,7 +501,11 @@ fn build_question_view(
         standard,
         options,
         answer: sec.answer_letter(),
-        supersedes: sec.supersedes.clone(),
+        supersedes: sec
+            .supersedes
+            .iter()
+            .map(|id| all_headings.get(id).cloned().unwrap_or_else(|| id.clone()))
+            .collect(),
         tests,
         words,
         no_entry,

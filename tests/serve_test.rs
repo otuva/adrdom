@@ -1412,6 +1412,34 @@ fn page_shows_question_options_and_the_decisions_list() {
         decisions.body
     );
 
+    // adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
+    // A supersedes entry is written as an id; the page turns it back into
+    // the heading it names, never printing the bare id.
+    let superseding = format!(
+        "# Second\n\n### 2.1 Is the decision revisited?\ndepends: decision\n\nsupersedes: {}\n\nProblem: the decision needs revisiting.\n\nStandard: s2.\n\n- A) Yes: the decision is revisited.\n  Why: reasons.\n  Costs: costs.\n- B) No: the decision stands.\n  Why: other reasons.\n  Costs: other costs.\n",
+        question_id
+    );
+    let second = write_record(&dir, "adrdom/decisions/second.md", &superseding);
+    approve_record(&dir, "adrdom/decisions/second.md");
+    let ask_out = adr(&dir, &["ask", second.to_str().unwrap()], &[], "");
+    assert!(ask_out.status.success(), "ask failed: {}", stderr(&ask_out));
+    let second_content = std::fs::read_to_string(&second).unwrap();
+    let second_id = extract_ids(&second_content)[0].clone();
+    assert!(adr_answer(&dir, &second_id, "A").status.success());
+
+    let decisions = get(port, "/decisions", Some(&cookie));
+    assert_eq!(decisions.status, 200, "body: {}", decisions.body);
+    assert!(
+        decisions.body.contains("supersedes 1.1 What is the unit of authority called?"),
+        "superseded heading missing from /decisions: {}",
+        decisions.body
+    );
+    assert!(
+        !decisions.body.contains(&question_id),
+        "bare id printed on /decisions: {}",
+        decisions.body
+    );
+
     let _ = child.kill();
     let _ = child.wait();
 }
