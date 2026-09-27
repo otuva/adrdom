@@ -1061,7 +1061,7 @@ pub fn agents_md_missing_brief() -> String {
 pub fn claude_md_missing_import() -> String {
     refuse(
         "CLAUDE.md does not import AGENTS.md".to_string(),
-        Next::agent("runs: adr install"),
+        Next::agent("runs: adr install --claude"),
     )
 }
 

@@ -716,7 +716,7 @@ fn check_install_fails_when_claude_md_does_not_import_agents_md() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("install: CLAUDE.md does not import AGENTS.md; agent runs: adr install"),
+        stdout(&out).contains("install: CLAUDE.md does not import AGENTS.md; agent runs: adr install --claude"),
         "{}",
         stdout(&out)
     );
