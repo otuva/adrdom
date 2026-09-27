@@ -149,7 +149,7 @@ blob: <git hash-object docs/adr/old-file.md>
 10-14	prose: <topic file name>
 15-22	decision: <heading of a question in a topic file>
 23-23	term: <name>
-24-30	dropped: copy of <heading of a current decision>
+24-30	dropped: copy of <heading of a question in a topic file>
 31-35	dropped: copy of docs/adr/other-file.md
 36-40	dropped: detail
 ```
