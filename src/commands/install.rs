@@ -75,9 +75,33 @@ pub fn run(claude: bool, codex: bool) -> i32 {
     let mut messages = Vec::new();
 
     let hooks = root.join(".githooks");
-    fs::create_dir_all(&hooks).ok();
-    create_hook(&hooks.join("pre-commit"), PRE_COMMIT_HOOK);
-    create_hook(&hooks.join("commit-msg"), COMMIT_MSG_HOOK);
+    if let Err(e) = fs::create_dir_all(&hooks) {
+        eprintln!(
+            "install: {}",
+            msg::create_failed(&hooks.display().to_string(), e, retry())
+        );
+        return 1;
+    }
+    match create_hook(&root, repo::PRE_COMMIT_HOOK_PATH, PRE_COMMIT_HOOK) {
+        Ok(m) => messages.push(m),
+        Err(e) => {
+            eprintln!(
+                "install: {}",
+                msg::write_failed(repo::PRE_COMMIT_HOOK_PATH, e, retry())
+            );
+            return 1;
+        }
+    }
+    match create_hook(&root, repo::COMMIT_MSG_HOOK_PATH, COMMIT_MSG_HOOK) {
+        Ok(m) => messages.push(m),
+        Err(e) => {
+            eprintln!(
+                "install: {}",
+                msg::write_failed(repo::COMMIT_MSG_HOOK_PATH, e, retry())
+            );
+            return 1;
+        }
+    }
 
     repo::git(&root, &["config", "core.hooksPath", ".githooks"]);
 
@@ -139,23 +163,29 @@ fn create_if_missing(path: &Path, content: &str) {
     }
 }
 
-fn create_hook(path: &Path, content: &str) {
-    if path.exists() {
-        return;
+/// Writes/refreshes `rel` (a hook path relative to `root`, e.g.
+/// `repo::PRE_COMMIT_HOOK_PATH`) with `content`: writes it when missing,
+/// rewrites it when the content on disk differs, and leaves it untouched
+/// (reporting "up to date") when it already matches -- the same
+/// missing/stale/current shape as `install_agents_md`.
+fn create_hook(root: &Path, rel: &str, content: &str) -> Result<String, String> {
+    let path = root.join(rel);
+    if let Ok(existing) = fs::read_to_string(&path) {
+        if existing == content {
+            return Ok(msg::hook_up_to_date(rel));
+        }
     }
-    if let Err(e) = fs::write(path, content) {
-        eprintln!("install: {}", msg::write_failed(&path.display().to_string(), e, retry()));
-        return;
-    }
+    fs::write(&path, content).map_err(|e| e.to_string())?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if let Ok(meta) = fs::metadata(path) {
+        if let Ok(meta) = fs::metadata(&path) {
             let mut perms = meta.permissions();
             perms.set_mode(0o755);
-            fs::set_permissions(path, perms).ok();
+            fs::set_permissions(&path, perms).ok();
         }
     }
+    Ok(msg::hook_written(rel))
 }
 
 /// Locates the marker lines in `lines` (as produced by `content.split('\n')`,

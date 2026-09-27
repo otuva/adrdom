@@ -18,6 +18,17 @@ pub const TERMS_PATH: &str = "adrdom/terms.md";
 /// (`ban`, `unban`, `ask`, `check --banned`, `terms_refusals`, `install`).
 pub const BAN_LIST: &str = "adrdom/state/banned.sha256";
 
+/// Where `adr install` writes the pre-commit hook, relative to the repo
+/// root. Its content is `commands::install::PRE_COMMIT_HOOK`; `check`'s
+/// `install` check reads this path the same way it reads AGENTS.md (per
+/// "Does check hold the files install writes?", 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
+/// answer A, extended by the owner to cover the git hooks).
+pub const PRE_COMMIT_HOOK_PATH: &str = ".githooks/pre-commit";
+/// Where `adr install` writes the commit-msg hook, relative to the repo
+/// root. Its content is `commands::install::COMMIT_MSG_HOOK`; checked the
+/// same way as `PRE_COMMIT_HOOK_PATH`.
+pub const COMMIT_MSG_HOOK_PATH: &str = ".githooks/commit-msg";
+
 pub fn find_root() -> Option<PathBuf> {
     let mut dir = std::env::current_dir().ok()?;
     loop {

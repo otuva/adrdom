@@ -739,10 +739,11 @@ fn terms_article_shows_waiting_for_approval_when_unapproved() {
     assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
         .status
         .success());
-    // AGENTS.md staged too: the pre-commit hook now judges the same
-    // staged tree `check --staged` does (per "Does check at a commit read
-    // the staged files?"), and it sits on disk, unstaged, since install.
-    run_git(&dir, &["add", "adrdom/terms.md", "adrdom/state/ledger.tsv", "AGENTS.md"]);
+    // AGENTS.md and the hooks staged too: the pre-commit hook judges the
+    // staged tree (per "Does check at a commit read the staged files?"),
+    // and check holds every file install wrote, which sit on disk,
+    // unstaged, since install.
+    run_git(&dir, &["add", "adrdom/terms.md", "adrdom/state/ledger.tsv", "AGENTS.md", ".githooks"]);
     let commit_out = run_git(&dir, &["commit", "-q", "-m", "approve terms v1"]);
     assert!(commit_out.status.success(), "{:?}", commit_out);
 

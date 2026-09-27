@@ -1,6 +1,6 @@
 use super::Failure;
 use crate::msg;
-use crate::repo::Source;
+use crate::repo::{self, Source};
 use std::path::Path;
 
 /// Read through `source` -- the index when `check` is judging a commit,
@@ -14,6 +14,24 @@ use std::path::Path;
 /// for `check` to treat them differently from any other judged file).
 pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
     let mut out = Vec::new();
+
+    // The git hooks are checked unconditionally, the same as AGENTS.md
+    // below (6ef9eca6-fd8b-4211-aae7-00b37a2a9245 A, extended by the owner
+    // to cover the hooks `adr install` writes, not just AGENTS.md).
+    check_hook(
+        &mut out,
+        root,
+        source,
+        repo::PRE_COMMIT_HOOK_PATH,
+        crate::commands::install::PRE_COMMIT_HOOK,
+    );
+    check_hook(
+        &mut out,
+        root,
+        source,
+        repo::COMMIT_MSG_HOOK_PATH,
+        crate::commands::install::COMMIT_MSG_HOOK,
+    );
 
     // AGENTS.md is checked unconditionally; CLAUDE.md's import is checked
     // only when .claude/ exists, the same condition used below for the
@@ -113,6 +131,34 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
     }
 
     out
+}
+
+/// Compares `path`'s content in `source` against `content`, line by line
+/// with `trim_end` (the same tolerance `check_install`'s AGENTS.md brief
+/// comparison uses), and pushes a failure when the file is missing or
+/// differs.
+fn check_hook(out: &mut Vec<Failure>, root: &Path, source: &Source, path: &str, content: &str) {
+    match source.read(root, path) {
+        Some(existing) => {
+            let existing_lines: Vec<&str> = existing.split('\n').collect();
+            let want_lines: Vec<&str> = content.split('\n').collect();
+            let matches = existing_lines.len() == want_lines.len()
+                && existing_lines
+                    .iter()
+                    .zip(want_lines.iter())
+                    .all(|(a, b)| a.trim_end() == b.trim_end());
+            if !matches {
+                out.push(Failure {
+                    check: "install".to_string(),
+                    message: msg::hook_differs(path),
+                });
+            }
+        }
+        None => out.push(Failure {
+            check: "install".to_string(),
+            message: msg::hook_missing(path),
+        }),
+    }
 }
 
 fn missing_deny_entry(entry: &str) -> Failure {

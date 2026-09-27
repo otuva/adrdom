@@ -18,7 +18,9 @@ runtime dependencies beyond `git` on `PATH`.
 ## Commands
 
 - `adr install` — set up `adrdom/decisions/`, `adrdom/state/`, and git hooks
-  in the current repository, and write the agent brief into AGENTS.md (the
+  in the current repository (writing or rewriting each hook to match what
+  it writes, and leaving an already-current one untouched), and write the
+  agent brief into AGENTS.md (the
   file agents read) between marker lines, refreshing it in place on a later
   run. Idempotent. `adr install --claude` additionally creates CLAUDE.md
   holding a line importing AGENTS.md when the file is missing (or adds that
@@ -137,8 +139,11 @@ as `terms: <name>=<uuid>, <name>=<uuid>`.
 into `.claude/settings.json`'s `permissions.deny` (covering `adr answer`,
 `adr approve`, `adr unban`, `adr serve`, `adr uninstall`, and edits to
 `adrdom/state/`). `adr check`'s `install` check always verifies that
-AGENTS.md holds the current brief between its marker lines; it fails naming
-`adr install` as the fix. The CLAUDE.md-import and deny-entry parts of the
+AGENTS.md holds the current brief between its marker lines, and that
+`.githooks/pre-commit` and `.githooks/commit-msg` each hold what `adr
+install` writes; either failure names `adr install` as the fix (this does
+not cover `git config core.hooksPath` itself, which is not a file `check`
+can read). The CLAUDE.md-import and deny-entry parts of the
 check only run when a `.claude` directory exists in the repository; when it
 does, the check fails if CLAUDE.md exists but lacks the import, or any deny
 entry is missing, naming `adr install --claude` as the fix. Likewise, the

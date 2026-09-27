@@ -1079,6 +1079,24 @@ pub fn settings_unparseable(path: &str) -> String {
     )
 }
 
+/// `check`'s `install` check on a git hook (`.githooks/pre-commit` or
+/// `.githooks/commit-msg`, per `path`): the file exists but its content
+/// differs from what `adr install` writes.
+pub fn hook_differs(path: &str) -> String {
+    refuse(
+        format!("{} differs from what install writes", path),
+        Next::agent("runs: adr install"),
+    )
+}
+
+/// Same check as `hook_differs`, but the hook file is missing outright.
+pub fn hook_missing(path: &str) -> String {
+    refuse(
+        format!("{} is missing", path),
+        Next::agent("runs: adr install"),
+    )
+}
+
 pub fn codex_rules_stale() -> String {
     refuse(
         ".codex/rules/adrdom.rules differs from this binary's".to_string(),
@@ -1313,6 +1331,18 @@ pub fn claude_md_import_added() -> String {
     "install: CLAUDE.md: added the AGENTS.md import".to_string()
 }
 
+/// `adr install` wrote a hook (`path`, e.g. `.githooks/pre-commit`) that
+/// was either missing or held stale content.
+pub fn hook_written(path: &str) -> String {
+    format!("install: {}: written", path)
+}
+
+/// `adr install` found a hook (`path`) already holding exactly what it
+/// writes, and left it untouched.
+pub fn hook_up_to_date(path: &str) -> String {
+    format!("install: {}: already up to date", path)
+}
+
 pub fn agents_md_removed_whole() -> String {
     "uninstall: AGENTS.md: removed (held only the brief)".to_string()
 }
@@ -1527,6 +1557,8 @@ mod tests {
             settings_unparseable(".claude/settings.json"),
             codex_rules_stale(),
             codex_rules_missing(),
+            hook_differs(".githooks/pre-commit"),
+            hook_missing(".githooks/pre-commit"),
             malformed_ledger_row(3, "bad row"),
             ledger_not_append_only(),
             ledger_asked_id_missing("id-1"),

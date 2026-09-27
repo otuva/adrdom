@@ -233,6 +233,34 @@ fn install_without_flags_writes_only_githooks_and_agents_md_brief() {
     );
 }
 
+// --- git hooks -----------------------------------------------------------
+
+// adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
+// install refreshes an existing hook whose content differs from what it
+// writes, and leaves an already-current hook untouched (byte-identical
+// second run) -- the same missing/stale/current shape as AGENTS.md.
+#[test]
+fn install_rewrites_a_stale_hook_and_leaves_a_current_one_untouched() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let first = std::fs::read(dir.join(".githooks/pre-commit")).unwrap();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let second = std::fs::read(dir.join(".githooks/pre-commit")).unwrap();
+    assert_eq!(
+        first, second,
+        "a second install must leave an already-current hook byte-identical"
+    );
+
+    std::fs::write(dir.join(".githooks/pre-commit"), "#!/bin/sh\necho edited\n").unwrap();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    assert_eq!(
+        std::fs::read_to_string(dir.join(".githooks/pre-commit")).unwrap(),
+        "#!/bin/sh\nadr check --staged\nexit $?\n",
+        "install must rewrite a hook whose content differs from what it writes"
+    );
+}
+
 // --- AGENTS.md ---------------------------------------------------------
 
 #[test]

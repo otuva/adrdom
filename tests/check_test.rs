@@ -722,6 +722,106 @@ fn check_install_fails_when_claude_md_does_not_import_agents_md() {
     );
 }
 
+// adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
+// check fails when the pre-commit hook differs from what install writes
+// (an agent's installed block, extended by the owner to cover the git
+// hooks); the move is running install again, which restores it.
+#[test]
+fn check_install_fails_when_pre_commit_hook_differs_and_passes_after_reinstall() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    std::fs::write(dir.join(".githooks/pre-commit"), "#!/bin/sh\necho edited\n").unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    assert!(
+        stdout(&out).contains(
+            "install: .githooks/pre-commit differs from what install writes; agent runs: adr install"
+        ),
+        "{}",
+        stdout(&out)
+    );
+
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    assert_eq!(
+        std::fs::read_to_string(dir.join(".githooks/pre-commit")).unwrap(),
+        "#!/bin/sh\nadr check --staged\nexit $?\n",
+        "reinstall should restore the hook"
+    );
+
+    let out2 = adr(&dir, &["check"], &[], "");
+    assert!(
+        !stdout(&out2).contains("install:"),
+        "install check should pass after re-install: {}",
+        stdout(&out2)
+    );
+}
+
+// adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
+// check fails when the commit-msg hook is deleted outright, and install
+// recreates it.
+#[test]
+fn check_install_fails_when_commit_msg_hook_missing_and_passes_after_reinstall() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    std::fs::remove_file(dir.join(".githooks/commit-msg")).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    assert!(
+        stdout(&out).contains(
+            "install: .githooks/commit-msg is missing; agent runs: adr install"
+        ),
+        "{}",
+        stdout(&out)
+    );
+
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    assert!(dir.join(".githooks/commit-msg").is_file());
+
+    let out2 = adr(&dir, &["check"], &[], "");
+    assert!(
+        !stdout(&out2).contains("install:"),
+        "install check should pass after re-install: {}",
+        stdout(&out2)
+    );
+}
+
+// adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
+// check --staged judges the staged hook, not the working tree: the good
+// hook is staged, then the working-tree copy is corrupted, and the staged
+// check still passes (per 34e81f57 A, the same source rule as AGENTS.md).
+#[test]
+fn check_staged_judges_the_staged_hook_not_the_working_tree_copy() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    run_git(&dir, &["add", "-A"]);
+
+    std::fs::write(dir.join(".githooks/pre-commit"), "#!/bin/sh\necho edited\n").unwrap();
+
+    let out = adr(&dir, &["check", "--staged"], &[], "");
+    assert!(
+        out.status.success(),
+        "staged check should judge the staged (good) hook, not the corrupted working tree: {}",
+        stdout(&out)
+    );
+
+    let out2 = adr(&dir, &["check"], &[], "");
+    assert!(
+        !out2.status.success(),
+        "plain check reads the working tree, where the hook is now bad"
+    );
+    assert!(
+        stdout(&out2).contains(
+            "install: .githooks/pre-commit differs from what install writes; agent runs: adr install"
+        ),
+        "{}",
+        stdout(&out2)
+    );
+}
+
 // adr: f8d92841-aef7-4cd7-bd94-0e07c03e4cb6
 // The installed brief tells the agent to build only a tier whose questions
 // are all answered, and never a tier holding an open sibling.
