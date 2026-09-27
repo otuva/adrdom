@@ -177,12 +177,26 @@ pub fn dep_refusal_text(rel: &str, heading: &str, err: &DepError) -> String {
 /// either way, this used to re-read every file off disk itself regardless,
 /// doubling that read in the callers that already had it in memory.
 pub fn cross_file_heading_index(records: &[RecordFile], led: &Ledger) -> HashMap<String, Vec<(String, String)>> {
+    heading_index(records, Some(led))
+}
+
+/// The traversal `cross_file_heading_index` (current decisions only, via
+/// `Some(led)`) and `blame::any_headings_with_id` (any state at all, via
+/// `None`) both build from: every heading text carrying an id, across
+/// every topic file in `records`, paired with its file and id, filtered to
+/// current decisions only when a ledger is given.
+pub fn heading_index(
+    records: &[RecordFile],
+    led: Option<&Ledger>,
+) -> HashMap<String, Vec<(String, String)>> {
     let mut out: HashMap<String, Vec<(String, String)>> = HashMap::new();
     for rf in records {
         for sec in &rf.sections {
             let Some(id) = &sec.id else { continue };
-            if !state::is_current(led, id) {
-                continue;
+            if let Some(led) = led {
+                if !state::is_current(led, id) {
+                    continue;
+                }
             }
             out.entry(sec.heading_text.trim().to_string())
                 .or_default()

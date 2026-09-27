@@ -165,3 +165,14 @@ id: 9d634996-475e-4ddc-8113-05c404ad9d5c
 terms: asked=3c8d4c9c-abca-4faa-b7c1-aae39951376c, options=43778946-d44c-4acf-a766-0a4915fce199, question=277a8338-c57a-43cc-8b28-6b42e9347f6a
 definition: The letters of a question's options under which a question standing on it is asked.
 aliases: answer sets
+
+## origin
+id: ecb18413-cb3e-437e-9444-3cdd406ed67d
+definition: A prose file outside adrdom whose text the records take in.
+aliases: origins
+
+## blame
+id: 108053a8-c2c3-4561-874c-2f573a5409f2
+terms: origin=ecb18413-cb3e-437e-9444-3cdd406ed67d
+definition: A file holding, for one origin, its line ranges and what each range went to in the records.
+aliases: blame file, blame files

@@ -78,6 +78,21 @@ pub fn terms_approved(led: &Ledger, tf: &TermsFile) -> bool {
     }
 }
 
+/// True when `content` (a blame file's current text, exactly as it stands)
+/// hashes to the latest `blame` ledger row for `rel` (per "Does the owner
+/// approve a blame file?", e879fe72 A: "a blame file that differs from its
+/// latest approval is a draft"). Hashed the same way `crate::blame::file_hash`
+/// hashes the rewritten lines `do_approve_blame` is about to write, so a
+/// file freshly approved always reads back as approved.
+pub fn blame_approved(led: &Ledger, rel: &str, content: &str) -> bool {
+    let lines = record::split_lines(content);
+    let hash = crate::blame::file_hash(&lines);
+    match led.latest_for_path("blame", rel) {
+        Some(row) => row.hash == hash,
+        None => false,
+    }
+}
+
 /// Loads `adrdom/terms.md` under `root`, or `None` when the repo has no
 /// terms file at all (terms are optional).
 pub fn load_terms(root: &Path) -> Option<TermsFile> {
@@ -480,5 +495,34 @@ mod tests {
         let root = PathBuf::from("/repo");
         let path = PathBuf::from("adrdom/decisions/plan.md");
         assert_eq!(rel_path(&root, &path), "adrdom/decisions/plan.md");
+    }
+
+    // adr: e879fe72-ec07-48cd-9902-2b158aaae726
+    //
+    // "a blame file that differs from its latest approval is a draft":
+    // no `blame` row at all, or one whose hash doesn't match the content's
+    // own hash, is not approved; a row over the exact hash `blame::file_hash`
+    // computes for that content is.
+    #[test]
+    fn blame_approved_compares_the_latest_blame_row_hash() {
+        let content = "origin: docs/x.md\nblob: 0000000000000000000000000000000000000000\n\n1-1\tdropped: dead\n";
+        let led = Ledger { rows: vec![], malformed: vec![] };
+        assert!(!blame_approved(&led, "adrdom/blame/x.md", content));
+
+        let hash = crate::blame::file_hash(&record::split_lines(content));
+        let led = Ledger {
+            rows: vec![Row {
+                time: "2024-01-01T00:00:00Z".to_string(),
+                event: "blame".to_string(),
+                id: "-".to_string(),
+                hash,
+                detail: "adrdom/blame/x.md".to_string(),
+                version: "0.1.0".to_string(),
+            }],
+            malformed: vec![],
+        };
+        assert!(blame_approved(&led, "adrdom/blame/x.md", content));
+        assert!(!blame_approved(&led, "adrdom/blame/other.md", content));
+        assert!(!blame_approved(&led, "adrdom/blame/x.md", "different content\n"));
     }
 }

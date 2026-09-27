@@ -147,6 +147,7 @@ impl Section {
     }
 }
 
+#[derive(Clone)]
 pub struct RecordFile {
     pub path: PathBuf,
     /// The path as printed: relative to the repo root with forward slashes

@@ -1275,6 +1275,242 @@ pub fn body_under_unapproved_heading(rel: &str, heading: &str) -> String {
     )
 }
 
+// --- adrdom/blame/*.md (blame files) --------------------------------------
+// Shared by `blame::do_approve_blame`'s refusal collection (per "What does
+// a blame file hold?", "Does a blame file cover its whole origin?", "What
+// does a blame row name?", "Does the owner approve a blame file?").
+
+pub fn blame_shape_error(rel: &str, e: &str) -> String {
+    refuse(format!("{}: {}", rel, e), Next::agent("fixes the blame file"))
+}
+
+pub fn blame_blob_not_found(rel: &str, blob: &str) -> String {
+    refuse(
+        format!("{}: origin is missing and blob {} is not in git", rel, blob),
+        Next::agent("restores the origin at its path, or fixes the blob identifier"),
+    )
+}
+
+/// The origin sits at its path but its content hashes to a different blob
+/// than the blame file names (per "What does a blame file hold?").
+pub fn blame_blob_differs(rel: &str, origin: &str) -> String {
+    refuse(
+        format!("{}: blob does not match the content of {}", rel, origin),
+        Next::agent(&format!(
+            "fixes the blob identifier to the hash of {}, or restores {} to the content the rows map",
+            origin, origin
+        )),
+    )
+}
+
+fn range_text(start: usize, end: usize) -> String {
+    if start == end {
+        start.to_string()
+    } else {
+        format!("{}-{}", start, end)
+    }
+}
+
+pub fn blame_coverage_gap(rel: &str, start: usize, end: usize) -> String {
+    refuse(
+        format!(
+            "{}: line(s) {} of the origin are covered by no row",
+            rel,
+            range_text(start, end)
+        ),
+        Next::agent("adds a row covering them"),
+    )
+}
+
+pub fn blame_range_beyond(rel: &str, start: usize, end: usize, n: usize) -> String {
+    refuse(
+        format!(
+            "{}: row {} is beyond the origin's {} line(s)",
+            rel,
+            range_text(start, end),
+            n
+        ),
+        Next::agent("fixes the range"),
+    )
+}
+
+pub fn blame_row_unknown_heading(rel: &str, text: &str) -> String {
+    refuse(
+        format!(
+            "{}: row names heading \"{}\" which is no question in any topic file",
+            rel, text
+        ),
+        Next::agent("names a heading that exists, or rewrites the row"),
+    )
+}
+
+pub fn blame_row_ambiguous_heading(rel: &str, text: &str, files: &[String]) -> String {
+    refuse(
+        format!(
+            "{}: row names heading \"{}\" which is a question in more than one file: {}",
+            rel,
+            text,
+            files.join(", ")
+        ),
+        Next::agent("names it by id instead"),
+    )
+}
+
+pub fn blame_row_unknown_term(rel: &str, name: &str) -> String {
+    refuse(
+        format!("{}: row names term \"{}\" which is no term", rel, name),
+        Next::agent("adds the term to adrdom/terms.md or rewrites the row"),
+    )
+}
+
+pub fn blame_row_retired_term(rel: &str, name: &str) -> String {
+    refuse(
+        format!("{}: row names term \"{}\" which is retired", rel, name),
+        Next::agent("names a current term or rewrites the row"),
+    )
+}
+
+pub fn blame_row_missing_prose_stem(rel: &str, stem: &str) -> String {
+    refuse(
+        format!(
+            "{}: row names topic file \"{}\" which does not exist",
+            rel, stem
+        ),
+        Next::agent("names an existing topic file or rewrites the row"),
+    )
+}
+
+/// `path` had no trailing `?`, so it was read as a copy-of-origin path
+/// (per "What does a blame row name?"), not a heading -- the extra clause
+/// tells the agent that a heading is the other way to spell this row, in
+/// case the missing `?` was the actual mistake.
+pub fn blame_row_copy_path_missing(rel: &str, path: &str) -> String {
+    let hint = if path.trim_end().ends_with('?') {
+        ""
+    } else {
+        "; a question is named by its heading ending in ?"
+    };
+    refuse(
+        format!(
+            "{}: row's copy target \"{}\" is no file in the working tree and has no blame file of its own{}",
+            rel, path, hint
+        ),
+        Next::agent("names an existing origin or rewrites the row"),
+    )
+}
+
+/// The origin line, or a `dropped: copy of <path>` row, names a path
+/// under `repo::ADRDOM_DIR`, or one that exists but is not a regular file
+/// (per the "origin" term: "a prose file outside adrdom whose text the
+/// records take in"). Shared by the origin line itself (34f0202a A) and a
+/// copy-of path (38216d39 A) -- `blame::valid_origin_path` is the one
+/// place both `approve` and `check` read this rule from.
+pub fn blame_bad_origin_path(rel: &str, path: &str) -> String {
+    refuse(
+        format!("{}: \"{}\" is not a regular file outside adrdom", rel, path),
+        Next::agent("names a regular file outside adrdom"),
+    )
+}
+
+pub fn blame_row_unknown_destination(rel: &str, start: usize, end: usize, text: &str) -> String {
+    refuse(
+        format!(
+            "{}: row {}: \"{}\": blame row names no known destination",
+            rel,
+            range_text(start, end),
+            text
+        ),
+        Next::agent(
+            "rewrites the row as one of: decision: <heading>, term: <name>, prose: <topic file>, dropped: dead, dropped: detail, dropped: copy of <heading or origin path>",
+        ),
+    )
+}
+
+pub fn blame_approved(rel: &str) -> String {
+    format!("approve: {}: blame approved", rel)
+}
+
+pub fn blame_unchanged(rel: &str) -> String {
+    format!("approve: {}: blame unchanged", rel)
+}
+
+// --- commands/check/blame.rs -----------------------------------------------
+// Shared by `check`'s `blame` category (per "Does check hold a blame file
+// to its origin?", 5fddeeb5 A; "Does an origin leave the repository while
+// its blame file has an open row?", 4bb5ef1b A; "Does the tool stop while
+// a blame file waits for approval?", 9c3cc17e A).
+
+/// `git hash-object`'s own blob sha for `origin`'s current content no
+/// longer matches the blame file's `blob:` line (5fddeeb5 A). A missing
+/// origin is never reported here -- that is `blame_origin_missing`.
+pub fn blame_blob_mismatch(rel: &str, origin: &str) -> String {
+    refuse(
+        format!("{}: blob no longer matches {}", rel, origin),
+        Next::agent(format!("updates the rows for {}'s current content", origin))
+            .and_owner_runs(format!("adr approve {} again", rel)),
+    )
+}
+
+/// `origin` is missing while `rel` still holds it hostage: either the
+/// blame file itself is a draft (`"the blame file's own approval"` in
+/// `open`), or a `decision:` row it carries is not yet answered (4bb5ef1b
+/// A). `open` is sorted, deduped, and always non-empty when this is
+/// called.
+pub fn blame_origin_missing(rel: &str, origin: &str, open: &[String]) -> String {
+    refuse(
+        format!(
+            "{}: origin {} is missing while {} still open: {}",
+            rel,
+            origin,
+            if open.len() == 1 { "this is" } else { "these are" },
+            open.join(", ")
+        ),
+        Next::agent(format!(
+            "restores {} from git; it may go once the blame file is approved and every row above is answered",
+            origin
+        )),
+    )
+}
+
+/// `count` blame files awaiting approval (9c3cc17e A: a draft passes, it
+/// only ever earns a count line, the same shape `plan_awaiting` already
+/// gives an unapproved topic file).
+pub fn blame_awaiting(count: usize, list: &str) -> String {
+    format!("blame: {} file(s) awaiting approval: {}", count, list)
+}
+
+/// A blame file itself (`rel`) could not be read as text at all (per "Does
+/// check hold a blame file to its origin?", 5fddeeb5 A: fail-open here
+/// means never silently skipping the file). Distinct from `blame_shape_error`
+/// -- there is no content to have a shape at all.
+pub fn blame_file_unreadable(rel: &str) -> String {
+    refuse(
+        format!("{}: cannot be read as text", rel),
+        Next::agent("fixes the file so it can be read as text (e.g. its encoding)"),
+    )
+}
+
+/// `git hash-object --stdin` itself failed on `origin`'s current content
+/// (5fddeeb5 A: the blob comparison must fail closed, never silently pass
+/// when git could not be asked at all).
+pub fn blame_hash_failed(rel: &str, origin: &str) -> String {
+    refuse(
+        format!("{}: git could not hash the current content of {}", rel, origin),
+        Next::agent(format!("retries; git must be able to read and hash {}", origin)),
+    )
+}
+
+/// `origin` sits at its path (per `Source::exists`) but its content could
+/// not be read as text (4bb5ef1b A: distinct from the origin being
+/// missing outright -- a present, unreadable origin is its own failure,
+/// never routed through the missing-origin branch).
+pub fn blame_origin_unreadable(rel: &str, origin: &str) -> String {
+    refuse(
+        format!("{}: origin {} exists but cannot be read as text", rel, origin),
+        Next::agent(format!("fixes {} so it can be read as text (e.g. its encoding)", origin)),
+    )
+}
+
 // --- serve/mod.rs ------------------------------------------------------
 
 pub fn bind_failed(port: u16, e: impl Display) -> String {
@@ -1645,6 +1881,24 @@ mod tests {
             body_under_unapproved_heading("x.md", "heading"),
             bind_failed(7357, e),
             missing_answer_selection("id-1", "abcd1234"),
+            blame_shape_error("adrdom/blame/x.md", "line 1: missing \"origin: <path>\""),
+            blame_blob_not_found("adrdom/blame/x.md", "abc123"),
+            blame_blob_differs("adrdom/blame/x.md", "docs/x.md"),
+            blame_coverage_gap("adrdom/blame/x.md", 3, 5),
+            blame_range_beyond("adrdom/blame/x.md", 1, 10, 5),
+            blame_row_unknown_heading("adrdom/blame/x.md", "Does X?"),
+            blame_row_ambiguous_heading("adrdom/blame/x.md", "Does X?", &["a.md".to_string(), "b.md".to_string()]),
+            blame_row_unknown_term("adrdom/blame/x.md", "widget"),
+            blame_row_retired_term("adrdom/blame/x.md", "widget"),
+            blame_row_missing_prose_stem("adrdom/blame/x.md", "no-such-topic"),
+            blame_row_copy_path_missing("adrdom/blame/x.md", "docs/gone.md"),
+            blame_row_unknown_destination("adrdom/blame/x.md", 1, 1, "free text"),
+            blame_blob_mismatch("adrdom/blame/x.md", "docs/x.md"),
+            blame_origin_missing("adrdom/blame/x.md", "docs/x.md", &["Does X?".to_string()]),
+            blame_bad_origin_path("adrdom/blame/x.md", "adrdom/blame/notes.md"),
+            blame_file_unreadable("adrdom/blame/x.md"),
+            blame_hash_failed("adrdom/blame/x.md", "docs/x.md"),
+            blame_origin_unreadable("adrdom/blame/x.md", "docs/x.md"),
         ];
         for o in &outputs {
             assert!(
