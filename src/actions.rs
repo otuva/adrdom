@@ -103,7 +103,11 @@ struct Located {
     cur_hash: String,
 }
 
-fn locate_asked(root: &Path, id: &str, version: &str) -> Result<Located, String> {
+/// `letter` is the option `do_answer` will pick; it is checked against the
+/// section's options right after the already-answered checks and before
+/// the version check, as before answer and refuse shared this path.
+/// `do_refuse` passes `None`.
+fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> Result<Located, String> {
     let ledger_path = root.join(crate::repo::LEDGER_PATH);
     let led = ledger::read(&ledger_path);
 
@@ -133,6 +137,11 @@ fn locate_asked(root: &Path, id: &str, version: &str) -> Result<Located, String>
         }
         if sec.answer_line.is_some() {
             return Err(msg::already_answered(&sec.heading_text));
+        }
+        if let Some(letter) = letter {
+            if !sec.options.iter().any(|o| o.letter == letter) {
+                return Err(msg::letter_not_an_option(letter, &sec.heading_text));
+            }
         }
         cur_hash = record::section_hash(&rf.lines, sec);
         // Per "Does an answer carry the version of the question the owner
@@ -212,14 +221,11 @@ fn finish_answer(
 }
 
 pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<Outcome, String> {
-    let Located { led, rf, idx, tf, cur_hash, .. } = locate_asked(root, id, version)?;
+    let Located { led, rf, idx, tf, cur_hash, .. } = locate_asked(root, id, version, Some(letter))?;
 
     let supersedes_val;
     {
         let sec = &rf.sections[idx];
-        if !sec.options.iter().any(|o| o.letter == letter) {
-            return Err(msg::letter_not_an_option(letter, &sec.heading_text));
-        }
         let Some(terms_line_idx) = sec.terms_line else {
             return Err(msg::no_terms_line(id));
         };
@@ -312,7 +318,7 @@ pub fn do_refuse(root: &Path, id: &str, version: &str) -> Result<Outcome, String
     // version, and ledger-state checks as the letter path (`locate_asked`).
     // The section's own terms-line/pairing checks are not shared (5), so
     // the returned terms file has no further use here.
-    let Located { rf, idx, rel, cur_hash, .. } = locate_asked(root, id, version)?;
+    let Located { rf, idx, rel, cur_hash, .. } = locate_asked(root, id, version, None)?;
 
     let supersedes_val = rf.sections[idx].supersedes.clone();
     let heading_for_print = rf.sections[idx].heading_text.clone();

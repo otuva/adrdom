@@ -1476,6 +1476,40 @@ fn answer_with_a_stale_version_is_refused_and_writes_nothing() {
     );
 }
 
+// A letter that names no option is refused before the version is even
+// compared: an answer with both a stale version and a bad letter hears
+// about the letter, so fixing the version never uncovers a second refusal.
+#[test]
+fn answer_with_a_bad_letter_and_a_stale_version_is_refused_for_the_letter() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+
+    let content = std::fs::read_to_string(&record).unwrap();
+    let question_id = extract_ids(&content)[0].clone();
+    let stale_version = current_version(&dir, &question_id);
+    let edited = content.replace(
+        "names leaked into decisions.",
+        "names leaked into decisions, badly.",
+    );
+    std::fs::write(&record, edited).unwrap();
+    let reask = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(reask.status.success(), "reask failed: {}", stderr(&reask));
+    assert_ne!(current_version(&dir, &question_id), stale_version);
+
+    let stale_arg = format!("{}@{}", question_id, stale_version);
+    let out = adr_owner(&dir, &["answer", &stale_arg, "Z"], "");
+    assert!(!out.status.success());
+    let err = stderr(&out);
+    assert!(err.contains("letter Z does not name an option"), "{}", err);
+    assert!(!err.contains("has moved since that version was read"), "{}", err);
+}
+
 // adr: 11be073c-ce91-44d8-833a-ef0b5e0b1672
 //
 // The version comparison is case-insensitive: an uppercased version (hex
