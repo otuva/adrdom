@@ -669,9 +669,8 @@ pub fn tier_blocked_waiting(
     )
 }
 
-/// The open tier still holds a question nobody has asked yet (a skeleton
-/// heading, or a body `ask` has not run on), so a later tier's candidate
-/// waits on the agent, not the owner.
+/// The open tier still holds a bare skeleton heading (no body yet), so a
+/// later tier's candidate waits on the agent, not the owner, to write one.
 pub fn tier_blocked_unasked(
     rel: &str,
     heading: &str,
@@ -685,6 +684,26 @@ pub fn tier_blocked_unasked(
             rel, heading, cand_tier, open_tier, blocker
         ),
         Next::agent("writes its body and asks it first"),
+    )
+}
+
+/// The open tier still holds a question with a real body -- `state::
+/// tier_blocker` only ever returns one, so this is never a skeleton --
+/// that nobody has run `ask` on yet, so a later tier's candidate waits on
+/// the agent to ask it, not to write a body that already exists.
+pub fn tier_blocked_needs_ask(
+    rel: &str,
+    heading: &str,
+    cand_tier: usize,
+    open_tier: usize,
+    blocker: &str,
+) -> String {
+    refuse(
+        format!(
+            "{}: \"{}\" is in tier {}; tier {} is open, waiting on unasked \"{}\"",
+            rel, heading, cand_tier, open_tier, blocker
+        ),
+        Next::agent("asks it first"),
     )
 }
 
@@ -1539,6 +1558,7 @@ mod tests {
             tier_blocked_refused("x.md", "heading", 2, 1, "blocker"),
             tier_blocked_waiting("x.md", "heading", 2, 1, "blocker", "id-1", "abcd1234"),
             tier_blocked_unasked("x.md", "heading", 2, 1, "blocker"),
+            tier_blocked_needs_ask("x.md", "heading", 2, 1, "blocker"),
             moot_candidate("x.md", "heading", "target", "A", 'B'),
             banned_word_in_candidate("x.md", "heading", ""),
             pairs_no_term("x.md", "heading"),

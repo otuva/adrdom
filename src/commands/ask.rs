@@ -320,8 +320,12 @@ pub fn run(record_path: PathBuf) -> i32 {
                     // The next move depends on where the blocker stands:
                     // refused -> the plan changes; asked -> the owner
                     // answers it (by id@version, the form `answer`
-                    // takes); anything else (a skeleton, or a body `ask`
-                    // has not run on) -> the agent asks it first.
+                    // takes); anything else -> the agent asks it first,
+                    // writing a body first only when the blocker is a bare
+                    // skeleton (`state::tier_blocker` returns a non-skeleton
+                    // section whenever the open tier has one, so a blocker
+                    // that reaches here unrefused and unasked already has a
+                    // body exactly when it is not a skeleton).
                     let blocker_state = blocker
                         .id
                         .as_deref()
@@ -346,8 +350,16 @@ pub fn run(record_path: PathBuf) -> i32 {
                             blocker.id.as_deref().unwrap_or("<id>"),
                             &bhash[..record::VERSION_LEN],
                         )
-                    } else {
+                    } else if blocker.is_skeleton {
                         msg::tier_blocked_unasked(
+                            &rel,
+                            &sec.heading_text,
+                            cand_tier,
+                            open_n,
+                            &blocker.heading_text,
+                        )
+                    } else {
+                        msg::tier_blocked_needs_ask(
                             &rel,
                             &sec.heading_text,
                             cand_tier,

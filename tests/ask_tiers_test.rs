@@ -457,6 +457,30 @@ fn ask_blocks_a_later_tier_candidate_naming_an_unasked_skeleton() {
     );
 }
 
+// `state::tier_blocker` returns a non-skeleton section whenever the open
+// tier holds one: a fully written, approved question that nobody has run
+// `ask` on yet. The later candidate's move must be "asks it first", never
+// "writes its body and asks it first" -- Q1 already has a body.
+#[test]
+fn ask_blocks_a_later_tier_candidate_naming_an_unasked_but_already_written_question() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+
+    // Q1 already carries a full body -- not a skeleton -- but has never
+    // been asked.
+    let content = format!("{}{}", Q1, q2_depends_on_q1("=A"));
+    let record = write_record(&dir, "adrdom/decisions/example.md", &content);
+    approve_record(&dir, "adrdom/decisions/example.md");
+
+    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(!out.status.success());
+    assert_eq!(
+        stderr(&out).trim_end(),
+        "ask: adrdom/decisions/example.md: \"1.2 Does the widget's paint match its color?\" is in tier 2; tier 1 is open, waiting on unasked \"1.1 What color is the widget?\"; agent asks it first"
+    );
+}
+
 // --- moot --------------------------------------------------------------
 
 #[test]
