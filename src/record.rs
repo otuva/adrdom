@@ -150,7 +150,8 @@ impl Section {
 pub struct RecordFile {
     pub path: PathBuf,
     /// The path as printed: relative to the repo root with forward slashes
-    /// when loaded through `load_in`, otherwise the path as given.
+    /// when loaded through `load_all`/`load_all_via`, otherwise the path as
+    /// given (`load`).
     pub rel: String,
     pub lines: Vec<String>,
     pub sections: Vec<Section>,
@@ -242,17 +243,11 @@ pub fn load(path: &Path) -> std::io::Result<RecordFile> {
     Ok(build(path.to_path_buf(), rel, lines))
 }
 
-/// Like `load`, with the printed path made relative to `root`.
-pub fn load_in(root: &Path, path: &Path) -> std::io::Result<RecordFile> {
-    let mut rf = load(path)?;
-    rf.rel = crate::state::rel_path(root, path);
-    Ok(rf)
-}
-
 /// Every topic file under `root` (`repo::list_decision_files`), loaded off
-/// the filesystem via `load_in`; a file that fails to load is left out
-/// silently, matching every caller of this before it except `check`
-/// (`load_all_via`, which needs to name each one that failed and why).
+/// the filesystem by `load_all_via` building the `RecordFile` directly; a
+/// file that fails to load is left out silently, matching every caller of
+/// this before it except `check` (`load_all_via`, which needs to name each
+/// one that failed and why).
 pub fn load_all(root: &Path) -> Vec<RecordFile> {
     load_all_via(root, &crate::repo::Source::WorkingTree).0
 }
@@ -986,6 +981,14 @@ pub fn canonical_set(set: &AnswerSet) -> String {
             sorted.into_iter().map(|c| c.to_string()).collect::<Vec<_>>().join("|")
         }
     }
+}
+
+/// The `=<set>` suffix a `depends:` entry prints after its id/text: `=*`,
+/// `=A`, `=A|B` (`canonical_set`, prefixed with `=`), or an empty string
+/// for `None`. Shared by every place that rewrites or prints a depends
+/// entry's answer set back into text.
+pub fn set_suffix(set: &Option<AnswerSet>) -> String {
+    set.as_ref().map(|s| format!("={}", canonical_set(s))).unwrap_or_default()
 }
 
 /// sha256 of `<dependent key>=<canonical set>` (per "Does a depends entry

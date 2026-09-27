@@ -899,7 +899,7 @@ fn do_approve_record(
     // loaded again, further down, only for `missing_answered_refusals` --
     // after `cross_file_heading_index` had already loaded every file
     // itself to build its own copy of the same thing. Loaded via
-    // `load_in` (root-relative `.rel`, matching what `cross_file_heading_index`
+    // `record::load_all` (root-relative `.rel`, matching what `cross_file_heading_index`
     // always printed) straight off disk, still unwritten at this point, so
     // its ids are exactly what's on disk; minting new ids for skeleton
     // headings below never removes an id already in the ledger's
@@ -1163,13 +1163,8 @@ fn rewrite_dep_entry(
     cross_file_headings: &HashMap<String, Vec<(String, String)>>,
     led: &Ledger,
 ) -> String {
-    let set_suffix = |set: &Option<record::AnswerSet>| {
-        set.as_ref()
-            .map(|s| format!("={}", record::canonical_set(s)))
-            .unwrap_or_default()
-    };
     match d {
-        record::Dep::Id { id, set } => format!("{}{}", id, set_suffix(set)),
+        record::Dep::Id { id, set } => format!("{}{}", id, record::set_suffix(set)),
         record::Dep::Text { text, set } => {
             let resolved = depends::resolve_dep(
                 d,
@@ -1187,8 +1182,8 @@ fn rewrite_dep_entry(
                     DepTarget::Term(id) | DepTarget::Decision(id) => Some(id),
                 });
             match resolved {
-                Some(id) => format!("{}{}", id, set_suffix(set)),
-                None => format!("{}{}", text, set_suffix(set)),
+                Some(id) => format!("{}{}", id, record::set_suffix(set)),
+                None => format!("{}{}", text, record::set_suffix(set)),
             }
         }
     }

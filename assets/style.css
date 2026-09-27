@@ -193,13 +193,6 @@ input.filter:focus-visible { outline: 2px solid var(--hold); outline-offset: 1px
 .terms-list li.retired .name { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
 .terms-list .badge { display: inline-block; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; padding: 0.05em 0.5em; border-radius: 4px; margin-left: 0.4rem; vertical-align: middle; }
 .badge.retired { color: var(--refuse); border: 1px solid var(--refuse); text-decoration: none; }
-.badge.changed { color: var(--paper); background: var(--hold); }
-.changed-box { margin: 1.4rem 0 0; padding: 0.9rem 1.1rem; border-left: 4px solid var(--hold); background: var(--hold-soft); }
-.changed-box h2 { font-size: 1.15rem; margin-bottom: 0.4rem; }
-.changed-box .row { display: grid; grid-template-columns: 4rem 1fr; column-gap: 0.8rem; row-gap: 0.15rem; margin: 0.5rem 0; font-size: 0.97rem; }
-.changed-box .row .k { color: var(--muted); }
-.changed-box .before { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
-.changed-box .carried { font-size: 0.9rem; color: var(--muted); margin: 0.2rem 0 0; }
 .no-match { color: var(--muted); margin: 1rem 0; }
 
 /* answer page: terms in text and aside */

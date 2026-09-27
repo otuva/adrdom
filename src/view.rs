@@ -183,10 +183,7 @@ pub fn all_heading_texts(root: &Path) -> HashMap<String, String> {
 }
 
 fn dep_with_set(text: &str, set: &Option<record::AnswerSet>) -> String {
-    match set {
-        None => text.to_string(),
-        Some(s) => format!("{}={}", text, record::canonical_set(s)),
-    }
+    format!("{}{}", text, record::set_suffix(set))
 }
 
 /// A `depends:` entry's text as words (per "Does a reference in a topic

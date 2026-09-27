@@ -5,7 +5,6 @@
 use crate::ledger::{Ledger, Row};
 use crate::record::{self, RecordFile, Section};
 use crate::terms::{self, TermsFile};
-use std::collections::BTreeSet;
 use std::path::{Component, Path};
 
 /// `path` relative to `root`, with forward slashes, e.g.
@@ -154,8 +153,8 @@ pub struct DependentEntry {
 /// supplies one (`approve`'s step 7, reporting against pairs about to be
 /// written rather than what is already on disk, indexed the same as
 /// `tf.terms`) or from the term's own `terms_line` otherwise. Never
-/// transitive on its own -- a caller that needs the closure over the term
-/// graph runs `transitive_term_ids` on the pairs this returns.
+/// transitive on its own -- these pairs are not walked further through the
+/// term graph.
 pub fn dependent_entries(
     records: &[RecordFile],
     led: &Ledger,
@@ -232,34 +231,6 @@ pub fn dependent_entries(
         }
     }
     out
-}
-
-/// Every term id reached starting at `start` (already-resolved uuids) and,
-/// while `transitive`, repeatedly following each landed term's own
-/// recorded `terms:` line onward through `tf` -- cycle-safe. `start`
-/// themselves are always included. Non-transitive, this is just `start`
-/// deduplicated.
-pub fn transitive_term_ids(
-    start: impl IntoIterator<Item = String>,
-    tf: &TermsFile,
-    transitive: bool,
-) -> BTreeSet<String> {
-    let mut seen = BTreeSet::new();
-    let mut stack: Vec<String> = start.into_iter().collect();
-    while let Some(uuid) = stack.pop() {
-        if !seen.insert(uuid.clone()) {
-            continue;
-        }
-        if !transitive {
-            continue;
-        }
-        if let Some(t) = tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str())) {
-            if let Some(more) = t.terms_line.as_deref().and_then(terms::parse_terms_line) {
-                stack.extend(more.into_iter().map(|(_, u)| u));
-            }
-        }
-    }
-    seen
 }
 
 /// The three ways a caller that requires `adrdom/terms.md` (`ask`, `answer`)
