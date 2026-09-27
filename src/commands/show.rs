@@ -1,5 +1,6 @@
 //! `adr show`: per topic file, each derived tier and its questions,
 //! plainly. No HTML, no snapshot — reads the file and ledger directly.
+use crate::blame;
 use crate::depends;
 use crate::ledger::{self, Ledger};
 use crate::msg::{self, Actor};
@@ -8,7 +9,7 @@ use crate::repo;
 use crate::state;
 use crate::terms::{self, Term};
 use crate::view::{self, QState};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 pub fn run(record_arg: Option<PathBuf>) -> i32 {
@@ -48,6 +49,20 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
     let all_records: Vec<RecordFile> = record::load_all(&root);
     let cross_file_headings = depends::cross_file_heading_index(&all_records, &led);
 
+    // Every heading id, any state, and every blame file (per "Does show
+    // print a blame file?", 7b05f8df A): built once here, off the same
+    // full `all_records` the `record_arg` filter below is about to
+    // consume, and kept for both the "from:" line under every decision and
+    // the blame sections printed after every topic file's own.
+    let any_headings_all = blame::any_headings_with_id(&all_records);
+    let known_ids = blame::known_heading_ids(&any_headings_all);
+    let blame_files = blame::load_all(&root);
+    // A record-id lookup independent of `record_arg`'s filter (`records`
+    // below may end up holding only the one file asked for): blame
+    // rendering always resolves against every topic file, not only the one
+    // being printed.
+    let blame_records: Vec<RecordFile> = record::load_all(&root);
+
     let mut records: Vec<RecordFile> = match &record_arg {
         Some(p) => {
             let rel = state::rel_path(&root, p);
@@ -64,7 +79,19 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
 
     for rf in &mut records {
         depends::normalize_cross_file_deps(rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
-        print_file(rf, &led, &terms_list, &all_headings);
+        print_file(
+            rf,
+            &led,
+            &terms_list,
+            &all_headings,
+            &blame_files,
+            &any_headings_all,
+            &known_ids,
+        );
+    }
+
+    for bf in &blame_files {
+        print_blame_file(bf, &led, &blame_records);
     }
     0
 }
@@ -73,7 +100,16 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
 /// questions. A file whose tier derivation failed prints only its `#
 /// <topic>` line; `adr check`/`adr ask`/`adr approve` are where the
 /// derivation error itself is reported.
-fn print_file(rf: &RecordFile, led: &Ledger, terms_list: &[Term], all_headings: &HashMap<String, String>) {
+#[allow(clippy::too_many_arguments)]
+fn print_file(
+    rf: &RecordFile,
+    led: &Ledger,
+    terms_list: &[Term],
+    all_headings: &HashMap<String, String>,
+    blame_files: &[blame::BlameFile],
+    any_headings_all: &HashMap<String, Vec<(String, String)>>,
+    known_ids: &HashSet<String>,
+) {
     println!("# {}", rf.topic.as_deref().unwrap_or(""));
 
     let Some(tiers) = &rf.tiers else {
@@ -87,17 +123,30 @@ fn print_file(rf: &RecordFile, led: &Ledger, terms_list: &[Term], all_headings: 
         }
         println!("tier {}", t);
         for &i in &idxs {
-            print_question(rf, &rf.sections[i], led, terms_list, all_headings);
+            print_question(
+                rf,
+                &rf.sections[i],
+                led,
+                terms_list,
+                all_headings,
+                blame_files,
+                any_headings_all,
+                known_ids,
+            );
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn print_question(
     rf: &RecordFile,
     sec: &Section,
     led: &Ledger,
     terms_list: &[Term],
     all_headings: &HashMap<String, String>,
+    blame_files: &[blame::BlameFile],
+    any_headings_all: &HashMap<String, Vec<(String, String)>>,
+    known_ids: &HashSet<String>,
 ) {
     let state = view::qstate(led, sec);
     // Per "Does an answer carry the version of the question the owner
@@ -128,6 +177,97 @@ fn print_question(
             println!("    {}", s);
         }
     }
+    // Per "Does show print a blame file?", 7b05f8df A: "under each
+    // decision ... a line `from: <origin path> (<n> rows)` for every blame
+    // file with a row naming it." Only a section with an id can be named
+    // by any row at all.
+    if let Some(id) = &sec.id {
+        for (origin, n) in blame::origins_for_decision(blame_files, any_headings_all, known_ids, id) {
+            println!("    from: {} ({} rows)", origin, n);
+        }
+    }
+}
+
+/// One section per blame file (per "Does show print a blame file?",
+/// 7b05f8df A): the origin path, whether it is approved or still awaiting
+/// approval, the row count per destination kind, every dropped row with
+/// its range and reason, and every decision row with its range, the
+/// heading text, and the question's state -- the same state words
+/// `state_label` already gives a topic section.
+fn print_blame_file(bf: &blame::BlameFile, led: &Ledger, records: &[RecordFile]) {
+    let Some(origin) = &bf.origin else {
+        // A shape-broken blame file: `check` is where that is refused;
+        // `show` just skips it rather than guessing at a header it never
+        // parsed.
+        return;
+    };
+    println!("# blame: {}", bf.rel);
+    let content = record::join_lines(&bf.lines);
+    let status = if state::blame_approved(led, &bf.rel, &content) {
+        "approved"
+    } else {
+        "awaiting approval"
+    };
+    println!("  origin: {} ({})", origin, status);
+
+    let counts = blame::counts_by_kind(&bf.rows);
+    if !counts.is_empty() {
+        let line: Vec<String> = counts.iter().map(|(k, n)| format!("{} {}", k.label(), n)).collect();
+        println!("  {}", line.join(", "));
+    }
+
+    let any_headings = blame::any_headings_with_id(records);
+    let known_ids = blame::known_heading_ids(&any_headings);
+    for row in &bf.rows {
+        let range = if row.start == row.end {
+            row.start.to_string()
+        } else {
+            format!("{}-{}", row.start, row.end)
+        };
+        if let Some(value) = blame::decision_target(&row.dest) {
+            let (heading, qstate_word) =
+                match blame::resolve_heading_value(value, &any_headings, &known_ids) {
+                    Some(id) => {
+                        let heading = blame::heading_text_for_id(records, &id)
+                            .map(str::to_string)
+                            .unwrap_or_else(|| id.clone());
+                        let word = records
+                            .iter()
+                            .flat_map(|rf| rf.sections.iter())
+                            .find(|s| s.id.as_deref() == Some(id.as_str()))
+                            .map(|sec| state_label(view::qstate(led, sec), sec))
+                            .unwrap_or_else(|| "unknown".to_string());
+                        (heading, word)
+                    }
+                    None => (value.to_string(), "unknown".to_string()),
+                };
+            println!("  {}\tdecision: {} [{}]", range, heading, qstate_word);
+        } else if let Some(reason) = classify_dropped(&row.dest, records) {
+            println!("  {}\tdropped: {}", range, reason);
+        } else {
+            // A term/prose row: print as written -- no id to turn back
+            // into a name for either kind.
+            println!("  {}\t{}", range, row.dest.trim());
+        }
+    }
+}
+
+/// The reason text `print_blame_file` prints after `dropped: ` for one
+/// row: `dead`/`detail` as written, a copy target rendered back to a
+/// heading text or a path (per "Does show print a blame file?": "copy
+/// targets rendered as the heading text or path, ids turned back into
+/// names the way depends entries are"). `None` when `dest` is not a
+/// `dropped:` row at all.
+fn classify_dropped(dest: &str, records: &[RecordFile]) -> Option<String> {
+    let t = dest.trim();
+    if t == "dropped: dead" {
+        return Some("dead".to_string());
+    }
+    if t == "dropped: detail" {
+        return Some("detail".to_string());
+    }
+    let target = blame::copy_target(t)?;
+    Some(format!("copy of {}", blame::render_copy_target(target, records)))
 }
 
 /// The state word `show` prints inside `[...]`: `answered` also carries

@@ -12,6 +12,12 @@ pub const STATE_DIR: &str = "adrdom/state";
 /// The append-only ledger of every act (`ask`, `answer`, `approve`, ...).
 pub const LEDGER_PATH: &str = "adrdom/state/ledger.tsv";
 /// The repo's own terms file.
+/// Where blame files live, relative to the repo root (per "What does a
+/// blame file hold?", 34f0202a A): one `<stem>.md` per origin, holding its
+/// line ranges and what each range went to. `do_approve` dispatches a path
+/// under here the same way it dispatches `TERMS_PATH`, by prefix.
+pub const BLAME_DIR: &str = "adrdom/blame";
+
 pub const TERMS_PATH: &str = "adrdom/terms.md";
 /// Where the hashed ban list lives, relative to the repo root: the one
 /// literal for this path, used by every site that reads or writes it
@@ -52,6 +58,33 @@ pub fn git(root: &Path, args: &[&str]) -> Option<String> {
         .ok()?;
     if out.status.success() {
         Some(String::from_utf8_lossy(&out.stdout).to_string())
+    } else {
+        None
+    }
+}
+
+/// The git blob sha `git hash-object --stdin` gives `content`, without
+/// needing a real file on disk: lets a caller hash content it already
+/// holds as a string -- read through `Source::Index` at a commit, or
+/// `Source::WorkingTree` off disk -- the same way `check` reads every
+/// other file it judges (per "Does check at a commit read the staged
+/// files?"), rather than only ever hashing whatever sits in the working
+/// tree right now. `None` on any failure to run git.
+pub fn git_hash_object_stdin(root: &Path, content: &str) -> Option<String> {
+    use std::io::Write;
+    use std::process::Stdio;
+    let mut child = Command::new("git")
+        .current_dir(root)
+        .args(["hash-object", "--stdin"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    child.stdin.take()?.write_all(content.as_bytes()).ok()?;
+    let out = child.wait_with_output().ok()?;
+    if out.status.success() {
+        Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
     } else {
         None
     }

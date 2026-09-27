@@ -1,5 +1,6 @@
 //! One code path for every owner act: the CLI and the page both call these
 //! (per "Does the adr binary serve the ui?").
+use crate::blame;
 use crate::depends::{self, DepTarget};
 use crate::ledger::{self, Ledger};
 use crate::msg::{self, Next};
@@ -357,9 +358,140 @@ pub fn do_approve(root: &Path, file: &Path) -> Result<Outcome, String> {
 
     if rel == crate::repo::TERMS_PATH {
         do_approve_terms(root, file, &led, &ledger_path)
+    } else if rel.starts_with(&format!("{}/", crate::repo::BLAME_DIR)) {
+        do_approve_blame(root, file, &rel, &led, &ledger_path)
     } else {
         do_approve_record(root, file, &rel, &led, &ledger_path)
     }
+}
+
+/// `adrdom/blame/<stem>.md` (per "Does the owner approve a blame file?",
+/// e879fe72 A): parse the fixed shape, read the origin's content at the
+/// blob the file names, check that the rows' ranges cover it with no gap
+/// (5c399a14 A), resolve every row's destination against the closed set
+/// (38216d39 A) -- collecting every refusal at once, nothing written to
+/// disk on any of them, the same contract `do_approve_record` keeps -- then
+/// rewrite every row to its canonical (id-bearing, where the set names one)
+/// form, save, and write one `blame` ledger row over the saved content's
+/// hash unless it already matches the latest one for this path.
+fn do_approve_blame(
+    root: &Path,
+    file: &Path,
+    rel: &str,
+    led: &Ledger,
+    ledger_path: &Path,
+) -> Result<Outcome, String> {
+    let bf = blame::load(file, rel).map_err(|e| {
+        msg::approve_prefixed(msg::read_failed(
+            &file.display().to_string(),
+            e,
+            Next::owner_runs(format!("adr approve {} again", rel)),
+        ))
+    })?;
+
+    let mut refusals: Vec<String> = bf
+        .shape_errors
+        .iter()
+        .map(|e| msg::approve_prefixed(msg::blame_shape_error(rel, e)))
+        .collect();
+    if !refusals.is_empty() {
+        return Err(refusals.join("\n"));
+    }
+
+    // Shape is clean, so both header fields are present (`blame::parse`
+    // only leaves either `None` alongside the shape error that reports it).
+    let blob = bf.blob.clone().expect("no shape error means blob is set");
+
+    let Some(content) = repo::git(root, &["cat-file", "-p", &blob]) else {
+        return Err(msg::approve_prefixed(msg::blame_blob_not_found(rel, &blob)));
+    };
+    let n = content.lines().count();
+
+    let (beyond, gaps) = blame::coverage_errors(&bf.rows, n);
+    for b in &beyond {
+        refusals.push(msg::approve_prefixed(msg::blame_range_beyond(rel, b.start, b.end, n)));
+    }
+    for g in &gaps {
+        refusals.push(msg::approve_prefixed(msg::blame_coverage_gap(rel, g.start, g.end)));
+    }
+
+    // Every set `resolve_destination` reads, built once for this file's own
+    // rows rather than once per row.
+    let all_records: Vec<RecordFile> = record::load_all(root);
+    let any_headings = blame::any_headings_with_id(&all_records);
+    let known_heading_ids = blame::known_heading_ids(&any_headings);
+    let current_headings = depends::cross_file_heading_index(&all_records, led);
+    let terms_list: Vec<terms::Term> = state::load_terms(root)
+        .map(|tf| terms::minted_copy(&tf).terms)
+        .unwrap_or_default();
+    let phrase_lookup = terms::phrase_lookup(&terms_list);
+    let decision_stems: HashSet<String> = repo::list_decision_files(root)
+        .iter()
+        .filter_map(|p| p.file_stem().and_then(|s| s.to_str()).map(str::to_string))
+        .collect();
+    let known_origins = blame::known_origins(root);
+
+    let ctx = blame::ResolveCtx {
+        any_headings,
+        known_heading_ids,
+        current_headings: &current_headings,
+        terms_list: terms_list.as_slice(),
+        phrase_lookup: &phrase_lookup,
+        decision_stems,
+        known_origins,
+        root: root.to_path_buf(),
+    };
+
+    let mut resolved: Vec<blame::Resolved> = Vec::new();
+    for row in &bf.rows {
+        match blame::resolve_destination(&row.dest, led, &ctx) {
+            Ok(r) => resolved.push(r),
+            Err(e) => refusals.push(msg::approve_prefixed(blame::dest_refusal_text(rel, row, &e))),
+        }
+    }
+
+    if !refusals.is_empty() {
+        return Err(refusals.join("\n"));
+    }
+
+    let mut work_lines = bf.lines.clone();
+    for (row, r) in bf.rows.iter().zip(resolved.iter()) {
+        work_lines[row.line_idx] = format!("{}-{}\t{}", row.start, row.end, r.canonical());
+    }
+
+    std::fs::write(&bf.path, record::join_lines(&work_lines)).map_err(|e| {
+        msg::approve_prefixed(msg::write_failed(
+            &file.display().to_string(),
+            e,
+            Next::owner_runs(format!("adr approve {} again", rel)),
+        ))
+    })?;
+
+    let new_hash = blame::file_hash(&work_lines);
+    let unchanged = led.latest_for_path("blame", rel).map(|r| r.hash.as_str()) == Some(new_hash.as_str());
+
+    let summary = if unchanged {
+        msg::blame_unchanged(rel)
+    } else {
+        let row = ledger::Row {
+            time: ledger::now_rfc3339(),
+            event: "blame".to_string(),
+            id: "-".to_string(),
+            hash: new_hash,
+            detail: rel.to_string(),
+            version: crate::version::VERSION.to_string(),
+        };
+        ledger::append(ledger_path, &[row]).map_err(|e| {
+            msg::approve_prefixed(msg::update_failed(
+                "ledger",
+                e,
+                Next::owner_runs(format!("adr approve {} again", rel)),
+            ))
+        })?;
+        msg::blame_approved(rel)
+    };
+
+    Ok(Outcome { summary })
 }
 
 /// Every refusal `adrdom/terms.md` earns under steps 1, 3, 4 and 5 of

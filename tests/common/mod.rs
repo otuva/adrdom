@@ -193,6 +193,104 @@ pub fn write_test_comment(dir: &Path, id: &str) {
     run_git(dir, &["add", "tested.txt"]);
 }
 
+// --- blame fixtures, shared by every blame_*_test.rs ----------------------
+
+pub const BLAME_TERMS: &str = "# Terms\n\
+\n\
+## pass\n\
+id: 11111111-1111-1111-1111-111111111111\n\
+definition: Whether something is accepted.\n\
+aliases: \n\
+\n\
+## gone\n\
+id: 22222222-2222-2222-2222-222222222222\n\
+definition: A retired fixture term.\n\
+aliases: \n\
+retired: yes\n";
+
+pub const BLAME_TOPIC: &str = r#"# Example
+
+### Does this pass?
+depends: pass
+
+Problem: whether it passes.
+
+Standard: clear yes or no.
+
+- A) Yes it passes.
+  Why: reasons.
+  Costs: costs.
+- B) No it does not.
+  Why: other reasons.
+  Costs: other costs.
+
+### Does this also pass?
+depends: pass
+
+Problem: whether it also passes.
+
+Standard: clear yes or no.
+
+- A) Yes it passes too.
+  Why: reasons.
+  Costs: costs.
+- B) No it does not.
+  Why: other reasons.
+  Costs: other costs.
+"#;
+
+/// A repo with `pass`/`gone` (retired) terms approved, and `BLAME_TOPIC`
+/// approved with both headings minted an id: "Does this pass?" answered A
+/// (current), "Does this also pass?" only asked (not current). Returns
+/// (dir, id of "Does this pass?", id of "Does this also pass?").
+pub fn blame_setup() -> (PathBuf, String, String) {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_terms_via_ledger(&dir, BLAME_TERMS);
+    let record = write_record(&dir, "adrdom/decisions/example.md", BLAME_TOPIC);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
+    let content = std::fs::read_to_string(&record).unwrap();
+    let ids = extract_ids(&content);
+    assert_eq!(ids.len(), 2, "{}", content);
+    let (id1, id2) = (ids[0].clone(), ids[1].clone());
+    let out = adr_answer(&dir, &id1, "A");
+    assert!(out.status.success(), "answer failed: {}", stderr(&out));
+    // The fixture's own current decision needs a tie for `check`'s
+    // `tested` category, same as any other answered question in a repo
+    // `adr check` judges.
+    write_test_comment(&dir, &id1);
+    (dir, id1, id2)
+}
+
+/// Writes `content` to `rel` under `dir` and returns the git blob sha
+/// `git hash-object -w` gives it, without staging or committing it.
+pub fn write_origin(dir: &Path, rel: &str, content: &str) -> String {
+    let path = dir.join(rel);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).unwrap();
+    }
+    std::fs::write(&path, content).unwrap();
+    let out = run_git(dir, &["hash-object", "-w", rel]);
+    assert!(out.status.success(), "hash-object failed");
+    stdout(&out).trim().to_string()
+}
+
+pub fn blame_row_count(dir: &Path) -> usize {
+    std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv"))
+        .unwrap_or_default()
+        .lines()
+        .filter(|l| l.contains("\tblame\t"))
+        .count()
+}
+
+pub fn write_blame_file(dir: &Path, rel: &str, origin: &str, blob: &str, rows: &str) -> PathBuf {
+    let content = format!("origin: {}\nblob: {}\n\n{}", origin, blob, rows);
+    write_record(dir, rel, &content)
+}
+
 // --- Plan/context approval, without depending on `adr approve` -----------
 //
 // `approve_via_ledger` below writes `content` to `rel` and loads it back

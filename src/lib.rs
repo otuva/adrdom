@@ -1,5 +1,6 @@
 pub mod actions;
 pub mod banned;
+pub mod blame;
 pub mod commands;
 pub mod depends;
 pub mod ledger;

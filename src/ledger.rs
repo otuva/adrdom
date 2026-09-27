@@ -2,7 +2,7 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-pub const EVENTS: [&str; 11] = [
+pub const EVENTS: [&str; 12] = [
     "asked",
     "answered",
     "refused",
@@ -14,6 +14,7 @@ pub const EVENTS: [&str; 11] = [
     "banned",
     "unbanned",
     "assumes",
+    "blame",
 ];
 
 #[derive(Debug, Clone)]

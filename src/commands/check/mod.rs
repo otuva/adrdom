@@ -1,5 +1,6 @@
 mod answers;
 mod banned;
+mod blame;
 mod done;
 mod ids;
 mod install;
@@ -151,6 +152,8 @@ fn build(
     push_failures(&mut failures, plan_failures);
     let (terms_failures, terms_notes) = terms::check_terms(root, &records, &led, &source);
     push_failures(&mut failures, terms_failures);
+    let (blame_failures, blame_notes) = blame::check_blame(root, &source, &records, &led);
+    push_failures(&mut failures, blame_failures);
     let (test_failures, tested_count) = tests::check_tests(root, &records, &led, tests, &source);
     push_failures(&mut failures, test_failures);
     push_failures(&mut failures, tells::check_tells(root, &records, &led, &per_record_refusals));
@@ -177,6 +180,7 @@ fn build(
         notes.push(msg::plan_awaiting(awaiting.len(), &awaiting.join(", ")));
     }
     notes.extend(terms_notes);
+    notes.extend(blame_notes);
     for d in done::check_done(&records, &led, &raw_hashes) {
         notes.push(msg::done(&d));
     }
