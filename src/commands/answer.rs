@@ -38,7 +38,7 @@ pub fn run(id_arg: String, letter: String) -> i32 {
     let outcome = if letter == "refuse" {
         actions::do_refuse(&root, id, version)
     } else {
-        match parse_letter(&letter) {
+        match actions::parse_letter(&letter) {
             Some(c) => actions::do_answer(&root, id, version, c),
             None => {
                 eprintln!("answer: {}", msg::invalid_letter(&letter));
@@ -58,18 +58,5 @@ pub fn run(id_arg: String, letter: String) -> i32 {
             }
             1
         }
-    }
-}
-
-fn parse_letter(s: &str) -> Option<char> {
-    let mut chars = s.chars();
-    let c = chars.next()?;
-    if chars.next().is_some() {
-        return None;
-    }
-    if c.is_ascii_uppercase() {
-        Some(c)
-    } else {
-        None
     }
 }

@@ -599,6 +599,13 @@ pub fn terms_line_names_retired_term(id: &str, name: &str) -> String {
     )
 }
 
+/// Printed after `adr answer <id>@<version> <letter>` succeeds: the heading
+/// and the decision sentence the owner picked. Not a refusal, so it never
+/// goes through `refuse()` -- there is no next move to name.
+pub fn answered_summary(heading: &str, sentence: &str) -> String {
+    format!("answered: {}\n  {}", heading, sentence)
+}
+
 /// Printed after `adr answer <id> refuse` succeeds: the heading is closed,
 /// the plan around it likely needs another pass.
 pub fn refused_summary(heading: &str, rel: &str) -> String {

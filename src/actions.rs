@@ -95,7 +95,41 @@ fn terms_for_answer(root: &Path, led: &Ledger, rel: &str) -> Result<terms::Terms
     }
 }
 
-pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<Outcome, String> {
+/// Exactly one ASCII uppercase character; anything else (empty, more than
+/// one character, lowercase, a digit, punctuation) is not a letter. Shared
+/// by the CLI (`commands/answer.rs`) and the page (`commands/serve/mod.rs`)
+/// so "answer takes that version from the terminal and the page alike"
+/// extends to how the letter itself is read: the page refuses a lowercase
+/// or multi-character selection the same way the CLI does.
+pub fn parse_letter(s: &str) -> Option<char> {
+    let mut chars = s.chars();
+    let c = chars.next()?;
+    if chars.next().is_some() {
+        return None;
+    }
+    if c.is_ascii_uppercase() {
+        Some(c)
+    } else {
+        None
+    }
+}
+
+/// What `do_answer` and `do_refuse` both need once a question has been
+/// found, gated on terms, and confirmed to still be in the `asked` state at
+/// the version given -- the steps neither letter-specific nor refusal-
+/// specific (id lookup, terms gate, already-refused/already-answered,
+/// section hash, version format/staleness, ledger state). `tf` is unused by
+/// `do_refuse`, which has no terms-line pairing of its own to check.
+struct Located {
+    led: Ledger,
+    rf: RecordFile,
+    idx: usize,
+    rel: String,
+    tf: terms::TermsFile,
+    cur_hash: String,
+}
+
+fn locate_asked(root: &Path, id: &str, version: &str) -> Result<Located, String> {
     let ledger_path = root.join("adrdom/state/ledger.tsv");
     let led = ledger::read(&ledger_path);
 
@@ -109,7 +143,7 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
             }
         }
     }
-    let Some((mut rf, idx)) = found else {
+    let Some((rf, idx)) = found else {
         return Err(msg::id_not_found(id));
     };
     let rel = state::rel_path(root, &rf.path);
@@ -119,11 +153,10 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
     // (`terms_for_answer`, per cd450764 B) -- the file itself when it
     // matches its latest approval, the snapshot when a draft sits on top of
     // it. The returned terms file is kept for the terms-line validity check
-    // below.
+    // `do_answer` makes afterward.
     let tf = terms_for_answer(root, &led, &rel)?;
 
     let cur_hash;
-    let supersedes_val;
     {
         let sec = &rf.sections[idx];
         if sec.is_refused() {
@@ -131,9 +164,6 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
         }
         if sec.answer_line.is_some() {
             return Err(msg::already_answered(&sec.heading_text));
-        }
-        if !sec.options.iter().any(|o| o.letter == letter) {
-            return Err(msg::letter_not_an_option(letter, &sec.heading_text));
         }
         cur_hash = record::section_hash(&rf.lines, sec);
         // Per "Does an answer carry the version of the question the owner
@@ -160,6 +190,66 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
             _ => {
                 return Err(msg::not_in_asked_state(&sec.heading_text));
             }
+        }
+    }
+
+    Ok(Located { led, rf, idx, rel, tf, cur_hash })
+}
+
+/// The write step `do_answer` and `do_refuse` both end with: splice the
+/// `**Answer:** <answer_text>` line in at the end of the section's hash
+/// range, save the topic file, then append `rows` to the ledger -- with the
+/// same error handling and the same "try again" command shape either way,
+/// `retry_words` filling in the part that differs (`"A again"` for the
+/// letter, `"refuse again"` for a refusal).
+fn finish_answer(
+    root: &Path,
+    id: &str,
+    version: &str,
+    retry_words: &str,
+    mut rf: RecordFile,
+    idx: usize,
+    answer_text: &str,
+    rows: Vec<ledger::Row>,
+) -> Result<(), String> {
+    let ledger_path = root.join("adrdom/state/ledger.tsv");
+
+    let hash_end = {
+        let sec = &rf.sections[idx];
+        record::hash_range(&rf.lines, sec).1
+    };
+    rf.lines.splice(
+        hash_end..hash_end,
+        [String::new(), format!("**Answer:** {}", answer_text)],
+    );
+
+    record::save(&rf).map_err(|e| {
+        msg::write_failed(
+            "topic file",
+            e,
+            Next::owner_runs(format!("adr answer {}@{} {}", id, version, retry_words)),
+        )
+    })?;
+
+    ledger::append(&ledger_path, &rows).map_err(|e| {
+        msg::update_failed(
+            "ledger",
+            e,
+            Next::owner_runs(format!("adr answer {}@{} {}", id, version, retry_words)),
+        )
+    })?;
+
+    Ok(())
+}
+
+pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<Outcome, String> {
+    let Located { led, rf, idx, tf, cur_hash, .. } = locate_asked(root, id, version)?;
+
+    let supersedes_val;
+    {
+        let sec = &rf.sections[idx];
+        if !sec.options.iter().any(|o| o.letter == letter) {
+            return Err(msg::letter_not_an_option(letter, &sec.heading_text));
         }
         let Some(terms_line_idx) = sec.terms_line else {
             return Err(msg::no_terms_line(id));
@@ -209,31 +299,13 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
         }
     }
 
-    let heading_for_print;
-    let sentence_for_print;
-    {
-        let sec = &rf.sections[idx];
-        let (_, hash_end) = record::hash_range(&rf.lines, sec);
-        heading_for_print = sec.heading_text.clone();
-        sentence_for_print = sec
-            .options
-            .iter()
-            .find(|o| o.letter == letter)
-            .and_then(|o| o.sentence.clone())
-            .unwrap_or_default();
-        rf.lines.splice(
-            hash_end..hash_end,
-            [String::new(), format!("**Answer:** {}", letter)],
-        );
-    }
-
-    record::save(&rf).map_err(|e| {
-        msg::write_failed(
-            "topic file",
-            e,
-            Next::owner_runs(format!("adr answer {}@{} <letter> again", id, version)),
-        )
-    })?;
+    let heading_for_print = rf.sections[idx].heading_text.clone();
+    let sentence_for_print = rf.sections[idx]
+        .options
+        .iter()
+        .find(|o| o.letter == letter)
+        .and_then(|o| o.sentence.clone())
+        .unwrap_or_default();
 
     let mut rows = vec![ledger::Row {
         time: ledger::now_rfc3339(),
@@ -253,16 +325,12 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
             version: crate::version::VERSION.to_string(),
         });
     }
-    ledger::append(&ledger_path, &rows).map_err(|e| {
-        msg::update_failed(
-            "ledger",
-            e,
-            Next::owner_runs(format!("adr answer {}@{} <letter> again", id, version)),
-        )
-    })?;
+
+    let letter_str = letter.to_string();
+    finish_answer(root, id, version, &format!("{} again", letter_str), rf, idx, &letter_str, rows)?;
 
     Ok(Outcome {
-        summary: format!("answered: {}\n  {}", heading_for_print, sentence_for_print),
+        summary: msg::answered_summary(&heading_for_print, &sentence_for_print),
     })
 }
 
@@ -277,88 +345,21 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
 /// question is never acted on (no target is checked, no `superseded` row
 /// is written); its presence only earns a printed note.
 pub fn do_refuse(root: &Path, id: &str, version: &str) -> Result<Outcome, String> {
-    let ledger_path = root.join("adrdom/state/ledger.tsv");
-    let led = ledger::read(&ledger_path);
+    // Same lookup, terms gate, already-refused/already-answered, hash,
+    // version, and ledger-state checks as the letter path (`locate_asked`).
+    // The section's own terms-line/pairing checks are not shared (5), so
+    // the returned terms file has no further use here.
+    let Located { rf, idx, rel, cur_hash, .. } = locate_asked(root, id, version)?;
 
-    let files = repo::list_decision_files(root);
-    let mut found = None;
-    for f in &files {
-        if let Ok(rf) = record::load(f) {
-            if let Some(idx) = rf.sections.iter().position(|s| s.id.as_deref() == Some(id)) {
-                found = Some((rf, idx));
-                break;
-            }
-        }
-    }
-    let Some((mut rf, idx)) = found else {
-        return Err(msg::id_not_found(id));
-    };
-    let rel = state::rel_path(root, &rf.path);
-
-    // Same terms.md gate as the letter path (`terms_for_answer`, cd450764
-    // B); the section's own terms-line/pairing checks are not shared (5),
-    // so the returned terms file has no further use here.
-    terms_for_answer(root, &led, &rel)?;
-
-    let cur_hash;
-    let supersedes_val;
-    {
-        let sec = &rf.sections[idx];
-        if sec.is_refused() {
-            return Err(msg::already_refused(&sec.heading_text));
-        }
-        if sec.answer_line.is_some() {
-            return Err(msg::already_answered(&sec.heading_text));
-        }
-        cur_hash = record::section_hash(&rf.lines, sec);
-        // Same version check as the letter path (per "Does an answer carry
-        // the version of the question the owner read?"), ahead of the
-        // ledger-state check for the same reason: lowercased and validated
-        // as exactly `VERSION_LEN` hex characters before it is ever
-        // compared to the hash.
-        let version_lower = version.to_lowercase();
-        if version_lower.len() != record::VERSION_LEN
-            || !version_lower.chars().all(|c| c.is_ascii_hexdigit())
-        {
-            return Err(msg::invalid_version_format(version));
-        }
-        if version_lower != cur_hash[..record::VERSION_LEN] {
-            return Err(msg::stale_version(&sec.heading_text));
-        }
-        match led.latest_state(id) {
-            Some(row) if row.event == "asked" && row.hash == cur_hash => {}
-            _ => {
-                return Err(msg::not_in_asked_state(&sec.heading_text));
-            }
-        }
-        supersedes_val = sec.supersedes.clone();
-    }
-
-    let heading_for_print;
+    let supersedes_val = rf.sections[idx].supersedes.clone();
+    let heading_for_print = rf.sections[idx].heading_text.clone();
     let mut note: Option<String> = None;
-    {
-        let sec = &rf.sections[idx];
-        let (_, hash_end) = record::hash_range(&rf.lines, sec);
-        heading_for_print = sec.heading_text.clone();
-        if !supersedes_val.is_empty() {
-            note = Some(format!(
-                "answer: {}",
-                msg::supersedes_ignored_on_refusal(&heading_for_print)
-            ));
-        }
-        rf.lines.splice(
-            hash_end..hash_end,
-            [String::new(), "**Answer:** refused".to_string()],
-        );
+    if !supersedes_val.is_empty() {
+        note = Some(format!(
+            "answer: {}",
+            msg::supersedes_ignored_on_refusal(&heading_for_print)
+        ));
     }
-
-    record::save(&rf).map_err(|e| {
-        msg::write_failed(
-            "topic file",
-            e,
-            Next::owner_runs(format!("adr answer {}@{} refuse again", id, version)),
-        )
-    })?;
 
     let row = ledger::Row {
         time: ledger::now_rfc3339(),
@@ -368,13 +369,8 @@ pub fn do_refuse(root: &Path, id: &str, version: &str) -> Result<Outcome, String
         detail: heading_for_print.clone(),
         version: crate::version::VERSION.to_string(),
     };
-    ledger::append(&ledger_path, &[row]).map_err(|e| {
-        msg::update_failed(
-            "ledger",
-            e,
-            Next::owner_runs(format!("adr answer {}@{} refuse again", id, version)),
-        )
-    })?;
+
+    finish_answer(root, id, version, "refuse again", rf, idx, "refused", vec![row])?;
 
     let mut summary = format!("answer: {}", msg::refused_summary(&heading_for_print, &rel));
     if let Some(n) = note {

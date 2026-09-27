@@ -217,10 +217,17 @@ fn handle_answer(root: &Path, form: &HashMap<String, String>) -> Reply {
         };
     }
 
-    let letter = value.chars().next().map(|c| c.to_ascii_uppercase());
-
-    let Some(letter) = letter else {
-        let banner = format!("serve: {}", msg::missing_answer_selection(&id));
+    // Same letter parsing the CLI uses (`actions::parse_letter`), so a
+    // lowercase or multi-character selection refuses the same way here as
+    // it does from the terminal; an empty selection (no field posted at
+    // all -- never happens from this page's own form) keeps its own
+    // message, since there is nothing malformed to name.
+    let Some(letter) = actions::parse_letter(&value) else {
+        let banner = if value.is_empty() {
+            format!("serve: {}", msg::missing_answer_selection(&id))
+        } else {
+            format!("serve: {}", msg::invalid_letter(&value))
+        };
         return Reply::Redirect(
             format!(
                 "/next?show={}&m={}",
