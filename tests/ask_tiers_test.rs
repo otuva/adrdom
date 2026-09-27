@@ -16,7 +16,6 @@
 // instead.
 mod common;
 
-use adr::record::sha256_hex;
 use common::*;
 
 const Q1: &str = r#"# Example
@@ -682,7 +681,7 @@ fn ask_prints_the_tier_and_writes_an_assumes_row_per_dependent() {
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     // an `assumes` row keys on the dependent's own heading
     // id, not its heading text.
-    let expected_hash = sha256_hex(&format!("{}=A|B", q2_id));
+    let expected_hash = assumes_hash(&q2_id, "A|B");
     let row = ledger
         .lines()
         .find(|l| l.contains("\tassumes\t"))
