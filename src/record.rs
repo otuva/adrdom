@@ -555,6 +555,11 @@ struct BodyScan {
     supersedes: Vec<String>,
     depends: Vec<Dep>,
     depends_errors: Vec<String>,
+    /// "supersedes: second supersedes line, line N" / "terms: second terms
+    /// line, line N": 5892981c holds every reference list on one line, so
+    /// a second line of either is refused, the same as a second depends
+    /// line, rather than silently ignored.
+    reference_line_errors: Vec<String>,
     terms_line: Option<usize>,
     options: Vec<OptionRec>,
     answer_line: Option<usize>,
@@ -580,6 +585,8 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
     let mut depends: Vec<Dep> = Vec::new();
     let mut depends_errors: Vec<String> = Vec::new();
     let mut depends_line_seen = false;
+    let mut reference_line_errors: Vec<String> = Vec::new();
+    let mut supersedes_line_seen = false;
     let mut terms_line = None;
     let mut options: Vec<OptionRec> = Vec::new();
     let mut answer_line = None;
@@ -631,19 +638,25 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
             continue;
         }
         if let Some(v) = kv(line, "supersedes") {
-            if supersedes.is_empty() {
-                supersedes = v
-                    .split(',')
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-                    .collect();
+            if supersedes_line_seen {
+                reference_line_errors
+                    .push(format!("supersedes: second supersedes line, line {}", j + 1));
+                continue;
             }
+            supersedes_line_seen = true;
+            supersedes = v
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
             continue;
         }
         if kv(line, "terms").is_some() {
-            if terms_line.is_none() {
-                terms_line = Some(j);
+            if terms_line.is_some() {
+                reference_line_errors.push(format!("terms: second terms line, line {}", j + 1));
+                continue;
             }
+            terms_line = Some(j);
             continue;
         }
         if kv(line, "Problem").is_some() {
@@ -739,6 +752,7 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
         supersedes,
         depends,
         depends_errors,
+        reference_line_errors,
         terms_line,
         options,
         answer_line,
@@ -797,6 +811,7 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
 
     let mut shape_errors = scan.stray_errors;
     shape_errors.extend(scan.depends_errors);
+    shape_errors.extend(scan.reference_line_errors);
     if !is_skeleton {
         // A missing field (count 0) and a repeated one (count > 1) are
         // different mistakes and get different messages: a zero count is
@@ -1826,6 +1841,44 @@ mod tests {
             sec.shape_errors
                 .iter()
                 .any(|e| e == "depends: second depends line, line 5"),
+            "{:?}",
+            sec.shape_errors
+        );
+    }
+
+    // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a supersedes list split
+    // across two lines is refused (a shape error), not silently dropped.
+    #[test]
+    fn two_supersedes_lines_under_one_heading_is_a_shape_error() {
+        let rf = rf_from(
+            "# Topic\n\n### 1.1 Q?\ndepends: widget\nsupersedes: aaa, bbb\nsupersedes: ccc\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        let sec = &rf.sections[0];
+        // Only the first line's entries are read.
+        assert_eq!(sec.supersedes, vec!["aaa".to_string(), "bbb".to_string()]);
+        assert!(
+            sec.shape_errors
+                .iter()
+                .any(|e| e == "supersedes: second supersedes line, line 6"),
+            "{:?}",
+            sec.shape_errors
+        );
+    }
+
+    // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a terms list split
+    // across two lines is refused (a shape error), not silently dropped.
+    #[test]
+    fn two_terms_lines_under_one_heading_is_a_shape_error() {
+        let rf = rf_from(
+            "# Topic\n\n### 1.1 Q?\ndepends: widget\nterms: widget=aaa\nterms: gadget=bbb\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        );
+        let sec = &rf.sections[0];
+        // The first terms line stays the one the section records.
+        assert_eq!(sec.terms_line, Some(4));
+        assert!(
+            sec.shape_errors
+                .iter()
+                .any(|e| e == "terms: second terms line, line 6"),
             "{:?}",
             sec.shape_errors
         );

@@ -102,6 +102,20 @@ fn parity_two_depends_lines() {
     assert_parity(&dir, &record, "second depends line");
 }
 
+// adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a supersedes list split
+// across two lines is refused by both `adr approve` and `adr check`, not
+// silently cut to its first line.
+#[test]
+fn parity_two_supersedes_lines() {
+    let dir = init_repo();
+    setup(&dir);
+    approve_minimal_terms(&dir, "decision");
+    let content = "# Example\n\n### 1.1 Q?\ndepends: decision\nsupersedes: aaa\nsupersedes: bbb\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let record = write_record(&dir, "adrdom/decisions/example.md", content);
+
+    assert_parity(&dir, &record, "second supersedes line");
+}
+
 #[test]
 fn parity_missing_depends_line() {
     let dir = init_repo();
