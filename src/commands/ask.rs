@@ -218,7 +218,12 @@ pub fn run(record_path: PathBuf) -> i32 {
             .any(|(i, _)| candidate[i] && rf.tier_of(i) == Some(n));
         if asking_in_open_tier {
             for (ti, target) in rf.sections.iter().enumerate() {
-                if rf.tier_of(ti) != Some(n) {
+                // Only the questions being asked this run: a set is
+                // frozen with the body it stands on, so an entry naming a
+                // sibling that was asked (or answered) earlier keeps
+                // whatever it froze then, and an answered sibling's
+                // dependents are never edited on its account.
+                if rf.tier_of(ti) != Some(n) || !candidate[ti] {
                     continue;
                 }
                 for (di, set) in rf.dependents_of(ti) {

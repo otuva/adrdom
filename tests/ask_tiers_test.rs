@@ -438,6 +438,48 @@ fn ask_refuses_a_tier_n_dependent_with_no_answer_set() {
     assert_eq!(after, before);
 }
 
+// adr: fa90692a-150e-4a89-91e2-1d575cb59d0f
+//
+// "when a tier's bodies are written, every depends entry naming one of its
+// questions gets the letters": the set is frozen with the question being
+// asked. A question written and answered after its target was answered
+// never needed a set, and when a new question later joins the target's
+// tier, ask asks the new one without demanding a set on that old,
+// answered line.
+#[test]
+fn ask_asks_a_new_sibling_without_a_set_on_an_answered_dependents_line() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let record = write_record(&dir, "adrdom/decisions/example.md", Q1);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let q1_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
+    assert!(adr_answer(&dir, &q1_id, "A").status.success());
+
+    // Q2 arrives after Q1 is answered: its entry carries no set, and ask
+    // and answer take it as it is.
+    let mut content = std::fs::read_to_string(&record).unwrap();
+    content.push_str(&q2_depends_on_q1(""));
+    std::fs::write(&record, &content).unwrap();
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let q2_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[1].clone();
+    assert!(adr_answer(&dir, &q2_id, "A").status.success());
+
+    // Q3 joins Q1's tier. Q2's line naming Q1 still has no set; Q1 is
+    // answered, so no set is asked for, and Q3 is asked.
+    let mut content = std::fs::read_to_string(&record).unwrap();
+    content.push_str(
+        "\n### 1.3 Does the widget need a lid?\ndepends: widget\n\nProblem: p.\n\nStandard: s.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n",
+    );
+    std::fs::write(&record, &content).unwrap();
+    approve_record(&dir, "adrdom/decisions/example.md");
+    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(stdout(&out).contains("asked: \"1.3 Does the widget need a lid?\" (tier 1)"), "{}", stdout(&out));
+}
+
 #[test]
 fn ask_refuses_a_set_naming_an_option_the_target_does_not_have() {
     let dir = init_repo();
