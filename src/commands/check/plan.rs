@@ -41,6 +41,8 @@ pub(super) fn check_plan(
     let mut out = Vec::new();
     let mut awaiting: Vec<String> = Vec::new();
     let mut heading_files: HashMap<String, Vec<String>> = HashMap::new();
+    let records_by_rel: HashMap<&str, &RecordFile> =
+        records.iter().map(|rf| (rf.rel.as_str(), rf)).collect();
 
     // Naming half of the same decision as the cross-file duplicate-heading
     // check below (76bd7ef0 A: "each file holds one topic and is named by
@@ -61,10 +63,7 @@ pub(super) fn check_plan(
         // topic, lowercased and hyphenated. A file with no h1 already fails
         // its shape check, so it is skipped here.
         let rel = state::rel_path(root, &f);
-        let topic = records
-            .iter()
-            .find(|rf| rf.rel == rel)
-            .and_then(|rf| rf.topic.as_deref());
+        let topic = records_by_rel.get(rel.as_str()).and_then(|rf| rf.topic.as_deref());
         if let Some(topic) = topic {
             let expected = repo::expected_topic_file_stem(topic);
             if name.strip_suffix(".md") != Some(expected.as_str()) {
