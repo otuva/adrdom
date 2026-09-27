@@ -375,10 +375,10 @@ pub fn run(record_path: PathBuf) -> i32 {
 
         // Moot refusal: this candidate's own entry in `moot_pairs`, matched
         // by section index since two sections may share a heading text.
-        if let Some((_, _, t, set_str, c)) = moot_pairs.iter().find(|(si, ..)| *si == i) {
+        if let Some(p) = moot_pairs.iter().find(|p| p.section_idx == i) {
             eprintln!(
                 "ask: {}",
-                msg::moot_candidate(&rel, &sec.heading_text, t, set_str, *c)
+                msg::moot_candidate(&rel, &sec.heading_text, &p.target_heading, &p.set_text, p.letter)
             );
             return 1;
         }

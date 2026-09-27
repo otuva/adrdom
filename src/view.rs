@@ -223,21 +223,30 @@ pub fn format_dep(
     }
 }
 
-/// One `(dependent section index, dependent heading, target heading,
-/// canonical set text, answered letter)` tuple per heading dep in `rf`
-/// whose declared answer set excludes the letter its target was actually
-/// answered with (per "Does a depends entry carry the answers it holds
-/// under?", "moot"; mirrors `check`'s `moot.rs`, computed independently
-/// here since `record.rs` has no ledger access). The index lets `ask`
-/// match a candidate by identity: two sections may share a heading until
-/// `check` refuses the duplicate. A target that is unanswered (gated on
-/// the ledger's `qstate`, not the raw file text, so a body edited to show
-/// a letter that was never actually asked/answered through the ledger
-/// never counts), or a set of `=*`, never produces an entry. Shared by
+/// One entry per heading dep in `rf` whose declared answer set excludes
+/// the letter its target was actually answered with (per "Does a depends
+/// entry carry the answers it holds under?", "moot"; mirrors `check`'s
+/// `moot.rs`, computed independently here since `record.rs` has no ledger
+/// access).
+pub(crate) struct MootPair {
+    /// The dependent's own index in `rf.sections`: lets `ask` match a
+    /// candidate by identity, since two sections may share a heading text
+    /// until `check` refuses the duplicate.
+    pub section_idx: usize,
+    pub dependent_heading: String,
+    pub target_heading: String,
+    pub set_text: String,
+    pub letter: char,
+}
+
+/// Every `MootPair` in `rf`. A target that is unanswered (gated on the
+/// ledger's `qstate`, not the raw file text, so a body edited to show a
+/// letter that was never actually asked/answered through the ledger never
+/// counts), or a set of `=*`, never produces an entry. Shared by
 /// `moot_notes` (its formatted-string wrapper, read by `check`/the page)
 /// and `ask`'s moot refusal, so the two can never diverge on what counts
 /// as moot.
-pub(crate) fn moot_pairs(rf: &RecordFile, led: &Ledger) -> Vec<(usize, String, String, String, char)> {
+pub(crate) fn moot_pairs(rf: &RecordFile, led: &Ledger) -> Vec<MootPair> {
     let mut out = Vec::new();
     for (si, sec) in rf.sections.iter().enumerate() {
         for d in &sec.depends {
@@ -257,13 +266,13 @@ pub(crate) fn moot_pairs(rf: &RecordFile, led: &Ledger) -> Vec<(usize, String, S
                 continue;
             };
             if !letters.contains(&c) {
-                out.push((
-                    si,
-                    sec.heading_text.clone(),
-                    target.heading_text.clone(),
-                    record::canonical_set(&record::AnswerSet::Letters(letters.clone())),
-                    c,
-                ));
+                out.push(MootPair {
+                    section_idx: si,
+                    dependent_heading: sec.heading_text.clone(),
+                    target_heading: target.heading_text.clone(),
+                    set_text: record::canonical_set(&record::AnswerSet::Letters(letters.clone())),
+                    letter: c,
+                });
             }
         }
     }
@@ -276,7 +285,12 @@ pub(crate) fn moot_pairs(rf: &RecordFile, led: &Ledger) -> Vec<(usize, String, S
 pub(crate) fn moot_notes(rf: &RecordFile, led: &Ledger) -> Vec<String> {
     moot_pairs(rf, led)
         .into_iter()
-        .map(|(_, h, t, set, c)| format!("\"{}\" stands on \"{}\"={}, answered {}", h, t, set, c))
+        .map(|p| {
+            format!(
+                "\"{}\" stands on \"{}\"={}, answered {}",
+                p.dependent_heading, p.target_heading, p.set_text, p.letter
+            )
+        })
         .collect()
 }
 
