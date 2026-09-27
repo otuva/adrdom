@@ -85,6 +85,18 @@ pub struct Hit {
     pub term: Option<String>,
 }
 
+/// The name of the term a banned-list entry was banned under: `uuid` is
+/// the list's value for the hash (None for a word banned on its own), and
+/// `terms` the terms file it may name. Shared by `hits` and `first_hit` so
+/// every hit names its term the same way.
+fn term_name(uuid: Option<&str>, terms: &[crate::terms::Term]) -> Option<String> {
+    let uuid = uuid?;
+    terms
+        .iter()
+        .find(|t| t.id.as_deref() == Some(uuid))
+        .map(|t| t.name.clone())
+}
+
 /// The one banned-word scan: split `text` into lines, tokenize each line
 /// with `tokenize`, hash every token and look it up in `hash_map` (a ban
 /// list hash to the term uuid it was banned under, if any, exactly as
@@ -109,12 +121,7 @@ pub fn hits(
             if !seen.insert(tok.clone()) {
                 continue;
             }
-            let term = uuid_opt.as_ref().and_then(|uuid| {
-                terms
-                    .iter()
-                    .find(|t| t.id.as_deref() == Some(uuid.as_str()))
-                    .map(|t| t.name.clone())
-            });
+            let term = term_name(uuid_opt.as_deref(), terms);
             out.push(Hit { line: i + 1, token: tok, term });
         }
     }
@@ -137,12 +144,7 @@ pub fn first_hit(
             let Some(uuid_opt) = hash_map.get(&h) else {
                 continue;
             };
-            let term = uuid_opt.as_ref().and_then(|uuid| {
-                terms
-                    .iter()
-                    .find(|t| t.id.as_deref() == Some(uuid.as_str()))
-                    .map(|t| t.name.clone())
-            });
+            let term = term_name(uuid_opt.as_deref(), terms);
             return Some(Hit { line: i + 1, token: tok, term });
         }
     }

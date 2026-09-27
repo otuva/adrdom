@@ -678,13 +678,7 @@ pub fn tier_blocked_unasked(
     open_tier: usize,
     blocker: &str,
 ) -> String {
-    refuse(
-        format!(
-            "{}: \"{}\" is in tier {}; tier {} is open, waiting on unasked \"{}\"",
-            rel, heading, cand_tier, open_tier, blocker
-        ),
-        Next::agent("writes its body and asks it first"),
-    )
+    tier_blocked_on(rel, heading, cand_tier, open_tier, blocker, "writes its body and asks it first")
 }
 
 /// The open tier still holds a question with a real body -- `state::
@@ -698,12 +692,25 @@ pub fn tier_blocked_needs_ask(
     open_tier: usize,
     blocker: &str,
 ) -> String {
+    tier_blocked_on(rel, heading, cand_tier, open_tier, blocker, "asks it first")
+}
+
+/// The one sentence both tier-blocked refusals share; only the agent's
+/// next move differs.
+fn tier_blocked_on(
+    rel: &str,
+    heading: &str,
+    cand_tier: usize,
+    open_tier: usize,
+    blocker: &str,
+    next: &str,
+) -> String {
     refuse(
         format!(
             "{}: \"{}\" is in tier {}; tier {} is open, waiting on unasked \"{}\"",
             rel, heading, cand_tier, open_tier, blocker
         ),
-        Next::agent("asks it first"),
+        Next::agent(next),
     )
 }
 

@@ -167,10 +167,13 @@ mod topic_name_tests {
 
         assert_eq!(expected_topic_file_stem("Rule 2"), "rule-2");
         assert_eq!(expected_topic_file_stem("OAuth2"), "oauth2");
-        assert!(!valid_topic_file_name(&format!(
-            "{}.md",
-            expected_topic_file_stem("Rule 2")
-        )));
+        for topic in ["Rule 2", "OAuth2"] {
+            assert!(
+                !valid_topic_file_name(&format!("{}.md", expected_topic_file_stem(topic))),
+                "{}",
+                topic
+            );
+        }
     }
 }
 
