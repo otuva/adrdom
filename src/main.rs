@@ -1,20 +1,7 @@
-mod actions;
-mod banned;
-mod commands;
-mod depends;
-mod ledger;
-mod msg;
-mod record;
-mod repo;
-mod state;
-mod tells;
-mod terms;
-mod version;
-mod view;
-
+use adr::commands;
+use adr::version::VERSION;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
-use version::VERSION;
 
 /// adr: a control layer between AI coding agents and a repository.
 #[derive(Parser)]

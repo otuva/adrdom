@@ -3,6 +3,10 @@ name = "adr"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "adr"
+path = "src/lib.rs"
+
 [[bin]]
 name = "adr"
 path = "src/main.rs"

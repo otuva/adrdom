@@ -132,11 +132,6 @@ fn id_for_heading(content: &str, heading_prefix: &str) -> String {
         .to_string()
 }
 
-fn asked_row_count(dir: &std::path::Path) -> usize {
-    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap_or_default();
-    ledger.lines().filter(|l| l.contains("\tasked\t")).count()
-}
-
 // adr: f01e20ae-00fc-4ec9-a25b-88a90dffc624
 //
 // "one approval covers the headings and their depends lines; the question
@@ -240,12 +235,7 @@ fn plan_lifecycle_end_to_end() {
     let state_3 = std::fs::read_to_string(&record).unwrap();
     assert_eq!(id_for_heading(&state_3, "### 1.1"), q1_id);
     let ledger_after_ask1 = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    assert_eq!(
-        ledger_after_ask1.lines().filter(|l| l.contains("\tasked\t")).count(),
-        1,
-        "{}",
-        ledger_after_ask1
-    );
+    assert_eq!(asked_row_count(&dir), 1, "{}", ledger_after_ask1);
     assert_eq!(
         ledger_after_ask1.lines().filter(|l| l.contains("\tassumes\t")).count(),
         2,

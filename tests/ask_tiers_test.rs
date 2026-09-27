@@ -16,19 +16,8 @@
 // instead.
 mod common;
 
+use adr::record::sha256_hex;
 use common::*;
-use sha2::{Digest, Sha256};
-
-fn sha256_hex(text: &str) -> String {
-    let mut h = Sha256::new();
-    h.update(text.as_bytes());
-    h.finalize().iter().map(|b| format!("{:02x}", b)).collect()
-}
-
-fn asked_row_count(dir: &std::path::Path) -> usize {
-    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap_or_default();
-    ledger.lines().filter(|l| l.contains("\tasked\t")).count()
-}
 
 const Q1: &str = r#"# Example
 

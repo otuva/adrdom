@@ -2,6 +2,7 @@
 // helper here, which is expected.
 #![allow(dead_code)]
 
+use adr::{ledger, record, terms};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -10,6 +11,15 @@ static COUNTER: AtomicU64 = AtomicU64::new(0);
 
 pub fn adr_bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_adr"))
+}
+
+/// How many `asked` ledger rows exist so far: a count of `\tasked\t` lines
+/// in `adrdom/state/ledger.tsv`, since every heading already has an id the
+/// moment it is approved (9.1 A), so `extract_ids(...).len()` no longer
+/// tracks "how many questions have been asked".
+pub fn asked_row_count(dir: &Path) -> usize {
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap_or_default();
+    ledger.lines().filter(|l| l.contains("\tasked\t")).count()
 }
 
 /// Creates a fresh temp dir, `git init -q`s it, configures a test user,
@@ -185,90 +195,10 @@ pub fn write_test_comment(dir: &Path, id: &str) {
 
 // --- Plan/context approval, without depending on `adr approve` -----------
 //
-// The crate has no lib target, so this test binary can't call
-// `record::plan_hash`/`context_hash` directly; these mirror that logic
-// (see src/record.rs) closely enough to produce the same hashes for
-// well-formed fixture content, so tests can write `approved`/`context`
-// ledger rows straight into adrdom/state/ledger.tsv without needing the
-// `approve` command (being built concurrently in a separate slice).
-
-fn sha256_hex(text: &str) -> String {
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    hasher.update(text.as_bytes());
-    hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect()
-}
-
-/// If `entry` (a `depends:` line's value, trimmed) carries an `=A`/`=A|B`/
-/// `=*` answer-set suffix on a heading target (the text before the `=`
-/// ends with `?`), returns the entry with that suffix stripped; otherwise
-/// returns it unchanged. Mirrors the set-stripping half of `record::Dep`
-/// parsing (see src/record.rs) closely enough for well-formed fixture
-/// content.
-fn strip_answer_set_suffix(entry: &str) -> String {
-    if let Some(eq_idx) = entry.rfind('=') {
-        let base = entry[..eq_idx].trim_end();
-        if base.ends_with('?') {
-            return base.to_string();
-        }
-    }
-    entry.to_string()
-}
-
-/// Mirrors `record::plan_hash` (see src/record.rs): sha256 of the trimmed
-/// `### ` question heading lines in file order, each followed by its
-/// (single, 8.1 A) `depends:` line's entries, comma-split, each with any
-/// `=set` suffix stripped, joined with `\n`. No `## ` tier headings any
-/// more (8.3 A): tiers are derived, not written. Doesn't reproduce the
-/// comma-in-heading-text rejoin `record::parse_depends_line` does before
-/// approve (see src/record.rs) -- fine for the well-formed, comma-free
-/// fixture content every caller of this mirror uses.
-pub fn plan_hash(content: &str) -> String {
-    let mut items: Vec<String> = Vec::new();
-    let mut seen_heading = false;
-    for raw in content.split('\n') {
-        let line = raw.trim_end();
-        if line.starts_with("### ") && line.ends_with('?') {
-            items.push(line.to_string());
-            seen_heading = true;
-            continue;
-        }
-        if seen_heading {
-            if let Some(v) = line.trim_start().strip_prefix("depends: ") {
-                for entry in v.split(',') {
-                    items.push(format!("depends: {}", strip_answer_set_suffix(entry.trim())));
-                }
-            }
-        }
-    }
-    sha256_hex(&items.join("\n"))
-}
-
-/// Mirrors `record::context_hash`: sha256 of the context prose lines
-/// (between the h1 and the first `### ` question heading) with
-/// leading/trailing blank lines trimmed, joined with `\n`; the empty string
-/// hashes when there is none.
-pub fn context_hash(content: &str) -> String {
-    let lines: Vec<&str> = content.split('\n').collect();
-    let h1_idx = lines.iter().position(|l| l.starts_with("# "));
-    let q_idx = lines
-        .iter()
-        .position(|l| l.starts_with("### ") && l.trim_end().ends_with('?'));
-    let start = h1_idx.map(|i| i + 1).unwrap_or(0);
-    let end = q_idx.unwrap_or(lines.len());
-    let start = start.min(end);
-    let slice = &lines[start..end];
-
-    let mut from = 0;
-    while from < slice.len() && slice[from].trim().is_empty() {
-        from += 1;
-    }
-    let mut to = slice.len();
-    while to > from && slice[to - 1].trim().is_empty() {
-        to -= 1;
-    }
-    sha256_hex(&slice[from..to].join("\n"))
-}
+// `approve_via_ledger` below writes `content` to `rel` and loads it back
+// through `record::load` so the `approved`/`context` ledger rows it writes
+// carry the real `record::plan_hash`/`record::context_hash` of that file
+// (see src/record.rs), rather than a hand-rolled mirror of that logic.
 
 /// Writes `approved`/`context` ledger rows for `content` as if `adr
 /// approve` had just run on `rel` (path relative to `dir`, forward
@@ -282,13 +212,20 @@ pub fn context_hash(content: &str) -> String {
 /// instead: `ask` now refuses outright on a section with no id, and only
 /// real `approve` gives one.
 pub fn approve_via_ledger(dir: &Path, rel: &str, content: &str) {
-    let plan = plan_hash(content);
-    let ctx = context_hash(content);
-    let ledger_path = dir.join("adrdom/state/ledger.tsv");
-    let mut existing = std::fs::read_to_string(&ledger_path).unwrap_or_default();
-    existing.push_str(&format!("2024-01-01T00:00:00Z\tapproved\t-\t{}\t{}\n", plan, rel));
-    existing.push_str(&format!("2024-01-01T00:00:00Z\tcontext\t-\t{}\t{}\n", ctx, rel));
-    std::fs::write(&ledger_path, existing).unwrap();
+    let path = dir.join(rel);
+    // Guarantee the file on disk is exactly `content`, regardless of what
+    // the caller already wrote, so the real loader below parses the same
+    // text the caller means to have "approved".
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).unwrap();
+    }
+    std::fs::write(&path, content).unwrap();
+    let rf = record::load(&path)
+        .unwrap_or_else(|e| panic!("approve_via_ledger: failed to load {}: {}", rel, e));
+    let plan = record::plan_hash(&rf);
+    let ctx = record::context_hash(&rf);
+    append_ledger_row(dir, "approved", "-", &plan, rel);
+    append_ledger_row(dir, "context", "-", &ctx, rel);
 }
 
 /// Runs the real, owner-gated `adr approve <rel>` (9.1 A: `approve` mints
@@ -310,14 +247,22 @@ pub fn approve_record(dir: &Path, rel: &str) {
 }
 
 /// Appends a hand-crafted ledger row (bypassing every command): `event`,
-/// `id`, `hash`, `detail`, tab-separated with a fixed timestamp.
+/// `id`, `hash`, `detail`, with a fixed timestamp and the real binary's
+/// version, formatted through `ledger::row_line` so it has the same six
+/// tab-separated fields a real command would write.
 pub fn append_ledger_row(dir: &Path, event: &str, id: &str, hash: &str, detail: &str) {
     let ledger_path = dir.join("adrdom/state/ledger.tsv");
     let mut existing = std::fs::read_to_string(&ledger_path).unwrap_or_default();
-    existing.push_str(&format!(
-        "2024-01-01T00:00:00Z\t{}\t{}\t{}\t{}\n",
-        event, id, hash, detail
-    ));
+    let row = ledger::Row {
+        time: "2024-01-01T00:00:00Z".to_string(),
+        event: event.to_string(),
+        id: id.to_string(),
+        hash: hash.to_string(),
+        detail: detail.to_string(),
+        version: adr::version::VERSION.to_string(),
+    };
+    existing.push_str(&ledger::row_line(&row));
+    existing.push('\n');
     std::fs::write(&ledger_path, existing).unwrap();
 }
 
@@ -333,24 +278,16 @@ pub fn approve_empty_terms(dir: &Path) {
 
 /// Writes `adrdom/terms.md` with `content` and hand-writes a `terms`
 /// ledger row as if `adr approve adrdom/terms.md` had just run on exactly
-/// that content. Mirrors `terms::file_hash` (sha256 of the content with
-/// `\r\n` normalized to `\n`, each line right-trimmed; the crate has no
-/// lib target for tests to call that directly).
+/// that content: writes `content` to disk (so it matches whatever the
+/// caller already wrote there) and hashes it back with the real
+/// `terms::file_hash`, through `terms::load`.
 pub fn approve_terms_via_ledger(dir: &Path, content: &str) {
-    let normalized = content.replace("\r\n", "\n");
-    let trimmed = normalized
-        .split('\n')
-        .map(|l| l.trim_end())
-        .collect::<Vec<_>>()
-        .join("\n");
-    let hash = sha256_hex(&trimmed);
-    let ledger_path = dir.join("adrdom/state/ledger.tsv");
-    let mut existing = std::fs::read_to_string(&ledger_path).unwrap_or_default();
-    existing.push_str(&format!(
-        "2024-01-01T00:00:00Z\tterms\t-\t{}\tadrdom/terms.md\n",
-        hash
-    ));
-    std::fs::write(&ledger_path, existing).unwrap();
+    let path = dir.join("adrdom/terms.md");
+    std::fs::write(&path, content).unwrap();
+    let tf = terms::load(&path)
+        .unwrap_or_else(|e| panic!("approve_terms_via_ledger: failed to load terms.md: {}", e));
+    let hash = terms::file_hash(&tf);
+    append_ledger_row(dir, "terms", "-", &hash, "adrdom/terms.md");
 }
 
 // --- Terms approval, without depending on `adr approve` -------------------
@@ -359,12 +296,8 @@ pub fn approve_terms_via_ledger(dir: &Path, content: &str) {
 // approved, and the section's text pairs at least one term. Most tests
 // that only care about plan/context/answer behavior need a minimal, already
 // approved terms.md with a single term whose name appears somewhere in
-// the fixture text; this mirrors `terms::file_hash` (sha256 of the file's
-// text with line endings normalized and each line right-trimmed) the same
-// way `approve_via_ledger`
-// mirrors the plan/context hashes, so tests don't have to route through
-// the `approve` command (being built as the same slice, but kept
-// independent so a bug in one doesn't mask a bug in the other).
+// the fixture text; `approve_terms_via_ledger` above (real `terms::file_hash`)
+// gets there without routing through the `approve` command.
 pub fn approve_minimal_terms(dir: &Path, word: &str) {
     let content = format!(
         "# Terms\n\n## {}\nid: 99999999-9999-9999-9999-999999999999\ndefinition: A fixture term for tests.\naliases: \n",
@@ -390,30 +323,35 @@ pub fn approve_terms_with(dir: &Path, words: &[&str]) {
     approve_terms_via_ledger(dir, &content);
 }
 
-/// Mirrors an `assumes` row's hash (see src/commands/check/answers.rs,
-/// spec §2): sha256 of `<dependent heading>=<set>`. `set` is the answer-set
-/// text as `check` renders it: a single letter, letters joined by `|` in
-/// sorted order, or `*` for "any". Lets a test hand-write an `assumes` row
-/// that either matches or deliberately mismatches a depends line's current
-/// set, without depending on `adr ask` (built concurrently in a separate
-/// slice).
-pub fn assumes_hash(dependent_heading: &str, set: &str) -> String {
-    sha256_hex(&format!("{}={}", dependent_heading, set))
+/// An `assumes` row's hash (see src/commands/check/answers.rs, spec §2):
+/// `record::assumes_hash` of `dependent_key` against the answer set `set`
+/// spells out in the shape `check` renders it and this helper's callers
+/// already pass: a single letter, letters joined by `|`, or `*` for "any".
+/// Lets a test hand-write an `assumes` row that either matches or
+/// deliberately mismatches a depends line's current set, without depending
+/// on `adr ask`.
+pub fn assumes_hash(dependent_key: &str, set: &str) -> String {
+    let parsed = if set == "*" {
+        record::AnswerSet::Any
+    } else {
+        record::AnswerSet::Letters(set.chars().filter(|c| *c != '|').collect())
+    };
+    record::assumes_hash(dependent_key, &parsed)
 }
 
-/// Mirrors `record::section_hash` for a caller that already has the exact
-/// block of lines making up one section (from its heading through its
-/// last content line, no trailing blank, no `**Answer:**`): each line
-/// right-trimmed, joined with `\n`, sha256 hex. Lets a test hand-craft an
-/// `asked` ledger row matching a record it edited directly (e.g. after
-/// stripping a `terms:` line `ask` wrote), without reimplementing
-/// `record::hash_range`.
+/// `record::section_hash` for a caller that already has the exact block of
+/// lines making up one section (from its heading through its last content
+/// line, no trailing blank, no `**Answer:**`): wraps `section_text` as the
+/// sole question of a throwaway topic file, loads it back through
+/// `record::load`, and hashes its one section for real. Lets a test
+/// hand-craft an `asked`/`refused`/`answered` ledger row matching a record
+/// it edited directly (e.g. after stripping a `terms:` line `ask` wrote).
 pub fn mirror_section_hash(section_text: &str) -> String {
-    let text: String = section_text
-        .trim_end_matches('\n')
-        .split('\n')
-        .map(|l| l.trim_end())
-        .collect::<Vec<_>>()
-        .join("\n");
-    sha256_hex(&text)
+    let content = format!("# Topic\n\n{}\n", section_text.trim_end_matches('\n'));
+    let lines = record::split_lines(&content);
+    let sections = record::parse_sections(&lines);
+    let sec = sections
+        .first()
+        .unwrap_or_else(|| panic!("mirror_section_hash: no section parsed from: {}", section_text));
+    record::section_hash(&lines, sec)
 }

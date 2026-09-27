@@ -317,12 +317,7 @@ fn ask_refuses_group_two_while_group_one_unanswered_then_passes_after_answer() {
     // id too (9.1 A), so `extract_ids` no longer tells asked apart from
     // merely approved -- the ledger's `asked` row count does.
     let ledger_still = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    assert_eq!(
-        ledger_still.lines().filter(|l| l.contains("\tasked\t")).count(),
-        1,
-        "{}",
-        ledger_still
-    );
+    assert_eq!(asked_row_count(&dir), 1, "{}", ledger_still);
 
     // Answer group one, then ask succeeds for group two.
     let answer_out = adr_answer(&dir, &first_id, "A");
@@ -331,12 +326,7 @@ fn ask_refuses_group_two_while_group_one_unanswered_then_passes_after_answer() {
     let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out2.status.success(), "ask failed: {}", stderr(&out2));
     let ledger_final = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    assert_eq!(
-        ledger_final.lines().filter(|l| l.contains("\tasked\t")).count(),
-        2,
-        "{}",
-        ledger_final
-    );
+    assert_eq!(asked_row_count(&dir), 2, "{}", ledger_final);
 }
 
 // --- a struck asked heading is withdrawn on approve ---------------------

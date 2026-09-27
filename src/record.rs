@@ -8,7 +8,6 @@ use std::path::{Path, PathBuf};
 pub struct OptionRec {
     pub letter: char,
     pub sentence: Option<String>,
-    #[allow(dead_code)]
     pub line: usize,
 }
 
@@ -109,15 +108,12 @@ pub struct Section {
     /// `ask` and `approve` both refuse on this slice (plus the file-level
     /// `RecordFile::shape_errors`) before doing anything else; `check`'s
     /// `parse` check reads this and `parse_errors` together.
-    #[allow(dead_code)]
     pub shape_errors: Vec<String>,
     /// True when the heading has no non-blank line before the next
     /// heading other than `depends:` lines: no id, no body, never a
     /// failure.
-    #[allow(dead_code)]
     pub is_skeleton: bool,
     /// Line index of this section's `terms: ` line, if any.
-    #[allow(dead_code)]
     pub terms_line: Option<usize>,
 }
 
@@ -161,17 +157,14 @@ pub struct RecordFile {
     pub lines: Vec<String>,
     pub sections: Vec<Section>,
     /// The h1 topic text, or `None` if the file has no h1 (a shape error).
-    #[allow(dead_code)]
     pub topic: Option<String>,
     /// [start, end) line range of the context prose: everything between
     /// the h1 and the first `### ` question heading (or end of file, if no
     /// h1/questions).
-    #[allow(dead_code)]
     pub context_range: (usize, usize),
     /// File-level shape errors (spec point: missing/duplicate h1, text
     /// before h1, a `## ` tier heading — tiers are derived now, never
     /// written by hand).
-    #[allow(dead_code)]
     pub shape_errors: Vec<String>,
     /// Each section's 1-based tier (index-aligned with `sections`), filled
     /// when `derive_tiers` succeeds; `None` when `derive_error` is set
@@ -890,7 +883,6 @@ fn analyze_shape(lines: &[String], sections: &[Section]) -> (Option<String>, (us
 /// reordered, or renamed heading, a heading gaining/losing/swapping its id,
 /// or a changed/added/removed depends target; unaffected by a body edit or
 /// a depends entry's answer set.
-#[allow(dead_code)]
 pub fn plan_hash(rf: &RecordFile) -> String {
     let mut out: Vec<String> = Vec::new();
     for s in &rf.sections {
@@ -912,7 +904,6 @@ pub fn plan_hash(rf: &RecordFile) -> String {
 /// sha256 of the context prose lines with leading/trailing blank lines
 /// trimmed, joined with `\n`; the empty string hashes when there is no
 /// prose (spec point 9).
-#[allow(dead_code)]
 pub fn context_hash(rf: &RecordFile) -> String {
     let (s, e) = rf.context_range;
     let e = e.min(rf.lines.len());
