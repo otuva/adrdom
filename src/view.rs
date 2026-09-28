@@ -789,6 +789,20 @@ mod tests {
         std::fs::write(&path, existing).unwrap();
     }
 
+    /// Same as `append_row`, but with an explicit `time`: per "Does the
+    /// tool take the order of ledger rows from their time?", two rows about
+    /// the same subject sharing `append_row`'s one fixed time are ordered
+    /// by row text, not by which one a fixture wrote first, so a fixture
+    /// whose point is which row is "the latest" (an `asked` row and the
+    /// `answered`/`superseded`/`withdrawn` row that follows it) needs each
+    /// row to carry a time later than the one before it.
+    fn append_row_at(dir: &Path, event: &str, id: &str, hash: &str, detail: &str, time: &str) {
+        let path = dir.join(repo::LEDGER_PATH);
+        let mut existing = std::fs::read_to_string(&path).unwrap_or_default();
+        existing.push_str(&format!("{}\t{}\t{}\t{}\t{}\n", time, event, id, hash, detail));
+        std::fs::write(&path, existing).unwrap();
+    }
+
     const TWO_GROUP: &str = "# Topic\n\n\
 Context prose.\n\n\
 ### 1.1 First question?\n\n\
@@ -835,13 +849,13 @@ Standard: s2.\n\n\
     fn qstate_answered_superseded_and_withdrawn() {
         let dir = temp_repo();
         let led_path = dir.join(repo::LEDGER_PATH);
-        append_row(&dir, "asked", "id-a", "h", "A?");
-        append_row(&dir, "answered", "id-a", "h", "A");
-        append_row(&dir, "asked", "id-b", "h", "B?");
-        append_row(&dir, "answered", "id-b", "h", "A");
-        append_row(&dir, "superseded", "id-b", "-", "id-c");
-        append_row(&dir, "asked", "id-d", "h", "D?");
-        append_row(&dir, "withdrawn", "id-d", "-", "D?");
+        append_row_at(&dir, "asked", "id-a", "h", "A?", "2024-01-01T00:00:00Z");
+        append_row_at(&dir, "answered", "id-a", "h", "A", "2024-01-01T00:00:01Z");
+        append_row_at(&dir, "asked", "id-b", "h", "B?", "2024-01-01T00:00:02Z");
+        append_row_at(&dir, "answered", "id-b", "h", "A", "2024-01-01T00:00:03Z");
+        append_row_at(&dir, "superseded", "id-b", "-", "id-c", "2024-01-01T00:00:04Z");
+        append_row_at(&dir, "asked", "id-d", "h", "D?", "2024-01-01T00:00:05Z");
+        append_row_at(&dir, "withdrawn", "id-d", "-", "D?", "2024-01-01T00:00:06Z");
         let led = ledger::read(&led_path);
 
         let mk = |id: &str| Section {
@@ -1279,8 +1293,8 @@ Standard: s2.\n\n\
     fn moot_notes_and_file_view_moot_name_the_excluded_answer() {
         let dir = temp_repo();
         let record = write_record(&dir, "adrdom/decisions/example.md", MOOT_FIXTURE);
-        append_row(&dir, "asked", "id-root", "h", "1.1 Root?");
-        append_row(&dir, "answered", "id-root", "h", "B");
+        append_row_at(&dir, "asked", "id-root", "h", "1.1 Root?", "2024-01-01T00:00:00Z");
+        append_row_at(&dir, "answered", "id-root", "h", "B", "2024-01-01T00:00:01Z");
 
         let rf = record::load(&record).unwrap();
         let led = ledger::read(&dir.join(repo::LEDGER_PATH));

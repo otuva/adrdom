@@ -1197,10 +1197,43 @@ pub fn malformed_ledger_row(lineno: usize, raw: &str) -> String {
     )
 }
 
+/// Per "Does check fail a ledger whose rows changed place?"
+/// (c10c3a49-e993-4c9f-a46b-4a1ba3646dcf A): a HEAD row is missing or
+/// changed -- a row's place in the file is free, so this never fires for
+/// one that only moved.
 pub fn ledger_not_append_only() -> String {
     refuse(
-        "not append-only: working copy diverges from HEAD".to_string(),
-        Next::owner_runs("git diff adrdom/state/ledger.tsv; only new rows may be appended, the rest is restored by hand"),
+        "a row from HEAD's ledger is missing or changed in the working copy".to_string(),
+        Next::owner_runs("git diff adrdom/state/ledger.tsv; a row may move, but none may be dropped or edited -- restore by hand whatever is missing or changed"),
+    )
+}
+
+/// A merge (pending, via `MERGE_HEAD`, or already committed, via `HEAD`'s
+/// second parent) is missing a ledger row one of the two branches wrote
+/// (per "Does check at a merge look for the ledger rows of both
+/// branches?"): the merge itself dropped a row instead of carrying it
+/// forward, the one thing an append-only ledger can never do.
+pub fn ledger_merge_drops_rows() -> String {
+    refuse(
+        "merge drops a branch's ledger rows".to_string(),
+        Next::owner_runs(
+            "the rows of the merged branch are restored from that branch, by hand, only by adding them back",
+        ),
+    )
+}
+
+/// HEAD is a merge commit, but at least one of its parents is not in this
+/// repository at all -- a shallow clone, where the parent's own commit
+/// object was never fetched. Distinct from a parent that is fully present
+/// and simply holds no ledger file at that path (nothing to compare, no
+/// failure): here there is nothing to read, so `ledger_merge_drops_rows`'s
+/// own test -- every row either branch wrote survives into the merge --
+/// cannot run at all, and this refuses instead of a check that never
+/// looked passing anyway.
+pub fn ledger_merge_parents_unreadable() -> String {
+    refuse(
+        "this merge commit's parents cannot be read; the clone is too shallow".to_string(),
+        Next::agent("runs: git fetch --deepen=1"),
     )
 }
 
@@ -1930,6 +1963,8 @@ mod tests {
             hook_not_executable(".githooks/pre-commit"),
             malformed_ledger_row(3, "bad row"),
             ledger_not_append_only(),
+            ledger_merge_drops_rows(),
+            ledger_merge_parents_unreadable(),
             ledger_asked_id_missing("id-1"),
             ledger_answered_without_asked("id-1"),
             untested("id-1"),

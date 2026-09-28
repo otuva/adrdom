@@ -88,6 +88,8 @@ Standard: logs merged from several writers order their events by the time each e
   Why: nothing rests on a clock.
   Costs: the result of a merge depends on which branch has its rows last.
 
+**Answer:** A
+
 ### Does check at a merge look for the ledger rows of both branches?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e18b82d8-5271-4385-bbab-2b89e5da278f, bf6697e3-8832-4b90-b036-8fecedb55406=A
 id: 1c27f2d6-ab62-4c5a-91b2-1488722f3c48
@@ -103,18 +105,60 @@ Standard: a merge of append-only logs is verified against every parent; the entr
   Why: check has one rule fewer.
   Costs: a row the owner wrote on the other branch can vanish at a merge with no failure.
 
+**Answer:** A
+
 ### Does a command write a time later than the last ledger row?
 depends: e18b82d8-5271-4385-bbab-2b89e5da278f, 385a57d5-5f76-454a-ae5d-9b0d6f5c1492=A
 id: aefa7f3c-70c3-412e-8d73-16ff9e2b703a
+terms: ledger=e18b82d8-5271-4385-bbab-2b89e5da278f
+
+Problem: a machine whose clock runs behind writes a new ledger row that reads as older than the row before it, and two rows on one subject with the same time have no order.
+Standard: logs ordered by time keep the time rising; a writer takes the later of its clock and one step after the last time in the log.
+
+- A) Yes: a command writes its rows with one time, the later of the clock and one second after the last row of the ledger.
+  Why: a new row is the latest whatever the clock says.
+  Costs: the time of a row can run some seconds ahead of the clock.
+- B) No: a command writes the time of the clock.
+  Why: the time of a row is the time of the act.
+  Costs: on a clock that runs behind, a new act reads as older than the one it replaces.
+
+**Answer:** A
 
 ### Does check fail a ledger whose rows changed place?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e18b82d8-5271-4385-bbab-2b89e5da278f, 385a57d5-5f76-454a-ae5d-9b0d6f5c1492=*
 id: c10c3a49-e993-4c9f-a46b-4a1ba3646dcf
+terms: asks=3c8d4c9c-abca-4faa-b7c1-aae39951376c, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, refused=0942e445-0163-423e-8ba7-84dd8ac07045, refuses=0942e445-0163-423e-8ba7-84dd8ac07045
+
+Problem: a merge puts the ledger rows of one branch between the rows of the other, and a check that asks for the old ledger at the start of the file refuses the merge though no row is lost.
+Standard: a log whose order comes from its entries is verified as a set: every old entry present, byte for byte, in any place.
+
+- A) No: check fails a row that is missing or changed, and the place of a row in the file is free.
+  Why: a merge passes whichever way it runs and however it is resolved.
+  Costs: a row can be moved in the file with no failure; the move changes nothing the tool reads.
+- B) Yes: the rows of the last commit keep their order among themselves, and new rows may stand between them.
+  Why: a moved row is reported.
+  Costs: a merge resolved with the rows of one branch out of their order is refused.
+- C) Yes: the ledger of the last commit stands at the start of the file, byte for byte.
+  Why: any change before the end of the file is reported.
+  Costs: a branch that took the main branch in cannot be merged back into it.
+
+**Answer:** A
 
 ### Does install write a merge rule for the ledger?
 depends: 1b98cdea-dc1b-4789-8f67-68d130d7a49d, e18b82d8-5271-4385-bbab-2b89e5da278f, 385a57d5-5f76-454a-ae5d-9b0d6f5c1492=A
 id: db56a285-946f-48b1-b073-bb1e90192185
+terms: ban=ef83beae-6857-4200-b251-a0fcc3c72f9d, install=1b98cdea-dc1b-4789-8f67-68d130d7a49d, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f
+
+Problem: two branches that each add ledger rows conflict at every merge, and resolving the conflict is a hand edit of a file under adrdom/state.
+Standard: for a file that only grows, git has a union merge, set in a git attributes file, that keeps the lines of both sides.
+
+- A) Yes: install writes a git attributes file under adrdom that keeps the ledger rows of both branches at a merge; the ban list has no such rule.
+  Why: a merge on the machine needs no hand edit of the ledger.
+  Costs: hosting sites ignore the rule, and a merge made there still conflicts.
+- B) No: the conflict stays, and whoever merges keeps the rows of both sides by hand.
+  Why: install writes one file fewer.
+  Costs: every merge of two branches with new rows needs a hand edit of the ledger.
 
 ### Does check hold the merge rule install writes for the ledger?
-depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 1b98cdea-dc1b-4789-8f67-68d130d7a49d, db56a285-946f-48b1-b073-bb1e90192185
+depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 1b98cdea-dc1b-4789-8f67-68d130d7a49d, db56a285-946f-48b1-b073-bb1e90192185=A
 id: 76c6adc6-c018-4df4-b49a-ddcd0a03a48c

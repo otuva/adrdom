@@ -284,8 +284,8 @@ fn check_passes_a_depends_entry_on_a_current_decision() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_empty_terms(&dir);
     let other_id = "33333333-3333-3333-3333-333333333333";
-    append_ledger_row(&dir, "asked", other_id, "h1", "old heading");
-    append_ledger_row(&dir, "answered", other_id, "h1", "A");
+    append_ledger_row_at(&dir, "asked", other_id, "h1", "old heading", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", other_id, "h1", "A", "2024-01-01T00:00:01Z");
     let content = format!("# Topic\n\n### 1.1 Q?\ndepends: {}{}", other_id, QUESTION_BODY);
     write_record(&dir, "adrdom/decisions/example.md", &content);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
@@ -425,8 +425,8 @@ fn check_fails_a_depends_set_naming_an_option_a_cross_file_decision_does_not_hav
     approve_minimal_terms(&dir, "widget");
 
     let a_id = "11111111-2222-3333-4444-555555555555";
-    append_ledger_row(&dir, "asked", a_id, "h1", "1.1 What color is the widget?");
-    append_ledger_row(&dir, "answered", a_id, "h1", "A");
+    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 What color is the widget?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
     let a_content = format!(
         "# Topic A\n\n### 1.1 What color is the widget?\ndepends: widget\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         a_id

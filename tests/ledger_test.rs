@@ -21,10 +21,13 @@ Standard: clear yes or no.
 
 // adr: bf6697e3-8832-4b90-b036-8fecedb55406
 //
-// "every row present at HEAD must be present, byte for byte, in the
-// working copy; only new rows pass": tampering with an already-committed
-// row (this test) fails `check` with a `ledger:` "not append-only"
-// failure; `ledger_deleted_committed_row_fails_check_but_a_new_appended_row_still_passes`
+// "every row present at HEAD must still be present, byte for byte,
+// somewhere in the working copy -- its place in the file is free (per
+// "Does check fail a ledger whose rows changed place?",
+// c10c3a49-e993-4c9f-a46b-4a1ba3646dcf A)": tampering with an
+// already-committed row (this test) fails `check` with a `ledger:`
+// "missing or changed" failure;
+// `ledger_deleted_committed_row_fails_check_but_a_new_appended_row_still_passes`
 // below covers the sibling clauses -- a deleted row fails the same way,
 // and a genuinely new appended row still passes.
 #[test]
@@ -77,7 +80,7 @@ fn ledger_append_only_violation_is_detected_after_a_commit() {
     let out2_text = stdout(&out2);
     assert!(!out2.status.success());
     assert!(out2_text.contains("ledger:"), "{}", out2_text);
-    assert!(out2_text.contains("not append-only"), "{}", out2_text);
+    assert!(out2_text.contains("missing or changed"), "{}", out2_text);
 }
 
 // adr: dfd32ef6-c2ac-40ef-b8b3-9c58732516b1
@@ -191,10 +194,10 @@ fn approve_and_answer_write_without_committing_and_the_next_commit_carries_them(
 // adr: bf6697e3-8832-4b90-b036-8fecedb55406
 //
 // The deletion half and the still-passes half of "every row present at
-// HEAD must be present, byte for byte, in the working copy; only new rows
-// pass": removing a committed row fails `check` exactly like editing one
-// does, and restoring HEAD's content plus a genuinely new appended row
-// clears the failure.
+// HEAD must still be present, byte for byte, somewhere in the working
+// copy; its place in the file is free": removing a committed row fails
+// `check` exactly like editing one does, and restoring HEAD's content plus
+// a genuinely new appended row clears the failure.
 #[test]
 fn ledger_deleted_committed_row_fails_check_but_a_new_appended_row_still_passes() {
     let dir = init_repo();
@@ -225,9 +228,9 @@ fn ledger_deleted_committed_row_fails_check_but_a_new_appended_row_still_passes(
         stdout(&clean_check)
     );
 
-    // Delete one committed line entirely (not just edit it): the working
-    // copy is then a strict subset of HEAD's ledger, never a byte-for-byte
-    // prefix superset of it.
+    // Delete one committed line entirely (not just edit it): HEAD's row is
+    // then missing from the working copy altogether, wherever it might
+    // otherwise have sat.
     let mut lines: Vec<&str> = committed.lines().collect();
     let asked_idx = lines
         .iter()
@@ -241,18 +244,18 @@ fn ledger_deleted_committed_row_fails_check_but_a_new_appended_row_still_passes(
     assert!(!deleted_check.status.success());
     let deleted_text = stdout(&deleted_check);
     assert!(deleted_text.contains("ledger:"), "{}", deleted_text);
-    assert!(deleted_text.contains("not append-only"), "{}", deleted_text);
+    assert!(deleted_text.contains("missing or changed"), "{}", deleted_text);
 
     // Restore HEAD's content untouched and append a genuinely new row on
-    // top: only new lines at the end, so the check must pass again.
+    // top: every HEAD row is still present, so the check must pass again.
     let mut restored = committed.clone();
     restored.push_str("2024-01-01T00:00:00Z\tcontext\t-\t-\tsomedetail\t0.1.0\n");
     std::fs::write(&ledger_path, &restored).unwrap();
 
     let restored_check = adr(&dir, &["check"], &[], "");
     assert!(
-        !stdout(&restored_check).contains("not append-only"),
-        "a HEAD-prefix-preserving append should pass the ledger check: {}",
+        !stdout(&restored_check).contains("missing or changed"),
+        "every HEAD row still present should pass the ledger check: {}",
         stdout(&restored_check)
     );
 }

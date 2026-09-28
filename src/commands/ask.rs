@@ -477,6 +477,10 @@ pub fn run(record_path: PathBuf) -> i32 {
         rf.sections = record::parse_sections(&rf.lines);
     }
 
+    // One time for every row this run writes (per "Does a command write a
+    // time later than the last ledger row?", aefa7f3c-70c3-412e-8d73-16ff9e2b703a
+    // A): the "asked" row and its "assumes" rows below all share it.
+    let write_time = ledger::write_time(&led);
     let mut new_rows = Vec::new();
     let mut summary: Vec<String> = Vec::new();
     for i in 0..rf.sections.len() {
@@ -499,7 +503,7 @@ pub fn run(record_path: PathBuf) -> i32 {
         let Some(label) = label else { continue };
         let tier = rf.tier_of(i).unwrap_or(1);
         new_rows.push(ledger::Row {
-            time: ledger::now_rfc3339(),
+            time: write_time.clone(),
             event: "asked".to_string(),
             id: id.clone(),
             hash: cur,
@@ -532,7 +536,7 @@ pub fn run(record_path: PathBuf) -> i32 {
             };
             let set_str = record::canonical_set(set);
             new_rows.push(ledger::Row {
-                time: ledger::now_rfc3339(),
+                time: write_time.clone(),
                 event: "assumes".to_string(),
                 id: id.clone(),
                 hash: record::assumes_hash(&dep_id, set),

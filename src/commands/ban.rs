@@ -124,10 +124,15 @@ pub fn run(term: Option<String>) -> i32 {
         return 1;
     }
 
+    // One time for every row this run writes (per "Does a command write a
+    // time later than the last ledger row?", aefa7f3c-70c3-412e-8d73-16ff9e2b703a
+    // A), whichever hash each row names.
+    let led = ledger::read(&ledger_path);
+    let write_time = ledger::write_time(&led);
     let rows: Vec<ledger::Row> = new_hashes
         .iter()
         .map(|h| ledger::Row {
-            time: ledger::now_rfc3339(),
+            time: write_time.clone(),
             event: "banned".to_string(),
             id: "-".to_string(),
             hash: h.clone(),
