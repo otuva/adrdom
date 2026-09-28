@@ -343,6 +343,125 @@ fn d_an_unban_and_a_ban_merge_correctly_in_either_direction() {
     let _ = base_ba;
 }
 
+// (w3): a hash the ledger has since called `unbanned` (ban, then unban),
+// then put back into the file by hand (or by a merge) -- `adr ban` of that
+// same word finds it not currently banned per the ledger (`unbanned` is the
+// latest row), so it writes a fresh, later `banned` row for it, and the
+// file the run writes holds the hash again through that new row, not
+// through the stale hand-edit. Ledger-sourced, not file-sourced
+// (ce19c883-c61d-477b-a6d4-fee5134c6e9a T, f422c5db-13d0-4ff7-9e43-
+// b68ab44a7cb9): before this fix, `adr ban` read "already banned" off the
+// file alone, so a hash sitting in the file with no ledger backing for it
+// silently made the run write nothing.
+#[test]
+fn w3_a_hash_the_ledger_calls_unbanned_but_put_back_in_the_file_is_banned_again() {
+    // adr: f422c5db-13d0-4ff7-9e43-b68ab44a7cb9
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let word = "banagainafterunbanword";
+    let hash = record::sha256_hex(word);
+
+    let ban_out = adr(&dir, &["ban"], &[], &format!("{}\n", word));
+    assert!(ban_out.status.success(), "ban failed: {}", stderr(&ban_out));
+    let unban_out = adr_owner(&dir, &["unban"], &format!("{}\n", word));
+    assert!(unban_out.status.success(), "unban failed: {}", stderr(&unban_out));
+    assert!(banned_lines(&dir).is_empty(), "expected the file empty right after unban");
+
+    // Put the hash back into the file by hand -- the shape a merge that
+    // resurrects a stale line, or a hand edit, leaves behind. The ledger
+    // still says `unbanned`, so `check` must refuse this.
+    std::fs::write(banned_path(&dir), format!("{}\n", hash)).unwrap();
+    let stale_check = adr(&dir, &["check"], &[], "");
+    assert!(!stale_check.status.success(), "expected check to refuse the stale file");
+    assert!(
+        stdout(&stale_check).contains("in file, ledger says unbanned"),
+        "{}",
+        stdout(&stale_check)
+    );
+
+    let ledger_before = std::fs::read_to_string(ledger_path(&dir)).unwrap();
+    let banned_rows_before = ledger_before.lines().filter(|l| l.contains("\tbanned\t")).count();
+
+    let reban_out = adr(&dir, &["ban"], &[], &format!("{}\n", word));
+    assert!(reban_out.status.success(), "re-ban failed: {}", stderr(&reban_out));
+
+    let ledger_after = std::fs::read_to_string(ledger_path(&dir)).unwrap();
+    let banned_rows_after = ledger_after.lines().filter(|l| l.contains("\tbanned\t")).count();
+    assert_eq!(
+        banned_rows_after,
+        banned_rows_before + 1,
+        "re-banning must write one fresh `banned` row: before={} after={}",
+        ledger_before,
+        ledger_after
+    );
+
+    let lines = banned_lines(&dir);
+    assert_eq!(lines, vec![hash], "{:?}", lines);
+
+    let check_after = adr(&dir, &["check"], &[], "");
+    assert!(
+        check_after.status.success(),
+        "check should pass once the file matches the ledger's fresh ban: {}",
+        stdout(&check_after)
+    );
+}
+
+// (w4-adjacent w5): the ledger says a hash is banned, but the file is
+// missing it (dropped by hand, or never merged back in). `adr ban` of that
+// same word finds it already banned per the ledger, so it writes no new
+// row ("no new entries"), but the file it writes is still the ledger's own
+// banned set, so the hash lands back in the file anyway.
+#[test]
+fn w5_ledger_says_banned_but_file_is_missing_it_gets_no_new_row_but_the_file_is_fixed() {
+    // adr: f422c5db-13d0-4ff7-9e43-b68ab44a7cb9
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let word = "fileisstalebutledgerbannedword";
+    let hash = record::sha256_hex(word);
+
+    let ban_out = adr(&dir, &["ban"], &[], &format!("{}\n", word));
+    assert!(ban_out.status.success(), "ban failed: {}", stderr(&ban_out));
+    assert_eq!(banned_lines(&dir), vec![hash.clone()]);
+
+    // Drop the hash from the file by hand -- the ledger still calls it
+    // banned. `check` must refuse this the other way round from (w3).
+    std::fs::write(banned_path(&dir), "").unwrap();
+    let stale_check = adr(&dir, &["check"], &[], "");
+    assert!(!stale_check.status.success(), "expected check to refuse the missing entry");
+    assert!(
+        stdout(&stale_check).contains("banned") && stdout(&stale_check).contains("missing"),
+        "{}",
+        stdout(&stale_check)
+    );
+
+    let ledger_before = std::fs::read_to_string(ledger_path(&dir)).unwrap();
+
+    let reban_out = adr(&dir, &["ban"], &[], &format!("{}\n", word));
+    assert!(reban_out.status.success(), "re-ban failed: {}", stderr(&reban_out));
+    assert_eq!(
+        stdout(&reban_out).trim_end(),
+        "ban: no new entries",
+        "the word was already banned per the ledger, so no fresh row is expected"
+    );
+
+    let ledger_after = std::fs::read_to_string(ledger_path(&dir)).unwrap();
+    assert_eq!(ledger_before, ledger_after, "no new entries must write no ledger row");
+
+    // The file this run wrote is still fixed, equal to the ledger, even
+    // though nothing new was banned.
+    let lines = banned_lines(&dir);
+    assert_eq!(lines, vec![hash], "{:?}", lines);
+
+    let check_after = adr(&dir, &["check"], &[], "");
+    assert!(
+        check_after.status.success(),
+        "check should pass once the file is brought back in line with the ledger: {}",
+        stdout(&check_after)
+    );
+}
+
 // (e): a missing file is written outright.
 #[test]
 fn e_rebuild_writes_the_file_when_it_is_missing() {

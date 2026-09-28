@@ -99,6 +99,59 @@ fn a_banned_and_unbanned_for_one_hash_at_one_time_fails_then_a_later_ban_row_pas
 
 // adr: ce19c883-c61d-477b-a6d4-fee5134c6e9a
 //
+// The lab case: the same hand-tied `banned`/`unbanned` pair as (a), but the
+// hash already stands in `adrdom/state/banned.sha256` too (the shape a real
+// ban followed by a same-time race leaves: the file was written by the
+// original, real ban and never cleaned up). Before `adr ban` read "already
+// banned" from the ledger (f422c5db-13d0-4ff7-9e43-b68ab44a7cb9), it read
+// that off the file instead, found the hash already there, and wrote
+// nothing -- so the tie was never cleared this way, even though "the
+// command is run again" is exactly this decision's own remedy. Fixed, `adr
+// ban` of the same word writes a fresh, later `banned` row (the ledger
+// still says `unbanned`, agreeing with (a)'s tie-break), and the tie
+// clears.
+#[test]
+fn g_a_hand_tied_pair_with_the_hash_already_in_the_file_is_cleared_by_a_real_ban() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let hash = record::sha256_hex("sametimehashwordlab");
+    let tie_time = "2024-01-01T00:00:00Z";
+    append_ledger_row_at(&dir, "banned", "-", &hash, "", tie_time);
+    append_ledger_row_at(&dir, "unbanned", "-", &hash, "", tie_time);
+    std::fs::write(dir.join("adrdom/state/banned.sha256"), format!("{}\n", hash)).unwrap();
+
+    let tied = adr(&dir, &["check"], &[], "");
+    assert!(!tied.status.success(), "a hand-tied banned/unbanned pair must fail check");
+    let text = stdout(&tied);
+    assert!(text.contains("ledger:"), "{}", text);
+    assert!(text.contains(COMPETES_TEXT), "{}", text);
+    assert!(text.contains(&hash[..12]), "{}", text);
+
+    let ban = adr(&dir, &["ban"], &[], "sametimehashwordlab\n");
+    assert!(ban.status.success(), "ban failed: {}", stderr(&ban));
+    assert_ne!(
+        stdout(&ban).trim_end(),
+        "ban: no new entries",
+        "the ledger's own tie-break must have found the word not currently banned"
+    );
+
+    let after = adr(&dir, &["check"], &[], "");
+    assert!(
+        after.status.success(),
+        "check must pass once the later ban row settles the tie: {}",
+        stdout(&after)
+    );
+    let lines: Vec<String> = std::fs::read_to_string(dir.join("adrdom/state/banned.sha256"))
+        .unwrap()
+        .lines()
+        .map(|s| s.to_string())
+        .collect();
+    assert_eq!(lines, vec![hash], "{:?}", lines);
+}
+
+// adr: ce19c883-c61d-477b-a6d4-fee5134c6e9a
+//
 // Two state rows (asked, answered) sharing one id at one time fail.
 #[test]
 fn b_two_state_rows_for_one_id_at_one_time_fails() {
@@ -163,6 +216,32 @@ fn d_two_byte_identical_rows_at_one_time_passes() {
         "two byte-identical rows must not compete: {}",
         text
     );
+}
+
+// adr: ce19c883-c61d-477b-a6d4-fee5134c6e9a
+//
+// Two `approved` rows for one file at one time fail, and the message names
+// which event collided (`approved`), not only the file: rule (3) groups by
+// event and path together, so an `approved` row and a `context` row for the
+// same file are two different subjects and must never be confused in the
+// text either.
+#[test]
+fn f_two_approved_rows_for_one_file_at_one_time_names_the_event() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+
+    let rel = "adrdom/decisions/example.md";
+    let tie_time = "2024-01-01T00:00:00Z";
+    append_ledger_row_at(&dir, "approved", "-", "hash-1", rel, tie_time);
+    append_ledger_row_at(&dir, "approved", "-", "hash-2", rel, tie_time);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success(), "two approved rows for one file at one time must fail check");
+    let text = stdout(&out);
+    assert!(text.contains("ledger:"), "{}", text);
+    assert!(text.contains(COMPETES_TEXT), "{}", text);
+    assert!(text.contains(rel), "{}", text);
+    assert!(text.contains("approved"), "the event name must be in the message: {}", text);
 }
 
 // adr: ce19c883-c61d-477b-a6d4-fee5134c6e9a

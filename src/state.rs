@@ -488,25 +488,26 @@ fn ruling_of(row: &Row) -> Option<Ruling> {
 /// with two different options?" (e3200081-9995-4bbe-983f-2f430dc341e7): take
 /// `id`'s `asked` and `answered`/`refused` rows in ledger order (`led.rows`
 /// is already ordered by time); let `r` be the position of the latest
-/// `asked` row. `r` is an "asked again" row when the `answered` rows before
-/// it name two or more different options. The standing rulings are the
+/// `asked` row. `r` is an "asked again" row when the rulings before it --
+/// each `answered` row's letter and each `refused` row, per `ruling_of` --
+/// name two or more different rulings. The standing rulings are the
 /// `answered`/`refused` rows after `r` when `r` is an asked-again row,
 /// otherwise every `answered`/`refused` row of the question. `None` when
 /// `id` was never asked at all -- there is no `r` to reckon from.
 pub fn standing_rulings(led: &Ledger, id: &str) -> Option<Vec<Ruling>> {
     let r_pos = led.rows.iter().rposition(|row| row.id == id && row.event == "asked")?;
 
-    let mut distinct_answered_before: Vec<char> = Vec::new();
+    let mut distinct_rulings_before: Vec<Ruling> = Vec::new();
     for row in &led.rows[..r_pos] {
-        if row.id == id && row.event == "answered" {
-            if let Some(c) = row.detail.trim().chars().next() {
-                if !distinct_answered_before.contains(&c) {
-                    distinct_answered_before.push(c);
+        if row.id == id {
+            if let Some(ruling) = ruling_of(row) {
+                if !distinct_rulings_before.contains(&ruling) {
+                    distinct_rulings_before.push(ruling);
                 }
             }
         }
     }
-    let asked_again = distinct_answered_before.len() >= 2;
+    let asked_again = distinct_rulings_before.len() >= 2;
 
     let range: &[Row] = if asked_again { &led.rows[r_pos + 1..] } else { &led.rows[..] };
     let rulings: Vec<Ruling> = range
@@ -784,6 +785,56 @@ mod tests {
         fn never_asked_no_conflict() {
             let led = led_of(vec![]);
             assert!(conflicting_rulings(&led, "q").is_none());
+        }
+
+        // Rule 8, continued: a `refused` row counts toward "asked again"
+        // exactly as an `answered` row does. Before this fix, only
+        // `answered` rows were counted, so a ruling made of one answer and
+        // one refusal was never recognized as "asked again" -- asking again
+        // and answering again could never clear the conflict.
+        //
+        // asked t1; answered A t2; refused t3 (two distinct rulings before
+        // the next ask); re-asked t5 -> asked-again, nothing after it yet ->
+        // open, no conflict.
+        #[test]
+        fn rule_8_reasked_after_answer_and_refusal_no_conflict_while_open() {
+            // adr: e3200081-9995-4bbe-983f-2f430dc341e7
+            let led = led_of(vec![
+                row_at("asked", "q", "Q?", &t(1)),
+                row_at("answered", "q", "A", &t(2)),
+                row_at("refused", "q", "Q?", &t(3)),
+                row_at("asked", "q", "Q?", &t(5)),
+            ]);
+            assert!(conflicting_rulings(&led, "q").is_none(), "open, not yet settled again");
+        }
+
+        // Same ledger, then answered A again after the re-ask -> A stands.
+        #[test]
+        fn rule_8_reasked_after_answer_and_refusal_then_answered_again_stands() {
+            // adr: e3200081-9995-4bbe-983f-2f430dc341e7
+            let led = led_of(vec![
+                row_at("asked", "q", "Q?", &t(1)),
+                row_at("answered", "q", "A", &t(2)),
+                row_at("refused", "q", "Q?", &t(3)),
+                row_at("asked", "q", "Q?", &t(5)),
+                row_at("answered", "q", "A", &t(6)),
+            ]);
+            assert!(conflicting_rulings(&led, "q").is_none(), "A stands, no conflict");
+        }
+
+        // Same ledger, but the settling act after the re-ask is a fresh
+        // refusal instead of a letter -> refused stands.
+        #[test]
+        fn rule_8_reasked_after_answer_and_refusal_then_refused_again_stands() {
+            // adr: e3200081-9995-4bbe-983f-2f430dc341e7
+            let led = led_of(vec![
+                row_at("asked", "q", "Q?", &t(1)),
+                row_at("answered", "q", "A", &t(2)),
+                row_at("refused", "q", "Q?", &t(3)),
+                row_at("asked", "q", "Q?", &t(5)),
+                row_at("refused", "q", "Q?", &t(6)),
+            ]);
+            assert!(conflicting_rulings(&led, "q").is_none(), "refused stands, no conflict");
         }
     }
 }

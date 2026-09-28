@@ -294,9 +294,9 @@ fn check_same_time_competition(led: &Ledger) -> Vec<Failure> {
             by_path.entry((r.event.as_str(), r.detail.as_str())).or_default().push(r);
         }
     }
-    for ((_, detail), rows) in &by_path {
+    for ((event, detail), rows) in &by_path {
         if let Some(time) = competing_at_latest_time(rows) {
-            subjects.push((time, format!("file {}", detail)));
+            subjects.push((time, format!("{} file {}", event, detail)));
         }
     }
 

@@ -34,11 +34,16 @@ jobs:
       # commit and run `adr check --since` it, which runs the whole check
       # and adds the one comparison against it. A `pull_request` build (no
       # `before` of its own) or a push with no real "before" runs the plain
-      # check instead.
+      # check instead. The fetch's own failure (the commit has aged out of
+      # the remote, or the history was rewritten) is tolerated with `|| true`
+      # rather than ending the step: `adr check --since` still runs on
+      # whatever the fetch left, and its own message for a commit it can't
+      # read (per "Does check in CI compare..." unreadable case) is what
+      # gets reported, not git's.
       - name: adr check
         run: |
           if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
-            git fetch --depth=1 origin "${{ github.event.before }}"
+            git fetch --depth=1 origin "${{ github.event.before }}" || true
             ./target/release/adr check --since "${{ github.event.before }}"
           else
             ./target/release/adr check

@@ -212,6 +212,70 @@ fn d_a_remote_sha_not_present_locally_fails_check_push() {
     assert!(text.contains(REMOTE_UNREADABLE_TEXT), "{}", text);
 }
 
+// --- f) --push refuses alongside the flags `check --push` ignores ---------
+//
+// `check --push` short-circuits straight into `push::run`, before `staged`/
+// `message`/`since` are ever read (see `commands::check::run`): combined
+// with any of them, the other flag was silently ignored rather than
+// applied. Refused up front by clap instead, the same way `ban --term`
+// conflicts with `ban --rebuild`.
+
+// adr: 19e1c023-a678-4842-a414-bb0e45c41601
+#[test]
+fn f_push_conflicts_with_staged() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    commit_all(&dir, "install");
+
+    let out = adr(&dir, &["check", "--push", "--staged"], &[], "");
+    assert!(!out.status.success(), "--push and --staged together must be refused");
+    assert!(
+        stderr(&out).contains("cannot be used with"),
+        "{}",
+        stderr(&out)
+    );
+}
+
+// adr: 19e1c023-a678-4842-a414-bb0e45c41601
+#[test]
+fn f_push_conflicts_with_message() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    commit_all(&dir, "install");
+    let msg_path = dir.join("msg.txt");
+    std::fs::write(&msg_path, "a commit message\n").unwrap();
+
+    let out = adr(
+        &dir,
+        &["check", "--push", "--message", msg_path.to_str().unwrap()],
+        &[],
+        "",
+    );
+    assert!(!out.status.success(), "--push and --message together must be refused");
+    assert!(
+        stderr(&out).contains("cannot be used with"),
+        "{}",
+        stderr(&out)
+    );
+}
+
+// adr: 19e1c023-a678-4842-a414-bb0e45c41601
+#[test]
+fn f_push_conflicts_with_since() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    commit_all(&dir, "install");
+    let since = head_sha(&dir);
+
+    let out = adr(&dir, &["check", "--push", "--since", &since], &[], "");
+    assert!(!out.status.success(), "--push and --since together must be refused");
+    assert!(
+        stderr(&out).contains("cannot be used with"),
+        "{}",
+        stderr(&out)
+    );
+}
+
 // --- e) an all-zero remote sha and an all-zero local sha both pass --------
 
 // adr: 19e1c023-a678-4842-a414-bb0e45c41601

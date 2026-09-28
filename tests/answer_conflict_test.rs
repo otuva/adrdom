@@ -245,6 +245,102 @@ fn c2_independently_asked_on_each_branch_conflicts() {
     assert!(stdout(&out).contains(&id), "{}", stdout(&out));
 }
 
+/// c1's shape, but branch `b` refuses instead of naming a second letter: a
+/// refusal is a ruling too (rule 8), so it conflicts with branch `a`'s
+/// answer exactly as a second letter would, re-asks the same way, and
+/// settles by either a fresh letter or a fresh refusal, chosen by
+/// `settle_with_refusal`.
+fn c1_flow_answer_then_refusal(settle_with_refusal: bool) {
+    let (dir, id, record) = base_asked();
+    let base = current_branch(&dir);
+
+    checkout_new_branch(&dir, "a");
+    let out = adr_answer(&dir, &id, "A");
+    assert!(out.status.success(), "a: answer failed: {}", stderr(&out));
+    commit_all(&dir, "a: answer A");
+
+    checkout(&dir, &base);
+    sleep_a_beat();
+    checkout_new_branch(&dir, "b");
+    let out = adr_answer(&dir, &id, "refuse");
+    assert!(out.status.success(), "b: refuse failed: {}", stderr(&out));
+    commit_all(&dir, "b: refuse");
+
+    checkout(&dir, "a");
+    merge_keep_target(&dir, "b", REL);
+
+    let staged = adr(&dir, &["check", "--staged"], &[], "");
+    assert!(
+        !staged.status.success(),
+        "check --staged should fail on the merged conflict: {}",
+        stdout(&staged)
+    );
+    assert!(stdout(&staged).contains(CONFLICT_TEXT), "{}", stdout(&staged));
+    assert!(stdout(&staged).contains(&id), "{}", stdout(&staged));
+
+    finish_merge_commit(&dir);
+    let committed = adr(&dir, &["check"], &[], "");
+    assert!(
+        !committed.status.success(),
+        "check should still fail after the merge commit: {}",
+        stdout(&committed)
+    );
+    assert!(stdout(&committed).contains(CONFLICT_TEXT), "{}", stdout(&committed));
+
+    // The re-ask clears the conflict (asked-again is now decided from the
+    // rulings before the latest ask, an answer and a refusal both counted).
+    let reask = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(reask.status.success(), "conflict re-ask failed: {}", stderr(&reask));
+    assert!(
+        stdout(&reask).contains("re-asked"),
+        "expected a re-ask in the output: {}",
+        stdout(&reask)
+    );
+
+    let after_reask = adr(&dir, &["check"], &[], "");
+    assert!(
+        !stdout(&after_reask).contains(CONFLICT_TEXT),
+        "no conflict once the question is open again: {}",
+        stdout(&after_reask)
+    );
+
+    if settle_with_refusal {
+        let answer = adr_answer(&dir, &id, "refuse");
+        assert!(answer.status.success(), "final refuse failed: {}", stderr(&answer));
+        // A refused question is never "current", so it needs no test tie.
+    } else {
+        let answer = adr_answer(&dir, &id, "A");
+        assert!(answer.status.success(), "final answer failed: {}", stderr(&answer));
+        write_test_comment(&dir, &id);
+    }
+
+    let final_check = adr(&dir, &["check"], &[], "");
+    assert!(
+        final_check.status.success(),
+        "check should pass once the conflict is resolved: {}",
+        stdout(&final_check)
+    );
+}
+
+// adr: e3200081-9995-4bbe-983f-2f430dc341e7
+//
+// Rule 8: an answer on one branch and a refusal on the other, merged, is a
+// conflict exactly like two different letters; settling it again with a
+// fresh letter clears it.
+#[test]
+fn rule_8_answer_then_refusal_conflict_then_resolved_by_answer() {
+    c1_flow_answer_then_refusal(false);
+}
+
+// adr: e3200081-9995-4bbe-983f-2f430dc341e7
+//
+// Same conflict, but settled again with a fresh refusal instead of a
+// letter.
+#[test]
+fn rule_8_answer_then_refusal_conflict_then_resolved_by_refusal() {
+    c1_flow_answer_then_refusal(true);
+}
+
 // adr: e3200081-9995-4bbe-983f-2f430dc341e7
 //
 // c5: both branches answer the same letter -- not a conflict, `adr check`

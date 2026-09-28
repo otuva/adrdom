@@ -57,12 +57,12 @@ enum Command {
     },
     /// Run all governance checks.
     Check {
-        #[arg(long)]
+        #[arg(long, conflicts_with = "push")]
         staged: bool,
-        #[arg(long)]
+        #[arg(long, conflicts_with = "push")]
         message: Option<PathBuf>,
         /// Also require every ledger row of <commit>'s own ledger to be present in the one being judged.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "push")]
         since: Option<String>,
         /// Read git's pre-push input from stdin and judge only that: no ref may drop a ledger row the remote already has.
         #[arg(long)]

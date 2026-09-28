@@ -65,8 +65,16 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
         return 1;
     }
 
-    let existing_entries: Vec<(String, Option<String>)> = banned::read_entries(&banned_path);
-    let existing_hashes: HashSet<String> = existing_entries.iter().map(|(h, _)| h.clone()).collect();
+    // "Banned now" comes from the ledger, not the file (ce19c883-c61d-477b-
+    // a6d4-fee5134c6e9a, f422c5db-13d0-4ff7-9e43-b68ab44a7cb9): the ledger
+    // is the source of what is banned, and the file is only its present
+    // result. A hash the ledger already calls banned is skipped here as
+    // already-banned even on a run where the file itself doesn't (yet, or
+    // any more) hold it -- the file is brought back in line below either
+    // way, through `banned::write_sorted` from this same set.
+    let led = ledger::read(&ledger_path);
+    let banned_now: Vec<(String, Option<String>)> = banned::currently_banned(&led);
+    let banned_hashes: HashSet<String> = banned_now.iter().map(|(h, _)| h.clone()).collect();
     let mut new_hashes: Vec<String> = Vec::new();
     let mut seen_this_run: HashSet<String> = HashSet::new();
 
@@ -76,13 +84,31 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
         }
         for tok in banned::tokenize(line) {
             let h = record::sha256_hex(&tok);
-            if !existing_hashes.contains(&h) && seen_this_run.insert(h.clone()) {
+            if !banned_hashes.contains(&h) && seen_this_run.insert(h.clone()) {
                 new_hashes.push(h);
             }
         }
     }
 
     if new_hashes.is_empty() {
+        // Nothing new to ban, but the file can still be stale against the
+        // ledger -- a hash the ledger calls banned but the file is missing,
+        // or a same-time `banned`/`unbanned` tie the ledger has since
+        // settled with a later row the file never picked up. Bring it back
+        // to exactly the ledger's banned set when it doesn't already match,
+        // same as `--rebuild` would write it; left untouched (no write at
+        // all) when it already does, so this changes neither the printed
+        // text nor the exit code of the no-new-entries case.
+        let expected = banned::sorted_content(&banned_now);
+        if std::fs::read_to_string(&banned_path).unwrap_or_default() != expected {
+            if let Err(e) = banned::write_sorted(&banned_path, banned_now) {
+                eprintln!(
+                    "ban: {}",
+                    msg::update_failed("banned list", e, Next::agent("checks the error and retries"))
+                );
+                return 1;
+            }
+        }
         println!("ban: {}", msg::no_new_entries());
         return 0;
     }
@@ -115,9 +141,12 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     }
 
     // The ban list is written whole every time (per "Does the tool write
-    // the ban list in one fixed order?"), sorted by hash: the existing
-    // entries plus the ones this run adds, never an append at the end.
-    let mut entries = existing_entries;
+    // the ban list in one fixed order?"), sorted by hash: the ledger's own
+    // banned set plus the ones this run adds, never an append at the end --
+    // so the file ends equal to the ledger, whatever it held before this
+    // run (ce19c883-c61d-477b-a6d4-fee5134c6e9a, f422c5db-13d0-4ff7-9e43-
+    // b68ab44a7cb9).
+    let mut entries = banned_now;
     entries.extend(new_hashes.iter().map(|h| (h.clone(), uuid.clone())));
 
     if let Err(e) = banned::write_sorted(&banned_path, entries) {
@@ -130,8 +159,9 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
 
     // One time for every row this run writes (per "Does a command write a
     // time later than the last ledger row?", aefa7f3c-70c3-412e-8d73-16ff9e2b703a
-    // A), whichever hash each row names.
-    let led = ledger::read(&ledger_path);
+    // A), whichever hash each row names. Read before this run wrote the
+    // ledger row below (nothing else here touches the ledger file), so the
+    // earlier `led` still reflects it exactly.
     let write_time = ledger::write_time(&led);
     let rows: Vec<ledger::Row> = new_hashes
         .iter()

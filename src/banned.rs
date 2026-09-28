@@ -177,22 +177,23 @@ pub fn currently_banned(led: &crate::ledger::Ledger) -> Vec<(String, Option<Stri
         .collect()
 }
 
-/// Rewrites the whole ban list at `path`, sorted by hash (per "Does the
-/// tool write the ban list in one fixed order?"): one line per entry, no
-/// duplicate hashes. `ban` calls this with the existing entries plus the
-/// newly banned ones folded in; `unban` calls it with the existing entries
-/// minus the ones it removed. Both end up writing the same sorted,
-/// deduplicated shape, so this is the one place that shape is written.
+/// The exact bytes `write_sorted` writes for `entries` -- sorted by hash
+/// and, within a hash, by uuid (an entry with no uuid sorts first), then
+/// deduplicated to one line per hash -- without touching the filesystem.
+/// Split out from `write_sorted` so a caller that only wants to write when
+/// the result would actually differ from what's already on disk (`ban`,
+/// when it finds no new word to ban itself but the file may still be stale
+/// against the ledger) can compare first instead of writing speculatively.
 ///
 /// When two entries share one hash under different term uuids -- two
 /// branches banning the same word under two different `--term` calls, then
 /// merging -- which one survives can't depend on the order `entries` arrives
 /// in, or the file a merge produces would depend on which side's row a
 /// text merge happened to keep first. So entries are sorted by hash and
-/// then, within a hash, by uuid (an entry with no uuid sorts first), before
-/// `dedup_by` keeps the first of each hash: the same input, in any order,
-/// always keeps the same uuid.
-pub fn write_sorted(path: &Path, mut entries: Vec<(String, Option<String>)>) -> std::io::Result<()> {
+/// then, within a hash, by uuid, before `dedup_by` keeps the first of each
+/// hash: the same input, in any order, always keeps the same uuid.
+pub fn sorted_content(entries: &[(String, Option<String>)]) -> String {
+    let mut entries = entries.to_vec();
     entries.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
     entries.dedup_by(|a, b| a.0 == b.0);
     let mut content = String::new();
@@ -200,5 +201,16 @@ pub fn write_sorted(path: &Path, mut entries: Vec<(String, Option<String>)>) -> 
         content.push_str(&format_line(hash, uuid));
         content.push('\n');
     }
-    fs::write(path, content)
+    content
+}
+
+/// Rewrites the whole ban list at `path` to `sorted_content(&entries)` (per
+/// "Does the tool write the ban list in one fixed order?"): one line per
+/// entry, no duplicate hashes. `ban` calls this with the ledger's own
+/// banned set plus the newly banned ones folded in; `unban` calls it with
+/// the existing entries minus the ones it removed; `--rebuild` calls it
+/// with the ledger's banned set alone. All end up writing the same sorted,
+/// deduplicated shape, so this is the one place that shape is written.
+pub fn write_sorted(path: &Path, entries: Vec<(String, Option<String>)>) -> std::io::Result<()> {
+    fs::write(path, sorted_content(&entries))
 }
