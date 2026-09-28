@@ -750,6 +750,7 @@ fn terms_article_shows_waiting_for_approval_when_unapproved() {
             "adrdom/terms.md",
             "adrdom/state/ledger.tsv",
             "adrdom/state/terms-brief.md",
+            "adrdom/.gitattributes",
             "AGENTS.md",
             ".githooks",
         ],

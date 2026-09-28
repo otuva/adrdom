@@ -26,6 +26,15 @@ pub(crate) const CLAUDE_MD_IMPORT: &str = "@AGENTS.md";
 pub(crate) const PRE_COMMIT_HOOK: &str = "#!/bin/sh\nadr check --staged\nexit $?\n";
 pub(crate) const COMMIT_MSG_HOOK: &str = "#!/bin/sh\nadr check --message \"$1\"\nexit $?\n";
 
+/// `adrdom/.gitattributes`'s whole content (Decision 7,
+/// db56a285-946f-48b1-b073-bb1e90192185): the one merge rule that keeps
+/// both branches' rows at a merge for the ledger. The ban list gets no
+/// such rule -- a merge conflict there is left for the owner to resolve,
+/// same as any other file `install` doesn't cover. `check`'s `install`
+/// check compares the file on disk against this text the same way it
+/// compares `.codex/rules/adrdom.rules` against `codex_rules_content()`.
+pub(crate) const GITATTRIBUTES_CONTENT: &str = "state/ledger.tsv merge=union\n";
+
 /// `.codex/rules/adrdom.rules`'s content: one `prefix_rule` block per
 /// `OWNER_COMMANDS` entry (`commands::OWNER_COMMANDS`), `decision =
 /// "forbidden"`. `check`'s `install`
@@ -73,6 +82,17 @@ pub fn run(claude: bool, codex: bool) -> i32 {
     create_if_missing(&root.join(banned::BAN_LIST), "");
 
     let mut messages = Vec::new();
+
+    match install_gitattributes(&root) {
+        Ok(m) => messages.push(m),
+        Err(e) => {
+            eprintln!(
+                "install: {}",
+                msg::write_failed(repo::GITATTRIBUTES_PATH, e, retry())
+            );
+            return 1;
+        }
+    }
 
     let hooks = root.join(".githooks");
     if let Err(e) = fs::create_dir_all(&hooks) {
@@ -209,6 +229,24 @@ fn make_executable(path: &Path) {
     {
         let _ = path;
     }
+}
+
+/// Writes/refreshes `adrdom/.gitattributes`: written when missing or when
+/// its content differs from `GITATTRIBUTES_CONTENT`, left untouched
+/// (reporting "up to date") when it already holds exactly that text -- the
+/// same missing/stale/current shape `install_codex_rules` already uses for
+/// its own whole, tool-owned file (there is no marked section inside this
+/// one to preserve, unlike AGENTS.md/CLAUDE.md).
+fn install_gitattributes(root: &Path) -> Result<String, String> {
+    let path = root.join(repo::GITATTRIBUTES_PATH);
+    let already = fs::read_to_string(&path)
+        .map(|c| c == GITATTRIBUTES_CONTENT)
+        .unwrap_or(false);
+    if already {
+        return Ok(msg::gitattributes_up_to_date());
+    }
+    fs::write(&path, GITATTRIBUTES_CONTENT).map_err(|e| e.to_string())?;
+    Ok(msg::gitattributes_written())
 }
 
 /// Locates the marker lines in `lines` (as produced by `content.split('\n')`,

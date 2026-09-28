@@ -159,6 +159,21 @@ Standard: for a file that only grows, git has a union merge, set in a git attrib
   Why: install writes one file fewer.
   Costs: every merge of two branches with new rows needs a hand edit of the ledger.
 
+**Answer:** A
+
 ### Does check hold the merge rule install writes for the ledger?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 1b98cdea-dc1b-4789-8f67-68d130d7a49d, db56a285-946f-48b1-b073-bb1e90192185=A
 id: 76c6adc6-c018-4df4-b49a-ddcd0a03a48c
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, install=1b98cdea-dc1b-4789-8f67-68d130d7a49d, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f
+
+Problem: an agent can edit or remove the git attributes file, and a merge then conflicts again or keeps lines by a rule the tool never wrote.
+Standard: generated files are compared with their generator, and drift fails.
+
+- A) Yes: check fails when the git attributes file under adrdom differs from what install writes; the move is running install again.
+  Why: the rule a merge runs by stays the text of the tool.
+  Costs: a repository that adds its own lines to that file fails every commit.
+- B) No: install writes the file once and nothing looks again.
+  Why: the repository may add its own rules to the file.
+  Costs: the rule can vanish, and nothing reports it until a merge conflicts.
+
+**Answer:** A

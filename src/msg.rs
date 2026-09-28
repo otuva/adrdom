@@ -1190,6 +1190,24 @@ pub fn codex_rules_missing() -> String {
     )
 }
 
+/// `check`'s `install` check on `adrdom/.gitattributes`: the file exists
+/// but its content differs from what `adr install` writes.
+pub fn gitattributes_differs() -> String {
+    refuse(
+        "adrdom/.gitattributes differs from what install writes".to_string(),
+        Next::agent("runs: adr install"),
+    )
+}
+
+/// Same check as `gitattributes_differs`, but the file is missing
+/// outright.
+pub fn gitattributes_missing() -> String {
+    refuse(
+        "adrdom/.gitattributes is missing".to_string(),
+        Next::agent("runs: adr install"),
+    )
+}
+
 pub fn malformed_ledger_row(lineno: usize, raw: &str) -> String {
     refuse(
         format!("line {}: malformed row: {}", lineno, raw),
@@ -1820,6 +1838,19 @@ pub fn codex_trust_note() -> String {
         .to_string()
 }
 
+/// `adr install` wrote `adrdom/.gitattributes` (Decision 7,
+/// db56a285-946f-48b1-b073-bb1e90192185) because it was either missing or
+/// held stale content.
+pub fn gitattributes_written() -> String {
+    "install: adrdom/.gitattributes: written".to_string()
+}
+
+/// `adr install` found `adrdom/.gitattributes` already holding exactly
+/// what it writes, and left it untouched.
+pub fn gitattributes_up_to_date() -> String {
+    "install: adrdom/.gitattributes: already up to date".to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1961,6 +1992,8 @@ mod tests {
             hook_differs(".githooks/pre-commit"),
             hook_missing(".githooks/pre-commit"),
             hook_not_executable(".githooks/pre-commit"),
+            gitattributes_differs(),
+            gitattributes_missing(),
             malformed_ledger_row(3, "bad row"),
             ledger_not_append_only(),
             ledger_merge_drops_rows(),

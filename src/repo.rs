@@ -28,6 +28,14 @@ pub const TERMS_BRIEF_PATH: &str = "adrdom/state/terms-brief.md";
 /// (`ban`, `unban`, `ask`, `check --banned`, `terms_refusals`, `install`).
 pub const BAN_LIST: &str = "adrdom/state/banned.sha256";
 
+/// Where `adr install` writes the ledger's merge rule, relative to the
+/// repo root (Decision 7, db56a285-946f-48b1-b073-bb1e90192185 -- install
+/// writes a git attributes file under adrdom that keeps the ledger rows of
+/// both branches at a merge; the ban list gets no such rule). Its content
+/// is `commands::install::GITATTRIBUTES_CONTENT`; `check`'s `install`
+/// check reads this path the same way it reads the git hooks.
+pub const GITATTRIBUTES_PATH: &str = "adrdom/.gitattributes";
+
 /// Where `adr install` writes the pre-commit hook, relative to the repo
 /// root. Its content is `commands::install::PRE_COMMIT_HOOK`; `check`'s
 /// `install` check reads this path the same way it reads AGENTS.md (per

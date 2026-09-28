@@ -143,7 +143,14 @@ fn check_at_a_commit_reads_the_staged_terms_brief() {
     let dir = approved_repo();
     run_git(
         &dir,
-        &["add", "adrdom/terms.md", "adrdom/state/ledger.tsv", "AGENTS.md", ".githooks"],
+        &[
+            "add",
+            "adrdom/terms.md",
+            "adrdom/state/ledger.tsv",
+            "adrdom/.gitattributes",
+            "AGENTS.md",
+            ".githooks",
+        ],
     );
     let out = adr(&dir, &["check", "--staged"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
