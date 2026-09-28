@@ -129,6 +129,8 @@ Standard: a file derived from a log is compared with the log in both directions,
   Why: check has one rule fewer.
   Costs: a lifted ban that returns in a merge is enforced again and nothing reports it.
 
+**Answer:** A
+
 ### Does the tool write the ban list in one fixed order?
 depends: ef83beae-6857-4200-b251-a0fcc3c72f9d, c6da863d-5085-402f-815a-9bb832b4df7e=A
 id: bf27b020-4e60-48e0-8d3b-5f818e6bf6d8
@@ -143,3 +145,5 @@ Standard: list files under version control are kept sorted, so that lines added 
 - B) No: ban adds at the end and unban rewrites the list.
   Why: ban writes one line and touches nothing else.
   Costs: every merge of two branches that ban or unban conflicts.
+
+**Answer:** A

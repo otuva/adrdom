@@ -61,7 +61,8 @@ pub fn run(term: Option<String>) -> i32 {
         return 1;
     }
 
-    let existing_hashes: HashSet<String> = banned::read_set(&banned_path);
+    let existing_entries: Vec<(String, Option<String>)> = banned::read_entries(&banned_path);
+    let existing_hashes: HashSet<String> = existing_entries.iter().map(|(h, _)| h.clone()).collect();
     let mut new_hashes: Vec<String> = Vec::new();
     let mut seen_this_run: HashSet<String> = HashSet::new();
 
@@ -109,12 +110,13 @@ pub fn run(term: Option<String>) -> i32 {
         return 1;
     }
 
-    let entries: Vec<(String, Option<String>)> = new_hashes
-        .iter()
-        .map(|h| (h.clone(), uuid.clone()))
-        .collect();
+    // The ban list is written whole every time (per "Does the tool write
+    // the ban list in one fixed order?"), sorted by hash: the existing
+    // entries plus the ones this run adds, never an append at the end.
+    let mut entries = existing_entries;
+    entries.extend(new_hashes.iter().map(|h| (h.clone(), uuid.clone())));
 
-    if let Err(e) = banned::append(&banned_path, &entries) {
+    if let Err(e) = banned::write_sorted(&banned_path, entries) {
         eprintln!(
             "ban: {}",
             msg::update_failed("banned list", e, Next::agent("checks the error and retries"))

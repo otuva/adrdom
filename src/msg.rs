@@ -995,6 +995,21 @@ pub fn banned_missing_from_ledger(hash_prefix: &str) -> String {
     )
 }
 
+/// A hash that stands in the file, was banned at some time, but the
+/// ledger's latest row for it is `unbanned` -- the file still carries a
+/// line the ledger already voided (per "Does check hold the ban list
+/// equal to the ledger?"). `adr unban` on the same word clears this: it
+/// removes the hash from the file and writes a fresh `unbanned` row,
+/// whatever the ledger's last row for the hash already said.
+pub fn banned_unbanned_but_in_file(hash_prefix: &str) -> String {
+    refuse(
+        format!("{} in file, ledger says unbanned", hash_prefix),
+        Next::owner_runs(
+            "git diff adrdom/state/banned.sha256 adrdom/state/ledger.tsv; restore by hand whatever is not real",
+        ),
+    )
+}
+
 /// An asked/answered section that carries no `terms:` line at all. `ask`
 /// always writes one, so an answered section can only lose it through an
 /// edit made after the answer -- and an answered question can never be

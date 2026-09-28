@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::io::Write;
 use std::path::Path;
 
 /// Where the hashed ban list lives, relative to the repo root: the one
@@ -151,16 +150,28 @@ pub fn first_hit(
     None
 }
 
-pub fn append(path: &Path, entries: &[(String, Option<String>)]) -> std::io::Result<()> {
-    if entries.is_empty() {
-        return Ok(());
+/// Rewrites the whole ban list at `path`, sorted by hash (per "Does the
+/// tool write the ban list in one fixed order?"): one line per entry, no
+/// duplicate hashes. `ban` calls this with the existing entries plus the
+/// newly banned ones folded in; `unban` calls it with the existing entries
+/// minus the ones it removed. Both end up writing the same sorted,
+/// deduplicated shape, so this is the one place that shape is written.
+///
+/// When two entries share one hash under different term uuids -- two
+/// branches banning the same word under two different `--term` calls, then
+/// merging -- which one survives can't depend on the order `entries` arrives
+/// in, or the file a merge produces would depend on which side's row a
+/// text merge happened to keep first. So entries are sorted by hash and
+/// then, within a hash, by uuid (an entry with no uuid sorts first), before
+/// `dedup_by` keeps the first of each hash: the same input, in any order,
+/// always keeps the same uuid.
+pub fn write_sorted(path: &Path, mut entries: Vec<(String, Option<String>)>) -> std::io::Result<()> {
+    entries.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+    entries.dedup_by(|a, b| a.0 == b.0);
+    let mut content = String::new();
+    for (hash, uuid) in &entries {
+        content.push_str(&format_line(hash, uuid));
+        content.push('\n');
     }
-    let mut f = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)?;
-    for (hash, uuid) in entries {
-        writeln!(f, "{}", format_line(hash, uuid))?;
-    }
-    Ok(())
+    fs::write(path, content)
 }

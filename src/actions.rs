@@ -1420,17 +1420,11 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
         });
     }
 
-    let mut remaining: Vec<(String, Option<String>)> = existing
+    let remaining: Vec<(String, Option<String>)> = existing
         .into_iter()
         .filter(|(h, _)| !to_remove.contains(h))
         .collect();
-    remaining.sort_by(|a, b| a.0.cmp(&b.0));
-    let mut content = String::new();
-    for (h, u) in &remaining {
-        content.push_str(&crate::banned::format_line(h, u));
-        content.push('\n');
-    }
-    std::fs::write(&banned_path, content).map_err(|e| {
+    crate::banned::write_sorted(&banned_path, remaining).map_err(|e| {
         msg::update_failed("banned list", e, Next::owner_runs("adr unban again"))
     })?;
 

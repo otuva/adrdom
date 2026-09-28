@@ -29,11 +29,15 @@ pub(super) fn check_banned(root: &Path, staged: bool, message: Option<&Path>, so
     out
 }
 
-/// The ban list against the ledger's `banned`/`unbanned` history: every
-/// hash the ledger currently considers banned (a `banned` row with no
-/// later `unbanned` row) must be in the file, and every hash in the file
-/// must trace back to some `banned` row (regardless of a later `unbanned`
-/// row, which would otherwise have removed it from the file already).
+/// The ban list against the ledger's `banned`/`unbanned` history (per "Does
+/// check hold the ban list equal to the ledger?"): the file must hold
+/// exactly the hashes the ledger says are banned now, no more and no
+/// fewer. Every hash the ledger currently considers banned (a `banned` row
+/// with no later `unbanned` row) must be in the file; every hash in the
+/// file must trace back to some `banned` row; and every hash in the file
+/// that the ledger's own latest row calls `unbanned` is flagged too, since
+/// the file and the ledger's current state must agree, not just the
+/// file and the ledger's history.
 pub(super) fn check_banned_ledger(led: &Ledger, root: &Path, source: &Source) -> Vec<Failure> {
     let mut out = Vec::new();
     let file_hashes: HashSet<String> = read_banned_entries(root, source)
@@ -77,6 +81,18 @@ pub(super) fn check_banned_ledger(led: &Ledger, root: &Path, source: &Source) ->
         out.push(Failure {
             check: "banned".to_string(),
             message: msg::banned_missing_from_ledger(hash_prefix(h)),
+        });
+    }
+
+    let mut unbanned_but_in_file: Vec<&String> = file_hashes
+        .iter()
+        .filter(|h| ever_banned.contains(*h) && !currently_banned.contains(*h))
+        .collect();
+    unbanned_but_in_file.sort();
+    for h in unbanned_but_in_file {
+        out.push(Failure {
+            check: "banned".to_string(),
+            message: msg::banned_unbanned_but_in_file(hash_prefix(h)),
         });
     }
 
