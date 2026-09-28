@@ -12,7 +12,9 @@ jobs:
       # and the working tree/index, plus, at a merge commit, both of
       # HEAD's parents (per "Does check at a merge look for the ledger
       # rows of both branches?") -- depth 2 is enough for `HEAD^1`/`HEAD^2`
-      # to resolve there.
+      # to resolve there. A push event's own "commit before the push" can
+      # sit further back than depth 2 reaches; the step below fetches that
+      # one commit on its own, by sha, once it knows what it is.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
@@ -25,5 +27,19 @@ jobs:
       - name: cargo build --release
         run: cargo build --release
 
+      # Per "Does check in CI compare the ledger with the commit before the
+      # push?" (a26876ba-5789-4d05-965e-853d00d9edd2 C): on a push whose
+      # "before" commit is real -- not the all-zero sha a branch's first
+      # push carries, which `github.event.before` is then -- fetch that one
+      # commit and run `adr check --since` it, which runs the whole check
+      # and adds the one comparison against it. A `pull_request` build (no
+      # `before` of its own) or a push with no real "before" runs the plain
+      # check instead.
       - name: adr check
-        run: ./target/release/adr check
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            git fetch --depth=1 origin "${{ github.event.before }}"
+            ./target/release/adr check --since "${{ github.event.before }}"
+          else
+            ./target/release/adr check
+          fi

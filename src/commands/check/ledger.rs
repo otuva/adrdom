@@ -11,6 +11,7 @@ pub(super) fn check_ledger(
     records: &[RecordFile],
     root: &Path,
     ledger_content: &str,
+    since: Option<&str>,
 ) -> Vec<Failure> {
     let mut out = Vec::new();
     for (lineno, raw) in &led.malformed {
@@ -104,6 +105,32 @@ pub(super) fn check_ledger(
         }
     }
 
+    // Per "Does check in CI compare the ledger with the commit before the
+    // push?" (a26876ba-5789-4d05-965e-853d00d9edd2 C): `--since <commit>`
+    // adds one more presence test, against `<commit>`'s own ledger, on top
+    // of the plain check's own HEAD/merge ones above. `is_zero_sha` covers
+    // a branch's first push (CI's `github.event.before` is all zeros then):
+    // nothing to compare. `--push` runs this same presence test itself, per
+    // ref line, through `ref_ledger_has_rows_missing`/`lines_missing`
+    // directly (see `push.rs`) rather than through this `since` parameter,
+    // since a push judges only that one comparison, never the rest of
+    // `check_ledger`.
+    if let Some(commit) = since {
+        if !repo::is_zero_sha(commit) {
+            if !parent_object_present(root, commit) {
+                out.push(Failure {
+                    check: "ledger".to_string(),
+                    message: msg::ledger_since_unreadable(commit),
+                });
+            } else if ref_ledger_has_rows_missing(root, commit, &present) {
+                out.push(Failure {
+                    check: "ledger".to_string(),
+                    message: msg::ledger_since_drops_rows(commit),
+                });
+            }
+        }
+    }
+
     let all_ids: HashSet<String> = records
         .iter()
         .flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.clone()))
@@ -139,12 +166,16 @@ pub(super) fn check_ledger(
 /// Whether `refname`'s copy of the ledger (`git show <refname>:adrdom/state/ledger.tsv`)
 /// holds any non-empty row line missing from `present` -- the ledger being
 /// judged, already split into a line set by the caller. `refname` names
-/// `MERGE_HEAD` or one of `HEAD`'s parents by sha (the caller has already
-/// confirmed the parent's commit object is present when it calls this);
-/// when the ref itself can't be read at all (`MERGE_HEAD` unset) or simply
-/// holds no ledger file at that path, there's nothing to compare and this
-/// counts as nothing missing, never a failure.
-fn ref_ledger_has_rows_missing(root: &Path, refname: &str, present: &HashSet<&str>) -> bool {
+/// `MERGE_HEAD`, one of `HEAD`'s parents, or a plain commit sha (the
+/// `since` comparison above, and `push.rs`'s own per-ref comparison) -- the
+/// caller has already confirmed the sha's commit object is present when it
+/// matters (every caller but the `MERGE_HEAD` one); when the ref itself
+/// can't be read at all (`MERGE_HEAD` unset) or simply holds no ledger file
+/// at that path, there's nothing to compare and this counts as nothing
+/// missing, never a failure. `pub(super)`: the one comparison shared by the
+/// HEAD test above, the merge tests, `since`, and `push.rs`'s own presence
+/// test.
+pub(super) fn ref_ledger_has_rows_missing(root: &Path, refname: &str, present: &HashSet<&str>) -> bool {
     let Some(other_content) = repo::git(root, &["show", &format!("{}:{}", refname, repo::LEDGER_PATH)]) else {
         return false;
     };
@@ -157,8 +188,11 @@ fn ref_ledger_has_rows_missing(root: &Path, refname: &str, present: &HashSet<&st
 /// rows changed place?" (c10c3a49-e993-4c9f-a46b-4a1ba3646dcf A) puts
 /// behind both the HEAD test above and `ref_ledger_has_rows_missing`'s
 /// merge-side test: a row's place in either file is free, so this never
-/// looks at where a line sits, only whether it is there at all.
-fn lines_missing(other_content: &str, present: &HashSet<&str>) -> bool {
+/// looks at where a line sits, only whether it is there at all. `pub(super)`
+/// so `push.rs` can run the same test directly against a sha it already
+/// read itself, without going through `ref_ledger_has_rows_missing`'s own
+/// `git show`.
+pub(super) fn lines_missing(other_content: &str, present: &HashSet<&str>) -> bool {
     other_content.lines().any(|l| !l.is_empty() && !present.contains(l))
 }
 
@@ -184,7 +218,9 @@ fn head_parents(root: &Path) -> Vec<String> {
 /// Whether `sha`'s commit object actually exists in this repository --
 /// `false` in exactly the shallow-clone case `head_parents` is read to
 /// catch: the sha is named in HEAD's commit object, but the object itself
-/// was never fetched.
-fn parent_object_present(root: &Path, sha: &str) -> bool {
+/// was never fetched. Also the `since`/`push.rs` blind-spot test: a `since`
+/// commit or a pre-push line's remote sha that names a commit this
+/// repository never fetched at all. `pub(super)` for `push.rs`'s own use.
+pub(super) fn parent_object_present(root: &Path, sha: &str) -> bool {
     repo::git(root, &["cat-file", "-e", &format!("{}^{{commit}}", sha)]).is_some()
 }

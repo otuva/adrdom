@@ -25,6 +25,11 @@ pub(crate) const CLAUDE_MD_IMPORT: &str = "@AGENTS.md";
 
 pub(crate) const PRE_COMMIT_HOOK: &str = "#!/bin/sh\nadr check --staged\nexit $?\n";
 pub(crate) const COMMIT_MSG_HOOK: &str = "#!/bin/sh\nadr check --message \"$1\"\nexit $?\n";
+/// Decision P (19e1c023-a678-4842-a414-bb0e45c41601): a plain `sh` script,
+/// same shape as the other two hooks, that hands `adr check --push` git's
+/// own pre-push input -- the script never redirects its own stdin, so the
+/// lines git writes to the hook's stdin reach the command unchanged.
+pub(crate) const PRE_PUSH_HOOK: &str = "#!/bin/sh\nadr check --push\nexit $?\n";
 
 /// `adrdom/.gitattributes`'s whole content (Decision 7,
 /// db56a285-946f-48b1-b073-bb1e90192185): the one merge rule that keeps
@@ -118,6 +123,16 @@ pub fn run(claude: bool, codex: bool) -> i32 {
             eprintln!(
                 "install: {}",
                 msg::write_failed(repo::COMMIT_MSG_HOOK_PATH, e, retry())
+            );
+            return 1;
+        }
+    }
+    match create_hook(&root, repo::PRE_PUSH_HOOK_PATH, PRE_PUSH_HOOK) {
+        Ok(m) => messages.push(m),
+        Err(e) => {
+            eprintln!(
+                "install: {}",
+                msg::write_failed(repo::PRE_PUSH_HOOK_PATH, e, retry())
             );
             return 1;
         }

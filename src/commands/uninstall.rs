@@ -1,5 +1,5 @@
 use crate::commands::install::{
-    self, CLAUDE_MD_IMPORT, CLAUDE_MD_MARKER, COMMIT_MSG_HOOK, PRE_COMMIT_HOOK,
+    self, CLAUDE_MD_IMPORT, CLAUDE_MD_MARKER, COMMIT_MSG_HOOK, PRE_COMMIT_HOOK, PRE_PUSH_HOOK,
 };
 use crate::commands::deny_entries;
 use crate::msg::{self, Actor, Next};
@@ -148,7 +148,7 @@ fn remove_claude_md_import(root: &Path) -> Result<Option<String>, String> {
     Ok(Some(msg::claude_md_import_removed()))
 }
 
-/// Deletes the two hooks only when their content still matches exactly
+/// Deletes the three hooks only when their content still matches exactly
 /// what `adr install` writes, removes `.githooks` once empty, and unsets
 /// `core.hooksPath` only when it's still `.githooks`.
 fn remove_hooks(root: &Path) -> Vec<String> {
@@ -156,6 +156,7 @@ fn remove_hooks(root: &Path) -> Vec<String> {
     let hooks = root.join(".githooks");
     let pre_commit = hooks.join("pre-commit");
     let commit_msg = hooks.join("commit-msg");
+    let pre_push = hooks.join("pre-push");
 
     if let Ok(content) = fs::read_to_string(&pre_commit) {
         if content == PRE_COMMIT_HOOK && fs::remove_file(&pre_commit).is_ok() {
@@ -165,6 +166,11 @@ fn remove_hooks(root: &Path) -> Vec<String> {
     if let Ok(content) = fs::read_to_string(&commit_msg) {
         if content == COMMIT_MSG_HOOK && fs::remove_file(&commit_msg).is_ok() {
             messages.push(msg::hook_removed("commit-msg"));
+        }
+    }
+    if let Ok(content) = fs::read_to_string(&pre_push) {
+        if content == PRE_PUSH_HOOK && fs::remove_file(&pre_push).is_ok() {
+            messages.push(msg::hook_removed("pre-push"));
         }
     }
     if let Ok(mut entries) = fs::read_dir(&hooks) {

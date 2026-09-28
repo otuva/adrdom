@@ -61,6 +61,12 @@ enum Command {
         staged: bool,
         #[arg(long)]
         message: Option<PathBuf>,
+        /// Also require every ledger row of <commit>'s own ledger to be present in the one being judged.
+        #[arg(long)]
+        since: Option<String>,
+        /// Read git's pre-push input from stdin and judge only that: no ref may drop a ledger row the remote already has.
+        #[arg(long)]
+        push: bool,
     },
 }
 
@@ -76,7 +82,7 @@ fn main() {
         Command::Ban { term, rebuild } => commands::ban::run(term, rebuild),
         Command::Unban => commands::unban::run(),
         Command::Serve { port } => commands::serve::run(port),
-        Command::Check { staged, message } => commands::check::run(staged, message),
+        Command::Check { staged, message, since, push } => commands::check::run(staged, message, since, push),
     };
     std::process::exit(code);
 }

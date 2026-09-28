@@ -1266,6 +1266,55 @@ pub fn ledger_answered_without_asked(id: &str) -> String {
     )
 }
 
+/// `adr check --push`, one line pre-push hands it: `local_ref`'s ledger, at
+/// the sha about to be pushed, is missing a row `remote_ref` already holds
+/// at its own sha (per "Does check look at the ledger before a push?",
+/// 19e1c023-a678-4842-a414-bb0e45c41601 P). Same remedy as
+/// `ledger_merge_drops_rows` -- the missing rows are restored, only by
+/// adding them back -- since a push that drops a row is the same kind of
+/// loss, just found before it reaches the remote instead of after a merge.
+pub fn ledger_push_drops_rows(local_ref: &str, remote_ref: &str) -> String {
+    refuse(
+        format!(
+            "push of {} would drop ledger rows the remote's {} already holds",
+            local_ref, remote_ref
+        ),
+        Next::owner_runs("the rows already on the remote branch are restored, by hand, only by adding them back, then the push runs again"),
+    )
+}
+
+/// `adr check --push`: the remote sha a pre-push line names is not a
+/// commit this repository has -- a shallow clone, or a remote branch never
+/// fetched -- so there is nothing local to compare it against, the same
+/// blind spot `ledger_merge_parents_unreadable` refuses on for a shallow
+/// merge.
+pub fn ledger_push_remote_unreadable(remote_ref: &str) -> String {
+    refuse(
+        format!("{}'s remote commit cannot be read here", remote_ref),
+        Next::agent("fetches the remote branch first"),
+    )
+}
+
+/// `adr check --since <commit>` (per "Does check in CI compare the ledger
+/// with the commit before the push?", a26876ba-5789-4d05-965e-853d00d9edd2
+/// C): the ledger being judged is missing a row `<commit>`'s own ledger
+/// already holds. Same remedy as `ledger_push_drops_rows`.
+pub fn ledger_since_drops_rows(commit: &str) -> String {
+    refuse(
+        format!("ledger drops a row {} already holds", commit),
+        Next::owner_runs("the rows already at that commit are restored, by hand, only by adding them back"),
+    )
+}
+
+/// `adr check --since <commit>`: `<commit>` itself is not in this
+/// repository (too shallow a fetch), so its ledger cannot be read at all.
+pub fn ledger_since_unreadable(commit: &str) -> String {
+    refuse(
+        format!("{} cannot be read here", commit),
+        Next::agent("fetches that commit first"),
+    )
+}
+
 pub fn untested(id: &str) -> String {
     refuse(
         format!("{}: untested", id),
@@ -2003,6 +2052,10 @@ mod tests {
             ledger_merge_parents_unreadable(),
             ledger_asked_id_missing("id-1"),
             ledger_answered_without_asked("id-1"),
+            ledger_push_drops_rows("refs/heads/feat", "refs/heads/main"),
+            ledger_push_remote_unreadable("refs/heads/main"),
+            ledger_since_drops_rows("abc123"),
+            ledger_since_unreadable("abc123"),
             untested("id-1"),
             stale_test("id-1"),
             duplicate_heading_in_file("heading", "x.md"),

@@ -32,6 +32,13 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
         repo::COMMIT_MSG_HOOK_PATH,
         crate::commands::install::COMMIT_MSG_HOOK,
     );
+    check_hook(
+        &mut out,
+        root,
+        source,
+        repo::PRE_PUSH_HOOK_PATH,
+        crate::commands::install::PRE_PUSH_HOOK,
+    );
 
     // The ledger's merge rule (Decision 8, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c):
     // checked unconditionally, the same as the git hooks above -- install

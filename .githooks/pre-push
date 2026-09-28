@@ -1,0 +1,3 @@
+#!/bin/sh
+adr check --push
+exit $?

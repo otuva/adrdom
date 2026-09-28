@@ -46,6 +46,23 @@ pub const PRE_COMMIT_HOOK_PATH: &str = ".githooks/pre-commit";
 /// root. Its content is `commands::install::COMMIT_MSG_HOOK`; checked the
 /// same way as `PRE_COMMIT_HOOK_PATH`.
 pub const COMMIT_MSG_HOOK_PATH: &str = ".githooks/commit-msg";
+/// Where `adr install` writes the pre-push hook, relative to the repo root
+/// (Decision P, 19e1c023-a678-4842-a414-bb0e45c41601 -- check fails a push
+/// unless every ledger row of the remote branch is in the ledger being
+/// pushed). Its content is `commands::install::PRE_PUSH_HOOK`; checked the
+/// same way as `PRE_COMMIT_HOOK_PATH`.
+pub const PRE_PUSH_HOOK_PATH: &str = ".githooks/pre-push";
+
+/// Whether `s` is git's all-zero sha, of whatever length (40 hex digits for
+/// sha-1, 64 for sha-256): the value a pre-push line carries for "this ref
+/// doesn't exist yet" (as the local sha, a deleted branch; as the remote
+/// sha, a branch new on the remote), and the value a workflow's "commit
+/// before the push" carries when there was none (the branch's first push).
+/// Checked by shape, not a fixed-width literal, so it reads either sha
+/// width the same way.
+pub fn is_zero_sha(s: &str) -> bool {
+    !s.is_empty() && s.chars().all(|c| c == '0')
+}
 
 pub fn find_root() -> Option<PathBuf> {
     let mut dir = std::env::current_dir().ok()?;

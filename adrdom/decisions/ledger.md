@@ -193,6 +193,8 @@ Standard: git runs a hook before a push with the commits of both sides; a check 
   Why: install writes one hook fewer.
   Costs: a row lost in a rebase or a fast-forward is reported nowhere.
 
+**Answer:** A
+
 ### Does check in CI compare the ledger with the commit before the push?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e18b82d8-5271-4385-bbab-2b89e5da278f, bf6697e3-8832-4b90-b036-8fecedb55406=A
 id: a26876ba-5789-4d05-965e-853d00d9edd2
@@ -207,6 +209,8 @@ Standard: a check on the server compares the pushed commit with the commit the b
 - B) No: check in CI reads the pushed commit alone.
   Why: the workflow needs one commit.
   Costs: a push that lost ledger rows passes CI.
+
+**Answer:** A
 
 ### Does check fail a question answered with two different options?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 277a8338-c57a-43cc-8b28-6b42e9347f6a, 43778946-d44c-4acf-a766-0a4915fce199, 1c27f2d6-ab62-4c5a-91b2-1488722f3c48=A
