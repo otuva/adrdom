@@ -956,6 +956,22 @@ pub fn answer_set_changed(rel: &str, dep_heading: &str, heading: &str) -> String
     )
 }
 
+/// A question whose standing ledger rulings name two or more different
+/// options (per "Does check fail a question answered with two different
+/// options?", e3200081-9995-4bbe-983f-2f430dc341e7): two branches each
+/// answered (or one answered and one refused) the same question, and a
+/// merge kept both rows. The topic file's own `**Answer:**` line only shows
+/// one side, so this is caught from the ledger directly, never from the
+/// file text. The move is always the same: the agent re-asks the question,
+/// and the owner answers it again.
+pub fn answer_conflict(rel: &str, heading: &str, id: &str, a: &str, b: &str) -> String {
+    refuse(
+        format!("{}: {}: two standing answers, {} and {}", rel, heading, a, b),
+        Next::agent(format!("runs adr ask {}", rel))
+            .and_owner_runs(format!("adr answer {}@<version> <letter>", id)),
+    )
+}
+
 /// The `"path:line"` location a failure names, one-based.
 pub fn location(name: &str, line: usize) -> String {
     format!("{}:{}", name, line)
@@ -2030,6 +2046,7 @@ mod tests {
             refused_row_without_line("x.md", "heading"),
             edited_after_asking("x.md", "heading"),
             answer_set_changed("x.md", "dependent", "heading"),
+            answer_conflict("x.md", "heading", "id-1", "A", "B"),
             banned_word_at("x.md:3", ""),
             banned_missing_from_file("abcdef123456"),
             banned_missing_from_ledger("abcdef123456"),

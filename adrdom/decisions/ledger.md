@@ -215,6 +215,19 @@ Standard: a check on the server compares the pushed commit with the commit the b
 ### Does check fail a question answered with two different options?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 277a8338-c57a-43cc-8b28-6b42e9347f6a, 43778946-d44c-4acf-a766-0a4915fce199, 1c27f2d6-ab62-4c5a-91b2-1488722f3c48=A
 id: e3200081-9995-4bbe-983f-2f430dc341e7
+terms: answer=b36113a1-1384-4e4c-a798-8399f4181366, answered=b36113a1-1384-4e4c-a798-8399f4181366, answers=b36113a1-1384-4e4c-a798-8399f4181366, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, option=43778946-d44c-4acf-a766-0a4915fce199, options=43778946-d44c-4acf-a766-0a4915fce199, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
+
+Problem: two branches answer one question with different options; the merge keeps both answers in the ledger, whoever resolves the topic file picks the option, and check passes.
+Standard: two writes to one record that disagree are not settled by the merge; they are reported, and the one with the authority writes again.
+
+- A) Yes: check fails a question whose answers in the ledger name two different options, answer takes a new answer for it, and that answer stands.
+  Why: the option that stands is one the owner picked with both in view.
+  Costs: the owner answers one question twice.
+- B) No: the option in the topic file stands, and the other answer stays in the ledger with no report.
+  Why: nothing waits for the owner.
+  Costs: whoever resolved the merge picked the decision.
+
+**Answer:** A
 
 ### Does check fail two ledger rows on one subject with the same time?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e18b82d8-5271-4385-bbab-2b89e5da278f, aefa7f3c-70c3-412e-8d73-16ff9e2b703a=A
