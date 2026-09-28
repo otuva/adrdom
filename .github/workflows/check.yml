@@ -8,10 +8,14 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      # `adr check` only ever reads the current commit's tree (`git show
-      # HEAD:...`) and the working tree/index, never older commits, so the
-      # default shallow checkout is enough.
+      # `adr check` reads the current commit's tree (`git show HEAD:...`)
+      # and the working tree/index, plus, at a merge commit, both of
+      # HEAD's parents (per "Does check at a merge look for the ledger
+      # rows of both branches?") -- depth 2 is enough for `HEAD^1`/`HEAD^2`
+      # to resolve there.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - uses: dtolnay/rust-toolchain@stable
 
