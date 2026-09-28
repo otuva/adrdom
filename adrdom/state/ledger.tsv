@@ -266,3 +266,8 @@
 2026-09-27T19:03:00Z	answered	db56a285-946f-48b1-b073-bb1e90192185	3e697a0075d959c0557f1b0bf1e59b2a49f461ca451341fac6563eb99d6a8dbf	A	0.2.0
 2026-09-27T19:03:20Z	asked	76c6adc6-c018-4df4-b49a-ddcd0a03a48c	6b8ccb5276a1c6dbb5be4442148505b50db89b0e520c77d42891ab359f87d765	Does check hold the merge rule install writes for the ledger?	0.2.0
 2026-09-27T19:05:06Z	answered	76c6adc6-c018-4df4-b49a-ddcd0a03a48c	6b8ccb5276a1c6dbb5be4442148505b50db89b0e520c77d42891ab359f87d765	A	0.2.0
+2026-09-28T17:01:20Z	approved	-	a91638cceb5dbacd01f8c481c20a89491cd94f3afdd312a509feab8fbdb24252	adrdom/decisions/ledger.md	0.2.0
+2026-09-28T17:01:25Z	approved	-	1475278875a4098cc73d2afc4f929336c38e93b79c6be88f7bee563e5de2ac64	adrdom/decisions/ban.md	0.2.0
+2026-09-28T17:02:08Z	asked	19e1c023-a678-4842-a414-bb0e45c41601	85c893ac610c5b5eb1a1e8d90105b4b56dd74a033bd80b5f82be2144333ff379	Does check look at the ledger before a push?	0.2.0
+2026-09-28T17:02:08Z	asked	a26876ba-5789-4d05-965e-853d00d9edd2	473d89aed5d8b88d436ddd489cc44ad11fc183474f35a8731328219af3becdb3	Does check in CI compare the ledger with the commit before the push?	0.2.0
+2026-09-28T17:02:09Z	asked	f422c5db-13d0-4ff7-9e43-b68ab44a7cb9	ad6d86e2e054d461fa21f9bd1e1a8ee10d205f7a29441c5f8029574894b51bdd	Does the tool rewrite the ban list from the ledger?	0.2.0

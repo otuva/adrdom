@@ -147,3 +147,21 @@ Standard: list files under version control are kept sorted, so that lines added 
   Costs: every merge of two branches that ban or unban conflicts.
 
 **Answer:** A
+
+### Does the tool rewrite the ban list from the ledger?
+depends: ef83beae-6857-4200-b251-a0fcc3c72f9d, e18b82d8-5271-4385-bbab-2b89e5da278f, 06b7e003-4d9f-427a-a798-c1af97865411=A
+id: f422c5db-13d0-4ff7-9e43-b68ab44a7cb9
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, ban=ef83beae-6857-4200-b251-a0fcc3c72f9d, banned=ef83beae-6857-4200-b251-a0fcc3c72f9d, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d
+
+Problem: a merge of two branches leaves the ban list in conflict or holding a hash whose ban the owner lifted, and putting it right is a hand edit of a file under adrdom/state.
+Standard: a state file that a log fully determines is rebuilt from the log by the tool and never edited by hand.
+
+- A) Yes: a command any agent runs writes the ban list as the hashes the ledger says are banned, sorted, and writes no ledger row.
+  Why: a conflict in the ban list is cleared by one command, whichever way the merge ran.
+  Costs: the ban list changes with no act of the owner at that moment; it follows the acts the ledger holds.
+- B) Yes: an owner command writes the ban list as the hashes the ledger says are banned, sorted, and writes no ledger row.
+  Why: what is enforced changes only when the owner runs a command.
+  Costs: every merge that touches the ban list waits for the owner.
+- C) No: whoever merges edits the ban list by hand, and check fails until it equals the ledger.
+  Why: the tool has one command fewer.
+  Costs: a file under adrdom/state is edited by hand at every such merge.

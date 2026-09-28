@@ -177,3 +177,41 @@ Standard: generated files are compared with their generator, and drift fails.
   Costs: the rule can vanish, and nothing reports it until a merge conflicts.
 
 **Answer:** A
+
+### Does check look at the ledger before a push?
+depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e18b82d8-5271-4385-bbab-2b89e5da278f, bf6697e3-8832-4b90-b036-8fecedb55406=A
+id: 19e1c023-a678-4842-a414-bb0e45c41601
+terms: check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, install=1b98cdea-dc1b-4789-8f67-68d130d7a49d, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f
+
+Problem: a rebase and a fast-forward make no commit, so no hook runs, and a ledger row lost that way is compared with nothing.
+Standard: git runs a hook before a push with the commits of both sides; a check that a commit can miss is repeated there.
+
+- A) Yes: install writes a hook that runs before a push, and check fails the push unless every ledger row of the remote branch is in the ledger that is pushed.
+  Why: a row lost in a rebase or a fast-forward is caught before it leaves the machine.
+  Costs: nothing is looked at until a push, and a push made without the hooks skips it.
+- B) No: check looks at the ledger at a commit and at a merge only.
+  Why: install writes one hook fewer.
+  Costs: a row lost in a rebase or a fast-forward is reported nowhere.
+
+### Does check in CI compare the ledger with the commit before the push?
+depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e18b82d8-5271-4385-bbab-2b89e5da278f, bf6697e3-8832-4b90-b036-8fecedb55406=A
+id: a26876ba-5789-4d05-965e-853d00d9edd2
+terms: check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f
+
+Problem: check in CI reads the pushed commit alone, so a push that lost ledger rows passes.
+Standard: a check on the server compares the pushed commit with the commit the branch held before the push.
+
+- A) Yes: in CI check fails unless every ledger row of the commit before the push is in the ledger of the pushed commit.
+  Why: a hook on the machine can be skipped, a check on the server cannot.
+  Costs: the loss is reported after it reached the server, and the workflow fetches the earlier commit.
+- B) No: check in CI reads the pushed commit alone.
+  Why: the workflow needs one commit.
+  Costs: a push that lost ledger rows passes CI.
+
+### Does check fail a question answered with two different options?
+depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 277a8338-c57a-43cc-8b28-6b42e9347f6a, 43778946-d44c-4acf-a766-0a4915fce199, 1c27f2d6-ab62-4c5a-91b2-1488722f3c48=A
+id: e3200081-9995-4bbe-983f-2f430dc341e7
+
+### Does check fail two ledger rows on one subject with the same time?
+depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e18b82d8-5271-4385-bbab-2b89e5da278f, aefa7f3c-70c3-412e-8d73-16ff9e2b703a=A
+id: ce19c883-c61d-477b-a6d4-fee5134c6e9a
