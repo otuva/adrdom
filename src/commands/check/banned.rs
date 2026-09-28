@@ -46,19 +46,17 @@ pub(super) fn check_banned_ledger(led: &Ledger, root: &Path, source: &Source) ->
         .collect();
 
     let mut ever_banned: HashSet<String> = HashSet::new();
-    let mut currently_banned: HashSet<String> = HashSet::new();
     for row in &led.rows {
-        match row.event.as_str() {
-            "banned" => {
-                ever_banned.insert(row.hash.clone());
-                currently_banned.insert(row.hash.clone());
-            }
-            "unbanned" => {
-                currently_banned.remove(&row.hash);
-            }
-            _ => {}
+        if row.event == "banned" {
+            ever_banned.insert(row.hash.clone());
         }
     }
+    // Shared with `adr ban --rebuild` (`banned::currently_banned`), so the
+    // two can never disagree about what "banned now" means.
+    let currently_banned: HashSet<String> = banned::currently_banned(led)
+        .into_iter()
+        .map(|(h, _)| h)
+        .collect();
 
     let mut missing_from_file: Vec<&String> = currently_banned
         .iter()

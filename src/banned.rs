@@ -150,6 +150,33 @@ pub fn first_hit(
     None
 }
 
+/// Every hash the ledger currently says is banned (per "Does the tool
+/// rewrite the ban list from the ledger?" and "Does check hold the ban list
+/// equal to the ledger?"): for each hash that ever carries a `banned` or
+/// `unbanned` row, its latest such row -- by the ledger's own order
+/// (`ledger::parse` already sorts `rows` by time, never by file position) --
+/// kept only when that latest row is `banned`, paired with the term uuid
+/// from that row's `detail` column when it carries one. Shared by
+/// `check_banned_ledger` (which only needs the hash) and `adr ban
+/// --rebuild` (which needs the uuid too, to carry it onto the rewritten
+/// file), so the two can never disagree about what "banned now" means.
+pub fn currently_banned(led: &crate::ledger::Ledger) -> Vec<(String, Option<String>)> {
+    let mut latest: HashMap<String, &crate::ledger::Row> = HashMap::new();
+    for row in &led.rows {
+        if row.event == "banned" || row.event == "unbanned" {
+            latest.insert(row.hash.clone(), row);
+        }
+    }
+    latest
+        .into_values()
+        .filter(|row| row.event == "banned")
+        .map(|row| {
+            let uuid = if row.detail.is_empty() { None } else { Some(row.detail.clone()) };
+            (row.hash.clone(), uuid)
+        })
+        .collect()
+}
+
 /// Rewrites the whole ban list at `path`, sorted by hash (per "Does the
 /// tool write the ban list in one fixed order?"): one line per entry, no
 /// duplicate hashes. `ban` calls this with the existing entries plus the

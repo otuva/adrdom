@@ -165,3 +165,5 @@ Standard: a state file that a log fully determines is rebuilt from the log by th
 - C) No: whoever merges edits the ban list by hand, and check fails until it equals the ledger.
   Why: the tool has one command fewer.
   Costs: a file under adrdom/state is edited by hand at every such merge.
+
+**Answer:** A

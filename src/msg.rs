@@ -980,33 +980,27 @@ pub fn banned_missing_from_file(hash_prefix: &str) -> String {
             "{} in ledger, missing from adrdom/state/banned.sha256",
             hash_prefix
         ),
-        Next::owner_runs(
-            "git diff adrdom/state/banned.sha256 adrdom/state/ledger.tsv; restore by hand whatever is not real",
-        ),
+        Next::agent("runs: adr ban --rebuild"),
     )
 }
 
 pub fn banned_missing_from_ledger(hash_prefix: &str) -> String {
     refuse(
         format!("{} in file, no ledger row", hash_prefix),
-        Next::owner_runs(
-            "git diff adrdom/state/banned.sha256 adrdom/state/ledger.tsv; restore by hand whatever is not real",
-        ),
+        Next::agent("runs: adr ban --rebuild"),
     )
 }
 
 /// A hash that stands in the file, was banned at some time, but the
 /// ledger's latest row for it is `unbanned` -- the file still carries a
 /// line the ledger already voided (per "Does check hold the ban list
-/// equal to the ledger?"). `adr unban` on the same word clears this: it
-/// removes the hash from the file and writes a fresh `unbanned` row,
-/// whatever the ledger's last row for the hash already said.
+/// equal to the ledger?"). `adr ban --rebuild` clears this: it rewrites the
+/// file to exactly what the ledger currently says is banned, whatever the
+/// file held before.
 pub fn banned_unbanned_but_in_file(hash_prefix: &str) -> String {
     refuse(
         format!("{} in file, ledger says unbanned", hash_prefix),
-        Next::owner_runs(
-            "git diff adrdom/state/banned.sha256 adrdom/state/ledger.tsv; restore by hand whatever is not real",
-        ),
+        Next::agent("runs: adr ban --rebuild"),
     )
 }
 
@@ -1722,6 +1716,14 @@ pub fn banned_added(n: usize) -> String {
     format!("added {} entries", n)
 }
 
+/// Printed after `adr ban --rebuild` writes the ban list straight from the
+/// ledger (per "Does the tool rewrite the ban list from the ledger?"): `n`
+/// is the number of lines it wrote, in the same style `banned_added` and
+/// `removed_entries` already use for the plain `ban`/`unban` counts.
+pub fn banned_rebuilt(n: usize) -> String {
+    format!("rebuilt {} entries", n)
+}
+
 pub fn agents_md_created() -> String {
     "install: AGENTS.md: created with the brief".to_string()
 }
@@ -1982,6 +1984,7 @@ mod tests {
             banned_word_at("x.md:3", ""),
             banned_missing_from_file("abcdef123456"),
             banned_missing_from_ledger("abcdef123456"),
+            banned_unbanned_but_in_file("abcdef123456"),
             agents_md_stale(),
             agents_md_missing_brief(),
             claude_md_missing_import(),

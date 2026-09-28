@@ -271,3 +271,4 @@
 2026-09-28T17:02:08Z	asked	19e1c023-a678-4842-a414-bb0e45c41601	85c893ac610c5b5eb1a1e8d90105b4b56dd74a033bd80b5f82be2144333ff379	Does check look at the ledger before a push?	0.2.0
 2026-09-28T17:02:08Z	asked	a26876ba-5789-4d05-965e-853d00d9edd2	473d89aed5d8b88d436ddd489cc44ad11fc183474f35a8731328219af3becdb3	Does check in CI compare the ledger with the commit before the push?	0.2.0
 2026-09-28T17:02:09Z	asked	f422c5db-13d0-4ff7-9e43-b68ab44a7cb9	ad6d86e2e054d461fa21f9bd1e1a8ee10d205f7a29441c5f8029574894b51bdd	Does the tool rewrite the ban list from the ledger?	0.2.0
+2026-09-28T17:04:19Z	answered	f422c5db-13d0-4ff7-9e43-b68ab44a7cb9	ad6d86e2e054d461fa21f9bd1e1a8ee10d205f7a29441c5f8029574894b51bdd	A	0.2.0

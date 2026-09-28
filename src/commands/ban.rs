@@ -30,7 +30,7 @@ fn resolve_term_uuid(root: &std::path::Path, name: &str) -> Option<String> {
     None
 }
 
-pub fn run(term: Option<String>) -> i32 {
+pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
@@ -40,6 +40,10 @@ pub fn run(term: Option<String>) -> i32 {
     };
     let banned_path = root.join(banned::BAN_LIST);
     let ledger_path = root.join(repo::LEDGER_PATH);
+
+    if rebuild {
+        return run_rebuild(&banned_path, &ledger_path);
+    }
 
     let uuid: Option<String> = match &term {
         Some(name) => match resolve_term_uuid(&root, name) {
@@ -149,5 +153,28 @@ pub fn run(term: Option<String>) -> i32 {
     }
 
     println!("ban: {}", msg::banned_added(new_hashes.len()));
+    0
+}
+
+/// `adr ban --rebuild` (id f422c5db-13d0-4ff7-9e43-b68ab44a7cb9): rewrites
+/// `adrdom/state/banned.sha256` as exactly the hashes the ledger currently
+/// says are banned (`banned::currently_banned`, the same function `check`
+/// judges the file against, so the two can never disagree), sorted through
+/// `banned::write_sorted`. Reads no stdin, ignores whatever the file
+/// currently holds -- conflict markers from a merge, or nothing at all --
+/// and writes no ledger row: this recomputes state the ledger already
+/// carries, it doesn't record a new event.
+fn run_rebuild(banned_path: &std::path::Path, ledger_path: &std::path::Path) -> i32 {
+    let led = ledger::read(ledger_path);
+    let entries = banned::currently_banned(&led);
+    let n = entries.len();
+    if let Err(e) = banned::write_sorted(banned_path, entries) {
+        eprintln!(
+            "ban: {}",
+            msg::update_failed("banned list", e, Next::agent("checks the error and retries"))
+        );
+        return 1;
+    }
+    println!("ban: {}", msg::banned_rebuilt(n));
     0
 }

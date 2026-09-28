@@ -40,8 +40,12 @@ enum Command {
     Ban {
         /// Carry an existing terms.md term's uuid alongside each new hash,
         /// matched case-insensitively by name or alias.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "rebuild")]
         term: Option<String>,
+        /// Rewrite the ban list from the ledger alone, ignoring whatever it
+        /// currently holds; reads no stdin and writes no ledger row.
+        #[arg(long)]
+        rebuild: bool,
     },
     /// Owner-only: read lines from stdin and remove them (and their tokens)
     /// from the ban list.
@@ -69,7 +73,7 @@ fn main() {
         Command::Approve { file } => commands::approve::run(file),
         Command::Answer { id, letter } => commands::answer::run(id, letter),
         Command::Show { topic_file } => commands::show::run(topic_file),
-        Command::Ban { term } => commands::ban::run(term),
+        Command::Ban { term, rebuild } => commands::ban::run(term, rebuild),
         Command::Unban => commands::unban::run(),
         Command::Serve { port } => commands::serve::run(port),
         Command::Check { staged, message } => commands::check::run(staged, message),
