@@ -226,19 +226,21 @@ fn ban_ignores_a_word_present_only_in_a_ledger_row_detail() {
     // that section is superseded (the section itself then deleted from
     // the record, per the fixture's premise). The word now lives only in
     // this `asked` row's detail column.
-    append_ledger_row(
+    append_ledger_row_at(
         &dir,
         "asked",
         "33333333-3333-3333-3333-333333333333",
         "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
         "1.1 What handles gadgetword?",
+        "2024-01-01T00:00:00Z",
     );
-    append_ledger_row(
+    append_ledger_row_at(
         &dir,
         "superseded",
         "33333333-3333-3333-3333-333333333333",
         "-",
         "44444444-4444-4444-4444-444444444444",
+        "2024-01-01T00:00:01Z",
     );
 
     // history is not scanned: the ledger copy of the word never blocks `ban`.

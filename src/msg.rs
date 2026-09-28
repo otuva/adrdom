@@ -1331,6 +1331,20 @@ pub fn ledger_since_unreadable(commit: &str) -> String {
     )
 }
 
+/// Per "Does check fail two ledger rows on one subject with the same
+/// time?" (ce19c883-c61d-477b-a6d4-fee5134c6e9a T): two rows that are not
+/// byte-identical, carry the same time, and compete for one subject --
+/// `subject` already names which kind it is and the value (`"id <uuid>"`,
+/// `"hash <prefix>"`, or `"file <path>"`). The remedy is always the same
+/// command run again, since that writes a later row, and a later row
+/// settles which one stands.
+pub fn ledger_same_time_competition(time: &str, subject: &str) -> String {
+    refuse(
+        format!("two ledger rows at {} compete for {}", time, subject),
+        Next::agent("runs the command again, so it writes a later row that stands"),
+    )
+}
+
 pub fn untested(id: &str) -> String {
     refuse(
         format!("{}: untested", id),
@@ -2073,6 +2087,7 @@ mod tests {
             ledger_push_remote_unreadable("refs/heads/main"),
             ledger_since_drops_rows("abc123"),
             ledger_since_unreadable("abc123"),
+            ledger_same_time_competition("2024-01-01T00:00:00Z", "id id-1"),
             untested("id-1"),
             stale_test("id-1"),
             duplicate_heading_in_file("heading", "x.md"),

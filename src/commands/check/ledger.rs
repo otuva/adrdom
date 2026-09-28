@@ -1,10 +1,20 @@
 use super::{dropped_state, Failure};
-use crate::ledger::Ledger;
+use crate::ledger::{Ledger, Row};
 use crate::msg;
 use crate::record::RecordFile;
 use crate::repo;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
+
+/// The state-row events `check_same_time_competition`'s rule (1) matches
+/// (ce19c883-c61d-477b-a6d4-fee5134c6e9a T): the same set `Ledger::latest_state`
+/// already reads a question's state from.
+const COMPETING_STATE_EVENTS: [&str; 5] = ["asked", "answered", "refused", "superseded", "withdrawn"];
+
+/// The events rule (3) matches: every event whose `detail` column carries a
+/// file path (src/actions.rs's `approved`, `context`, `terms` and `blame`
+/// writers), per the dry run this decision's build asked for.
+const COMPETING_PATH_EVENTS: [&str; 4] = ["approved", "context", "terms", "blame"];
 
 pub(super) fn check_ledger(
     led: &Ledger,
@@ -131,6 +141,8 @@ pub(super) fn check_ledger(
         }
     }
 
+    out.extend(check_same_time_competition(led));
+
     let all_ids: HashSet<String> = records
         .iter()
         .flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.clone()))
@@ -223,4 +235,116 @@ fn head_parents(root: &Path) -> Vec<String> {
 /// repository never fetched at all. `pub(super)` for `push.rs`'s own use.
 pub(super) fn parent_object_present(root: &Path, sha: &str) -> bool {
     repo::git(root, &["cat-file", "-e", &format!("{}^{{commit}}", sha)]).is_some()
+}
+
+/// Per "Does check fail two ledger rows on one subject with the same
+/// time?" (ce19c883-c61d-477b-a6d4-fee5134c6e9a T): every pair of rows that
+/// carry the same time and compete for one subject -- and are the latest
+/// rows for that subject, so nothing later has already settled which one
+/// stands. Three rules, each grouping the ledger by its own notion of
+/// "subject" first:
+///
+/// 1. state rows (`COMPETING_STATE_EVENTS`) sharing an id, the id not `-`;
+/// 2. `banned`/`unbanned` rows sharing a hash;
+/// 3. rows of one `COMPETING_PATH_EVENTS` event sharing its `detail` (a
+///    file path) -- an `approved` row and a `context` row for the same
+///    file are two different subjects (different events), so they never
+///    compete here.
+///
+/// Within a subject's own rows, only the ones at that subject's own latest
+/// time are ever compared: a same-time tie further back in a subject's
+/// history stops mattering the moment a later row exists for it, since
+/// that later row is what "the command run again" (this failure's own
+/// remedy) writes, and it already settles the subject going forward.
+fn check_same_time_competition(led: &Ledger) -> Vec<Failure> {
+    // One subject string per finding, sorted before it's ever turned into a
+    // `Failure` (`by_id`/`by_hash`/`by_path` are `HashMap`s, so their own
+    // iteration order carries no meaning) -- the same determinism every
+    // other multi-row category in `check` already sorts its own findings
+    // for.
+    let mut subjects: Vec<(String, String)> = Vec::new();
+
+    let mut by_id: HashMap<&str, Vec<&Row>> = HashMap::new();
+    for r in &led.rows {
+        if r.id != "-" && COMPETING_STATE_EVENTS.contains(&r.event.as_str()) {
+            by_id.entry(r.id.as_str()).or_default().push(r);
+        }
+    }
+    for (id, rows) in &by_id {
+        if let Some(time) = competing_at_latest_time(rows) {
+            subjects.push((time, format!("id {}", id)));
+        }
+    }
+
+    let mut by_hash: HashMap<&str, Vec<&Row>> = HashMap::new();
+    for r in &led.rows {
+        if matches!(r.event.as_str(), "banned" | "unbanned") {
+            by_hash.entry(r.hash.as_str()).or_default().push(r);
+        }
+    }
+    for (hash, rows) in &by_hash {
+        if let Some(time) = competing_at_latest_time(rows) {
+            subjects.push((time, format!("hash {}", short_hash(hash))));
+        }
+    }
+
+    let mut by_path: HashMap<(&str, &str), Vec<&Row>> = HashMap::new();
+    for r in &led.rows {
+        if COMPETING_PATH_EVENTS.contains(&r.event.as_str()) {
+            by_path.entry((r.event.as_str(), r.detail.as_str())).or_default().push(r);
+        }
+    }
+    for ((_, detail), rows) in &by_path {
+        if let Some(time) = competing_at_latest_time(rows) {
+            subjects.push((time, format!("file {}", detail)));
+        }
+    }
+
+    subjects.sort();
+    subjects
+        .into_iter()
+        .map(|(time, subject)| Failure {
+            check: "ledger".to_string(),
+            message: msg::ledger_same_time_competition(&time, &subject),
+        })
+        .collect()
+}
+
+/// `rows` are already every row sharing one subject (whichever of the
+/// three groupings above). Its own latest time -- the ledger's rows are
+/// RFC3339 strings in one fixed UTC form (`ledger::now_rfc3339`/
+/// `ledger::write_time`), so plain string comparison already orders them
+/// correctly, without reparsing. `Some(time)` when two or more of the rows
+/// at that latest time are not byte-identical to each other (`row_line`
+/// equal); `None` when only one row sits at the latest time, or every row
+/// there is the same row repeated.
+fn competing_at_latest_time(rows: &[&Row]) -> Option<String> {
+    let latest = rows.iter().map(|r| r.time.as_str()).max()?;
+    let at_latest: Vec<&&Row> = rows.iter().filter(|r| r.time == latest).collect();
+    if at_latest.len() < 2 {
+        return None;
+    }
+    let first = at_latest[0];
+    if at_latest.iter().all(|r| rows_identical(first, r)) {
+        None
+    } else {
+        Some(latest.to_string())
+    }
+}
+
+/// Whether `a` and `b` are the same row, byte for byte -- `Row` no longer
+/// carries the raw line it was parsed from (`ledger::order_by_time` drops
+/// it), but every field `ledger::row_line` writes is compared here instead,
+/// which is the same test for any row that parsed cleanly (`time` is
+/// already equal, both rows coming from the same time-bucket).
+fn rows_identical(a: &Row, b: &Row) -> bool {
+    a.event == b.event && a.id == b.id && a.hash == b.hash && a.detail == b.detail && a.version == b.version
+}
+
+/// A hash's first 12 hex characters, the same prefix length
+/// `commands/check/banned.rs`'s own `hash_prefix` reports a banned hash
+/// with -- kept as its own copy here rather than importing that (private)
+/// helper, so this file and that one stay free to change independently.
+fn short_hash(h: &str) -> &str {
+    &h[..h.len().min(12)]
 }

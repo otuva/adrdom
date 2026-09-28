@@ -276,3 +276,5 @@
 2026-09-28T17:04:26Z	answered	a26876ba-5789-4d05-965e-853d00d9edd2	473d89aed5d8b88d436ddd489cc44ad11fc183474f35a8731328219af3becdb3	A	0.2.0
 2026-09-28T17:05:03Z	asked	e3200081-9995-4bbe-983f-2f430dc341e7	e640d157cdd8aa49fad58deb0ed1e72b35539d76162c3cdf64f5e7563a8fcd48	Does check fail a question answered with two different options?	0.2.0
 2026-09-28T17:06:26Z	answered	e3200081-9995-4bbe-983f-2f430dc341e7	e640d157cdd8aa49fad58deb0ed1e72b35539d76162c3cdf64f5e7563a8fcd48	A	0.2.0
+2026-09-28T17:06:44Z	asked	ce19c883-c61d-477b-a6d4-fee5134c6e9a	d6ea52ff8cb7ca78bdc7d9eb98e5f1342e40c97d3747c88682e4c8d15eca02b0	Does check fail two ledger rows on one subject with the same time?	0.2.0
+2026-09-28T18:24:38Z	answered	ce19c883-c61d-477b-a6d4-fee5134c6e9a	d6ea52ff8cb7ca78bdc7d9eb98e5f1342e40c97d3747c88682e4c8d15eca02b0	A	0.2.0

@@ -232,3 +232,16 @@ Standard: two writes to one record that disagree are not settled by the merge; t
 ### Does check fail two ledger rows on one subject with the same time?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e18b82d8-5271-4385-bbab-2b89e5da278f, aefa7f3c-70c3-412e-8d73-16ff9e2b703a=A
 id: ce19c883-c61d-477b-a6d4-fee5134c6e9a
+terms: ban=ef83beae-6857-4200-b251-a0fcc3c72f9d, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f
+
+Problem: two branches each write a ledger row on one subject in the same second, such as a ban and the lifting of that ban; both rows carry one time, and the time cannot say which is the later.
+Standard: two writes to one record with the same time are a collision; they are reported and one of them is written again, not ordered by a rule that guesses.
+
+- A) Yes: check fails two rows that carry one time and compete for one subject, and the command run again writes a later row that stands; rows of one command that share a time do not compete.
+  Why: the row that stands is always the later one by the clock.
+  Costs: a merge of two branches that wrote in the same second waits for one command to be run again.
+- B) No: rows with one time are ordered by their text.
+  Why: nothing waits, and the order is the same whichever way the merge ran.
+  Costs: the row that stands is picked by its wording, not by which act came later.
+
+**Answer:** A
