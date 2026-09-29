@@ -118,16 +118,25 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
     // check or ask, which always need every file -- never has a reason to
     // parse the rest once it is found.
     let mut found = None;
+    // The files that could not be read: the question may be in one of
+    // them, so "not found" names them.
+    let mut unread: Vec<String> = Vec::new();
     for f in crate::repo::list_decision_files(root) {
-        if let Ok(rf) = record::load(&f) {
-            if let Some(idx) = rf.sections.iter().position(|s| s.id.as_deref() == Some(id)) {
-                found = Some((rf, idx));
-                break;
+        match record::load(&f) {
+            Ok(rf) => {
+                if let Some(idx) = rf.sections.iter().position(|s| s.id.as_deref() == Some(id)) {
+                    found = Some((rf, idx));
+                    break;
+                }
             }
+            Err(_) => unread.push(crate::state::rel_path(root, &f)),
         }
     }
     let Some((rf, idx)) = found else {
-        return Err(msg::id_not_found(id));
+        if unread.is_empty() {
+            return Err(msg::id_not_found(id));
+        }
+        return Err(msg::id_not_found_some_unread(id, &unread));
     };
     // `record::load` (unlike `load_all`/`load_all_via`) leaves `rf.rel` as
     // the raw path it was given, so it is recomputed here the way every
@@ -512,18 +521,25 @@ fn do_approve_blame(
         work_lines[row.line_idx] = format!("{}-{}\t{}", row.start, row.end, r.canonical());
     }
 
-    std::fs::write(&bf.path, record::join_lines(&work_lines)).map_err(|e| {
-        msg::approve_prefixed(msg::write_failed(
-            &file.display().to_string(),
-            e,
-            Next::owner_runs(format!("adr approve {} again", rel)),
-        ))
-    })?;
+    // Written only when a row changed, so the line below can say whether
+    // the file on disk was touched.
+    let rewritten = work_lines != bf.lines;
+    if rewritten {
+        std::fs::write(&bf.path, record::join_lines(&work_lines)).map_err(|e| {
+            msg::approve_prefixed(msg::write_failed(
+                &file.display().to_string(),
+                e,
+                Next::owner_runs(format!("adr approve {} again", rel)),
+            ))
+        })?;
+    }
 
     let new_hash = blame::file_hash(&work_lines);
     let unchanged = led.latest_for_path("blame", rel).map(|r| r.hash.as_str()) == Some(new_hash.as_str());
 
-    let summary = if unchanged {
+    let summary = if unchanged && rewritten {
+        msg::blame_rows_rewritten(rel)
+    } else if unchanged {
         msg::blame_unchanged(rel)
     } else {
         let row = ledger::Row {
@@ -1443,10 +1459,18 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
         .map(|(h, _)| h.clone())
         .collect();
     removed.sort();
+    // The words given that were not banned: said as a count beside what
+    // was removed, never dropped without a word.
+    let not_banned = to_remove.len() - removed.len();
+    let not_banned_suffix = if not_banned == 0 {
+        String::new()
+    } else {
+        msg::not_banned_suffix(not_banned)
+    };
 
     if removed.is_empty() {
         return Ok(Outcome {
-            summary: msg::nothing_to_remove(),
+            summary: format!("{}{}", msg::nothing_to_remove(), not_banned_suffix),
         });
     }
 
@@ -1478,6 +1502,6 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
         .map_err(|e| msg::update_failed("ledger", e, Next::owner_runs("adr unban again")))?;
 
     Ok(Outcome {
-        summary: msg::removed_entries(removed.len()),
+        summary: format!("{}{}", msg::removed_entries(removed.len()), not_banned_suffix),
     })
 }

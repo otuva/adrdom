@@ -88,6 +88,16 @@ pub fn create_failed(target: &str, e: impl Display, next: Next) -> String {
     refuse(format!("failed to create {}: {}", target, e), next)
 }
 
+pub fn remove_failed(target: &str, e: impl Display, next: Next) -> String {
+    refuse(format!("failed to remove {}: {}", target, e), next)
+}
+
+/// `git config` did not take the change to `core.hooksPath`. `doing` is
+/// "set" or "unset".
+pub fn hooks_path_failed(doing: &str, next: Next) -> String {
+    refuse(format!("git config failed to {} core.hooksPath", doing), next)
+}
+
 pub fn parse_failed(target: &str, e: impl Display, next: Next) -> String {
     refuse(format!("{}: {}", target, e), next)
 }
@@ -512,6 +522,20 @@ pub fn id_not_found(id: &str) -> String {
     refuse(
         format!("id {} not found in any topic file", id),
         Next::owner_runs("adr answer with a real id"),
+    )
+}
+
+/// The id was in no topic file that could be read, and `unread` (paths,
+/// never empty) could not be read at all: the question may be in one of
+/// them.
+pub fn id_not_found_some_unread(id: &str, unread: &[String]) -> String {
+    refuse(
+        format!(
+            "id {} not found in the topic files that could be read; cannot read {}",
+            id,
+            unread.join(", ")
+        ),
+        Next::agent("fixes each file so it can be read as text (e.g. its encoding)"),
     )
 }
 
@@ -1051,6 +1075,15 @@ pub fn show_blame(rel: &str) -> String {
     format!("# blame: {}", rel)
 }
 
+/// A topic file show could not read: printed in its place, so a file with
+/// decisions in it is never missing from the listing without a word.
+pub fn show_topic_unreadable(rel: &str, e: impl Display) -> String {
+    format!(
+        "# {} (cannot be read: {}; agent fixes the file so it can be read as text)",
+        rel, e
+    )
+}
+
 pub fn show_blame_unreadable(rel: &str, e: impl Display) -> String {
     format!("# blame: {} (cannot be read: {})", rel, e)
 }
@@ -1146,6 +1179,14 @@ pub fn no_such_term(name: &str) -> String {
     refuse(
         format!("no term named \"{}\" in adrdom/terms.md", name),
         Next::agent("names a term that exists in adrdom/terms.md"),
+    )
+}
+
+/// `ban --term` with no terms file to look the name up in.
+pub fn no_terms_file_for_term(name: &str) -> String {
+    refuse(
+        format!("cannot look up \"{}\": adrdom/terms.md is missing or cannot be read", name),
+        Next::agent("writes adrdom/terms.md, or fixes it so it can be read as text"),
     )
 }
 
@@ -1966,6 +2007,15 @@ pub fn blame_unchanged(rel: &str) -> String {
     format!("approve: {}: blame unchanged", rel)
 }
 
+/// The approval stands as it was, and the file on disk was written again:
+/// its rows were not in the form approve writes them in.
+pub fn blame_rows_rewritten(rel: &str) -> String {
+    format!(
+        "approve: {}: rows rewritten in the form approve writes; blame unchanged",
+        rel
+    )
+}
+
 // --- commands/check/blame.rs -----------------------------------------------
 // Shared by `check`'s `blame` category (per "Does check hold a blame file
 // to its origin?", 5fddeeb5 A; "Does an origin leave the repository while
@@ -2141,8 +2191,32 @@ pub fn removed_entries(n: usize) -> String {
     format!("removed {} entries", n)
 }
 
+/// Added to unban's line when `n` (never 0) of the words given were not
+/// banned. A count and never the words: a word given here may be a
+/// misspelling of a banned one.
+pub fn not_banned_suffix(n: usize) -> String {
+    format!("; {} of the words given were not banned", n)
+}
+
 pub fn no_new_entries() -> String {
     "no new entries".to_string()
+}
+
+/// `ban` found nothing new to add and found the ban list different from
+/// what the ledger says is banned, so it wrote the list again.
+pub fn no_new_entries_list_rewritten(n: usize) -> String {
+    format!(
+        "no new entries; the ban list did not match the ledger and was written again with {} entries",
+        n
+    )
+}
+
+/// `check --message <file>` could not read the commit message file.
+pub fn message_file_unreadable(path: &str, e: impl Display) -> String {
+    refuse(
+        format!("cannot read the commit message file {}: {}", path, e),
+        Next::agent("passes a commit message file that can be read as text"),
+    )
 }
 
 pub fn banned_added(n: usize) -> String {

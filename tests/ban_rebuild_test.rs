@@ -442,8 +442,8 @@ fn w5_ledger_says_banned_but_file_is_missing_it_gets_no_new_row_but_the_file_is_
     assert!(reban_out.status.success(), "re-ban failed: {}", stderr(&reban_out));
     assert_eq!(
         stdout(&reban_out).trim_end(),
-        "ban: no new entries",
-        "the word was already banned per the ledger, so no fresh row is expected"
+        "ban: no new entries; the ban list did not match the ledger and was written again with 1 entries",
+        "the word was already banned per the ledger, so no fresh row is expected, and the write of the file is said"
     );
 
     let ledger_after = std::fs::read_to_string(ledger_path(&dir)).unwrap();

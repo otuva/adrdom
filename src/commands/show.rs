@@ -53,7 +53,8 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
     // rather than inside `cross_file_heading_index` (which used to load
     // them all itself, then have the loop below load whichever of them it
     // was about to print all over again).
-    let all_records: Vec<RecordFile> = record::load_all(&root);
+    let (all_records, unreadable_topic_files) =
+        record::load_all_via(&root, &repo::Source::WorkingTree);
     let cross_file_headings = depends::cross_file_heading_index(&all_records, &led);
 
     // Every heading id, any state, and every blame file (per "Does show
@@ -77,11 +78,32 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
                 // Not one of the repo's topic files (an unusual path
                 // outside adrdom/decisions/, say): loaded directly, same as
                 // before this pass.
-                None => record::load(p).into_iter().collect(),
+                None => match record::load(p) {
+                    Ok(rf) => vec![rf],
+                    Err(e) => {
+                        eprintln!(
+                            "show: {}",
+                            msg::read_failed(
+                                &rel,
+                                e,
+                                msg::Next::agent("names a topic file that can be read as text")
+                            )
+                        );
+                        return 1;
+                    }
+                },
             }
         }
         None => all_records,
     };
+    // A topic file that cannot be read is named where it would have been
+    // printed; with a file argument only that file is printed, and the one
+    // asked for is refused above when it is the one that cannot be read.
+    if record_arg.is_none() {
+        for (f, e) in &unreadable_topic_files {
+            println!("{}", msg::show_topic_unreadable(&state::rel_path(&root, f), e));
+        }
+    }
 
     let tests = crate::commands::check::test_index(&root, &repo::Source::WorkingTree);
     for rf in &mut records {
