@@ -91,9 +91,12 @@ Standard: the named practice for this, stated flat.
 ```
 
 Two or three options. Strip each option to its answer to the heading and
-compare them: two options that answer it the same way are one option. If the
-question replaces a current decision, add `supersedes: <id>` under the
-heading (several ids separated by commas).
+compare them: two options that answer it the same way are one option.
+
+If the question replaces a current decision, put a `supersedes:` line under
+its `id:` line and write the heading of that decision on it, as on a
+`depends:` line (several headings separated by commas). `adr ask` turns
+each heading into its id.
 
 When `next` names an answer set, write it on that `depends:` entry: `=A`,
 `=A|B` or `=*`, the letters of the other question under which this one still

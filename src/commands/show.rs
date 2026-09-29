@@ -268,6 +268,16 @@ fn print_question(
             .collect();
         println!("{}", msg::show_stands_on(&entries));
     }
+    // The decisions this question replaces, as words: an entry the tool
+    // has turned into an identifier is turned back into the heading.
+    if !sec.supersedes.is_empty() {
+        let names: Vec<String> = sec
+            .supersedes
+            .iter()
+            .map(|e| all_headings.get(e).cloned().unwrap_or_else(|| e.clone()))
+            .collect();
+        println!("{}", msg::show_supersedes(&names));
+    }
     let dependents = stood_on_by(rf, sec, all, led);
     if !dependents.is_empty() {
         println!("{}", msg::show_stood_on_by(&dependents));

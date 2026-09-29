@@ -707,6 +707,21 @@ pub fn ask_supersedes_not_current(rel: &str, heading: &str, old: &str, name: Opt
     )
 }
 
+/// A `supersedes:` entry written as a heading that more than one current
+/// decision carries.
+pub fn ask_supersedes_ambiguous(rel: &str, heading: &str, entry: &str, files: &[String]) -> String {
+    refuse(
+        format!(
+            "{}: \"{}\": supersedes \"{}\", which is a current decision in more than one place: {}",
+            rel,
+            heading,
+            entry,
+            files.join(", ")
+        ),
+        ambiguous_heading_next(),
+    )
+}
+
 pub fn tier_blocked_refused(
     rel: &str,
     heading: &str,
@@ -1002,6 +1017,11 @@ pub fn show_stands_on(entries: &[String]) -> String {
 
 pub fn show_chosen(sentence: &str) -> String {
     format!("    {}", sentence)
+}
+
+/// Under a question: the decisions it replaces, by heading.
+pub fn show_supersedes(headings: &[String]) -> String {
+    format!("    supersedes: {}", headings.join(", "))
 }
 
 /// Under a superseded question: the heading of the question that took its

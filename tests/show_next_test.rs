@@ -318,8 +318,12 @@ or moves it to another file when none does",
 // adr: f4f667ad-8714-4e65-897b-c7002e423c28
 // adr: 1b181f10-97f4-4bbe-8939-d5842192126c
 //
+// adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
+//
 // A superseded question stays in its topic file, and show names under it
-// the question that took its place.
+// the question that took its place. The agent names the decision it
+// replaces by its heading; ask turns the heading into the identifier and
+// show turns it back.
 #[test]
 fn show_names_what_replaced_a_superseded_question() {
     let dir = init_repo();
@@ -342,19 +346,46 @@ fn show_names_what_replaced_a_superseded_question() {
     let id_line = format!("id: {}\n", two);
     std::fs::write(
         &path,
-        text.replace(&id_line, &format!("{}supersedes: {}\n{}", id_line, one, BODY)),
+        text.replace(&id_line, &format!("{}supersedes: {}\n{}", id_line, ONE, BODY)),
     )
     .unwrap();
     let asked = adr(&dir, &["ask", p], &[], "");
     assert!(asked.status.success(), "{}", stderr(&asked));
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(text.contains(&format!("supersedes: {}\n", one)), "{}", text);
     assert!(adr_answer(&dir, &two, "A").status.success());
 
     let shown = stdout(&adr(&dir, &["show", "--all"], &[], ""));
     let expected = format!(
-        "  [superseded] {}\n    stands on: widget\n    replaced by: {}\n",
-        ONE, TWO
+        "  [superseded] {one}\n    stands on: widget\n    replaced by: {two}\n  \
+[answered A] {two}\n    stands on: widget\n    supersedes: {one}\n",
+        one = ONE,
+        two = TWO
     );
     assert!(shown.contains(&expected), "{}", shown);
+
+    // A heading that names no current decision: the refusal names it.
+    let mut text = std::fs::read_to_string(&path).unwrap();
+    text.push_str(&format!("\n### {}\ndepends: widget\n", THREE));
+    std::fs::write(&path, text).unwrap();
+    approve_record(&dir, REL);
+    let text = std::fs::read_to_string(&path).unwrap();
+    let id_line = format!("id: {}\n", id_of(&path, THREE));
+    std::fs::write(
+        &path,
+        text.replace(&id_line, &format!("{}supersedes: {}\n{}", id_line, ONE, BODY)),
+    )
+    .unwrap();
+    let asked = adr(&dir, &["ask", p], &[], "");
+    assert!(!asked.status.success());
+    assert!(
+        stderr(&asked).contains(&format!(
+            "\"{}\": supersedes {}, which is not a current decision; agent fixes the supersedes line",
+            THREE, ONE
+        )),
+        "{}",
+        stderr(&asked)
+    );
 }
 
 // adr: f8d92841-aef7-4cd7-bd94-0e07c03e4cb6

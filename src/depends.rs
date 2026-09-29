@@ -350,6 +350,47 @@ pub fn normalize_cross_file_deps(
     });
 }
 
+/// Why a `supersedes:` entry names no decision to replace.
+pub enum SupersedesError {
+    /// It names no current decision, by identifier or by heading.
+    NotCurrent,
+    /// Its heading is the heading of more than one current decision; the
+    /// (sorted) topic files they are in.
+    Ambiguous(Vec<String>),
+}
+
+/// The identifier of the current decision a `supersedes:` entry names (per
+/// "Does a reference in a topic file carry the identifier of what it
+/// names?": the agent writes the name, the tool turns it into the
+/// identifier). An entry is the identifier of a current decision, or the
+/// heading of exactly one, in this topic file or another;
+/// `cross_file_headings` is `cross_file_heading_index`, every current
+/// decision by its heading.
+pub fn resolve_supersedes(
+    entry: &str,
+    cross_file_headings: &HashMap<String, Vec<(String, String)>>,
+    led: &Ledger,
+) -> Result<String, SupersedesError> {
+    let entry = entry.trim();
+    if state::is_current(led, entry) {
+        return Ok(entry.to_string());
+    }
+    let matches: &[(String, String)] = cross_file_headings
+        .get(entry)
+        .map(|v| v.as_slice())
+        .unwrap_or(&[]);
+    match matches {
+        [] => Err(SupersedesError::NotCurrent),
+        [(_, id)] => Ok(id.clone()),
+        many => {
+            let mut files: Vec<String> = many.iter().map(|(rel, _)| rel.clone()).collect();
+            files.sort();
+            files.dedup();
+            Err(SupersedesError::Ambiguous(files))
+        }
+    }
+}
+
 /// One `bad_option_letter` message per letter in `letters` that isn't
 /// one of `target`'s options (per "Does a depends entry carry the answers
 /// it holds under?"); empty when `target` has no options

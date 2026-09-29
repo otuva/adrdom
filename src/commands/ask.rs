@@ -282,6 +282,10 @@ pub fn run(record_path: PathBuf) -> i32 {
     // moot). Computed once, ahead of the per-candidate loop.
     let moot_pairs = view::moot_pairs(&rf, &led);
 
+    // For each candidate, by its index: the identifiers its supersedes
+    // line names.
+    let mut supersedes_ids: HashMap<usize, Vec<String>> = HashMap::new();
+
     for (i, sec) in rf.sections.iter().enumerate() {
         if !candidate[i] {
             continue;
@@ -313,21 +317,37 @@ pub fn run(record_path: PathBuf) -> i32 {
         // here; `answer` later accepts a target that was superseded after
         // this question's own `asked` row (a split), but never one that was
         // already stale before it was ever asked.
+        // An entry is written as the heading of the decision or as its
+        // identifier; the identifiers are what the write step below puts
+        // on the line (per "Does a reference in a topic file carry the
+        // identifier of what it names?").
+        let mut ids = Vec::new();
         for old in &sec.supersedes {
-            if !state::is_current(&led, old) {
-                let names = crate::view::all_heading_texts(&root);
-                eprintln!(
-                    "ask: {}",
-                    msg::ask_supersedes_not_current(
-                        &rel,
-                        &sec.heading_text,
-                        old,
-                        names.get(old).map(String::as_str)
-                    )
-                );
-                return 1;
+            match depends::resolve_supersedes(old, &cross_file_headings, &led) {
+                Ok(id) => ids.push(id),
+                Err(depends::SupersedesError::NotCurrent) => {
+                    let names = crate::view::all_heading_texts(&root);
+                    eprintln!(
+                        "ask: {}",
+                        msg::ask_supersedes_not_current(
+                            &rel,
+                            &sec.heading_text,
+                            old,
+                            names.get(old).map(String::as_str)
+                        )
+                    );
+                    return 1;
+                }
+                Err(depends::SupersedesError::Ambiguous(files)) => {
+                    eprintln!(
+                        "ask: {}",
+                        msg::ask_supersedes_ambiguous(&rel, &sec.heading_text, old, &files)
+                    );
+                    return 1;
+                }
             }
         }
+        supersedes_ids.insert(i, ids);
 
         // Tier rule (per "Does the tool derive tiers from the depends
         // lines?"): a candidate outside the open tier refuses, naming the
@@ -465,6 +485,16 @@ pub fn run(record_path: PathBuf) -> i32 {
             continue;
         }
         let sec = rf.sections[i].clone();
+        // A supersedes entry written as a heading becomes the identifier
+        // it names, in place, before the question's text is hashed.
+        if let Some(ids) = supersedes_ids.get(&i) {
+            if *ids != sec.supersedes {
+                if let Some(idx) = find_prefixed_line(&rf.lines, sec.start, sec.end, "supersedes: ") {
+                    rf.lines[idx] = format!("supersedes: {}", ids.join(", "));
+                    terms_touched = true;
+                }
+            }
+        }
         let text = state::section_text_excluding_terms_line(&rf.lines, &sec);
         let pairs = terms::resolve(&text, &terms_list);
         let new_line = match terms::format_terms_line(&pairs) {
