@@ -203,6 +203,20 @@ fn print_question(
             println!("{}", msg::show_chosen(&s));
         }
     }
+    // A superseded question names what took its place: the ledger's
+    // `superseded` row holds the id of the question that replaced it.
+    if state == QState::Superseded {
+        let replaced_by = sec
+            .id
+            .as_deref()
+            .and_then(|id| led.latest_state(id))
+            .map(|row| row.detail.trim())
+            .filter(|by| !by.is_empty());
+        if let Some(by) = replaced_by {
+            let name = all_headings.get(by).map(String::as_str).unwrap_or(by);
+            println!("{}", msg::show_replaced_by(name));
+        }
+    }
     // Per "Does show print a blame file?", 7b05f8df A: "under each
     // decision ... a line `from: <origin path> (<n> rows)` for every blame
     // file with a row naming it." Only a section with an id can be named

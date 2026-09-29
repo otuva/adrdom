@@ -964,6 +964,12 @@ pub fn show_chosen(sentence: &str) -> String {
     format!("    {}", sentence)
 }
 
+/// Under a superseded question: the heading of the question that took its
+/// place.
+pub fn show_replaced_by(heading: &str) -> String {
+    format!("    replaced by: {}", heading)
+}
+
 pub fn show_from(origin: &str, rows: usize) -> String {
     format!(
         "    from: {} ({} {})",

@@ -315,6 +315,48 @@ or moves it to another file when none does",
     );
 }
 
+// adr: f4f667ad-8714-4e65-897b-c7002e423c28
+// adr: 1b181f10-97f4-4bbe-8939-d5842192126c
+//
+// A superseded question stays in its topic file, and show names under it
+// the question that took its place.
+#[test]
+fn show_names_what_replaced_a_superseded_question() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let path = write_record(&dir, REL, &format!("# Gate\n\n### {}\ndepends: widget\n", ONE));
+    approve_record(&dir, REL);
+    write_body(&path, ONE);
+    let p = path.to_str().unwrap();
+    assert!(adr(&dir, &["ask", p], &[], "").status.success());
+    let one = id_of(&path, ONE);
+    assert!(adr_answer(&dir, &one, "A").status.success());
+
+    let mut text = std::fs::read_to_string(&path).unwrap();
+    text.push_str(&format!("\n### {}\ndepends: widget\n", TWO));
+    std::fs::write(&path, text).unwrap();
+    approve_record(&dir, REL);
+    let text = std::fs::read_to_string(&path).unwrap();
+    let two = id_of(&path, TWO);
+    let id_line = format!("id: {}\n", two);
+    std::fs::write(
+        &path,
+        text.replace(&id_line, &format!("{}supersedes: {}\n{}", id_line, one, BODY)),
+    )
+    .unwrap();
+    let asked = adr(&dir, &["ask", p], &[], "");
+    assert!(asked.status.success(), "{}", stderr(&asked));
+    assert!(adr_answer(&dir, &two, "A").status.success());
+
+    let shown = stdout(&adr(&dir, &["show"], &[], ""));
+    let expected = format!(
+        "  [superseded] {}\n    stands on: widget\n    replaced by: {}\n",
+        ONE, TWO
+    );
+    assert!(shown.contains(&expected), "{}", shown);
+}
+
 // adr: f8d92841-aef7-4cd7-bd94-0e07c03e4cb6
 //
 // Every question answered and tied to a test: show prints no "next" at all.
