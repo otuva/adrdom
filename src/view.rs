@@ -313,11 +313,18 @@ pub(crate) fn next_moves(
     rf: &RecordFile,
     led: &Ledger,
     plan_ok: bool,
+    plan_refusals: &[String],
     tests: &HashMap<String, Vec<String>>,
 ) -> Vec<String> {
     use crate::msg;
+    // What `approve` and `check` refuse in this file's plan
+    // (`actions::record_refusals`), each with the move it names.
+    let clears: Vec<String> = plan_refusals.iter().map(|r| msg::next_clears(r)).collect();
     let Some(tiers) = &rf.tiers else {
-        return vec![msg::next_plan_unresolved()];
+        if clears.is_empty() {
+            return vec![msg::next_plan_unresolved()];
+        }
+        return clears;
     };
     let open_tier = state::open_tier(rf);
     let moot: HashSet<usize> = moot_pairs(rf, led).iter().map(|p| p.section_idx).collect();
@@ -390,15 +397,18 @@ pub(crate) fn next_moves(
     // What is answered is built before anything new is written: the commit
     // that carries an answer carries its code and its test.
     let mut out = build;
+    let refused = !clears.is_empty();
+    out.extend(clears);
     if plan_ok {
         out.extend(bodies);
         out.extend(sets);
         if !to_ask.is_empty() {
             out.push(msg::next_ask(&rf.rel, &to_ask));
         }
-    } else {
+    } else if !refused {
         // Nothing is written or asked under a plan that waits for its
-        // approval; what the owner owes and what is answered stands.
+        // approval; what the owner owes and what is answered stands. The
+        // owner's command is named once `approve` would take the plan.
         out.push(msg::next_plan_unapproved(&rf.rel));
     }
     out.extend(answers);

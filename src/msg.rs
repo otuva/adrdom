@@ -841,10 +841,15 @@ pub fn next_plan_unresolved() -> String {
     Next::agent("runs adr check and clears what it names in the plan").render()
 }
 
+/// A plan that waits for its approval and that `approve` would take.
 pub fn next_plan_unapproved(rel: &str) -> String {
-    Next::agent("runs adr check and clears what it names")
-        .and_owner_runs(format!("adr approve {}", rel))
-        .render()
+    Next::owner_runs(format!("adr approve {}", rel)).render()
+}
+
+/// A refusal `approve` would print for the plan, whole, with the move it
+/// names: the agent reads it here and not among the lines of `check`.
+pub fn next_clears(refusal: &str) -> String {
+    Next::agent(format!("clears: {}", refusal)).render()
 }
 
 pub fn next_write_body(heading: &str) -> String {
@@ -1550,6 +1555,13 @@ pub fn body_under_unapproved_heading(rel: &str, heading: &str) -> String {
     )
 }
 
+pub fn bodies_under_unapproved_headings(rel: &str, count: usize) -> String {
+    refuse(
+        format!("{}: {} bodies under unapproved headings", rel, count),
+        Next::owner_runs(format!("adr approve {}", rel)),
+    )
+}
+
 // --- adrdom/blame/*.md (blame files) --------------------------------------
 // Shared by `blame::do_approve_blame`'s refusal collection (per "What does
 // a blame file hold?", "Does a blame file cover its whole origin?", "What
@@ -2205,6 +2217,7 @@ mod tests {
             topic_file_name_mismatch("adrdom/decisions/x.md", "Y", "y"),
             topic_unnameable("adrdom/decisions/rule.md", "Rule 2"),
             body_under_unapproved_heading("x.md", "heading"),
+            bodies_under_unapproved_headings("x.md", 3),
             bind_failed(7357, e),
             missing_answer_selection("id-1", "abcd1234"),
             blame_shape_error("adrdom/blame/x.md", "line 1: missing \"origin: <path>\""),

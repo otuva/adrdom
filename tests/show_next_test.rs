@@ -103,13 +103,7 @@ fn show_names_the_next_move_at_every_step() {
     let p = path.to_str().unwrap();
 
     // A plan that waits for its approval: nothing is written under it.
-    assert_eq!(
-        next(&dir),
-        vec![format!(
-            "agent runs adr check and clears what it names, owner runs: adr approve {}",
-            REL
-        )]
-    );
+    assert_eq!(next(&dir), vec![format!("owner runs: adr approve {}", REL)]);
 
     approve_record(&dir, REL);
     assert_eq!(next(&dir), vec![body_of(ONE), body_of(TWO), later(THREE)]);
@@ -188,6 +182,63 @@ fn show_names_the_next_move_at_every_step() {
             "agent changes the plan: \"{}\" is refused and holds the questions that come after it",
             THREE
         )]
+    );
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+// adr: 15d82e53-e344-4347-b639-3bf6eb9ef1b4
+//
+// A heading added to an approved file, beside four answered questions. The
+// refusal is the agent's next move: show prints it whole and names no
+// owner command, and check prints it ahead of one line for the file.
+#[test]
+fn show_prints_the_refusal_of_a_plan_as_the_next_move() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let mut plan = String::from("# Gate\n");
+    for n in ["one", "two", "three", "four"] {
+        plan.push_str(&format!("\n### Does the widget gate {} hold?\ndepends: widget\n", n));
+    }
+    let path = write_record(&dir, REL, &plan);
+    approve_record(&dir, REL);
+    for n in ["one", "two", "three", "four"] {
+        write_body(&path, &format!("Does the widget gate {} hold?", n));
+    }
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    for id in extract_ids(&std::fs::read_to_string(&path).unwrap()) {
+        assert!(adr_answer(&dir, &id, "A").status.success());
+        write_test_comment(&dir, &id);
+    }
+
+    let mut text = std::fs::read_to_string(&path).unwrap();
+    text.push_str("\n### Does the widget gate five hold?\ndepends: widget\n");
+    std::fs::write(&path, text).unwrap();
+
+    let refusal = format!(
+        "{}: 5 questions stand together, the most is 4: 4 answered, and \"Does the widget gate five hold?\"; \
+agent finds a question among the ones named that assumes the answer of another one and names that one on its depends line, \
+or moves it to another file when none does",
+        REL
+    );
+    assert_eq!(next(&dir), vec![format!("agent clears: {}", refusal)]);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let plan_lines: Vec<String> = stdout(&out)
+        .lines()
+        .filter(|l| l.starts_with("plan: ") && !l.contains("awaiting approval"))
+        .map(|l| l.to_string())
+        .collect();
+    assert_eq!(
+        plan_lines,
+        vec![
+            format!("plan: {}", refusal),
+            format!(
+                "plan: {}: 4 bodies under unapproved headings; owner runs: adr approve {}",
+                REL, REL
+            ),
+        ]
     );
 }
 

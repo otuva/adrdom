@@ -166,7 +166,10 @@ tier 2
   [refused] 2.2 Also depends?
     stands on: 1.1 Root?=A
 next
-  agent runs adr check and clears what it names, owner runs: adr approve adrdom/decisions/tiered.md
+  agent clears: adrdom/decisions/tiered.md: \"1.1 Root?\" has no depends line; agent writes what the question stands on
+  agent clears: adrdom/decisions/tiered.md: \"1.2 Unasked root?\" has no depends line; agent writes what the question stands on
+  agent clears: adrdom/decisions/tiered.md: \"1.3 Skeleton?\" has no depends line; agent writes what the question stands on
+  agent clears: adrdom/decisions/tiered.md: \"2.2 Also depends?\": answered; agent removes the edit
   owner runs: adr answer id-open@11024127 <letter> for \"2.1 Depends on root?\"
   agent changes the plan: \"2.2 Also depends?\" is refused and holds the questions that come after it
   not yet: \"1.1 Root?\" is answered and is built once \"1.2 Unasked root?\" is answered
@@ -334,7 +337,7 @@ fn show_prints_no_guess_for_an_ambiguous_cross_file_heading_dependency() {
     let b_block = shown[b_start..b_end].trim_end();
     assert_eq!(
         b_block,
-        "# Topic B\nnext\n  agent runs adr check and clears what it names in the plan",
+        "# Topic B\nnext\n  agent clears: adrdom/decisions/topic-b.md: \"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\" which is no heading in this file and no current decision; agent names a heading of this file or a current decision",
         "an ambiguous cross-file dependency must print no guessed tier or \"stands on\": {}",
         shown
     );

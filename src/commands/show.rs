@@ -91,7 +91,18 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
             &any_headings_all,
             &known_ids,
         );
-        let next = view::next_moves(rf, &led, plan_ok, &tests);
+        let plan_refusals: Vec<String> = crate::actions::record_refusals(
+            &rf.rel,
+            rf,
+            &terms_list,
+            &phrase_lookup,
+            &cross_file_headings,
+            &led,
+        )
+        .into_iter()
+        .map(|r| r.message)
+        .collect();
+        let next = view::next_moves(rf, &led, plan_ok, &plan_refusals, &tests);
         if !next.is_empty() {
             println!("next");
             for line in next {
