@@ -72,11 +72,14 @@ fn build(
     let ledger_content = source.read(root, ledger_rel).unwrap_or_default();
     let led = crate::ledger::parse(&ledger_content);
 
+    // A topic file that cannot be read is a failure: nothing in it is
+    // judged, and a pass would let it through with its decisions unread.
     let (mut records, unreadable) = record::load_all_via(root, &source);
-    let mut notes: Vec<String> = unreadable
+    let unreadable_failures: Vec<String> = unreadable
         .into_iter()
-        .map(|(f, e)| msg::topic_file_unreadable(&f.display().to_string(), e))
+        .map(|(f, e)| msg::topic_file_unreadable(&state::rel_path(root, &f), e))
         .collect();
+    let mut notes: Vec<String> = Vec::new();
 
     // Terms minted in memory: a terms file that has never been
     // approved carries no ids on disk yet, and `phrase_lookup` only
@@ -138,7 +141,7 @@ fn build(
         .collect();
     let missing_answered = actions::missing_answered_refusals(&records, &led);
 
-    let mut failures: Vec<String> = Vec::new();
+    let mut failures: Vec<String> = unreadable_failures;
     push_failures(&mut failures, parse::check_parse(&per_record_refusals));
     push_failures(&mut failures, ids::check_ids(&records, &led, &missing_answered, &raw_hashes));
     push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_content, since));

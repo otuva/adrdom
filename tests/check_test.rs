@@ -2376,3 +2376,28 @@ fn check_fails_a_test_tied_to_a_refused_decision() {
         stdout(&out)
     );
 }
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// A topic file the tool cannot read as text is judged by nothing. check
+// fails on it and names the move; a pass would let the file into a commit
+// with its questions unread.
+#[test]
+fn check_fails_a_topic_file_it_cannot_read() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_empty_terms(&dir);
+    std::fs::create_dir_all(dir.join("adrdom/decisions")).unwrap();
+    std::fs::write(dir.join("adrdom/decisions/broken.md"), [0x23u8, 0x20, 0xff, 0xfe, 0x0a]).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success(), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains(
+            "parse: adrdom/decisions/broken.md: cannot be read: it holds no text the tool can read; \
+agent fixes the file so it can be read as text (e.g. its encoding)"
+        ),
+        "{}",
+        stdout(&out)
+    );
+}

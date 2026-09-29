@@ -2089,8 +2089,12 @@ pub fn terms_unpaired(count: usize, list: &str) -> String {
     format!("terms: {} terms paired by nothing: {}", count, list)
 }
 
+/// A failure of `check`, with its category in front as every failure has.
 pub fn topic_file_unreadable(path: &str, e: impl Display) -> String {
-    format!("parse: {}: cannot read: {}", path, e)
+    refuse(
+        format!("parse: {}: cannot be read: {}", path, e),
+        Next::agent("fixes the file so it can be read as text (e.g. its encoding)"),
+    )
 }
 
 pub fn terms_ids_filled(n: usize) -> String {

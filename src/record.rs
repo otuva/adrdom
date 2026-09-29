@@ -265,7 +265,7 @@ pub fn load_all_via(root: &Path, source: &crate::repo::Source) -> (Vec<RecordFil
         let rel = crate::state::rel_path(root, &f);
         match source.read(root, &rel) {
             Some(content) => records.push(build(f, rel, split_lines(&content))),
-            None => errors.push((f, "not found".to_string())),
+            None => errors.push((f, "it holds no text the tool can read".to_string())),
         }
     }
     (records, errors)
