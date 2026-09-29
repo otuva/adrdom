@@ -398,13 +398,24 @@ pub fn bad_option_letter(rel: &str, dependent: &str, target: &str, letter: char)
     )
 }
 
-pub fn tier_cap_exceeded(rel: &str, tier: usize, count: usize, cap: usize) -> String {
+/// `headings` are the questions the tool would ask together, in file order.
+pub fn tier_cap_exceeded(rel: &str, headings: &[String], cap: usize) -> String {
+    let names = headings
+        .iter()
+        .map(|h| format!("\"{}\"", h))
+        .collect::<Vec<_>>()
+        .join(", ");
     refuse(
         format!(
-            "{}: tier {} holds {} questions, the cap is {}",
-            rel, tier, count, cap
+            "{}: {} questions would be put to the owner together, the most is {}: {}",
+            rel,
+            headings.len(),
+            cap,
+            names
         ),
-        Next::agent("moves questions under a higher heading or splits the topic"),
+        Next::agent(
+            "finds a question among these that assumes the answer of another one and names that one on its depends line, or splits the file when none does",
+        ),
     )
 }
 
@@ -417,7 +428,7 @@ use crate::record::DeriveError;
 fn derive_what(rel: &str, e: &DeriveError) -> String {
     match e {
         DeriveError::Dangling { section, entry } => format!(
-            "{}: \"{}\" depends on \"{}\" which is no heading in this file",
+            "{}: \"{}\" depends on \"{}\" which is no heading in this file and no current decision",
             rel, section, entry
         ),
         DeriveError::Cycle(names) => {
@@ -444,7 +455,9 @@ fn derive_what(rel: &str, e: &DeriveError) -> String {
 
 fn derive_next(e: &DeriveError) -> Next {
     match e {
-        DeriveError::Dangling { .. } => Next::agent("adds the heading or fixes the text"),
+        DeriveError::Dangling { .. } => {
+            Next::agent("names a heading of this file or a current decision")
+        }
         DeriveError::Cycle(_) => Next::agent("breaks it"),
         DeriveError::SelfDep(_) => Next::agent("removes the line or names something else"),
         DeriveError::AmbiguousHeading { .. } => ambiguous_heading_next(),
@@ -2007,7 +2020,7 @@ mod tests {
             dep_not_current_decision("x.md", "heading", "id-1"),
             dep_no_term("x.md", "heading", "widget"),
             bad_option_letter("x.md", "dependent", "target", 'Z'),
-            tier_cap_exceeded("x.md", 1, 5, 4),
+            tier_cap_exceeded("x.md", &["heading".to_string()], 4),
             derive_error("x.md", &DeriveError::SelfDep("heading".to_string())),
             derive_error_ask("x.md", &DeriveError::SelfDep("heading".to_string())),
             answered_id_missing("id-1", "heading"),

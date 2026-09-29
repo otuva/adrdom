@@ -314,7 +314,7 @@ fn check_fails_a_dangling_depends_entry() {
     let text = stdout(&out);
     assert!(
         text.contains(
-            "plan: adrdom/decisions/example.md: \"1.1 Q?\" depends on \"2.2 Missing?\" which is no heading in this file; agent adds the heading or fixes the text"
+            "plan: adrdom/decisions/example.md: \"1.1 Q?\" depends on \"2.2 Missing?\" which is no heading in this file and no current decision; agent names a heading of this file or a current decision"
         ),
         "{}",
         text
@@ -471,7 +471,7 @@ fn check_fails_a_tier_over_the_cap() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains("plan: adrdom/decisions/cap.md: tier 1 holds 5 questions, the cap is 4"),
+        text.contains("plan: adrdom/decisions/cap.md: 5 questions would be put to the owner together, the most is 4"),
         "{}",
         text
     );

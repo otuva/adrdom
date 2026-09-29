@@ -257,9 +257,9 @@ Standard: plain words.
 //
 // core: "four questions per tier, a value set in the tool; approve and ask
 // stop a plan with a tier over four". Five root questions (one tier) is one
-// past TIER_CAP: `approve` refuses naming the exact cap ("tier 1 holds 5
-// questions, the cap is 4"), and since the file was never approved, `ask`
-// independently refuses it too ("plan not approved") -- neither command
+// past TIER_CAP: `approve` refuses naming the exact cap ("5 questions would
+// be put to the owner together, the most is 4"), and since the file was
+// never approved, `ask` independently refuses it too ("plan not approved") -- neither command
 // lets the over-cap plan through, and neither writes to the file on
 // refusal.
 #[test]
@@ -287,7 +287,7 @@ fn ask_refuses_a_tier_over_the_cap() {
     );
     assert!(!approve_out.status.success());
     assert!(
-        stderr(&approve_out).contains("tier 1 holds 5 questions, the cap is 4"),
+        stderr(&approve_out).contains("5 questions would be put to the owner together, the most is 4"),
         "{}",
         stderr(&approve_out)
     );

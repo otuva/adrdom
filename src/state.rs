@@ -327,6 +327,22 @@ pub fn live_tiers(led: &Ledger, rf: &RecordFile, tiers: &[usize]) -> Vec<usize> 
         .collect()
 }
 
+/// The headings of the live questions in the first tier over the cap, in
+/// file order; `None` when no tier is over it. What the cap refusal names
+/// (per "Does a refusal name the command that clears it?"), read by
+/// `approve` and `check` through `record_refusals` and by `ask`.
+pub fn over_cap_headings(led: &Ledger, rf: &RecordFile, tiers: &[usize]) -> Option<Vec<String>> {
+    let (tier, _) = crate::record::over_cap(&live_tiers(led, rf, tiers))?;
+    Some(
+        rf.sections
+            .iter()
+            .zip(tiers)
+            .filter(|(sec, &t)| t == tier && !is_dead(led, sec))
+            .map(|(sec, _)| sec.heading_text.clone())
+            .collect(),
+    )
+}
+
 /// `done` (per "Does a topic file close?"): a file is done once its plan
 /// and context are approved and every section carries a letter answer.
 /// `plan_ok`/`ctx_ok` are supplied by the caller (`check`'s `file_approval`
