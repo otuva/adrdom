@@ -183,7 +183,7 @@ pub fn run(claude: bool, codex: bool) -> i32 {
         }
     }
 
-    println!("adrdom installed at {}", root.display());
+    println!("{}", msg::installed_at(root.display()));
     for m in &messages {
         println!("{}", m);
     }

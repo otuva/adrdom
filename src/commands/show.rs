@@ -104,9 +104,9 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
         .collect();
         let next = view::next_moves(rf, &led, plan_ok, &plan_refusals, &tests);
         if !next.is_empty() {
-            println!("next");
+            println!("{}", msg::show_next());
             for line in next {
-                println!("  {}", line);
+                println!("{}", msg::show_next_line(&line));
             }
         }
     }
@@ -120,7 +120,7 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
         print_blame_file(bf, &led, &blame_records, &any_headings_all, &known_ids);
     }
     for (rel, e) in &unreadable_blame_files {
-        println!("# blame: {} (cannot be read: {})", rel, e);
+        println!("{}", msg::show_blame_unreadable(rel, e));
     }
     0
 }
@@ -139,7 +139,7 @@ fn print_file(
     any_headings_all: &HashMap<String, Vec<(String, String)>>,
     known_ids: &HashSet<String>,
 ) {
-    println!("# {}", rf.topic.as_deref().unwrap_or(""));
+    println!("{}", msg::show_topic(rf.topic.as_deref().unwrap_or("")));
 
     let Some(tiers) = &rf.tiers else {
         return;
@@ -150,7 +150,7 @@ fn print_file(
         if idxs.is_empty() {
             continue;
         }
-        println!("tier {}", t);
+        println!("{}", msg::show_tier(t));
         for &i in &idxs {
             print_question(
                 rf,
@@ -182,28 +182,22 @@ fn print_question(
     // read?": an asked (`Open`), unanswered question also prints the
     // version `answer` and the page's POST both check against -- the
     // owner's next move is `adr answer <id>@<version> <letter>`.
-    if state == QState::Open {
-        let version = record::version_of(&rf.lines, sec);
-        println!(
-            "  [{} @{}] {}",
-            state_label(state, sec),
-            version,
-            sec.heading_text
-        );
-    } else {
-        println!("  [{}] {}", state_label(state, sec), sec.heading_text);
-    }
+    let version = (state == QState::Open).then(|| record::version_of(&rf.lines, sec));
+    println!(
+        "{}",
+        msg::show_question(&state_label(state, sec), version.as_deref(), &sec.heading_text)
+    );
     if !sec.depends.is_empty() {
         let entries: Vec<String> = sec
             .depends
             .iter()
             .map(|d| view::format_dep(d, rf, terms_list, all_headings))
             .collect();
-        println!("    stands on: {}", entries.join(", "));
+        println!("{}", msg::show_stands_on(&entries));
     }
     if state == QState::Answered {
         if let Some(s) = sec.chosen_sentence() {
-            println!("    {}", s);
+            println!("{}", msg::show_chosen(&s));
         }
     }
     // Per "Does show print a blame file?", 7b05f8df A: "under each
@@ -212,7 +206,7 @@ fn print_question(
     // by any row at all.
     if let Some(id) = &sec.id {
         for (origin, n) in blame::origins_for_decision(blame_files, any_headings_all, known_ids, id) {
-            println!("    from: {} ({} {})", origin, n, if n == 1 { "row" } else { "rows" });
+            println!("{}", msg::show_from(&origin, n));
         }
     }
 }
@@ -230,28 +224,27 @@ fn print_blame_file(
     any_headings: &HashMap<String, Vec<(String, String)>>,
     known_ids: &HashSet<String>,
 ) {
-    println!("# blame: {}", bf.rel);
+    println!("{}", msg::show_blame(&bf.rel));
     // A shape-broken blame file is still printed (7b05f8df A: "each blame
     // file"): its shape errors first, then whatever parsed. `check` is
     // where the shape error is refused.
     for e in &bf.shape_errors {
-        println!("  shape: {}", e);
+        println!("{}", msg::show_blame_shape(e));
     }
     let Some(origin) = &bf.origin else {
         return;
     };
     let content = record::join_lines(&bf.lines);
-    let status = if state::blame_approved(led, &bf.rel, &content) {
-        "approved"
-    } else {
-        "awaiting approval"
-    };
-    println!("  origin: {} ({})", origin, status);
+    let approved = state::blame_approved(led, &bf.rel, &content);
+    println!("{}", msg::show_blame_origin(origin, approved));
 
     let counts = blame::counts_by_kind(&bf.rows);
     if !counts.is_empty() {
-        let line: Vec<String> = counts.iter().map(|(k, n)| format!("{} {}", k.label(), n)).collect();
-        println!("  {}", line.join(", "));
+        let line: Vec<String> = counts
+            .iter()
+            .map(|(k, n)| msg::show_blame_count(k.label(), *n))
+            .collect();
+        println!("{}", msg::show_blame_counts(&line));
     }
 
     for row in &bf.rows {
@@ -262,13 +255,13 @@ fn print_blame_file(
         };
         if let Some(value) = blame::decision_target(&row.dest) {
             let (heading, qstate_word) = heading_and_state(value, records, led, &any_headings, &known_ids);
-            println!("  {}\tdecision: {} [{}]", range, heading, qstate_word);
+            println!("{}", msg::show_blame_decision(&range, &heading, &qstate_word));
         } else if let Some(reason) = classify_dropped(&row.dest, records, led, &any_headings, &known_ids) {
-            println!("  {}\tdropped: {}", range, reason);
+            println!("{}", msg::show_blame_dropped(&range, &reason));
         } else {
             // A term/prose row: print as written -- no id to turn back
             // into a name for either kind.
-            println!("  {}\t{}", range, row.dest.trim());
+            println!("{}", msg::show_blame_row(&range, row.dest.trim()));
         }
     }
 }
@@ -326,24 +319,13 @@ fn classify_dropped(
     let target = blame::copy_target(t)?;
     if record::is_uuid(target) || target.trim_end().ends_with('?') {
         let (heading, word) = heading_and_state(target, records, led, any_headings, known_ids);
-        return Some(format!("copy of {} [{}]", heading, word));
+        return Some(msg::show_blame_copy_of(&heading, Some(&word)));
     }
-    Some(format!("copy of {}", blame::render_copy_target(target, records)))
+    Some(msg::show_blame_copy_of(&blame::render_copy_target(target, records), None))
 }
 
 /// The state word `show` prints inside `[...]`: `answered` also carries
 /// the chosen letter (`answered A`), every other state is the bare word.
 fn state_label(state: QState, sec: &Section) -> String {
-    match state {
-        QState::Skeleton => "skeleton".to_string(),
-        QState::Unasked => "unasked".to_string(),
-        QState::Open => "open".to_string(),
-        QState::Answered => match sec.answer_letter() {
-            Some(c) => format!("answered {}", c),
-            None => "answered".to_string(),
-        },
-        QState::Refused => "refused".to_string(),
-        QState::Superseded => "superseded".to_string(),
-        QState::Withdrawn => "withdrawn".to_string(),
-    }
+    msg::show_state(state, sec.answer_letter())
 }

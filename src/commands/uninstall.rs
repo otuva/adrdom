@@ -64,7 +64,7 @@ pub fn run() -> i32 {
 
     messages.extend(remove_codex_rules(&root));
 
-    println!("adrdom uninstalled at {}", root.display());
+    println!("{}", msg::uninstalled_at(root.display()));
     for m in &messages {
         println!("{}", m);
     }

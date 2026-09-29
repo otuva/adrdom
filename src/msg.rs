@@ -917,6 +917,142 @@ pub fn next_later(headings: &[String]) -> String {
     format!("not yet, after the questions named above: {}", quoted(headings))
 }
 
+// --- show: the lines of its listing ----------------------------------------
+// Labels and layout, no refusal among them: a note carries no `Next`.
+
+use crate::view::QState;
+
+pub fn show_topic(topic: &str) -> String {
+    format!("# {}", topic)
+}
+
+pub fn show_tier(tier: usize) -> String {
+    format!("tier {}", tier)
+}
+
+/// The state word `show` prints inside `[...]`: `answered` also carries
+/// the chosen letter (`answered A`), every other state is the bare word.
+pub fn show_state(state: QState, letter: Option<char>) -> String {
+    match state {
+        QState::Skeleton => "skeleton".to_string(),
+        QState::Unasked => "unasked".to_string(),
+        QState::Open => "open".to_string(),
+        QState::Answered => match letter {
+            Some(c) => format!("answered {}", c),
+            None => "answered".to_string(),
+        },
+        QState::Refused => "refused".to_string(),
+        QState::Superseded => "superseded".to_string(),
+        QState::Withdrawn => "withdrawn".to_string(),
+    }
+}
+
+/// `version` is given for an asked, unanswered question: what the owner
+/// puts after the `@` of `adr answer`.
+pub fn show_question(state: &str, version: Option<&str>, heading: &str) -> String {
+    match version {
+        Some(v) => format!("  [{} @{}] {}", state, v, heading),
+        None => format!("  [{}] {}", state, heading),
+    }
+}
+
+pub fn show_stands_on(entries: &[String]) -> String {
+    format!("    stands on: {}", entries.join(", "))
+}
+
+pub fn show_chosen(sentence: &str) -> String {
+    format!("    {}", sentence)
+}
+
+pub fn show_from(origin: &str, rows: usize) -> String {
+    format!(
+        "    from: {} ({} {})",
+        origin,
+        rows,
+        if rows == 1 { "row" } else { "rows" }
+    )
+}
+
+pub fn show_next() -> String {
+    "next".to_string()
+}
+
+pub fn show_next_line(line: &str) -> String {
+    format!("  {}", line)
+}
+
+pub fn show_blame(rel: &str) -> String {
+    format!("# blame: {}", rel)
+}
+
+pub fn show_blame_unreadable(rel: &str, e: impl Display) -> String {
+    format!("# blame: {} (cannot be read: {})", rel, e)
+}
+
+pub fn show_blame_shape(e: &str) -> String {
+    format!("  shape: {}", e)
+}
+
+pub fn show_blame_origin(origin: &str, approved: bool) -> String {
+    let status = if approved { "approved" } else { "awaiting approval" };
+    format!("  origin: {} ({})", origin, status)
+}
+
+pub fn show_blame_counts(counts: &[String]) -> String {
+    format!("  {}", counts.join(", "))
+}
+
+pub fn show_blame_count(kind: &str, rows: usize) -> String {
+    format!("{} {}", kind, rows)
+}
+
+pub fn show_blame_decision(range: &str, heading: &str, state: &str) -> String {
+    format!("  {}\tdecision: {} [{}]", range, heading, state)
+}
+
+pub fn show_blame_dropped(range: &str, reason: &str) -> String {
+    format!("  {}\tdropped: {}", range, reason)
+}
+
+pub fn show_blame_row(range: &str, dest: &str) -> String {
+    format!("  {}\t{}", range, dest)
+}
+
+pub fn show_blame_copy_of(target: &str, state: Option<&str>) -> String {
+    match state {
+        Some(s) => format!("copy of {} [{}]", target, s),
+        None => format!("copy of {}", target),
+    }
+}
+
+// --- ask: the lines of its summary ------------------------------------------
+
+pub fn ask_asked(heading: &str, tier: usize) -> String {
+    format!("asked: \"{}\" (tier {})", heading, tier)
+}
+
+pub fn ask_reasked(heading: &str, tier: usize) -> String {
+    format!("re-asked: \"{}\" (tier {})", heading, tier)
+}
+
+pub fn ask_conflict(heading: &str, a: &str, b: &str) -> String {
+    format!("conflict: \"{}\" answered {} and {}, both stood", heading, a, b)
+}
+
+pub fn ask_assumes(dependent: &str, set: &str) -> String {
+    format!("  assumes: \"{}\"={}", dependent, set)
+}
+
+// --- install / uninstall: the closing line ---------------------------------
+
+pub fn installed_at(root: impl Display) -> String {
+    format!("adrdom installed at {}", root)
+}
+
+pub fn uninstalled_at(root: impl Display) -> String {
+    format!("adrdom uninstalled at {}", root)
+}
+
 // --- answer.rs / ban.rs / unban.rs / install.rs / uninstall.rs -------------
 
 pub fn invalid_letter(letter: &str) -> String {
