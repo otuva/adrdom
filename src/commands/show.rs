@@ -139,7 +139,7 @@ fn print_file(
     any_headings_all: &HashMap<String, Vec<(String, String)>>,
     known_ids: &HashSet<String>,
 ) {
-    println!("{}", msg::show_topic(rf.topic.as_deref().unwrap_or("")));
+    println!("{}", msg::show_topic(rf.topic.as_deref().unwrap_or(""), &rf.rel));
 
     let Some(tiers) = &rf.tiers else {
         return;

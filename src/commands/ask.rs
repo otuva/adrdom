@@ -314,7 +314,16 @@ pub fn run(record_path: PathBuf) -> i32 {
         // already stale before it was ever asked.
         for old in &sec.supersedes {
             if !state::is_current(&led, old) {
-                eprintln!("ask: {}", msg::ask_supersedes_not_current(&rel, &sec.heading_text, old));
+                let names = crate::view::all_heading_texts(&root);
+                eprintln!(
+                    "ask: {}",
+                    msg::ask_supersedes_not_current(
+                        &rel,
+                        &sec.heading_text,
+                        old,
+                        names.get(old).map(String::as_str)
+                    )
+                );
                 return 1;
             }
         }

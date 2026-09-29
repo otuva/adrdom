@@ -277,7 +277,8 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
                 _ => false,
             };
             if !target_ok {
-                return Err(msg::supersedes_not_current(old));
+                let names = crate::view::all_heading_texts(root);
+                return Err(msg::supersedes_not_current(old, names.get(old).map(String::as_str)));
             }
         }
     }
@@ -957,9 +958,23 @@ pub fn record_refusals(
             if let Err(e) =
                 depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, cross_file_headings, led)
             {
+                // What the identifier names, for the refusal only: a term
+                // (a retired one too), else the heading of a question in
+                // any state, read off the topic files.
+                let name = match &e {
+                    depends::DepError::NotCurrentDecision(id) => terms_list
+                        .iter()
+                        .find(|t| t.id.as_deref() == Some(id.as_str()))
+                        .map(|t| t.name.clone())
+                        .or_else(|| {
+                            repo::find_root()
+                                .and_then(|root| crate::view::all_heading_texts(&root).remove(id))
+                        }),
+                    _ => None,
+                };
                 out.push(Refusal {
                     category: "plan",
-                    message: depends::dep_refusal_text(rel, &sec.heading_text, &e),
+                    message: depends::dep_refusal_text(rel, &sec.heading_text, &e, name.as_deref()),
                 });
             }
         }

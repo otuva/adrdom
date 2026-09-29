@@ -65,7 +65,7 @@ fn show_lists_every_question_with_its_state_and_tier() {
     assert!(out.status.success(), "stderr: {}", stderr(&out));
     let shown = stdout(&out);
 
-    assert!(shown.starts_with("# Example\n"), "{}", shown);
+    assert!(shown.starts_with("# Example (adrdom/decisions/example.md)\n"), "{}", shown);
     assert!(shown.contains("tier 1\n"), "{}", shown);
     assert!(shown.contains("[answered A] 1.1 Is this current?"), "{}", shown);
     assert!(shown.contains("Yes it is current."), "{}", shown);
@@ -156,7 +156,7 @@ fn show_prints_tiers_states_stands_on_and_chosen_sentence() {
     // "id-open"'s version is the current section hash's own prefix (per
     // "Does an answer carry the version of the question the owner read?").
     let expected = "\
-# Tiered Topic
+# Tiered Topic (adrdom/decisions/tiered.md)
 tier 1
   [answered A] 1.1 Root?
     First choice.
@@ -339,7 +339,7 @@ fn show_prints_no_guess_for_an_ambiguous_cross_file_heading_dependency() {
     let b_block = shown[b_start..b_end].trim_end();
     assert_eq!(
         b_block,
-        "# Topic B\nnext\n  agent clears: adrdom/decisions/topic-b.md: \"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\" which is no heading in this file and no current decision; agent names a heading of this file or a current decision",
+        "# Topic B (adrdom/decisions/topic-b.md)\nnext\n  agent clears: adrdom/decisions/topic-b.md: \"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\" which is no heading in this file and no current decision; agent names a heading of this file or a current decision",
         "an ambiguous cross-file dependency must print no guessed tier or \"stands on\": {}",
         shown
     );

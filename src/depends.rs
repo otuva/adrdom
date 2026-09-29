@@ -152,9 +152,13 @@ pub fn resolve_dep(
 /// `rf.derive_error` (via `normalize_cross_file_deps`) instead, skipping it
 /// before ever calling `resolve_dep` for the purpose of a per-entry
 /// message.
-pub fn dep_refusal_text(rel: &str, heading: &str, err: &DepError) -> String {
+///
+/// `name` is what the identifier of a `NotCurrentDecision` names, when the
+/// caller can tell: a term's name, or the heading of a question in any
+/// state.
+pub fn dep_refusal_text(rel: &str, heading: &str, err: &DepError, name: Option<&str>) -> String {
     match err {
-        DepError::NotCurrentDecision(id) => msg::dep_not_current_decision(rel, heading, id),
+        DepError::NotCurrentDecision(id) => msg::dep_not_current_decision(rel, heading, id, name),
         DepError::NoTerm(text) => msg::dep_no_term(rel, heading, text),
         DepError::AmbiguousHeading { .. } => {
             unreachable!("a heading-shaped entry never reaches dep_refusal_text; see the doc comment above")

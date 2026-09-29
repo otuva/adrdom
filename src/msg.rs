@@ -338,11 +338,14 @@ pub fn frozen_depends_edited(rel: &str, heading: &str) -> String {
     )
 }
 
-pub fn dep_not_current_decision(rel: &str, heading: &str, id: &str) -> String {
+pub fn dep_not_current_decision(rel: &str, heading: &str, id: &str, name: Option<&str>) -> String {
     refuse(
         format!(
-            "{}: \"{}\" depends on {} which is not a current decision",
-            rel, heading, id
+            "{}: \"{}\" depends on {} which is not a current decision{}",
+            rel,
+            heading,
+            id,
+            named(name)
         ),
         Next::agent("names a current decision or removes the line"),
     )
@@ -626,9 +629,19 @@ pub fn refused_summary(heading: &str, rel: &str) -> String {
     )
 }
 
-pub fn supersedes_not_current(id: &str) -> String {
+/// `, "<name>"` after an identifier the tool can put a name to (a heading,
+/// a term), nothing when it cannot: the reader is never left with an
+/// identifier alone where the tool holds the name.
+fn named(name: Option<&str>) -> String {
+    match name {
+        Some(n) => format!(", \"{}\"", n),
+        None => String::new(),
+    }
+}
+
+pub fn supersedes_not_current(id: &str, name: Option<&str>) -> String {
     refuse(
-        format!("supersedes target {} is not a current decision", id),
+        format!("supersedes target {} is not a current decision{}", id, named(name)),
         Next::agent("fixes the supersedes line"),
     )
 }
@@ -683,11 +696,14 @@ pub fn depends_on_refused(rel: &str, heading: &str, target: &str) -> String {
     )
 }
 
-pub fn ask_supersedes_not_current(rel: &str, heading: &str, old: &str) -> String {
+pub fn ask_supersedes_not_current(rel: &str, heading: &str, old: &str, name: Option<&str>) -> String {
     refuse(
         format!(
-            "{}: \"{}\": supersedes {}, which is not a current decision",
-            rel, heading, old
+            "{}: \"{}\": supersedes {}, which is not a current decision{}",
+            rel,
+            heading,
+            old,
+            named(name)
         ),
         Next::agent("fixes the supersedes line"),
     )
@@ -922,8 +938,8 @@ pub fn next_later(headings: &[String]) -> String {
 
 use crate::view::QState;
 
-pub fn show_topic(topic: &str) -> String {
-    format!("# {}", topic)
+pub fn show_topic(topic: &str, rel: &str) -> String {
+    format!("# {} ({})", topic, rel)
 }
 
 pub fn show_tier(tier: usize) -> String {
@@ -1622,9 +1638,9 @@ pub fn ledger_same_time_competition(time: &str, subject: &str) -> String {
     )
 }
 
-pub fn untested(id: &str) -> String {
+pub fn untested(id: &str, heading: Option<&str>) -> String {
     refuse(
-        format!("{}: untested", id),
+        format!("{}: untested{}", id, named(heading)),
         Next::agent(format!(
             "writes a test that shows the code follows this decision and puts \"adr: {}\" in it",
             id
@@ -1632,9 +1648,15 @@ pub fn untested(id: &str) -> String {
     )
 }
 
-pub fn stale_test(id: &str) -> String {
+/// `locations` are the `path:line` places the tag was found at.
+pub fn stale_test(id: &str, heading: Option<&str>, locations: &[String]) -> String {
+    let at = if locations.is_empty() {
+        String::new()
+    } else {
+        format!(" at {}", locations.join(", "))
+    };
     refuse(
-        format!("{}: stale (not a current decision)", id),
+        format!("{}: stale (not a current decision){}{}", id, named(heading), at),
         Next::agent(format!("removes the stale \"adr: {}\" tag from the test", id)),
     )
 }
@@ -2288,7 +2310,7 @@ mod tests {
             term_definition_term_retired("term", "retired-term"),
             term_definition_terms_line_malformed("term"),
             frozen_depends_edited("x.md", "heading"),
-            dep_not_current_decision("x.md", "heading", "id-1"),
+            dep_not_current_decision("x.md", "heading", "id-1", Some("name")),
             dep_no_term("x.md", "heading", "widget"),
             bad_option_letter("x.md", "dependent", "target", 'Z'),
             tier_cap_exceeded("x.md", &["heading".to_string()], 0, 4),
@@ -2308,14 +2330,14 @@ mod tests {
             malformed_terms_line("id-1"),
             terms_line_names_gone_term("id-1", "uuid-1"),
             terms_line_names_retired_term("id-1", "term"),
-            supersedes_not_current("id-1"),
+            supersedes_not_current("id-1", None),
             edited_after_answered("x.md", "heading"),
             edited_after_refused("x.md", "heading"),
             plan_not_approved("x.md"),
             context_not_approved("x.md"),
             missing_answer_set("x.md", "dependent", "target"),
             depends_on_refused("x.md", "heading", "target"),
-            ask_supersedes_not_current("x.md", "heading", "id-1"),
+            ask_supersedes_not_current("x.md", "heading", "id-1", Some("name")),
             tier_blocked_refused("x.md", "heading", 2, 1, "blocker"),
             tier_blocked_waiting("x.md", "heading", 2, 1, "blocker", "id-1", "abcd1234"),
             tier_blocked_unasked("x.md", "heading", 2, 1, "blocker"),
@@ -2373,8 +2395,8 @@ mod tests {
             ledger_since_drops_rows("abc123"),
             ledger_since_unreadable("abc123"),
             ledger_same_time_competition("2024-01-01T00:00:00Z", "id id-1"),
-            untested("id-1"),
-            stale_test("id-1"),
+            untested("id-1", Some("heading")),
+            stale_test("id-1", None, &["x.rs:3".to_string()]),
             duplicate_heading_in_file("heading", "x.md"),
             duplicate_heading_across_files("heading", "x.md", "y.md"),
             bad_topic_file_name("adrdom/decisions/Bad_Name.md"),

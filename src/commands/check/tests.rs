@@ -70,22 +70,32 @@ pub(super) fn check_tests(
 
     let mut tested_count = 0;
 
+    // The heading a question carries, whatever its state: a line that
+    // names an identifier names the question beside it.
+    let heading_of = |id: &str| {
+        records
+            .iter()
+            .flat_map(|rf| rf.sections.iter())
+            .find(|s| s.id.as_deref() == Some(id))
+            .map(|s| s.heading_text.as_str())
+    };
+
     for id in &current {
         if test_ids.contains_key(id) {
             tested_count += 1;
         } else {
             out.push(Failure {
                 check: "tested".to_string(),
-                message: msg::untested(id),
+                message: msg::untested(id, heading_of(id)),
             });
         }
     }
 
-    for id in test_ids.keys() {
+    for (id, locations) in test_ids {
         if !current.contains(id) {
             out.push(Failure {
                 check: "tested".to_string(),
-                message: msg::stale_test(id),
+                message: msg::stale_test(id, heading_of(id), locations),
             });
         }
     }

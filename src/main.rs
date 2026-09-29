@@ -69,7 +69,32 @@ enum Command {
     },
 }
 
+/// The exit code of a command whose reader went away, as a shell reports a
+/// process ended by a closed pipe (128 + 13).
+const READER_GONE: i32 = 141;
+
+/// `adr show | head` closes the pipe while the tool still prints, and a
+/// print to a closed pipe panics. That is no fault of the tool: the process
+/// ends without a word, with `READER_GONE`, so a pipeline that watches exit
+/// codes never reads it as a pass. Every other panic is printed as before.
+fn end_quietly_when_the_reader_is_gone() {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let payload = info.payload();
+        let text = payload
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .or_else(|| payload.downcast_ref::<&str>().copied())
+            .unwrap_or("");
+        if text.starts_with("failed printing to std") {
+            std::process::exit(READER_GONE);
+        }
+        default_hook(info);
+    }));
+}
+
 fn main() {
+    end_quietly_when_the_reader_is_gone();
     let shown: &'static str = Box::leak(
         adr::msg::version_shown(VERSION, cfg!(feature = "owner-bypass")).into_boxed_str(),
     );

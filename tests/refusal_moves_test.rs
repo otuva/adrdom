@@ -195,3 +195,129 @@ or moves it to another file when none does",
     assert!(!out.status.success());
     assert!(stderr(&out).contains(&refusal), "{}", stderr(&out));
 }
+
+/// Writes `content` to `rel`, approves it, asks it and answers the question
+/// at `index` with A. Returns that question's id.
+fn answered(dir: &std::path::Path, rel: &str, content: &str, index: usize) -> String {
+    let path = write_record(dir, rel, content);
+    approve_record(dir, rel);
+    let out = adr(dir, &["ask", path.to_str().unwrap()], &[], "");
+    assert!(out.status.success(), "ask {} failed: {}", rel, stderr(&out));
+    let id = extract_ids(&std::fs::read_to_string(&path).unwrap())[index].clone();
+    let out = adr_answer(dir, &id, "A");
+    assert!(out.status.success(), "answer {} failed: {}", rel, stderr(&out));
+    id
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// A line that names an identifier names the question beside it, and a
+// stale tag is named with the file and line it sits at: the tool holds
+// both, the reader does not look them up.
+#[test]
+fn a_refusal_names_the_question_beside_its_identifier() {
+    let dir = setup();
+    const ALPHA: &str = "Does the widget alpha hold?";
+    const BETA: &str = "Does the widget beta hold?";
+    const GAMMA: &str = "Does the widget gamma hold?";
+    let alpha = answered(&dir, A, &format!("# A\n\n{}", question(ALPHA, "widget", "")), 0);
+
+    // Answered, no test tied to it.
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(
+        stdout(&out).contains(&format!("tested: {}: untested, \"{}\"; agent writes", alpha, ALPHA)),
+        "{}",
+        stdout(&out)
+    );
+
+    // Beta stands on alpha; then gamma takes alpha's place.
+    write_test_comment(&dir, &alpha);
+    let beta = answered(
+        &dir,
+        B,
+        &format!("# B\n\n{}", question(BETA, &format!("widget, {}", ALPHA), "")),
+        0,
+    );
+    write_test_comment(&dir, &beta);
+    let mut a = std::fs::read_to_string(dir.join(A)).unwrap();
+    a.push_str(&format!(
+        "\n{}",
+        question(GAMMA, "widget", &format!("supersedes: {}\n", alpha))
+    ));
+    let gamma = answered(&dir, A, &a, 1);
+    write_test_comment(&dir, &gamma);
+
+    let out = adr(&dir, &["check"], &[], "");
+    let text = stdout(&out);
+    assert!(
+        text.contains(&format!(
+            "plan: {}: \"{}\" depends on {} which is not a current decision, \"{}\"; agent",
+            B, BETA, alpha, ALPHA
+        )),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains(&format!(
+            "tested: {}: stale (not a current decision), \"{}\" at tested.txt:1; agent removes",
+            alpha, ALPHA
+        )),
+        "{}",
+        text
+    );
+
+    // A question that names alpha on its supersedes line after alpha left.
+    let mut a = std::fs::read_to_string(dir.join(A)).unwrap();
+    a.push_str("\n### Does the widget delta hold?\ndepends: widget\n");
+    std::fs::write(dir.join(A), &a).unwrap();
+    approve_record(&dir, A);
+    let a = std::fs::read_to_string(dir.join(A)).unwrap();
+    let delta = extract_ids(&a)[2].clone();
+    let id_line = format!("id: {}\n", delta);
+    let body = question("x", "x", "");
+    let body = body.split_once("\n\n").map(|(_, rest)| rest).unwrap_or("").to_string();
+    std::fs::write(
+        dir.join(A),
+        a.replace(&id_line, &format!("{}supersedes: {}\n\n{}", id_line, alpha, body)),
+    )
+    .unwrap();
+    let out = adr(&dir, &["ask", dir.join(A).to_str().unwrap()], &[], "");
+    assert!(!out.status.success());
+    assert!(
+        stderr(&out).contains(&format!(
+            "supersedes {}, which is not a current decision, \"{}\"; agent fixes",
+            alpha, ALPHA
+        )),
+        "{}",
+        stderr(&out)
+    );
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// The reader of `adr show` goes away while the tool still prints (`adr show
+// | head`). The tool ends without a word: a crash report there reads as a
+// fault of the repository.
+#[test]
+fn show_ends_without_a_word_when_its_reader_goes_away() {
+    use std::process::{Command, Stdio};
+    let dir = setup();
+    let mut plan = String::from("# A\n");
+    for n in ["one", "two", "three", "four"] {
+        plan.push_str(&format!("\n### Does the widget {} hold?\ndepends: widget\n", n));
+    }
+    write_record(&dir, A, &plan);
+
+    let mut child = Command::new(adr_bin())
+        .current_dir(&dir)
+        .arg("show")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    drop(child.stdout.take());
+    let out = child.wait_with_output().unwrap();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(!err.contains("panicked"), "{}", err);
+    assert!(err.is_empty(), "{}", err);
+}
