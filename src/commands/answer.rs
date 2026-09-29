@@ -26,7 +26,16 @@ pub fn run(id_arg: String, letter: String) -> i32 {
     let (id, version) = match id_arg.split_once('@') {
         Some(pair) => pair,
         None => {
-            eprintln!("answer: {}", msg::answer_missing_version(&id_arg));
+            // The question the bare id names, when it names one: the
+            // refusal then prints the command whole, version included.
+            let found = crate::record::load_all(&root).into_iter().find_map(|rf| {
+                rf.sections
+                    .iter()
+                    .find(|s| s.id.as_deref() == Some(id_arg.as_str()) && !s.is_skeleton)
+                    .map(|s| (s.heading_text.clone(), crate::record::version_of(&rf.lines, s)))
+            });
+            let asked = found.as_ref().map(|(h, v)| (h.as_str(), v.as_str()));
+            eprintln!("answer: {}", msg::answer_missing_version(&id_arg, asked));
             return 1;
         }
     };

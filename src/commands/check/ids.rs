@@ -132,7 +132,7 @@ pub(super) fn check_ids(
         }
         out.push(Failure {
             check: "ids".to_string(),
-            message: msg::ledger_id_not_found(&id),
+            message: msg::ledger_id_not_found(&id, led.latest_asked(&id).map(|r| r.detail.as_str())),
         });
     }
 
@@ -150,7 +150,7 @@ pub(super) fn check_ids(
                 if row.event == "withdrawn" {
                     out.push(Failure {
                         check: "ids".to_string(),
-                        message: msg::withdrawn_id_present(id, &rf.rel),
+                        message: msg::withdrawn_id_present(id, &sec.heading_text, &rf.rel),
                     });
                 }
             }

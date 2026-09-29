@@ -250,14 +250,18 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
     {
         let sec = &rf.sections[idx];
         let Some(terms_line_idx) = sec.terms_line else {
-            return Err(msg::no_terms_line(id));
+            return Err(msg::no_terms_line(id, &sec.heading_text));
         };
         let problems = terms::validate_pairs(rf.lines[terms_line_idx].trim_end(), &tf)
-            .map_err(|_| msg::malformed_terms_line(id))?;
+            .map_err(|_| msg::malformed_terms_line(id, &sec.heading_text))?;
         if let Some(p) = problems.first() {
             return Err(match &p.kind {
-                terms::ProblemKind::Gone => msg::terms_line_names_gone_term(id, &p.uuid),
-                terms::ProblemKind::Retired(name) => msg::terms_line_names_retired_term(id, name),
+                terms::ProblemKind::Gone => {
+                    msg::terms_line_names_gone_term(id, &sec.heading_text, &p.uuid, &p.word)
+                }
+                terms::ProblemKind::Retired(name) => {
+                    msg::terms_line_names_retired_term(id, &sec.heading_text, name)
+                }
             });
         }
         supersedes_val = sec.supersedes.clone();
@@ -650,7 +654,8 @@ pub fn terms_refusals(
         for (word, uuid) in &dep.pairs {
             let Some(target) = tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str()))
             else {
-                refusals.push(msg::term_removed_but_carried(uuid, &label));
+                let word = dep.from_word.then_some(word.as_str());
+                refusals.push(msg::term_removed_but_carried(uuid, word, &label));
                 continue;
             };
             if target.retired {

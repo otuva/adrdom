@@ -166,7 +166,7 @@ fn check_fails_a_refused_id_missing_from_every_file_until_withdrawn() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains(&format!("ledger id {} not found in any topic file", REFUSABLE_ID)),
+        text.contains(&format!("ledger id {} (\"1.1 Q?\") not found in any topic file", REFUSABLE_ID)),
         "{}",
         text
     );

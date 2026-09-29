@@ -160,6 +160,7 @@ pub(super) fn check_terms(
                                     &rel,
                                     &sec.heading_text,
                                     &p.uuid,
+                                    &p.word,
                                     id,
                                     answered,
                                 ),
@@ -191,7 +192,7 @@ pub(super) fn check_terms(
                     match p.kind {
                         terms::ProblemKind::Gone => out.push(Failure {
                             check: "terms".to_string(),
-                            message: msg::term_definition_term_not_found(&t.name, &p.uuid),
+                            message: msg::term_definition_term_not_found(&t.name, &p.uuid, &p.word),
                         }),
                         terms::ProblemKind::Retired(name) => out.push(Failure {
                             check: "terms".to_string(),

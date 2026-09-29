@@ -1198,7 +1198,7 @@ fn approve_refuses_removing_a_term_carried_by_a_current_decision() {
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(
-        err.contains("term 33333333-3333-3333-3333-333333333333 removed"),
+        err.contains("term 33333333-3333-3333-3333-333333333333 (\"decision\") removed"),
         "{}",
         err
     );
@@ -1681,7 +1681,7 @@ fn approve_refuses_an_agent_written_bogus_terms_line_in_a_term() {
     let err = stderr(&out);
     assert!(
         err.contains(
-            "term 99999999-9999-9999-9999-999999999999 removed but carried by term \"question\""
+            "term 99999999-9999-9999-9999-999999999999 (\"bogus\") removed but carried by term \"question\""
         ),
         "{}",
         err

@@ -1116,7 +1116,7 @@ fn answer_refuses_a_section_with_no_terms_line() {
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
-        format!("answer: {}: no terms line; agent re-asks", id)
+        format!("answer: {} (\"1.1 What is the authority?\"): no terms line; agent re-asks", id)
     );
 }
 
@@ -1170,7 +1170,7 @@ fn answer_refuses_a_malformed_terms_line() {
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
-        format!("answer: {}: malformed terms line; agent re-asks", id)
+        format!("answer: {} (\"1.1 What is the unit of authority called?\"): malformed terms line; agent re-asks", id)
     );
 }
 
@@ -1200,7 +1200,7 @@ fn answer_refuses_a_terms_line_naming_a_nonexistent_term() {
     assert_eq!(
         stderr(&out).trim_end(),
         format!(
-            "answer: {}: terms line names term 00000000-0000-0000-0000-000000000000 that no longer exists; agent re-asks",
+            "answer: {} (\"1.1 What is the unit of authority called?\"): terms line names term 00000000-0000-0000-0000-000000000000 (\"authority\") that no longer exists; agent re-asks",
             id
         )
     );
@@ -1232,7 +1232,7 @@ fn answer_refuses_a_terms_line_naming_a_retired_term() {
     assert_eq!(
         stderr(&out).trim_end(),
         format!(
-            "answer: {}: terms line names retired term \"authority\"; agent re-asks",
+            "answer: {} (\"1.1 What is the unit of authority called?\"): terms line names retired term \"authority\"; agent re-asks",
             id
         )
     );
@@ -1414,8 +1414,11 @@ fn answer_with_a_bare_id_is_refused_and_writes_nothing() {
     let err = stderr(&out);
     assert!(err.contains("no version given"), "{}", err);
     assert!(
-        err.contains("owner runs: adr show"),
-        "expected the next move to name adr show: {}",
+        err.contains(&format!(
+            "{} (\"1.1 What is the unit of authority called?\"): no version given; owner runs: adr answer {}@",
+            question_id, question_id
+        )),
+        "expected the next move to name adr answer with a version: {}",
         err
     );
 

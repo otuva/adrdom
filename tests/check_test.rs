@@ -1500,7 +1500,7 @@ fn check_fails_a_withdrawn_id_still_present_in_a_record() {
     let text = stdout(&out);
     assert!(text.contains("ids:"), "{}", text);
     assert!(
-        text.contains(&format!("withdrawn id {} still present in", wd_id)),
+        text.contains(&format!("withdrawn id {} (\"1.1 Some question?\") still present in", wd_id)),
         "{}",
         text
     );
@@ -1803,7 +1803,7 @@ fn check_fails_an_asked_section_whose_terms_line_names_a_missing_uuid() {
     let text = stdout(&out);
     assert!(
         text.contains(&format!(
-            "adrdom/decisions/example.md: 1.1 Some question?: term {} not found",
+            "adrdom/decisions/example.md: 1.1 Some question?: term {} (\"decision\") not found",
             missing_uuid
         )),
         "{}",
@@ -2177,7 +2177,7 @@ fn check_staged_treats_a_staged_deleted_topic_file_as_gone() {
     let text = stdout(&out);
     assert!(!out.status.success(), "{}", text);
     assert!(
-        text.contains(&format!("asked row id {} not found in any topic file", id)),
+        text.contains(&format!("asked row id {} (\"3.1 Does this pass?\") not found in any topic file", id)),
         "a staged deletion must be read as the file being gone, at a commit: {}",
         text
     );

@@ -231,11 +231,14 @@ pub fn circular_definition(chain: &str) -> String {
 
 /// A dependent (a decision's or a term's own `terms:` line) still names a
 /// uuid that no longer exists in `adrdom/terms.md` at all.
-pub fn term_removed_but_carried(uuid: &str, source: &str) -> String {
+/// `word` is the word `source` names the term by, when it names it by a
+/// word (its terms line); a depends line names it by the identifier alone.
+pub fn term_removed_but_carried(uuid: &str, word: Option<&str>, source: &str) -> String {
     refuse(
         format!(
             "adrdom/terms.md: term {} removed but carried by {}",
-            uuid, source
+            named(uuid, word),
+            source
         ),
         Next::owner_runs("adr approve adrdom/terms.md after restoring the term, marked retired: yes"),
     )
@@ -577,11 +580,19 @@ pub fn not_in_asked_state(heading: &str) -> String {
 /// carry the version of the question the owner read?"): a bare id is
 /// refused before it is ever looked up, since there is nothing yet to
 /// check it against.
-pub fn answer_missing_version(id: &str) -> String {
-    refuse(
-        format!("{}: no version given", id),
-        Next::owner_runs("adr show to read the question and answer with the printed id@version"),
-    )
+/// `asked` is the heading and the version of the question `id` names, when
+/// it names one that is asked: the command is then printed whole.
+pub fn answer_missing_version(id: &str, asked: Option<(&str, &str)>) -> String {
+    match asked {
+        Some((heading, version)) => refuse(
+            format!("{}: no version given", named(id, Some(heading))),
+            Next::owner_runs(format!("adr answer {}@{} <letter>", id, version)),
+        ),
+        None => refuse(
+            format!("{}: no version given", id),
+            Next::owner_runs("adr show"),
+        ),
+    }
 }
 
 /// The version on an answer (from the terminal's `<id>@<version>` or the
@@ -608,30 +619,39 @@ pub fn invalid_version_format(version: &str) -> String {
     )
 }
 
-pub fn no_terms_line(id: &str) -> String {
-    refuse(format!("{}: no terms line", id), Next::agent("re-asks"))
-}
-
-pub fn malformed_terms_line(id: &str) -> String {
+pub fn no_terms_line(id: &str, heading: &str) -> String {
     refuse(
-        format!("{}: malformed terms line", id),
+        format!("{}: no terms line", named(id, Some(heading))),
         Next::agent("re-asks"),
     )
 }
 
-pub fn terms_line_names_gone_term(id: &str, uuid: &str) -> String {
+pub fn malformed_terms_line(id: &str, heading: &str) -> String {
+    refuse(
+        format!("{}: malformed terms line", named(id, Some(heading))),
+        Next::agent("re-asks"),
+    )
+}
+
+/// `word` is the word of the question the gone term was named by.
+pub fn terms_line_names_gone_term(id: &str, heading: &str, uuid: &str, word: &str) -> String {
     refuse(
         format!(
             "{}: terms line names term {} that no longer exists",
-            id, uuid
+            named(id, Some(heading)),
+            named(uuid, Some(word))
         ),
         Next::agent("re-asks"),
     )
 }
 
-pub fn terms_line_names_retired_term(id: &str, name: &str) -> String {
+pub fn terms_line_names_retired_term(id: &str, heading: &str, name: &str) -> String {
     refuse(
-        format!("{}: terms line names retired term \"{}\"", id, name),
+        format!(
+            "{}: terms line names retired term \"{}\"",
+            named(id, Some(heading)),
+            name
+        ),
         Next::agent("re-asks"),
     )
 }
@@ -1247,16 +1267,18 @@ pub fn removed_from_plan(id: &str, heading: &str, event: &str, removed_file: Opt
     }
 }
 
-pub fn ledger_id_not_found(id: &str) -> String {
+/// `heading` is the heading the ledger holds for the question, from the
+/// row written when it was asked.
+pub fn ledger_id_not_found(id: &str, heading: Option<&str>) -> String {
     refuse(
-        format!("ledger id {} not found in any topic file", id),
+        format!("ledger id {} not found in any topic file", named(id, heading)),
         Next::agent("checks why this id's heading is not in any topic file"),
     )
 }
 
-pub fn withdrawn_id_present(id: &str, rel: &str) -> String {
+pub fn withdrawn_id_present(id: &str, heading: &str, rel: &str) -> String {
     refuse(
-        format!("withdrawn id {} still present in {}", id, rel),
+        format!("withdrawn id {} still present in {}", named(id, Some(heading)), rel),
         Next::agent("removes the heading").and_owner_runs(format!(
             "adr approve {} if it should come back",
             rel
@@ -1438,7 +1460,14 @@ pub fn section_terms_line_malformed(rel: &str, heading: &str, id: &str, answered
 /// still be re-asked; an answered one is frozen, so the fix moves to
 /// restoring the term in `adrdom/terms.md` (mirrors `term_removed_but_carried`)
 /// or superseding the decision.
-pub fn section_term_not_found(rel: &str, heading: &str, uuid: &str, id: &str, answered: bool) -> String {
+pub fn section_term_not_found(
+    rel: &str,
+    heading: &str,
+    uuid: &str,
+    word: &str,
+    id: &str,
+    answered: bool,
+) -> String {
     let next = if answered {
         Next::agent(format!(
             "restores the term in adrdom/terms.md, or writes a question that supersedes {} with a new terms pairing",
@@ -1448,7 +1477,7 @@ pub fn section_term_not_found(rel: &str, heading: &str, uuid: &str, id: &str, an
         Next::agent("re-asks so the terms line matches current terms")
     };
     refuse(
-        format!("{}: {}: term {} not found", rel, heading, uuid),
+        format!("{}: {}: term {} not found", rel, heading, named(uuid, Some(word))),
         next,
     )
 }
@@ -1473,9 +1502,13 @@ pub fn section_term_retired(rel: &str, heading: &str, name: &str, id: &str, answ
 
 /// A term's own `terms:` line (its definition's pairings) names a uuid
 /// that no longer exists.
-pub fn term_definition_term_not_found(name: &str, uuid: &str) -> String {
+pub fn term_definition_term_not_found(name: &str, uuid: &str, word: &str) -> String {
     refuse(
-        format!("adrdom/terms.md: \"{}\": term {} not found", name, uuid),
+        format!(
+            "adrdom/terms.md: \"{}\": term {} not found",
+            name,
+            named(uuid, Some(word))
+        ),
         Next::agent("rewords the definition so it pairs a term that exists"),
     )
 }
@@ -1643,18 +1676,18 @@ pub fn ledger_merge_parents_unreadable() -> String {
     )
 }
 
-pub fn ledger_asked_id_missing(id: &str) -> String {
+pub fn ledger_asked_id_missing(id: &str, heading: Option<&str>) -> String {
     refuse(
-        format!("asked row id {} not found in any topic file", id),
+        format!("asked row id {} not found in any topic file", named(id, heading)),
         Next::agent("restores the heading in the topic file").and_owner_runs("adr approve <file> if the heading was removed on purpose"),
     )
 }
 
-pub fn ledger_answered_without_asked(id: &str) -> String {
+pub fn ledger_answered_without_asked(id: &str, heading: Option<&str>) -> String {
     refuse(
         format!(
             "answered row for {} has no matching earlier asked hash",
-            id
+            named(id, heading)
         ),
         Next::owner_runs("git diff adrdom/state/ledger.tsv; an answered row needs the asked row it answers"),
     )
@@ -2402,7 +2435,7 @@ mod tests {
             terms_brief_differs(),
             terms_brief_not_staged(),
             circular_definition("a -> b -> a"),
-            term_removed_but_carried("uuid-1", "term \"x\""),
+            term_removed_but_carried("uuid-1", Some("word"), "term \"x\""),
             term_retired_but_carried("x", "term \"y\"", term_reword_and_approve()),
             term_retired_but_carried("x", "id-1: \"heading\"", Next::agent("supersedes id-1 with a new question first")),
             word_moved_off_term("word", "term", "term \"y\"", term_reword_and_approve()),
@@ -2424,11 +2457,11 @@ mod tests {
             section_no_terms_line("x.md", "heading", "id-1", true),
             section_terms_line_malformed("x.md", "heading", "id-1", false),
             section_terms_line_malformed("x.md", "heading", "id-1", true),
-            section_term_not_found("x.md", "heading", "uuid-1", "id-1", false),
-            section_term_not_found("x.md", "heading", "uuid-1", "id-1", true),
+            section_term_not_found("x.md", "heading", "uuid-1", "word", "id-1", false),
+            section_term_not_found("x.md", "heading", "uuid-1", "word", "id-1", true),
             section_term_retired("x.md", "heading", "term", "id-1", false),
             section_term_retired("x.md", "heading", "term", "id-1", true),
-            term_definition_term_not_found("term", "uuid-1"),
+            term_definition_term_not_found("term", "uuid-1", "word"),
             term_definition_term_retired("term", "retired-term"),
             term_definition_terms_line_malformed("term"),
             frozen_depends_edited("x.md", "heading"),
@@ -2445,13 +2478,14 @@ mod tests {
             already_answered("heading"),
             letter_not_an_option('Z', "heading"),
             not_in_asked_state("heading"),
-            answer_missing_version("id-1"),
+            answer_missing_version("id-1", None),
+            answer_missing_version("id-1", Some(("heading", "12345678"))),
             stale_version("heading"),
             invalid_version_format("Z0ZZZZZZ"),
-            no_terms_line("id-1"),
-            malformed_terms_line("id-1"),
-            terms_line_names_gone_term("id-1", "uuid-1"),
-            terms_line_names_retired_term("id-1", "term"),
+            no_terms_line("id-1", "heading"),
+            malformed_terms_line("id-1", "heading"),
+            terms_line_names_gone_term("id-1", "heading", "uuid-1", "word"),
+            terms_line_names_retired_term("id-1", "heading", "term"),
             supersedes_not_current("id-1", None),
             edited_after_answered("x.md", "heading"),
             edited_after_refused("x.md", "heading"),
@@ -2480,8 +2514,8 @@ mod tests {
             duplicate_id("id-1", "x.md:heading", "y.md", "heading"),
             removed_from_plan("id-1", "heading", "asked", Some("x.md")),
             removed_from_plan("id-1", "heading", "asked", None),
-            ledger_id_not_found("id-1"),
-            withdrawn_id_present("id-1", "x.md"),
+            ledger_id_not_found("id-1", Some("heading")),
+            withdrawn_id_present("id-1", "heading", "x.md"),
             refusal_without_row("x.md", "heading"),
             answer_without_row("x.md", "heading"),
             answered_text_changed("x.md", "heading", "id-1"),
@@ -2510,8 +2544,8 @@ mod tests {
             ledger_not_append_only(),
             ledger_merge_drops_rows(),
             ledger_merge_parents_unreadable(),
-            ledger_asked_id_missing("id-1"),
-            ledger_answered_without_asked("id-1"),
+            ledger_asked_id_missing("id-1", Some("heading")),
+            ledger_answered_without_asked("id-1", Some("heading")),
             ledger_push_drops_rows("refs/heads/feat", "refs/heads/main"),
             ledger_push_remote_unreadable("refs/heads/main"),
             ledger_since_drops_rows("abc123"),
@@ -2567,7 +2601,7 @@ mod tests {
     // (live), or write a question that supersedes the decision.
     #[test]
     fn section_term_not_found_answered_never_suggests_restoring_as_retired() {
-        let out = section_term_not_found("x.md", "heading", "uuid-1", "id-1", true);
+        let out = section_term_not_found("x.md", "heading", "uuid-1", "word", "id-1", true);
         assert!(!out.contains("retired"), "{}", out);
         assert!(out.contains("restores the term in adrdom/terms.md"), "{}", out);
         assert!(

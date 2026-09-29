@@ -761,6 +761,8 @@ pub enum ProblemKind {
 /// One `Problem` per uuid `validate_pairs` finds wrong on a line.
 pub struct Problem {
     pub uuid: String,
+    /// The word the line names the term by.
+    pub word: String,
     pub kind: ProblemKind,
 }
 
@@ -779,14 +781,16 @@ pub struct Malformed;
 pub fn validate_pairs(line: &str, tf: &TermsFile) -> Result<Vec<Problem>, Malformed> {
     let pairs = parse_terms_line(line).ok_or(Malformed)?;
     let mut problems = Vec::new();
-    for (_, uuid) in pairs {
+    for (word, uuid) in pairs {
         match tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str())) {
             None => problems.push(Problem {
                 uuid,
+                word,
                 kind: ProblemKind::Gone,
             }),
             Some(t) if t.retired => problems.push(Problem {
                 uuid,
+                word,
                 kind: ProblemKind::Retired(t.name.clone()),
             }),
             _ => {}

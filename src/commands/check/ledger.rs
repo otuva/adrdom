@@ -152,7 +152,7 @@ pub(super) fn check_ledger(
         if row.event == "asked" && !all_ids.contains(&row.id) && !dropped_state(led, &row.id) {
             out.push(Failure {
                 check: "ledger".to_string(),
-                message: msg::ledger_asked_id_missing(&row.id),
+                message: msg::ledger_asked_id_missing(&row.id, Some(row.detail.as_str())),
             });
         }
     }
@@ -166,7 +166,10 @@ pub(super) fn check_ledger(
             if !has_match {
                 out.push(Failure {
                     check: "ledger".to_string(),
-                    message: msg::ledger_answered_without_asked(&row.id),
+                    message: msg::ledger_answered_without_asked(
+                        &row.id,
+                        led.latest_asked(&row.id).map(|r| r.detail.as_str()),
+                    ),
                 });
             }
         }
