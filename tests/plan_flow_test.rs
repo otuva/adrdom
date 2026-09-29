@@ -254,7 +254,7 @@ fn plan_lifecycle_end_to_end() {
     assert_eq!(
         stderr(&out).trim_end(),
         format!(
-            "ask: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" is in tier 2; tier 1 is open, waiting on \"1.1 What color is the widget?\"; owner runs: adr answer {}@{} <letter> on it first",
+            "ask: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" is in tier 2; tier 1 is open, waiting on \"1.1 What color is the widget?\"; owner runs: adr answer {}@{} <letter>",
             q1_id,
             current_version(&dir, &q1_id)
         )

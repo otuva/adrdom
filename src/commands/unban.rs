@@ -21,7 +21,7 @@ pub fn run() -> i32 {
     if std::io::stdin().read_to_string(&mut input).is_err() {
         eprintln!(
             "unban: {}",
-            msg::stdin_read_failed(Next::owner_runs("adr unban again"))
+            msg::stdin_read_failed(Next::owner_runs("adr unban"))
         );
         return 1;
     }

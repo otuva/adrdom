@@ -116,9 +116,12 @@ pub fn stdin_read_failed(next: Next) -> String {
 pub fn not_a_repo(cmd: &str, actor: Actor) -> String {
     let next = match actor {
         Actor::Agent => Next::agent("changes into the repository and retries"),
-        Actor::Owner => Next::owner_runs(format!("adr {} again from inside the repository", cmd)),
+        Actor::Owner => Next::owner_runs(format!("adr {}", cmd)),
     };
-    refuse(format!("{}: not inside a git repository", cmd), next)
+    refuse(
+        format!("{}: not inside a git repository; it runs inside one", cmd),
+        next,
+    )
 }
 
 /// The refusal every owner-only command prints when stdin isn't an
@@ -240,7 +243,8 @@ pub fn term_removed_but_carried(uuid: &str, word: Option<&str>, source: &str) ->
             named(uuid, word),
             source
         ),
-        Next::owner_runs("adr approve adrdom/terms.md after restoring the term, marked retired: yes"),
+        Next::agent("restores the term in adrdom/terms.md, marked retired: yes")
+            .and_owner_runs("adr approve adrdom/terms.md"),
     )
 }
 
@@ -523,8 +527,11 @@ pub fn answered_id_missing(id: &str, heading: &str) -> String {
 
 pub fn id_not_found(id: &str) -> String {
     refuse(
-        format!("id {} not found in any topic file", id),
-        Next::owner_runs("adr answer with a real id"),
+        format!(
+            "id {} not found in any topic file; show prints the id of every question that waits for an answer",
+            id
+        ),
+        Next::owner_runs("adr show"),
     )
 }
 
@@ -544,25 +551,36 @@ pub fn id_not_found_some_unread(id: &str, unread: &[String]) -> String {
 
 pub fn already_refused(heading: &str) -> String {
     refuse(
-        format!("\"{}\" is already refused", heading),
-        Next::owner_runs("adr answer a different, still-open id"),
+        format!(
+            "\"{}\" is already refused; show prints every question that waits for an answer",
+            heading
+        ),
+        Next::owner_runs("adr show"),
     )
 }
 
 pub fn already_answered(heading: &str) -> String {
     refuse(
-        format!("\"{}\" is already answered", heading),
-        Next::owner_runs("adr answer a different, still-open id"),
+        format!(
+            "\"{}\" is already answered; show prints every question that waits for an answer",
+            heading
+        ),
+        Next::owner_runs("adr show"),
     )
 }
 
-pub fn letter_not_an_option(letter: char, heading: &str) -> String {
+/// `letters` are the letters of the question's options; `id` and `version`
+/// are the ones the owner gave, both good when this is printed.
+pub fn letter_not_an_option(letter: char, heading: &str, letters: &[char], id: &str, version: &str) -> String {
+    let has: Vec<String> = letters.iter().map(|c| c.to_string()).collect();
     refuse(
         format!(
-            "letter {} does not name an option in \"{}\"",
-            letter, heading
+            "letter {} does not name an option in \"{}\"; its options are {}",
+            letter,
+            heading,
+            has.join(", ")
         ),
-        Next::owner_runs("adr answer with a letter the question actually has"),
+        Next::owner_runs(format!("adr answer {}@{} <letter>", id, version)),
     )
 }
 
@@ -602,8 +620,11 @@ pub fn answer_missing_version(id: &str, asked: Option<(&str, &str)>) -> String {
 /// version was read.
 pub fn stale_version(heading: &str) -> String {
     refuse(
-        format!("\"{}\" has moved since that version was read", heading),
-        Next::owner_runs("adr show to read it again and answer with the printed id@version"),
+        format!(
+            "\"{}\" has moved since that version was read; show prints it as it is, with its id and version",
+            heading
+        ),
+        Next::owner_runs("adr show"),
     )
 }
 
@@ -614,8 +635,11 @@ pub fn stale_version(heading: &str) -> String {
 /// instead of `stale_version`.
 pub fn invalid_version_format(version: &str) -> String {
     refuse(
-        format!("\"{}\" is not a valid version", version),
-        Next::owner_runs("adr show and copies the printed id@version"),
+        format!(
+            "\"{}\" is not a valid version; show prints the id and version of every question that waits for an answer",
+            version
+        ),
+        Next::owner_runs("adr show"),
     )
 }
 
@@ -796,7 +820,7 @@ pub fn tier_blocked_waiting(
             "{}: \"{}\" is in tier {}; tier {} is open, waiting on \"{}\"",
             rel, heading, cand_tier, open_tier, blocker
         ),
-        Next::owner_runs(format!("adr answer {}@{} <letter> on it first", blocker_id, blocker_version)),
+        Next::owner_runs(format!("adr answer {}@{} <letter>", blocker_id, blocker_version)),
     )
 }
 
@@ -888,7 +912,7 @@ pub fn no_id_line(rel: &str, heading: &str) -> String {
             "{}: \"{}\": no id line found to write the terms line after",
             rel, heading
         ),
-        Next::owner_runs(format!("adr approve {} again", rel)),
+        Next::owner_runs(format!("adr approve {}", rel)),
     )
 }
 
@@ -1188,10 +1212,14 @@ pub fn uninstalled_at(root: impl Display) -> String {
 
 // --- answer.rs / ban.rs / unban.rs / install.rs / uninstall.rs -------------
 
-pub fn invalid_letter(letter: &str) -> String {
+/// `id_arg` is the `<id>@<version>` the owner gave.
+pub fn invalid_letter(letter: &str, id_arg: &str) -> String {
     refuse(
-        format!("invalid letter {}", letter),
-        Next::owner_runs("adr answer with a single uppercase letter, or \"refuse\""),
+        format!(
+            "invalid letter {}; an answer is one uppercase letter, or the word refuse",
+            letter
+        ),
+        Next::owner_runs(format!("adr answer {} <letter>", id_arg)),
     )
 }
 
@@ -1262,8 +1290,8 @@ pub fn duplicate_id(id: &str, prev: &str, rel: &str, heading: &str) -> String {
 pub fn removed_from_plan(id: &str, heading: &str, event: &str, removed_file: Option<&str>) -> String {
     let what = format!("{} (\"{}\", {}) was removed from the plan", id, heading, event);
     match removed_file {
-        Some(rel) => refuse(what, Next::owner_runs(format!("adr approve {} again", rel))),
-        None => refuse(what, Next::owner_runs("adr approve <the edited topic file>")),
+        Some(rel) => refuse(what, Next::owner_runs(format!("adr approve {}", rel))),
+        None => refuse(what, Next::owner_runs("adr approve <topic file>")),
     }
 }
 
@@ -1279,10 +1307,8 @@ pub fn ledger_id_not_found(id: &str, heading: Option<&str>) -> String {
 pub fn withdrawn_id_present(id: &str, heading: &str, rel: &str) -> String {
     refuse(
         format!("withdrawn id {} still present in {}", named(id, Some(heading)), rel),
-        Next::agent("removes the heading").and_owner_runs(format!(
-            "adr approve {} if it should come back",
-            rel
-        )),
+        Next::agent("removes the heading, or leaves it when it is to come back")
+            .and_owner_runs(format!("adr approve {}", rel)),
     )
 }
 
@@ -1631,8 +1657,11 @@ pub fn gitattributes_missing() -> String {
 
 pub fn malformed_ledger_row(lineno: usize, raw: &str) -> String {
     refuse(
-        format!("line {}: malformed row: {}", lineno, raw),
-        Next::owner_runs("git diff adrdom/state/ledger.tsv and decides which rows are real before anything is committed"),
+        format!(
+            "line {}: malformed row: {}; the owner decides which rows are real before anything is committed",
+            lineno, raw
+        ),
+        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
     )
 }
 
@@ -1642,8 +1671,8 @@ pub fn malformed_ledger_row(lineno: usize, raw: &str) -> String {
 /// one that only moved.
 pub fn ledger_not_append_only() -> String {
     refuse(
-        "a row from HEAD's ledger is missing or changed in the working copy".to_string(),
-        Next::owner_runs("git diff adrdom/state/ledger.tsv; a row may move, but none may be dropped or edited -- restore by hand whatever is missing or changed"),
+        "a row from HEAD's ledger is missing or changed in the working copy; a row may move, none may be dropped or edited, and what is missing or changed is restored by hand".to_string(),
+        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
     )
 }
 
@@ -1679,17 +1708,18 @@ pub fn ledger_merge_parents_unreadable() -> String {
 pub fn ledger_asked_id_missing(id: &str, heading: Option<&str>) -> String {
     refuse(
         format!("asked row id {} not found in any topic file", named(id, heading)),
-        Next::agent("restores the heading in the topic file").and_owner_runs("adr approve <file> if the heading was removed on purpose"),
+        Next::agent("restores the heading in its topic file, or leaves it out when it was removed on purpose")
+            .and_owner_runs("adr approve <topic file>"),
     )
 }
 
 pub fn ledger_answered_without_asked(id: &str, heading: Option<&str>) -> String {
     refuse(
         format!(
-            "answered row for {} has no matching earlier asked hash",
+            "answered row for {} has no matching earlier asked hash; an answered row needs the asked row it answers",
             named(id, heading)
         ),
-        Next::owner_runs("git diff adrdom/state/ledger.tsv; an answered row needs the asked row it answers"),
+        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
     )
 }
 
@@ -2062,7 +2092,7 @@ pub fn blame_blob_mismatch(rel: &str, origin: &str) -> String {
     refuse(
         format!("{}: blob no longer matches {}", rel, origin),
         Next::agent(format!("updates the rows for {}'s current content", origin))
-            .and_owner_runs(format!("adr approve {} again", rel)),
+            .and_owner_runs(format!("adr approve {}", rel)),
     )
 }
 
@@ -2131,7 +2161,7 @@ pub fn blame_origin_unreadable(rel: &str, origin: &str) -> String {
 pub fn bind_failed(port: u16, e: impl Display) -> String {
     refuse(
         format!("failed to bind 127.0.0.1:{}: {}", port, e),
-        Next::owner_runs("adr serve --port <a free port>"),
+        Next::owner_runs("adr serve --port <port>"),
     )
 }
 
@@ -2476,7 +2506,7 @@ mod tests {
             id_not_found("id-1"),
             already_refused("heading"),
             already_answered("heading"),
-            letter_not_an_option('Z', "heading"),
+            letter_not_an_option('Z', "heading", &['A', 'B'], "id-1", "abcd1234"),
             not_in_asked_state("heading"),
             answer_missing_version("id-1", None),
             answer_missing_version("id-1", Some(("heading", "12345678"))),
@@ -2503,7 +2533,7 @@ mod tests {
             pairs_no_term("x.md", "heading"),
             pairs_no_term_at_write("x.md", "heading"),
             no_id_line("x.md", "heading"),
-            invalid_letter("z"),
+            invalid_letter("z", "id-1@abcd1234"),
             no_such_term("widget"),
             already_in_use(),
             settings_not_json_object("path", Next::agent("retries")),
@@ -2587,6 +2617,26 @@ mod tests {
                 "no next move: {}",
                 o
             );
+        }
+        // What follows `owner runs: ` is what the agent posts to the owner
+        // and the owner pastes: a command and nothing after it. The three
+        // refusals about ledger rows a push, a merge or a commit dropped
+        // name no command, since no command restores a row.
+        for o in &outputs {
+            let Some((_, command)) = o.split_once("owner runs: ") else {
+                continue;
+            };
+            if command.starts_with("the rows ") {
+                continue;
+            }
+            assert!(
+                command.starts_with("adr ") || command.starts_with("git "),
+                "not a command: {}",
+                o
+            );
+            for prose in [" again", " if ", " to ", " and ", " with ", " first", ";", ","] {
+                assert!(!command.contains(prose), "{:?} after the command: {}", prose, o);
+            }
         }
     }
 

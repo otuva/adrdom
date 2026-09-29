@@ -1204,7 +1204,7 @@ fn approve_refuses_removing_a_term_carried_by_a_current_decision() {
     );
     assert!(err.contains("What is the decision?"), "{}", err);
     assert!(
-        err.contains("owner runs: adr approve adrdom/terms.md after restoring the term"),
+        err.contains("agent restores the term in adrdom/terms.md, marked retired: yes, owner runs: adr approve adrdom/terms.md"),
         "{}",
         err
     );

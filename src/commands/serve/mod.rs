@@ -226,7 +226,7 @@ fn handle_answer(root: &Path, form: &HashMap<String, String>) -> Reply {
         let banner = if value.is_empty() {
             format!("serve: {}", msg::missing_answer_selection(&id, &version))
         } else {
-            format!("serve: {}", msg::invalid_letter(&value))
+            format!("serve: {}", msg::invalid_letter(&value, &format!("{}@{}", id, version)))
         };
         return Reply::Redirect(
             format!(

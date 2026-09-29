@@ -1652,7 +1652,7 @@ fn answer_with_an_invalid_letter_is_refused_and_writes_nothing() {
             err
         );
         assert!(
-            err.contains("owner runs: adr answer with a single uppercase letter, or \"refuse\""),
+            err.contains(&format!("owner runs: adr answer {} <letter>", arg)),
             "bad_letter={}: {}",
             bad_letter,
             err

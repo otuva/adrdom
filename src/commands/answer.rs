@@ -50,7 +50,7 @@ pub fn run(id_arg: String, letter: String) -> i32 {
         match actions::parse_letter(&letter) {
             Some(c) => actions::do_answer(&root, id, version, c),
             None => {
-                eprintln!("answer: {}", msg::invalid_letter(&letter));
+                eprintln!("answer: {}", msg::invalid_letter(&letter, &id_arg));
                 return 1;
             }
         }

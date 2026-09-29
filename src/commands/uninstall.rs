@@ -10,7 +10,7 @@ use std::path::Path;
 /// The owner's next move on any I/O failure while uninstalling: fix the
 /// underlying problem, then run uninstall again.
 fn retry() -> Next {
-    Next::owner_runs("adr uninstall again")
+    Next::owner_runs("adr uninstall")
 }
 
 /// Owner-only: removes everything `adr install` wrote outside `adrdom/`,
