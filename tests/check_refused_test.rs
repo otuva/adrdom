@@ -147,7 +147,7 @@ fn check_a_refused_id_is_never_untested_but_a_tie_to_it_is_stale() {
         text
     );
     assert!(
-        line_with(&text, &REFUSABLE_ID, ": stale (not a current decision)"),
+        line_with(&text, &REFUSABLE_ID, ": tied to a test and not a current decision"),
         "a tie to a refused id must be stale: {}",
         text
     );

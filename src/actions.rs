@@ -193,7 +193,7 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
         match led.latest_state(id) {
             Some(row) if row.event == "asked" && row.hash == cur_hash => {}
             _ => {
-                return Err(msg::not_in_asked_state(&sec.heading_text));
+                return Err(msg::not_in_asked_state(&sec.heading_text, &rel));
             }
         }
     }
@@ -703,7 +703,7 @@ pub fn terms_refusals(
                     // as the retired case above.
                     let next = match dep.source.decision_id() {
                         Some(id) => Next::agent(format!(
-                            "restores the wording in adrdom/terms.md so \"{}\" still names \"{}\", or writes a question that supersedes {} with a new terms pairing",
+                            "restores the wording in adrdom/terms.md so \"{}\" still names \"{}\", or writes a question that supersedes {}",
                             word, target.name, id
                         )),
                         None => msg::term_reword_and_approve(),

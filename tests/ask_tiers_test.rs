@@ -561,7 +561,7 @@ fn ask_refuses_a_moot_candidate() {
     assert!(!out.status.success());
     assert_eq!(
         stderr(&out).trim_end(),
-        "ask: adrdom/decisions/example.md: \"1.2 Does the widget's paint match its color?\" is moot: stands on \"1.1 What color is the widget?\"=A, answered B; agent drops or replaces the heading, owner runs: adr approve adrdom/decisions/example.md"
+        "ask: adrdom/decisions/example.md: \"1.2 Does the widget's paint match its color?\" has no case left: it stands on \"1.1 What color is the widget?\" under A, and the answer was B; agent drops or replaces the heading, owner runs: adr approve adrdom/decisions/example.md"
     );
 }
 

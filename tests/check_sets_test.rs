@@ -127,7 +127,7 @@ fn check_notes_a_moot_dependent() {
     let text = stdout(&out);
     assert!(
         text.contains(
-            "moot: adrdom/decisions/colors.md: \"1.2 Depends on color?\" stands on \"1.1 Which color?\"=A, answered B"
+            "no case left: adrdom/decisions/colors.md: \"1.2 Depends on color?\" stands on \"1.1 Which color?\"=A, answered B"
         ),
         "{}",
         text
@@ -155,7 +155,7 @@ fn check_stays_silent_on_a_letter_written_in_the_file_but_never_answered_in_the_
 
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
-    assert!(!text.contains("moot:"), "{}", text);
+    assert!(!text.contains("no case left:"), "{}", text);
 }
 
 #[test]
@@ -220,5 +220,5 @@ fn check_does_not_note_a_dependent_whose_set_still_includes_the_answer() {
 
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
-    assert!(!text.contains("moot:"), "{}", text);
+    assert!(!text.contains("no case left:"), "{}", text);
 }

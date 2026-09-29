@@ -1838,7 +1838,7 @@ fn check_fails_an_asked_section_bound_to_a_retired_term() {
     let text = stdout(&out);
     assert!(
         text.contains(
-            "adrdom/decisions/example.md: 1.1 Some question?: bound term \"decision\" is retired"
+            "adrdom/decisions/example.md: 1.1 Some question?: uses the retired term \"decision\""
         ),
         "{}",
         text
@@ -2341,7 +2341,7 @@ fn check_fails_a_test_tied_to_a_decision_that_was_later_superseded() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "check should fail: {}", stdout(&out));
     assert!(
-        line_with(&stdout(&out), &old_id, ": stale (not a current decision)"),
+        line_with(&stdout(&out), &old_id, ": tied to a test and not a current decision"),
         "{}",
         stdout(&out)
     );
@@ -2371,7 +2371,7 @@ fn check_fails_a_test_tied_to_a_refused_decision() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "check should fail: {}", stdout(&out));
     assert!(
-        line_with(&stdout(&out), &id, ": stale (not a current decision)"),
+        line_with(&stdout(&out), &id, ": tied to a test and not a current decision"),
         "{}",
         stdout(&out)
     );

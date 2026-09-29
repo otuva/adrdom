@@ -984,7 +984,7 @@ fn overview_shows_a_moot_note_for_an_excluded_answer() {
     assert_eq!(resp.status, 200, "body: {}", resp.body);
     assert!(
         resp.body
-            .contains("moot: &quot;1.2 Dependent?&quot; stands on &quot;1.1 Root?&quot;=A, answered B"),
+            .contains("no case left: &quot;1.2 Dependent?&quot; stands on &quot;1.1 Root?&quot;=A, answered B"),
         "body: {}",
         resp.body
     );

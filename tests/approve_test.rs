@@ -110,7 +110,7 @@ fn approve_writes_approved_and_context_rows_then_is_idempotent() {
     let ledger2 = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert_eq!(ledger, ledger2, "rerunning approve with nothing changed must be a no-op");
     assert!(stdout(&out2).contains("plan unchanged"), "{}", stdout(&out2));
-    assert!(stdout(&out2).contains("context unchanged"), "{}", stdout(&out2));
+    assert!(stdout(&out2).contains("prose unchanged"), "{}", stdout(&out2));
 }
 
 // --- approve refuses on an option-count shape error --------------------
@@ -174,7 +174,7 @@ fn approve_refuses_a_question_with_four_options() {
 // "each with its own hash; ask stops a file where either part is
 // unapproved (e.g. the prose edited after approve)": editing only the
 // context prose leaves the plan hash (and its `approved` row) untouched
-// while the context hash moves, so `ask` stops on "context not approved"
+// while the context hash moves, so `ask` stops on "prose not approved"
 // even though the heading itself is still approved.
 #[test]
 fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
@@ -199,7 +199,7 @@ fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("context not approved"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("prose not approved"), "{}", stderr(&out));
 
     let ledger_before = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let approved_before = ledger_before.lines().filter(|l| l.contains("\tapproved\t")).count();
@@ -264,7 +264,7 @@ fn editing_a_heading_requires_reapproval_with_one_new_approved_row() {
     let out2 = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out2.status.success(), "approve failed: {}", stderr(&out2));
     assert!(
-        stdout(&out2).contains("context unchanged"),
+        stdout(&out2).contains("prose unchanged"),
         "{}",
         stdout(&out2)
     );
@@ -934,14 +934,14 @@ fn approve_refuses_a_terms_edit_that_moves_a_word_off_a_term_carried_by_a_curren
     let err = stderr(&out);
     assert!(
         err.contains(
-            "word \"choice\" moved off term \"decision\", carried by adrdom/decisions/example.md: \"1.1 What is the choice?\""
+            "word \"choice\" no longer names term \"decision\", used by adrdom/decisions/example.md: \"1.1 What is the choice?\""
         ),
         "{}",
         err
     );
     assert!(
         err.contains(&format!(
-            "agent restores the wording in adrdom/terms.md so \"choice\" still names \"decision\", or writes a question that supersedes {} with a new terms pairing",
+            "agent restores the wording in adrdom/terms.md so \"choice\" still names \"decision\", or writes a question that supersedes {}",
             id
         )),
         "an answered decision's next move must be restore-or-supersede, never re-ask: {}",
@@ -1234,7 +1234,7 @@ fn approve_refuses_retiring_a_term_carried_by_a_current_decision() {
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(
-        err.contains("term \"decision\" retired but carried by"),
+        err.contains("term \"decision\" retired but used by"),
         "{}",
         err
     );
@@ -1336,7 +1336,7 @@ fn approve_refuses_retiring_a_term_named_only_by_a_current_decisions_depends_lin
     let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
-    assert!(err.contains("term \"flag\" retired but carried by"), "{}", err);
+    assert!(err.contains("term \"flag\" retired but used by"), "{}", err);
     assert!(err.contains("What comes next?"), "{}", err);
     assert!(
         err.contains(&format!("agent supersedes {} with a new question first", id)),
@@ -1681,7 +1681,7 @@ fn approve_refuses_an_agent_written_bogus_terms_line_in_a_term() {
     let err = stderr(&out);
     assert!(
         err.contains(
-            "term 99999999-9999-9999-9999-999999999999 (\"bogus\") removed but carried by term \"question\""
+            "term 99999999-9999-9999-9999-999999999999 (\"bogus\") removed but used by term \"question\""
         ),
         "{}",
         err
@@ -1736,7 +1736,7 @@ fn approve_refuses_retiring_a_term_carried_by_another_terms_definition() {
     let err = stderr(&out);
     assert!(
         err.contains(
-            "term \"decision\" retired but carried by term \"question\"; agent rewords the definition to drop the retired word, owner runs: adr approve adrdom/terms.md"
+            "term \"decision\" retired but used by term \"question\"; agent rewords the definition to drop the retired word, owner runs: adr approve adrdom/terms.md"
         ),
         "{}",
         err
@@ -1786,7 +1786,7 @@ fn approve_refuses_retiring_a_term_while_a_new_term_takes_its_word_and_another_s
     let err = stderr(&out);
     assert!(
         err.contains(
-            "term \"decision\" retired but carried by term \"question\"; agent rewords the definition to drop the retired word, owner runs: adr approve adrdom/terms.md"
+            "term \"decision\" retired but used by term \"question\"; agent rewords the definition to drop the retired word, owner runs: adr approve adrdom/terms.md"
         ),
         "{}",
         err

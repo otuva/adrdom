@@ -239,7 +239,7 @@ pub fn circular_definition(chain: &str) -> String {
 pub fn term_removed_but_carried(uuid: &str, word: Option<&str>, source: &str) -> String {
     refuse(
         format!(
-            "adrdom/terms.md: term {} removed but carried by {}",
+            "adrdom/terms.md: term {} removed but used by {}",
             named(uuid, word),
             source
         ),
@@ -257,7 +257,7 @@ pub fn term_removed_but_carried(uuid: &str, word: Option<&str>, source: &str) ->
 pub fn term_retired_but_carried(name: &str, source: &str, next: Next) -> String {
     refuse(
         format!(
-            "adrdom/terms.md: term \"{}\" retired but carried by {}",
+            "adrdom/terms.md: term \"{}\" retired but used by {}",
             name, source
         ),
         next,
@@ -278,7 +278,7 @@ pub fn term_reword_and_approve() -> Next {
 pub fn word_moved_off_term(word: &str, term_name: &str, source: &str, next: Next) -> String {
     refuse(
         format!(
-            "adrdom/terms.md: word \"{}\" moved off term \"{}\", carried by {}",
+            "adrdom/terms.md: word \"{}\" no longer names term \"{}\", used by {}",
             word, term_name, source
         ),
         next,
@@ -584,13 +584,10 @@ pub fn letter_not_an_option(letter: char, heading: &str, letters: &[char], id: &
     )
 }
 
-pub fn not_in_asked_state(heading: &str) -> String {
+pub fn not_in_asked_state(heading: &str, rel: &str) -> String {
     refuse(
-        format!(
-            "\"{}\" is not currently in the 'asked' state at its current hash",
-            heading
-        ),
-        Next::agent("runs adr ask so it is asked again at the current hash"),
+        format!("\"{}\" is not asked as it reads now", heading),
+        Next::agent(format!("runs: adr ask {}", rel)),
     )
 }
 
@@ -738,7 +735,7 @@ pub fn plan_not_approved(rel: &str) -> String {
 
 pub fn context_not_approved(rel: &str) -> String {
     refuse(
-        format!("{}: context not approved", rel),
+        format!("{}: prose not approved", rel),
         Next::owner_runs(format!("adr approve {}", rel)),
     )
 }
@@ -878,7 +875,7 @@ pub fn moot_candidate(
 ) -> String {
     refuse(
         format!(
-            "{}: \"{}\" is moot: stands on \"{}\"={}, answered {}",
+            "{}: \"{}\" has no case left: it stands on \"{}\" under {}, and the answer was {}",
             rel, heading, target, set_str, letter
         ),
         Next::agent("drops or replaces the heading").and_owner_runs(format!("adr approve {}", rel)),
@@ -894,14 +891,14 @@ pub fn banned_word_in_candidate(rel: &str, heading: &str, suffix: &str) -> Strin
 
 pub fn pairs_no_term(rel: &str, heading: &str) -> String {
     refuse(
-        format!("{}: \"{}\" pairs no term", rel, heading),
+        format!("{}: \"{}\" uses no term", rel, heading),
         Next::agent("adds the term to adrdom/terms.md or rewrites the question"),
     )
 }
 
 pub fn pairs_no_term_at_write(rel: &str, heading: &str) -> String {
     refuse(
-        format!("{}: \"{}\": pairs no term at write time", rel, heading),
+        format!("{}: \"{}\": uses no term", rel, heading),
         Next::agent("re-runs adr ask"),
     )
 }
@@ -982,7 +979,7 @@ pub fn next_refused(heading: &str) -> String {
 }
 
 pub fn next_moot(rel: &str, heading: &str) -> String {
-    Next::agent(format!("drops or replaces \"{}\", which is moot", heading))
+    Next::agent(format!("drops or replaces \"{}\", which has no case left", heading))
         .and_owner_runs(format!("adr approve {}", rel))
         .render()
 }
@@ -1241,7 +1238,7 @@ pub fn no_terms_file_for_term(name: &str) -> String {
 pub fn already_in_use() -> String {
     refuse(
         "refusing: already in use".to_string(),
-        Next::agent("removes the word from the repo text first, or bans a different word"),
+        Next::agent("removes the word from the repository first, or bans a different word"),
     )
 }
 
@@ -1496,7 +1493,7 @@ pub fn section_term_not_found(
 ) -> String {
     let next = if answered {
         Next::agent(format!(
-            "restores the term in adrdom/terms.md, or writes a question that supersedes {} with a new terms pairing",
+            "restores the term in adrdom/terms.md, or writes a question that supersedes {}",
             id
         ))
     } else {
@@ -1514,14 +1511,14 @@ pub fn section_term_not_found(
 pub fn section_term_retired(rel: &str, heading: &str, name: &str, id: &str, answered: bool) -> String {
     let next = if answered {
         Next::agent(format!(
-            "un-retires the term in adrdom/terms.md, or writes a question that supersedes {} with a new terms pairing",
+            "un-retires the term in adrdom/terms.md, or writes a question that supersedes {}",
             id
         ))
     } else {
         Next::agent("re-asks so the terms line drops the retired term")
     };
     refuse(
-        format!("{}: {}: bound term \"{}\" is retired", rel, heading, name),
+        format!("{}: {}: uses the retired term \"{}\"", rel, heading, name),
         next,
     )
 }
@@ -1535,17 +1532,17 @@ pub fn term_definition_term_not_found(name: &str, uuid: &str, word: &str) -> Str
             name,
             named(uuid, Some(word))
         ),
-        Next::agent("rewords the definition so it pairs a term that exists"),
+        Next::agent("rewords the definition so it uses a term that exists"),
     )
 }
 
 pub fn term_definition_term_retired(name: &str, retired_name: &str) -> String {
     refuse(
         format!(
-            "adrdom/terms.md: \"{}\": bound term \"{}\" is retired",
+            "adrdom/terms.md: \"{}\": uses the retired term \"{}\"",
             name, retired_name
         ),
-        Next::agent("rewords the definition so it no longer pairs the retired term"),
+        Next::agent("rewords the definition so it no longer uses the retired term"),
     )
 }
 
@@ -1716,7 +1713,7 @@ pub fn ledger_asked_id_missing(id: &str, heading: Option<&str>) -> String {
 pub fn ledger_answered_without_asked(id: &str, heading: Option<&str>) -> String {
     refuse(
         format!(
-            "answered row for {} has no matching earlier asked hash; an answered row needs the asked row it answers",
+            "answered row for {} matches no asked row; an answered row needs the asked row it answers",
             named(id, heading)
         ),
         Next::owner_runs("git diff adrdom/state/ledger.tsv"),
@@ -1804,8 +1801,8 @@ pub fn stale_test(id: &str, heading: Option<&str>, locations: &[String]) -> Stri
         format!(" at {}", locations.join(", "))
     };
     refuse(
-        format!("{}: stale (not a current decision){}", named(id, heading), at),
-        Next::agent(format!("removes the stale \"adr: {}\" tag from the test", id)),
+        format!("{}: tied to a test and not a current decision{}", named(id, heading), at),
+        Next::agent(format!("removes the comment \"adr: {}\" from the test", id)),
     )
 }
 
@@ -2187,7 +2184,7 @@ pub fn done(rel: &str) -> String {
 }
 
 pub fn moot_note(rel: &str, note: &str) -> String {
-    format!("moot: {}: {}", rel, note)
+    format!("no case left: {}: {}", rel, note)
 }
 
 pub fn tiers_note_check(rel: &str, sizes: &str) -> String {
@@ -2231,11 +2228,11 @@ pub fn plan_unchanged(rel: &str) -> String {
 }
 
 pub fn context_approved(rel: &str) -> String {
-    format!("approve: {}: context approved", rel)
+    format!("approve: {}: prose approved", rel)
 }
 
 pub fn context_unchanged(rel: &str) -> String {
-    format!("approve: {}: context unchanged", rel)
+    format!("approve: {}: prose unchanged", rel)
 }
 
 pub fn withdrawn(detail: &str) -> String {
@@ -2473,7 +2470,7 @@ mod tests {
                 "word",
                 "term",
                 "id-1: \"heading\"",
-                Next::agent("restores the wording in adrdom/terms.md so \"word\" still names \"term\", or writes a question that supersedes id-1 with a new terms pairing"),
+                Next::agent("restores the wording in adrdom/terms.md so \"word\" still names \"term\", or writes a question that supersedes id-1"),
             ),
             definition_too_long("x", 3),
             terms_banned_word(3, ""),
@@ -2507,7 +2504,7 @@ mod tests {
             already_refused("heading"),
             already_answered("heading"),
             letter_not_an_option('Z', "heading", &['A', 'B'], "id-1", "abcd1234"),
-            not_in_asked_state("heading"),
+            not_in_asked_state("heading", "x.md"),
             answer_missing_version("id-1", None),
             answer_missing_version("id-1", Some(("heading", "12345678"))),
             stale_version("heading"),
@@ -2655,7 +2652,7 @@ mod tests {
         assert!(!out.contains("retired"), "{}", out);
         assert!(out.contains("restores the term in adrdom/terms.md"), "{}", out);
         assert!(
-            out.contains("writes a question that supersedes id-1 with a new terms pairing"),
+            out.contains("writes a question that supersedes id-1"),
             "{}",
             out
         );

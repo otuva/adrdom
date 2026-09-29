@@ -272,7 +272,7 @@ fn plan_lifecycle_end_to_end() {
     let check_out = adr(&dir, &["check"], &[], "");
     assert!(
         stdout(&check_out).contains(
-            "moot: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" stands on \"1.1 What color is the widget?\"=A, answered B"
+            "no case left: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" stands on \"1.1 What color is the widget?\"=A, answered B"
         ),
         "{}",
         stdout(&check_out)
@@ -286,7 +286,7 @@ fn plan_lifecycle_end_to_end() {
     assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
-        "ask: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" is moot: stands on \"1.1 What color is the widget?\"=A, answered B; agent drops or replaces the heading, owner runs: adr approve adrdom/decisions/widget.md"
+        "ask: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" has no case left: it stands on \"1.1 What color is the widget?\" under A, and the answer was B; agent drops or replaces the heading, owner runs: adr approve adrdom/decisions/widget.md"
     );
 
     // Revert Q2 to skeleton again, then give Q3 a body: it asks fine.

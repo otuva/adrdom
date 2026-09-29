@@ -272,7 +272,7 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     );
     assert!(
         text.contains(&format!(
-            "tested: {} (\"{}\"): stale (not a current decision) at tested.txt:1; agent removes",
+            "tested: {} (\"{}\"): tied to a test and not a current decision at tested.txt:1; agent removes",
             alpha, ALPHA
         )),
         "{}",
