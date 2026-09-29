@@ -1043,6 +1043,20 @@ pub fn ask_assumes(dependent: &str, set: &str) -> String {
     format!("  assumes: \"{}\"={}", dependent, set)
 }
 
+// --- adr --version -----------------------------------------------------------
+
+/// What `adr --version` prints after the name. A build with the test-only
+/// `owner-bypass` feature says so ahead of the number, so it is never taken
+/// for the binary the owner uses. The ledger's version column keeps the
+/// bare number (`version::VERSION`).
+pub fn version_shown(version: &str, takes_owner_bypass: bool) -> String {
+    if takes_owner_bypass {
+        format!("test build with the owner bypass, {}", version)
+    } else {
+        version.to_string()
+    }
+}
+
 // --- install / uninstall: the closing line ---------------------------------
 
 pub fn installed_at(root: impl Display) -> String {

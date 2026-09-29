@@ -1,14 +1,13 @@
 use adr::commands;
 use adr::version::VERSION;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use std::path::PathBuf;
 
 /// adr: a control layer between AI coding agents and a repository.
 #[derive(Parser)]
 #[command(
     name = "adr",
-    about = "A control layer between AI coding agents and a repository",
-    version = VERSION
+    about = "A control layer between AI coding agents and a repository"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -71,7 +70,11 @@ enum Command {
 }
 
 fn main() {
-    let cli = Cli::parse();
+    let shown: &'static str = Box::leak(
+        adr::msg::version_shown(VERSION, cfg!(feature = "owner-bypass")).into_boxed_str(),
+    );
+    let matches = Cli::command().version(shown).get_matches();
+    let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
     let code = match cli.command {
         Command::Install { claude, codex } => commands::install::run(claude, codex),
         Command::Uninstall => commands::uninstall::run(),
