@@ -398,23 +398,40 @@ pub fn bad_option_letter(rel: &str, dependent: &str, target: &str, letter: char)
     )
 }
 
-/// `headings` are the questions the tool would ask together, in file order.
-pub fn tier_cap_exceeded(rel: &str, headings: &[String], cap: usize) -> String {
-    let names = headings
+/// `open` are the questions of the tier that are not answered yet, in file
+/// order; `answered` counts the ones the owner answered, which hold their
+/// place and are never moved.
+pub fn tier_cap_exceeded(rel: &str, open: &[String], answered: usize, cap: usize) -> String {
+    let names = open
         .iter()
         .map(|h| format!("\"{}\"", h))
         .collect::<Vec<_>>()
         .join(", ");
+    if answered == 0 {
+        return refuse(
+            format!(
+                "{}: {} questions would be put to the owner together, the most is {}: {}",
+                rel,
+                open.len(),
+                cap,
+                names
+            ),
+            Next::agent(
+                "finds a question among these that assumes the answer of another one and names that one on its depends line, or splits the file when none does",
+            ),
+        );
+    }
     refuse(
         format!(
-            "{}: {} questions would be put to the owner together, the most is {}: {}",
+            "{}: {} questions stand together, the most is {}: {} answered, and {}",
             rel,
-            headings.len(),
+            open.len() + answered,
             cap,
+            answered,
             names
         ),
         Next::agent(
-            "finds a question among these that assumes the answer of another one and names that one on its depends line, or splits the file when none does",
+            "finds a question among the ones named that assumes the answer of another one and names that one on its depends line, or moves it to another file when none does",
         ),
     )
 }
@@ -2020,7 +2037,8 @@ mod tests {
             dep_not_current_decision("x.md", "heading", "id-1"),
             dep_no_term("x.md", "heading", "widget"),
             bad_option_letter("x.md", "dependent", "target", 'Z'),
-            tier_cap_exceeded("x.md", &["heading".to_string()], 4),
+            tier_cap_exceeded("x.md", &["heading".to_string()], 0, 4),
+            tier_cap_exceeded("x.md", &["heading".to_string()], 3, 4),
             derive_error("x.md", &DeriveError::SelfDep("heading".to_string())),
             derive_error_ask("x.md", &DeriveError::SelfDep("heading".to_string())),
             answered_id_missing("id-1", "heading"),

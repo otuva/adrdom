@@ -199,8 +199,8 @@ pub fn run(record_path: PathBuf) -> i32 {
     // file-wide (mirrors approve's cap check, prefixed `ask:`). Dead
     // (refused/superseded/withdrawn) questions don't count.
     if let Some(tiers) = &rf.tiers {
-        if let Some(headings) = state::over_cap_headings(&led, &rf, tiers) {
-            eprintln!("ask: {}", msg::tier_cap_exceeded(&rel, &headings, record::TIER_CAP));
+        if let Some((open, answered)) = state::over_cap_headings(&led, &rf, tiers) {
+            eprintln!("ask: {}", msg::tier_cap_exceeded(&rel, &open, answered, record::TIER_CAP));
             return 1;
         }
     }

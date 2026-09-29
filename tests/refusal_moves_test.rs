@@ -119,18 +119,20 @@ fn the_ban_scan_reads_a_file_named_outside_ascii() {
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 // adr: 15d82e53-e344-4347-b639-3bf6eb9ef1b4
 //
-// Five questions that stand on no other question. The refusal names them
+// Five questions written as if none stood on another. The fifth asks about
+// the widget "where the widget one holds": it assumes the answer of the
+// first and its depends line leaves that out. The refusal names the five
 // and the two moves; the first move, made, clears it.
 #[test]
 fn the_cap_refusal_names_the_questions_and_the_move() {
     let dir = setup();
-    let names = ["one", "two", "three", "four", "five"];
+    const FIFTH: &str = "Does the widget hold where the widget one holds?";
     let plan = |fifth_depends: &str| {
         let mut content = String::from("# Cap\n\n");
-        for n in names {
-            let depends = if n == "five" { fifth_depends } else { "widget" };
-            content.push_str(&format!("### Does the widget {} hold?\ndepends: {}\n\n", n, depends));
+        for n in ["one", "two", "three", "four"] {
+            content.push_str(&format!("### Does the widget {} hold?\ndepends: widget\n\n", n));
         }
+        content.push_str(&format!("### {}\ndepends: {}\n\n", FIFTH, fifth_depends));
         content
     };
     let rel = "adrdom/decisions/cap.md";
@@ -139,10 +141,10 @@ fn the_cap_refusal_names_the_questions_and_the_move() {
     let refusal = format!(
         "{}: 5 questions would be put to the owner together, the most is 4: \
 \"Does the widget one hold?\", \"Does the widget two hold?\", \"Does the widget three hold?\", \
-\"Does the widget four hold?\", \"Does the widget five hold?\"; \
+\"Does the widget four hold?\", \"{}\"; \
 agent finds a question among these that assumes the answer of another one and names that one on its depends line, \
 or splits the file when none does",
-        rel
+        rel, FIFTH
     );
     let out = adr(&dir, &["check"], &[], "");
     assert!(stdout(&out).contains(&refusal), "{}", stdout(&out));
@@ -153,4 +155,43 @@ or splits the file when none does",
     write_record(&dir, rel, &plan("widget, Does the widget one hold?"));
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+// adr: 15d82e53-e344-4347-b639-3bf6eb9ef1b4
+//
+// Four answered questions hold their place, and their depends lines are
+// never edited again. A fifth beside them is over the cap: the refusal
+// counts the answered ones and names only the one the agent can move.
+#[test]
+fn the_cap_refusal_names_only_the_questions_not_answered() {
+    let dir = setup();
+    let rel = "adrdom/decisions/cap.md";
+    let mut content = String::from("# Cap\n");
+    for n in ["one", "two", "three", "four"] {
+        content.push_str(&format!(
+            "\n{}",
+            question(&format!("Does the widget {} hold?", n), "widget", "")
+        ));
+    }
+    let path = write_record(&dir, rel, &content);
+    approve_record(&dir, rel);
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    for id in extract_ids(&std::fs::read_to_string(&path).unwrap()) {
+        assert!(adr_answer(&dir, &id, "A").status.success());
+    }
+
+    let mut content = std::fs::read_to_string(&path).unwrap();
+    content.push_str("\n### Does the widget five hold?\ndepends: widget\n");
+    std::fs::write(&path, content).unwrap();
+
+    let refusal = format!(
+        "{}: 5 questions stand together, the most is 4: 4 answered, and \"Does the widget five hold?\"; \
+agent finds a question among the ones named that assumes the answer of another one and names that one on its depends line, \
+or moves it to another file when none does",
+        rel
+    );
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(!out.status.success());
+    assert!(stderr(&out).contains(&refusal), "{}", stderr(&out));
 }
