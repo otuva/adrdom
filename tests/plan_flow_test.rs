@@ -193,7 +193,8 @@ fn plan_lifecycle_end_to_end() {
     assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
-        "ask: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" depends on \"1.1 What color is the widget?\" without an answer set; agent writes =A, =A|B or =* on that depends line"
+        "ask: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" depends on \"1.1 What color is the widget?\" without an answer set; agent writes =A, =A|B or =* on that depends line\n\
+         ask: adrdom/decisions/widget.md: \"1.3 Does the paint need a second coat?\" depends on \"1.1 What color is the widget?\" without an answer set; agent writes =A, =A|B or =* on that depends line"
     );
     // Nothing written on refusal.
     let after = std::fs::read_to_string(&record).unwrap();

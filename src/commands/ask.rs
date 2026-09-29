@@ -9,7 +9,7 @@ use crate::state;
 use crate::tells;
 use crate::terms;
 use crate::view;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 pub fn run(record_path: PathBuf) -> i32 {
@@ -216,6 +216,18 @@ pub fn run(record_path: PathBuf) -> i32 {
     // never `None`.
     let open_tier: Option<usize> = state::open_tier(&rf);
 
+    // From here on every refusal is about one question and reads the same
+    // file and ledger as the others, so none of them needs another to have
+    // passed. They are gathered and printed together, and nothing is
+    // written while there is one: a question with three faults is told all
+    // three in one run.
+    let mut refusals: Vec<String> = Vec::new();
+    // The questions, by index, that a refusal about what they stand on
+    // already names. The tier refusal is left out for these: its move is
+    // the owner's answer to the question the tier waits on, and that
+    // answer is not to come before the agent's own move on this question.
+    let mut named_by_depends: HashSet<usize> = HashSet::new();
+
     // Answer sets mandatory (per "Does a depends entry carry the answers
     // it holds under?"): before asking any candidate in the
     // open tier, every section in the file with a heading dep pointing at
@@ -246,26 +258,21 @@ pub fn run(record_path: PathBuf) -> i32 {
                 }
                 for (di, set) in rf.dependents_of(ti) {
                     let dependent = &rf.sections[di];
-                    match set {
-                        None => {
-                            eprintln!(
-                                "ask: {}",
-                                msg::missing_answer_set(&rel, &dependent.heading_text, &target.heading_text)
-                            );
-                            return 1;
-                        }
-                        Some(record::AnswerSet::Any) => {}
+                    let found = match set {
+                        None => vec![msg::missing_answer_set(
+                            &rel,
+                            &dependent.heading_text,
+                            &target.heading_text,
+                        )],
+                        Some(record::AnswerSet::Any) => Vec::new(),
                         Some(record::AnswerSet::Letters(letters)) => {
-                            if let Some(m) =
-                                depends::bad_letters(&rel, &dependent.heading_text, target, letters)
-                                    .into_iter()
-                                    .next()
-                            {
-                                eprintln!("ask: {}", m);
-                                return 1;
-                            }
+                            depends::bad_letters(&rel, &dependent.heading_text, target, letters)
                         }
+                    };
+                    if !found.is_empty() {
+                        named_by_depends.insert(di);
                     }
+                    refusals.extend(found);
                 }
             }
         }
@@ -285,6 +292,9 @@ pub fn run(record_path: PathBuf) -> i32 {
     // For each candidate, by its index: the identifiers its supersedes
     // line names.
     let mut supersedes_ids: HashMap<usize, Vec<String>> = HashMap::new();
+    // Every heading by its identifier, any state: a refusal names the
+    // question beside an identifier.
+    let names = crate::view::heading_texts(&all_records);
 
     for (i, sec) in rf.sections.iter().enumerate() {
         if !candidate[i] {
@@ -300,11 +310,12 @@ pub fn run(record_path: PathBuf) -> i32 {
             if let Some(ti) = rf.dep_target(d) {
                 let target = &rf.sections[ti];
                 if target.is_refused() {
-                    eprintln!(
-                        "ask: {}",
-                        msg::depends_on_refused(&rel, &sec.heading_text, &target.heading_text)
-                    );
-                    return 1;
+                    refusals.push(msg::depends_on_refused(
+                        &rel,
+                        &sec.heading_text,
+                        &target.heading_text,
+                    ));
+                    named_by_depends.insert(i);
                 }
             }
         }
@@ -326,24 +337,15 @@ pub fn run(record_path: PathBuf) -> i32 {
             match depends::resolve_supersedes(old, &cross_file_headings, &led) {
                 Ok(id) => ids.push(id),
                 Err(depends::SupersedesError::NotCurrent) => {
-                    let names = crate::view::all_heading_texts(&root);
-                    eprintln!(
-                        "ask: {}",
-                        msg::ask_supersedes_not_current(
-                            &rel,
-                            &sec.heading_text,
-                            old,
-                            names.get(old).map(String::as_str)
-                        )
-                    );
-                    return 1;
+                    refusals.push(msg::ask_supersedes_not_current(
+                        &rel,
+                        &sec.heading_text,
+                        old,
+                        names.get(old).map(String::as_str),
+                    ));
                 }
                 Err(depends::SupersedesError::Ambiguous(files)) => {
-                    eprintln!(
-                        "ask: {}",
-                        msg::ask_supersedes_ambiguous(&rel, &sec.heading_text, old, &files)
-                    );
-                    return 1;
+                    refusals.push(msg::ask_supersedes_ambiguous(&rel, &sec.heading_text, old, &files));
                 }
             }
         }
@@ -357,7 +359,7 @@ pub fn run(record_path: PathBuf) -> i32 {
         // whether that blocker is refused.
         let cand_tier = rf.tier_of(i).unwrap_or(1);
         if let Some(open_n) = open_tier {
-            if cand_tier != open_n {
+            if cand_tier != open_n && !named_by_depends.contains(&i) {
                 if let Some(blocker) = state::tier_blocker(&rf, open_n) {
                     // The next move depends on where the blocker stands:
                     // refused -> the plan changes; asked -> the owner
@@ -409,8 +411,7 @@ pub fn run(record_path: PathBuf) -> i32 {
                             &blocker.heading_text,
                         )
                     };
-                    eprintln!("ask: {}", m);
-                    return 1;
+                    refusals.push(m);
                 }
             }
         }
@@ -418,11 +419,13 @@ pub fn run(record_path: PathBuf) -> i32 {
         // Moot refusal: this candidate's own entry in `moot_pairs`, matched
         // by section index since two sections may share a heading text.
         if let Some(p) = moot_pairs.iter().find(|p| p.section_idx == i) {
-            eprintln!(
-                "ask: {}",
-                msg::moot_candidate(&rel, &sec.heading_text, &p.target_heading, &p.set_text, p.letter)
-            );
-            return 1;
+            refusals.push(msg::moot_candidate(
+                &rel,
+                &sec.heading_text,
+                &p.target_heading,
+                &p.set_text,
+                p.letter,
+            ));
         }
 
         // Per "Does the tool stop loaded phrases in a question?": a
@@ -431,25 +434,19 @@ pub fn run(record_path: PathBuf) -> i32 {
         // from the same scan `approve` runs on headings and context prose.
         {
             let (s, e) = record::hash_range(&rf.lines, sec);
-            if let Some((line, phrase, what)) =
-                tells::prose_tells_in(&rf.lines, s, e).into_iter().next()
-            {
-                eprintln!("ask: {}", msg::tell(&rel, line, &sec.heading_text, &phrase, what));
-                return 1;
+            for (line, phrase, what) in tells::prose_tells_in(&rf.lines, s, e) {
+                refusals.push(msg::tell(&rel, line, &sec.heading_text, &phrase, what));
             }
         }
 
         let text = state::section_text_excluding_terms_line(&rf.lines, sec);
 
         // Refusal 5: a banned word in the candidate's own text, from the
-        // single hash-based ban list scanner. `ask` stops at the first hit.
+        // single hash-based ban list scanner. One line for the question:
+        // the refusal names the question and never the word.
         if let Some(hit) = banned::first_hit(&text, &banned_entries, &terms_list) {
             let suffix = msg::term_suffix(hit.term.as_deref());
-            eprintln!(
-                "ask: {}",
-                msg::banned_word_in_candidate(&rel, &sec.heading_text, &suffix)
-            );
-            return 1;
+            refusals.push(msg::banned_word_in_candidate(&rel, &sec.heading_text, &suffix));
         }
 
         // `terms::resolve` never matches a retired term (per "Does a retired term keep its words?"), so a
@@ -460,9 +457,15 @@ pub fn run(record_path: PathBuf) -> i32 {
 
         // Refusal 6: zero pairings.
         if pairs.is_empty() {
-            eprintln!("ask: {}", msg::pairs_no_term(&rel, &sec.heading_text));
-            return 1;
+            refusals.push(msg::pairs_no_term(&rel, &sec.heading_text));
         }
+    }
+
+    if !refusals.is_empty() {
+        for m in &refusals {
+            eprintln!("ask: {}", m);
+        }
+        return 1;
     }
 
     // Per "Does a reference in a topic file carry the identifier of what

@@ -58,6 +58,61 @@ Standard: plain words.
     )
 }
 
+// --- every refusal in one run ----------------------------------------------
+
+// One run of ask names every fault of every question it was about to ask:
+// two loaded words in the first question, one in the second, and the
+// missing answer set of the question that stands on the first. Nothing is
+// written and nothing is asked.
+#[test]
+fn ask_names_every_fault_in_one_run() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let plan = "# Example\n\n### 1.1 What color is the widget?\ndepends: widget\n\n\
+                ### 1.2 Does the widget have a lid?\ndepends: widget\n\n\
+                ### 1.3 Does the widget's paint match its color?\ndepends: 1.1 What color is the widget?\n";
+    let record = write_record(&dir, "adrdom/decisions/example.md", plan);
+    approve_record(&dir, "adrdom/decisions/example.md");
+
+    let approved = std::fs::read_to_string(&record).unwrap();
+    let ids = extract_ids(&approved);
+    let body_1 = "\nProblem: the widget is already red and currently unpainted.\n\n\
+                  Standard: plain words.\n\n\
+                  - A) The widget is red.\n  Why: reasons.\n  Costs: costs.\n\
+                  - B) The widget is blue.\n  Why: other reasons.\n  Costs: other costs.\n";
+    let body_2 = "\nProblem: the widget has no lid today.\n\n\
+                  Standard: plain words.\n\n\
+                  - A) The widget has a lid.\n  Why: reasons.\n  Costs: costs.\n\
+                  - B) The widget has no lid.\n  Why: other reasons.\n  Costs: other costs.\n";
+    let with_bodies = approved
+        .replacen(&format!("id: {}\n", ids[0]), &format!("id: {}\n{}", ids[0], body_1), 1)
+        .replacen(&format!("id: {}\n", ids[1]), &format!("id: {}\n{}", ids[1], body_2), 1);
+    assert_ne!(with_bodies, approved, "the id lines must be found");
+    std::fs::write(&record, &with_bodies).unwrap();
+
+    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
+    let err = stderr(&out);
+    let lines: Vec<&str> = err.lines().collect();
+    assert_eq!(lines.len(), 4, "{}", err);
+    assert!(lines.iter().all(|l| l.starts_with("ask: adrdom/decisions/example.md")), "{}", err);
+    assert_eq!(lines.iter().filter(|l| l.contains("without an answer set")).count(), 1, "{}", err);
+    for word in ["already", "currently", "today"] {
+        assert_eq!(
+            lines.iter().filter(|l| l.contains(&format!("\"{}\"", word))).count(),
+            1,
+            "one line for {:?}: {}",
+            word,
+            err
+        );
+    }
+
+    let after = std::fs::read_to_string(&record).unwrap();
+    assert_eq!(after, with_bodies, "ask must not modify the file when it refuses");
+    assert_eq!(asked_row_count(&dir), 0, "nothing is asked while a refusal stands");
+}
+
 // --- tier order: blocked, then allowed once the blocker is answered -------
 
 // adr: aec860fd-22ad-44a7-99f7-222ea19537e7
