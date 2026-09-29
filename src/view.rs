@@ -294,6 +294,122 @@ pub(crate) fn moot_notes(rf: &RecordFile, led: &Ledger) -> Vec<String> {
         .collect()
 }
 
+/// What is next in one topic file, one line per move, each naming who
+/// makes it: what `show` prints under the file and `ask` prints when it has
+/// nothing to ask. The agent reads its next move here and never works it
+/// out from the tiers. In order: the decisions to build (per "Does the
+/// agent build on a decision before its tier is fully answered?": built
+/// once every question beside it is answered), the bodies to write, the
+/// answer sets to write, the questions to ask, the approval the file waits
+/// for, the answers the owner owes, a refused or moot question that holds
+/// the rest, the decisions that wait for a question beside them, and the
+/// questions whose turn has not come. Empty when nothing is left to do.
+///
+/// `plan_ok` is read by the caller off the file as loaded, before
+/// `depends::normalize_cross_file_deps` (see `snapshot`). `tests` is
+/// `check::test_index`: an answered decision with a test tied to it is
+/// built.
+pub(crate) fn next_moves(
+    rf: &RecordFile,
+    led: &Ledger,
+    plan_ok: bool,
+    tests: &HashMap<String, Vec<String>>,
+) -> Vec<String> {
+    use crate::msg;
+    let Some(tiers) = &rf.tiers else {
+        return vec![msg::next_plan_unresolved()];
+    };
+    let open_tier = state::open_tier(rf);
+    let moot: HashSet<usize> = moot_pairs(rf, led).iter().map(|p| p.section_idx).collect();
+
+    let mut bodies = Vec::new();
+    let mut to_ask = Vec::new();
+    let mut answers = Vec::new();
+    let mut held = Vec::new();
+    let mut build = Vec::new();
+    let mut build_waits = Vec::new();
+    let mut later = Vec::new();
+
+    for (i, sec) in rf.sections.iter().enumerate() {
+        let heading = sec.heading_text.as_str();
+        match qstate(led, sec) {
+            QState::Skeleton | QState::Unasked if moot.contains(&i) => {
+                held.push(msg::next_moot(&rf.rel, heading));
+            }
+            QState::Skeleton | QState::Unasked if Some(tiers[i]) != open_tier => {
+                later.push(heading.to_string());
+            }
+            QState::Skeleton | QState::Unasked if sec.is_skeleton => {
+                bodies.push(msg::next_write_body(heading));
+            }
+            QState::Skeleton | QState::Unasked => to_ask.push(heading.to_string()),
+            QState::Open => {
+                if let Some(id) = &sec.id {
+                    let version = record::version_of(&rf.lines, sec);
+                    answers.push(msg::next_answer(id, &version, heading));
+                }
+            }
+            QState::Refused => held.push(msg::next_refused(heading)),
+            QState::Answered => {
+                let Some(id) = &sec.id else { continue };
+                if tests.get(id).is_some_and(|locations| !locations.is_empty()) {
+                    continue;
+                }
+                let beside = rf
+                    .sections
+                    .iter()
+                    .enumerate()
+                    .find(|(j, s)| *j != i && tiers[*j] == tiers[i] && state::tier_unresolved(s));
+                match beside {
+                    Some((_, s)) => build_waits.push(msg::next_build_waits(heading, &s.heading_text)),
+                    None => build.push(msg::next_build(heading, id)),
+                }
+            }
+            QState::Superseded | QState::Withdrawn => {}
+        }
+    }
+
+    // Per "Does a depends entry carry the answers it holds under?": every
+    // entry that names a question about to be asked carries its letters
+    // before `ask` runs. Named once the target has its options.
+    let mut sets = Vec::new();
+    for (ti, target) in rf.sections.iter().enumerate() {
+        if Some(tiers[ti]) != open_tier || target.is_skeleton || !state::tier_unresolved(target) {
+            continue;
+        }
+        for (di, set) in rf.dependents_of(ti) {
+            if set.is_none() {
+                sets.push(msg::next_answer_set(
+                    &rf.sections[di].heading_text,
+                    &target.heading_text,
+                ));
+            }
+        }
+    }
+
+    // What is answered is built before anything new is written: the commit
+    // that carries an answer carries its code and its test.
+    let mut out = build;
+    if plan_ok {
+        out.extend(bodies);
+        out.extend(sets);
+        if !to_ask.is_empty() {
+            out.push(msg::next_ask(&rf.rel, &to_ask));
+        }
+    } else {
+        // Nothing is written or asked under a plan that waits for its
+        // approval; what the owner owes and what is answered stands.
+        out.push(msg::next_plan_unapproved(&rf.rel));
+    }
+    out.extend(answers);
+    out.extend(held);
+    out.extend(build_waits);
+    if plan_ok && !later.is_empty() {
+        out.push(msg::next_later(&later));
+    }
+    out
+}
+
 /// The text following `prefix` (e.g. `"Problem: "`) on the first matching
 /// line in `sec`'s body, trimmed, with the prefix itself left out.
 fn body_field(lines: &[String], sec: &Section, prefix: &str) -> Option<String> {

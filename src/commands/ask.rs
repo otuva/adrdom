@@ -564,6 +564,12 @@ pub fn run(record_path: PathBuf) -> i32 {
 
     if new_rows.is_empty() {
         println!("ask: {}", msg::nothing_to_ask(&record_path.display().to_string()));
+        // The plan is approved by this point (`ask` stops on an unapproved
+        // one above), so what is left is named move by move.
+        let tests = crate::commands::check::test_index(&root, &repo::Source::WorkingTree);
+        for line in crate::view::next_moves(&rf, &led, true, &tests) {
+            println!("  {}", line);
+        }
         return 0;
     }
 

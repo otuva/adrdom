@@ -76,7 +76,11 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
         None => all_records,
     };
 
+    let tests = crate::commands::check::test_index(&root, &repo::Source::WorkingTree);
     for rf in &mut records {
+        // Read off the file as loaded, before the pass below rewrites its
+        // depends entries in memory (see `view::snapshot`).
+        let plan_ok = state::plan_approved(&led, rf, &rf.rel) && state::context_approved(&led, rf, &rf.rel);
         depends::normalize_cross_file_deps(rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
         print_file(
             rf,
@@ -87,6 +91,13 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
             &any_headings_all,
             &known_ids,
         );
+        let next = view::next_moves(rf, &led, plan_ok, &tests);
+        if !next.is_empty() {
+            println!("next");
+            for line in next {
+                println!("  {}", line);
+            }
+        }
     }
 
     // Reuses `any_headings_all`/`known_ids` (built off `all_records`

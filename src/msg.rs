@@ -819,11 +819,89 @@ pub fn no_id_line(rel: &str, heading: &str) -> String {
     )
 }
 
+/// `ask` prints the file's next moves (`view::next_moves`) under this line.
 pub fn nothing_to_ask(path: &str) -> String {
+    format!("nothing to ask in {}", path)
+}
+
+// --- what is next in a topic file (`view::next_moves`) ---------------------
+// One line per move, each opening with who makes it, in the words a
+// refusal uses. `show` prints them under the file, `ask` when it has
+// nothing to ask.
+
+fn quoted(headings: &[String]) -> String {
+    headings
+        .iter()
+        .map(|h| format!("\"{}\"", h))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+pub fn next_plan_unresolved() -> String {
+    Next::agent("runs adr check and clears what it names in the plan").render()
+}
+
+pub fn next_plan_unapproved(rel: &str) -> String {
+    Next::agent("runs adr check and clears what it names")
+        .and_owner_runs(format!("adr approve {}", rel))
+        .render()
+}
+
+pub fn next_write_body(heading: &str) -> String {
+    Next::agent(format!("writes the body of \"{}\"", heading)).render()
+}
+
+pub fn next_answer_set(dependent: &str, target: &str) -> String {
+    Next::agent(format!(
+        "writes =A, =A|B or =* on the depends line of \"{}\" where it names \"{}\"",
+        dependent, target
+    ))
+    .render()
+}
+
+pub fn next_ask(rel: &str, headings: &[String]) -> String {
+    Next::agent(format!("runs adr ask {} for {}", rel, quoted(headings))).render()
+}
+
+pub fn next_answer(id: &str, version: &str, heading: &str) -> String {
     format!(
-        "nothing to ask in {}: no question in the open tier has a body that is not already asked; agent writes the bodies of the open tier (adr show names it)",
-        path
+        "{} for \"{}\"",
+        Next::owner_runs(format!("adr answer {}@{} <letter>", id, version)).render(),
+        heading
     )
+}
+
+pub fn next_refused(heading: &str) -> String {
+    Next::agent(format!(
+        "changes the plan: \"{}\" is refused and holds the questions that come after it",
+        heading
+    ))
+    .render()
+}
+
+pub fn next_moot(rel: &str, heading: &str) -> String {
+    Next::agent(format!("drops or replaces \"{}\", which is moot", heading))
+        .and_owner_runs(format!("adr approve {}", rel))
+        .render()
+}
+
+pub fn next_build(heading: &str, id: &str) -> String {
+    Next::agent(format!(
+        "builds \"{}\" and puts \"adr: {}\" in a test that shows it",
+        heading, id
+    ))
+    .render()
+}
+
+pub fn next_build_waits(heading: &str, beside: &str) -> String {
+    format!(
+        "not yet: \"{}\" is answered and is built once \"{}\" is answered",
+        heading, beside
+    )
+}
+
+pub fn next_later(headings: &[String]) -> String {
+    format!("not yet, after the questions named above: {}", quoted(headings))
 }
 
 // --- answer.rs / ban.rs / unban.rs / install.rs / uninstall.rs -------------

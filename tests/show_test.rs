@@ -165,6 +165,11 @@ tier 2
     stands on: 1.1 Root?=A
   [refused] 2.2 Also depends?
     stands on: 1.1 Root?=A
+next
+  agent runs adr check and clears what it names, owner runs: adr approve adrdom/decisions/tiered.md
+  owner runs: adr answer id-open@11024127 <letter> for \"2.1 Depends on root?\"
+  agent changes the plan: \"2.2 Also depends?\" is refused and holds the questions that come after it
+  not yet: \"1.1 Root?\" is answered and is built once \"1.2 Unasked root?\" is answered
 ";
     assert_eq!(shown, expected, "full output: {}", shown);
 }
@@ -319,8 +324,8 @@ fn show_prints_no_guess_for_an_ambiguous_cross_file_heading_dependency() {
 
     // Everything `show` prints for file B, from its topic line to the next
     // file's (or end of output): tier derivation failed on the ambiguous
-    // entry, so this is the topic line alone -- no tier, no question, and
-    // in particular no guessed "stands on" line.
+    // entry, so this is the topic line and the one move left -- no tier, no
+    // question, and in particular no guessed "stands on" line.
     let b_start = shown.find("# Topic B").expect("topic B header");
     let b_end = shown[b_start..]
         .find("\n# ")
@@ -328,8 +333,9 @@ fn show_prints_no_guess_for_an_ambiguous_cross_file_heading_dependency() {
         .unwrap_or(shown.len());
     let b_block = shown[b_start..b_end].trim_end();
     assert_eq!(
-        b_block, "# Topic B",
-        "an ambiguous cross-file dependency must print nothing but the topic line, never a guessed tier or \"stands on\": {}",
+        b_block,
+        "# Topic B\nnext\n  agent runs adr check and clears what it names in the plan",
+        "an ambiguous cross-file dependency must print no guessed tier or \"stands on\": {}",
         shown
     );
 }
