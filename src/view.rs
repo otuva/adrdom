@@ -351,7 +351,13 @@ pub(crate) fn next_moves(
             }
             QState::Skeleton | QState::Unasked => to_ask.push(heading.to_string()),
             QState::Open => {
-                if let Some(id) = &sec.id {
+                let Some(id) = &sec.id else { continue };
+                // Edited since it was asked: `answer` takes only the text
+                // the ledger holds, so the agent asks it again first.
+                let asked = led.latest_asked(id).map(|r| r.hash.as_str());
+                if asked != Some(record::section_hash(&rf.lines, sec).as_str()) {
+                    to_ask.push(heading.to_string());
+                } else {
                     let version = record::version_of(&rf.lines, sec);
                     answers.push(msg::next_answer(id, &version, heading));
                 }
@@ -368,6 +374,9 @@ pub(crate) fn next_moves(
                     .enumerate()
                     .find(|(j, s)| *j != i && tiers[*j] == tiers[i] && state::tier_unresolved(s));
                 match beside {
+                    Some((_, s)) if s.is_refused() => {
+                        build_waits.push(msg::next_build_waits_refused(heading, &s.heading_text))
+                    }
                     Some((_, s)) => build_waits.push(msg::next_build_waits(heading, &s.heading_text)),
                     None => build.push(msg::next_build(heading, id)),
                 }

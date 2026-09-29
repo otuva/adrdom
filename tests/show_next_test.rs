@@ -144,6 +144,20 @@ fn show_names_the_next_move_at_every_step() {
         assert!(said.contains(&format!("  {}", line)), "{}", said);
     }
 
+    // A body edited after it was asked: the owner's command would be
+    // refused, so the move is the agent's, to ask it again.
+    let text = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(&path, text.replacen("the widget breaks.", "the widget breaks in use.", 1)).unwrap();
+    assert_eq!(
+        next(&dir),
+        vec![ask_for(&[ONE]), answer_for(&dir, &two, TWO), later(THREE)]
+    );
+    assert!(adr(&dir, &["ask", p], &[], "").status.success());
+    assert_eq!(
+        next(&dir),
+        vec![answer_for(&dir, &one, ONE), answer_for(&dir, &two, TWO), later(THREE)]
+    );
+
     // One of two answered: it is not built while the other is open.
     assert!(adr_answer(&dir, &one, "A").status.success());
     assert_eq!(
@@ -182,6 +196,39 @@ fn show_names_the_next_move_at_every_step() {
             "agent changes the plan: \"{}\" is refused and holds the questions that come after it",
             THREE
         )]
+    );
+}
+
+// adr: f8d92841-aef7-4cd7-bd94-0e07c03e4cb6
+//
+// The question beside an answered one is refused: no answer is coming, and
+// the line says what the answered one waits for.
+#[test]
+fn show_names_the_plan_change_an_answered_decision_waits_for() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let plan = format!("# Gate\n\n### {}\ndepends: widget\n\n### {}\ndepends: widget\n", ONE, TWO);
+    let path = write_record(&dir, REL, &plan);
+    approve_record(&dir, REL);
+    write_body(&path, ONE);
+    write_body(&path, TWO);
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr_answer(&dir, &id_of(&path, ONE), "A").status.success());
+    assert!(adr_answer(&dir, &id_of(&path, TWO), "refuse").status.success());
+
+    assert_eq!(
+        next(&dir),
+        vec![
+            format!(
+                "agent changes the plan: \"{}\" is refused and holds the questions that come after it",
+                TWO
+            ),
+            format!(
+                "not yet: \"{}\" is answered and is built once the plan changes, \"{}\" beside it is refused",
+                ONE, TWO
+            ),
+        ]
     );
 }
 

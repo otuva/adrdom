@@ -905,6 +905,14 @@ pub fn next_build_waits(heading: &str, beside: &str) -> String {
     )
 }
 
+/// The question beside it is refused: no answer is coming, the plan changes.
+pub fn next_build_waits_refused(heading: &str, beside: &str) -> String {
+    format!(
+        "not yet: \"{}\" is answered and is built once the plan changes, \"{}\" beside it is refused",
+        heading, beside
+    )
+}
+
 pub fn next_later(headings: &[String]) -> String {
     format!("not yet, after the questions named above: {}", quoted(headings))
 }

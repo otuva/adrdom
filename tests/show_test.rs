@@ -152,7 +152,9 @@ fn show_prints_tiers_states_stands_on_and_chosen_sentence() {
     // computed live off the topic file text, not off the hand-written
     // `asked` row's placeholder hash ("h-open") above, so it prints
     // regardless of that row being a fixture stand-in rather than a real
-    // `adr ask` hash.
+    // `adr ask` hash. Under "next" that same stand-in hash makes the
+    // question read as edited since it was asked, so no owner command is
+    // named for it: `answer` would refuse one.
     let expected = "\
 # Tiered Topic
 tier 1
@@ -170,7 +172,6 @@ next
   agent clears: adrdom/decisions/tiered.md: \"1.2 Unasked root?\" has no depends line; agent writes what the question stands on
   agent clears: adrdom/decisions/tiered.md: \"1.3 Skeleton?\" has no depends line; agent writes what the question stands on
   agent clears: adrdom/decisions/tiered.md: \"2.2 Also depends?\": answered; agent removes the edit
-  owner runs: adr answer id-open@11024127 <letter> for \"2.1 Depends on root?\"
   agent changes the plan: \"2.2 Also depends?\" is refused and holds the questions that come after it
   not yet: \"1.1 Root?\" is answered and is built once \"1.2 Unasked root?\" is answered
 ";
