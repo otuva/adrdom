@@ -1045,9 +1045,9 @@ pub fn show_tier(tier: usize) -> String {
 /// the chosen letter (`answered A`), every other state is the bare word.
 pub fn show_state(state: QState, letter: Option<char>) -> String {
     match state {
-        QState::Skeleton => "skeleton".to_string(),
-        QState::Unasked => "unasked".to_string(),
-        QState::Open => "open".to_string(),
+        QState::Skeleton => "no body".to_string(),
+        QState::Unasked => "not asked".to_string(),
+        QState::Open => "asked".to_string(),
         QState::Answered => match letter {
             Some(c) => format!("answered {}", c),
             None => "answered".to_string(),

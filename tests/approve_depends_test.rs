@@ -491,7 +491,7 @@ fn approve_turns_a_depends_name_into_an_id_and_show_turns_it_back_into_words() {
     let show2 = adr(&dir, &["show", "--all"], &[], "");
     assert!(show2.status.success(), "{}", stderr(&show2));
     let shown2 = stdout(&show2);
-    assert!(shown2.contains("[unasked] 1.1 Is the gadget red?"), "{}", shown2);
+    assert!(shown2.contains("[not asked] 1.1 Is the gadget red?"), "{}", shown2);
     assert!(shown2.contains("stands on: 1.1 Is the gadget red?"), "{}", shown2);
     assert!(!shown2.contains("Is the widget red?"), "{}", shown2);
 }

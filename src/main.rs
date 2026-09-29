@@ -27,12 +27,23 @@ enum Command {
     },
     /// Owner-only: remove what `adr install` wrote outside adrdom/.
     Uninstall,
-    /// Record `asked` for every unasked/changed question in an approved topic file.
-    Ask { topic_file: PathBuf },
-    /// Owner-only: approve a topic file's plan/context, or the terms file.
-    Approve { file: PathBuf },
+    /// Ask the owner every question of a topic file that has a body and is not asked yet, or print every refusal.
+    Ask {
+        /// The topic file, adrdom/decisions/<topic>.md.
+        topic_file: PathBuf,
+    },
+    /// Owner-only: approve the headings and prose of a topic file, the terms file, or a blame file.
+    Approve {
+        /// A topic file, adrdom/terms.md, or a blame file under adrdom/blame.
+        file: PathBuf,
+    },
     /// Owner-only: answer a question, identified by `<id>@<version>`, with an option letter or `refuse`.
-    Answer { id: String, letter: String },
+    Answer {
+        /// The question, as `adr show` prints it: <id>@<version>.
+        id: String,
+        /// The letter of the option picked, or the word refuse.
+        letter: String,
+    },
     /// Print the current decisions and what is next; with a topic file or --all, every question.
     Show {
         /// Print every question of this topic file, with its state and what it stands on.
@@ -43,12 +54,13 @@ enum Command {
     },
     /// Read lines from stdin and ban them (and their tokens) from the repo.
     Ban {
-        /// Carry an existing terms.md term's uuid alongside each new hash,
-        /// matched case-insensitively by name or alias.
+        /// Name the term the banned words belong to, by its name or an
+        /// alias; the case of the letters does not count.
         #[arg(long, conflicts_with = "rebuild")]
         term: Option<String>,
-        /// Rewrite the ban list from the ledger alone, ignoring whatever it
-        /// currently holds; reads no stdin and writes no ledger row.
+        /// Write the ban list again from what the ledger says is banned;
+        /// reads no input and bans nothing new. Run it when a refusal
+        /// names it.
         #[arg(long)]
         rebuild: bool,
     },
@@ -71,10 +83,10 @@ enum Command {
         /// Print what failed and nothing else.
         #[arg(long)]
         quiet: bool,
-        /// Also require every ledger row of <commit>'s own ledger to be present in the one being judged.
+        /// Also fail when a line of the ledger as it was at <commit> is missing from the ledger now.
         #[arg(long, conflicts_with = "push")]
         since: Option<String>,
-        /// Read git's pre-push input from stdin and judge only that: no ref may drop a ledger row the remote already has.
+        /// What the pre-push hook runs: read git's pre-push input and fail when a push would drop a line of the ledger the remote has.
         #[arg(long)]
         push: bool,
     },

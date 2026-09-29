@@ -79,7 +79,7 @@ fn show_lists_every_question_with_its_state_and_tier() {
     // text the owner is reading right now.
     let version = current_version(&dir, &ids[1]);
     assert!(
-        shown.contains(&format!("[open @{}] 1.2 Is this only asked?", version)),
+        shown.contains(&format!("[asked @{}] 1.2 Is this only asked?", version)),
         "{}",
         shown
     );
@@ -161,10 +161,10 @@ tier 1
   [answered A] 1.1 Root?
     stood on by: 2.1 Depends on root?
     First choice.
-  [unasked] 1.2 Unasked root?
-  [skeleton] 1.3 Skeleton?
+  [not asked] 1.2 Unasked root?
+  [no body] 1.3 Skeleton?
 tier 2
-  [open @11024127] 2.1 Depends on root?
+  [asked @11024127] 2.1 Depends on root?
     stands on: 1.1 Root?=A
   [refused] 2.2 Also depends?
     stands on: 1.1 Root?=A
@@ -269,7 +269,7 @@ fn show_derives_tiers_for_an_unapproved_file_whose_depends_line_names_a_cross_fi
 
     assert!(shown.contains("# Topic B"), "{}", shown);
     assert!(
-        shown.contains("tier 1\n  [unasked] 1.1 Does B stand on A?"),
+        shown.contains("tier 1\n  [not asked] 1.1 Does B stand on A?"),
         "B's only question should land in tier 1 and be listed as unasked: {}",
         shown
     );

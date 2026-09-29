@@ -106,7 +106,7 @@ fn show_tags_a_decision_row_naming_an_unasked_question_with_the_unasked_state() 
     let out = adr(&dir, &["show", "--all"], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
-    assert!(text.contains("decision: Does this pass? [unasked]"), "{}", text);
+    assert!(text.contains("decision: Does this pass? [not asked]"), "{}", text);
 }
 
 // adr: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
@@ -125,7 +125,7 @@ fn show_tags_a_decision_row_naming_an_asked_unanswered_question_with_the_open_st
     let out = adr(&dir, &["show", "--all"], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
-    assert!(text.contains("decision: Does this also pass? [open]"), "{}", text);
+    assert!(text.contains("decision: Does this also pass? [asked]"), "{}", text);
 }
 
 // adr: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15

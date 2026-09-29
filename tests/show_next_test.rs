@@ -154,7 +154,7 @@ fn show_names_the_next_move_at_every_step() {
     );
     // Its line in the listing carries no version for the owner to use.
     let shown = stdout(&adr(&dir, &["show", "--all"], &[], ""));
-    assert!(shown.contains(&format!("  [open] {}\n", ONE)), "{}", shown);
+    assert!(shown.contains(&format!("  [asked] {}\n", ONE)), "{}", shown);
     assert!(adr(&dir, &["ask", p], &[], "").status.success());
     assert_eq!(
         next(&dir),
@@ -448,7 +448,7 @@ adr show <topic file> prints every question of one file with what it stands on; 
 
     let whole = format!(
         "# Gate ({rel})\ntier 1\n  [answered A] {one}\n    stands on: widget\n    stood on by: {three}\n    Yes the widget holds.\n\
-tier 2\n  [skeleton] {three}\n    stands on: widget, {one}=A\nnext\n  agent writes the body of \"{three}\"\n",
+tier 2\n  [no body] {three}\n    stands on: widget, {one}=A\nnext\n  agent writes the body of \"{three}\"\n",
         rel = REL,
         one = ONE,
         three = THREE
