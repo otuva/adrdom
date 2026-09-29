@@ -62,10 +62,15 @@ enum Command {
     },
     /// Run all governance checks.
     Check {
+        /// Judge the files as they are staged for the commit, not as they are on disk.
         #[arg(long, conflicts_with = "push")]
         staged: bool,
+        /// Judge the staged files and look for banned words in this commit message file.
         #[arg(long, conflicts_with = "push")]
         message: Option<PathBuf>,
+        /// Print what failed and nothing else.
+        #[arg(long)]
+        quiet: bool,
         /// Also require every ledger row of <commit>'s own ledger to be present in the one being judged.
         #[arg(long, conflicts_with = "push")]
         since: Option<String>,
@@ -116,7 +121,9 @@ fn main() {
         Command::Ban { term, rebuild } => commands::ban::run(term, rebuild),
         Command::Unban => commands::unban::run(),
         Command::Serve { port } => commands::serve::run(port),
-        Command::Check { staged, message, since, push } => commands::check::run(staged, message, since, push),
+        Command::Check { staged, message, quiet, since, push } => {
+            commands::check::run(staged, message, since, push, quiet)
+        }
     };
     std::process::exit(code);
 }

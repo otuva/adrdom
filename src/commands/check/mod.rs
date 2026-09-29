@@ -206,7 +206,11 @@ fn build(
 /// ledger before a push?", 19e1c023-a678-4842-a414-bb0e45c41601 P). Every
 /// other combination runs the plain report, `since` (`--since <commit>`)
 /// adding its one extra ledger comparison on top.
-pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: bool) -> i32 {
+///
+/// `quiet` (`--quiet`) prints the failures and leaves out the notes: what
+/// the commit hooks run, so a commit that passes prints nothing and one
+/// that fails prints only what failed.
+pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: bool, quiet: bool) -> i32 {
     if push {
         return push::run();
     }
@@ -225,8 +229,10 @@ pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: 
     for f in &report.failures {
         println!("{}", f);
     }
-    for n in &report.notes {
-        println!("{}", n);
+    if !quiet {
+        for n in &report.notes {
+            println!("{}", n);
+        }
     }
 
     exit_code

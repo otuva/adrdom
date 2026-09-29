@@ -746,7 +746,7 @@ fn check_install_fails_when_pre_commit_hook_differs_and_passes_after_reinstall()
     assert!(adr(&dir, &["install"], &[], "").status.success());
     assert_eq!(
         std::fs::read_to_string(dir.join(".githooks/pre-commit")).unwrap(),
-        "#!/bin/sh\nadr check --staged\nexit $?\n",
+        "#!/bin/sh\nadr check --staged --quiet\nexit $?\n",
         "reinstall should restore the hook"
     );
 
@@ -2400,4 +2400,37 @@ agent fixes the file so it can be read as text (e.g. its encoding)"
         "{}",
         stdout(&out)
     );
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// The commit hooks run check with --quiet. A commit that passes prints
+// nothing; one that fails prints what failed and no note. check run by hand
+// prints its notes as before.
+#[test]
+fn check_quiet_prints_what_failed_and_nothing_else() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_empty_terms(&dir);
+    run_git(&dir, &["add", "-A"]);
+
+    let pre_commit = std::fs::read_to_string(dir.join(".githooks/pre-commit")).unwrap();
+    let commit_msg = std::fs::read_to_string(dir.join(".githooks/commit-msg")).unwrap();
+    assert!(pre_commit.contains("adr check --staged --quiet"), "{}", pre_commit);
+    assert!(commit_msg.contains("adr check --message \"$1\" --quiet"), "{}", commit_msg);
+
+    let by_hand = adr(&dir, &["check", "--staged"], &[], "");
+    assert!(by_hand.status.success(), "{}", stdout(&by_hand));
+    assert!(stdout(&by_hand).contains("tested: 0"), "{}", stdout(&by_hand));
+
+    let quiet = adr(&dir, &["check", "--staged", "--quiet"], &[], "");
+    assert!(quiet.status.success(), "{}", stdout(&quiet));
+    assert_eq!(stdout(&quiet), "");
+
+    std::fs::write(dir.join("adrdom/decisions/broken.md"), [0x23u8, 0x20, 0xff, 0xfe, 0x0a]).unwrap();
+    let quiet = adr(&dir, &["check", "--quiet"], &[], "");
+    assert!(!quiet.status.success());
+    let lines: Vec<String> = stdout(&quiet).lines().map(|l| l.to_string()).collect();
+    assert_eq!(lines.len(), 1, "{:?}", lines);
+    assert!(lines[0].starts_with("parse: adrdom/decisions/broken.md: cannot be read"), "{:?}", lines);
 }
