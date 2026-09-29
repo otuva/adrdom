@@ -61,7 +61,7 @@ pub fn run(claude: bool, codex: bool) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("install", Actor::Agent));
+            eprintln!("{}", msg::not_a_repo("install", "", Actor::Agent));
             return 1;
         }
     };

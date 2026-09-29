@@ -218,7 +218,7 @@ pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("check", Actor::Agent));
+            eprintln!("{}", msg::not_a_repo("check", "", Actor::Agent));
             return 1;
         }
     };

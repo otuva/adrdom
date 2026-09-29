@@ -14,7 +14,7 @@ pub fn run(id_arg: String, letter: String) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("answer", Actor::Owner));
+            eprintln!("{}", msg::not_a_repo("answer", &format!("{} {}", id_arg, letter), Actor::Owner));
             return 1;
         }
     };
@@ -28,10 +28,18 @@ pub fn run(id_arg: String, letter: String) -> i32 {
         None => {
             // The question the bare id names, when it names one: the
             // refusal then prints the command whole, version included.
+            let led = crate::ledger::read(&root.join(repo::LEDGER_PATH));
             let found = crate::record::load_all(&root).into_iter().find_map(|rf| {
                 rf.sections
                     .iter()
-                    .find(|s| s.id.as_deref() == Some(id_arg.as_str()) && !s.is_skeleton)
+                    .find(|s| s.id.as_deref() == Some(id_arg.as_str()))
+                    .filter(|s| {
+                        let hash = crate::record::section_hash(&rf.lines, s);
+                        s.answer_line.is_none()
+                            && led
+                                .latest_state(&id_arg)
+                                .is_some_and(|r| r.event == "asked" && r.hash == hash)
+                    })
                     .map(|s| (s.heading_text.clone(), crate::record::version_of(&rf.lines, s)))
             });
             let asked = found.as_ref().map(|(h, v)| (h.as_str(), v.as_str()));

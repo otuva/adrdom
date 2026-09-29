@@ -16,7 +16,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("ask", Actor::Agent));
+            eprintln!("{}", msg::not_a_repo("ask", "", Actor::Agent));
             return 1;
         }
     };
@@ -333,7 +333,7 @@ pub fn run(record_path: PathBuf) -> i32 {
         // on the line (per "Does a reference in a topic file carry the
         // identifier of what it names?").
         let mut ids = Vec::new();
-        for old in &sec.supersedes {
+        for old in &depends::supersedes_entries(&sec.supersedes, &cross_file_headings, &led) {
             match depends::resolve_supersedes(old, &cross_file_headings, &led) {
                 Ok(id) => ids.push(id),
                 Err(depends::SupersedesError::NotCurrent) => {

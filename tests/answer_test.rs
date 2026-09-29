@@ -1421,6 +1421,9 @@ fn answer_with_a_bare_id_is_refused_and_writes_nothing() {
         "expected the next move to name adr answer with a version: {}",
         err
     );
+    // The move the refusal names, as printed, with a letter in place of
+    // `<letter>`: made at the end of this test, and it answers the question.
+    let command = err.trim_end().split("owner runs: adr ").nth(1).unwrap().to_string();
 
     let after = std::fs::read_to_string(&record).unwrap();
     assert!(
@@ -1433,6 +1436,22 @@ fn answer_with_a_bare_id_is_refused_and_writes_nothing() {
         !ledger.lines().any(|l| l.contains("\tanswered\t")),
         "nothing should be written to the ledger: {}",
         ledger
+    );
+
+    let args: Vec<&str> = command
+        .split(' ')
+        .map(|a| if a == "<letter>" { "A" } else { a })
+        .collect();
+    let out = adr_owner(&dir, &args, "");
+    assert!(out.status.success(), "{:?}: {}", args, stderr(&out));
+
+    // The question is answered now: a bare id names no command that
+    // would answer it, and the owner is sent to show.
+    let out = adr_owner(&dir, &["answer", question_id, "A"], "");
+    assert!(!out.status.success());
+    assert_eq!(
+        stderr(&out).trim_end(),
+        format!("answer: {}: no version given; owner runs: adr show", question_id)
     );
 }
 

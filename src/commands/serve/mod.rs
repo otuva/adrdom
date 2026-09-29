@@ -23,7 +23,7 @@ pub fn run(port: u16) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("serve", Actor::Owner));
+            eprintln!("{}", msg::not_a_repo("serve", &format!("--port {}", port), Actor::Owner));
             return 1;
         }
     };

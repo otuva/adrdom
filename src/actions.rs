@@ -1471,6 +1471,9 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
         .map(|(h, _)| h.clone())
         .collect();
     removed.sort();
+    // A ban list may hold one hash on two lines (a merge, an edit by
+    // hand): it is one word, removed once.
+    removed.dedup();
     // The words given that were not banned: said as a count beside what
     // was removed, never dropped without a word.
     let not_banned = to_remove.len() - removed.len();

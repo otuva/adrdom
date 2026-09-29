@@ -33,7 +33,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("ban", Actor::Agent));
+            eprintln!("{}", msg::not_a_repo("ban", "", Actor::Agent));
             return 1;
         }
     };

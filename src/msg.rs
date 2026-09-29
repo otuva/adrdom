@@ -113,10 +113,17 @@ pub fn stdin_read_failed(next: Next) -> String {
 /// be running `cmd` (the owner, for the five owner-only commands, since
 /// `owner_authorized` already gated by the time this fires; the agent for
 /// every other command).
-pub fn not_a_repo(cmd: &str, actor: Actor) -> String {
+/// `args` is what the command was given, so the owner's line is the whole
+/// command.
+pub fn not_a_repo(cmd: &str, args: &str, actor: Actor) -> String {
+    let command = if args.is_empty() {
+        format!("adr {}", cmd)
+    } else {
+        format!("adr {} {}", cmd, args)
+    };
     let next = match actor {
         Actor::Agent => Next::agent("changes into the repository and retries"),
-        Actor::Owner => Next::owner_runs(format!("adr {}", cmd)),
+        Actor::Owner => Next::owner_runs(command),
     };
     refuse(
         format!("{}: not inside a git repository; it runs inside one", cmd),
@@ -2343,6 +2350,14 @@ pub fn claude_md_import_removed() -> String {
     "uninstall: CLAUDE.md: removed the AGENTS.md import".to_string()
 }
 
+/// A hook that is there and is not what this build of install writes.
+pub fn hook_left(name: &str) -> String {
+    format!(
+        "uninstall: left .githooks/{}: it differs from what install writes",
+        name
+    )
+}
+
 pub fn hook_removed(name: &str) -> String {
     format!("uninstall: removed .githooks/{}", name)
 }
@@ -2449,8 +2464,8 @@ mod tests {
             create_failed("x", e, Next::agent("retries")),
             parse_failed("x", e, Next::agent("retries")),
             stdin_read_failed(Next::agent("retries")),
-            not_a_repo("ask", Actor::Agent),
-            not_a_repo("approve", Actor::Owner),
+            not_a_repo("ask", "", Actor::Agent),
+            not_a_repo("approve", "adrdom/decisions/x.md", Actor::Owner),
             owner_refusal("approve", "adrdom/decisions/x.md"),
             owner_refusal("unban", ""),
             terms_missing(),

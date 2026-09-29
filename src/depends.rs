@@ -391,6 +391,37 @@ pub fn resolve_supersedes(
     }
 }
 
+/// The entries of a `supersedes:` line, from the pieces a split at every
+/// comma gave. A heading may hold a comma itself: pieces are joined again,
+/// the longest run first, while the joined text names a current decision
+/// (one or several), the same way a `depends:` line's pieces are joined
+/// against the headings of its file. A run that names none stays one entry
+/// for each piece.
+pub fn supersedes_entries(
+    pieces: &[String],
+    cross_file_headings: &HashMap<String, Vec<(String, String)>>,
+    led: &Ledger,
+) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < pieces.len() {
+        let mut chosen = i + 1;
+        for j in (i + 2..=pieces.len()).rev() {
+            let joined = pieces[i..j].join(", ");
+            if !matches!(
+                resolve_supersedes(&joined, cross_file_headings, led),
+                Err(SupersedesError::NotCurrent)
+            ) {
+                chosen = j;
+                break;
+            }
+        }
+        out.push(pieces[i..chosen].join(", "));
+        i = chosen;
+    }
+    out
+}
+
 /// One `bad_option_letter` message per letter in `letters` that isn't
 /// one of `target`'s options (per "Does a depends entry carry the answers
 /// it holds under?"); empty when `target` has no options

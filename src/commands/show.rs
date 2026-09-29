@@ -23,7 +23,7 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("show", Actor::Agent));
+            eprintln!("{}", msg::not_a_repo("show", "", Actor::Agent));
             return 1;
         }
     };
@@ -146,15 +146,16 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
         }
     }
 
+    // The short listing ends here: the blame files are in the whole one.
+    if !whole {
+        println!("{}", msg::show_whole_hint());
+        return 0;
+    }
     // Reuses `any_headings_all`/`known_ids` (built off `all_records`
     // above, before the clone): `blame_records` is that same set of
     // sections and ids, so the index would only be recomputed to the same
     // content -- built once and passed to every file printed below,
     // rather than rebuilt per file.
-    if !whole {
-        println!("{}", msg::show_whole_hint());
-        return 0;
-    }
     for bf in &blame_files {
         print_blame_file(bf, &led, &blame_records, &any_headings_all, &known_ids);
     }

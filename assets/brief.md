@@ -118,7 +118,9 @@ compare them: two options that answer it the same way are one option.
 If the question replaces a current decision, put a `supersedes:` line under
 its `id:` line and write the heading of that decision on it, as on a
 `depends:` line (several headings separated by commas). `adr ask` turns
-each heading into its id.
+each heading into its id. When a refusal says a heading names more than one
+decision, write the id of the one you mean in its place: it is on the `id:`
+line under that heading in its topic file.
 
 When `next` names an answer set, write it on that `depends:` entry: `=A`,
 `=A|B` or `=*`, the letters of the other question under which this one still
