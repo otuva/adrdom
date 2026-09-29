@@ -104,9 +104,9 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
         .collect();
         let next = view::next_moves(rf, &led, plan_ok, &plan_refusals, &tests);
         if !next.is_empty() {
-            println!("{}", msg::show_next());
+            println!("{}", msg::next_heading());
             for line in next {
-                println!("{}", msg::show_next_line(&line));
+                println!("{}", msg::next_line(&line));
             }
         }
     }
@@ -182,7 +182,10 @@ fn print_question(
     // read?": an asked (`Open`), unanswered question also prints the
     // version `answer` and the page's POST both check against -- the
     // owner's next move is `adr answer <id>@<version> <letter>`.
-    let version = (state == QState::Open).then(|| record::version_of(&rf.lines, sec));
+    // No version for a question edited since it was asked: `answer` would
+    // refuse it, and "next" names the agent's move, to ask it again.
+    let version = (state == QState::Open && view::asked_text_stands(led, rf, sec))
+        .then(|| record::version_of(&rf.lines, sec));
     println!(
         "{}",
         msg::show_question(&state_label(state, sec), version.as_deref(), &sec.heading_text)
@@ -324,8 +327,7 @@ fn classify_dropped(
     Some(msg::show_blame_copy_of(&blame::render_copy_target(target, records), None))
 }
 
-/// The state word `show` prints inside `[...]`: `answered` also carries
-/// the chosen letter (`answered A`), every other state is the bare word.
+/// `msg::show_state` for a section.
 fn state_label(state: QState, sec: &Section) -> String {
     msg::show_state(state, sec.answer_letter())
 }

@@ -973,11 +973,11 @@ pub fn show_from(origin: &str, rows: usize) -> String {
     )
 }
 
-pub fn show_next() -> String {
+pub fn next_heading() -> String {
     "next".to_string()
 }
 
-pub fn show_next_line(line: &str) -> String {
+pub fn next_line(line: &str) -> String {
     format!("  {}", line)
 }
 

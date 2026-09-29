@@ -568,7 +568,7 @@ pub fn run(record_path: PathBuf) -> i32 {
         // one above), so what is left is named move by move.
         let tests = crate::commands::check::test_index(&root, &repo::Source::WorkingTree);
         for line in crate::view::next_moves(&rf, &led, true, &[], &tests) {
-            println!("{}", msg::show_next_line(&line));
+            println!("{}", msg::next_line(&line));
         }
         return 0;
     }

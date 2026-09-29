@@ -152,6 +152,9 @@ fn show_names_the_next_move_at_every_step() {
         next(&dir),
         vec![ask_for(&[ONE]), answer_for(&dir, &two, TWO), later(THREE)]
     );
+    // Its line in the listing carries no version for the owner to use.
+    let shown = stdout(&adr(&dir, &["show"], &[], ""));
+    assert!(shown.contains(&format!("  [open] {}\n", ONE)), "{}", shown);
     assert!(adr(&dir, &["ask", p], &[], "").status.success());
     assert_eq!(
         next(&dir),
@@ -208,27 +211,50 @@ fn show_names_the_plan_change_an_answered_decision_waits_for() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
-    let plan = format!("# Gate\n\n### {}\ndepends: widget\n\n### {}\ndepends: widget\n", ONE, TWO);
+    const FOUR: &str = "Does the widget gate stay shut?";
+    let plan = format!(
+        "# Gate\n\n### {}\ndepends: widget\n\n### {}\ndepends: widget\n\n### {}\ndepends: widget\n",
+        ONE, TWO, FOUR
+    );
     let path = write_record(&dir, REL, &plan);
     approve_record(&dir, REL);
     write_body(&path, ONE);
     write_body(&path, TWO);
+    write_body(&path, FOUR);
     assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
     assert!(adr_answer(&dir, &id_of(&path, ONE), "A").status.success());
     assert!(adr_answer(&dir, &id_of(&path, TWO), "refuse").status.success());
 
+    let refused = format!(
+        "agent changes the plan: \"{}\" is refused and holds the questions that come after it",
+        TWO
+    );
+    let waits_for_plan = |heading: &str| {
+        format!(
+            "not yet: \"{}\" is answered and is built once the plan changes, \"{}\" beside it is refused",
+            heading, TWO
+        )
+    };
+
+    // One question beside it is refused and one still waits for its
+    // answer: the answer is named, the refused one has its own line.
+    let four = id_of(&path, FOUR);
     assert_eq!(
         next(&dir),
         vec![
+            answer_for(&dir, &four, FOUR),
+            refused.clone(),
             format!(
-                "agent changes the plan: \"{}\" is refused and holds the questions that come after it",
-                TWO
-            ),
-            format!(
-                "not yet: \"{}\" is answered and is built once the plan changes, \"{}\" beside it is refused",
-                ONE, TWO
+                "not yet: \"{}\" is answered and is built once \"{}\" is answered",
+                ONE, FOUR
             ),
         ]
+    );
+
+    assert!(adr_answer(&dir, &four, "A").status.success());
+    assert_eq!(
+        next(&dir),
+        vec![refused, waits_for_plan(ONE), waits_for_plan(FOUR)]
     );
 }
 

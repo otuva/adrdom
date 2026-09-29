@@ -294,6 +294,15 @@ pub(crate) fn moot_notes(rf: &RecordFile, led: &Ledger) -> Vec<String> {
         .collect()
 }
 
+/// True when the text of an asked question is the text the ledger holds
+/// for its latest `asked` row: `answer` takes the question only then, and
+/// the version `show` prints for the owner is good only then.
+pub(crate) fn asked_text_stands(led: &Ledger, rf: &RecordFile, sec: &Section) -> bool {
+    let Some(id) = &sec.id else { return false };
+    led.latest_asked(id).map(|r| r.hash.as_str())
+        == Some(record::section_hash(&rf.lines, sec).as_str())
+}
+
 /// What is next in one topic file, one line per move, each naming who
 /// makes it: what `show` prints under the file and `ask` prints when it has
 /// nothing to ask. The agent reads its next move here and never works it
@@ -353,10 +362,14 @@ pub(crate) fn next_moves(
             QState::Open => {
                 let Some(id) = &sec.id else { continue };
                 // Edited since it was asked: `answer` takes only the text
-                // the ledger holds, so the agent asks it again first.
-                let asked = led.latest_asked(id).map(|r| r.hash.as_str());
-                if asked != Some(record::section_hash(&rf.lines, sec).as_str()) {
-                    to_ask.push(heading.to_string());
+                // the ledger holds, so the agent asks it again first, once
+                // `ask` takes it (it asks the open tier only).
+                if !asked_text_stands(led, rf, sec) {
+                    if Some(tiers[i]) == open_tier {
+                        to_ask.push(heading.to_string());
+                    } else {
+                        later.push(heading.to_string());
+                    }
                 } else {
                     let version = record::version_of(&rf.lines, sec);
                     answers.push(msg::next_answer(id, &version, heading));
@@ -368,12 +381,18 @@ pub(crate) fn next_moves(
                 if tests.get(id).is_some_and(|locations| !locations.is_empty()) {
                     continue;
                 }
-                let beside = rf
-                    .sections
-                    .iter()
-                    .enumerate()
-                    .find(|(j, s)| *j != i && tiers[*j] == tiers[i] && state::tier_unresolved(s));
-                match beside {
+                // A question beside it that still waits for an answer is
+                // named ahead of a refused one: the refused one has its own
+                // line, and the answer is what the build waits for longest.
+                let unresolved = |refused: bool| {
+                    rf.sections.iter().enumerate().find(|(j, s)| {
+                        *j != i
+                            && tiers[*j] == tiers[i]
+                            && state::tier_unresolved(s)
+                            && s.is_refused() == refused
+                    })
+                };
+                match unresolved(false).or_else(|| unresolved(true)) {
                     Some((_, s)) if s.is_refused() => {
                         build_waits.push(msg::next_build_waits_refused(heading, &s.heading_text))
                     }

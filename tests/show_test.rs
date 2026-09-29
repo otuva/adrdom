@@ -139,7 +139,13 @@ fn show_prints_tiers_states_stands_on_and_chosen_sentence() {
     let record = write_record(&dir, "adrdom/decisions/tiered.md", TIERED_RECORD);
     append_ledger_row_at(&dir, "asked", "id-root", "h-root", "1.1 Root?", "2024-01-01T00:00:00Z");
     append_ledger_row_at(&dir, "answered", "id-root", "h-root", "A", "2024-01-01T00:00:01Z");
-    append_ledger_row(&dir, "asked", "id-open", "h-open", "2.1 Depends on root?");
+    // The open question's `asked` row carries the hash of its text as it
+    // stands: a stand-in hash would read as "edited since it was asked",
+    // and show prints no version and no owner command for that.
+    let rf = adr::record::load(&record).unwrap();
+    let open = rf.sections.iter().find(|s| s.id.as_deref() == Some("id-open")).unwrap();
+    let open_hash = adr::record::section_hash(&rf.lines, open);
+    append_ledger_row(&dir, "asked", "id-open", &open_hash, "2.1 Depends on root?");
     append_ledger_row(&dir, "asked", "id-refused", "h-refused", "2.2 Also depends?");
     append_ledger_row(&dir, "refused", "id-refused", "h-refused", "2.2 Also depends?");
 
@@ -148,13 +154,7 @@ fn show_prints_tiers_states_stands_on_and_chosen_sentence() {
     let shown = stdout(&out);
 
     // "id-open"'s version is the current section hash's own prefix (per
-    // "Does an answer carry the version of the question the owner read?"):
-    // computed live off the topic file text, not off the hand-written
-    // `asked` row's placeholder hash ("h-open") above, so it prints
-    // regardless of that row being a fixture stand-in rather than a real
-    // `adr ask` hash. Under "next" that same stand-in hash makes the
-    // question read as edited since it was asked, so no owner command is
-    // named for it: `answer` would refuse one.
+    // "Does an answer carry the version of the question the owner read?").
     let expected = "\
 # Tiered Topic
 tier 1
@@ -172,6 +172,7 @@ next
   agent clears: adrdom/decisions/tiered.md: \"1.2 Unasked root?\" has no depends line; agent writes what the question stands on
   agent clears: adrdom/decisions/tiered.md: \"1.3 Skeleton?\" has no depends line; agent writes what the question stands on
   agent clears: adrdom/decisions/tiered.md: \"2.2 Also depends?\": answered; agent removes the edit
+  owner runs: adr answer id-open@11024127 <letter> for \"2.1 Depends on root?\"
   agent changes the plan: \"2.2 Also depends?\" is refused and holds the questions that come after it
   not yet: \"1.1 Root?\" is answered and is built once \"1.2 Unasked root?\" is answered
 ";
