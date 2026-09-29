@@ -977,11 +977,10 @@ pub fn record_refusals(
     // there. A refused/superseded/withdrawn question is dead and does not
     // count (`state::live_tiers`).
     if let Some(tiers) = &rf.tiers {
-        let live = state::live_tiers(led, rf, tiers);
-        if let Some((tier, count)) = record::over_cap(&live) {
+        if let Some((open, answered)) = state::over_cap_headings(led, rf, tiers) {
             out.push(Refusal {
                 category: "plan",
-                message: msg::tier_cap_exceeded(rel, tier, count, record::TIER_CAP),
+                message: msg::tier_cap_exceeded(rel, &open, answered, record::TIER_CAP),
             });
         }
     }

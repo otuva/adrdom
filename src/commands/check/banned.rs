@@ -122,11 +122,11 @@ pub(crate) fn collect_targets(
         return out;
     }
     if staged {
-        if let Some(list) = repo::git(
+        if let Some(list) = repo::git_paths(
             root,
             &["diff", "--cached", "--name-only", "--diff-filter=d"],
         ) {
-            for path in list.lines() {
+            for path in &list {
                 if skip_path(path) {
                     continue;
                 }
@@ -139,8 +139,8 @@ pub(crate) fn collect_targets(
     }
 
     let mut paths: Vec<String> = Vec::new();
-    if let Some(list) = repo::git(root, &["ls-files"]) {
-        paths.extend(list.lines().map(|s| s.to_string()));
+    if let Some(list) = repo::git_paths(root, &["ls-files"]) {
+        paths.extend(list);
     }
     for p in paths {
         if skip_path(&p) {

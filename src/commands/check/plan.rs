@@ -88,17 +88,6 @@ pub(super) fn check_plan(
         if !plan_ok || !ctx_ok {
             awaiting.push(rel.clone());
         }
-        if !plan_ok {
-            for sec in &rf.sections {
-                if !sec.is_skeleton {
-                    out.push(Failure {
-                        check: "plan".to_string(),
-                        message: msg::body_under_unapproved_heading(&rel, &sec.heading_text),
-                    });
-                }
-            }
-        }
-
         // The missing-depends-line, entry-resolution, derive-error, and
         // tier-cap failures: `record_refusals`'s `plan` category for this
         // file, computed once in `mod.rs`.
@@ -108,6 +97,30 @@ pub(super) fn check_plan(
                     check: "plan".to_string(),
                     message: r.message.clone(),
                 });
+            }
+        }
+
+        // One line for the file, after its refusals above: a heading added
+        // to an approved file puts every body in it under an unapproved
+        // plan, and one line for each would bury the refusal that names
+        // the agent's move.
+        if !plan_ok {
+            let bodies: Vec<&str> = rf
+                .sections
+                .iter()
+                .filter(|sec| !sec.is_skeleton)
+                .map(|sec| sec.heading_text.as_str())
+                .collect();
+            match bodies.as_slice() {
+                [] => {}
+                [one] => out.push(Failure {
+                    check: "plan".to_string(),
+                    message: msg::body_under_unapproved_heading(&rel, one),
+                }),
+                many => out.push(Failure {
+                    check: "plan".to_string(),
+                    message: msg::bodies_under_unapproved_headings(&rel, many.len()),
+                }),
             }
         }
 

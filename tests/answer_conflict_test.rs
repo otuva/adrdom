@@ -175,6 +175,25 @@ fn c1_flow(first: &str, second: &str, merge_target: &str, merge_source: &str) {
         "c6: no conflict once the question is open again: {}",
         stdout(&after_reask)
     );
+    // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+    // The question is open and waits for the owner: check names no move,
+    // and never the one that would put the two answers back.
+    assert!(
+        after_reask.status.success() && !stdout(&after_reask).contains("without answer line"),
+        "an open question after the re-ask fails nothing: {}",
+        stdout(&after_reask)
+    );
+    // An answer line put back by hand is backed by no standing answer,
+    // whatever the rows of the two earlier answers say.
+    let open_text = std::fs::read_to_string(&record).unwrap();
+    std::fs::write(&record, format!("{}\n**Answer:** A\n", open_text.trim_end())).unwrap();
+    let by_hand = adr(&dir, &["check"], &[], "");
+    assert!(
+        !by_hand.status.success() && stdout(&by_hand).contains("answer line without ledger row"),
+        "a hand-written answer line on the open question fails: {}",
+        stdout(&by_hand)
+    );
+    std::fs::write(&record, open_text).unwrap();
 
     // Full path: the owner answers again, A stands, check passes.
     let answer = adr_answer(&dir, &id, "A");
@@ -301,6 +320,11 @@ fn c1_flow_answer_then_refusal(settle_with_refusal: bool) {
     assert!(
         !stdout(&after_reask).contains(CONFLICT_TEXT),
         "no conflict once the question is open again: {}",
+        stdout(&after_reask)
+    );
+    assert!(
+        after_reask.status.success() && !stdout(&after_reask).contains("without answer line"),
+        "an open question after the re-ask fails nothing: {}",
         stdout(&after_reask)
     );
 

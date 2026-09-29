@@ -19,8 +19,8 @@ use std::path::Path;
 pub fn test_index(root: &Path, source: &Source) -> HashMap<String, Vec<String>> {
     let mut test_ids: HashMap<String, Vec<String>> = HashMap::new();
     let adrdom_prefix = format!("{}/", repo::ADRDOM_DIR);
-    if let Some(list) = repo::git(root, &["ls-files"]) {
-        for path in list.lines() {
+    if let Some(list) = repo::git_paths(root, &["ls-files"]) {
+        for path in &list {
             if path.starts_with(&adrdom_prefix) {
                 continue;
             }

@@ -867,8 +867,9 @@ fn check_staged_judges_the_staged_hook_not_the_working_tree_copy() {
 }
 
 // adr: f8d92841-aef7-4cd7-bd94-0e07c03e4cb6
-// The installed brief tells the agent to build only a tier whose questions
-// are all answered, and never a tier holding an open sibling.
+// The installed brief tells the agent to build a decision when `show`
+// names it and not before; `show` names it once every question beside it
+// is answered (tests/show_next_test.rs holds that half).
 #[test]
 fn installed_brief_tells_the_agent_to_build_only_a_fully_answered_tier() {
     let dir = init_repo();
@@ -877,7 +878,7 @@ fn installed_brief_tells_the_agent_to_build_only_a_fully_answered_tier() {
     let agents = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
     assert!(
         agents.contains(
-            "Build only a tier whose\n   questions are all answered; nothing in a tier is built while a sibling\n   question in it is still open."
+            "Build a decision when `next`\n   names it, and not before."
         ),
         "{}",
         agents
@@ -895,7 +896,7 @@ fn installed_brief_tells_the_owner_may_edit_or_write_the_plan() {
     let agents = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
     assert!(
         agents.contains(
-            "The owner may\nstrike, add or reorder headings before approving, or write the plan itself\nand approve it the same way."
+            "The owner may strike, add or reorder headings before\napproving, or write the plan itself and approve it the same way."
         ),
         "{}",
         agents

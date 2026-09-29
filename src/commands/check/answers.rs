@@ -43,6 +43,14 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                         message: msg::refusal_without_row(&rf.rel, &sec.heading_text),
                     });
                 }
+            } else if sec.answer_line.is_some() && state::is_open_again(led, id) {
+                // Asked again after two answers met and not answered since:
+                // no answer stands, so a line in the file is hand-written,
+                // whatever the rows of the earlier answers say.
+                out.push(Failure {
+                    check: "answers".to_string(),
+                    message: msg::answer_without_row(&rf.rel, &sec.heading_text),
+                });
             } else if sec.answer_line.is_some() {
                 // `state::closed_match` mirrors this exactly: every
                 // `answered` row for this id at all, so an edit that moves
@@ -85,11 +93,19 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                     }
                 }
             } else {
-                let has_answered_row = led
-                    .rows
-                    .iter()
-                    .any(|r| r.event == "answered" && &r.id == id);
-                let has_refused_row = led.rows.iter().any(|r| r.event == "refused" && &r.id == id);
+                // A question asked again after two answers met (per "Does
+                // check fail a question answered with two different
+                // options?") is open: the owner's next answer settles it,
+                // while the rows of the two earlier answers stay in the
+                // ledger. No line is missing from the file.
+                let open_again = state::is_open_again(led, id);
+                let has_answered_row = !open_again
+                    && led
+                        .rows
+                        .iter()
+                        .any(|r| r.event == "answered" && &r.id == id);
+                let has_refused_row =
+                    !open_again && led.rows.iter().any(|r| r.event == "refused" && &r.id == id);
                 if has_answered_row {
                     out.push(Failure {
                         check: "answers".to_string(),

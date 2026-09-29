@@ -139,7 +139,13 @@ fn show_prints_tiers_states_stands_on_and_chosen_sentence() {
     let record = write_record(&dir, "adrdom/decisions/tiered.md", TIERED_RECORD);
     append_ledger_row_at(&dir, "asked", "id-root", "h-root", "1.1 Root?", "2024-01-01T00:00:00Z");
     append_ledger_row_at(&dir, "answered", "id-root", "h-root", "A", "2024-01-01T00:00:01Z");
-    append_ledger_row(&dir, "asked", "id-open", "h-open", "2.1 Depends on root?");
+    // The open question's `asked` row carries the hash of its text as it
+    // stands: a stand-in hash would read as "edited since it was asked",
+    // and show prints no version and no owner command for that.
+    let rf = adr::record::load(&record).unwrap();
+    let open = rf.sections.iter().find(|s| s.id.as_deref() == Some("id-open")).unwrap();
+    let open_hash = adr::record::section_hash(&rf.lines, open);
+    append_ledger_row(&dir, "asked", "id-open", &open_hash, "2.1 Depends on root?");
     append_ledger_row(&dir, "asked", "id-refused", "h-refused", "2.2 Also depends?");
     append_ledger_row(&dir, "refused", "id-refused", "h-refused", "2.2 Also depends?");
 
@@ -148,11 +154,7 @@ fn show_prints_tiers_states_stands_on_and_chosen_sentence() {
     let shown = stdout(&out);
 
     // "id-open"'s version is the current section hash's own prefix (per
-    // "Does an answer carry the version of the question the owner read?"):
-    // computed live off the topic file text, not off the hand-written
-    // `asked` row's placeholder hash ("h-open") above, so it prints
-    // regardless of that row being a fixture stand-in rather than a real
-    // `adr ask` hash.
+    // "Does an answer carry the version of the question the owner read?").
     let expected = "\
 # Tiered Topic
 tier 1
@@ -165,6 +167,14 @@ tier 2
     stands on: 1.1 Root?=A
   [refused] 2.2 Also depends?
     stands on: 1.1 Root?=A
+next
+  agent clears: adrdom/decisions/tiered.md: \"1.1 Root?\" has no depends line; agent writes what the question stands on
+  agent clears: adrdom/decisions/tiered.md: \"1.2 Unasked root?\" has no depends line; agent writes what the question stands on
+  agent clears: adrdom/decisions/tiered.md: \"1.3 Skeleton?\" has no depends line; agent writes what the question stands on
+  agent clears: adrdom/decisions/tiered.md: \"2.2 Also depends?\": answered; agent removes the edit
+  owner runs: adr answer id-open@11024127 <letter> for \"2.1 Depends on root?\"
+  agent changes the plan: \"2.2 Also depends?\" is refused and holds the questions that come after it
+  not yet: \"1.1 Root?\" is answered and is built once \"1.2 Unasked root?\" is answered
 ";
     assert_eq!(shown, expected, "full output: {}", shown);
 }
@@ -319,8 +329,8 @@ fn show_prints_no_guess_for_an_ambiguous_cross_file_heading_dependency() {
 
     // Everything `show` prints for file B, from its topic line to the next
     // file's (or end of output): tier derivation failed on the ambiguous
-    // entry, so this is the topic line alone -- no tier, no question, and
-    // in particular no guessed "stands on" line.
+    // entry, so this is the topic line and the one move left -- no tier, no
+    // question, and in particular no guessed "stands on" line.
     let b_start = shown.find("# Topic B").expect("topic B header");
     let b_end = shown[b_start..]
         .find("\n# ")
@@ -328,8 +338,9 @@ fn show_prints_no_guess_for_an_ambiguous_cross_file_heading_dependency() {
         .unwrap_or(shown.len());
     let b_block = shown[b_start..b_end].trim_end();
     assert_eq!(
-        b_block, "# Topic B",
-        "an ambiguous cross-file dependency must print nothing but the topic line, never a guessed tier or \"stands on\": {}",
+        b_block,
+        "# Topic B\nnext\n  agent clears: adrdom/decisions/topic-b.md: \"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\" which is no heading in this file and no current decision; agent names a heading of this file or a current decision",
+        "an ambiguous cross-file dependency must print no guessed tier or \"stands on\": {}",
         shown
     );
 }

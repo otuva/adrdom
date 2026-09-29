@@ -398,13 +398,41 @@ pub fn bad_option_letter(rel: &str, dependent: &str, target: &str, letter: char)
     )
 }
 
-pub fn tier_cap_exceeded(rel: &str, tier: usize, count: usize, cap: usize) -> String {
+/// `open` are the questions of the tier that are not answered yet, in file
+/// order; `answered` counts the ones the owner answered, which hold their
+/// place and are never moved.
+pub fn tier_cap_exceeded(rel: &str, open: &[String], answered: usize, cap: usize) -> String {
+    let names = open
+        .iter()
+        .map(|h| format!("\"{}\"", h))
+        .collect::<Vec<_>>()
+        .join(", ");
+    if answered == 0 {
+        return refuse(
+            format!(
+                "{}: {} questions would be put to the owner together, the most is {}: {}",
+                rel,
+                open.len(),
+                cap,
+                names
+            ),
+            Next::agent(
+                "finds a question among these that assumes the answer of another one and names that one on its depends line, or splits the file when none does",
+            ),
+        );
+    }
     refuse(
         format!(
-            "{}: tier {} holds {} questions, the cap is {}",
-            rel, tier, count, cap
+            "{}: {} questions stand together, the most is {}: {} answered, and {}",
+            rel,
+            open.len() + answered,
+            cap,
+            answered,
+            names
         ),
-        Next::agent("moves questions under a higher heading or splits the topic"),
+        Next::agent(
+            "finds a question among the ones named that assumes the answer of another one and names that one on its depends line, or moves it to another file when none does",
+        ),
     )
 }
 
@@ -417,7 +445,7 @@ use crate::record::DeriveError;
 fn derive_what(rel: &str, e: &DeriveError) -> String {
     match e {
         DeriveError::Dangling { section, entry } => format!(
-            "{}: \"{}\" depends on \"{}\" which is no heading in this file",
+            "{}: \"{}\" depends on \"{}\" which is no heading in this file and no current decision",
             rel, section, entry
         ),
         DeriveError::Cycle(names) => {
@@ -444,7 +472,9 @@ fn derive_what(rel: &str, e: &DeriveError) -> String {
 
 fn derive_next(e: &DeriveError) -> Next {
     match e {
-        DeriveError::Dangling { .. } => Next::agent("adds the heading or fixes the text"),
+        DeriveError::Dangling { .. } => {
+            Next::agent("names a heading of this file or a current decision")
+        }
         DeriveError::Cycle(_) => Next::agent("breaks it"),
         DeriveError::SelfDep(_) => Next::agent("removes the line or names something else"),
         DeriveError::AmbiguousHeading { .. } => ambiguous_heading_next(),
@@ -789,11 +819,252 @@ pub fn no_id_line(rel: &str, heading: &str) -> String {
     )
 }
 
+/// `ask` prints the file's next moves (`view::next_moves`) under this line.
 pub fn nothing_to_ask(path: &str) -> String {
+    format!("nothing to ask in {}", path)
+}
+
+// --- what is next in a topic file (`view::next_moves`) ---------------------
+// One line per move, each opening with who makes it, in the words a
+// refusal uses. `show` prints them under the file, `ask` when it has
+// nothing to ask.
+
+fn quoted(headings: &[String]) -> String {
+    headings
+        .iter()
+        .map(|h| format!("\"{}\"", h))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+pub fn next_plan_unresolved() -> String {
+    Next::agent("runs adr check and clears what it names in the plan").render()
+}
+
+/// A plan that waits for its approval and that `approve` would take.
+pub fn next_plan_unapproved(rel: &str) -> String {
+    Next::owner_runs(format!("adr approve {}", rel)).render()
+}
+
+/// A refusal `approve` would print for the plan, whole, with the move it
+/// names: the agent reads it here and not among the lines of `check`.
+pub fn next_clears(refusal: &str) -> String {
+    Next::agent(format!("clears: {}", refusal)).render()
+}
+
+pub fn next_write_body(heading: &str) -> String {
+    Next::agent(format!("writes the body of \"{}\"", heading)).render()
+}
+
+pub fn next_answer_set(dependent: &str, target: &str) -> String {
+    Next::agent(format!(
+        "writes =A, =A|B or =* on the depends line of \"{}\" where it names \"{}\"",
+        dependent, target
+    ))
+    .render()
+}
+
+pub fn next_ask(rel: &str, headings: &[String]) -> String {
+    Next::agent(format!("runs adr ask {} for {}", rel, quoted(headings))).render()
+}
+
+pub fn next_answer(id: &str, version: &str, heading: &str) -> String {
     format!(
-        "nothing to ask in {}: no question in the open tier has a body that is not already asked; agent writes the bodies of the open tier (adr show names it)",
-        path
+        "{} for \"{}\"",
+        Next::owner_runs(format!("adr answer {}@{} <letter>", id, version)).render(),
+        heading
     )
+}
+
+pub fn next_refused(heading: &str) -> String {
+    Next::agent(format!(
+        "changes the plan: \"{}\" is refused and holds the questions that come after it",
+        heading
+    ))
+    .render()
+}
+
+pub fn next_moot(rel: &str, heading: &str) -> String {
+    Next::agent(format!("drops or replaces \"{}\", which is moot", heading))
+        .and_owner_runs(format!("adr approve {}", rel))
+        .render()
+}
+
+pub fn next_build(heading: &str, id: &str) -> String {
+    Next::agent(format!(
+        "builds \"{}\" and puts \"adr: {}\" in a test that shows it",
+        heading, id
+    ))
+    .render()
+}
+
+pub fn next_build_waits(heading: &str, beside: &str) -> String {
+    format!(
+        "not yet: \"{}\" is answered and is built once \"{}\" is answered",
+        heading, beside
+    )
+}
+
+/// The question beside it is refused: no answer is coming, the plan changes.
+pub fn next_build_waits_refused(heading: &str, beside: &str) -> String {
+    format!(
+        "not yet: \"{}\" is answered and is built once the plan changes, \"{}\" beside it is refused",
+        heading, beside
+    )
+}
+
+pub fn next_later(headings: &[String]) -> String {
+    format!("not yet, after the questions named above: {}", quoted(headings))
+}
+
+// --- show: the lines of its listing ----------------------------------------
+// Labels and layout, no refusal among them: a note carries no `Next`.
+
+use crate::view::QState;
+
+pub fn show_topic(topic: &str) -> String {
+    format!("# {}", topic)
+}
+
+pub fn show_tier(tier: usize) -> String {
+    format!("tier {}", tier)
+}
+
+/// The state word `show` prints inside `[...]`: `answered` also carries
+/// the chosen letter (`answered A`), every other state is the bare word.
+pub fn show_state(state: QState, letter: Option<char>) -> String {
+    match state {
+        QState::Skeleton => "skeleton".to_string(),
+        QState::Unasked => "unasked".to_string(),
+        QState::Open => "open".to_string(),
+        QState::Answered => match letter {
+            Some(c) => format!("answered {}", c),
+            None => "answered".to_string(),
+        },
+        QState::Refused => "refused".to_string(),
+        QState::Superseded => "superseded".to_string(),
+        QState::Withdrawn => "withdrawn".to_string(),
+    }
+}
+
+/// `version` is given for an asked, unanswered question: what the owner
+/// puts after the `@` of `adr answer`.
+pub fn show_question(state: &str, version: Option<&str>, heading: &str) -> String {
+    match version {
+        Some(v) => format!("  [{} @{}] {}", state, v, heading),
+        None => format!("  [{}] {}", state, heading),
+    }
+}
+
+pub fn show_stands_on(entries: &[String]) -> String {
+    format!("    stands on: {}", entries.join(", "))
+}
+
+pub fn show_chosen(sentence: &str) -> String {
+    format!("    {}", sentence)
+}
+
+pub fn show_from(origin: &str, rows: usize) -> String {
+    format!(
+        "    from: {} ({} {})",
+        origin,
+        rows,
+        if rows == 1 { "row" } else { "rows" }
+    )
+}
+
+pub fn next_heading() -> String {
+    "next".to_string()
+}
+
+pub fn next_line(line: &str) -> String {
+    format!("  {}", line)
+}
+
+pub fn show_blame(rel: &str) -> String {
+    format!("# blame: {}", rel)
+}
+
+pub fn show_blame_unreadable(rel: &str, e: impl Display) -> String {
+    format!("# blame: {} (cannot be read: {})", rel, e)
+}
+
+pub fn show_blame_shape(e: &str) -> String {
+    format!("  shape: {}", e)
+}
+
+pub fn show_blame_origin(origin: &str, approved: bool) -> String {
+    let status = if approved { "approved" } else { "awaiting approval" };
+    format!("  origin: {} ({})", origin, status)
+}
+
+pub fn show_blame_counts(counts: &[String]) -> String {
+    format!("  {}", counts.join(", "))
+}
+
+pub fn show_blame_count(kind: &str, rows: usize) -> String {
+    format!("{} {}", kind, rows)
+}
+
+pub fn show_blame_decision(range: &str, heading: &str, state: &str) -> String {
+    format!("  {}\tdecision: {} [{}]", range, heading, state)
+}
+
+pub fn show_blame_dropped(range: &str, reason: &str) -> String {
+    format!("  {}\tdropped: {}", range, reason)
+}
+
+pub fn show_blame_row(range: &str, dest: &str) -> String {
+    format!("  {}\t{}", range, dest)
+}
+
+pub fn show_blame_copy_of(target: &str, state: Option<&str>) -> String {
+    match state {
+        Some(s) => format!("copy of {} [{}]", target, s),
+        None => format!("copy of {}", target),
+    }
+}
+
+// --- ask: the lines of its summary ------------------------------------------
+
+pub fn ask_asked(heading: &str, tier: usize) -> String {
+    format!("asked: \"{}\" (tier {})", heading, tier)
+}
+
+pub fn ask_reasked(heading: &str, tier: usize) -> String {
+    format!("re-asked: \"{}\" (tier {})", heading, tier)
+}
+
+pub fn ask_conflict(heading: &str, a: &str, b: &str) -> String {
+    format!("conflict: \"{}\" answered {} and {}, both stood", heading, a, b)
+}
+
+pub fn ask_assumes(dependent: &str, set: &str) -> String {
+    format!("  assumes: \"{}\"={}", dependent, set)
+}
+
+// --- adr --version -----------------------------------------------------------
+
+/// What `adr --version` prints after the name. A build with the test-only
+/// `owner-bypass` feature says so ahead of the number, so it is never taken
+/// for the binary the owner uses. The ledger's version column keeps the
+/// bare number (`version::VERSION`).
+pub fn version_shown(version: &str, takes_owner_bypass: bool) -> String {
+    if takes_owner_bypass {
+        format!("test build with the owner bypass, {}", version)
+    } else {
+        version.to_string()
+    }
+}
+
+// --- install / uninstall: the closing line ---------------------------------
+
+pub fn installed_at(root: impl Display) -> String {
+    format!("adrdom installed at {}", root)
+}
+
+pub fn uninstalled_at(root: impl Display) -> String {
+    format!("adrdom uninstalled at {}", root)
 }
 
 // --- answer.rs / ban.rs / unban.rs / install.rs / uninstall.rs -------------
@@ -1442,6 +1713,13 @@ pub fn body_under_unapproved_heading(rel: &str, heading: &str) -> String {
     )
 }
 
+pub fn bodies_under_unapproved_headings(rel: &str, count: usize) -> String {
+    refuse(
+        format!("{}: {} bodies under unapproved headings", rel, count),
+        Next::owner_runs(format!("adr approve {}", rel)),
+    )
+}
+
 // --- adrdom/blame/*.md (blame files) --------------------------------------
 // Shared by `blame::do_approve_blame`'s refusal collection (per "What does
 // a blame file hold?", "Does a blame file cover its whole origin?", "What
@@ -2007,7 +2285,8 @@ mod tests {
             dep_not_current_decision("x.md", "heading", "id-1"),
             dep_no_term("x.md", "heading", "widget"),
             bad_option_letter("x.md", "dependent", "target", 'Z'),
-            tier_cap_exceeded("x.md", 1, 5, 4),
+            tier_cap_exceeded("x.md", &["heading".to_string()], 0, 4),
+            tier_cap_exceeded("x.md", &["heading".to_string()], 3, 4),
             derive_error("x.md", &DeriveError::SelfDep("heading".to_string())),
             derive_error_ask("x.md", &DeriveError::SelfDep("heading".to_string())),
             answered_id_missing("id-1", "heading"),
@@ -2096,6 +2375,7 @@ mod tests {
             topic_file_name_mismatch("adrdom/decisions/x.md", "Y", "y"),
             topic_unnameable("adrdom/decisions/rule.md", "Rule 2"),
             body_under_unapproved_heading("x.md", "heading"),
+            bodies_under_unapproved_headings("x.md", 3),
             bind_failed(7357, e),
             missing_answer_selection("id-1", "abcd1234"),
             blame_shape_error("adrdom/blame/x.md", "line 1: missing \"origin: <path>\""),

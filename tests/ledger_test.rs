@@ -494,6 +494,10 @@ fn version_flag_and_ledger_rows_use_the_repository_version_file() {
         printed,
         version
     );
+    // A build that takes the owner bypass says so; the build the owner
+    // installs, with no feature, prints the bare number.
+    let marked = printed.contains("test build with the owner bypass");
+    assert_eq!(marked, cfg!(feature = "owner-bypass"), "{:?}", printed);
 
     let terms = "# Terms\n\n## pass\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A clear yes.\naliases: passes\n";
     let terms_path = write_record(&dir, "adrdom/terms.md", terms);

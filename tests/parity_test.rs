@@ -85,7 +85,7 @@ fn parity_tier_over_cap() {
 ### 1.5 Q5?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-    assert_parity(&dir, &record, "tier 1 holds 5 questions, the cap is 4");
+    assert_parity(&dir, &record, "5 questions would be put to the owner together, the most is 4");
 }
 
 // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a depends list split across

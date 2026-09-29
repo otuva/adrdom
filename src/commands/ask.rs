@@ -199,9 +199,8 @@ pub fn run(record_path: PathBuf) -> i32 {
     // file-wide (mirrors approve's cap check, prefixed `ask:`). Dead
     // (refused/superseded/withdrawn) questions don't count.
     if let Some(tiers) = &rf.tiers {
-        let live = state::live_tiers(&led, &rf, tiers);
-        if let Some((n, m)) = record::over_cap(&live) {
-            eprintln!("ask: {}", msg::tier_cap_exceeded(&rel, n, m, record::TIER_CAP));
+        if let Some((open, answered)) = state::over_cap_headings(&led, &rf, tiers) {
+            eprintln!("ask: {}", msg::tier_cap_exceeded(&rel, &open, answered, record::TIER_CAP));
             return 1;
         }
     }
@@ -508,12 +507,11 @@ pub fn run(record_path: PathBuf) -> i32 {
         }
         let Some(id) = sec.id.clone() else { continue };
         let cur = record::section_hash(&rf.lines, sec);
-        let label = match led.latest_state(&id) {
-            None => Some("asked"),
-            Some(row) if row.event == "asked" && row.hash != cur => Some("re-asked"),
-            _ => None,
+        let again = match led.latest_state(&id) {
+            None => false,
+            Some(row) if row.event == "asked" && row.hash != cur => true,
+            _ => continue,
         };
-        let Some(label) = label else { continue };
         let tier = rf.tier_of(i).unwrap_or(1);
         new_rows.push(ledger::Row {
             time: write_time.clone(),
@@ -523,7 +521,11 @@ pub fn run(record_path: PathBuf) -> i32 {
             detail: sec.heading_text.clone(),
             version: crate::version::VERSION.to_string(),
         });
-        summary.push(format!("{}: \"{}\" (tier {})", label, sec.heading_text, tier));
+        summary.push(if again {
+            msg::ask_reasked(&sec.heading_text, tier)
+        } else {
+            msg::ask_asked(&sec.heading_text, tier)
+        });
 
         // One `assumes` row per dependent (per "Does a depends entry
         // carry the answers it holds under?"): what set the
@@ -556,15 +558,18 @@ pub fn run(record_path: PathBuf) -> i32 {
                 detail: dep_id,
                 version: crate::version::VERSION.to_string(),
             });
-            summary.push(format!(
-                "  assumes: \"{}\"={}",
-                dependent.heading_text, set_str
-            ));
+            summary.push(msg::ask_assumes(&dependent.heading_text, &set_str));
         }
     }
 
     if new_rows.is_empty() {
         println!("ask: {}", msg::nothing_to_ask(&record_path.display().to_string()));
+        // The plan is approved by this point (`ask` stops on an unapproved
+        // one above), so what is left is named move by move.
+        let tests = crate::commands::check::test_index(&root, &repo::Source::WorkingTree);
+        for line in crate::view::next_moves(&rf, &led, true, &[], &tests) {
+            println!("{}", msg::next_line(&line));
+        }
         return 0;
     }
 
@@ -697,13 +702,8 @@ fn do_conflict_reask(
     }];
 
     let mut summary = vec![
-        format!(
-            "conflict: \"{}\" answered {} and {}, both stood",
-            heading,
-            a.label(),
-            b.label()
-        ),
-        format!("re-asked: \"{}\" (tier {})", heading, tier),
+        msg::ask_conflict(&heading, &a.label(), &b.label()),
+        msg::ask_reasked(&heading, tier),
     ];
 
     // One `assumes` row per dependent that already carries a set, exactly
@@ -724,7 +724,7 @@ fn do_conflict_reask(
             detail: dep_id,
             version: crate::version::VERSION.to_string(),
         });
-        summary.push(format!("  assumes: \"{}\"={}", dependent.heading_text, set_str));
+        summary.push(msg::ask_assumes(&dependent.heading_text, &set_str));
     }
 
     let ledger_path = root.join(crate::repo::LEDGER_PATH);

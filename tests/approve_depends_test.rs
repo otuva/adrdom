@@ -185,7 +185,7 @@ fn approve_refuses_a_dangling_heading_dependency() {
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(
-        err.contains("\"1.1 Q?\" depends on \"Missing?\" which is no heading in this file; agent adds the heading or fixes the text"),
+        err.contains("\"1.1 Q?\" depends on \"Missing?\" which is no heading in this file and no current decision; agent names a heading of this file or a current decision"),
         "{}",
         err
     );
@@ -245,7 +245,7 @@ fn approve_refuses_five_root_questions_in_one_tier() {
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(
-        err.contains("tier 1 holds 5 questions, the cap is 4; agent moves questions under a higher heading or splits the topic"),
+        err.contains("5 questions would be put to the owner together, the most is 4"),
         "{}",
         err
     );

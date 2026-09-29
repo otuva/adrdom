@@ -327,6 +327,51 @@ pub fn live_tiers(led: &Ledger, rf: &RecordFile, tiers: &[usize]) -> Vec<usize> 
         .collect()
 }
 
+/// True when the latest ledger state of `id` is `asked` although an earlier
+/// row answered or refused it: the question was asked again (per "Does
+/// check fail a question answered with two different options?") and waits
+/// for the owner.
+pub fn is_open_again(led: &Ledger, id: &str) -> bool {
+    matches!(led.latest_state(id), Some(row) if row.event == "asked")
+        && led
+            .rows
+            .iter()
+            .any(|r| r.id == id && matches!(r.event.as_str(), "answered" | "refused"))
+}
+
+/// The live questions of the first tier over the cap, `None` when no tier
+/// is over it: the headings of those not answered yet, in file order, and
+/// the count of the answered ones. An answered question holds its place in
+/// the tier (`live_tiers`) but its depends line is never edited again
+/// (`is_frozen`), so the cap refusal (per "Does a refusal name the command
+/// that clears it?") names only the ones the agent can still move. Read by
+/// `approve` and `check` through `record_refusals` and by `ask`.
+pub fn over_cap_headings(
+    led: &Ledger,
+    rf: &RecordFile,
+    tiers: &[usize],
+) -> Option<(Vec<String>, usize)> {
+    let live: Vec<(&Section, usize)> = rf
+        .sections
+        .iter()
+        .zip(tiers)
+        .filter(|(sec, _)| !is_dead(led, sec))
+        .map(|(sec, &t)| (sec, t))
+        .collect();
+    let live_tiers: Vec<usize> = live.iter().map(|(_, t)| *t).collect();
+    let (tier, _) = crate::record::over_cap(&live_tiers)?;
+    let mut open = Vec::new();
+    let mut answered = 0;
+    for (sec, _) in live.into_iter().filter(|(_, t)| *t == tier) {
+        if sec.id.as_deref().is_some_and(|id| is_current(led, id)) {
+            answered += 1;
+        } else {
+            open.push(sec.heading_text.clone());
+        }
+    }
+    Some((open, answered))
+}
+
 /// `done` (per "Does a topic file close?"): a file is done once its plan
 /// and context are approved and every section carries a letter answer.
 /// `plan_ok`/`ctx_ok` are supplied by the caller (`check`'s `file_approval`

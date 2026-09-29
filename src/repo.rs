@@ -92,6 +92,24 @@ pub fn git(root: &Path, args: &[&str]) -> Option<String> {
     }
 }
 
+/// The paths a git listing command prints (`ls-files`, `diff --name-only`),
+/// one entry per path. Runs the command with `-z`: git then ends each path
+/// with a NUL and prints it as it is, where the plain form wraps a path
+/// holding a byte outside ASCII in quotes and escapes it, a name no later
+/// read finds (per "What ties a test to a decision?": "every tracked file
+/// outside adrdom"). `None` on any failure to run git.
+pub fn git_paths(root: &Path, args: &[&str]) -> Option<Vec<String>> {
+    let (cmd, rest) = args.split_first()?;
+    let mut full: Vec<&str> = vec![cmd, "-z"];
+    full.extend_from_slice(rest);
+    git(root, &full).map(|s| {
+        s.split('\0')
+            .filter(|p| !p.is_empty())
+            .map(|p| p.to_string())
+            .collect()
+    })
+}
+
 /// The git blob sha `git hash-object --stdin` gives `content`, without
 /// needing a real file on disk: lets a caller hash content it already
 /// holds as a string -- read through `Source::Index` at a commit, or
@@ -349,9 +367,7 @@ impl Source {
                     .map(|p| crate::state::rel_path(root, &p))
                     .collect()
             }
-            Source::Index => git(root, &["ls-files", "--", rel_dir])
-                .map(|s| s.lines().map(|l| l.to_string()).collect())
-                .unwrap_or_default(),
+            Source::Index => git_paths(root, &["ls-files", "--", rel_dir]).unwrap_or_default(),
         }
     }
 }
