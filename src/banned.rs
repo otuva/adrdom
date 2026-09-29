@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::io::Write;
 use std::path::Path;
 
 /// Where the hashed ban list lives, relative to the repo root: the one
@@ -151,16 +150,67 @@ pub fn first_hit(
     None
 }
 
-pub fn append(path: &Path, entries: &[(String, Option<String>)]) -> std::io::Result<()> {
-    if entries.is_empty() {
-        return Ok(());
+/// Every hash the ledger currently says is banned (per "Does the tool
+/// rewrite the ban list from the ledger?" and "Does check hold the ban list
+/// equal to the ledger?"): for each hash that ever carries a `banned` or
+/// `unbanned` row, its latest such row -- by the ledger's own order
+/// (`ledger::parse` already sorts `rows` by time, never by file position) --
+/// kept only when that latest row is `banned`, paired with the term uuid
+/// from that row's `detail` column when it carries one. Shared by
+/// `check_banned_ledger` (which only needs the hash) and `adr ban
+/// --rebuild` (which needs the uuid too, to carry it onto the rewritten
+/// file), so the two can never disagree about what "banned now" means.
+pub fn currently_banned(led: &crate::ledger::Ledger) -> Vec<(String, Option<String>)> {
+    let mut latest: HashMap<String, &crate::ledger::Row> = HashMap::new();
+    for row in &led.rows {
+        if row.event == "banned" || row.event == "unbanned" {
+            latest.insert(row.hash.clone(), row);
+        }
     }
-    let mut f = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)?;
-    for (hash, uuid) in entries {
-        writeln!(f, "{}", format_line(hash, uuid))?;
+    latest
+        .into_values()
+        .filter(|row| row.event == "banned")
+        .map(|row| {
+            let uuid = if row.detail.is_empty() { None } else { Some(row.detail.clone()) };
+            (row.hash.clone(), uuid)
+        })
+        .collect()
+}
+
+/// The exact bytes `write_sorted` writes for `entries` -- sorted by hash
+/// and, within a hash, by uuid (an entry with no uuid sorts first), then
+/// deduplicated to one line per hash -- without touching the filesystem.
+/// Split out from `write_sorted` so a caller that only wants to write when
+/// the result would actually differ from what's already on disk (`ban`,
+/// when it finds no new word to ban itself but the file may still be stale
+/// against the ledger) can compare first instead of writing speculatively.
+///
+/// When two entries share one hash under different term uuids -- two
+/// branches banning the same word under two different `--term` calls, then
+/// merging -- which one survives can't depend on the order `entries` arrives
+/// in, or the file a merge produces would depend on which side's row a
+/// text merge happened to keep first. So entries are sorted by hash and
+/// then, within a hash, by uuid, before `dedup_by` keeps the first of each
+/// hash: the same input, in any order, always keeps the same uuid.
+pub fn sorted_content(entries: &[(String, Option<String>)]) -> String {
+    let mut entries = entries.to_vec();
+    entries.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+    entries.dedup_by(|a, b| a.0 == b.0);
+    let mut content = String::new();
+    for (hash, uuid) in &entries {
+        content.push_str(&format_line(hash, uuid));
+        content.push('\n');
     }
-    Ok(())
+    content
+}
+
+/// Rewrites the whole ban list at `path` to `sorted_content(&entries)` (per
+/// "Does the tool write the ban list in one fixed order?"): one line per
+/// entry, no duplicate hashes. `ban` calls this with the ledger's own
+/// banned set plus the newly banned ones folded in; `unban` calls it with
+/// the existing entries minus the ones it removed; `--rebuild` calls it
+/// with the ledger's banned set alone. All end up writing the same sorted,
+/// deduplicated shape, so this is the one place that shape is written.
+pub fn write_sorted(path: &Path, entries: Vec<(String, Option<String>)>) -> std::io::Result<()> {
+    fs::write(path, sorted_content(&entries))
 }

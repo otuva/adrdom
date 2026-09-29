@@ -750,6 +750,7 @@ fn terms_article_shows_waiting_for_approval_when_unapproved() {
             "adrdom/terms.md",
             "adrdom/state/ledger.tsv",
             "adrdom/state/terms-brief.md",
+            "adrdom/.gitattributes",
             "AGENTS.md",
             ".githooks",
         ],
@@ -972,8 +973,8 @@ fn overview_shows_a_moot_note_for_an_excluded_answer() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(&dir, "adrdom/decisions/moot.md", MOOT_ROOT_ANSWER_B);
-    append_ledger_row(&dir, "asked", "id-root", "h", "1.1 Root?");
-    append_ledger_row(&dir, "answered", "id-root", "h", "B");
+    append_ledger_row_at(&dir, "asked", "id-root", "h", "1.1 Root?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", "id-root", "h", "B", "2024-01-01T00:00:01Z");
 
     let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
     let (port, token) = read_open_line(&mut child);

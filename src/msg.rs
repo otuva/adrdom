@@ -956,6 +956,22 @@ pub fn answer_set_changed(rel: &str, dep_heading: &str, heading: &str) -> String
     )
 }
 
+/// A question whose standing ledger rulings name two or more different
+/// options (per "Does check fail a question answered with two different
+/// options?", e3200081-9995-4bbe-983f-2f430dc341e7): two branches each
+/// answered (or one answered and one refused) the same question, and a
+/// merge kept both rows. The topic file's own `**Answer:**` line only shows
+/// one side, so this is caught from the ledger directly, never from the
+/// file text. The move is always the same: the agent re-asks the question,
+/// and the owner answers it again.
+pub fn answer_conflict(rel: &str, heading: &str, id: &str, a: &str, b: &str) -> String {
+    refuse(
+        format!("{}: {}: two standing answers, {} and {}", rel, heading, a, b),
+        Next::agent(format!("runs adr ask {}", rel))
+            .and_owner_runs(format!("adr answer {}@<version> <letter>", id)),
+    )
+}
+
 /// The `"path:line"` location a failure names, one-based.
 pub fn location(name: &str, line: usize) -> String {
     format!("{}:{}", name, line)
@@ -980,18 +996,27 @@ pub fn banned_missing_from_file(hash_prefix: &str) -> String {
             "{} in ledger, missing from adrdom/state/banned.sha256",
             hash_prefix
         ),
-        Next::owner_runs(
-            "git diff adrdom/state/banned.sha256 adrdom/state/ledger.tsv; restore by hand whatever is not real",
-        ),
+        Next::agent("runs: adr ban --rebuild"),
     )
 }
 
 pub fn banned_missing_from_ledger(hash_prefix: &str) -> String {
     refuse(
         format!("{} in file, no ledger row", hash_prefix),
-        Next::owner_runs(
-            "git diff adrdom/state/banned.sha256 adrdom/state/ledger.tsv; restore by hand whatever is not real",
-        ),
+        Next::agent("runs: adr ban --rebuild"),
+    )
+}
+
+/// A hash that stands in the file, was banned at some time, but the
+/// ledger's latest row for it is `unbanned` -- the file still carries a
+/// line the ledger already voided (per "Does check hold the ban list
+/// equal to the ledger?"). `adr ban --rebuild` clears this: it rewrites the
+/// file to exactly what the ledger currently says is banned, whatever the
+/// file held before.
+pub fn banned_unbanned_but_in_file(hash_prefix: &str) -> String {
+    refuse(
+        format!("{} in file, ledger says unbanned", hash_prefix),
+        Next::agent("runs: adr ban --rebuild"),
     )
 }
 
@@ -1175,6 +1200,24 @@ pub fn codex_rules_missing() -> String {
     )
 }
 
+/// `check`'s `install` check on `adrdom/.gitattributes`: the file exists
+/// but its content differs from what `adr install` writes.
+pub fn gitattributes_differs() -> String {
+    refuse(
+        "adrdom/.gitattributes differs from what install writes".to_string(),
+        Next::agent("runs: adr install"),
+    )
+}
+
+/// Same check as `gitattributes_differs`, but the file is missing
+/// outright.
+pub fn gitattributes_missing() -> String {
+    refuse(
+        "adrdom/.gitattributes is missing".to_string(),
+        Next::agent("runs: adr install"),
+    )
+}
+
 pub fn malformed_ledger_row(lineno: usize, raw: &str) -> String {
     refuse(
         format!("line {}: malformed row: {}", lineno, raw),
@@ -1182,10 +1225,43 @@ pub fn malformed_ledger_row(lineno: usize, raw: &str) -> String {
     )
 }
 
+/// Per "Does check fail a ledger whose rows changed place?"
+/// (c10c3a49-e993-4c9f-a46b-4a1ba3646dcf A): a HEAD row is missing or
+/// changed -- a row's place in the file is free, so this never fires for
+/// one that only moved.
 pub fn ledger_not_append_only() -> String {
     refuse(
-        "not append-only: working copy diverges from HEAD".to_string(),
-        Next::owner_runs("git diff adrdom/state/ledger.tsv; only new rows may be appended, the rest is restored by hand"),
+        "a row from HEAD's ledger is missing or changed in the working copy".to_string(),
+        Next::owner_runs("git diff adrdom/state/ledger.tsv; a row may move, but none may be dropped or edited -- restore by hand whatever is missing or changed"),
+    )
+}
+
+/// A merge (pending, via `MERGE_HEAD`, or already committed, via `HEAD`'s
+/// second parent) is missing a ledger row one of the two branches wrote
+/// (per "Does check at a merge look for the ledger rows of both
+/// branches?"): the merge itself dropped a row instead of carrying it
+/// forward, the one thing an append-only ledger can never do.
+pub fn ledger_merge_drops_rows() -> String {
+    refuse(
+        "merge drops a branch's ledger rows".to_string(),
+        Next::owner_runs(
+            "the rows of the merged branch are restored from that branch, by hand, only by adding them back",
+        ),
+    )
+}
+
+/// HEAD is a merge commit, but at least one of its parents is not in this
+/// repository at all -- a shallow clone, where the parent's own commit
+/// object was never fetched. Distinct from a parent that is fully present
+/// and simply holds no ledger file at that path (nothing to compare, no
+/// failure): here there is nothing to read, so `ledger_merge_drops_rows`'s
+/// own test -- every row either branch wrote survives into the merge --
+/// cannot run at all, and this refuses instead of a check that never
+/// looked passing anyway.
+pub fn ledger_merge_parents_unreadable() -> String {
+    refuse(
+        "this merge commit's parents cannot be read; the clone is too shallow".to_string(),
+        Next::agent("runs: git fetch --deepen=1"),
     )
 }
 
@@ -1203,6 +1279,69 @@ pub fn ledger_answered_without_asked(id: &str) -> String {
             id
         ),
         Next::owner_runs("git diff adrdom/state/ledger.tsv; an answered row needs the asked row it answers"),
+    )
+}
+
+/// `adr check --push`, one line pre-push hands it: `local_ref`'s ledger, at
+/// the sha about to be pushed, is missing a row `remote_ref` already holds
+/// at its own sha (per "Does check look at the ledger before a push?",
+/// 19e1c023-a678-4842-a414-bb0e45c41601 P). Same remedy as
+/// `ledger_merge_drops_rows` -- the missing rows are restored, only by
+/// adding them back -- since a push that drops a row is the same kind of
+/// loss, just found before it reaches the remote instead of after a merge.
+pub fn ledger_push_drops_rows(local_ref: &str, remote_ref: &str) -> String {
+    refuse(
+        format!(
+            "push of {} would drop ledger rows the remote's {} already holds",
+            local_ref, remote_ref
+        ),
+        Next::owner_runs("the rows already on the remote branch are restored, by hand, only by adding them back, then the push runs again"),
+    )
+}
+
+/// `adr check --push`: the remote sha a pre-push line names is not a
+/// commit this repository has -- a shallow clone, or a remote branch never
+/// fetched -- so there is nothing local to compare it against, the same
+/// blind spot `ledger_merge_parents_unreadable` refuses on for a shallow
+/// merge.
+pub fn ledger_push_remote_unreadable(remote_ref: &str) -> String {
+    refuse(
+        format!("{}'s remote commit cannot be read here", remote_ref),
+        Next::agent("fetches the remote branch first"),
+    )
+}
+
+/// `adr check --since <commit>` (per "Does check in CI compare the ledger
+/// with the commit before the push?", a26876ba-5789-4d05-965e-853d00d9edd2
+/// C): the ledger being judged is missing a row `<commit>`'s own ledger
+/// already holds. Same remedy as `ledger_push_drops_rows`.
+pub fn ledger_since_drops_rows(commit: &str) -> String {
+    refuse(
+        format!("ledger drops a row {} already holds", commit),
+        Next::owner_runs("the rows already at that commit are restored, by hand, only by adding them back"),
+    )
+}
+
+/// `adr check --since <commit>`: `<commit>` itself is not in this
+/// repository (too shallow a fetch), so its ledger cannot be read at all.
+pub fn ledger_since_unreadable(commit: &str) -> String {
+    refuse(
+        format!("{} cannot be read here", commit),
+        Next::agent("fetches that commit first"),
+    )
+}
+
+/// Per "Does check fail two ledger rows on one subject with the same
+/// time?" (ce19c883-c61d-477b-a6d4-fee5134c6e9a T): two rows that are not
+/// byte-identical, carry the same time, and compete for one subject --
+/// `subject` already names which kind it is and the value (`"id <uuid>"`,
+/// `"hash <prefix>"`, or `"file <path>"`). The remedy is always the same
+/// command run again, since that writes a later row, and a later row
+/// settles which one stands.
+pub fn ledger_same_time_competition(time: &str, subject: &str) -> String {
+    refuse(
+        format!("two ledger rows at {} compete for {}", time, subject),
+        Next::agent("runs the command again, so it writes a later row that stands"),
     )
 }
 
@@ -1656,6 +1795,14 @@ pub fn banned_added(n: usize) -> String {
     format!("added {} entries", n)
 }
 
+/// Printed after `adr ban --rebuild` writes the ban list straight from the
+/// ledger (per "Does the tool rewrite the ban list from the ledger?"): `n`
+/// is the number of lines it wrote, in the same style `banned_added` and
+/// `removed_entries` already use for the plain `ban`/`unban` counts.
+pub fn banned_rebuilt(n: usize) -> String {
+    format!("rebuilt {} entries", n)
+}
+
 pub fn agents_md_created() -> String {
     "install: AGENTS.md: created with the brief".to_string()
 }
@@ -1770,6 +1917,19 @@ pub fn codex_rules_written() -> String {
 pub fn codex_trust_note() -> String {
     "install: Codex enforces project rules only for a project marked trusted in the owner's Codex config."
         .to_string()
+}
+
+/// `adr install` wrote `adrdom/.gitattributes` (Decision 7,
+/// db56a285-946f-48b1-b073-bb1e90192185) because it was either missing or
+/// held stale content.
+pub fn gitattributes_written() -> String {
+    "install: adrdom/.gitattributes: written".to_string()
+}
+
+/// `adr install` found `adrdom/.gitattributes` already holding exactly
+/// what it writes, and left it untouched.
+pub fn gitattributes_up_to_date() -> String {
+    "install: adrdom/.gitattributes: already up to date".to_string()
 }
 
 #[cfg(test)]
@@ -1900,9 +2060,11 @@ mod tests {
             refused_row_without_line("x.md", "heading"),
             edited_after_asking("x.md", "heading"),
             answer_set_changed("x.md", "dependent", "heading"),
+            answer_conflict("x.md", "heading", "id-1", "A", "B"),
             banned_word_at("x.md:3", ""),
             banned_missing_from_file("abcdef123456"),
             banned_missing_from_ledger("abcdef123456"),
+            banned_unbanned_but_in_file("abcdef123456"),
             agents_md_stale(),
             agents_md_missing_brief(),
             claude_md_missing_import(),
@@ -1913,10 +2075,19 @@ mod tests {
             hook_differs(".githooks/pre-commit"),
             hook_missing(".githooks/pre-commit"),
             hook_not_executable(".githooks/pre-commit"),
+            gitattributes_differs(),
+            gitattributes_missing(),
             malformed_ledger_row(3, "bad row"),
             ledger_not_append_only(),
+            ledger_merge_drops_rows(),
+            ledger_merge_parents_unreadable(),
             ledger_asked_id_missing("id-1"),
             ledger_answered_without_asked("id-1"),
+            ledger_push_drops_rows("refs/heads/feat", "refs/heads/main"),
+            ledger_push_remote_unreadable("refs/heads/main"),
+            ledger_since_drops_rows("abc123"),
+            ledger_since_unreadable("abc123"),
+            ledger_same_time_competition("2024-01-01T00:00:00Z", "id id-1"),
             untested("id-1"),
             stale_test("id-1"),
             duplicate_heading_in_file("heading", "x.md"),

@@ -10,7 +10,7 @@ use crate::tells;
 use crate::terms;
 use crate::view;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub fn run(record_path: PathBuf) -> i32 {
     let root = match repo::find_root() {
@@ -51,6 +51,19 @@ pub fn run(record_path: PathBuf) -> i32 {
             return 1;
         }
     };
+
+    // Per "Does check fail a question answered with two different
+    // options?" (e3200081-9995-4bbe-983f-2f430dc341e7, rule 5): a question
+    // in conflict takes priority over everything else this run -- whatever
+    // tier it is in, whether or not the file has an open tier too. Handled
+    // and reported on its own, ahead of every other gate below (shape,
+    // plan/context approval, tier cap, the open tier itself): none of that
+    // bears on re-asking a question whose text never moved. When the file
+    // also has an open tier, only the conflict is asked this run; a further
+    // `ask` run picks the open tier back up.
+    if let Some((idx, id, a, b)) = find_conflicted_section(&rf, &led) {
+        return do_conflict_reask(&root, &record_path, rf, &led, idx, &id, a, b);
+    }
 
     // Shape and parse errors refuse first, before anything else is even
     // considered: the same "parse" category `approve`/`check` refuse on
@@ -477,6 +490,10 @@ pub fn run(record_path: PathBuf) -> i32 {
         rf.sections = record::parse_sections(&rf.lines);
     }
 
+    // One time for every row this run writes (per "Does a command write a
+    // time later than the last ledger row?", aefa7f3c-70c3-412e-8d73-16ff9e2b703a
+    // A): the "asked" row and its "assumes" rows below all share it.
+    let write_time = ledger::write_time(&led);
     let mut new_rows = Vec::new();
     let mut summary: Vec<String> = Vec::new();
     for i in 0..rf.sections.len() {
@@ -499,7 +516,7 @@ pub fn run(record_path: PathBuf) -> i32 {
         let Some(label) = label else { continue };
         let tier = rf.tier_of(i).unwrap_or(1);
         new_rows.push(ledger::Row {
-            time: ledger::now_rfc3339(),
+            time: write_time.clone(),
             event: "asked".to_string(),
             id: id.clone(),
             hash: cur,
@@ -532,7 +549,7 @@ pub fn run(record_path: PathBuf) -> i32 {
             };
             let set_str = record::canonical_set(set);
             new_rows.push(ledger::Row {
-                time: ledger::now_rfc3339(),
+                time: write_time.clone(),
                 event: "assumes".to_string(),
                 id: id.clone(),
                 hash: record::assumes_hash(&dep_id, set),
@@ -581,4 +598,146 @@ pub fn run(record_path: PathBuf) -> i32 {
 /// directly under.
 fn find_prefixed_line(lines: &[String], start: usize, end: usize, prefix: &str) -> Option<usize> {
     (start + 1..end).find(|&j| lines[j].starts_with(prefix))
+}
+
+/// The first section in `rf` that is in conflict (per
+/// "Does check fail a question answered with two different options?",
+/// e3200081-9995-4bbe-983f-2f430dc341e7): it carries an id, its
+/// `**Answer:**` line is present (a genuine answer or refusal to remove --
+/// nothing to re-ask without one), and `state::conflicting_rulings` finds
+/// two or more standing rulings for its id. Returns the section's own
+/// index, its id, and the two rulings, for `do_conflict_reask`.
+fn find_conflicted_section(
+    rf: &record::RecordFile,
+    led: &ledger::Ledger,
+) -> Option<(usize, String, state::Ruling, state::Ruling)> {
+    for (i, sec) in rf.sections.iter().enumerate() {
+        let Some(id) = &sec.id else { continue };
+        if sec.answer_line.is_none() {
+            continue;
+        }
+        if let Some((a, b)) = state::conflicting_rulings(led, id) {
+            return Some((i, id.clone(), a, b));
+        }
+    }
+    None
+}
+
+/// Removes the `**Answer:**` line `finish_answer` (src/actions.rs) once
+/// spliced in for section `idx`, and the blank line it inserted directly
+/// above it, leaving the section exactly as it looked before it was first
+/// answered: `finish_answer` always inserts exactly those two lines
+/// (`[String::new(), "**Answer:** ..."]`) at the section's hash end, so
+/// removing them is the exact reverse of that splice, whatever the answer
+/// text was. Reparses `rf.sections` afterward (the same lightweight
+/// re-derive `ask`'s own terms-line rewrite already uses below: section
+/// count and order are unaffected by removing two lines from inside one
+/// section, so `rf.tiers` -- not recomputed here -- stays index-aligned).
+fn strip_answer_line(rf: &mut record::RecordFile, idx: usize) {
+    let sec = &rf.sections[idx];
+    let al = sec
+        .answer_line
+        .expect("find_conflicted_section only returns a section with an answer line");
+    let start = sec.start;
+    let remove_from = if al > start && rf.lines[al - 1].trim().is_empty() {
+        al - 1
+    } else {
+        al
+    };
+    rf.lines.drain(remove_from..=al);
+    rf.sections = record::parse_sections(&rf.lines);
+}
+
+/// Asks a conflicted question again (rule 5): strips its `**Answer:**`
+/// line, saves the topic file, then writes a fresh `asked` row (and its
+/// `assumes` rows) exactly as an ordinary ask of that question would --
+/// the section's text never moved, so its hash is the same one the
+/// question was first asked under. Bypasses every other gate `run` applies
+/// to an ordinary candidate (plan/context approval, the tier cap, the open
+/// tier, moot/banned/terms checks): none of them bear on re-asking text
+/// that hasn't changed.
+fn do_conflict_reask(
+    root: &Path,
+    record_path: &Path,
+    mut rf: record::RecordFile,
+    led: &ledger::Ledger,
+    idx: usize,
+    id: &str,
+    a: state::Ruling,
+    b: state::Ruling,
+) -> i32 {
+    let heading = rf.sections[idx].heading_text.clone();
+
+    strip_answer_line(&mut rf, idx);
+
+    if let Err(e) = record::save(&rf) {
+        eprintln!(
+            "ask: {}",
+            msg::write_failed(
+                &record_path.display().to_string(),
+                e,
+                Next::agent("checks the error and retries"),
+            )
+        );
+        return 1;
+    }
+
+    let write_time = ledger::write_time(led);
+    let sec = &rf.sections[idx];
+    let cur = record::section_hash(&rf.lines, sec);
+    let tier = rf.tier_of(idx).unwrap_or(1);
+
+    let mut new_rows = vec![ledger::Row {
+        time: write_time.clone(),
+        event: "asked".to_string(),
+        id: id.to_string(),
+        hash: cur,
+        detail: heading.clone(),
+        version: crate::version::VERSION.to_string(),
+    }];
+
+    let mut summary = vec![
+        format!(
+            "conflict: \"{}\" answered {} and {}, both stood",
+            heading,
+            a.label(),
+            b.label()
+        ),
+        format!("re-asked: \"{}\" (tier {})", heading, tier),
+    ];
+
+    // One `assumes` row per dependent that already carries a set, exactly
+    // as an ordinary ask writes them (a dependent with no set at all is
+    // skipped rather than refused: this run never ran the sets-mandatory
+    // gate an ordinary candidate in the open tier would have to pass, since
+    // this question's own tier may not even be open).
+    for (di, set) in rf.dependents_of(idx) {
+        let Some(set) = set else { continue };
+        let dependent = &rf.sections[di];
+        let Some(dep_id) = dependent.id.clone() else { continue };
+        let set_str = record::canonical_set(set);
+        new_rows.push(ledger::Row {
+            time: write_time.clone(),
+            event: "assumes".to_string(),
+            id: id.to_string(),
+            hash: record::assumes_hash(&dep_id, set),
+            detail: dep_id,
+            version: crate::version::VERSION.to_string(),
+        });
+        summary.push(format!("  assumes: \"{}\"={}", dependent.heading_text, set_str));
+    }
+
+    let ledger_path = root.join(crate::repo::LEDGER_PATH);
+    if let Err(e) = ledger::append(&ledger_path, &new_rows) {
+        eprintln!(
+            "ask: {}",
+            msg::update_failed("ledger", e, Next::agent("checks the error and retries"))
+        );
+        return 1;
+    }
+
+    for s in &summary {
+        println!("{}", s);
+    }
+    0
 }

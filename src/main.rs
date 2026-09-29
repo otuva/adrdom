@@ -40,8 +40,12 @@ enum Command {
     Ban {
         /// Carry an existing terms.md term's uuid alongside each new hash,
         /// matched case-insensitively by name or alias.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "rebuild")]
         term: Option<String>,
+        /// Rewrite the ban list from the ledger alone, ignoring whatever it
+        /// currently holds; reads no stdin and writes no ledger row.
+        #[arg(long)]
+        rebuild: bool,
     },
     /// Owner-only: read lines from stdin and remove them (and their tokens)
     /// from the ban list.
@@ -53,10 +57,16 @@ enum Command {
     },
     /// Run all governance checks.
     Check {
-        #[arg(long)]
+        #[arg(long, conflicts_with = "push")]
         staged: bool,
-        #[arg(long)]
+        #[arg(long, conflicts_with = "push")]
         message: Option<PathBuf>,
+        /// Also require every ledger row of <commit>'s own ledger to be present in the one being judged.
+        #[arg(long, conflicts_with = "push")]
+        since: Option<String>,
+        /// Read git's pre-push input from stdin and judge only that: no ref may drop a ledger row the remote already has.
+        #[arg(long)]
+        push: bool,
     },
 }
 
@@ -69,10 +79,10 @@ fn main() {
         Command::Approve { file } => commands::approve::run(file),
         Command::Answer { id, letter } => commands::answer::run(id, letter),
         Command::Show { topic_file } => commands::show::run(topic_file),
-        Command::Ban { term } => commands::ban::run(term),
+        Command::Ban { term, rebuild } => commands::ban::run(term, rebuild),
         Command::Unban => commands::unban::run(),
         Command::Serve { port } => commands::serve::run(port),
-        Command::Check { staged, message } => commands::check::run(staged, message),
+        Command::Check { staged, message, since, push } => commands::check::run(staged, message, since, push),
     };
     std::process::exit(code);
 }

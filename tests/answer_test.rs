@@ -636,12 +636,20 @@ fn answer_refuses_a_supersedes_target_already_superseded() {
     let heading_idx = edited.find("### 1.3 What is the third unit of authority called?").unwrap();
     let section_text = edited[heading_idx..].trim_end_matches('\n');
     let new_hash = mirror_section_hash(section_text);
-    append_ledger_row(
+    // Later than old_id's real `superseded` row (today's actual clock
+    // time, from the real `adr answer` above), not the fixed 2024 date
+    // `append_ledger_row` uses: this row's own position -- which
+    // `latest_asked_pos`/`latest_superseded_pos` now derive from time, per
+    // "Does the tool take the order of ledger rows from their time?" --
+    // has to land after that `superseded` row for this test's point (old_id
+    // was already superseded before this hand-crafted ask) to hold.
+    append_ledger_row_at(
         &dir,
         "asked",
         &third_id,
         &new_hash,
         "1.3 What is the third unit of authority called?",
+        "2099-01-01T00:00:00Z",
     );
 
     let answer_out = adr_answer(&dir, &third_id, "A");
@@ -1096,7 +1104,13 @@ fn answer_refuses_a_section_with_no_terms_line() {
     let heading_idx = without_terms.find("### 1.1 What is the authority?").unwrap();
     let section_text = without_terms[heading_idx..].trim_end_matches('\n');
     let new_hash = mirror_section_hash(section_text);
-    append_ledger_row(&dir, "asked", &id, &new_hash, "1.1 What is the authority?");
+    // Later than the real `asked` row `adr ask` just wrote (today's actual
+    // clock time, not the fixed 2024 date `append_ledger_row` uses): per
+    // "Does the tool take the order of ledger rows from their time?", a
+    // row's place in `rows` comes from its time, so this hand-written row
+    // has to carry a time after "now" to stand as the latest one, not just
+    // sit later in the file.
+    append_ledger_row_at(&dir, "asked", &id, &new_hash, "1.1 What is the authority?", "2099-01-01T00:00:00Z");
 
     let out = adr_answer(&dir, &id, "A");
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
@@ -1125,7 +1139,10 @@ fn corrupt_terms_line(dir: &Path, record: &Path, heading: &str, new_terms_line: 
     let section_text = edited[heading_idx..].trim_end_matches('\n');
     let new_hash = mirror_section_hash(section_text);
     let detail = heading.trim_start_matches("### ");
-    append_ledger_row(dir, "asked", &id, &new_hash, detail);
+    // Later than the real `asked` row `adr ask` already wrote, same reason
+    // as `answer_refuses_a_section_with_no_terms_line`'s own hand-written
+    // row above.
+    append_ledger_row_at(dir, "asked", &id, &new_hash, detail, "2099-01-01T00:00:00Z");
 }
 
 #[test]

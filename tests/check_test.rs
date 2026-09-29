@@ -1905,8 +1905,8 @@ fn check_fails_an_answered_section_with_no_terms_line_by_restoring_or_supersedin
         question_id
     );
     write_record(&dir, "adrdom/decisions/example.md", &record_content);
-    append_ledger_row(&dir, "asked", question_id, "deadbeef", "1.1 Some question?");
-    append_ledger_row(&dir, "answered", question_id, "deadbeef", "A");
+    append_ledger_row_at(&dir, "asked", question_id, "deadbeef", "1.1 Some question?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", question_id, "deadbeef", "A", "2024-01-01T00:00:01Z");
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());

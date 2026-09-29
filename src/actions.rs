@@ -290,8 +290,13 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
         .and_then(|o| o.sentence.clone())
         .unwrap_or_default();
 
+    // One time for every row this run writes (per "Does a command write a
+    // time later than the last ledger row?", aefa7f3c-70c3-412e-8d73-16ff9e2b703a
+    // A): the "answered" row and any "superseded" rows it carries all share
+    // it, taken once here from `led` rather than the clock directly.
+    let write_time = ledger::write_time(&led);
     let mut rows = vec![ledger::Row {
-        time: ledger::now_rfc3339(),
+        time: write_time.clone(),
         event: "answered".to_string(),
         id: id.to_string(),
         hash: cur_hash,
@@ -300,7 +305,7 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
     }];
     for old in &supersedes_val {
         rows.push(ledger::Row {
-            time: ledger::now_rfc3339(),
+            time: write_time.clone(),
             event: "superseded".to_string(),
             id: old.clone(),
             hash: "-".to_string(),
@@ -332,7 +337,7 @@ pub fn do_refuse(root: &Path, id: &str, version: &str) -> Result<Outcome, String
     // version, and ledger-state checks as the letter path (`locate_asked`).
     // The section's own terms-line/pairing checks are not shared (5), so
     // the returned terms file has no further use here.
-    let Located { rf, idx, rel, cur_hash, .. } = locate_asked(root, id, version, None)?;
+    let Located { led, rf, idx, rel, cur_hash, .. } = locate_asked(root, id, version, None)?;
 
     let supersedes_val = rf.sections[idx].supersedes.clone();
     let heading_for_print = rf.sections[idx].heading_text.clone();
@@ -345,7 +350,7 @@ pub fn do_refuse(root: &Path, id: &str, version: &str) -> Result<Outcome, String
     }
 
     let row = ledger::Row {
-        time: ledger::now_rfc3339(),
+        time: ledger::write_time(&led),
         event: "refused".to_string(),
         id: id.to_string(),
         hash: cur_hash,
@@ -521,7 +526,7 @@ fn do_approve_blame(
         msg::blame_unchanged(rel)
     } else {
         let row = ledger::Row {
-            time: ledger::now_rfc3339(),
+            time: ledger::write_time(led),
             event: "blame".to_string(),
             id: "-".to_string(),
             hash: new_hash,
@@ -795,7 +800,7 @@ fn do_approve_terms(
         out.push(msg::terms_already_approved());
     } else {
         let row = ledger::Row {
-            time: ledger::now_rfc3339(),
+            time: ledger::write_time(led),
             event: "terms".to_string(),
             id: "-".to_string(),
             hash: terms::file_hash(&tf),
@@ -1194,6 +1199,14 @@ fn do_approve_record(
         }
     }
 
+    // One time for every row this run writes (per "Does a command write a
+    // time later than the last ledger row?", aefa7f3c-70c3-412e-8d73-16ff9e2b703a
+    // A), taken once here from `led` (loaded before this run made any
+    // change) and reused below for both the withdrawn rows and, further
+    // down, the approved/context rows -- two separate `append` calls this
+    // one run can make, both carrying this same time.
+    let write_time = ledger::write_time(led);
+
     // Always computed (harmless when `refusals` is already non-empty from
     // an earlier category): only acted on -- ledger rows appended -- once
     // every category above has been confirmed clean, below.
@@ -1210,7 +1223,7 @@ fn do_approve_record(
         if let Some(r) = led.latest_state(id) {
             if r.event == "asked" || r.event == "refused" {
                 withdrawn_rows.push(ledger::Row {
-                    time: ledger::now_rfc3339(),
+                    time: write_time.clone(),
                     event: "withdrawn".to_string(),
                     id: id.clone(),
                     hash: "-".to_string(),
@@ -1270,7 +1283,7 @@ fn do_approve_record(
         != Some(plan_hash.as_str());
     if plan_changed {
         rows.push(ledger::Row {
-            time: ledger::now_rfc3339(),
+            time: write_time.clone(),
             event: "approved".to_string(),
             id: "-".to_string(),
             hash: plan_hash.clone(),
@@ -1288,7 +1301,7 @@ fn do_approve_record(
         != Some(context_hash.as_str());
     if context_changed {
         rows.push(ledger::Row {
-            time: ledger::now_rfc3339(),
+            time: write_time.clone(),
             event: "context".to_string(),
             id: "-".to_string(),
             hash: context_hash.clone(),
@@ -1420,24 +1433,23 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
         });
     }
 
-    let mut remaining: Vec<(String, Option<String>)> = existing
+    let remaining: Vec<(String, Option<String>)> = existing
         .into_iter()
         .filter(|(h, _)| !to_remove.contains(h))
         .collect();
-    remaining.sort_by(|a, b| a.0.cmp(&b.0));
-    let mut content = String::new();
-    for (h, u) in &remaining {
-        content.push_str(&crate::banned::format_line(h, u));
-        content.push('\n');
-    }
-    std::fs::write(&banned_path, content).map_err(|e| {
+    crate::banned::write_sorted(&banned_path, remaining).map_err(|e| {
         msg::update_failed("banned list", e, Next::owner_runs("adr unban again"))
     })?;
 
+    // One time for every row this run writes (per "Does a command write a
+    // time later than the last ledger row?", aefa7f3c-70c3-412e-8d73-16ff9e2b703a
+    // A), whichever hash each row names.
+    let led = ledger::read(&ledger_path);
+    let write_time = ledger::write_time(&led);
     let rows: Vec<ledger::Row> = removed
         .iter()
         .map(|h| ledger::Row {
-            time: ledger::now_rfc3339(),
+            time: write_time.clone(),
             event: "unbanned".to_string(),
             id: "-".to_string(),
             hash: h.clone(),

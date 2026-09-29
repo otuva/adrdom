@@ -74,8 +74,8 @@ fn approve_accepts_all_three_depends_target_kinds_and_refuses_a_missing_line() {
     // that appears in no topic file at all -- a different rule from the
     // one this test is about -- so it needs a home).
     let decided_id = "66666666-6666-6666-6666-666666666666";
-    append_ledger_row(&dir, "asked", decided_id, "h1", "Some earlier heading?");
-    append_ledger_row(&dir, "answered", decided_id, "h1", "A");
+    append_ledger_row_at(&dir, "asked", decided_id, "h1", "Some earlier heading?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", decided_id, "h1", "A", "2024-01-01T00:00:01Z");
     let earlier = format!(
         "# Earlier\n\n### 1.1 Some earlier heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         decided_id
@@ -601,8 +601,8 @@ fn approve_refuses_a_depends_set_naming_an_option_a_cross_file_decision_does_not
     setup(&dir);
 
     let a_id = "11111111-2222-3333-4444-555555555555";
-    append_ledger_row(&dir, "asked", a_id, "h1", "1.1 Does A do a thing?");
-    append_ledger_row(&dir, "answered", a_id, "h1", "A");
+    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Does A do a thing?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
     let a_content = format!(
         "# Topic A\n\n### 1.1 Does A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         a_id
@@ -656,8 +656,8 @@ fn approve_resolves_a_cross_file_heading_dependency_and_show_turns_it_back_into_
     // uses for "a current decision", just with a real heading of its own
     // for B to name.
     let a_id = "77777777-7777-7777-7777-777777777777";
-    append_ledger_row(&dir, "asked", a_id, "h1", "1.1 Does A do a thing?");
-    append_ledger_row(&dir, "answered", a_id, "h1", "A");
+    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Does A do a thing?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
     let a_content = format!(
         "# Topic A\n\n### 1.1 Does A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         a_id
@@ -704,8 +704,8 @@ fn approve_refuses_a_cross_file_heading_dependency_naming_two_current_decisions(
     setup(&dir);
 
     let a_id = "88888888-8888-8888-8888-888888888888";
-    append_ledger_row(&dir, "asked", a_id, "h1", "1.1 Shared heading?");
-    append_ledger_row(&dir, "answered", a_id, "h1", "A");
+    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
     let a_content = format!(
         "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         a_id
@@ -713,8 +713,8 @@ fn approve_refuses_a_cross_file_heading_dependency_naming_two_current_decisions(
     write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
 
     let c_id = "99999999-8888-8888-8888-888888888888";
-    append_ledger_row(&dir, "asked", c_id, "h1", "1.1 Shared heading?");
-    append_ledger_row(&dir, "answered", c_id, "h1", "A");
+    append_ledger_row_at(&dir, "asked", c_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", c_id, "h1", "A", "2024-01-01T00:00:01Z");
     let c_content = format!(
         "# Topic C\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         c_id
@@ -763,11 +763,11 @@ fn approve_refuses_a_cross_file_heading_dependency_naming_two_decisions_in_one_f
     setup(&dir);
 
     let a_id = "aaaaaaaa-8888-8888-8888-888888888888";
-    append_ledger_row(&dir, "asked", a_id, "h1", "1.1 Shared heading?");
-    append_ledger_row(&dir, "answered", a_id, "h1", "A");
+    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
     let c_id = "cccccccc-8888-8888-8888-888888888888";
-    append_ledger_row(&dir, "asked", c_id, "h2", "1.1 Shared heading?");
-    append_ledger_row(&dir, "answered", c_id, "h2", "A");
+    append_ledger_row_at(&dir, "asked", c_id, "h2", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", c_id, "h2", "A", "2024-01-01T00:00:01Z");
     let a_content = format!(
         "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {a}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {c}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         a = a_id,
@@ -811,8 +811,8 @@ fn approve_refuses_a_real_dangling_entry_over_a_co_occurring_ambiguous_heading()
     setup(&dir);
 
     let a_id = "88888888-8888-8888-8888-888888888888";
-    append_ledger_row(&dir, "asked", a_id, "h1", "1.1 Shared heading?");
-    append_ledger_row(&dir, "answered", a_id, "h1", "A");
+    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
     let a_content = format!(
         "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         a_id
@@ -820,8 +820,8 @@ fn approve_refuses_a_real_dangling_entry_over_a_co_occurring_ambiguous_heading()
     write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
 
     let c_id = "99999999-8888-8888-8888-888888888888";
-    append_ledger_row(&dir, "asked", c_id, "h1", "1.1 Shared heading?");
-    append_ledger_row(&dir, "answered", c_id, "h1", "A");
+    append_ledger_row_at(&dir, "asked", c_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", c_id, "h1", "A", "2024-01-01T00:00:01Z");
     let c_content = format!(
         "# Topic C\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         c_id
@@ -872,8 +872,8 @@ fn approve_refuses_a_frozen_sections_depends_line_hand_edited_to_a_cross_file_he
     // Y: an already-answered, current decision living in a topic file of
     // its own, for X to (wrongly) start naming after X is already answered.
     let y_id = "77777777-7777-7777-7777-777777777777";
-    append_ledger_row(&dir, "asked", y_id, "h1", "1.1 Does Y do a thing?");
-    append_ledger_row(&dir, "answered", y_id, "h1", "A");
+    append_ledger_row_at(&dir, "asked", y_id, "h1", "1.1 Does Y do a thing?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", y_id, "h1", "A", "2024-01-01T00:00:01Z");
     let y_content = format!(
         "# Topic Y\n\n### 1.1 Does Y do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         y_id
@@ -884,8 +884,8 @@ fn approve_refuses_a_frozen_sections_depends_line_hand_edited_to_a_cross_file_he
     // after the fact, to a cross-file heading reference -- exactly the
     // edit `record_refusals`'s frozen check exists to catch.
     let x_id = "66666666-6666-6666-6666-666666666666";
-    append_ledger_row(&dir, "asked", x_id, "h1", "1.1 Does X stand on something?");
-    append_ledger_row(&dir, "answered", x_id, "h1", "A");
+    append_ledger_row_at(&dir, "asked", x_id, "h1", "1.1 Does X stand on something?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", x_id, "h1", "A", "2024-01-01T00:00:01Z");
     let x_content = format!(
         "# Topic X\n\n### 1.1 Does X stand on something?\ndepends: 1.1 Does Y do a thing?\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         x_id
@@ -933,8 +933,8 @@ fn ask_refuses_a_cross_file_heading_dependency_naming_two_current_decisions() {
     setup(&dir);
 
     let a_id = "88888888-8888-8888-8888-888888888888";
-    append_ledger_row(&dir, "asked", a_id, "h1", "1.1 Shared heading?");
-    append_ledger_row(&dir, "answered", a_id, "h1", "A");
+    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
     let a_content = format!(
         "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         a_id
@@ -942,8 +942,8 @@ fn ask_refuses_a_cross_file_heading_dependency_naming_two_current_decisions() {
     write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
 
     let c_id = "99999999-8888-8888-8888-888888888888";
-    append_ledger_row(&dir, "asked", c_id, "h1", "1.1 Shared heading?");
-    append_ledger_row(&dir, "answered", c_id, "h1", "A");
+    append_ledger_row_at(&dir, "asked", c_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", c_id, "h1", "A", "2024-01-01T00:00:01Z");
     let c_content = format!(
         "# Topic C\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         c_id

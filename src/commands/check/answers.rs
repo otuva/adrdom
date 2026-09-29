@@ -11,6 +11,22 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
             let Some(id) = &sec.id else { continue };
             let cur = record::section_hash(&rf.lines, sec);
 
+            // Per "Does check fail a question answered with two different
+            // options?" (e3200081-9995-4bbe-983f-2f430dc341e7): a question
+            // whose standing ledger rulings (`state::conflicting_rulings`)
+            // name two or more different options fails here, straight from
+            // the ledger -- the file's own `**Answer:**` line only shows
+            // one side and can never catch this on its own (`closed_match`
+            // below only compares that one line against the ledger, so it
+            // stays silent about a second, equally genuine row for a
+            // different option).
+            if let Some((a, b)) = state::conflicting_rulings(led, id) {
+                out.push(Failure {
+                    check: "answers".to_string(),
+                    message: msg::answer_conflict(&rf.rel, &sec.heading_text, id, &a.label(), &b.label()),
+                });
+            }
+
             if sec.is_refused() {
                 // Per "Does the owner answer a question with a refusal?":
                 // a `**Answer:** refused` line needs a matching `refused`

@@ -8,6 +8,7 @@ mod ledger;
 mod moot;
 mod parse;
 mod plan;
+mod push;
 mod tells;
 mod terms;
 mod tests;
@@ -43,16 +44,20 @@ fn push_failures(out: &mut Vec<String>, fs: Vec<Failure>) {
 /// Always runs the plain repo-wide scan (non-staged, no message file):
 /// `serve` has no commit to check "at", unlike `run`.
 pub fn collect_with_tests(root: &Path, tests: &HashMap<String, Vec<String>>) -> view::CheckReport {
-    build(root, false, None, Some(tests))
+    build(root, false, None, None, Some(tests))
 }
 
 /// Everything `check` reports, computed against `root`. `run` passes
-/// `staged`/`message` on for the pre-commit/commit-msg hook modes;
-/// `collect_with_tests` always passes the plain non-staged, no-message scan.
+/// `staged`/`message` on for the pre-commit/commit-msg hook modes, and
+/// `since` for `--since <commit>` (per "Does check in CI compare the
+/// ledger with the commit before the push?", a26876ba-5789-4d05-965e-853d00d9edd2
+/// C); `collect_with_tests` always passes the plain non-staged, no-message,
+/// no-`since` scan.
 fn build(
     root: &Path,
     staged: bool,
     message: Option<&Path>,
+    since: Option<&str>,
     tests: Option<&HashMap<String, Vec<String>>>,
 ) -> view::CheckReport {
     // Picked once per run and threaded through every category below (per
@@ -133,7 +138,7 @@ fn build(
     let mut failures: Vec<String> = Vec::new();
     push_failures(&mut failures, parse::check_parse(&per_record_refusals));
     push_failures(&mut failures, ids::check_ids(&records, &led, &missing_answered, &raw_hashes));
-    push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_content));
+    push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_content, since));
     push_failures(&mut failures, banned::check_banned_ledger(&led, root, &source));
     push_failures(&mut failures, answers::check_answers(&records, &led));
     push_failures(&mut failures, banned::check_banned(root, staged, message, &source));
@@ -189,7 +194,17 @@ fn build(
     view::CheckReport { failures, notes }
 }
 
-pub fn run(staged: bool, message: Option<PathBuf>) -> i32 {
+/// `push` (`--push`) short-circuits to `push::run`, which reads git's
+/// pre-push stdin and judges only that one ledger comparison, per ref line
+/// -- never the rest of what `check` reports (per "Does check look at the
+/// ledger before a push?", 19e1c023-a678-4842-a414-bb0e45c41601 P). Every
+/// other combination runs the plain report, `since` (`--since <commit>`)
+/// adding its one extra ledger comparison on top.
+pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: bool) -> i32 {
+    if push {
+        return push::run();
+    }
+
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
@@ -198,7 +213,7 @@ pub fn run(staged: bool, message: Option<PathBuf>) -> i32 {
         }
     };
 
-    let report = build(&root, staged, message.as_deref(), None);
+    let report = build(&root, staged, message.as_deref(), since.as_deref(), None);
     let exit_code = if report.failures.is_empty() { 0 } else { 1 };
 
     for f in &report.failures {

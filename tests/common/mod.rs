@@ -364,6 +364,30 @@ pub fn append_ledger_row(dir: &Path, event: &str, id: &str, hash: &str, detail: 
     std::fs::write(&ledger_path, existing).unwrap();
 }
 
+/// Same as `append_ledger_row`, but with an explicit `time` instead of the
+/// fixed one every call to that helper shares. Per "Does the tool take the
+/// order of ledger rows from their time?": two rows about the same
+/// subject that carry that same fixed time are ordered by row text, not by
+/// which one a fixture wrote first, so a fixture whose own point is which
+/// row is "the latest" (e.g. an `asked` row and the `answered` row that
+/// follows it) needs each row to carry a time later than the one before
+/// it, not a shared one.
+pub fn append_ledger_row_at(dir: &Path, event: &str, id: &str, hash: &str, detail: &str, time: &str) {
+    let ledger_path = dir.join("adrdom/state/ledger.tsv");
+    let mut existing = std::fs::read_to_string(&ledger_path).unwrap_or_default();
+    let row = ledger::Row {
+        time: time.to_string(),
+        event: event.to_string(),
+        id: id.to_string(),
+        hash: hash.to_string(),
+        detail: detail.to_string(),
+        version: adr::version::VERSION.to_string(),
+    };
+    existing.push_str(&ledger::row_line(&row));
+    existing.push('\n');
+    std::fs::write(&ledger_path, existing).unwrap();
+}
+
 /// Writes and approves a term-less `adrdom/terms.md`. Since `check` fails
 /// once any record exists and `adrdom/terms.md` is missing (an unapproved
 /// file alone is only a note now, never a failure), tests that write a

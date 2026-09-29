@@ -137,8 +137,8 @@ fn show_prints_tiers_states_stands_on_and_chosen_sentence() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/tiered.md", TIERED_RECORD);
-    append_ledger_row(&dir, "asked", "id-root", "h-root", "1.1 Root?");
-    append_ledger_row(&dir, "answered", "id-root", "h-root", "A");
+    append_ledger_row_at(&dir, "asked", "id-root", "h-root", "1.1 Root?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", "id-root", "h-root", "A", "2024-01-01T00:00:01Z");
     append_ledger_row(&dir, "asked", "id-open", "h-open", "2.1 Depends on root?");
     append_ledger_row(&dir, "asked", "id-refused", "h-refused", "2.2 Also depends?");
     append_ledger_row(&dir, "refused", "id-refused", "h-refused", "2.2 Also depends?");
@@ -239,8 +239,8 @@ fn show_derives_tiers_for_an_unapproved_file_whose_depends_line_names_a_cross_fi
     // A: an already-answered, current decision living in a topic file of
     // its own.
     let a_id = "77777777-7777-7777-7777-777777777777";
-    append_ledger_row(&dir, "asked", a_id, "h1", "1.1 Does A do a thing?");
-    append_ledger_row(&dir, "answered", a_id, "h1", "A");
+    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Does A do a thing?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
     let a_content = format!(
         "# Topic A\n\n### 1.1 Does A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         a_id

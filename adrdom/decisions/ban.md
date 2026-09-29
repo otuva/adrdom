@@ -113,3 +113,57 @@ Standard: a new lint rule lands on a clean tree, with every violation fixed befo
   Costs: CI fails until every hit is cleaned, and a hit nobody can clean keeps it failing until the owner lifts the ban.
 
 **Answer:** A
+
+### Does check hold the ban list equal to the ledger?
+depends: ef83beae-6857-4200-b251-a0fcc3c72f9d, 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e18b82d8-5271-4385-bbab-2b89e5da278f, ef7ec04d-9cdd-40a1-8246-42a4a0200828=A
+id: 06b7e003-4d9f-427a-a798-c1af97865411
+terms: ban=ef83beae-6857-4200-b251-a0fcc3c72f9d, banned=ef83beae-6857-4200-b251-a0fcc3c72f9d, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d
+
+Problem: after a merge the ban list can hold the hash of a word whose ban the owner lifted, and check passes.
+Standard: a file derived from a log is compared with the log in both directions, and any difference fails.
+
+- A) Yes: check fails unless the ban list holds exactly the hashes the ledger says are banned now, no more and no fewer.
+  Why: a lifted ban cannot come back without a ledger row.
+  Costs: a ban list merged wrongly stops every commit until it is put right.
+- B) No: check looks only for a banned hash missing from the ban list and for a hash the ledger never banned.
+  Why: check has one rule fewer.
+  Costs: a lifted ban that returns in a merge is enforced again and nothing reports it.
+
+**Answer:** A
+
+### Does the tool write the ban list in one fixed order?
+depends: ef83beae-6857-4200-b251-a0fcc3c72f9d, c6da863d-5085-402f-815a-9bb832b4df7e=A
+id: bf27b020-4e60-48e0-8d3b-5f818e6bf6d8
+terms: ban=ef83beae-6857-4200-b251-a0fcc3c72f9d, banned=ef83beae-6857-4200-b251-a0fcc3c72f9d, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f
+
+Problem: ban adds a hash at the end of the ban list and unban rewrites the whole list, so two branches that touch it conflict at every merge.
+Standard: list files under version control are kept sorted, so that lines added and removed on two branches fall in different places and merge cleanly.
+
+- A) Yes: ban and unban both write the ban list sorted by hash.
+  Why: most changes from two branches to the ban list merge with no conflict.
+  Costs: the ban list no longer shows the order in which words were banned; the ledger still does.
+- B) No: ban adds at the end and unban rewrites the list.
+  Why: ban writes one line and touches nothing else.
+  Costs: every merge of two branches that ban or unban conflicts.
+
+**Answer:** A
+
+### Does the tool rewrite the ban list from the ledger?
+depends: ef83beae-6857-4200-b251-a0fcc3c72f9d, e18b82d8-5271-4385-bbab-2b89e5da278f, 06b7e003-4d9f-427a-a798-c1af97865411=A
+id: f422c5db-13d0-4ff7-9e43-b68ab44a7cb9
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, ban=ef83beae-6857-4200-b251-a0fcc3c72f9d, banned=ef83beae-6857-4200-b251-a0fcc3c72f9d, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d
+
+Problem: a merge of two branches leaves the ban list in conflict or holding a hash whose ban the owner lifted, and putting it right is a hand edit of a file under adrdom/state.
+Standard: a state file that a log fully determines is rebuilt from the log by the tool and never edited by hand.
+
+- A) Yes: a command any agent runs writes the ban list as the hashes the ledger says are banned, sorted, and writes no ledger row.
+  Why: a conflict in the ban list is cleared by one command, whichever way the merge ran.
+  Costs: the ban list changes with no act of the owner at that moment; it follows the acts the ledger holds.
+- B) Yes: an owner command writes the ban list as the hashes the ledger says are banned, sorted, and writes no ledger row.
+  Why: what is enforced changes only when the owner runs a command.
+  Costs: every merge that touches the ban list waits for the owner.
+- C) No: whoever merges edits the ban list by hand, and check fails until it equals the ledger.
+  Why: the tool has one command fewer.
+  Costs: a file under adrdom/state is edited by hand at every such merge.
+
+**Answer:** A
