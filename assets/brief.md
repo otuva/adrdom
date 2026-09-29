@@ -69,11 +69,12 @@ entries of its `depends:` line are ids.
 
 **2. Walk each question, then write its body.** Write the bodies `next`
 names. Before you write an option, read the code and the decisions it meets
-and find out three things: what the tool has to keep or do for this option
-that it does not today, which command looks and at what moment, and which
-current decision the option touches. What you find is what the option costs:
-write it on its Costs line. When you find a second question on the way, add
-its heading to the plan (see Changing a plan).
+and find out what the option asks for: what the code has to keep, which part
+of it has to look and at what moment, and which current decision the option
+touches. That is what the option costs: write it on its Costs line. Say what
+is asked, never what the code does now: the record outlives the code. When
+you find a second question on the way, add its heading to the plan (see
+Changing a plan).
 
 ```
 Problem: what breaks, in one line.
