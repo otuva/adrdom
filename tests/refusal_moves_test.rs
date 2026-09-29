@@ -225,7 +225,7 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     // Answered, no test tied to it.
     let out = adr(&dir, &["check"], &[], "");
     assert!(
-        stdout(&out).contains(&format!("tested: {}: untested, \"{}\"; agent writes", alpha, ALPHA)),
+        stdout(&out).contains(&format!("tested: {} (\"{}\"): untested; agent writes", alpha, ALPHA)),
         "{}",
         stdout(&out)
     );
@@ -239,6 +239,19 @@ fn a_refusal_names_the_question_beside_its_identifier() {
         0,
     );
     write_test_comment(&dir, &beta);
+
+    // Under alpha, show names the question of the other file that stands
+    // on it: what would lose its ground with alpha.
+    let shown = stdout(&adr(&dir, &["show"], &[], ""));
+    assert!(
+        shown.contains(&format!(
+            "  [answered A] {}\n    stands on: widget\n    stood on by: {} ({})\n",
+            ALPHA, BETA, B
+        )),
+        "{}",
+        shown
+    );
+
     let mut a = std::fs::read_to_string(dir.join(A)).unwrap();
     a.push_str(&format!(
         "\n{}",
@@ -251,7 +264,7 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     let text = stdout(&out);
     assert!(
         text.contains(&format!(
-            "plan: {}: \"{}\" depends on {} which is not a current decision, \"{}\"; agent",
+            "plan: {}: \"{}\" depends on {} (\"{}\") which is not a current decision; agent",
             B, BETA, alpha, ALPHA
         )),
         "{}",
@@ -259,7 +272,7 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     );
     assert!(
         text.contains(&format!(
-            "tested: {}: stale (not a current decision), \"{}\" at tested.txt:1; agent removes",
+            "tested: {} (\"{}\"): stale (not a current decision) at tested.txt:1; agent removes",
             alpha, ALPHA
         )),
         "{}",
@@ -285,7 +298,7 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     assert!(!out.status.success());
     assert!(
         stderr(&out).contains(&format!(
-            "supersedes {}, which is not a current decision, \"{}\"; agent fixes",
+            "supersedes {} (\"{}\"), which is not a current decision; agent fixes",
             alpha, ALPHA
         )),
         "{}",
@@ -315,9 +328,11 @@ fn show_ends_without_a_word_when_its_reader_goes_away() {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
+    // The reading end is closed before the tool has read a file, so its
+    // first print meets the closed pipe.
     drop(child.stdout.take());
     let out = child.wait_with_output().unwrap();
     let err = String::from_utf8_lossy(&out.stderr);
-    assert!(!err.contains("panicked"), "{}", err);
     assert!(err.is_empty(), "{}", err);
+    assert_eq!(out.status.code(), Some(141), "{:?}", out.status);
 }

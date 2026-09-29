@@ -205,7 +205,7 @@ fn check_fails_a_depends_entry_on_a_retired_term_by_id_while_open() {
     let text = stdout(&out);
     assert!(
         text.contains(&format!(
-            "plan: adrdom/decisions/example.md: \"1.1 Q?\" depends on {} which is not a current decision, \"widget\"; agent names a current decision or removes the line",
+            "plan: adrdom/decisions/example.md: \"1.1 Q?\" depends on {} (\"widget\") which is not a current decision; agent names a current decision or removes the line",
             term_id
         )),
         "{}",

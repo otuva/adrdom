@@ -86,7 +86,7 @@ fn end_quietly_when_the_reader_is_gone() {
             .map(String::as_str)
             .or_else(|| payload.downcast_ref::<&str>().copied())
             .unwrap_or("");
-        if text.starts_with("failed printing to std") {
+        if text.starts_with("failed printing to std") && text.contains("Broken pipe") {
             std::process::exit(READER_GONE);
         }
         default_hook(info);

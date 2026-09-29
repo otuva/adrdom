@@ -389,7 +389,7 @@ fn check_tests_failure_when_untested() {
     assert!(out_text.contains("tested:"), "{}", out_text);
     assert!(out_text.contains("untested"), "{}", out_text);
     assert!(
-        out_text.contains(&format!("{}: untested", id)),
+        line_with(&out_text, &id, ": untested"),
         "check must name the untested decision by id: {}",
         out_text
     );
@@ -540,7 +540,7 @@ fn check_tests_ignores_a_tie_under_adrdom_and_an_untracked_tie() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains(&format!("{}: untested", id)),
+        line_with(&stdout(&out), &id, ": untested"),
         "a tie under adrdom/ must not count: {}",
         stdout(&out)
     );
@@ -551,7 +551,7 @@ fn check_tests_ignores_a_tie_under_adrdom_and_an_untracked_tie() {
     let out2 = adr(&dir, &["check"], &[], "");
     assert!(!out2.status.success());
     assert!(
-        stdout(&out2).contains(&format!("{}: untested", id)),
+        line_with(&stdout(&out2), &id, ": untested"),
         "an untracked tie must not count: {}",
         stdout(&out2)
     );
@@ -2212,7 +2212,7 @@ fn check_staged_reads_a_newly_staged_test_files_tie_from_the_index() {
     let out2 = adr(&dir, &["check"], &[], "");
     assert!(!out2.status.success(), "{}", stdout(&out2));
     assert!(
-        stdout(&out2).contains(&format!("{}: untested", id)),
+        line_with(&stdout(&out2), &id, ": untested"),
         "{}",
         stdout(&out2)
     );
@@ -2341,7 +2341,7 @@ fn check_fails_a_test_tied_to_a_decision_that_was_later_superseded() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "check should fail: {}", stdout(&out));
     assert!(
-        stdout(&out).contains(&format!("{}: stale (not a current decision)", old_id)),
+        line_with(&stdout(&out), &old_id, ": stale (not a current decision)"),
         "{}",
         stdout(&out)
     );
@@ -2371,7 +2371,7 @@ fn check_fails_a_test_tied_to_a_refused_decision() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "check should fail: {}", stdout(&out));
     assert!(
-        stdout(&out).contains(&format!("{}: stale (not a current decision)", id)),
+        line_with(&stdout(&out), &id, ": stale (not a current decision)"),
         "{}",
         stdout(&out)
     );

@@ -175,8 +175,13 @@ pub(crate) fn qstate(led: &Ledger, sec: &Section) -> QState {
 /// names a decision in another topic file back into that decision's
 /// heading text, for `format_dep`.
 pub fn all_heading_texts(root: &Path) -> HashMap<String, String> {
+    heading_texts(&record::load_all(root))
+}
+
+/// `all_heading_texts` for a caller that holds every topic file loaded.
+pub fn heading_texts(records: &[RecordFile]) -> HashMap<String, String> {
     let mut out = HashMap::new();
-    for rf in record::load_all(root) {
+    for rf in records {
         for sec in &rf.sections {
             if let Some(id) = &sec.id {
                 out.insert(id.clone(), sec.heading_text.clone());

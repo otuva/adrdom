@@ -159,6 +159,7 @@ fn show_prints_tiers_states_stands_on_and_chosen_sentence() {
 # Tiered Topic (adrdom/decisions/tiered.md)
 tier 1
   [answered A] 1.1 Root?
+    stood on by: 2.1 Depends on root?
     First choice.
   [unasked] 1.2 Unasked root?
   [skeleton] 1.3 Skeleton?

@@ -129,9 +129,12 @@ fn build(
     // `plan` pull their failures from these instead of re-deriving the
     // same shape/tells/depends checks `approve` already refuses on; `ids`
     // pulls the missing-answered-id lines the same way.
+    let names = crate::view::heading_texts(&records);
     let per_record_refusals: Vec<Vec<actions::Refusal>> = records
         .iter()
-        .map(|rf| actions::record_refusals(&rf.rel, rf, &terms_list, &phrase_lookup, &cross_file_headings, &led))
+        .map(|rf| {
+            actions::record_refusals(&rf.rel, rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &led)
+        })
         .collect();
     let missing_answered = actions::missing_answered_refusals(&records, &led);
 

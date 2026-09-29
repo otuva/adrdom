@@ -72,32 +72,28 @@ pub(super) fn check_tests(
 
     // The heading a question carries, whatever its state: a line that
     // names an identifier names the question beside it.
-    let heading_of = |id: &str| {
-        records
-            .iter()
-            .flat_map(|rf| rf.sections.iter())
-            .find(|s| s.id.as_deref() == Some(id))
-            .map(|s| s.heading_text.as_str())
-    };
+    let names = crate::view::heading_texts(records);
+    let heading_of = |id: &str| names.get(id).map(String::as_str);
 
-    for id in &current {
-        if test_ids.contains_key(id) {
-            tested_count += 1;
-        } else {
-            out.push(Failure {
-                check: "tested".to_string(),
-                message: msg::untested(id, heading_of(id)),
-            });
-        }
+    // In the order of the identifiers, so two runs print the same lines.
+    let mut untested: Vec<&String> = current.iter().filter(|id| !test_ids.contains_key(*id)).collect();
+    untested.sort();
+    tested_count += current.len() - untested.len();
+    for id in untested {
+        out.push(Failure {
+            check: "tested".to_string(),
+            message: msg::untested(id, heading_of(id)),
+        });
     }
 
-    for (id, locations) in test_ids {
-        if !current.contains(id) {
-            out.push(Failure {
-                check: "tested".to_string(),
-                message: msg::stale_test(id, heading_of(id), locations),
-            });
-        }
+    let mut stale: Vec<(&String, &Vec<String>)> =
+        test_ids.iter().filter(|(id, _)| !current.contains(*id)).collect();
+    stale.sort();
+    for (id, locations) in stale {
+        out.push(Failure {
+            check: "tested".to_string(),
+            message: msg::stale_test(id, heading_of(id), locations),
+        });
     }
 
     (out, tested_count)

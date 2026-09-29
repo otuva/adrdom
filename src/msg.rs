@@ -341,11 +341,10 @@ pub fn frozen_depends_edited(rel: &str, heading: &str) -> String {
 pub fn dep_not_current_decision(rel: &str, heading: &str, id: &str, name: Option<&str>) -> String {
     refuse(
         format!(
-            "{}: \"{}\" depends on {} which is not a current decision{}",
+            "{}: \"{}\" depends on {} which is not a current decision",
             rel,
             heading,
-            id,
-            named(name)
+            named(id, name)
         ),
         Next::agent("names a current decision or removes the line"),
     )
@@ -629,19 +628,19 @@ pub fn refused_summary(heading: &str, rel: &str) -> String {
     )
 }
 
-/// `, "<name>"` after an identifier the tool can put a name to (a heading,
-/// a term), nothing when it cannot: the reader is never left with an
-/// identifier alone where the tool holds the name.
-fn named(name: Option<&str>) -> String {
+/// An identifier with the name the tool can put to it (a heading, a term)
+/// right beside it, `<id> ("<name>")`, or the identifier alone when the
+/// tool holds no name for it.
+fn named(id: &str, name: Option<&str>) -> String {
     match name {
-        Some(n) => format!(", \"{}\"", n),
-        None => String::new(),
+        Some(n) => format!("{} (\"{}\")", id, n),
+        None => id.to_string(),
     }
 }
 
 pub fn supersedes_not_current(id: &str, name: Option<&str>) -> String {
     refuse(
-        format!("supersedes target {} is not a current decision{}", id, named(name)),
+        format!("supersedes target {} is not a current decision", named(id, name)),
         Next::agent("fixes the supersedes line"),
     )
 }
@@ -699,11 +698,10 @@ pub fn depends_on_refused(rel: &str, heading: &str, target: &str) -> String {
 pub fn ask_supersedes_not_current(rel: &str, heading: &str, old: &str, name: Option<&str>) -> String {
     refuse(
         format!(
-            "{}: \"{}\": supersedes {}, which is not a current decision{}",
+            "{}: \"{}\": supersedes {}, which is not a current decision",
             rel,
             heading,
-            old,
-            named(name)
+            named(old, name)
         ),
         Next::agent("fixes the supersedes line"),
     )
@@ -939,7 +937,21 @@ pub fn next_later(headings: &[String]) -> String {
 use crate::view::QState;
 
 pub fn show_topic(topic: &str, rel: &str) -> String {
+    if topic.is_empty() {
+        return format!("# ({})", rel);
+    }
     format!("# {} ({})", topic, rel)
+}
+
+/// Under a question: the questions whose depends line names it, the ones
+/// that would lose their ground with it.
+pub fn show_stood_on_by(entries: &[String]) -> String {
+    format!("    stood on by: {}", entries.join(", "))
+}
+
+/// A question of another topic file, in `show_stood_on_by`.
+pub fn show_question_of(heading: &str, rel: &str) -> String {
+    format!("{} ({})", heading, rel)
 }
 
 pub fn show_tier(tier: usize) -> String {
@@ -1640,7 +1652,7 @@ pub fn ledger_same_time_competition(time: &str, subject: &str) -> String {
 
 pub fn untested(id: &str, heading: Option<&str>) -> String {
     refuse(
-        format!("{}: untested{}", id, named(heading)),
+        format!("{}: untested", named(id, heading)),
         Next::agent(format!(
             "writes a test that shows the code follows this decision and puts \"adr: {}\" in it",
             id
@@ -1656,7 +1668,7 @@ pub fn stale_test(id: &str, heading: Option<&str>, locations: &[String]) -> Stri
         format!(" at {}", locations.join(", "))
     };
     refuse(
-        format!("{}: stale (not a current decision){}{}", id, named(heading), at),
+        format!("{}: stale (not a current decision){}", named(id, heading), at),
         Next::agent(format!("removes the stale \"adr: {}\" tag from the test", id)),
     )
 }

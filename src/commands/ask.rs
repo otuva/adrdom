@@ -107,8 +107,9 @@ pub fn run(record_path: PathBuf) -> i32 {
         return 1;
     }
 
+    let names = crate::view::all_heading_texts(&root);
     let shape_msgs: Vec<String> =
-        actions::record_refusals(&rel, &rf, &terms_list, &phrase_lookup, &cross_file_headings, &led)
+        actions::record_refusals(&rel, &rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &led)
             .into_iter()
             .filter(|r| r.category == "parse")
             .map(|r| format!("ask: {}", r.message))

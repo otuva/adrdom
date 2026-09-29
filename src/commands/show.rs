@@ -84,6 +84,7 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
         depends::normalize_cross_file_deps(rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
         print_file(
             rf,
+            &blame_records,
             &led,
             &terms_list,
             &all_headings,
@@ -97,6 +98,7 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
             &terms_list,
             &phrase_lookup,
             &cross_file_headings,
+            &all_headings,
             &led,
         )
         .into_iter()
@@ -132,6 +134,7 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
 #[allow(clippy::too_many_arguments)]
 fn print_file(
     rf: &RecordFile,
+    all: &[RecordFile],
     led: &Ledger,
     terms_list: &[Term],
     all_headings: &HashMap<String, String>,
@@ -155,6 +158,7 @@ fn print_file(
             print_question(
                 rf,
                 &rf.sections[i],
+                all,
                 led,
                 terms_list,
                 all_headings,
@@ -166,10 +170,44 @@ fn print_file(
     }
 }
 
+/// The questions whose depends line names `sec`, in the order of the topic
+/// files, each by its heading and, for a question of another file, the
+/// path of that file. A refused, superseded or withdrawn question is left
+/// out: its depends line is a record of what it stood on, nothing rests on
+/// `sec` through it any more. An entry written as a heading text names
+/// `sec` in its own file, and in another file only while `sec` is a
+/// current decision (per "What does a depends line name?").
+fn stood_on_by(rf: &RecordFile, sec: &Section, all: &[RecordFile], led: &Ledger) -> Vec<String> {
+    let heading = sec.heading_text.trim();
+    let current = sec.id.as_deref().is_some_and(|id| state::is_current(led, id));
+    let mut out = Vec::new();
+    for other in all {
+        let same_file = other.rel == rf.rel;
+        for dependent in &other.sections {
+            if (same_file && dependent.heading_text.trim() == heading) || state::is_dead(led, dependent) {
+                continue;
+            }
+            let names_it = dependent.depends.iter().any(|d| match d {
+                record::Dep::Id { id, .. } => sec.id.as_deref() == Some(id.as_str()),
+                record::Dep::Text { text, .. } => text.trim() == heading && (same_file || current),
+            });
+            if names_it {
+                out.push(if same_file {
+                    dependent.heading_text.clone()
+                } else {
+                    msg::show_question_of(&dependent.heading_text, &other.rel)
+                });
+            }
+        }
+    }
+    out
+}
+
 #[allow(clippy::too_many_arguments)]
 fn print_question(
     rf: &RecordFile,
     sec: &Section,
+    all: &[RecordFile],
     led: &Ledger,
     terms_list: &[Term],
     all_headings: &HashMap<String, String>,
@@ -197,6 +235,10 @@ fn print_question(
             .map(|d| view::format_dep(d, rf, terms_list, all_headings))
             .collect();
         println!("{}", msg::show_stands_on(&entries));
+    }
+    let dependents = stood_on_by(rf, sec, all, led);
+    if !dependents.is_empty() {
+        println!("{}", msg::show_stood_on_by(&dependents));
     }
     if state == QState::Answered {
         if let Some(s) = sec.chosen_sentence() {

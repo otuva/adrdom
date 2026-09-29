@@ -846,12 +846,17 @@ fn do_approve_terms(
 /// term" refusals. `cross_file_headings` is likewise supplied once per
 /// command run (`depends::cross_file_heading_index`), threaded straight
 /// into `resolve_dep`.
+///
+/// `names` is every heading by its id, of any state and any topic file
+/// (`view::all_heading_texts`), built once per command run by the caller:
+/// a refusal that names an identifier names the question beside it.
 pub fn record_refusals(
     rel: &str,
     rf: &RecordFile,
     terms_list: &[terms::Term],
     phrase_lookup: &HashMap<String, String>,
     cross_file_headings: &HashMap<String, Vec<(String, String)>>,
+    names: &HashMap<String, String>,
     led: &Ledger,
 ) -> Vec<Refusal> {
     let mut out: Vec<Refusal> = Vec::new();
@@ -960,21 +965,18 @@ pub fn record_refusals(
             {
                 // What the identifier names, for the refusal only: a term
                 // (a retired one too), else the heading of a question in
-                // any state, read off the topic files.
+                // any state.
                 let name = match &e {
                     depends::DepError::NotCurrentDecision(id) => terms_list
                         .iter()
                         .find(|t| t.id.as_deref() == Some(id.as_str()))
-                        .map(|t| t.name.clone())
-                        .or_else(|| {
-                            repo::find_root()
-                                .and_then(|root| crate::view::all_heading_texts(&root).remove(id))
-                        }),
+                        .map(|t| t.name.as_str())
+                        .or_else(|| names.get(id).map(String::as_str)),
                     _ => None,
                 };
                 out.push(Refusal {
                     category: "plan",
-                    message: depends::dep_refusal_text(rel, &sec.heading_text, &e, name.as_deref()),
+                    message: depends::dep_refusal_text(rel, &sec.heading_text, &e, name),
                 });
             }
         }
@@ -1155,8 +1157,9 @@ fn do_approve_record(
     // here (`record_refusals`, shared with `check`) instead of returned at
     // the first, so one `approve` call tells the agent everything it owes
     // the owner before asking again.
+    let names = crate::view::heading_texts(&all_records);
     let mut refusals: Vec<String> =
-        record_refusals(rel, &rf, terms_list, &phrase_lookup, &cross_file_headings, led)
+        record_refusals(rel, &rf, terms_list, &phrase_lookup, &cross_file_headings, &names, led)
             .into_iter()
             .map(|r| msg::approve_prefixed(r.message))
             .collect();

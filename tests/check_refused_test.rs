@@ -142,12 +142,12 @@ fn check_a_refused_id_is_never_untested_but_a_tie_to_it_is_stale() {
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
     assert!(
-        !text.contains(&format!("{}: untested", REFUSABLE_ID)),
+        !line_with(&text, &REFUSABLE_ID, ": untested"),
         "a refused id must never be reported untested: {}",
         text
     );
     assert!(
-        text.contains(&format!("{}: stale (not a current decision)", REFUSABLE_ID)),
+        line_with(&text, &REFUSABLE_ID, ": stale (not a current decision)"),
         "a tie to a refused id must be stale: {}",
         text
     );
