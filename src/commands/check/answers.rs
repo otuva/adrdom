@@ -85,11 +85,20 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                     }
                 }
             } else {
-                let has_answered_row = led
-                    .rows
-                    .iter()
-                    .any(|r| r.event == "answered" && &r.id == id);
-                let has_refused_row = led.rows.iter().any(|r| r.event == "refused" && &r.id == id);
+                // A question asked again after two answers met (per "Does
+                // check fail a question answered with two different
+                // options?") is open: its latest state is `asked` and the
+                // owner's next answer settles it, while the rows of the two
+                // earlier answers stay in the ledger. An `**Answer:**` line
+                // put back would bring the two answers back.
+                let open_again = matches!(led.latest_state(id), Some(row) if row.event == "asked");
+                let has_answered_row = !open_again
+                    && led
+                        .rows
+                        .iter()
+                        .any(|r| r.event == "answered" && &r.id == id);
+                let has_refused_row =
+                    !open_again && led.rows.iter().any(|r| r.event == "refused" && &r.id == id);
                 if has_answered_row {
                     out.push(Failure {
                         check: "answers".to_string(),
