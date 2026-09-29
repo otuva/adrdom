@@ -145,19 +145,21 @@ pub struct Snapshot {
     pub check: CheckReport,
 }
 
-/// The state a question heading is in, from the ledger's latest
-/// state row for its id: no id and a skeleton heading is `Skeleton`; no id
-/// with a body is `Unasked`; otherwise the id's latest ledger event maps
-/// straight across (`asked` -> `Open`, `answered` -> `Answered`, `refused`
-/// -> `Refused`, `superseded`/`withdrawn` accordingly). `pub(crate)` so
-/// `commands::show` can reuse it instead of re-deriving state.
+/// The state a question heading is in, from the ledger's latest state row
+/// for its id (`asked` -> `Open`, `answered` -> `Answered`, `refused` ->
+/// `Refused`, `superseded`/`withdrawn` accordingly). A heading with no such
+/// row, approved or not, is `Skeleton` while it has no body and `Unasked`
+/// once it has one: approve gives every heading an id, so the id says
+/// nothing about the body. `pub(crate)` so `commands::show` can reuse it
+/// instead of re-deriving state.
 pub(crate) fn qstate(led: &Ledger, sec: &Section) -> QState {
+    let never_asked = if sec.is_skeleton {
+        QState::Skeleton
+    } else {
+        QState::Unasked
+    };
     let Some(id) = &sec.id else {
-        return if sec.is_skeleton {
-            QState::Skeleton
-        } else {
-            QState::Unasked
-        };
+        return never_asked;
     };
     match led.latest_state(id).map(|r| r.event.as_str()) {
         Some("asked") => QState::Open,
@@ -165,7 +167,7 @@ pub(crate) fn qstate(led: &Ledger, sec: &Section) -> QState {
         Some("refused") => QState::Refused,
         Some("superseded") => QState::Superseded,
         Some("withdrawn") => QState::Withdrawn,
-        _ => QState::Unasked,
+        _ => never_asked,
     }
 }
 

@@ -984,6 +984,18 @@ pub fn show_question(state: &str, version: Option<&str>, heading: &str) -> Strin
     }
 }
 
+/// A current decision in the short listing: its heading alone, the answer
+/// follows on the next line (`show_chosen`).
+pub fn show_decision(heading: &str) -> String {
+    format!("  {}", heading)
+}
+
+/// The last line of the short listing: how to read the rest.
+pub fn show_whole_hint() -> String {
+    "adr show <topic file> prints every question of one file with what it stands on; adr show --all prints all of them"
+        .to_string()
+}
+
 pub fn show_stands_on(entries: &[String]) -> String {
     format!("    stands on: {}", entries.join(", "))
 }

@@ -16,9 +16,9 @@ path, and some agents load the file from it at the start of a session:
 
 ## What is next
 
-Run `adr show`. It prints every question with its state, every current
-decision, and under each topic file the lines of `next`: one line for each
-move, opening with who makes it.
+Run `adr show`. It prints every current decision, its heading and under it
+the answer the owner picked, and under each topic file the lines of `next`:
+one line for each move, opening with who makes it.
 
 - A line that opens with `agent` is yours. Make these moves in the order
   printed.
@@ -26,6 +26,10 @@ move, opening with who makes it.
   chat and stop.
 - A line that opens with `not yet` names something whose turn has not come.
   Leave it.
+
+`adr show <topic file>` prints every question of that file: what each one
+stands on, what stands on it, and what took the place of one that was
+replaced. Read it before you write a question into that file.
 
 ## Before you build anything
 

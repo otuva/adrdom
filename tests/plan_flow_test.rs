@@ -353,7 +353,7 @@ fn plan_lifecycle_end_to_end() {
         stdout(&out)
     );
 
-    let out = adr(&dir, &["show"], &[], "");
+    let out = adr(&dir, &["show", "--all"], &[], "");
     assert!(
         stdout(&out).contains("[refused] 1.3 Does the paint need a second coat?"),
         "{}",

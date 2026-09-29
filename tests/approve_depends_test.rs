@@ -461,7 +461,7 @@ fn approve_turns_a_depends_name_into_an_id_and_show_turns_it_back_into_words() {
     );
 
     // `show` reads that same id back and prints the words, unprompted.
-    let show1 = adr(&dir, &["show"], &[], "");
+    let show1 = adr(&dir, &["show", "--all"], &[], "");
     assert!(show1.status.success(), "{}", stderr(&show1));
     assert!(
         stdout(&show1).contains("stands on: 1.1 Is the widget red?"),
@@ -488,7 +488,7 @@ fn approve_turns_a_depends_name_into_an_id_and_show_turns_it_back_into_words() {
 
     // B's dependency still resolves -- and now prints the *new* wording,
     // proving the depends line was never the text.
-    let show2 = adr(&dir, &["show"], &[], "");
+    let show2 = adr(&dir, &["show", "--all"], &[], "");
     assert!(show2.status.success(), "{}", stderr(&show2));
     let shown2 = stdout(&show2);
     assert!(shown2.contains("[unasked] 1.1 Is the gadget red?"), "{}", shown2);
@@ -684,7 +684,7 @@ fn approve_resolves_a_cross_file_heading_dependency_and_show_turns_it_back_into_
         approved_b
     );
 
-    let show = adr(&dir, &["show"], &[], "");
+    let show = adr(&dir, &["show", "--all"], &[], "");
     assert!(show.status.success(), "{}", stderr(&show));
     assert!(
         stdout(&show).contains("stands on: 1.1 Does A do a thing?"),

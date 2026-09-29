@@ -153,7 +153,7 @@ fn show_names_the_next_move_at_every_step() {
         vec![ask_for(&[ONE]), answer_for(&dir, &two, TWO), later(THREE)]
     );
     // Its line in the listing carries no version for the owner to use.
-    let shown = stdout(&adr(&dir, &["show"], &[], ""));
+    let shown = stdout(&adr(&dir, &["show", "--all"], &[], ""));
     assert!(shown.contains(&format!("  [open] {}\n", ONE)), "{}", shown);
     assert!(adr(&dir, &["ask", p], &[], "").status.success());
     assert_eq!(
@@ -349,7 +349,7 @@ fn show_names_what_replaced_a_superseded_question() {
     assert!(asked.status.success(), "{}", stderr(&asked));
     assert!(adr_answer(&dir, &two, "A").status.success());
 
-    let shown = stdout(&adr(&dir, &["show"], &[], ""));
+    let shown = stdout(&adr(&dir, &["show", "--all"], &[], ""));
     let expected = format!(
         "  [superseded] {}\n    stands on: widget\n    replaced by: {}\n",
         ONE, TWO
@@ -375,4 +375,53 @@ fn show_prints_no_next_when_nothing_is_left() {
 
     let out = adr(&dir, &["show"], &[], "");
     assert!(!stdout(&out).lines().any(|l| l == "next"), "{}", stdout(&out));
+}
+
+// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
+//
+// With no topic file and no flag show prints the short listing: each
+// current decision as its heading and its answer, the next moves, and how
+// to read the rest. With a topic file, or with --all, it prints the whole
+// listing, the tiers among it ("show and the page print the tiers").
+#[test]
+fn show_is_short_until_it_is_asked_for_the_whole() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let plan = format!(
+        "# Gate\n\n### {}\ndepends: widget\n\n### {}\ndepends: widget, {}\n",
+        ONE, THREE, ONE
+    );
+    let path = write_record(&dir, REL, &plan);
+    approve_record(&dir, REL);
+    write_body(&path, ONE);
+    let one = id_of(&path, ONE);
+    let text = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(&path, text.replace(&format!(", {}\n", one), &format!(", {}=A\n", one))).unwrap();
+    let p = path.to_str().unwrap();
+    assert!(adr(&dir, &["ask", p], &[], "").status.success());
+    assert!(adr_answer(&dir, &one, "A").status.success());
+    write_test_comment(&dir, &one);
+
+    let short = stdout(&adr(&dir, &["show"], &[], ""));
+    assert_eq!(
+        short,
+        format!(
+            "# Gate ({rel})\n  {one}\n    Yes the widget holds.\nnext\n  agent writes the body of \"{three}\"\n\
+adr show <topic file> prints every question of one file with what it stands on; adr show --all prints all of them\n",
+            rel = REL,
+            one = ONE,
+            three = THREE
+        )
+    );
+
+    let whole = format!(
+        "# Gate ({rel})\ntier 1\n  [answered A] {one}\n    stands on: widget\n    stood on by: {three}\n    Yes the widget holds.\n\
+tier 2\n  [skeleton] {three}\n    stands on: widget, {one}=A\nnext\n  agent writes the body of \"{three}\"\n",
+        rel = REL,
+        one = ONE,
+        three = THREE
+    );
+    assert_eq!(stdout(&adr(&dir, &["show", "--all"], &[], "")), whole);
+    assert_eq!(stdout(&adr(&dir, &["show", p], &[], "")), whole);
 }

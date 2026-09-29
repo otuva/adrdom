@@ -137,7 +137,7 @@ fn same_rows_different_file_order_give_the_same_check_and_show_output() {
     let check_b = stdout(&adr(&dir_b, &["check"], &[], ""));
     assert_eq!(check_a, check_b, "check output must not depend on file order");
 
-    let show_a = stdout(&adr(&dir_a, &["show"], &[], ""));
-    let show_b = stdout(&adr(&dir_b, &["show"], &[], ""));
+    let show_a = stdout(&adr(&dir_a, &["show", "--all"], &[], ""));
+    let show_b = stdout(&adr(&dir_b, &["show", "--all"], &[], ""));
     assert_eq!(show_a, show_b, "show output must not depend on file order");
 }

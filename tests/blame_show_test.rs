@@ -29,7 +29,7 @@ fn show_prints_the_blame_file_counts_dropped_rows_and_the_from_line() {
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
 
-    let out = adr(&dir, &["show"], &[], "");
+    let out = adr(&dir, &["show", "--all"], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
 
@@ -76,7 +76,7 @@ fn show_prints_awaiting_approval_for_a_draft_blame_file() {
     );
     // Never approved.
 
-    let out = adr(&dir, &["show"], &[], "");
+    let out = adr(&dir, &["show", "--all"], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
     assert!(text.contains("awaiting approval"), "{}", text);
@@ -103,7 +103,7 @@ fn show_tags_a_decision_row_naming_an_unasked_question_with_the_unasked_state() 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
 
-    let out = adr(&dir, &["show"], &[], "");
+    let out = adr(&dir, &["show", "--all"], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
     assert!(text.contains("decision: Does this pass? [unasked]"), "{}", text);
@@ -122,7 +122,7 @@ fn show_tags_a_decision_row_naming_an_asked_unanswered_question_with_the_open_st
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
 
-    let out = adr(&dir, &["show"], &[], "");
+    let out = adr(&dir, &["show", "--all"], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
     assert!(text.contains("decision: Does this also pass? [open]"), "{}", text);
@@ -155,7 +155,7 @@ fn show_prints_a_from_line_per_origin_for_two_blame_files_naming_the_same_decisi
     let out = adr_owner(&dir, &["approve", path_b.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
 
-    let out = adr(&dir, &["show"], &[], "");
+    let out = adr(&dir, &["show", "--all"], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
 
@@ -192,7 +192,7 @@ fn a_blame_file_with_a_bad_header_and_one_with_a_bad_row_are_both_still_printed(
         "origin: docs/y.md\nblob: 0000000000000000000000000000000000000000\n\n1-1 dropped: dead\n2-2\tdropped: detail\n",
     );
 
-    let out = adr(&dir, &["show"], &[], "");
+    let out = adr(&dir, &["show", "--all"], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
 
@@ -220,7 +220,7 @@ fn a_dropped_row_with_extra_spaces_after_the_prefix_is_counted_and_printed_as_de
     write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
     // Never approved: show renders a draft file's rows as written.
 
-    let out = adr(&dir, &["show"], &[], "");
+    let out = adr(&dir, &["show", "--all"], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
     assert!(text.contains("dropped: dead 1"), "{}", text);
@@ -242,7 +242,7 @@ fn show_tags_a_copy_of_heading_row_with_the_targets_state() {
     let saved = std::fs::read_to_string(&path).unwrap();
     assert!(saved.contains(&format!("dropped: copy of {}", id1)), "{}", saved);
 
-    let out = adr(&dir, &["show"], &[], "");
+    let out = adr(&dir, &["show", "--all"], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
     assert!(

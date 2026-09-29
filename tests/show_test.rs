@@ -61,7 +61,7 @@ fn show_lists_every_question_with_its_state_and_tier() {
         stderr(&answer_out)
     );
 
-    let out = adr(&dir, &["show"], &[], "");
+    let out = adr(&dir, &["show", "--all"], &[], "");
     assert!(out.status.success(), "stderr: {}", stderr(&out));
     let shown = stdout(&out);
 
@@ -263,7 +263,7 @@ fn show_derives_tiers_for_an_unapproved_file_whose_depends_line_names_a_cross_fi
     let b_content = "# Topic B\n\n### 1.1 Does B stand on A?\ndepends: 1.1 Does A do a thing?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
 
-    let out = adr(&dir, &["show"], &[], "");
+    let out = adr(&dir, &["show", "--all"], &[], "");
     assert!(out.status.success(), "stderr: {}", stderr(&out));
     let shown = stdout(&out);
 
@@ -324,7 +324,7 @@ fn show_prints_no_guess_for_an_ambiguous_cross_file_heading_dependency() {
     let b_content = "# Topic B\n\n### 1.1 Does B stand on the shared heading?\ndepends: 1.1 Shared heading?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
 
-    let out = adr(&dir, &["show"], &[], "");
+    let out = adr(&dir, &["show", "--all"], &[], "");
     assert!(out.status.success(), "stderr: {}", stderr(&out));
     let shown = stdout(&out);
 

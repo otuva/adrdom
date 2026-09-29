@@ -242,7 +242,7 @@ fn a_refusal_names_the_question_beside_its_identifier() {
 
     // Under alpha, show names the question of the other file that stands
     // on it: what would lose its ground with alpha.
-    let shown = stdout(&adr(&dir, &["show"], &[], ""));
+    let shown = stdout(&adr(&dir, &["show", "--all"], &[], ""));
     assert!(
         shown.contains(&format!(
             "  [answered A] {}\n    stands on: widget\n    stood on by: {} ({})\n",

@@ -198,7 +198,7 @@ fn answer_with_supersedes_writes_superseded_row_and_show_hides_old() {
         ledger
     );
 
-    let show = adr(&dir, &["show"], &[], "");
+    let show = adr(&dir, &["show", "--all"], &[], "");
     assert!(show.status.success());
     let shown = stdout(&show);
     assert!(
@@ -338,7 +338,7 @@ fn answered_question_text_is_immutable_until_a_later_decision_supersedes_it() {
         stderr(&answer_out)
     );
 
-    let show = adr(&dir, &["show"], &[], "");
+    let show = adr(&dir, &["show", "--all"], &[], "");
     assert!(show.status.success());
     let shown = stdout(&show);
     assert!(

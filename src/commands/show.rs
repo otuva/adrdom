@@ -12,7 +12,14 @@ use crate::view::{self, QState};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-pub fn run(record_arg: Option<PathBuf>) -> i32 {
+/// `all` is the `--all` flag. With no topic file and no flag `show` prints
+/// the short listing: each topic file's current decisions, heading and
+/// answer, and its next moves. With a topic file, or with `--all`, it
+/// prints the whole listing: every question in any state, the order they
+/// are asked in, what each stands on and is stood on by, what replaced a
+/// superseded one, the origins, and the blame files.
+pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
+    let whole = all || record_arg.is_some();
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
@@ -82,16 +89,20 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
         // depends entries in memory (see `view::snapshot`).
         let plan_ok = state::plan_approved(&led, rf, &rf.rel) && state::context_approved(&led, rf, &rf.rel);
         depends::normalize_cross_file_deps(rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
-        print_file(
-            rf,
-            &blame_records,
-            &led,
-            &terms_list,
-            &all_headings,
-            &blame_files,
-            &any_headings_all,
-            &known_ids,
-        );
+        if whole {
+            print_file(
+                rf,
+                &blame_records,
+                &led,
+                &terms_list,
+                &all_headings,
+                &blame_files,
+                &any_headings_all,
+                &known_ids,
+            );
+        } else {
+            print_file_short(rf, &led);
+        }
         let plan_refusals: Vec<String> = crate::actions::record_refusals(
             &rf.rel,
             rf,
@@ -118,6 +129,10 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
     // sections and ids, so the index would only be recomputed to the same
     // content -- built once and passed to every file printed below,
     // rather than rebuilt per file.
+    if !whole {
+        println!("{}", msg::show_whole_hint());
+        return 0;
+    }
     for bf in &blame_files {
         print_blame_file(bf, &led, &blame_records, &any_headings_all, &known_ids);
     }
@@ -125,6 +140,23 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
         println!("{}", msg::show_blame_unreadable(rel, e));
     }
     0
+}
+
+/// The short listing of one topic file: its topic line, then each current
+/// decision as its heading and the answer the owner picked, in file order.
+/// A question that is not a current decision is left to the next moves
+/// under the file, which name every one that still has a move.
+fn print_file_short(rf: &RecordFile, led: &Ledger) {
+    println!("{}", msg::show_topic(rf.topic.as_deref().unwrap_or(""), &rf.rel));
+    for sec in &rf.sections {
+        if view::qstate(led, sec) != QState::Answered {
+            continue;
+        }
+        println!("{}", msg::show_decision(&sec.heading_text));
+        if let Some(s) = sec.chosen_sentence() {
+            println!("{}", msg::show_chosen(&s));
+        }
+    }
 }
 
 /// `# <topic>` then each derived tier as `tier N` followed by its

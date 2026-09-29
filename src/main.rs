@@ -33,8 +33,14 @@ enum Command {
     Approve { file: PathBuf },
     /// Owner-only: answer a question, identified by `<id>@<version>`, with an option letter or `refuse`.
     Answer { id: String, letter: String },
-    /// Print every question, with its state and tier.
-    Show { topic_file: Option<PathBuf> },
+    /// Print the current decisions and what is next; with a topic file or --all, every question.
+    Show {
+        /// Print every question of this topic file, with its state and what it stands on.
+        topic_file: Option<PathBuf>,
+        /// Print every question of every topic file, and the blame files.
+        #[arg(long)]
+        all: bool,
+    },
     /// Read lines from stdin and ban them (and their tokens) from the repo.
     Ban {
         /// Carry an existing terms.md term's uuid alongside each new hash,
@@ -106,7 +112,7 @@ fn main() {
         Command::Ask { topic_file } => commands::ask::run(topic_file),
         Command::Approve { file } => commands::approve::run(file),
         Command::Answer { id, letter } => commands::answer::run(id, letter),
-        Command::Show { topic_file } => commands::show::run(topic_file),
+        Command::Show { topic_file, all } => commands::show::run(topic_file, all),
         Command::Ban { term, rebuild } => commands::ban::run(term, rebuild),
         Command::Unban => commands::unban::run(),
         Command::Serve { port } => commands::serve::run(port),
