@@ -75,7 +75,6 @@ fn an_entry_on_an_unanswered_question_of_another_file_says_it_waits() {
 }
 
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
-// adr: 0b962bc8-05a8-48da-9fe8-bf77c7aa6e4a
 //
 // "What ties a test to a decision?": "found by text search in every tracked
 // file outside adrdom". A file whose name holds a letter outside ASCII is a
@@ -229,8 +228,8 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(
         stdout(&out).contains(&format!(
-            "tested: {} (\"{}\"): untested, no tracked file holds \"adr: {}\"; agent writes",
-            alpha, ALPHA, alpha
+            "untested: {}: \"{}\"; no tracked file holds \"adr: {}\"",
+            A, ALPHA, alpha
         )),
         "{}",
         stdout(&out)

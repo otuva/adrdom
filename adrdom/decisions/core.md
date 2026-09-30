@@ -284,10 +284,25 @@ Standard: a report separates a state from a violation; work in progress is count
   Why: the answers of a tier reach git one by one, and a tier is built whole.
   Costs: the last answer of a tier and its build land in one commit, and no answer of a later tier reaches git before the earlier tier is built.
 
+**Answer:** A
+
 ### What does a test carry to name its decision?
 depends: 3460d220-e523-448b-aeff-baa8051b7d06=*, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, e877e4a9-2caf-4fe6-9f82-5476a2abb00b
 id: 4319a653-6901-446c-94ab-6420ef472134
 
+Problem: the tool runs in repositories of any language and has to find which test names which decision without parsing that language.
+Standard: cross-language tools mark a file with a comment carrying an identifier in a fixed form and find it by text search.
+
+- A) A comment `adr: <id>` inside the test, found by text search in every tracked file outside adrdom.
+  Why: one rule for any language, and a person can search for the identifier too.
+  Costs: a comment can sit beside a test that asserts nothing; the tie names the test, not its honesty.
+- B) A test file named by the decision's identifier, under a directory the tool owns.
+  Why: the file being there is the tie, with no text to search.
+  Costs: the repository's tests move into the tool's layout.
+- C) A line in the decision naming the test by path and name.
+  Why: the decision says where its test is.
+  Costs: the decision changes whenever the test moves, and an answered decision cannot change.
+
 ### Does check fail a test that names a decision that is not current?
-depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e2533580-1486-4dc9-8697-e6c53605fe72, 4319a653-6901-446c-94ab-6420ef472134
+depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e2533580-1486-4dc9-8697-e6c53605fe72, 4319a653-6901-446c-94ab-6420ef472134=A|B
 id: 751ef30c-6a2f-4936-bf9b-b9d487146e53

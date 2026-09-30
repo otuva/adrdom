@@ -81,21 +81,17 @@ pub(super) fn check_tests(
     untested.sort();
     tested_count += current.len() - untested.len();
     for id in untested {
-        // Per "Does check fail an untested decision whose tier is still
-        // open?": while a question beside it is not answered, a note.
-        let waits = records.iter().find_map(|rf| {
-            let i = rf.sections.iter().position(|s| s.id.as_deref() == Some(id.as_str()))?;
-            let sib = crate::state::unresolved_sibling(rf, i)?;
-            Some(msg::untested_waits(&rf.rel, &rf.sections[i].heading_text, &sib.heading_text, sib.is_refused()))
+        // Per "What does check do with an untested current decision?": a
+        // note on every run, never a failure.
+        let at = records.iter().find_map(|rf| {
+            rf.sections
+                .iter()
+                .find(|s| s.id.as_deref() == Some(id.as_str()))
+                .map(|s| (rf.rel.as_str(), s.heading_text.as_str()))
         });
-        if let Some(note) = waits {
-            notes.push(note);
-            continue;
+        if let Some((rel, heading)) = at {
+            notes.push(msg::untested_note(rel, heading, id));
         }
-        out.push(Failure {
-            check: "tested".to_string(),
-            message: msg::untested(id, heading_of(id)),
-        });
     }
 
     let mut stale: Vec<(&String, &Vec<String>)> =

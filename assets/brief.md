@@ -136,7 +136,8 @@ stop. The owner puts a letter, or the word `refuse`, in place of `<letter>`.
 **4. After the answer.** Build the decisions `next` names. Tie each one to a
 test: put a comment `adr: <id>` inside a test, outside `adrdom/`, that shows
 the code follows the decision. Write the test if none exists, and add it to
-git. Commit the answers together with their code and tests.
+git. The answers are committed as they are given. `adr check` reports each
+untested decision until a test names it; the build and its tests follow.
 
 Never write or edit `id:`, `terms:` or `**Answer:**` lines yourself.
 
