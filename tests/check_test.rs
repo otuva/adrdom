@@ -2283,13 +2283,14 @@ aliases: \n";
 }
 
 //
-// "Does check fail a stale test tie?" (b871e776 A): yes -- a tie to a
+// "Does check fail a test that names a decision that is not current?" (751ef30c A): yes -- a tie to a
 // decision whose latest ledger state is no longer `answered` is stale, and
 // the agent's move is to remove the tag or point it at the current
 // decision. A later decision superseding the first is one way a tie goes
 // stale: `old_id` was genuinely current (and tested) when the tie was
 // written, then a second, real decision named `supersedes: <old_id>` and
 // took it out of force.
+// adr: 751ef30c-6a2f-4936-bf9b-b9d487146e53
 #[test]
 fn check_fails_a_test_tied_to_a_decision_that_was_later_superseded() {
     let dir = init_repo();
@@ -2346,9 +2347,10 @@ fn check_fails_a_test_tied_to_a_decision_that_was_later_superseded() {
 }
 
 //
-// The other way a tie goes stale (b871e776 A): the question it names was
+// The other way a tie goes stale (751ef30c A): the question it names was
 // answered with a refusal, never a lettered decision, so it never becomes
 // current at all -- a tie to it is stale from the moment it is written.
+// adr: 751ef30c-6a2f-4936-bf9b-b9d487146e53
 #[test]
 fn check_fails_a_test_tied_to_a_refused_decision() {
     let dir = init_repo();
