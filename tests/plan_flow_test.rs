@@ -223,12 +223,12 @@ fn plan_lifecycle_end_to_end() {
         printed
     );
     assert!(
-        printed.contains("  assumes: \"1.2 Does the paint match the widget's color?\"=A"),
+        printed.contains("  stood on by: \"1.2 Does the paint match the widget's color?\" under A"),
         "{}",
         printed
     );
     assert!(
-        printed.contains("  assumes: \"1.3 Does the paint need a second coat?\"=*"),
+        printed.contains("  stood on by: \"1.3 Does the paint need a second coat?\" under *"),
         "{}",
         printed
     );

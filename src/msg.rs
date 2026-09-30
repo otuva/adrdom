@@ -1162,7 +1162,7 @@ pub fn ask_conflict(heading: &str, a: &str, b: &str) -> String {
 }
 
 pub fn ask_assumes(dependent: &str, set: &str) -> String {
-    format!("  assumes: \"{}\"={}", dependent, set)
+    format!("  stood on by: \"{}\" under {}", dependent, set)
 }
 
 // --- adr --version -----------------------------------------------------------
@@ -1783,9 +1783,9 @@ pub fn untested_waits(rel: &str, heading: &str, beside: &str, refused: bool) -> 
 
 pub fn untested(id: &str, heading: Option<&str>) -> String {
     refuse(
-        format!("{}: untested", named(id, heading)),
+        format!("{}: untested, no tracked file holds \"adr: {}\"", named(id, heading), id),
         Next::agent(format!(
-            "writes a test that shows the code follows this decision and puts \"adr: {}\" in it",
+            "writes a test that shows the code follows this decision, puts \"adr: {}\" in it and adds it to git",
             id
         )),
     )

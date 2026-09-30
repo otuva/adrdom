@@ -228,7 +228,10 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     // Answered, no test tied to it.
     let out = adr(&dir, &["check"], &[], "");
     assert!(
-        stdout(&out).contains(&format!("tested: {} (\"{}\"): untested; agent writes", alpha, ALPHA)),
+        stdout(&out).contains(&format!(
+            "tested: {} (\"{}\"): untested, no tracked file holds \"adr: {}\"; agent writes",
+            alpha, ALPHA, alpha
+        )),
         "{}",
         stdout(&out)
     );

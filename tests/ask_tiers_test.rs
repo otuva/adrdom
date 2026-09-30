@@ -588,7 +588,7 @@ fn ask_asks_the_written_question_and_leaves_the_later_tier_candidate() {
     assert!(stderr(&out).is_empty(), "{}", stderr(&out));
     assert_eq!(
         stdout(&out),
-        "asked: \"1.1 What color is the widget?\" (tier 1)\n  assumes: \"1.2 Does the widget's paint match its color?\"=A\n"
+        "asked: \"1.1 What color is the widget?\" (tier 1)\n  stood on by: \"1.2 Does the widget's paint match its color?\" under A\n"
     );
     assert_eq!(asked_row_count(&dir), 1, "only Q1 is asked");
 
@@ -781,7 +781,7 @@ fn ask_prints_the_tier_and_writes_an_assumes_row_per_dependent() {
     );
     // The set is printed sorted, regardless of how it was written (=B|A).
     assert!(
-        printed.contains("  assumes: \"1.2 Does the widget's paint match its color?\"=A|B"),
+        printed.contains("  stood on by: \"1.2 Does the widget's paint match its color?\" under A|B"),
         "{}",
         printed
     );
