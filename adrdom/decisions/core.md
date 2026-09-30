@@ -309,3 +309,14 @@ Standard: cross-language tools mark a file with a comment carrying an identifier
 ### Does check fail a test that names a decision that is not current?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e2533580-1486-4dc9-8697-e6c53605fe72, 4319a653-6901-446c-94ab-6420ef472134=A|B
 id: 751ef30c-6a2f-4936-bf9b-b9d487146e53
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, current=e2533580-1486-4dc9-8697-e6c53605fe72, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, identifier=e877e4a9-2caf-4fe6-9f82-5476a2abb00b, refused=0942e445-0163-423e-8ba7-84dd8ac07045, supersede=2bae531b-c4df-48a0-89a0-3d52726741ea, superseded=2bae531b-c4df-48a0-89a0-3d52726741ea
+
+Problem: a test comment that names a superseded or refused decision points a reader at a rule no longer in force, and a search for the identifier finds a test that shows nothing in force.
+Standard: traceability links are kept current, so every link from a test names a requirement still in force.
+
+- A) Yes: check fails every test comment whose identifier is not a current decision, and the agent removes it or points it at the current one.
+  Why: every tie names a decision in force, so a search for an identifier finds only the tests that show it.
+  Costs: each supersede means editing the old ties before the next commit passes.
+- B) No: check reports a tie to an identifier that is not current, as a note on every run, and fails nothing.
+  Why: a supersede never holds a commit on old test comments.
+  Costs: stale ties build up, and a test can claim a decision that left force until someone reads the note.
