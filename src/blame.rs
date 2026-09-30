@@ -774,6 +774,86 @@ pub fn origins_for_decision(
     out
 }
 
+// --- what one blame file waits for ------------------------------------------
+
+/// What `check` and `show` both read off one blame file against its origin:
+/// the refusals `check` prints for it (shape, origin path, origin missing
+/// while a row is open, origin unreadable, blob mismatch, hash failure),
+/// whether it awaits approval, and the origin's content when it could be
+/// read. A draft never fails on its own (9c3cc17e A): `awaiting` is a flag.
+pub struct FileState {
+    pub failures: Vec<String>,
+    pub awaiting: bool,
+    pub origin_content: Option<String>,
+}
+
+pub fn file_state(
+    root: &Path,
+    source: &repo::Source,
+    bf: &BlameFile,
+    content: &str,
+    records: &[RecordFile],
+    led: &Ledger,
+    any_headings: &HashMap<String, Vec<(String, String)>>,
+    known_ids: &HashSet<String>,
+) -> FileState {
+    let rel = &bf.rel;
+    let mut st = FileState { failures: Vec::new(), awaiting: false, origin_content: None };
+    if !bf.shape_errors.is_empty() {
+        st.failures = bf.shape_errors.iter().map(|e| msg::blame_shape_error(rel, e)).collect();
+        return st;
+    }
+    let origin = bf.origin.clone().expect("no shape error means origin is set");
+    let blob = bf.blob.clone().expect("no shape error means blob is set");
+    if !valid_origin_path(root, source, &origin) {
+        st.failures.push(msg::blame_bad_origin_path(rel, &origin));
+        return st;
+    }
+    let approved = crate::state::blame_approved(led, rel, content);
+    if !source.exists(root, &origin) {
+        let mut open = open_decision_rows(bf, records, led, any_headings, known_ids);
+        if !approved {
+            open.push("the blame file's own approval".to_string());
+            open.sort();
+        }
+        if !open.is_empty() {
+            st.failures.push(msg::blame_origin_missing(rel, &origin, &open));
+        }
+        return st;
+    }
+    match source.read(root, &origin) {
+        None => st.failures.push(msg::blame_origin_unreadable(rel, &origin)),
+        Some(origin_content) => {
+            match repo::git_hash_object_stdin(root, &origin_content) {
+                Some(actual) if actual != blob => st.failures.push(msg::blame_blob_mismatch(rel, &origin)),
+                Some(_) => {}
+                None => st.failures.push(msg::blame_hash_failed(rel, &origin)),
+            }
+            st.awaiting = !approved;
+            st.origin_content = Some(origin_content);
+        }
+    }
+    st
+}
+
+/// The next lines of one blame file, in the three openings `show` prints:
+/// each refusal of `file_state` as the agent's move, each range beyond the
+/// origin and each run of its lines covered by no row as the agent's move,
+/// and, for a draft with nothing left to clear, the owner's approval.
+pub fn next_lines(st: &FileState, bf: &BlameFile) -> Vec<String> {
+    let mut out: Vec<String> = st.failures.iter().map(|f| msg::next_clears(f)).collect();
+    if let Some(c) = &st.origin_content {
+        let n = c.lines().count();
+        let (beyond, gaps) = coverage_errors(&bf.rows, n);
+        out.extend(beyond.iter().map(|b| msg::next_clears(&msg::blame_range_beyond(&bf.rel, b.start, b.end, n))));
+        out.extend(gaps.iter().map(|g| msg::next_clears(&msg::blame_coverage_gap(&bf.rel, g.start, g.end))));
+    }
+    if out.is_empty() && st.awaiting {
+        out.push(msg::next_plan_unapproved(&bf.rel));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

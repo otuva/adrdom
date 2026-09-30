@@ -282,26 +282,20 @@ fn a_refusal_names_the_question_beside_its_identifier() {
         text
     );
 
-    // A question that names alpha on its supersedes line after alpha left.
+    // A question that names alpha on its supersedes line after alpha left:
+    // approve refuses it and names the question beside the identifier.
     let mut a = std::fs::read_to_string(dir.join(A)).unwrap();
-    a.push_str("\n### Does the widget delta hold?\ndepends: widget\n");
+    a.push_str(&format!(
+        "\n### Does the widget delta hold?\ndepends: widget\nsupersedes: {}\n",
+        alpha
+    ));
     std::fs::write(dir.join(A), &a).unwrap();
-    approve_record(&dir, A);
-    let a = std::fs::read_to_string(dir.join(A)).unwrap();
-    let delta = extract_ids(&a)[2].clone();
-    let id_line = format!("id: {}\n", delta);
-    let body = question("x", "x", "");
-    let body = body.split_once("\n\n").map(|(_, rest)| rest).unwrap_or("").to_string();
-    std::fs::write(
-        dir.join(A),
-        a.replace(&id_line, &format!("{}supersedes: {}\n\n{}", id_line, alpha, body)),
-    )
-    .unwrap();
-    let out = adr(&dir, &["ask", dir.join(A).to_str().unwrap()], &[], "");
+    let out = adr_owner(&dir, &["approve", dir.join(A).to_str().unwrap()], "");
     assert!(!out.status.success());
     assert!(
         stderr(&out).contains(&format!(
-            "supersedes {} (\"{}\"), which is not a current decision; agent fixes",
+            "approve: {}: \"Does the widget delta hold?\": supersedes {} (\"{}\"), which is not a current decision; agent fixes",
+            A,
             alpha, ALPHA
         )),
         "{}",

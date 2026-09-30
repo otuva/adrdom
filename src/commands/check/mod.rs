@@ -165,7 +165,8 @@ fn build(
     push_failures(&mut failures, terms_failures);
     let (blame_failures, blame_notes) = blame::check_blame(root, &source, &records, &led);
     push_failures(&mut failures, blame_failures);
-    let (test_failures, tested_count) = tests::check_tests(root, &records, &led, tests, &source);
+    let (test_failures, tested_count, test_notes) =
+        tests::check_tests(root, &records, &led, tests, &source);
     push_failures(&mut failures, test_failures);
     push_failures(&mut failures, tells::check_tells(root, &records, &led, &per_record_refusals));
 
@@ -190,6 +191,7 @@ fn build(
     if !awaiting.is_empty() {
         notes.push(msg::plan_awaiting(awaiting.len(), &awaiting.join(", ")));
     }
+    notes.extend(test_notes);
     notes.extend(terms_notes);
     notes.extend(blame_notes);
     for d in done::check_done(&records, &led, &raw_hashes) {

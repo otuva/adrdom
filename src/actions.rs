@@ -1184,7 +1184,7 @@ pub fn missing_answered_refusals(records: &[RecordFile], led: &Ledger) -> Vec<Re
 }
 
 /// Inserts a freshly minted id directly after each skeleton section's
-/// `depends:` line (per "Does a reference in a topic file carry the
+/// `depends:` line (or its `supersedes:` line, directly under it) (per "Does a reference in a topic file carry the
 /// identifier of what it names?"; no blank padding, the same bare
 /// single-line insert `ask` uses for `terms:` after `id:`). Every section
 /// here has already passed `record_refusals`'s "has no depends line"
@@ -1199,8 +1199,16 @@ fn insert_missing_ids(rf: &RecordFile, mut work_lines: Vec<String>) -> Result<Ve
             let depends_idx = (sec.start + 1..sec.end)
                 .find(|&j| work_lines[j].starts_with("depends: "))
                 .ok_or_else(|| msg::approve_prefixed(msg::no_depends_line_bare(&sec.heading_text)))?;
+            // The plan lines come first, then the id: after the
+            // `supersedes:` line when the heading has one (which is
+            // directly under `depends:`), else after `depends:`.
+            let after = if work_lines.get(depends_idx + 1).is_some_and(|l| l.starts_with("supersedes: ")) {
+                depends_idx + 1
+            } else {
+                depends_idx
+            };
             let new_id = Uuid::new_v4().to_string();
-            work_lines.insert(depends_idx + 1, format!("id: {}", new_id));
+            work_lines.insert(after + 1, format!("id: {}", new_id));
         }
     }
     Ok(work_lines)
@@ -1294,6 +1302,37 @@ fn do_approve_record(
 
     for m in own_name_and_heading_refusals(rel, rf.topic.as_deref(), &rf.sections) {
         refusals.push(msg::approve_prefixed(m));
+    }
+
+    // Per "Does approve turn the supersedes line into identifiers?" (B):
+    // each entry of a `supersedes:` line is the heading of a current
+    // decision (in any topic file) or its id, and becomes the id, the way
+    // a `depends:` entry does. A section that is already frozen keeps its
+    // line as it is: its target is superseded by now, and the section's
+    // own hash guards the line.
+    let mut supersedes_ids: HashMap<usize, Vec<String>> = HashMap::new();
+    for (i, sec) in rf.sections.iter().enumerate() {
+        if sec.supersedes.is_empty() || state::is_frozen(led, sec) {
+            continue;
+        }
+        let mut ids = Vec::new();
+        for old in &depends::supersedes_entries(&sec.supersedes, &cross_file_headings, led) {
+            match depends::resolve_supersedes(old, &cross_file_headings, led) {
+                Ok(id) => ids.push(id),
+                Err(depends::SupersedesError::NotCurrent) => refusals.push(msg::approve_prefixed(
+                    msg::ask_supersedes_not_current(
+                        rel,
+                        &sec.heading_text,
+                        old,
+                        names.get(old).map(String::as_str),
+                    ),
+                )),
+                Err(depends::SupersedesError::Ambiguous(files)) => refusals.push(msg::approve_prefixed(
+                    msg::ask_supersedes_ambiguous(rel, &sec.heading_text, old, &files),
+                )),
+            }
+        }
+        supersedes_ids.insert(i, ids);
     }
 
     // A letter-set suffix naming a current decision elsewhere
@@ -1407,6 +1446,14 @@ fn do_approve_record(
             .map(|d| rewrite_dep_entry(d, sec, &work_rf, terms_list, &phrase_lookup, &cross_file_headings, led))
             .collect();
         work_rf.lines[line_idx] = format!("depends: {}", parts.join(", "));
+    }
+    // The `supersedes:` line, kept where the writer put it (under `id:`
+    // and `terms:` once asked), holds ids from here on.
+    for (i, sec) in sections_snapshot.iter().enumerate() {
+        let Some(ids) = supersedes_ids.get(&i) else { continue };
+        if let Some(j) = (sec.start + 1..sec.end).find(|&j| work_rf.lines[j].starts_with("supersedes: ")) {
+            work_rf.lines[j] = format!("supersedes: {}", ids.join(", "));
+        }
     }
     // Reparse once more so `plan_hash`/`context_hash` and everything below
     // sees the file exactly as it will be written.

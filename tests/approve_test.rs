@@ -1900,3 +1900,75 @@ fn approve_refuses_retiring_a_term_while_a_new_term_takes_its_word_and_another_s
         err
     );
 }
+
+// adr: 3b8da790-ea0c-4ca5-860a-980c7bc5f361
+//
+// The supersedes line belongs to the plan: a heading with only a depends
+// line and a supersedes line is a skeleton that approve accepts, and the
+// line reads identifiers afterwards, directly under the depends line and
+// above the id line.
+#[test]
+fn approve_turns_a_supersedes_heading_on_a_skeleton_into_an_identifier() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+    let rel = "adrdom/decisions/example.md";
+    let record = write_record(&dir, rel, ONE_QUESTION_RECORD);
+    approve_record(&dir, rel);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let old_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
+    assert!(adr_answer(&dir, &old_id, "A").status.success());
+
+    let mut content = std::fs::read_to_string(&record).unwrap();
+    content.push_str("\n### 1.2 Replacement?\ndepends: decision\nsupersedes: 1.1 Only question?\n");
+    std::fs::write(&record, &content).unwrap();
+    approve_record(&dir, rel);
+    let approved = std::fs::read_to_string(&record).unwrap();
+    let new_id = extract_ids(&approved)[1].clone();
+    assert!(
+        approved.contains(&format!("\nsupersedes: {}\nid: {}\n", old_id, new_id)),
+        "{}",
+        approved
+    );
+}
+
+// adr: 3b8da790-ea0c-4ca5-860a-980c7bc5f361
+//
+// A supersedes line written after approval moves the plan hash: check says
+// the plan is not approved and ask stops until approve runs again.
+#[test]
+fn a_supersedes_line_added_after_approval_waits_for_approval() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+    let rel = "adrdom/decisions/example.md";
+    let record = write_record(&dir, rel, ONE_QUESTION_RECORD);
+    approve_record(&dir, rel);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let old_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
+    assert!(adr_answer(&dir, &old_id, "A").status.success());
+
+    let mut content = std::fs::read_to_string(&record).unwrap();
+    content.push_str("\n### 1.2 Replacement?\ndepends: decision\n");
+    std::fs::write(&record, &content).unwrap();
+    approve_record(&dir, rel);
+    let approved = std::fs::read_to_string(&record).unwrap();
+    let new_id = extract_ids(&approved)[1].clone();
+    let edited = approved.replace(
+        &format!("\nid: {}\n", new_id),
+        &format!("\nsupersedes: {}\nid: {}\n", old_id, new_id),
+    );
+    assert_ne!(edited, approved);
+    std::fs::write(&record, &edited).unwrap();
+
+    let checked = adr(&dir, &["check"], &[], "");
+    let text = format!("{}{}", stdout(&checked), stderr(&checked));
+    assert!(text.contains("awaiting approval"), "{}", text);
+    let asked = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(stderr(&asked).contains("plan not approved"), "{}", stderr(&asked));
+
+    approve_record(&dir, rel);
+    let checked = adr(&dir, &["check"], &[], "");
+    let text = format!("{}{}", stdout(&checked), stderr(&checked));
+    assert!(!text.contains("plan not approved"), "{}", text);
+}

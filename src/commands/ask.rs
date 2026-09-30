@@ -296,9 +296,6 @@ pub fn run(record_path: PathBuf) -> i32 {
     // moot). Computed once, ahead of the per-candidate loop.
     let moot_pairs = view::moot_pairs(&rf, &led, &all_records);
 
-    // For each candidate, by its index: the identifiers its supersedes
-    // line names.
-    let mut supersedes_ids: HashMap<usize, Vec<String>> = HashMap::new();
     for (i, sec) in rf.sections.iter().enumerate() {
         if !candidate[i] {
             continue;
@@ -306,34 +303,24 @@ pub fn run(record_path: PathBuf) -> i32 {
 
         // Supersedes target must be current (per "Does one decision
         // supersede several?", owner note 2026-09-24): the supersedes
-        // line freezes at ask, so a
-        // candidate naming a target that is not current right now -- never
-        // answered, refused, withdrawn, or already superseded -- refuses
-        // here; `answer` later accepts a target that was superseded after
-        // this question's own `asked` row (a split), but never one that was
-        // already stale before it was ever asked.
-        // An entry is written as the heading of the decision or as its
-        // identifier; the identifiers are what the write step below puts
-        // on the line (per "Does a reference in a topic file carry the
-        // identifier of what it names?").
-        let mut ids = Vec::new();
-        for old in &depends::supersedes_entries(&sec.supersedes, &cross_file_headings, &led) {
-            match depends::resolve_supersedes(old, &cross_file_headings, &led) {
-                Ok(id) => ids.push(id),
-                Err(depends::SupersedesError::NotCurrent) => {
-                    refusals.push(msg::ask_supersedes_not_current(
-                        &rel,
-                        &sec.heading_text,
-                        old,
-                        names.get(old).map(String::as_str),
-                    ));
-                }
-                Err(depends::SupersedesError::Ambiguous(files)) => {
-                    refusals.push(msg::ask_supersedes_ambiguous(&rel, &sec.heading_text, old, &files));
-                }
+        // line freezes at ask, so a candidate naming a target that is not
+        // current right now -- never answered, refused, withdrawn, or
+        // already superseded -- refuses here, even when it was current at
+        // approval (per "Does approve turn the supersedes line into
+        // identifiers?": approve turns the line, ask checks the target
+        // once more). `answer` later accepts a target that was superseded
+        // after this question's own `asked` row (a split), but never one
+        // that was already stale before it was ever asked.
+        for old in &sec.supersedes {
+            if !state::is_current(&led, old) {
+                refusals.push(msg::ask_supersedes_not_current(
+                    &rel,
+                    &sec.heading_text,
+                    old,
+                    names.get(old).map(String::as_str),
+                ));
             }
         }
-        supersedes_ids.insert(i, ids);
 
         // Moot refusal: this candidate's own entry in `moot_pairs`, matched
         // by section index since two sections may share a heading text.
@@ -407,16 +394,6 @@ pub fn run(record_path: PathBuf) -> i32 {
             continue;
         }
         let sec = rf.sections[i].clone();
-        // A supersedes entry written as a heading becomes the identifier
-        // it names, in place, before the question's text is hashed.
-        if let Some(ids) = supersedes_ids.get(&i) {
-            if *ids != sec.supersedes {
-                if let Some(idx) = find_prefixed_line(&rf.lines, sec.start, sec.end, "supersedes: ") {
-                    rf.lines[idx] = format!("supersedes: {}", ids.join(", "));
-                    terms_touched = true;
-                }
-            }
-        }
         let text = state::section_text_excluding_terms_line(&rf.lines, &sec);
         let pairs = terms::resolve(&text, &terms_list);
         let new_line = match terms::format_terms_line(&pairs) {

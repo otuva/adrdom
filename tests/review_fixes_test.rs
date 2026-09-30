@@ -33,7 +33,10 @@ const B: &str = "adrdom/decisions/b.md";
 const WITH_COMMA: &str = "Does the widget hold, in the rain?";
 
 // A supersedes line takes the heading of the decision, and a heading may
-// hold a comma: the line is not cut at it.
+// hold a comma: the line is not cut at it. Approve turns the heading into
+// the identifier, before any body exists.
+//
+// adr: 3b8da790-ea0c-4ca5-860a-980c7bc5f361
 #[test]
 fn a_supersedes_line_takes_a_heading_that_holds_a_comma() {
     let dir = setup();
@@ -57,6 +60,8 @@ fn a_supersedes_line_takes_a_heading_that_holds_a_comma() {
         ),
     );
     approve_record(&dir, B);
+    let approved = std::fs::read_to_string(&b).unwrap();
+    assert!(approved.contains(&format!("supersedes: {}\n", alpha)), "{}", approved);
     let out = adr(&dir, &["ask", b.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let asked = std::fs::read_to_string(&b).unwrap();

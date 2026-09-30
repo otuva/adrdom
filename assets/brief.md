@@ -75,14 +75,21 @@ depends: check
 A question stands on another one when its options make sense only after the
 other is answered. Write every entry that is so, and none that is not.
 
+If a question replaces a current decision, put a `supersedes:` line directly
+under its `depends:` line and write the heading of that decision on it
+(several headings separated by commas). It is part of the plan: `adr approve`
+turns each heading into its id. When a refusal says a heading names more
+than one decision, write the id of the one you mean in its place: it is on
+the `id:` line under that heading in its topic file.
+
 Ask "does X" or "what does X do". A heading that opens with "which",
 "where", "how many" or "how much" is refused: it assumes an answer the owner
 has not given. One question per heading: a heading with "and" or "or" in it
 is refused as two questions. Say the plan is ready and stop. The owner may
 strike, add or reorder headings before approving, or write the plan itself
 and approve it the same way. The owner runs `adr approve <file>`; after it
-every heading has an `id:` line and the entries of its `depends:` line are
-ids.
+every heading has an `id:` line and the entries of its `depends:` and
+`supersedes:` lines are ids.
 
 **2. Walk each question, then write its body.** Write the bodies `next`
 names. Before you write an option, read the code and the decisions it meets
@@ -115,13 +122,6 @@ Standard: the named practice for this, stated flat.
 
 Two or three options. Strip each option to its answer to the heading and
 compare them: two options that answer it the same way are one option.
-
-If the question replaces a current decision, put a `supersedes:` line under
-its `id:` line and write the heading of that decision on it, as on a
-`depends:` line (several headings separated by commas). `adr ask` turns
-each heading into its id. When a refusal says a heading names more than one
-decision, write the id of the one you mean in its place: it is on the `id:`
-line under that heading in its topic file.
 
 When `next` names an answer set, write it on that `depends:` entry: `=A`,
 `=A|B` or `=*`, the letters of the other question under which this one still

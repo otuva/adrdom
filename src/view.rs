@@ -406,19 +406,11 @@ pub(crate) fn next_moves(
                 // A question beside it that still waits for an answer is
                 // named ahead of a refused one: the refused one has its own
                 // line, and the answer is what the build waits for longest.
-                let unresolved = |refused: bool| {
-                    rf.sections.iter().enumerate().find(|(j, s)| {
-                        *j != i
-                            && tiers[*j] == tiers[i]
-                            && state::tier_unresolved(s)
-                            && s.is_refused() == refused
-                    })
-                };
-                match unresolved(false).or_else(|| unresolved(true)) {
-                    Some((_, s)) if s.is_refused() => {
+                match state::unresolved_sibling(rf, i) {
+                    Some(s) if s.is_refused() => {
                         build_waits.push(msg::next_build_waits_refused(heading, &s.heading_text))
                     }
-                    Some((_, s)) => build_waits.push(msg::next_build_waits(heading, &s.heading_text)),
+                    Some(s) => build_waits.push(msg::next_build_waits(heading, &s.heading_text)),
                     None => build.push(msg::next_build(heading, id)),
                 }
             }

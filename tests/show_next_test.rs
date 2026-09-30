@@ -319,11 +319,12 @@ or moves it to another file when none does",
 // adr: 1b181f10-97f4-4bbe-8939-d5842192126c
 //
 // adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
+// adr: 3b8da790-ea0c-4ca5-860a-980c7bc5f361
 //
 // A superseded question stays in its topic file, and show names under it
 // the question that took its place. The agent names the decision it
-// replaces by its heading; ask turns the heading into the identifier and
-// show turns it back.
+// replaces by its heading, under the heading of the plan; approve turns the
+// heading into the identifier and show turns it back.
 #[test]
 fn show_names_what_replaced_a_superseded_question() {
     let dir = init_repo();
@@ -337,22 +338,21 @@ fn show_names_what_replaced_a_superseded_question() {
     let one = id_of(&path, ONE);
     assert!(adr_answer(&dir, &one, "A").status.success());
 
+    // The supersedes line is written with the plan, before approval.
     let mut text = std::fs::read_to_string(&path).unwrap();
-    text.push_str(&format!("\n### {}\ndepends: widget\n", TWO));
+    text.push_str(&format!("\n### {}\ndepends: widget\nsupersedes: {}\n", TWO, ONE));
     std::fs::write(&path, text).unwrap();
     approve_record(&dir, REL);
-    let text = std::fs::read_to_string(&path).unwrap();
     let two = id_of(&path, TWO);
-    let id_line = format!("id: {}\n", two);
-    std::fs::write(
-        &path,
-        text.replace(&id_line, &format!("{}supersedes: {}\n{}", id_line, ONE, BODY)),
-    )
-    .unwrap();
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        text.contains(&format!("\nsupersedes: {}\nid: {}\n", one, two)),
+        "{}",
+        text
+    );
+    write_body(&path, TWO);
     let asked = adr(&dir, &["ask", p], &[], "");
     assert!(asked.status.success(), "{}", stderr(&asked));
-    let text = std::fs::read_to_string(&path).unwrap();
-    assert!(text.contains(&format!("supersedes: {}\n", one)), "{}", text);
     assert!(adr_answer(&dir, &two, "A").status.success());
 
     let shown = stdout(&adr(&dir, &["show", "--all"], &[], ""));
@@ -364,27 +364,20 @@ fn show_names_what_replaced_a_superseded_question() {
     );
     assert!(shown.contains(&expected), "{}", shown);
 
-    // A heading that names no current decision: the refusal names it.
+    // A heading that names no current decision: approve refuses it and
+    // names the move.
     let mut text = std::fs::read_to_string(&path).unwrap();
-    text.push_str(&format!("\n### {}\ndepends: widget\n", THREE));
+    text.push_str(&format!("\n### {}\ndepends: widget\nsupersedes: {}\n", THREE, ONE));
     std::fs::write(&path, text).unwrap();
-    approve_record(&dir, REL);
-    let text = std::fs::read_to_string(&path).unwrap();
-    let id_line = format!("id: {}\n", id_of(&path, THREE));
-    std::fs::write(
-        &path,
-        text.replace(&id_line, &format!("{}supersedes: {}\n{}", id_line, ONE, BODY)),
-    )
-    .unwrap();
-    let asked = adr(&dir, &["ask", p], &[], "");
-    assert!(!asked.status.success());
+    let approved = adr_owner(&dir, &["approve", p], "");
+    assert!(!approved.status.success());
     assert!(
-        stderr(&asked).contains(&format!(
-            "\"{}\": supersedes {}, which is not a current decision; agent fixes the supersedes line",
-            THREE, ONE
+        stderr(&approved).contains(&format!(
+            "approve: {}: \"{}\": supersedes {}, which is not a current decision; agent fixes the supersedes line",
+            REL, THREE, ONE
         )),
         "{}",
-        stderr(&asked)
+        stderr(&approved)
     );
 }
 
@@ -409,6 +402,7 @@ fn show_prints_no_next_when_nothing_is_left() {
 }
 
 // adr: aec860fd-22ad-44a7-99f7-222ea19537e7
+// adr: 75075c78-fe3c-4fd8-8a33-29a5913d9d34
 //
 // With no topic file and no flag show prints the short listing: each
 // current decision as its heading and its answer, the next moves, and how

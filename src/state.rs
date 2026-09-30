@@ -404,6 +404,23 @@ pub fn tier_unresolved(sec: &Section) -> bool {
     sec.answer_letter().is_none()
 }
 
+/// The section beside section `i` in its tier that is not answered: the
+/// first one still waiting for an answer, else the first refused one (a
+/// refused question counts as not answered until a plan change). What
+/// "Does the agent build on a decision before its tier is fully answered?"
+/// waits on; `None` when the tier is fully answered or has no derived tier.
+pub fn unresolved_sibling(rf: &RecordFile, i: usize) -> Option<&Section> {
+    let tiers = rf.tiers.as_ref()?;
+    let find = |refused: bool| {
+        rf.sections
+            .iter()
+            .enumerate()
+            .find(|(j, s)| *j != i && tiers[*j] == tiers[i] && tier_unresolved(s) && s.is_refused() == refused)
+            .map(|(_, s)| s)
+    };
+    find(false).or_else(|| find(true))
+}
+
 /// The lowest derived tier (per "Does the tool derive tiers from the
 /// depends lines?") holding an unresolved section (`tier_unresolved`; a
 /// skeleton heading with no answer keeps its tier open exactly as a

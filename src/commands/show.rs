@@ -154,8 +154,26 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
         }
     }
 
-    // The short listing ends here: the blame files are in the whole one.
+    // The short listing ends with the next lines of every blame file that
+    // has one; the rest of a blame file is in the whole one.
     if !whole {
+        for bf in &blame_files {
+            let content = record::join_lines(&bf.lines);
+            let st = blame::file_state(
+                &root,
+                &repo::Source::WorkingTree,
+                bf,
+                &content,
+                &blame_records,
+                &led,
+                &any_headings_all,
+                &known_ids,
+            );
+            print_blame_next(&bf.rel, blame::next_lines(&st, bf));
+        }
+        for (rel, _) in &unreadable_blame_files {
+            print_blame_next(rel, vec![msg::next_clears(&msg::blame_file_unreadable(rel))]);
+        }
         println!("{}", msg::show_whole_hint());
         return 0;
     }
@@ -171,6 +189,18 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
         println!("{}", msg::show_blame_unreadable(rel, e));
     }
     0
+}
+
+/// A blame file's heading and its next lines, printed only when it has one.
+fn print_blame_next(rel: &str, next: Vec<String>) {
+    if next.is_empty() {
+        return;
+    }
+    println!("{}", msg::show_blame(rel));
+    println!("{}", msg::next_heading());
+    for line in next {
+        println!("{}", msg::next_line(&line));
+    }
 }
 
 /// The short listing of one topic file: its topic line, then each current

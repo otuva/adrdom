@@ -792,8 +792,9 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
     }
 }
 
-/// A heading whose body holds only blank lines, `depends:` lines, and an
-/// `id:` line (per "What does a depends line name?" and "Does a reference
+/// A heading whose body holds only blank lines, `depends:` lines, a
+/// `supersedes:` line (part of the plan, per "Does approve turn the
+/// supersedes line into identifiers?"), and an `id:` line (per "What does a depends line name?" and "Does a reference
 /// in a topic file carry the identifier of what it names?"): needs no id
 /// of its own to stay a skeleton, but `approve` gives every heading an id,
 /// skeletons included,
@@ -805,7 +806,11 @@ fn is_skeleton_range(lines: &[String], start: usize, end: usize) -> bool {
         // space after the colon is a typo, not a real field, so it must not
         // be silently swallowed as skeleton -- it falls through and
         // `scan_body` reports it as a stray line instead.
-        t.is_empty() || t.starts_with("depends: ") || t == "depends:" || t.starts_with("id: ")
+        t.is_empty()
+            || t.starts_with("depends: ")
+            || t == "depends:"
+            || t.starts_with("supersedes: ")
+            || t.starts_with("id: ")
     })
 }
 
@@ -960,6 +965,11 @@ pub fn plan_hash(rf: &RecordFile) -> String {
                 Dep::Text { text, .. } => text.as_str(),
             };
             out.push(format!("depends: {}", entry_text).trim_end().to_string());
+        }
+        // The `supersedes:` line is part of the plan (3b8da790 B): a line
+        // added, changed or removed after approval moves the hash.
+        if !s.supersedes.is_empty() {
+            out.push(format!("supersedes: {}", s.supersedes.join(", ")));
         }
     }
     sha256_hex(&out.join("\n"))

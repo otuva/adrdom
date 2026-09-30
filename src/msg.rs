@@ -1765,6 +1765,22 @@ pub fn ledger_same_time_competition(time: &str, subject: &str) -> String {
     )
 }
 
+/// A note, not a failure (per "Does check fail an untested decision whose
+/// tier is still open?"): the same words `show` prints for the build.
+pub fn untested_waits(rel: &str, heading: &str, beside: &str, refused: bool) -> String {
+    if refused {
+        format!(
+            "waiting: {}: \"{}\" is untested; built once the plan changes, \"{}\" beside it is refused",
+            rel, heading, beside
+        )
+    } else {
+        format!(
+            "waiting: {}: \"{}\" is untested; built once \"{}\" is answered",
+            rel, heading, beside
+        )
+    }
+}
+
 pub fn untested(id: &str, heading: Option<&str>) -> String {
     refuse(
         format!("{}: untested", named(id, heading)),

@@ -251,3 +251,44 @@ fn show_tags_a_copy_of_heading_row_with_the_targets_state() {
         text
     );
 }
+
+// adr: 75075c78-fe3c-4fd8-8a33-29a5913d9d34
+//
+// "the next lines of every blame file" join the short listing: a blame file
+// awaiting approval names the owner's command, and once the owner approves
+// it the line is gone. A blame file with nothing to do prints nothing.
+#[test]
+fn short_show_names_the_approval_a_blame_file_waits_for() {
+    let (dir, _id1, _id2) = blame_setup();
+    let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
+    let path = write_blame_file(
+        &dir,
+        "adrdom/blame/x.md",
+        "docs/x.md",
+        &blob,
+        "1-1\tdropped: dead\n2-2\tdropped: detail\n",
+    );
+
+    let out = adr(&dir, &["show"], &[], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    let text = stdout(&out);
+    assert!(
+        text.contains("# blame: adrdom/blame/x.md\nnext\n  owner runs: adr approve adrdom/blame/x.md\n"),
+        "{}",
+        text
+    );
+
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    let text = stdout(&adr(&dir, &["show"], &[], ""));
+    assert!(!text.contains("blame"), "{}", text);
+
+    // The origin changes: the agent's line names the blob that no longer matches.
+    write_origin(&dir, "docs/x.md", "one\ntwo\nthree\n");
+    let text = stdout(&adr(&dir, &["show"], &[], ""));
+    assert!(
+        text.contains("agent clears: adrdom/blame/x.md: blob no longer matches docs/x.md"),
+        "{}",
+        text
+    );
+}

@@ -2403,6 +2403,7 @@ agent fixes the file so it can be read as text (e.g. its encoding)"
 }
 
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+// adr: 154e4b9a-c811-4a84-a522-598914eb39f1
 //
 // The commit hooks run check with --quiet. A commit that passes prints
 // nothing; one that fails prints what failed and no note. check run by hand
@@ -2433,4 +2434,125 @@ fn check_quiet_prints_what_failed_and_nothing_else() {
     let lines: Vec<String> = stdout(&quiet).lines().map(|l| l.to_string()).collect();
     assert_eq!(lines.len(), 1, "{:?}", lines);
     assert!(lines[0].starts_with("parse: adrdom/decisions/broken.md: cannot be read"), "{:?}", lines);
+    assert!(!stdout(&quiet).contains("tested:"), "{}", stdout(&quiet));
+
+    // By hand, without the flag, the same failing repo still prints its notes.
+    let by_hand = adr(&dir, &["check"], &[], "");
+    assert!(!by_hand.status.success());
+    assert!(stdout(&by_hand).contains("tested: 0"), "{}", stdout(&by_hand));
+    assert!(stdout(&by_hand).lines().count() > 1, "{}", stdout(&by_hand));
+}
+
+const TWO_QUESTIONS: &str = r#"# Example
+
+### Does this pass?
+depends: pass
+
+Problem: whether it passes.
+
+Standard: clear yes or no.
+
+- A) Yes it passes.
+  Why: reasons.
+  Costs: costs.
+- B) No it does not.
+  Why: other reasons.
+  Costs: other costs.
+
+### Does that pass?
+depends: pass
+
+Problem: whether that passes.
+
+Standard: clear yes or no.
+
+- A) Yes that passes.
+  Why: reasons.
+  Costs: costs.
+- B) No that does not.
+  Why: other reasons.
+  Costs: other costs.
+"#;
+
+/// Two questions in one tier, both asked, none answered; returns their ids.
+fn ask_two_in_one_tier(dir: &std::path::Path) -> (String, String) {
+    let terms_content =
+        "# Terms\n\n## pass\nid: 11111111-1111-1111-1111-111111111111\ndefinition: Whether something is accepted.\naliases: \n";
+    std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
+    approve_terms_via_ledger(dir, terms_content);
+    let record = write_record(dir, "adrdom/decisions/example.md", TWO_QUESTIONS);
+    approve_record(dir, "adrdom/decisions/example.md");
+    let out = adr(dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
+    (ids[0].clone(), ids[1].clone())
+}
+
+// adr: f2e31cbe-1ba2-4b77-910a-b9664ce0277f
+// adr: 33a45b9e-8150-488e-be70-7ab2ca9adaa6
+// adr: 154e4b9a-c811-4a84-a522-598914eb39f1
+//
+// An untested decision whose tier still holds a question that is not
+// answered is a note, not a failure; once the tier is answered it fails.
+#[test]
+fn check_an_untested_decision_waits_while_its_tier_is_open() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let (first, second) = ask_two_in_one_tier(&dir);
+    assert!(adr_answer(&dir, &first, "A").status.success());
+
+    let out = adr(&dir, &["check"], &[], "");
+    let text = stdout(&out);
+    assert!(out.status.success(), "{}", text);
+    assert!(
+        text.contains(
+            "waiting: adrdom/decisions/example.md: \"Does this pass?\" is untested; built once \"Does that pass?\" is answered"
+        ),
+        "{}",
+        text
+    );
+    let quiet = adr(&dir, &["check", "--quiet"], &[], "");
+    assert!(quiet.status.success(), "{}", stdout(&quiet));
+    assert_eq!(stdout(&quiet), "");
+    run_git(&dir, &["add", "-A"]);
+    let staged = adr(&dir, &["check", "--staged", "--quiet"], &[], "");
+    assert!(staged.status.success(), "{}", stdout(&staged));
+    assert_eq!(stdout(&staged), "");
+
+    assert!(adr_answer(&dir, &second, "A").status.success());
+    let out = adr(&dir, &["check"], &[], "");
+    let text = stdout(&out);
+    assert!(!out.status.success(), "{}", text);
+    assert!(line_with(&text, &first, ": untested"), "{}", text);
+    assert!(line_with(&text, &second, ": untested"), "{}", text);
+    assert!(!text.contains("waiting:"), "{}", text);
+
+    write_test_comment(&dir, &first);
+    write_test_comment(&dir, &second);
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "{}", stdout(&out));
+}
+
+// adr: f2e31cbe-1ba2-4b77-910a-b9664ce0277f
+//
+// A refused sibling counts as not answered: the note names the plan change.
+#[test]
+fn check_an_untested_decision_waits_on_a_refused_sibling() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let (first, second) = ask_two_in_one_tier(&dir);
+    assert!(adr_answer(&dir, &first, "A").status.success());
+    let out = adr_answer(&dir, &second, "refuse");
+    assert!(out.status.success(), "{}", stderr(&out));
+
+    let out = adr(&dir, &["check"], &[], "");
+    let text = stdout(&out);
+    assert!(out.status.success(), "{}", text);
+    assert!(
+        text.contains(
+            "waiting: adrdom/decisions/example.md: \"Does this pass?\" is untested; built once the plan changes, \"Does that pass?\" beside it is refused"
+        ),
+        "{}",
+        text
+    );
 }

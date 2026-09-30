@@ -22,6 +22,8 @@ Standard: a listing command prints a summary and takes a flag or an argument for
   Why: the shortest listing.
   Costs: the current decisions, which the agent reads before it builds, need a second command.
 
+**Answer:** A
+
 ### Does a hook print what check prints on a pass?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 1b98cdea-dc1b-4789-8f67-68d130d7a49d, 34e81f57-9b3c-4dc4-a2ba-ca227523177d
 id: 154e4b9a-c811-4a84-a522-598914eb39f1
@@ -39,6 +41,8 @@ Standard: a hook is silent on success and prints only what failed.
 - C) No: check prints nothing on a pass, by hand or in a hook.
   Why: one behaviour, no flag.
   Costs: the done and awaiting-approval notes, which the decisions on a topic file closing and on a plan awaiting approval ask check to print, go.
+
+**Answer:** A
 
 ### Does approve turn the supersedes line into identifiers?
 depends: e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 3c8d4c9c-abca-4faa-b7c1-aae39951376c, 2bae531b-c4df-48a0-89a0-3d52726741ea, 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f, f4f667ad-8714-4e65-897b-c7002e423c28
@@ -58,6 +62,8 @@ Standard: one rule for every reference in a topic file.
   Why: the agent writes the line whenever it finds the need.
   Costs: two commands hold the same rule.
 
+**Answer:** B
+
 ### Does check fail an untested decision whose tier is still open?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, 33a45b9e-8150-488e-be70-7ab2ca9adaa6, f8d92841-aef7-4cd7-bd94-0e07c03e4cb6, dfd32ef6-c2ac-40ef-b8b3-9c58732516b1
 id: f2e31cbe-1ba2-4b77-910a-b9664ce0277f
@@ -75,3 +81,5 @@ Standard: a gate fires when its precondition is met, not before; a check that ca
 - C) No: check fails it once the tier is answered; until then it says nothing about it.
   Why: nothing to read while waiting.
   Costs: an answered decision with no test and no line naming it.
+
+**Answer:** A

@@ -50,8 +50,9 @@ pub(super) fn check_tests(
     led: &Ledger,
     tests: Option<&HashMap<String, Vec<String>>>,
     source: &Source,
-) -> (Vec<Failure>, usize) {
+) -> (Vec<Failure>, usize, Vec<String>) {
     let mut out = Vec::new();
+    let mut notes = Vec::new();
 
     let current: HashSet<String> = records
         .iter()
@@ -80,6 +81,17 @@ pub(super) fn check_tests(
     untested.sort();
     tested_count += current.len() - untested.len();
     for id in untested {
+        // Per "Does check fail an untested decision whose tier is still
+        // open?": while a question beside it is not answered, a note.
+        let waits = records.iter().find_map(|rf| {
+            let i = rf.sections.iter().position(|s| s.id.as_deref() == Some(id.as_str()))?;
+            let sib = crate::state::unresolved_sibling(rf, i)?;
+            Some(msg::untested_waits(&rf.rel, &rf.sections[i].heading_text, &sib.heading_text, sib.is_refused()))
+        });
+        if let Some(note) = waits {
+            notes.push(note);
+            continue;
+        }
         out.push(Failure {
             check: "tested".to_string(),
             message: msg::untested(id, heading_of(id)),
@@ -96,6 +108,6 @@ pub(super) fn check_tests(
         });
     }
 
-    (out, tested_count)
+    (out, tested_count, notes)
 }
 
