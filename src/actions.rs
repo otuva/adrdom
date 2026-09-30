@@ -118,16 +118,25 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
     // check or ask, which always need every file -- never has a reason to
     // parse the rest once it is found.
     let mut found = None;
+    // The files that could not be read: the question may be in one of
+    // them, so "not found" names them.
+    let mut unread: Vec<String> = Vec::new();
     for f in crate::repo::list_decision_files(root) {
-        if let Ok(rf) = record::load(&f) {
-            if let Some(idx) = rf.sections.iter().position(|s| s.id.as_deref() == Some(id)) {
-                found = Some((rf, idx));
-                break;
+        match record::load(&f) {
+            Ok(rf) => {
+                if let Some(idx) = rf.sections.iter().position(|s| s.id.as_deref() == Some(id)) {
+                    found = Some((rf, idx));
+                    break;
+                }
             }
+            Err(_) => unread.push(crate::state::rel_path(root, &f)),
         }
     }
     let Some((rf, idx)) = found else {
-        return Err(msg::id_not_found(id));
+        if unread.is_empty() {
+            return Err(msg::id_not_found(id));
+        }
+        return Err(msg::id_not_found_some_unread(id, &unread));
     };
     // `record::load` (unlike `load_all`/`load_all_via`) leaves `rf.rel` as
     // the raw path it was given, so it is recomputed here the way every
@@ -151,7 +160,14 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
         }
         if let Some(letter) = letter {
             if !sec.options.iter().any(|o| o.letter == letter) {
-                return Err(msg::letter_not_an_option(letter, &sec.heading_text));
+                let letters: Vec<char> = sec.options.iter().map(|o| o.letter).collect();
+                return Err(msg::letter_not_an_option(
+                    letter,
+                    &sec.heading_text,
+                    &letters,
+                    id,
+                    version,
+                ));
             }
         }
         cur_hash = record::section_hash(&rf.lines, sec);
@@ -171,14 +187,27 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
         {
             return Err(msg::invalid_version_format(version));
         }
-        if version_lower != cur_hash[..record::VERSION_LEN] {
-            return Err(msg::stale_version(&sec.heading_text));
+        // The text stands as it was asked (the version the owner would read
+        // is the current one) or it does not (never asked, or edited since:
+        // the agent's `ask` is the move and the owner has nothing to run).
+        let stands = crate::state::asked_text_stands(&led, id, &cur_hash);
+        if !stands {
+            return Err(if sec.is_skeleton {
+                msg::not_written(&sec.heading_text)
+            } else if led.latest_asked(id).is_none() {
+                msg::not_asked_yet(&sec.heading_text, &rel)
+            } else {
+                match led.latest_state(id).map(|r| r.event.as_str()) {
+                    Some("withdrawn") => msg::already_withdrawn(&sec.heading_text),
+                    Some("answered") => msg::already_answered(&sec.heading_text),
+                    Some("refused") => msg::already_refused(&sec.heading_text),
+                    Some("superseded") => msg::already_superseded(&sec.heading_text),
+                    _ => msg::not_in_asked_state(&sec.heading_text, &rel),
+                }
+            });
         }
-        match led.latest_state(id) {
-            Some(row) if row.event == "asked" && row.hash == cur_hash => {}
-            _ => {
-                return Err(msg::not_in_asked_state(&sec.heading_text));
-            }
+        if version_lower != cur_hash[..record::VERSION_LEN] {
+            return Err(msg::stale_version(&sec.heading_text, &rel));
         }
     }
 
@@ -241,14 +270,18 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
     {
         let sec = &rf.sections[idx];
         let Some(terms_line_idx) = sec.terms_line else {
-            return Err(msg::no_terms_line(id));
+            return Err(msg::no_terms_line(id, &sec.heading_text));
         };
         let problems = terms::validate_pairs(rf.lines[terms_line_idx].trim_end(), &tf)
-            .map_err(|_| msg::malformed_terms_line(id))?;
+            .map_err(|_| msg::malformed_terms_line(id, &sec.heading_text))?;
         if let Some(p) = problems.first() {
             return Err(match &p.kind {
-                terms::ProblemKind::Gone => msg::terms_line_names_gone_term(id, &p.uuid),
-                terms::ProblemKind::Retired(name) => msg::terms_line_names_retired_term(id, name),
+                terms::ProblemKind::Gone => {
+                    msg::terms_line_names_gone_term(id, &sec.heading_text, &p.uuid, &p.word)
+                }
+                terms::ProblemKind::Retired(name) => {
+                    msg::terms_line_names_retired_term(id, &sec.heading_text, name)
+                }
             });
         }
         supersedes_val = sec.supersedes.clone();
@@ -277,7 +310,8 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
                 _ => false,
             };
             if !target_ok {
-                return Err(msg::supersedes_not_current(old));
+                let names = crate::view::all_heading_texts(root);
+                return Err(msg::supersedes_not_current(old, names.get(old).map(String::as_str)));
             }
         }
     }
@@ -403,7 +437,7 @@ fn do_approve_blame(
         msg::approve_prefixed(msg::read_failed(
             &file.display().to_string(),
             e,
-            Next::owner_runs(format!("adr approve {} again", rel)),
+            Next::owner_runs(format!("adr approve {}", rel)),
         ))
     })?;
 
@@ -511,18 +545,25 @@ fn do_approve_blame(
         work_lines[row.line_idx] = format!("{}-{}\t{}", row.start, row.end, r.canonical());
     }
 
-    std::fs::write(&bf.path, record::join_lines(&work_lines)).map_err(|e| {
-        msg::approve_prefixed(msg::write_failed(
-            &file.display().to_string(),
-            e,
-            Next::owner_runs(format!("adr approve {} again", rel)),
-        ))
-    })?;
+    // Written only when a row changed, so the line below can say whether
+    // the file on disk was touched.
+    let rewritten = work_lines != bf.lines;
+    if rewritten {
+        std::fs::write(&bf.path, record::join_lines(&work_lines)).map_err(|e| {
+            msg::approve_prefixed(msg::write_failed(
+                &file.display().to_string(),
+                e,
+                Next::owner_runs(format!("adr approve {}", rel)),
+            ))
+        })?;
+    }
 
     let new_hash = blame::file_hash(&work_lines);
     let unchanged = led.latest_for_path("blame", rel).map(|r| r.hash.as_str()) == Some(new_hash.as_str());
 
-    let summary = if unchanged {
+    let summary = if unchanged && rewritten {
+        msg::blame_rows_rewritten(rel)
+    } else if unchanged {
         msg::blame_unchanged(rel)
     } else {
         let row = ledger::Row {
@@ -537,7 +578,7 @@ fn do_approve_blame(
             msg::approve_prefixed(msg::update_failed(
                 "ledger",
                 e,
-                Next::owner_runs(format!("adr approve {} again", rel)),
+                Next::owner_runs(format!("adr approve {}", rel)),
             ))
         })?;
         msg::blame_approved(rel)
@@ -633,7 +674,8 @@ pub fn terms_refusals(
         for (word, uuid) in &dep.pairs {
             let Some(target) = tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str()))
             else {
-                refusals.push(msg::term_removed_but_carried(uuid, &label));
+                let word = dep.from_word.then_some(word.as_str());
+                refusals.push(msg::term_removed_but_carried(uuid, word, &label));
                 continue;
             };
             if target.retired {
@@ -674,7 +716,7 @@ pub fn terms_refusals(
                     // as the retired case above.
                     let next = match dep.source.decision_id() {
                         Some(id) => Next::agent(format!(
-                            "restores the wording in adrdom/terms.md so \"{}\" still names \"{}\", or writes a question that supersedes {} with a new terms pairing",
+                            "restores the wording in adrdom/terms.md so \"{}\" still names \"{}\", or writes a question that supersedes {}",
                             word, target.name, id
                         )),
                         None => msg::term_reword_and_approve(),
@@ -733,7 +775,7 @@ fn do_approve_terms(
         msg::approve_prefixed(msg::read_failed(
             &file.display().to_string(),
             e,
-            Next::owner_runs("adr approve adrdom/terms.md again"),
+            Next::owner_runs("adr approve adrdom/terms.md"),
         ))
     })?;
 
@@ -767,7 +809,7 @@ fn do_approve_terms(
         msg::approve_prefixed(msg::write_failed(
             &file.display().to_string(),
             e,
-            Next::owner_runs("adr approve adrdom/terms.md again"),
+            Next::owner_runs("adr approve adrdom/terms.md"),
         ))
     })?;
 
@@ -785,7 +827,7 @@ fn do_approve_terms(
         msg::approve_prefixed(msg::write_failed(
             crate::repo::TERMS_BRIEF_PATH,
             e,
-            Next::owner_runs("adr approve adrdom/terms.md again"),
+            Next::owner_runs("adr approve adrdom/terms.md"),
         ))
     })?;
 
@@ -811,7 +853,7 @@ fn do_approve_terms(
             msg::approve_prefixed(msg::update_failed(
                 "ledger",
                 e,
-                Next::owner_runs("adr approve adrdom/terms.md again"),
+                Next::owner_runs("adr approve adrdom/terms.md"),
             ))
         })?;
         out.push(msg::terms_approved_now());
@@ -845,12 +887,22 @@ fn do_approve_terms(
 /// term" refusals. `cross_file_headings` is likewise supplied once per
 /// command run (`depends::cross_file_heading_index`), threaded straight
 /// into `resolve_dep`.
+///
+/// `names` is every heading by its id, of any state and any topic file
+/// (`view::all_heading_texts`), built once per command run by the caller:
+/// a refusal that names an identifier names the question beside it.
+/// `all` is every topic file loaded: a heading-shaped entry that names no
+/// current decision but a question of another topic file that is not
+/// answered (or is refused) is refused with the state the tool holds.
+#[allow(clippy::too_many_arguments)]
 pub fn record_refusals(
     rel: &str,
     rf: &RecordFile,
     terms_list: &[terms::Term],
     phrase_lookup: &HashMap<String, String>,
     cross_file_headings: &HashMap<String, Vec<(String, String)>>,
+    names: &HashMap<String, String>,
+    all: &[RecordFile],
     led: &Ledger,
 ) -> Vec<Refusal> {
     let mut out: Vec<Refusal> = Vec::new();
@@ -859,6 +911,12 @@ pub fn record_refusals(
         out.push(Refusal {
             category: "parse",
             message: msg::shape_error(rel, e),
+        });
+    }
+    for i in record::non_question_heading_lines(&rf.lines) {
+        out.push(Refusal {
+            category: "parse",
+            message: msg::heading_not_a_question(rel, i + 1),
         });
     }
     for sec in &rf.sections {
@@ -957,17 +1015,34 @@ pub fn record_refusals(
             if let Err(e) =
                 depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, cross_file_headings, led)
             {
+                // What the identifier names, for the refusal only: a term
+                // (a retired one too), else the heading of a question in
+                // any state.
+                let name = match &e {
+                    depends::DepError::NotCurrentDecision(id) => terms_list
+                        .iter()
+                        .find(|t| t.id.as_deref() == Some(id.as_str()))
+                        .map(|t| t.name.as_str())
+                        .or_else(|| names.get(id).map(String::as_str)),
+                    _ => None,
+                };
                 out.push(Refusal {
                     category: "plan",
-                    message: depends::dep_refusal_text(rel, &sec.heading_text, &e),
+                    message: depends::dep_refusal_text(rel, &sec.heading_text, &e, name),
                 });
             }
         }
     }
     if let Some(err) = &rf.derive_error {
+        let waiting = match err {
+            record::DeriveError::Dangling { section, entry } => {
+                waiting_on_other_file(rel, section, entry, all, led)
+            }
+            _ => None,
+        };
         out.push(Refusal {
             category: "plan",
-            message: msg::derive_error(rel, err),
+            message: waiting.unwrap_or_else(|| msg::derive_error(rel, err)),
         });
     }
 
@@ -985,6 +1060,82 @@ pub fn record_refusals(
         }
     }
 
+    out
+}
+
+/// The refusal for a heading-shaped `depends:` entry that names a question
+/// of another topic file that is not a current decision: not answered yet
+/// (unasked or asked), or refused. `None` when no other file holds an
+/// unanswered or refused question under that heading.
+fn waiting_on_other_file(
+    rel: &str,
+    section: &str,
+    entry: &str,
+    all: &[RecordFile],
+    led: &Ledger,
+) -> Option<String> {
+    let mut refused: Option<&str> = None;
+    for other in all.iter().filter(|o| o.rel != rel) {
+        for sec in other.sections.iter().filter(|s| s.heading_text.trim() == entry.trim()) {
+            match crate::view::qstate(led, sec) {
+                crate::view::QState::Skeleton
+                | crate::view::QState::Unasked
+                | crate::view::QState::Open => {
+                    return Some(msg::dep_waits_on_other_file(rel, section, entry, &other.rel));
+                }
+                crate::view::QState::Refused => refused = Some(other.rel.as_str()),
+                _ => {}
+            }
+        }
+    }
+    refused.map(|r| msg::dep_on_refused_in_other_file(rel, section, entry, r))
+}
+
+/// Refusals about a topic file's own name and its own headings, one
+/// function for `approve` and `check` so the two print the same lines
+/// (76bd7ef0 A): a name that is not lowercase words joined by hyphens, a
+/// topic no name can carry, a name that is not the topic, and a heading
+/// text used twice in the file. `topic` is the file's `# ` title when it
+/// has one.
+pub fn own_name_and_heading_refusals(
+    rel: &str,
+    topic: Option<&str>,
+    sections: &[record::Section],
+) -> Vec<String> {
+    let mut out = own_name_refusals(rel, topic);
+    out.extend(duplicate_heading_refusals(rel, sections));
+    out
+}
+
+/// The naming half of `own_name_and_heading_refusals`.
+pub fn own_name_refusals(rel: &str, topic: Option<&str>) -> Vec<String> {
+    let mut out = Vec::new();
+    let name = rel.rsplit('/').next().unwrap_or(rel);
+    if !repo::valid_topic_file_name(name) {
+        out.push(msg::bad_topic_file_name(rel));
+    } else if let Some(topic) = topic {
+        let expected = repo::expected_topic_file_stem(topic);
+        if !repo::valid_topic_file_name(&format!("{}.md", expected)) {
+            out.push(msg::topic_unnameable(rel, topic));
+        } else if name.strip_suffix(".md") != Some(expected.as_str()) {
+            out.push(msg::topic_file_name_mismatch(rel, topic, &expected));
+        }
+    }
+    out
+}
+
+/// The in-file duplicate heading half of `own_name_and_heading_refusals`.
+pub fn duplicate_heading_refusals(rel: &str, sections: &[record::Section]) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut counts: HashMap<&str, usize> = HashMap::new();
+    for sec in sections {
+        *counts.entry(sec.heading_text.as_str()).or_insert(0) += 1;
+    }
+    let mut dups: Vec<&str> = counts.into_iter().filter(|(_, c)| *c > 1).map(|(h, _)| h).collect();
+    dups.sort();
+    for h in dups {
+        out.push(msg::duplicate_heading_in_file(h, rel));
+    }
     out
 }
 
@@ -1039,7 +1190,7 @@ pub fn missing_answered_refusals(records: &[RecordFile], led: &Ledger) -> Vec<Re
 }
 
 /// Inserts a freshly minted id directly after each skeleton section's
-/// `depends:` line (per "Does a reference in a topic file carry the
+/// `depends:` line (or its `supersedes:` line, directly under it) (per "Does a reference in a topic file carry the
 /// identifier of what it names?"; no blank padding, the same bare
 /// single-line insert `ask` uses for `terms:` after `id:`). Every section
 /// here has already passed `record_refusals`'s "has no depends line"
@@ -1054,8 +1205,16 @@ fn insert_missing_ids(rf: &RecordFile, mut work_lines: Vec<String>) -> Result<Ve
             let depends_idx = (sec.start + 1..sec.end)
                 .find(|&j| work_lines[j].starts_with("depends: "))
                 .ok_or_else(|| msg::approve_prefixed(msg::no_depends_line_bare(&sec.heading_text)))?;
+            // The plan lines come first, then the id: after the
+            // `supersedes:` line when the heading has one (which is
+            // directly under `depends:`), else after `depends:`.
+            let after = if work_lines.get(depends_idx + 1).is_some_and(|l| l.starts_with("supersedes: ")) {
+                depends_idx + 1
+            } else {
+                depends_idx
+            };
             let new_id = Uuid::new_v4().to_string();
-            work_lines.insert(depends_idx + 1, format!("id: {}", new_id));
+            work_lines.insert(after + 1, format!("id: {}", new_id));
         }
     }
     Ok(work_lines)
@@ -1084,7 +1243,7 @@ fn do_approve_record(
         msg::approve_prefixed(msg::read_failed(
             &file.display().to_string(),
             e,
-            Next::owner_runs(format!("adr approve {} again", rel)),
+            Next::owner_runs(format!("adr approve {}", rel)),
         ))
     })?;
 
@@ -1140,11 +1299,51 @@ fn do_approve_record(
     // here (`record_refusals`, shared with `check`) instead of returned at
     // the first, so one `approve` call tells the agent everything it owes
     // the owner before asking again.
+    let names = crate::view::heading_texts(&all_records);
     let mut refusals: Vec<String> =
-        record_refusals(rel, &rf, terms_list, &phrase_lookup, &cross_file_headings, led)
+        record_refusals(rel, &rf, terms_list, &phrase_lookup, &cross_file_headings, &names, &all_records, led)
             .into_iter()
             .map(|r| msg::approve_prefixed(r.message))
             .collect();
+
+    for m in own_name_and_heading_refusals(rel, rf.topic.as_deref(), &rf.sections) {
+        refusals.push(msg::approve_prefixed(m));
+    }
+
+    // Per "Does approve turn the supersedes line into identifiers?" (B):
+    // each entry of a `supersedes:` line is the heading of a current
+    // decision (in any topic file) or its id, and becomes the id, the way
+    // a `depends:` entry does. A section that is already frozen keeps its
+    // line as it is: its target is superseded by now, and the section's
+    // own hash guards the line.
+    let mut supersedes_ids: HashMap<usize, Vec<String>> = HashMap::new();
+    for (i, sec) in rf.sections.iter().enumerate() {
+        // Once asked, the line is frozen with the body (per "Does one
+        // decision supersede several?"): a split sibling's target may be
+        // superseded by now, and approve leaves the line as it is.
+        let asked = sec.id.as_ref().is_some_and(|id| led.latest_asked(id).is_some());
+        if sec.supersedes.is_empty() || asked || state::is_frozen(led, sec) {
+            continue;
+        }
+        let mut ids = Vec::new();
+        for old in &depends::supersedes_entries(&sec.supersedes, &cross_file_headings, led) {
+            match depends::resolve_supersedes(old, &cross_file_headings, led) {
+                Ok(id) => ids.push(id),
+                Err(depends::SupersedesError::NotCurrent) => refusals.push(msg::approve_prefixed(
+                    msg::ask_supersedes_not_current(
+                        rel,
+                        &sec.heading_text,
+                        old,
+                        names.get(old).map(String::as_str),
+                    ),
+                )),
+                Err(depends::SupersedesError::Ambiguous(files)) => refusals.push(msg::approve_prefixed(
+                    msg::ask_supersedes_ambiguous(rel, &sec.heading_text, old, &files),
+                )),
+            }
+        }
+        supersedes_ids.insert(i, ids);
+    }
 
     // A letter-set suffix naming a current decision elsewhere
     // (`DepTarget::Decision`, an already-id entry or a heading-shaped one
@@ -1258,6 +1457,14 @@ fn do_approve_record(
             .collect();
         work_rf.lines[line_idx] = format!("depends: {}", parts.join(", "));
     }
+    // The `supersedes:` line, kept where the writer put it (under `id:`
+    // and `terms:` once asked), holds ids from here on.
+    for (i, sec) in sections_snapshot.iter().enumerate() {
+        let Some(ids) = supersedes_ids.get(&i) else { continue };
+        if let Some(j) = (sec.start + 1..sec.end).find(|&j| work_rf.lines[j].starts_with("supersedes: ")) {
+            work_rf.lines[j] = format!("supersedes: {}", ids.join(", "));
+        }
+    }
     // Reparse once more so `plan_hash`/`context_hash` and everything below
     // sees the file exactly as it will be written.
     let work_rf = record::build(work_rf.path.clone(), rel.to_string(), work_rf.lines.clone());
@@ -1269,7 +1476,7 @@ fn do_approve_record(
         msg::approve_prefixed(msg::write_failed(
             &file.display().to_string(),
             e,
-            Next::owner_runs(format!("adr approve {} again", rel)),
+            Next::owner_runs(format!("adr approve {}", rel)),
         ))
     })?;
 
@@ -1316,7 +1523,7 @@ fn do_approve_record(
         msg::approve_prefixed(msg::update_failed(
             "ledger",
             e,
-            Next::owner_runs(format!("adr approve {} again", rel)),
+            Next::owner_runs(format!("adr approve {}", rel)),
         ))
     })?;
 
@@ -1327,7 +1534,7 @@ fn do_approve_record(
             msg::approve_prefixed(msg::update_failed(
                 "ledger",
                 e,
-                Next::owner_runs(format!("adr approve {} again", rel)),
+                Next::owner_runs(format!("adr approve {}", rel)),
             ))
         })?;
         for r in &withdrawn_rows {
@@ -1425,10 +1632,21 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
         .map(|(h, _)| h.clone())
         .collect();
     removed.sort();
+    // A ban list may hold one hash on two lines (a merge, an edit by
+    // hand): it is one word, removed once.
+    removed.dedup();
+    // The words given that were not banned: said as a count beside what
+    // was removed, never dropped without a word.
+    let not_banned = to_remove.len() - removed.len();
+    let not_banned_suffix = if not_banned == 0 {
+        String::new()
+    } else {
+        msg::not_banned_suffix(not_banned)
+    };
 
     if removed.is_empty() {
         return Ok(Outcome {
-            summary: msg::nothing_to_remove(),
+            summary: format!("{}{}", msg::nothing_to_remove(), not_banned_suffix),
         });
     }
 
@@ -1437,7 +1655,7 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
         .filter(|(h, _)| !to_remove.contains(h))
         .collect();
     crate::banned::write_sorted(&banned_path, remaining).map_err(|e| {
-        msg::update_failed("banned list", e, Next::owner_runs("adr unban again"))
+        msg::update_failed("banned list", e, Next::owner_runs("adr unban"))
     })?;
 
     // One time for every row this run writes (per "Does a command write a
@@ -1457,9 +1675,9 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
         })
         .collect();
     ledger::append(&ledger_path, &rows)
-        .map_err(|e| msg::update_failed("ledger", e, Next::owner_runs("adr unban again")))?;
+        .map_err(|e| msg::update_failed("ledger", e, Next::owner_runs("adr unban")))?;
 
     Ok(Outcome {
-        summary: msg::removed_entries(removed.len()),
+        summary: format!("{}{}", msg::removed_entries(removed.len()), not_banned_suffix),
     })
 }

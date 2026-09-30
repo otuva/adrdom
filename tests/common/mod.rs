@@ -146,6 +146,19 @@ pub fn stderr(out: &Output) -> String {
     String::from_utf8_lossy(&out.stderr).to_string()
 }
 
+/// True when one line of `text` opens its report on `id` with `what`: the
+/// identifier, then the name the tool puts beside it when it holds one
+/// (`<id> ("<name>")`), then `what` (`": untested"`, `": stale ..."`).
+pub fn line_with(text: &str, id: &str, what: &str) -> bool {
+    text.lines().any(|l| match l.find(id) {
+        Some(at) => {
+            let rest = &l[at + id.len()..];
+            rest.starts_with(what) || (rest.starts_with(" (\"") && rest.contains(&format!("\"){}", what)))
+        }
+        None => false,
+    })
+}
+
 pub const EXAMPLE_RECORD: &str = r#"# Example
 
 ### 1.1 What is the unit of authority called?

@@ -72,11 +72,14 @@ fn build(
     let ledger_content = source.read(root, ledger_rel).unwrap_or_default();
     let led = crate::ledger::parse(&ledger_content);
 
+    // A topic file that cannot be read is a failure: nothing in it is
+    // judged, and a pass would let it through with its decisions unread.
     let (mut records, unreadable) = record::load_all_via(root, &source);
-    let mut notes: Vec<String> = unreadable
+    let unreadable_failures: Vec<String> = unreadable
         .into_iter()
-        .map(|(f, e)| msg::topic_file_unreadable(&f.display().to_string(), e))
+        .map(|(f, e)| msg::topic_file_unreadable(&state::rel_path(root, &f), e))
         .collect();
+    let mut notes: Vec<String> = Vec::new();
 
     // Terms minted in memory: a terms file that has never been
     // approved carries no ids on disk yet, and `phrase_lookup` only
@@ -129,13 +132,16 @@ fn build(
     // `plan` pull their failures from these instead of re-deriving the
     // same shape/tells/depends checks `approve` already refuses on; `ids`
     // pulls the missing-answered-id lines the same way.
+    let names = crate::view::heading_texts(&records);
     let per_record_refusals: Vec<Vec<actions::Refusal>> = records
         .iter()
-        .map(|rf| actions::record_refusals(&rf.rel, rf, &terms_list, &phrase_lookup, &cross_file_headings, &led))
+        .map(|rf| {
+            actions::record_refusals(&rf.rel, rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &records, &led)
+        })
         .collect();
     let missing_answered = actions::missing_answered_refusals(&records, &led);
 
-    let mut failures: Vec<String> = Vec::new();
+    let mut failures: Vec<String> = unreadable_failures;
     push_failures(&mut failures, parse::check_parse(&per_record_refusals));
     push_failures(&mut failures, ids::check_ids(&records, &led, &missing_answered, &raw_hashes));
     push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_content, since));
@@ -159,7 +165,8 @@ fn build(
     push_failures(&mut failures, terms_failures);
     let (blame_failures, blame_notes) = blame::check_blame(root, &source, &records, &led);
     push_failures(&mut failures, blame_failures);
-    let (test_failures, tested_count) = tests::check_tests(root, &records, &led, tests, &source);
+    let (test_failures, tested_count, test_notes) =
+        tests::check_tests(root, &records, &led, tests, &source);
     push_failures(&mut failures, test_failures);
     push_failures(&mut failures, tells::check_tells(root, &records, &led, &per_record_refusals));
 
@@ -184,6 +191,7 @@ fn build(
     if !awaiting.is_empty() {
         notes.push(msg::plan_awaiting(awaiting.len(), &awaiting.join(", ")));
     }
+    notes.extend(test_notes);
     notes.extend(terms_notes);
     notes.extend(blame_notes);
     for d in done::check_done(&records, &led, &raw_hashes) {
@@ -200,7 +208,11 @@ fn build(
 /// ledger before a push?", 19e1c023-a678-4842-a414-bb0e45c41601 P). Every
 /// other combination runs the plain report, `since` (`--since <commit>`)
 /// adding its one extra ledger comparison on top.
-pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: bool) -> i32 {
+///
+/// `quiet` (`--quiet`) prints the failures and leaves out the notes: what
+/// the commit hooks run, so a commit that passes prints nothing and one
+/// that fails prints only what failed.
+pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: bool, quiet: bool) -> i32 {
     if push {
         return push::run();
     }
@@ -208,7 +220,7 @@ pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("check", Actor::Agent));
+            eprintln!("{}", msg::not_a_repo("check", "", Actor::Agent));
             return 1;
         }
     };
@@ -219,8 +231,10 @@ pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: 
     for f in &report.failures {
         println!("{}", f);
     }
-    for n in &report.notes {
-        println!("{}", n);
+    if !quiet {
+        for n in &report.notes {
+            println!("{}", n);
+        }
     }
 
     exit_code

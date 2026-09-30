@@ -27,22 +27,40 @@ enum Command {
     },
     /// Owner-only: remove what `adr install` wrote outside adrdom/.
     Uninstall,
-    /// Record `asked` for every unasked/changed question in an approved topic file.
-    Ask { topic_file: PathBuf },
-    /// Owner-only: approve a topic file's plan/context, or the terms file.
-    Approve { file: PathBuf },
+    /// Ask the owner every question of a topic file that has a body and is not asked yet, or print every refusal.
+    Ask {
+        /// The topic file, adrdom/decisions/<topic>.md.
+        topic_file: PathBuf,
+    },
+    /// Owner-only: approve the headings and prose of a topic file, the terms file, or a blame file.
+    Approve {
+        /// A topic file, adrdom/terms.md, or a blame file under adrdom/blame.
+        file: PathBuf,
+    },
     /// Owner-only: answer a question, identified by `<id>@<version>`, with an option letter or `refuse`.
-    Answer { id: String, letter: String },
-    /// Print every question, with its state and tier.
-    Show { topic_file: Option<PathBuf> },
+    Answer {
+        /// The question, as `adr show` prints it: <id>@<version>.
+        id: String,
+        /// The letter of the option picked, or the word refuse.
+        letter: String,
+    },
+    /// Print the current decisions and what is next; with a topic file or --all, every question.
+    Show {
+        /// Print every question of this topic file, with its state and what it stands on.
+        topic_file: Option<PathBuf>,
+        /// Print every question of every topic file, and the blame files.
+        #[arg(long)]
+        all: bool,
+    },
     /// Read lines from stdin and ban them (and their tokens) from the repo.
     Ban {
-        /// Carry an existing terms.md term's uuid alongside each new hash,
-        /// matched case-insensitively by name or alias.
+        /// Name the term the banned words belong to, by its name or an
+        /// alias; the case of the letters does not count.
         #[arg(long, conflicts_with = "rebuild")]
         term: Option<String>,
-        /// Rewrite the ban list from the ledger alone, ignoring whatever it
-        /// currently holds; reads no stdin and writes no ledger row.
+        /// Write the ban list again from what the ledger says is banned;
+        /// reads no input and bans nothing new. Run it when a refusal
+        /// names it.
         #[arg(long)]
         rebuild: bool,
     },
@@ -56,20 +74,50 @@ enum Command {
     },
     /// Run all governance checks.
     Check {
+        /// Judge the files as they are staged for the commit, not as they are on disk.
         #[arg(long, conflicts_with = "push")]
         staged: bool,
+        /// Judge the staged files and look for banned words in this commit message file.
         #[arg(long, conflicts_with = "push")]
         message: Option<PathBuf>,
-        /// Also require every ledger row of <commit>'s own ledger to be present in the one being judged.
+        /// Print what failed and nothing else.
+        #[arg(long)]
+        quiet: bool,
+        /// Also fail when a line of the ledger as it was at <commit> is missing from the ledger now.
         #[arg(long, conflicts_with = "push")]
         since: Option<String>,
-        /// Read git's pre-push input from stdin and judge only that: no ref may drop a ledger row the remote already has.
+        /// What the pre-push hook runs: read git's pre-push input and fail when a push would drop a line of the ledger the remote has.
         #[arg(long)]
         push: bool,
     },
 }
 
+/// The exit code of a command whose reader went away, as a shell reports a
+/// process ended by a closed pipe (128 + 13).
+const READER_GONE: i32 = 141;
+
+/// `adr show | head` closes the pipe while the tool still prints, and a
+/// print to a closed pipe panics. That is no fault of the tool: the process
+/// ends without a word, with `READER_GONE`, so a pipeline that watches exit
+/// codes never reads it as a pass. Every other panic is printed as before.
+fn end_quietly_when_the_reader_is_gone() {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let payload = info.payload();
+        let text = payload
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .or_else(|| payload.downcast_ref::<&str>().copied())
+            .unwrap_or("");
+        if text.starts_with("failed printing to std") && text.contains("Broken pipe") {
+            std::process::exit(READER_GONE);
+        }
+        default_hook(info);
+    }));
+}
+
 fn main() {
+    end_quietly_when_the_reader_is_gone();
     let shown: &'static str = Box::leak(
         adr::msg::version_shown(VERSION, cfg!(feature = "owner-bypass")).into_boxed_str(),
     );
@@ -81,11 +129,13 @@ fn main() {
         Command::Ask { topic_file } => commands::ask::run(topic_file),
         Command::Approve { file } => commands::approve::run(file),
         Command::Answer { id, letter } => commands::answer::run(id, letter),
-        Command::Show { topic_file } => commands::show::run(topic_file),
+        Command::Show { topic_file, all } => commands::show::run(topic_file, all),
         Command::Ban { term, rebuild } => commands::ban::run(term, rebuild),
         Command::Unban => commands::unban::run(),
         Command::Serve { port } => commands::serve::run(port),
-        Command::Check { staged, message, since, push } => commands::check::run(staged, message, since, push),
+        Command::Check { staged, message, quiet, since, push } => {
+            commands::check::run(staged, message, since, push, quiet)
+        }
     };
     std::process::exit(code);
 }

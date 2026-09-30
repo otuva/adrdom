@@ -9,6 +9,16 @@ use std::path::Path;
 
 pub(super) fn check_banned(root: &Path, staged: bool, message: Option<&Path>, source: &Source) -> Vec<Failure> {
     let mut out = Vec::new();
+    // A message file that cannot be read is never scanned: a failure, or
+    // the commit would pass with its message unread.
+    if let Some(msg_path) = message {
+        if let Err(e) = std::fs::read_to_string(msg_path) {
+            out.push(Failure {
+                check: "banned".to_string(),
+                message: msg::message_file_unreadable(&msg_path.display().to_string(), e),
+            });
+        }
+    }
     let entries = read_banned_entries(root, source);
     if entries.is_empty() {
         return out;

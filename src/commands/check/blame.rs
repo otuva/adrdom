@@ -12,7 +12,6 @@ use crate::ledger::Ledger;
 use crate::msg;
 use crate::record::{self, RecordFile};
 use crate::repo::{self, Source};
-use crate::state;
 use std::path::Path;
 
 pub(super) fn check_blame(
@@ -48,85 +47,12 @@ pub(super) fn check_blame(
         };
         let bf = blame::parse(root.join(rel), rel.clone(), record::split_lines(&content));
 
-        if !bf.shape_errors.is_empty() {
-            for e in &bf.shape_errors {
-                out.push(Failure {
-                    check: "blame".to_string(),
-                    message: msg::blame_shape_error(rel, e),
-                });
-            }
-            continue;
+        let st = blame::file_state(root, source, &bf, &content, records, led, &any_headings, &known_ids);
+        for message in st.failures {
+            out.push(Failure { check: "blame".to_string(), message });
         }
-        // No shape error means both header fields parsed.
-        let origin = bf.origin.clone().expect("no shape error means origin is set");
-        let blob = bf.blob.clone().expect("no shape error means blob is set");
-
-        // Held to the same rule `resolve_copy_target` holds a copy-of path
-        // to: not under adrdom, not a directory. Checked before the
-        // missing/present branch below, so a directory (which `source.read`
-        // can never return content for) is never mistaken for a gone
-        // origin.
-        if !blame::valid_origin_path(root, source, &origin) {
-            out.push(Failure {
-                check: "blame".to_string(),
-                message: msg::blame_bad_origin_path(rel, &origin),
-            });
-            continue;
-        }
-
-        if !source.exists(root, &origin) {
-            // Truly nothing at the path (4bb5ef1b A): the blame file's own
-            // draft state is one more "still open" reason, alongside any
-            // unanswered `decision:` row.
-            let mut open = blame::open_decision_rows(&bf, records, led, &any_headings, &known_ids);
-            if !state::blame_approved(led, rel, &content) {
-                open.push("the blame file's own approval".to_string());
-                open.sort();
-            }
-            if !open.is_empty() {
-                out.push(Failure {
-                    check: "blame".to_string(),
-                    message: msg::blame_origin_missing(rel, &origin, &open),
-                });
-            }
-            continue;
-        }
-
-        match source.read(root, &origin) {
-            None => {
-                // Present, per `exists` above, but unreadable as text: its
-                // own failure (4bb5ef1b A), never the missing-origin
-                // branch -- a present origin is not "gone".
-                out.push(Failure {
-                    check: "blame".to_string(),
-                    message: msg::blame_origin_unreadable(rel, &origin),
-                });
-            }
-            Some(origin_content) => {
-                // 5fddeeb5 A: the origin is still here, so its current
-                // content's own git blob sha must match what the file
-                // names -- read through the same `source` as everything
-                // else `check` judges (a staged edit to the origin is
-                // judged too, per "Does check at a commit read the staged
-                // files?"). Fails closed: git itself failing to hash the
-                // content is a failure, never a silent pass.
-                match repo::git_hash_object_stdin(root, &origin_content) {
-                    Some(actual) if actual != blob => out.push(Failure {
-                        check: "blame".to_string(),
-                        message: msg::blame_blob_mismatch(rel, &origin),
-                    }),
-                    Some(_) => {}
-                    None => out.push(Failure {
-                        check: "blame".to_string(),
-                        message: msg::blame_hash_failed(rel, &origin),
-                    }),
-                }
-                // 9c3cc17e A: a draft never fails on its own -- only a
-                // count, gathered below.
-                if !state::blame_approved(led, rel, &content) {
-                    awaiting.push(rel.clone());
-                }
-            }
+        if st.awaiting {
+            awaiting.push(rel.clone());
         }
     }
 

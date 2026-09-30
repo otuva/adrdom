@@ -76,7 +76,9 @@ fn find_eprintln_calls(src: &str) -> Vec<String> {
 /// - `line` (answer.rs): one line of that same kind of `Err(String)`,
 ///   printed line by line.
 /// - `m` (ask.rs): one of `shape_msgs`, each `format!("ask: {}", r.message)`
-///   over a `Refusal` whose `message` field is built with `msg::`.
+///   over a `Refusal` whose `message` field is built with `msg::`, and one
+///   of the refusals ask gathers, each pushed as the result of a `msg::`
+///   call.
 /// - `h` (ban.rs): a bare `file:line` location string, printed as detail
 ///   *after* the actual refusal (`msg::already_in_use()`) that already
 ///   named ban's next move -- not itself a refusal.

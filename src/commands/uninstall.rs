@@ -10,7 +10,7 @@ use std::path::Path;
 /// The owner's next move on any I/O failure while uninstalling: fix the
 /// underlying problem, then run uninstall again.
 fn retry() -> Next {
-    Next::owner_runs("adr uninstall again")
+    Next::owner_runs("adr uninstall")
 }
 
 /// Owner-only: removes everything `adr install` wrote outside `adrdom/`,
@@ -24,51 +24,50 @@ pub fn run() -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("uninstall", Actor::Owner));
+            eprintln!("{}", msg::not_a_repo("uninstall", "", Actor::Owner));
             return 1;
         }
     };
 
+    // What was removed is printed on a failure too: the run that failed
+    // is the only one that can say it, the next one finds it gone.
     let mut messages = Vec::new();
+    let failed = remove_all(&root, &mut messages).err();
 
-    match remove_agents_md_section(&root) {
-        Ok(Some(m)) => messages.push(m),
-        Ok(None) => {}
-        Err(e) => {
-            eprintln!("uninstall: {}", msg::update_failed("AGENTS.md", e, retry()));
-            return 1;
-        }
+    if failed.is_none() {
+        println!("{}", msg::uninstalled_at(root.display()));
     }
-
-    match remove_claude_md_import(&root) {
-        Ok(Some(m)) => messages.push(m),
-        Ok(None) => {}
-        Err(e) => {
-            eprintln!("uninstall: {}", msg::update_failed("CLAUDE.md", e, retry()));
-            return 1;
-        }
-    }
-
-    messages.extend(remove_hooks(&root));
-
-    match remove_settings_deny(&root) {
-        Ok(mut msgs) => messages.append(&mut msgs),
-        Err(e) => {
-            eprintln!(
-                "uninstall: {}",
-                msg::update_failed(".claude/settings.json", e, retry())
-            );
-            return 1;
-        }
-    }
-
-    messages.extend(remove_codex_rules(&root));
-
-    println!("{}", msg::uninstalled_at(root.display()));
     for m in &messages {
         println!("{}", m);
     }
-    0
+    match failed {
+        Some(m) => {
+            eprintln!("uninstall: {}", m);
+            1
+        }
+        None => 0,
+    }
+}
+
+/// Every removal in order, stopping at the first that fails; `messages`
+/// holds a line for each thing removed or left up to that point.
+fn remove_all(root: &Path, messages: &mut Vec<String>) -> Result<(), String> {
+    if let Some(m) = remove_agents_md_section(root)
+        .map_err(|e| msg::update_failed("AGENTS.md", e, retry()))?
+    {
+        messages.push(m);
+    }
+    if let Some(m) = remove_claude_md_import(root)
+        .map_err(|e| msg::update_failed("CLAUDE.md", e, retry()))?
+    {
+        messages.push(m);
+    }
+    remove_hooks(root, messages)?;
+    messages.extend(
+        remove_settings_deny(root)
+            .map_err(|e| msg::update_failed(".claude/settings.json", e, retry()))?,
+    );
+    remove_codex_rules(root, messages)
 }
 
 /// Removes the marked brief section from AGENTS.md, plus the one blank
@@ -151,71 +150,83 @@ fn remove_claude_md_import(root: &Path) -> Result<Option<String>, String> {
 /// Deletes the three hooks only when their content still matches exactly
 /// what `adr install` writes, removes `.githooks` once empty, and unsets
 /// `core.hooksPath` only when it's still `.githooks`.
-fn remove_hooks(root: &Path) -> Vec<String> {
-    let mut messages = Vec::new();
+fn remove_hooks(root: &Path, messages: &mut Vec<String>) -> Result<(), String> {
     let hooks = root.join(".githooks");
-    let pre_commit = hooks.join("pre-commit");
-    let commit_msg = hooks.join("commit-msg");
-    let pre_push = hooks.join("pre-push");
 
-    if let Ok(content) = fs::read_to_string(&pre_commit) {
-        if content == PRE_COMMIT_HOOK && fs::remove_file(&pre_commit).is_ok() {
-            messages.push(msg::hook_removed("pre-commit"));
+    for (name, written) in [
+        ("pre-commit", PRE_COMMIT_HOOK),
+        ("commit-msg", COMMIT_MSG_HOOK),
+        ("pre-push", PRE_PUSH_HOOK),
+    ] {
+        let path = hooks.join(name);
+        if let Ok(content) = fs::read_to_string(&path) {
+            if content == written {
+                remove(&path, fs::remove_file(&path))?;
+                messages.push(msg::hook_removed(name));
+            } else {
+                // Not what this build of install writes: an owner's edit,
+                // or the hook of another version. Left, and said.
+                messages.push(msg::hook_left(name));
+            }
         }
     }
-    if let Ok(content) = fs::read_to_string(&commit_msg) {
-        if content == COMMIT_MSG_HOOK && fs::remove_file(&commit_msg).is_ok() {
-            messages.push(msg::hook_removed("commit-msg"));
-        }
-    }
-    if let Ok(content) = fs::read_to_string(&pre_push) {
-        if content == PRE_PUSH_HOOK && fs::remove_file(&pre_push).is_ok() {
-            messages.push(msg::hook_removed("pre-push"));
-        }
-    }
-    if let Ok(mut entries) = fs::read_dir(&hooks) {
-        if entries.next().is_none() && fs::remove_dir(&hooks).is_ok() {
-            messages.push(msg::githooks_dir_removed());
-        }
+    if remove(&hooks, remove_dir_when_empty(&hooks))? {
+        messages.push(msg::githooks_dir_removed());
     }
 
     if let Some(val) = repo::git(root, &["config", "core.hooksPath"]) {
         if val.trim() == ".githooks" {
-            repo::git(root, &["config", "--unset", "core.hooksPath"]);
+            if repo::git(root, &["config", "--unset", "core.hooksPath"]).is_none() {
+                return Err(msg::hooks_path_failed("unset", retry()));
+            }
             messages.push(msg::hooks_path_unset());
         }
     }
 
-    messages
+    Ok(())
+}
+
+/// The refusal for a removal that failed, naming what was not removed.
+fn remove<T>(path: &Path, done: std::io::Result<T>) -> Result<T, String> {
+    done.map_err(|e| msg::remove_failed(&path.display().to_string(), e, retry()))
+}
+
+/// Removes `dir` when it holds nothing; true when it was removed. A
+/// directory that is missing or holds something is left as it is.
+fn remove_dir_when_empty(dir: &Path) -> std::io::Result<bool> {
+    let Ok(mut entries) = fs::read_dir(dir) else {
+        return Ok(false);
+    };
+    if entries.next().is_some() {
+        return Ok(false);
+    }
+    fs::remove_dir(dir)?;
+    Ok(true)
 }
 
 /// Removes `.codex/rules/adrdom.rules` only when its content still matches
 /// exactly what `adr install --codex` writes, then removes `.codex/rules`
 /// once empty, and `.codex` once that is empty too. Leaves an
 /// owner-edited or foreign file alone (mirrors `remove_hooks`).
-fn remove_codex_rules(root: &Path) -> Vec<String> {
-    let mut messages = Vec::new();
+fn remove_codex_rules(root: &Path, messages: &mut Vec<String>) -> Result<(), String> {
     let rules_dir = root.join(".codex/rules");
     let rules_path = rules_dir.join("adrdom.rules");
     let codex_dir = root.join(".codex");
 
     if let Ok(content) = fs::read_to_string(&rules_path) {
-        if content == install::codex_rules_content() && fs::remove_file(&rules_path).is_ok() {
+        if content == install::codex_rules_content() {
+            remove(&rules_path, fs::remove_file(&rules_path))?;
             messages.push(msg::codex_rules_removed());
         }
     }
-    if let Ok(mut entries) = fs::read_dir(&rules_dir) {
-        if entries.next().is_none() && fs::remove_dir(&rules_dir).is_ok() {
-            messages.push(msg::codex_rules_dir_removed());
-        }
+    if remove(&rules_dir, remove_dir_when_empty(&rules_dir))? {
+        messages.push(msg::codex_rules_dir_removed());
     }
-    if let Ok(mut entries) = fs::read_dir(&codex_dir) {
-        if entries.next().is_none() && fs::remove_dir(&codex_dir).is_ok() {
-            messages.push(msg::codex_dir_removed());
-        }
+    if remove(&codex_dir, remove_dir_when_empty(&codex_dir))? {
+        messages.push(msg::codex_dir_removed());
     }
 
-    messages
+    Ok(())
 }
 
 /// Removes every `deny_entries()` string from `.claude/settings.json`'s
@@ -258,10 +269,8 @@ fn remove_settings_deny(root: &Path) -> Result<Vec<String>, String> {
     if settings_holds_only_deny(&value) {
         fs::remove_file(&path).map_err(|e| e.to_string())?;
         messages.push(msg::settings_json_deleted());
-        if let Ok(mut entries) = fs::read_dir(&dir) {
-            if entries.next().is_none() && fs::remove_dir(&dir).is_ok() {
-                messages.push(msg::claude_dir_removed());
-            }
+        if remove_dir_when_empty(&dir).map_err(|e| format!("{}: {}", dir.display(), e))? {
+            messages.push(msg::claude_dir_removed());
         }
         return Ok(messages);
     }

@@ -14,7 +14,7 @@ pub fn run(id_arg: String, letter: String) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("answer", Actor::Owner));
+            eprintln!("{}", msg::not_a_repo("answer", &format!("{} {}", id_arg, letter), Actor::Owner));
             return 1;
         }
     };
@@ -26,7 +26,21 @@ pub fn run(id_arg: String, letter: String) -> i32 {
     let (id, version) = match id_arg.split_once('@') {
         Some(pair) => pair,
         None => {
-            eprintln!("answer: {}", msg::answer_missing_version(&id_arg));
+            // The question the bare id names, when it names one: the
+            // refusal then prints the command whole, version included.
+            let led = crate::ledger::read(&root.join(repo::LEDGER_PATH));
+            let found = crate::record::load_all(&root).into_iter().find_map(|rf| {
+                rf.sections
+                    .iter()
+                    .find(|s| s.id.as_deref() == Some(id_arg.as_str()))
+                    .filter(|s| {
+                        let hash = crate::record::section_hash(&rf.lines, s);
+                        s.answer_line.is_none() && crate::state::asked_text_stands(&led, &id_arg, &hash)
+                    })
+                    .map(|s| (s.heading_text.clone(), crate::record::version_of(&rf.lines, s)))
+            });
+            let asked = found.as_ref().map(|(h, v)| (h.as_str(), v.as_str()));
+            eprintln!("answer: {}", msg::answer_missing_version(&id_arg, asked));
             return 1;
         }
     };
@@ -41,7 +55,7 @@ pub fn run(id_arg: String, letter: String) -> i32 {
         match actions::parse_letter(&letter) {
             Some(c) => actions::do_answer(&root, id, version, c),
             None => {
-                eprintln!("answer: {}", msg::invalid_letter(&letter));
+                eprintln!("answer: {}", msg::invalid_letter(&letter, &id_arg));
                 return 1;
             }
         }

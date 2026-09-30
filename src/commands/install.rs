@@ -23,8 +23,8 @@ pub(crate) const CLAUDE_MD_MARKER: &str =
     "<!-- adrdom: the next line imports the agent brief; adr uninstall removes both lines -->";
 pub(crate) const CLAUDE_MD_IMPORT: &str = "@AGENTS.md";
 
-pub(crate) const PRE_COMMIT_HOOK: &str = "#!/bin/sh\nadr check --staged\nexit $?\n";
-pub(crate) const COMMIT_MSG_HOOK: &str = "#!/bin/sh\nadr check --message \"$1\"\nexit $?\n";
+pub(crate) const PRE_COMMIT_HOOK: &str = "#!/bin/sh\nadr check --staged --quiet\nexit $?\n";
+pub(crate) const COMMIT_MSG_HOOK: &str = "#!/bin/sh\nadr check --message \"$1\" --quiet\nexit $?\n";
 /// Decision P (19e1c023-a678-4842-a414-bb0e45c41601): a plain `sh` script,
 /// same shape as the other two hooks, that hands `adr check --push` git's
 /// own pre-push input -- the script never redirects its own stdin, so the
@@ -61,7 +61,7 @@ pub fn run(claude: bool, codex: bool) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("install", Actor::Agent));
+            eprintln!("{}", msg::not_a_repo("install", "", Actor::Agent));
             return 1;
         }
     };
@@ -83,8 +83,15 @@ pub fn run(claude: bool, codex: bool) -> i32 {
         return 1;
     }
 
-    create_if_missing(&root.join(repo::LEDGER_PATH), "");
-    create_if_missing(&root.join(banned::BAN_LIST), "");
+    for path in [root.join(repo::LEDGER_PATH), root.join(banned::BAN_LIST)] {
+        if let Err(e) = create_if_missing(&path, "") {
+            eprintln!(
+                "install: {}",
+                msg::write_failed(&path.display().to_string(), e, retry())
+            );
+            return 1;
+        }
+    }
 
     let mut messages = Vec::new();
 
@@ -138,7 +145,11 @@ pub fn run(claude: bool, codex: bool) -> i32 {
         }
     }
 
-    repo::git(&root, &["config", "core.hooksPath", ".githooks"]);
+    // Without this git runs none of the hooks written above.
+    if repo::git(&root, &["config", "core.hooksPath", ".githooks"]).is_none() {
+        eprintln!("install: {}", msg::hooks_path_failed("set", retry()));
+        return 1;
+    }
 
     match install_agents_md(&root) {
         Ok(m) => messages.push(m),
@@ -190,12 +201,11 @@ pub fn run(claude: bool, codex: bool) -> i32 {
     0
 }
 
-fn create_if_missing(path: &Path, content: &str) {
-    if !path.exists() {
-        if let Err(e) = fs::write(path, content) {
-            eprintln!("install: {}", msg::write_failed(&path.display().to_string(), e, retry()));
-        }
+fn create_if_missing(path: &Path, content: &str) -> Result<(), String> {
+    if path.exists() {
+        return Ok(());
     }
+    fs::write(path, content).map_err(|e| e.to_string())
 }
 
 /// Writes/refreshes `rel` (a hook path relative to `root`, e.g.
@@ -219,30 +229,30 @@ fn create_hook(root: &Path, rel: &str, content: &str) -> Result<String, String> 
             if repo::hook_is_executable(&path) {
                 return Ok(msg::hook_up_to_date(rel));
             }
-            make_executable(&path);
+            make_executable(&path)?;
             return Ok(msg::hook_written(rel));
         }
     }
     fs::write(&path, content).map_err(|e| e.to_string())?;
-    make_executable(&path);
+    make_executable(&path)?;
     Ok(msg::hook_written(rel))
 }
 
 /// Sets the mode git requires to run a hook (0o755 on unix; a no-op
 /// elsewhere, where `repo::hook_is_executable` is always true).
-fn make_executable(path: &Path) {
+fn make_executable(path: &Path) -> Result<(), String> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if let Ok(meta) = fs::metadata(path) {
-            let mut perms = meta.permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(path, perms).ok();
-        }
+        let meta = fs::metadata(path).map_err(|e| e.to_string())?;
+        let mut perms = meta.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(path, perms).map_err(|e| e.to_string())
     }
     #[cfg(not(unix))]
     {
         let _ = path;
+        Ok(())
     }
 }
 

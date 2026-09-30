@@ -148,6 +148,7 @@ fn check_does_not_report_no_term_for_a_real_term_in_an_unapproved_terms_file() {
     assert!(!text.contains("no term"), "{}", text);
 }
 
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 #[test]
 fn check_fails_a_depends_entry_on_a_retired_term() {
     let dir = init_repo();
@@ -164,7 +165,7 @@ fn check_fails_a_depends_entry_on_a_retired_term() {
     let text = stdout(&out);
     assert!(
         text.contains(
-            "plan: adrdom/decisions/example.md: \"1.1 Q?\" depends on \"widget\" which is no term; agent adds the term or names another"
+            "plan: adrdom/decisions/example.md: \"1.1 Q?\" names the retired term \"widget\"; agent names another term"
         ),
         "{}",
         text
@@ -205,7 +206,7 @@ fn check_fails_a_depends_entry_on_a_retired_term_by_id_while_open() {
     let text = stdout(&out);
     assert!(
         text.contains(&format!(
-            "plan: adrdom/decisions/example.md: \"1.1 Q?\" depends on {} which is not a current decision; agent names a current decision or removes the line",
+            "plan: adrdom/decisions/example.md: \"1.1 Q?\" depends on {} (\"widget\") which is not a current decision; agent names a current decision or removes the line",
             term_id
         )),
         "{}",

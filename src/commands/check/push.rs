@@ -22,7 +22,7 @@ pub fn run() -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("check", Actor::Agent));
+            eprintln!("{}", msg::not_a_repo("check", "", Actor::Agent));
             return 1;
         }
     };

@@ -36,7 +36,7 @@ const B: &str = "adrdom/decisions/b.md";
 // file which is not answered names none of the three. "adds the heading"
 // would copy that question into this file.
 #[test]
-fn an_entry_on_an_unanswered_question_of_another_file_names_what_a_line_may_name() {
+fn an_entry_on_an_unanswered_question_of_another_file_says_it_waits() {
     let dir = setup();
     let a = write_record(
         &dir,
@@ -54,9 +54,12 @@ fn an_entry_on_an_unanswered_question_of_another_file_names_what_a_line_may_name
             question("Does the widget beta hold?", "widget, Does the widget alpha hold?", "")
         ),
     );
+    // The tool holds alpha's state in the other file: the line says whose
+    // turn it is (nobody's but the owner's, through alpha), not a move the
+    // agent cannot make.
     let refusal = format!(
-        "{}: \"Does the widget beta hold?\" depends on \"Does the widget alpha hold?\" which is no heading in this file and no current decision; agent names a heading of this file or a current decision",
-        B
+        "{}: \"Does the widget beta hold?\" depends on \"Does the widget alpha hold?\" ({}) which is not answered yet; not yet, after it is answered",
+        B, A
     );
     let out = adr(&dir, &["check"], &[], "");
     assert!(stdout(&out).contains(&refusal), "{}", stdout(&out));
@@ -64,7 +67,7 @@ fn an_entry_on_an_unanswered_question_of_another_file_names_what_a_line_may_name
     assert!(!out.status.success());
     assert!(stderr(&out).contains(&refusal), "{}", stderr(&out));
 
-    // Once alpha is answered it is a current decision: the same line holds.
+    // Once alpha is answered it is a current decision: the entry holds.
     let alpha = extract_ids(&std::fs::read_to_string(&a).unwrap())[0].clone();
     assert!(adr_answer(&dir, &alpha, "A").status.success());
     let out = adr_owner(&dir, &["approve", b.to_str().unwrap()], "");
@@ -194,4 +197,142 @@ or moves it to another file when none does",
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
     assert!(stderr(&out).contains(&refusal), "{}", stderr(&out));
+}
+
+/// Writes `content` to `rel`, approves it, asks it and answers the question
+/// at `index` with A. Returns that question's id.
+fn answered(dir: &std::path::Path, rel: &str, content: &str, index: usize) -> String {
+    let path = write_record(dir, rel, content);
+    approve_record(dir, rel);
+    let out = adr(dir, &["ask", path.to_str().unwrap()], &[], "");
+    assert!(out.status.success(), "ask {} failed: {}", rel, stderr(&out));
+    let id = extract_ids(&std::fs::read_to_string(&path).unwrap())[index].clone();
+    let out = adr_answer(dir, &id, "A");
+    assert!(out.status.success(), "answer {} failed: {}", rel, stderr(&out));
+    id
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// A line that names an identifier names the question beside it, and a
+// stale tag is named with the file and line it sits at: the tool holds
+// both, the reader does not look them up.
+#[test]
+fn a_refusal_names_the_question_beside_its_identifier() {
+    let dir = setup();
+    const ALPHA: &str = "Does the widget alpha hold?";
+    const BETA: &str = "Does the widget beta hold?";
+    const GAMMA: &str = "Does the widget gamma hold?";
+    let alpha = answered(&dir, A, &format!("# A\n\n{}", question(ALPHA, "widget", "")), 0);
+
+    // Answered, no test tied to it.
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(
+        stdout(&out).contains(&format!(
+            "tested: {} (\"{}\"): untested, no tracked file holds \"adr: {}\"; agent writes",
+            alpha, ALPHA, alpha
+        )),
+        "{}",
+        stdout(&out)
+    );
+
+    // Beta stands on alpha; then gamma takes alpha's place.
+    write_test_comment(&dir, &alpha);
+    let beta = answered(
+        &dir,
+        B,
+        &format!("# B\n\n{}", question(BETA, &format!("widget, {}", ALPHA), "")),
+        0,
+    );
+    write_test_comment(&dir, &beta);
+
+    // Under alpha, show names the question of the other file that stands
+    // on it: what would lose its ground with alpha.
+    let shown = stdout(&adr(&dir, &["show", "--all"], &[], ""));
+    assert!(
+        shown.contains(&format!(
+            "  [answered A] {}\n    stands on: widget\n    stood on by: {} ({})\n",
+            ALPHA, BETA, B
+        )),
+        "{}",
+        shown
+    );
+
+    let mut a = std::fs::read_to_string(dir.join(A)).unwrap();
+    a.push_str(&format!(
+        "\n{}",
+        question(GAMMA, "widget", &format!("supersedes: {}\n", alpha))
+    ));
+    let gamma = answered(&dir, A, &a, 1);
+    write_test_comment(&dir, &gamma);
+
+    let out = adr(&dir, &["check"], &[], "");
+    let text = stdout(&out);
+    assert!(
+        text.contains(&format!(
+            "plan: {}: \"{}\" depends on {} (\"{}\") which is not a current decision; agent",
+            B, BETA, alpha, ALPHA
+        )),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains(&format!(
+            "tested: {} (\"{}\"): tied to a test and not a current decision at tested.txt:1; agent removes",
+            alpha, ALPHA
+        )),
+        "{}",
+        text
+    );
+
+    // A question that names alpha on its supersedes line after alpha left:
+    // approve refuses it and names the question beside the identifier.
+    let mut a = std::fs::read_to_string(dir.join(A)).unwrap();
+    a.push_str(&format!(
+        "\n### Does the widget delta hold?\ndepends: widget\nsupersedes: {}\n",
+        alpha
+    ));
+    std::fs::write(dir.join(A), &a).unwrap();
+    let out = adr_owner(&dir, &["approve", dir.join(A).to_str().unwrap()], "");
+    assert!(!out.status.success());
+    assert!(
+        stderr(&out).contains(&format!(
+            "approve: {}: \"Does the widget delta hold?\": supersedes {} (\"{}\"), which is not a current decision; agent fixes",
+            A,
+            alpha, ALPHA
+        )),
+        "{}",
+        stderr(&out)
+    );
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// The reader of `adr show` goes away while the tool still prints (`adr show
+// | head`). The tool ends without a word: a crash report there reads as a
+// fault of the repository.
+#[test]
+fn show_ends_without_a_word_when_its_reader_goes_away() {
+    use std::process::{Command, Stdio};
+    let dir = setup();
+    let mut plan = String::from("# A\n");
+    for n in ["one", "two", "three", "four"] {
+        plan.push_str(&format!("\n### Does the widget {} hold?\ndepends: widget\n", n));
+    }
+    write_record(&dir, A, &plan);
+
+    let mut child = Command::new(adr_bin())
+        .current_dir(&dir)
+        .arg("show")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    // The reading end is closed before the tool has read a file, so its
+    // first print meets the closed pipe.
+    drop(child.stdout.take());
+    let out = child.wait_with_output().unwrap();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.is_empty(), "{}", err);
+    assert_eq!(out.status.code(), Some(141), "{:?}", out.status);
 }

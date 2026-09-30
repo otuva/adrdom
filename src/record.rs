@@ -265,7 +265,7 @@ pub fn load_all_via(root: &Path, source: &crate::repo::Source) -> (Vec<RecordFil
         let rel = crate::state::rel_path(root, &f);
         match source.read(root, &rel) {
             Some(content) => records.push(build(f, rel, split_lines(&content))),
-            None => errors.push((f, "not found".to_string())),
+            None => errors.push((f, "it holds no text the tool can read".to_string())),
         }
     }
     (records, errors)
@@ -302,6 +302,18 @@ pub fn save(rf: &RecordFile) -> std::io::Result<()> {
 
 fn is_question_heading(line: &str) -> bool {
     line.starts_with("### ") && line.trim_end().ends_with('?')
+}
+
+/// The indices of the `### ` lines that do not end in `?`: a heading is a
+/// question (per "What does a topic file hold?"), so such a line is
+/// refused rather than read as prose.
+pub fn non_question_heading_lines(lines: &[String]) -> Vec<usize> {
+    lines
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| l.starts_with("### ") && !is_question_heading(l))
+        .map(|(i, _)| i)
+        .collect()
 }
 
 fn is_h1(line: &str) -> bool {
@@ -609,7 +621,20 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
         if line.trim().is_empty() {
             continue;
         }
-        if let Some(v) = kv(line, "depends") {
+        // A `### ` line without `?` is refused once, by its own line
+        // (`non_question_heading_lines`); it is not also a stray line.
+        if line.starts_with("### ") {
+            continue;
+        }
+        // A `depends:` with nothing after it names nothing: it counts as a
+        // depends line with no entries, so the section is refused as having
+        // no depends line (`record_refusals`) and nothing else about it.
+        let empty_depends = is_bare_depends_line(line);
+        if let Some(v) = kv(line, "depends").or_else(|| empty_depends.then(String::new)) {
+            if v.is_empty() {
+                depends_line_seen = true;
+                continue;
+            }
             if depends_line_seen {
                 depends_errors.push(format!("depends: second depends line, line {}", j + 1));
                 continue;
@@ -767,12 +792,18 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
     }
 }
 
-/// A heading whose body holds only blank lines, `depends:` lines, and an
-/// `id:` line (per "What does a depends line name?" and "Does a reference
+/// A heading whose body holds only blank lines, `depends:` lines, a
+/// `supersedes:` line (part of the plan, per "Does approve turn the
+/// supersedes line into identifiers?"), and an `id:` line (per "What does a depends line name?" and "Does a reference
 /// in a topic file carry the identifier of what it names?"): needs no id
 /// of its own to stay a skeleton, but `approve` gives every heading an id,
 /// skeletons included,
 /// so a skeleton must stay a skeleton once it has one.
+/// A `depends:` line with nothing after it, indented or not.
+fn is_bare_depends_line(line: &str) -> bool {
+    line.trim() == "depends:"
+}
+
 fn is_skeleton_range(lines: &[String], start: usize, end: usize) -> bool {
     ((start + 1)..end).all(|j| {
         let t = lines[j].trim();
@@ -780,7 +811,11 @@ fn is_skeleton_range(lines: &[String], start: usize, end: usize) -> bool {
         // space after the colon is a typo, not a real field, so it must not
         // be silently swallowed as skeleton -- it falls through and
         // `scan_body` reports it as a stray line instead.
-        t.is_empty() || t.starts_with("depends: ") || t.starts_with("id: ")
+        t.is_empty()
+            || t.starts_with("depends: ")
+            || is_bare_depends_line(t)
+            || t.starts_with("supersedes: ")
+            || t.starts_with("id: ")
     })
 }
 
@@ -935,6 +970,11 @@ pub fn plan_hash(rf: &RecordFile) -> String {
                 Dep::Text { text, .. } => text.as_str(),
             };
             out.push(format!("depends: {}", entry_text).trim_end().to_string());
+        }
+        // The `supersedes:` line is part of the plan (3b8da790 B): a line
+        // added, changed or removed after approval moves the hash.
+        if !s.supersedes.is_empty() {
+            out.push(format!("supersedes: {}", s.supersedes.join(", ")));
         }
     }
     sha256_hex(&out.join("\n"))
@@ -1845,6 +1885,32 @@ mod tests {
             "{:?}",
             sec.shape_errors
         );
+    }
+
+    #[test]
+    fn bare_depends_predicate_ignores_indent() {
+        assert!(is_bare_depends_line("depends:"));
+        assert!(is_bare_depends_line("  depends:  "));
+        assert!(!is_bare_depends_line("depends: x"));
+        assert!(!is_bare_depends_line("depends:x"));
+    }
+
+    #[test]
+    fn indented_bare_depends_is_the_same_as_bare_and_a_later_real_one_is_second() {
+        for bare in ["depends:", "  depends:"] {
+            let rf = rf_from(&format!("# T\n\n### Q?\n{bare}\ndepends: widget\n"));
+            let sec = &rf.sections[0];
+            assert!(
+                sec.shape_errors.iter().any(|e| e.starts_with("depends: second depends line")),
+                "{bare:?}: {:?}",
+                sec.shape_errors
+            );
+            assert!(
+                !sec.shape_errors.iter().any(|e| e.contains("stray")),
+                "{bare:?}: {:?}",
+                sec.shape_errors
+            );
+        }
     }
 
     // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a supersedes list split

@@ -1,5 +1,5 @@
 use super::{file_approval, Failure};
-use crate::actions::Refusal;
+use crate::actions::{self, Refusal};
 use crate::depends::{self, DepTarget};
 use crate::ledger::Ledger;
 use crate::msg;
@@ -51,35 +51,13 @@ pub(super) fn check_plan(
     // listing rather than off `records`, so a file whose name is wrong is
     // still told so even when its content also fails to parse into one.
     for f in repo::list_decision_files_via(root, source) {
-        let name = f.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        if !repo::valid_topic_file_name(name) {
-            out.push(Failure {
-                check: "plan".to_string(),
-                message: msg::bad_topic_file_name(&state::rel_path(root, &f)),
-            });
-            continue;
-        }
-        // "is named by it": a well-formed name must also be the file's h1
-        // topic, lowercased and hyphenated. A file with no h1 already fails
-        // its shape check, so it is skipped here.
         let rel = state::rel_path(root, &f);
         let topic = records_by_rel.get(rel.as_str()).and_then(|rf| rf.topic.as_deref());
-        if let Some(topic) = topic {
-            let expected = repo::expected_topic_file_stem(topic);
-            // A topic whose derived stem no file name can carry (a digit,
-            // or nothing left once non-letters go) has no legal name under
-            // 76bd7ef0 A: the topic text is what has to change.
-            if !repo::valid_topic_file_name(&format!("{}.md", expected)) {
-                out.push(Failure {
-                    check: "plan".to_string(),
-                    message: msg::topic_unnameable(&rel, topic),
-                });
-            } else if name.strip_suffix(".md") != Some(expected.as_str()) {
-                out.push(Failure {
-                    check: "plan".to_string(),
-                    message: msg::topic_file_name_mismatch(&rel, topic, &expected),
-                });
-            }
+        for m in actions::own_name_refusals(&rel, topic) {
+            out.push(Failure {
+                check: "plan".to_string(),
+                message: m,
+            });
         }
     }
 
@@ -173,24 +151,16 @@ pub(super) fn check_plan(
         // identical `### ` headings inside this one file would otherwise
         // never surface (and `derive_tiers`' heading index binds a depends
         // line to the first of the two only, silently).
-        let mut local_counts: HashMap<&str, usize> = HashMap::new();
         for sec in &rf.sections {
-            *local_counts.entry(sec.heading_text.as_str()).or_insert(0) += 1;
             heading_files
                 .entry(sec.heading_text.clone())
                 .or_default()
                 .push(rel.clone());
         }
-        let mut dup_headings: Vec<&str> = local_counts
-            .into_iter()
-            .filter(|(_, count)| *count > 1)
-            .map(|(h, _)| h)
-            .collect();
-        dup_headings.sort();
-        for heading in dup_headings {
+        for m in actions::duplicate_heading_refusals(&rel, &rf.sections) {
             out.push(Failure {
                 check: "plan".to_string(),
-                message: msg::duplicate_heading_in_file(heading, &rel),
+                message: m,
             });
         }
     }

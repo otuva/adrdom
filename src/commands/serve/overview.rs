@@ -60,7 +60,7 @@ pub(super) fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> 
         if !f.moot.is_empty() {
             body.push_str("<ul class=\"notes\">\n");
             for n in &f.moot {
-                body.push_str(&format!("<li>moot: {}</li>\n", esc(n)));
+                body.push_str(&format!("<li>no case left: {}</li>\n", esc(n)));
             }
             body.push_str("</ul>\n");
         }

@@ -389,7 +389,7 @@ fn check_tests_failure_when_untested() {
     assert!(out_text.contains("tested:"), "{}", out_text);
     assert!(out_text.contains("untested"), "{}", out_text);
     assert!(
-        out_text.contains(&format!("{}: untested", id)),
+        line_with(&out_text, &id, ": untested"),
         "check must name the untested decision by id: {}",
         out_text
     );
@@ -540,7 +540,7 @@ fn check_tests_ignores_a_tie_under_adrdom_and_an_untracked_tie() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains(&format!("{}: untested", id)),
+        line_with(&stdout(&out), &id, ": untested"),
         "a tie under adrdom/ must not count: {}",
         stdout(&out)
     );
@@ -551,7 +551,7 @@ fn check_tests_ignores_a_tie_under_adrdom_and_an_untracked_tie() {
     let out2 = adr(&dir, &["check"], &[], "");
     assert!(!out2.status.success());
     assert!(
-        stdout(&out2).contains(&format!("{}: untested", id)),
+        line_with(&stdout(&out2), &id, ": untested"),
         "an untracked tie must not count: {}",
         stdout(&out2)
     );
@@ -746,7 +746,7 @@ fn check_install_fails_when_pre_commit_hook_differs_and_passes_after_reinstall()
     assert!(adr(&dir, &["install"], &[], "").status.success());
     assert_eq!(
         std::fs::read_to_string(dir.join(".githooks/pre-commit")).unwrap(),
-        "#!/bin/sh\nadr check --staged\nexit $?\n",
+        "#!/bin/sh\nadr check --staged --quiet\nexit $?\n",
         "reinstall should restore the hook"
     );
 
@@ -896,7 +896,7 @@ fn installed_brief_tells_the_owner_may_edit_or_write_the_plan() {
     let agents = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
     assert!(
         agents.contains(
-            "The owner may strike, add or reorder headings before\napproving, or write the plan itself and approve it the same way."
+            "The owner may\nstrike, add or reorder headings before approving, or write the plan itself\nand approve it the same way."
         ),
         "{}",
         agents
@@ -1500,7 +1500,7 @@ fn check_fails_a_withdrawn_id_still_present_in_a_record() {
     let text = stdout(&out);
     assert!(text.contains("ids:"), "{}", text);
     assert!(
-        text.contains(&format!("withdrawn id {} still present in", wd_id)),
+        text.contains(&format!("withdrawn id {} (\"1.1 Some question?\") still present in", wd_id)),
         "{}",
         text
     );
@@ -1803,7 +1803,7 @@ fn check_fails_an_asked_section_whose_terms_line_names_a_missing_uuid() {
     let text = stdout(&out);
     assert!(
         text.contains(&format!(
-            "adrdom/decisions/example.md: 1.1 Some question?: term {} not found",
+            "adrdom/decisions/example.md: 1.1 Some question?: term {} (\"decision\") not found",
             missing_uuid
         )),
         "{}",
@@ -1838,7 +1838,7 @@ fn check_fails_an_asked_section_bound_to_a_retired_term() {
     let text = stdout(&out);
     assert!(
         text.contains(
-            "adrdom/decisions/example.md: 1.1 Some question?: bound term \"decision\" is retired"
+            "adrdom/decisions/example.md: 1.1 Some question?: uses the retired term \"decision\""
         ),
         "{}",
         text
@@ -2177,7 +2177,7 @@ fn check_staged_treats_a_staged_deleted_topic_file_as_gone() {
     let text = stdout(&out);
     assert!(!out.status.success(), "{}", text);
     assert!(
-        text.contains(&format!("asked row id {} not found in any topic file", id)),
+        text.contains(&format!("asked row id {} (\"3.1 Does this pass?\") not found in any topic file", id)),
         "a staged deletion must be read as the file being gone, at a commit: {}",
         text
     );
@@ -2212,7 +2212,7 @@ fn check_staged_reads_a_newly_staged_test_files_tie_from_the_index() {
     let out2 = adr(&dir, &["check"], &[], "");
     assert!(!out2.status.success(), "{}", stdout(&out2));
     assert!(
-        stdout(&out2).contains(&format!("{}: untested", id)),
+        line_with(&stdout(&out2), &id, ": untested"),
         "{}",
         stdout(&out2)
     );
@@ -2341,7 +2341,7 @@ fn check_fails_a_test_tied_to_a_decision_that_was_later_superseded() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "check should fail: {}", stdout(&out));
     assert!(
-        stdout(&out).contains(&format!("{}: stale (not a current decision)", old_id)),
+        line_with(&stdout(&out), &old_id, ": tied to a test and not a current decision"),
         "{}",
         stdout(&out)
     );
@@ -2371,8 +2371,188 @@ fn check_fails_a_test_tied_to_a_refused_decision() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "check should fail: {}", stdout(&out));
     assert!(
-        stdout(&out).contains(&format!("{}: stale (not a current decision)", id)),
+        line_with(&stdout(&out), &id, ": tied to a test and not a current decision"),
         "{}",
         stdout(&out)
+    );
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// A topic file the tool cannot read as text is judged by nothing. check
+// fails on it and names the move; a pass would let the file into a commit
+// with its questions unread.
+#[test]
+fn check_fails_a_topic_file_it_cannot_read() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_empty_terms(&dir);
+    std::fs::create_dir_all(dir.join("adrdom/decisions")).unwrap();
+    std::fs::write(dir.join("adrdom/decisions/broken.md"), [0x23u8, 0x20, 0xff, 0xfe, 0x0a]).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success(), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains(
+            "parse: adrdom/decisions/broken.md: cannot be read: it holds no text the tool can read; \
+agent fixes the file so it can be read as text (e.g. its encoding)"
+        ),
+        "{}",
+        stdout(&out)
+    );
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+// adr: 154e4b9a-c811-4a84-a522-598914eb39f1
+//
+// The commit hooks run check with --quiet. A commit that passes prints
+// nothing; one that fails prints what failed and no note. check run by hand
+// prints its notes as before.
+#[test]
+fn check_quiet_prints_what_failed_and_nothing_else() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_empty_terms(&dir);
+    run_git(&dir, &["add", "-A"]);
+
+    let pre_commit = std::fs::read_to_string(dir.join(".githooks/pre-commit")).unwrap();
+    let commit_msg = std::fs::read_to_string(dir.join(".githooks/commit-msg")).unwrap();
+    assert!(pre_commit.contains("adr check --staged --quiet"), "{}", pre_commit);
+    assert!(commit_msg.contains("adr check --message \"$1\" --quiet"), "{}", commit_msg);
+
+    let by_hand = adr(&dir, &["check", "--staged"], &[], "");
+    assert!(by_hand.status.success(), "{}", stdout(&by_hand));
+    assert!(stdout(&by_hand).contains("tested: 0"), "{}", stdout(&by_hand));
+
+    let quiet = adr(&dir, &["check", "--staged", "--quiet"], &[], "");
+    assert!(quiet.status.success(), "{}", stdout(&quiet));
+    assert_eq!(stdout(&quiet), "");
+
+    std::fs::write(dir.join("adrdom/decisions/broken.md"), [0x23u8, 0x20, 0xff, 0xfe, 0x0a]).unwrap();
+    let quiet = adr(&dir, &["check", "--quiet"], &[], "");
+    assert!(!quiet.status.success());
+    let lines: Vec<String> = stdout(&quiet).lines().map(|l| l.to_string()).collect();
+    assert_eq!(lines.len(), 1, "{:?}", lines);
+    assert!(lines[0].starts_with("parse: adrdom/decisions/broken.md: cannot be read"), "{:?}", lines);
+    assert!(!stdout(&quiet).contains("tested:"), "{}", stdout(&quiet));
+
+    // By hand, without the flag, the same failing repo still prints its notes.
+    let by_hand = adr(&dir, &["check"], &[], "");
+    assert!(!by_hand.status.success());
+    assert!(stdout(&by_hand).contains("tested: 0"), "{}", stdout(&by_hand));
+    assert!(stdout(&by_hand).lines().count() > 1, "{}", stdout(&by_hand));
+}
+
+const TWO_QUESTIONS: &str = r#"# Example
+
+### Does this pass?
+depends: pass
+
+Problem: whether it passes.
+
+Standard: clear yes or no.
+
+- A) Yes it passes.
+  Why: reasons.
+  Costs: costs.
+- B) No it does not.
+  Why: other reasons.
+  Costs: other costs.
+
+### Does that pass?
+depends: pass
+
+Problem: whether that passes.
+
+Standard: clear yes or no.
+
+- A) Yes that passes.
+  Why: reasons.
+  Costs: costs.
+- B) No that does not.
+  Why: other reasons.
+  Costs: other costs.
+"#;
+
+/// Two questions in one tier, both asked, none answered; returns their ids.
+fn ask_two_in_one_tier(dir: &std::path::Path) -> (String, String) {
+    let terms_content =
+        "# Terms\n\n## pass\nid: 11111111-1111-1111-1111-111111111111\ndefinition: Whether something is accepted.\naliases: \n";
+    std::fs::write(dir.join("adrdom/terms.md"), terms_content).unwrap();
+    approve_terms_via_ledger(dir, terms_content);
+    let record = write_record(dir, "adrdom/decisions/example.md", TWO_QUESTIONS);
+    approve_record(dir, "adrdom/decisions/example.md");
+    let out = adr(dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
+    (ids[0].clone(), ids[1].clone())
+}
+
+// adr: f2e31cbe-1ba2-4b77-910a-b9664ce0277f
+// adr: 33a45b9e-8150-488e-be70-7ab2ca9adaa6
+// adr: 154e4b9a-c811-4a84-a522-598914eb39f1
+//
+// An untested decision whose tier still holds a question that is not
+// answered is a note, not a failure; once the tier is answered it fails.
+#[test]
+fn check_an_untested_decision_waits_while_its_tier_is_open() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let (first, second) = ask_two_in_one_tier(&dir);
+    assert!(adr_answer(&dir, &first, "A").status.success());
+
+    let out = adr(&dir, &["check"], &[], "");
+    let text = stdout(&out);
+    assert!(out.status.success(), "{}", text);
+    assert!(
+        text.contains(
+            "waiting: adrdom/decisions/example.md: \"Does this pass?\" is untested; built once \"Does that pass?\" is answered"
+        ),
+        "{}",
+        text
+    );
+    let quiet = adr(&dir, &["check", "--quiet"], &[], "");
+    assert!(quiet.status.success(), "{}", stdout(&quiet));
+    assert_eq!(stdout(&quiet), "");
+    run_git(&dir, &["add", "-A"]);
+    let staged = adr(&dir, &["check", "--staged", "--quiet"], &[], "");
+    assert!(staged.status.success(), "{}", stdout(&staged));
+    assert_eq!(stdout(&staged), "");
+
+    assert!(adr_answer(&dir, &second, "A").status.success());
+    let out = adr(&dir, &["check"], &[], "");
+    let text = stdout(&out);
+    assert!(!out.status.success(), "{}", text);
+    assert!(line_with(&text, &first, ": untested"), "{}", text);
+    assert!(line_with(&text, &second, ": untested"), "{}", text);
+    assert!(!text.contains("waiting:"), "{}", text);
+
+    write_test_comment(&dir, &first);
+    write_test_comment(&dir, &second);
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "{}", stdout(&out));
+}
+
+// adr: f2e31cbe-1ba2-4b77-910a-b9664ce0277f
+//
+// A refused sibling counts as not answered: the note names the plan change.
+#[test]
+fn check_an_untested_decision_waits_on_a_refused_sibling() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let (first, second) = ask_two_in_one_tier(&dir);
+    assert!(adr_answer(&dir, &first, "A").status.success());
+    let out = adr_answer(&dir, &second, "refuse");
+    assert!(out.status.success(), "{}", stderr(&out));
+
+    let out = adr(&dir, &["check"], &[], "");
+    let text = stdout(&out);
+    assert!(out.status.success(), "{}", text);
+    assert!(
+        text.contains(
+            "waiting: adrdom/decisions/example.md: \"Does this pass?\" is untested; built once the plan changes, \"Does that pass?\" beside it is refused"
+        ),
+        "{}",
+        text
     );
 }

@@ -32,6 +32,9 @@ pub enum DepError {
     /// A term-shaped `Text` entry (not heading-shaped, i.e. not ending in
     /// `?`) that names no current term.
     NoTerm(String),
+    /// A term-shaped `Text` entry naming a retired term's name or alias
+    /// and no current term.
+    RetiredTerm(String),
     /// A heading-shaped `Text` entry naming no heading in its own file, but
     /// a current decision's heading text in more than one *other* topic
     /// file (the gap "Does a reference in a topic file carry the identifier
@@ -137,7 +140,14 @@ pub fn resolve_dep(
             }
             match phrase_lookup.get(&t.to_lowercase()) {
                 Some(id) => Ok(Some(DepTarget::Term(id.clone()))),
-                None => Err(DepError::NoTerm(t.to_string())),
+                None => {
+                    let retired = crate::terms::is_retired_phrase(terms_list, t);
+                    if retired {
+                        Err(DepError::RetiredTerm(t.to_string()))
+                    } else {
+                        Err(DepError::NoTerm(t.to_string()))
+                    }
+                }
             }
         }
     }
@@ -152,10 +162,15 @@ pub fn resolve_dep(
 /// `rf.derive_error` (via `normalize_cross_file_deps`) instead, skipping it
 /// before ever calling `resolve_dep` for the purpose of a per-entry
 /// message.
-pub fn dep_refusal_text(rel: &str, heading: &str, err: &DepError) -> String {
+///
+/// `name` is what the identifier of a `NotCurrentDecision` names, when the
+/// caller can tell: a term's name, or the heading of a question in any
+/// state.
+pub fn dep_refusal_text(rel: &str, heading: &str, err: &DepError, name: Option<&str>) -> String {
     match err {
-        DepError::NotCurrentDecision(id) => msg::dep_not_current_decision(rel, heading, id),
+        DepError::NotCurrentDecision(id) => msg::dep_not_current_decision(rel, heading, id, name),
         DepError::NoTerm(text) => msg::dep_no_term(rel, heading, text),
+        DepError::RetiredTerm(text) => msg::dep_retired_term(rel, heading, text),
         DepError::AmbiguousHeading { .. } => {
             unreachable!("a heading-shaped entry never reaches dep_refusal_text; see the doc comment above")
         }
@@ -344,6 +359,78 @@ pub fn normalize_cross_file_deps(
         // hidden behind the ambiguity.
         Err(e) => e,
     });
+}
+
+/// Why a `supersedes:` entry names no decision to replace.
+pub enum SupersedesError {
+    /// It names no current decision, by identifier or by heading.
+    NotCurrent,
+    /// Its heading is the heading of more than one current decision; the
+    /// (sorted) topic files they are in.
+    Ambiguous(Vec<String>),
+}
+
+/// The identifier of the current decision a `supersedes:` entry names (per
+/// "Does a reference in a topic file carry the identifier of what it
+/// names?": the agent writes the name, the tool turns it into the
+/// identifier). An entry is the identifier of a current decision, or the
+/// heading of exactly one, in this topic file or another;
+/// `cross_file_headings` is `cross_file_heading_index`, every current
+/// decision by its heading.
+pub fn resolve_supersedes(
+    entry: &str,
+    cross_file_headings: &HashMap<String, Vec<(String, String)>>,
+    led: &Ledger,
+) -> Result<String, SupersedesError> {
+    let entry = entry.trim();
+    if state::is_current(led, entry) {
+        return Ok(entry.to_string());
+    }
+    let matches: &[(String, String)] = cross_file_headings
+        .get(entry)
+        .map(|v| v.as_slice())
+        .unwrap_or(&[]);
+    match matches {
+        [] => Err(SupersedesError::NotCurrent),
+        [(_, id)] => Ok(id.clone()),
+        many => {
+            let mut files: Vec<String> = many.iter().map(|(rel, _)| rel.clone()).collect();
+            files.sort();
+            files.dedup();
+            Err(SupersedesError::Ambiguous(files))
+        }
+    }
+}
+
+/// The entries of a `supersedes:` line, from the pieces a split at every
+/// comma gave. A heading may hold a comma itself: pieces are joined again,
+/// the longest run first, while the joined text names a current decision
+/// (one or several), the same way a `depends:` line's pieces are joined
+/// against the headings of its file. A run that names none stays one entry
+/// for each piece.
+pub fn supersedes_entries(
+    pieces: &[String],
+    cross_file_headings: &HashMap<String, Vec<(String, String)>>,
+    led: &Ledger,
+) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < pieces.len() {
+        let mut chosen = i + 1;
+        for j in (i + 2..=pieces.len()).rev() {
+            let joined = pieces[i..j].join(", ");
+            if !matches!(
+                resolve_supersedes(&joined, cross_file_headings, led),
+                Err(SupersedesError::NotCurrent)
+            ) {
+                chosen = j;
+                break;
+            }
+        }
+        out.push(pieces[i..chosen].join(", "));
+        i = chosen;
+    }
+    out
 }
 
 /// One `bad_option_letter` message per letter in `letters` that isn't

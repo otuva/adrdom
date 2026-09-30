@@ -12,7 +12,7 @@ pub fn run() -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("unban", Actor::Owner));
+            eprintln!("{}", msg::not_a_repo("unban", "", Actor::Owner));
             return 1;
         }
     };
@@ -21,7 +21,7 @@ pub fn run() -> i32 {
     if std::io::stdin().read_to_string(&mut input).is_err() {
         eprintln!(
             "unban: {}",
-            msg::stdin_read_failed(Next::owner_runs("adr unban again"))
+            msg::stdin_read_failed(Next::owner_runs("adr unban"))
         );
         return 1;
     }

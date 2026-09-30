@@ -87,6 +87,37 @@ fn approving_again_with_no_change_writes_no_new_row() {
     assert!(out2.status.success(), "{}", stderr(&out2));
     assert!(stdout(&out2).contains("blame unchanged"), "{}", stdout(&out2));
     assert_eq!(blame_row_count(&dir), 1, "no second row should be written");
+    assert!(
+        !stdout(&out2).contains("rows rewritten"),
+        "nothing was written to the file: {}",
+        stdout(&out2)
+    );
+}
+
+// A row put back to the heading after the approval is written to its
+// identifier again; the approval stands, and the line says the file was
+// written.
+#[test]
+fn approving_again_says_when_it_rewrote_the_rows() {
+    let (dir, id1, _id2) = setup();
+    let blob = write_origin(&dir, "docs/x.md", "line 1\n");
+    let rows = "1-1\tdecision: Does this pass?\n";
+    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
+    let as_written = std::fs::read_to_string(&path).unwrap();
+
+    let out1 = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(out1.status.success(), "{}", stderr(&out1));
+
+    std::fs::write(&path, &as_written).unwrap();
+    let out2 = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(out2.status.success(), "{}", stderr(&out2));
+    assert_eq!(
+        stdout(&out2).trim_end(),
+        "approve: adrdom/blame/x.md: rows rewritten in the form approve writes; blame unchanged"
+    );
+    assert_eq!(blame_row_count(&dir), 1, "no second row should be written");
+    let saved = std::fs::read_to_string(&path).unwrap();
+    assert!(saved.contains(&format!("decision: {}", id1)), "{}", saved);
 }
 
 // --- coverage: gap, beyond, and overlap -----------------------------------

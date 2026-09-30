@@ -193,7 +193,8 @@ fn plan_lifecycle_end_to_end() {
     assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
-        "ask: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" depends on \"1.1 What color is the widget?\" without an answer set; agent writes =A, =A|B or =* on that depends line"
+        "ask: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" depends on \"1.1 What color is the widget?\" without an answer set; agent writes =A, =A|B or =* on that depends line\n\
+         ask: adrdom/decisions/widget.md: \"1.3 Does the paint need a second coat?\" depends on \"1.1 What color is the widget?\" without an answer set; agent writes =A, =A|B or =* on that depends line"
     );
     // Nothing written on refusal.
     let after = std::fs::read_to_string(&record).unwrap();
@@ -222,12 +223,12 @@ fn plan_lifecycle_end_to_end() {
         printed
     );
     assert!(
-        printed.contains("  assumes: \"1.2 Does the paint match the widget's color?\"=A"),
+        printed.contains("  stood on by: \"1.2 Does the paint match the widget's color?\" under A"),
         "{}",
         printed
     );
     assert!(
-        printed.contains("  assumes: \"1.3 Does the paint need a second coat?\"=*"),
+        printed.contains("  stood on by: \"1.3 Does the paint need a second coat?\" under *"),
         "{}",
         printed
     );
@@ -243,21 +244,29 @@ fn plan_lifecycle_end_to_end() {
         ledger_after_ask1
     );
 
-    // --- 3. a candidate outside the open tier is refused, blocker named ---
+    // --- 3. a candidate outside the open tier is left for a later run ------
     let with_q2_body = state_3.replacen(&q2_marker(&q1_id, &q2_id), &q2_body_insert(&q1_id, &q2_id), 1);
     assert_ne!(with_q2_body, state_3, "Q2 marker must be found");
     std::fs::write(&record, &with_q2_body).unwrap();
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
+    assert!(out.status.success(), "ask should print nothing to ask: {}", stderr(&out));
+    assert!(stderr(&out).is_empty(), "{}", stderr(&out));
+    let printed = stdout(&out);
+    assert!(
+        printed.starts_with("ask: nothing to ask in ") && printed.lines().next().unwrap().ends_with("widget.md"),
+        "{}",
+        printed
+    );
     assert_eq!(
-        stderr(&out).trim_end(),
+        printed.lines().skip(1).collect::<Vec<_>>().join("\n"),
         format!(
-            "ask: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" is in tier 2; tier 1 is open, waiting on \"1.1 What color is the widget?\"; owner runs: adr answer {}@{} <letter> on it first",
+            "  owner runs: adr answer {}@{} <letter>  # \"1.1 What color is the widget?\"\n  not yet, after the questions named above: \"1.2 Does the paint match the widget's color?\", \"1.3 Does the paint need a second coat?\"",
             q1_id,
             current_version(&dir, &q1_id)
         )
     );
+    assert_eq!(asked_row_count(&dir), 1, "Q2 is not asked");
 
     // Remove that body again.
     std::fs::write(&record, &state_3).unwrap();
@@ -271,7 +280,7 @@ fn plan_lifecycle_end_to_end() {
     let check_out = adr(&dir, &["check"], &[], "");
     assert!(
         stdout(&check_out).contains(
-            "moot: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" stands on \"1.1 What color is the widget?\"=A, answered B"
+            "no case left: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" stands on \"1.1 What color is the widget?\"=A, answered B"
         ),
         "{}",
         stdout(&check_out)
@@ -285,7 +294,7 @@ fn plan_lifecycle_end_to_end() {
     assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
-        "ask: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" is moot: stands on \"1.1 What color is the widget?\"=A, answered B; agent drops or replaces the heading, owner runs: adr approve adrdom/decisions/widget.md"
+        "ask: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" has no case left: it stands on \"1.1 What color is the widget?\" under A, and the answer was B; agent drops or replaces the heading, owner runs: adr approve adrdom/decisions/widget.md"
     );
 
     // Revert Q2 to skeleton again, then give Q3 a body: it asks fine.
@@ -353,7 +362,7 @@ fn plan_lifecycle_end_to_end() {
         stdout(&out)
     );
 
-    let out = adr(&dir, &["show"], &[], "");
+    let out = adr(&dir, &["show", "--all"], &[], "");
     assert!(
         stdout(&out).contains("[refused] 1.3 Does the paint need a second coat?"),
         "{}",

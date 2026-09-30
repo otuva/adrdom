@@ -13,8 +13,7 @@ use std::io::Read;
 /// `aliases`/`retired` are used here, so this keeps working whatever else
 /// changes in the terms file's shape. A retired term is never matched
 /// (per "Does a retired term keep its words?"): this pairing sees current terms only, same as `terms::resolve`.
-fn resolve_term_uuid(root: &std::path::Path, name: &str) -> Option<String> {
-    let tf = state::load_terms(root)?;
+fn resolve_term_uuid(tf: &crate::terms::TermsFile, name: &str) -> Option<String> {
     let needle = name.trim().to_lowercase();
     for t in &tf.terms {
         if t.retired {
@@ -34,7 +33,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("ban", Actor::Agent));
+            eprintln!("{}", msg::not_a_repo("ban", "", Actor::Agent));
             return 1;
         }
     };
@@ -46,13 +45,19 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     }
 
     let uuid: Option<String> = match &term {
-        Some(name) => match resolve_term_uuid(&root, name) {
-            Some(u) => Some(u),
-            None => {
-                eprintln!("ban: {}", msg::no_such_term(name));
+        Some(name) => {
+            let Some(tf) = state::load_terms(&root) else {
+                eprintln!("ban: {}", msg::no_terms_file_for_term(name));
                 return 1;
+            };
+            match resolve_term_uuid(&tf, name) {
+                Some(u) => Some(u),
+                None => {
+                    eprintln!("ban: {}", msg::no_such_term(name));
+                    return 1;
+                }
             }
-        },
+        }
         None => None,
     };
 
@@ -96,11 +101,11 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
         // or a same-time `banned`/`unbanned` tie the ledger has since
         // settled with a later row the file never picked up. Bring it back
         // to exactly the ledger's banned set when it doesn't already match,
-        // same as `--rebuild` would write it; left untouched (no write at
-        // all) when it already does, so this changes neither the printed
-        // text nor the exit code of the no-new-entries case.
+        // same as `--rebuild` would write it, and said in the printed line;
+        // left untouched (no write at all) when it already does.
         let expected = banned::sorted_content(&banned_now);
         if std::fs::read_to_string(&banned_path).unwrap_or_default() != expected {
+            let n = banned_now.len();
             if let Err(e) = banned::write_sorted(&banned_path, banned_now) {
                 eprintln!(
                     "ban: {}",
@@ -108,6 +113,8 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
                 );
                 return 1;
             }
+            println!("ban: {}", msg::no_new_entries_list_rewritten(n));
+            return 0;
         }
         println!("ban: {}", msg::no_new_entries());
         return 0;

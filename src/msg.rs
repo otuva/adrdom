@@ -88,6 +88,16 @@ pub fn create_failed(target: &str, e: impl Display, next: Next) -> String {
     refuse(format!("failed to create {}: {}", target, e), next)
 }
 
+pub fn remove_failed(target: &str, e: impl Display, next: Next) -> String {
+    refuse(format!("failed to remove {}: {}", target, e), next)
+}
+
+/// `git config` did not take the change to `core.hooksPath`. `doing` is
+/// "set" or "unset".
+pub fn hooks_path_failed(doing: &str, next: Next) -> String {
+    refuse(format!("git config failed to {} core.hooksPath", doing), next)
+}
+
 pub fn parse_failed(target: &str, e: impl Display, next: Next) -> String {
     refuse(format!("{}: {}", target, e), next)
 }
@@ -103,12 +113,22 @@ pub fn stdin_read_failed(next: Next) -> String {
 /// be running `cmd` (the owner, for the five owner-only commands, since
 /// `owner_authorized` already gated by the time this fires; the agent for
 /// every other command).
-pub fn not_a_repo(cmd: &str, actor: Actor) -> String {
+/// `args` is what the command was given, so the owner's line is the whole
+/// command.
+pub fn not_a_repo(cmd: &str, args: &str, actor: Actor) -> String {
+    let command = if args.is_empty() {
+        format!("adr {}", cmd)
+    } else {
+        format!("adr {} {}", cmd, args)
+    };
     let next = match actor {
         Actor::Agent => Next::agent("changes into the repository and retries"),
-        Actor::Owner => Next::owner_runs(format!("adr {} again from inside the repository", cmd)),
+        Actor::Owner => Next::owner_runs(command),
     };
-    refuse(format!("{}: not inside a git repository", cmd), next)
+    refuse(
+        format!("{}: not inside a git repository; it runs inside one", cmd),
+        next,
+    )
 }
 
 /// The refusal every owner-only command prints when stdin isn't an
@@ -221,13 +241,17 @@ pub fn circular_definition(chain: &str) -> String {
 
 /// A dependent (a decision's or a term's own `terms:` line) still names a
 /// uuid that no longer exists in `adrdom/terms.md` at all.
-pub fn term_removed_but_carried(uuid: &str, source: &str) -> String {
+/// `word` is the word `source` names the term by, when it names it by a
+/// word (its terms line); a depends line names it by the identifier alone.
+pub fn term_removed_but_carried(uuid: &str, word: Option<&str>, source: &str) -> String {
     refuse(
         format!(
-            "adrdom/terms.md: term {} removed but carried by {}",
-            uuid, source
+            "adrdom/terms.md: term {} removed but used by {}",
+            named(uuid, word),
+            source
         ),
-        Next::owner_runs("adr approve adrdom/terms.md after restoring the term, marked retired: yes"),
+        Next::agent("restores the term in adrdom/terms.md, marked retired: yes")
+            .and_owner_runs("adr approve adrdom/terms.md"),
     )
 }
 
@@ -240,7 +264,7 @@ pub fn term_removed_but_carried(uuid: &str, source: &str) -> String {
 pub fn term_retired_but_carried(name: &str, source: &str, next: Next) -> String {
     refuse(
         format!(
-            "adrdom/terms.md: term \"{}\" retired but carried by {}",
+            "adrdom/terms.md: term \"{}\" retired but used by {}",
             name, source
         ),
         next,
@@ -261,7 +285,7 @@ pub fn term_reword_and_approve() -> Next {
 pub fn word_moved_off_term(word: &str, term_name: &str, source: &str, next: Next) -> String {
     refuse(
         format!(
-            "adrdom/terms.md: word \"{}\" moved off term \"{}\", carried by {}",
+            "adrdom/terms.md: word \"{}\" no longer names term \"{}\", used by {}",
             word, term_name, source
         ),
         next,
@@ -295,6 +319,15 @@ pub fn shape_error(rel: &str, e: &str) -> String {
     refuse(
         format!("{}: {}", rel, e),
         Next::agent("fixes the topic file"),
+    )
+}
+
+/// A `### ` line that does not end in `?` (per "What does a topic file
+/// hold?": a heading is a question).
+pub fn heading_not_a_question(rel: &str, line: usize) -> String {
+    refuse(
+        format!("{}: line {}: a heading is a question ending in ?", rel, line),
+        Next::agent("rewrites the line"),
     )
 }
 
@@ -338,11 +371,13 @@ pub fn frozen_depends_edited(rel: &str, heading: &str) -> String {
     )
 }
 
-pub fn dep_not_current_decision(rel: &str, heading: &str, id: &str) -> String {
+pub fn dep_not_current_decision(rel: &str, heading: &str, id: &str, name: Option<&str>) -> String {
     refuse(
         format!(
             "{}: \"{}\" depends on {} which is not a current decision",
-            rel, heading, id
+            rel,
+            heading,
+            named(id, name)
         ),
         Next::agent("names a current decision or removes the line"),
     )
@@ -355,6 +390,21 @@ pub fn dep_no_term(rel: &str, heading: &str, text: &str) -> String {
             rel, heading, text
         ),
         Next::agent("adds the term or names another"),
+    )
+}
+
+/// `show <file>` on a file that is not one of the topic files.
+pub fn show_not_a_topic_file(rel: &str) -> String {
+    refuse(
+        format!("{} is not a topic file", rel),
+        Next::agent("names a file under adrdom/decisions"),
+    )
+}
+
+pub fn dep_retired_term(rel: &str, heading: &str, text: &str) -> String {
+    refuse(
+        format!("{}: \"{}\" names the retired term \"{}\"", rel, heading, text),
+        Next::agent("names another term"),
     )
 }
 
@@ -481,6 +531,30 @@ fn derive_next(e: &DeriveError) -> Next {
     }
 }
 
+/// The tail of a refusal whose only move is to wait: no agent move.
+const WAIT_TAIL: &str = "; not yet, after it is answered";
+
+/// A `depends:` entry names a question of another topic file that is not
+/// answered yet.
+pub fn dep_waits_on_other_file(rel: &str, section: &str, entry: &str, other_rel: &str) -> String {
+    format!(
+        "{}: \"{}\" depends on \"{}\" ({}) which is not answered yet{}",
+        rel, section, entry, other_rel, WAIT_TAIL
+    )
+}
+
+/// A `depends:` entry names a question of another topic file that is
+/// refused.
+pub fn dep_on_refused_in_other_file(rel: &str, section: &str, entry: &str, other_rel: &str) -> String {
+    refuse(
+        format!(
+            "{}: \"{}\" depends on \"{}\" ({}) which is refused",
+            rel, section, entry, other_rel
+        ),
+        Next::agent("names another or drops the entry"),
+    )
+}
+
 pub fn derive_error(rel: &str, e: &DeriveError) -> String {
     refuse(derive_what(rel, e), derive_next(e))
 }
@@ -508,42 +582,107 @@ pub fn answered_id_missing(id: &str, heading: &str) -> String {
 
 pub fn id_not_found(id: &str) -> String {
     refuse(
-        format!("id {} not found in any topic file", id),
-        Next::owner_runs("adr answer with a real id"),
+        format!(
+            "id {} not found in any topic file; show prints the id of every question that waits for an answer",
+            id
+        ),
+        Next::owner_runs("adr show"),
+    )
+}
+
+/// The id was in no topic file that could be read, and `unread` (paths,
+/// never empty) could not be read at all: the question may be in one of
+/// them.
+pub fn id_not_found_some_unread(id: &str, unread: &[String]) -> String {
+    refuse(
+        format!(
+            "id {} not found in the topic files that could be read; cannot read {}",
+            id,
+            unread.join(", ")
+        ),
+        Next::agent("fixes each file so it can be read as text (e.g. its encoding)"),
     )
 }
 
 pub fn already_refused(heading: &str) -> String {
     refuse(
-        format!("\"{}\" is already refused", heading),
-        Next::owner_runs("adr answer a different, still-open id"),
+        format!(
+            "\"{}\" is already refused; show prints every question that waits for an answer",
+            heading
+        ),
+        Next::owner_runs("adr show"),
     )
 }
 
 pub fn already_answered(heading: &str) -> String {
     refuse(
-        format!("\"{}\" is already answered", heading),
-        Next::owner_runs("adr answer a different, still-open id"),
-    )
-}
-
-pub fn letter_not_an_option(letter: char, heading: &str) -> String {
-    refuse(
         format!(
-            "letter {} does not name an option in \"{}\"",
-            letter, heading
-        ),
-        Next::owner_runs("adr answer with a letter the question actually has"),
-    )
-}
-
-pub fn not_in_asked_state(heading: &str) -> String {
-    refuse(
-        format!(
-            "\"{}\" is not currently in the 'asked' state at its current hash",
+            "\"{}\" is already answered; show prints every question that waits for an answer",
             heading
         ),
-        Next::agent("runs adr ask so it is asked again at the current hash"),
+        Next::owner_runs("adr show"),
+    )
+}
+
+/// `letters` are the letters of the question's options; `id` and `version`
+/// are the ones the owner gave, both good when this is printed.
+pub fn letter_not_an_option(letter: char, heading: &str, letters: &[char], id: &str, version: &str) -> String {
+    let has: Vec<String> = letters.iter().map(|c| c.to_string()).collect();
+    refuse(
+        format!(
+            "letter {} does not name an option in \"{}\"; its options are {}",
+            letter,
+            heading,
+            has.join(", ")
+        ),
+        Next::owner_runs(format!("adr answer {}@{} <letter>", id, version)),
+    )
+}
+
+pub fn not_in_asked_state(heading: &str, rel: &str) -> String {
+    refuse(
+        format!("\"{}\" is edited since it was asked", heading),
+        Next::agent(format!("runs adr ask {}", rel)),
+    )
+}
+
+/// The question's latest ledger state is `withdrawn`: it was struck from
+/// the plan, and `ask` never picks it up.
+pub fn already_withdrawn(heading: &str) -> String {
+    refuse(
+        format!(
+            "\"{}\" was withdrawn from the plan; show prints every question that waits for an answer",
+            heading
+        ),
+        Next::owner_runs("adr show"),
+    )
+}
+
+/// The question's latest ledger state is `superseded`: a newer decision
+/// replaced it.
+pub fn already_superseded(heading: &str) -> String {
+    refuse(
+        format!(
+            "\"{}\" is already superseded; show prints every question that waits for an answer",
+            heading
+        ),
+        Next::owner_runs("adr show"),
+    )
+}
+
+/// A question with a body that no `ask` has put to the owner.
+pub fn not_asked_yet(heading: &str, rel: &str) -> String {
+    refuse(
+        format!("\"{}\" is not asked yet", heading),
+        Next::agent(format!("runs adr ask {}", rel)),
+    )
+}
+
+/// A question with no body yet: nothing to ask or answer.
+pub fn not_written(heading: &str) -> String {
+    refuse(
+        format!("\"{}\" has no body yet", heading),
+        Next::agent("writes its body"),
     )
 }
 
@@ -551,11 +690,19 @@ pub fn not_in_asked_state(heading: &str) -> String {
 /// carry the version of the question the owner read?"): a bare id is
 /// refused before it is ever looked up, since there is nothing yet to
 /// check it against.
-pub fn answer_missing_version(id: &str) -> String {
-    refuse(
-        format!("{}: no version given", id),
-        Next::owner_runs("adr show to read the question and answer with the printed id@version"),
-    )
+/// `asked` is the heading and the version of the question `id` names, when
+/// it names one that is asked: the command is then printed whole.
+pub fn answer_missing_version(id: &str, asked: Option<(&str, &str)>) -> String {
+    match asked {
+        Some((heading, version)) => refuse(
+            format!("{}: no version given", named(id, Some(heading))),
+            Next::owner_runs(format!("adr answer {}@{} <letter>", id, version)),
+        ),
+        None => refuse(
+            format!("{}: no version given", id),
+            Next::owner_runs("adr show"),
+        ),
+    }
 }
 
 /// The version on an answer (from the terminal's `<id>@<version>` or the
@@ -563,10 +710,17 @@ pub fn answer_missing_version(id: &str) -> String {
 /// "Does an answer carry the version of the question the owner read?"):
 /// the question moved -- usually a re-ask after an edit -- since that
 /// version was read.
-pub fn stale_version(heading: &str) -> String {
+///
+/// The refusal never prints the current version: the version on an answer
+/// is the owner's receipt of having read the text, so the owner is sent to
+/// read the file as it is now.
+pub fn stale_version(heading: &str, rel: &str) -> String {
     refuse(
-        format!("\"{}\" has moved since that version was read", heading),
-        Next::owner_runs("adr show to read it again and answer with the printed id@version"),
+        format!(
+            "\"{}\" has moved since that version was read; show prints it as it is now",
+            heading
+        ),
+        Next::owner_runs(format!("adr show {}", rel)),
     )
 }
 
@@ -577,35 +731,47 @@ pub fn stale_version(heading: &str) -> String {
 /// instead of `stale_version`.
 pub fn invalid_version_format(version: &str) -> String {
     refuse(
-        format!("\"{}\" is not a valid version", version),
-        Next::owner_runs("adr show and copies the printed id@version"),
+        format!(
+            "\"{}\" is not a valid version; show prints the id and version of every question that waits for an answer",
+            version
+        ),
+        Next::owner_runs("adr show"),
     )
 }
 
-pub fn no_terms_line(id: &str) -> String {
-    refuse(format!("{}: no terms line", id), Next::agent("re-asks"))
-}
-
-pub fn malformed_terms_line(id: &str) -> String {
+pub fn no_terms_line(id: &str, heading: &str) -> String {
     refuse(
-        format!("{}: malformed terms line", id),
+        format!("{}: no terms line", named(id, Some(heading))),
         Next::agent("re-asks"),
     )
 }
 
-pub fn terms_line_names_gone_term(id: &str, uuid: &str) -> String {
+pub fn malformed_terms_line(id: &str, heading: &str) -> String {
+    refuse(
+        format!("{}: malformed terms line", named(id, Some(heading))),
+        Next::agent("re-asks"),
+    )
+}
+
+/// `word` is the word of the question the gone term was named by.
+pub fn terms_line_names_gone_term(id: &str, heading: &str, uuid: &str, word: &str) -> String {
     refuse(
         format!(
             "{}: terms line names term {} that no longer exists",
-            id, uuid
+            named(id, Some(heading)),
+            named(uuid, Some(word))
         ),
         Next::agent("re-asks"),
     )
 }
 
-pub fn terms_line_names_retired_term(id: &str, name: &str) -> String {
+pub fn terms_line_names_retired_term(id: &str, heading: &str, name: &str) -> String {
     refuse(
-        format!("{}: terms line names retired term \"{}\"", id, name),
+        format!(
+            "{}: terms line names retired term \"{}\"",
+            named(id, Some(heading)),
+            name
+        ),
         Next::agent("re-asks"),
     )
 }
@@ -626,9 +792,19 @@ pub fn refused_summary(heading: &str, rel: &str) -> String {
     )
 }
 
-pub fn supersedes_not_current(id: &str) -> String {
+/// An identifier with the name the tool can put to it (a heading, a term)
+/// right beside it, `<id> ("<name>")`, or the identifier alone when the
+/// tool holds no name for it.
+fn named(id: &str, name: Option<&str>) -> String {
+    match name {
+        Some(n) => format!("{} (\"{}\")", id, n),
+        None => id.to_string(),
+    }
+}
+
+pub fn supersedes_not_current(id: &str, name: Option<&str>) -> String {
     refuse(
-        format!("supersedes target {} is not a current decision", id),
+        format!("supersedes target {} is not a current decision", named(id, name)),
         Next::agent("fixes the supersedes line"),
     )
 }
@@ -658,7 +834,7 @@ pub fn plan_not_approved(rel: &str) -> String {
 
 pub fn context_not_approved(rel: &str) -> String {
     refuse(
-        format!("{}: context not approved", rel),
+        format!("{}: prose not approved", rel),
         Next::owner_runs(format!("adr approve {}", rel)),
     )
 }
@@ -673,102 +849,30 @@ pub fn missing_answer_set(rel: &str, dependent: &str, target: &str) -> String {
     )
 }
 
-pub fn depends_on_refused(rel: &str, heading: &str, target: &str) -> String {
-    refuse(
-        format!(
-            "{}: \"{}\" stands on refused \"{}\"",
-            rel, heading, target
-        ),
-        Next::agent("re-plans").and_owner_runs(format!("adr approve {}", rel)),
-    )
-}
-
-pub fn ask_supersedes_not_current(rel: &str, heading: &str, old: &str) -> String {
+pub fn ask_supersedes_not_current(rel: &str, heading: &str, old: &str, name: Option<&str>) -> String {
     refuse(
         format!(
             "{}: \"{}\": supersedes {}, which is not a current decision",
-            rel, heading, old
+            rel,
+            heading,
+            named(old, name)
         ),
         Next::agent("fixes the supersedes line"),
     )
 }
 
-pub fn tier_blocked_refused(
-    rel: &str,
-    heading: &str,
-    cand_tier: usize,
-    open_tier: usize,
-    blocker: &str,
-) -> String {
+/// A `supersedes:` entry written as a heading that more than one current
+/// decision carries.
+pub fn ask_supersedes_ambiguous(rel: &str, heading: &str, entry: &str, files: &[String]) -> String {
     refuse(
         format!(
-            "{}: \"{}\" is in tier {}; tier {} is open, waiting on refused \"{}\"",
-            rel, heading, cand_tier, open_tier, blocker
+            "{}: \"{}\": supersedes \"{}\", which is a current decision in more than one place: {}",
+            rel,
+            heading,
+            entry,
+            files.join(", ")
         ),
-        Next::agent("re-plans").and_owner_runs(format!("adr approve {}", rel)),
-    )
-}
-
-pub fn tier_blocked_waiting(
-    rel: &str,
-    heading: &str,
-    cand_tier: usize,
-    open_tier: usize,
-    blocker: &str,
-    blocker_id: &str,
-    blocker_version: &str,
-) -> String {
-    refuse(
-        format!(
-            "{}: \"{}\" is in tier {}; tier {} is open, waiting on \"{}\"",
-            rel, heading, cand_tier, open_tier, blocker
-        ),
-        Next::owner_runs(format!("adr answer {}@{} <letter> on it first", blocker_id, blocker_version)),
-    )
-}
-
-/// The open tier still holds a bare skeleton heading (no body yet), so a
-/// later tier's candidate waits on the agent, not the owner, to write one.
-pub fn tier_blocked_unasked(
-    rel: &str,
-    heading: &str,
-    cand_tier: usize,
-    open_tier: usize,
-    blocker: &str,
-) -> String {
-    tier_blocked_on(rel, heading, cand_tier, open_tier, blocker, "writes its body and asks it first")
-}
-
-/// The open tier still holds a question with a real body -- `state::
-/// tier_blocker` only ever returns one, so this is never a skeleton --
-/// that nobody has run `ask` on yet, so a later tier's candidate waits on
-/// the agent to ask it, not to write a body that already exists.
-pub fn tier_blocked_needs_ask(
-    rel: &str,
-    heading: &str,
-    cand_tier: usize,
-    open_tier: usize,
-    blocker: &str,
-) -> String {
-    tier_blocked_on(rel, heading, cand_tier, open_tier, blocker, "asks it first")
-}
-
-/// The one sentence both tier-blocked refusals share; only the agent's
-/// next move differs.
-fn tier_blocked_on(
-    rel: &str,
-    heading: &str,
-    cand_tier: usize,
-    open_tier: usize,
-    blocker: &str,
-    next: &str,
-) -> String {
-    refuse(
-        format!(
-            "{}: \"{}\" is in tier {}; tier {} is open, waiting on unasked \"{}\"",
-            rel, heading, cand_tier, open_tier, blocker
-        ),
-        Next::agent(next),
+        ambiguous_heading_next(),
     )
 }
 
@@ -781,7 +885,7 @@ pub fn moot_candidate(
 ) -> String {
     refuse(
         format!(
-            "{}: \"{}\" is moot: stands on \"{}\"={}, answered {}",
+            "{}: \"{}\" has no case left: it stands on \"{}\" under {}, and the answer was {}",
             rel, heading, target, set_str, letter
         ),
         Next::agent("drops or replaces the heading").and_owner_runs(format!("adr approve {}", rel)),
@@ -797,14 +901,14 @@ pub fn banned_word_in_candidate(rel: &str, heading: &str, suffix: &str) -> Strin
 
 pub fn pairs_no_term(rel: &str, heading: &str) -> String {
     refuse(
-        format!("{}: \"{}\" pairs no term", rel, heading),
+        format!("{}: \"{}\" uses no term", rel, heading),
         Next::agent("adds the term to adrdom/terms.md or rewrites the question"),
     )
 }
 
 pub fn pairs_no_term_at_write(rel: &str, heading: &str) -> String {
     refuse(
-        format!("{}: \"{}\": pairs no term at write time", rel, heading),
+        format!("{}: \"{}\": uses no term", rel, heading),
         Next::agent("re-runs adr ask"),
     )
 }
@@ -815,7 +919,7 @@ pub fn no_id_line(rel: &str, heading: &str) -> String {
             "{}: \"{}\": no id line found to write the terms line after",
             rel, heading
         ),
-        Next::owner_runs(format!("adr approve {} again", rel)),
+        Next::owner_runs(format!("adr approve {}", rel)),
     )
 }
 
@@ -849,6 +953,9 @@ pub fn next_plan_unapproved(rel: &str) -> String {
 /// A refusal `approve` would print for the plan, whole, with the move it
 /// names: the agent reads it here and not among the lines of `check`.
 pub fn next_clears(refusal: &str) -> String {
+    if let Some(what) = refusal.strip_suffix(WAIT_TAIL) {
+        return format!("not yet: {}", what);
+    }
     Next::agent(format!("clears: {}", refusal)).render()
 }
 
@@ -865,12 +972,12 @@ pub fn next_answer_set(dependent: &str, target: &str) -> String {
 }
 
 pub fn next_ask(rel: &str, headings: &[String]) -> String {
-    Next::agent(format!("runs adr ask {} for {}", rel, quoted(headings))).render()
+    Next::agent(format!("runs adr ask {}  # {}", rel, quoted(headings))).render()
 }
 
 pub fn next_answer(id: &str, version: &str, heading: &str) -> String {
     format!(
-        "{} for \"{}\"",
+        "{}  # \"{}\"",
         Next::owner_runs(format!("adr answer {}@{} <letter>", id, version)).render(),
         heading
     )
@@ -885,7 +992,7 @@ pub fn next_refused(heading: &str) -> String {
 }
 
 pub fn next_moot(rel: &str, heading: &str) -> String {
-    Next::agent(format!("drops or replaces \"{}\", which is moot", heading))
+    Next::agent(format!("drops or replaces \"{}\", which has no case left", heading))
         .and_owner_runs(format!("adr approve {}", rel))
         .render()
 }
@@ -922,8 +1029,22 @@ pub fn next_later(headings: &[String]) -> String {
 
 use crate::view::QState;
 
-pub fn show_topic(topic: &str) -> String {
-    format!("# {}", topic)
+pub fn show_topic(topic: &str, rel: &str) -> String {
+    if topic.is_empty() {
+        return format!("# ({})", rel);
+    }
+    format!("# {} ({})", topic, rel)
+}
+
+/// Under a question: the questions whose depends line names it, the ones
+/// that would lose their ground with it.
+pub fn show_stood_on_by(entries: &[String]) -> String {
+    format!("    stood on by: {}", entries.join(", "))
+}
+
+/// A question of another topic file, in `show_stood_on_by`.
+pub fn show_question_of(heading: &str, rel: &str) -> String {
+    format!("{} ({})", heading, rel)
 }
 
 pub fn show_tier(tier: usize) -> String {
@@ -934,9 +1055,9 @@ pub fn show_tier(tier: usize) -> String {
 /// the chosen letter (`answered A`), every other state is the bare word.
 pub fn show_state(state: QState, letter: Option<char>) -> String {
     match state {
-        QState::Skeleton => "skeleton".to_string(),
-        QState::Unasked => "unasked".to_string(),
-        QState::Open => "open".to_string(),
+        QState::Skeleton => "no body".to_string(),
+        QState::Unasked => "not asked".to_string(),
+        QState::Open => "asked".to_string(),
         QState::Answered => match letter {
             Some(c) => format!("answered {}", c),
             None => "answered".to_string(),
@@ -956,12 +1077,35 @@ pub fn show_question(state: &str, version: Option<&str>, heading: &str) -> Strin
     }
 }
 
+/// A current decision in the short listing: its heading alone, the answer
+/// follows on the next line (`show_chosen`).
+pub fn show_decision(heading: &str) -> String {
+    format!("  {}", heading)
+}
+
+/// The last line of the short listing: how to read the rest.
+pub fn show_whole_hint() -> String {
+    "adr show <topic file> prints every question of one file with what it stands on; adr show --all prints all of them"
+        .to_string()
+}
+
 pub fn show_stands_on(entries: &[String]) -> String {
     format!("    stands on: {}", entries.join(", "))
 }
 
 pub fn show_chosen(sentence: &str) -> String {
     format!("    {}", sentence)
+}
+
+/// Under a question: the decisions it replaces, by heading.
+pub fn show_supersedes(headings: &[String]) -> String {
+    format!("    supersedes: {}", headings.join(", "))
+}
+
+/// Under a superseded question: the heading of the question that took its
+/// place.
+pub fn show_replaced_by(heading: &str) -> String {
+    format!("    replaced by: {}", heading)
 }
 
 pub fn show_from(origin: &str, rows: usize) -> String {
@@ -983,6 +1127,15 @@ pub fn next_line(line: &str) -> String {
 
 pub fn show_blame(rel: &str) -> String {
     format!("# blame: {}", rel)
+}
+
+/// A topic file show could not read: printed in its place, so a file with
+/// decisions in it is never missing from the listing without a word.
+pub fn show_topic_unreadable(rel: &str, e: impl Display) -> String {
+    format!(
+        "# {} (cannot be read: {}; agent fixes the file so it can be read as text)",
+        rel, e
+    )
 }
 
 pub fn show_blame_unreadable(rel: &str, e: impl Display) -> String {
@@ -1040,7 +1193,7 @@ pub fn ask_conflict(heading: &str, a: &str, b: &str) -> String {
 }
 
 pub fn ask_assumes(dependent: &str, set: &str) -> String {
-    format!("  assumes: \"{}\"={}", dependent, set)
+    format!("  stood on by: \"{}\" under {}", dependent, set)
 }
 
 // --- adr --version -----------------------------------------------------------
@@ -1069,10 +1222,14 @@ pub fn uninstalled_at(root: impl Display) -> String {
 
 // --- answer.rs / ban.rs / unban.rs / install.rs / uninstall.rs -------------
 
-pub fn invalid_letter(letter: &str) -> String {
+/// `id_arg` is the `<id>@<version>` the owner gave.
+pub fn invalid_letter(letter: &str, id_arg: &str) -> String {
     refuse(
-        format!("invalid letter {}", letter),
-        Next::owner_runs("adr answer with a single uppercase letter, or \"refuse\""),
+        format!(
+            "invalid letter {}; an answer is one uppercase letter, or the word refuse",
+            letter
+        ),
+        Next::owner_runs(format!("adr answer {} <letter>", id_arg)),
     )
 }
 
@@ -1083,10 +1240,18 @@ pub fn no_such_term(name: &str) -> String {
     )
 }
 
+/// `ban --term` with no terms file to look the name up in.
+pub fn no_terms_file_for_term(name: &str) -> String {
+    refuse(
+        format!("cannot look up \"{}\": adrdom/terms.md is missing or cannot be read", name),
+        Next::agent("writes adrdom/terms.md, or fixes it so it can be read as text"),
+    )
+}
+
 pub fn already_in_use() -> String {
     refuse(
         "refusing: already in use".to_string(),
-        Next::agent("removes the word from the repo text first, or bans a different word"),
+        Next::agent("removes the word from the repository first, or bans a different word"),
     )
 }
 
@@ -1135,25 +1300,25 @@ pub fn duplicate_id(id: &str, prev: &str, rel: &str, heading: &str) -> String {
 pub fn removed_from_plan(id: &str, heading: &str, event: &str, removed_file: Option<&str>) -> String {
     let what = format!("{} (\"{}\", {}) was removed from the plan", id, heading, event);
     match removed_file {
-        Some(rel) => refuse(what, Next::owner_runs(format!("adr approve {} again", rel))),
-        None => refuse(what, Next::owner_runs("adr approve <the edited topic file>")),
+        Some(rel) => refuse(what, Next::owner_runs(format!("adr approve {}", rel))),
+        None => refuse(what, Next::owner_runs("adr approve <topic file>")),
     }
 }
 
-pub fn ledger_id_not_found(id: &str) -> String {
+/// `heading` is the heading the ledger holds for the question, from the
+/// row written when it was asked.
+pub fn ledger_id_not_found(id: &str, heading: Option<&str>) -> String {
     refuse(
-        format!("ledger id {} not found in any topic file", id),
+        format!("ledger id {} not found in any topic file", named(id, heading)),
         Next::agent("checks why this id's heading is not in any topic file"),
     )
 }
 
-pub fn withdrawn_id_present(id: &str, rel: &str) -> String {
+pub fn withdrawn_id_present(id: &str, heading: &str, rel: &str) -> String {
     refuse(
-        format!("withdrawn id {} still present in {}", id, rel),
-        Next::agent("removes the heading").and_owner_runs(format!(
-            "adr approve {} if it should come back",
-            rel
-        )),
+        format!("withdrawn id {} still present in {}", named(id, Some(heading)), rel),
+        Next::agent("removes the heading, or leaves it when it is to come back")
+            .and_owner_runs(format!("adr approve {}", rel)),
     )
 }
 
@@ -1331,17 +1496,24 @@ pub fn section_terms_line_malformed(rel: &str, heading: &str, id: &str, answered
 /// still be re-asked; an answered one is frozen, so the fix moves to
 /// restoring the term in `adrdom/terms.md` (mirrors `term_removed_but_carried`)
 /// or superseding the decision.
-pub fn section_term_not_found(rel: &str, heading: &str, uuid: &str, id: &str, answered: bool) -> String {
+pub fn section_term_not_found(
+    rel: &str,
+    heading: &str,
+    uuid: &str,
+    word: &str,
+    id: &str,
+    answered: bool,
+) -> String {
     let next = if answered {
         Next::agent(format!(
-            "restores the term in adrdom/terms.md, or writes a question that supersedes {} with a new terms pairing",
+            "restores the term in adrdom/terms.md, or writes a question that supersedes {}",
             id
         ))
     } else {
         Next::agent("re-asks so the terms line matches current terms")
     };
     refuse(
-        format!("{}: {}: term {} not found", rel, heading, uuid),
+        format!("{}: {}: term {} not found", rel, heading, named(uuid, Some(word))),
         next,
     )
 }
@@ -1352,34 +1524,38 @@ pub fn section_term_not_found(rel: &str, heading: &str, uuid: &str, id: &str, an
 pub fn section_term_retired(rel: &str, heading: &str, name: &str, id: &str, answered: bool) -> String {
     let next = if answered {
         Next::agent(format!(
-            "un-retires the term in adrdom/terms.md, or writes a question that supersedes {} with a new terms pairing",
+            "un-retires the term in adrdom/terms.md, or writes a question that supersedes {}",
             id
         ))
     } else {
         Next::agent("re-asks so the terms line drops the retired term")
     };
     refuse(
-        format!("{}: {}: bound term \"{}\" is retired", rel, heading, name),
+        format!("{}: {}: uses the retired term \"{}\"", rel, heading, name),
         next,
     )
 }
 
 /// A term's own `terms:` line (its definition's pairings) names a uuid
 /// that no longer exists.
-pub fn term_definition_term_not_found(name: &str, uuid: &str) -> String {
+pub fn term_definition_term_not_found(name: &str, uuid: &str, word: &str) -> String {
     refuse(
-        format!("adrdom/terms.md: \"{}\": term {} not found", name, uuid),
-        Next::agent("rewords the definition so it pairs a term that exists"),
+        format!(
+            "adrdom/terms.md: \"{}\": term {} not found",
+            name,
+            named(uuid, Some(word))
+        ),
+        Next::agent("rewords the definition so it uses a term that exists"),
     )
 }
 
 pub fn term_definition_term_retired(name: &str, retired_name: &str) -> String {
     refuse(
         format!(
-            "adrdom/terms.md: \"{}\": bound term \"{}\" is retired",
+            "adrdom/terms.md: \"{}\": uses the retired term \"{}\"",
             name, retired_name
         ),
-        Next::agent("rewords the definition so it no longer pairs the retired term"),
+        Next::agent("rewords the definition so it no longer uses the retired term"),
     )
 }
 
@@ -1491,8 +1667,11 @@ pub fn gitattributes_missing() -> String {
 
 pub fn malformed_ledger_row(lineno: usize, raw: &str) -> String {
     refuse(
-        format!("line {}: malformed row: {}", lineno, raw),
-        Next::owner_runs("git diff adrdom/state/ledger.tsv and decides which rows are real before anything is committed"),
+        format!(
+            "line {}: malformed row: {}; the owner decides which rows are real before anything is committed",
+            lineno, raw
+        ),
+        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
     )
 }
 
@@ -1502,8 +1681,8 @@ pub fn malformed_ledger_row(lineno: usize, raw: &str) -> String {
 /// one that only moved.
 pub fn ledger_not_append_only() -> String {
     refuse(
-        "a row from HEAD's ledger is missing or changed in the working copy".to_string(),
-        Next::owner_runs("git diff adrdom/state/ledger.tsv; a row may move, but none may be dropped or edited -- restore by hand whatever is missing or changed"),
+        "a row from HEAD's ledger is missing or changed in the working copy; a row may move, none may be dropped or edited, and what is missing or changed is restored by hand".to_string(),
+        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
     )
 }
 
@@ -1536,20 +1715,21 @@ pub fn ledger_merge_parents_unreadable() -> String {
     )
 }
 
-pub fn ledger_asked_id_missing(id: &str) -> String {
+pub fn ledger_asked_id_missing(id: &str, heading: Option<&str>) -> String {
     refuse(
-        format!("asked row id {} not found in any topic file", id),
-        Next::agent("restores the heading in the topic file").and_owner_runs("adr approve <file> if the heading was removed on purpose"),
+        format!("asked row id {} not found in any topic file", named(id, heading)),
+        Next::agent("restores the heading in its topic file, or leaves it out when it was removed on purpose")
+            .and_owner_runs("adr approve <topic file>"),
     )
 }
 
-pub fn ledger_answered_without_asked(id: &str) -> String {
+pub fn ledger_answered_without_asked(id: &str, heading: Option<&str>) -> String {
     refuse(
         format!(
-            "answered row for {} has no matching earlier asked hash",
-            id
+            "answered row for {} matches no asked row; an answered row needs the asked row it answers",
+            named(id, heading)
         ),
-        Next::owner_runs("git diff adrdom/state/ledger.tsv; an answered row needs the asked row it answers"),
+        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
     )
 }
 
@@ -1616,20 +1796,42 @@ pub fn ledger_same_time_competition(time: &str, subject: &str) -> String {
     )
 }
 
-pub fn untested(id: &str) -> String {
+/// A note, not a failure (per "Does check fail an untested decision whose
+/// tier is still open?"): the same words `show` prints for the build.
+pub fn untested_waits(rel: &str, heading: &str, beside: &str, refused: bool) -> String {
+    if refused {
+        format!(
+            "waiting: {}: \"{}\" is untested; built once the plan changes, \"{}\" beside it is refused",
+            rel, heading, beside
+        )
+    } else {
+        format!(
+            "waiting: {}: \"{}\" is untested; built once \"{}\" is answered",
+            rel, heading, beside
+        )
+    }
+}
+
+pub fn untested(id: &str, heading: Option<&str>) -> String {
     refuse(
-        format!("{}: untested", id),
+        format!("{}: untested, no tracked file holds \"adr: {}\"", named(id, heading), id),
         Next::agent(format!(
-            "writes a test that shows the code follows this decision and puts \"adr: {}\" in it",
+            "writes a test that shows the code follows this decision, puts \"adr: {}\" in it and adds it to git",
             id
         )),
     )
 }
 
-pub fn stale_test(id: &str) -> String {
+/// `locations` are the `path:line` places the tag was found at.
+pub fn stale_test(id: &str, heading: Option<&str>, locations: &[String]) -> String {
+    let at = if locations.is_empty() {
+        String::new()
+    } else {
+        format!(" at {}", locations.join(", "))
+    };
     refuse(
-        format!("{}: stale (not a current decision)", id),
-        Next::agent(format!("removes the stale \"adr: {}\" tag from the test", id)),
+        format!("{}: tied to a test and not a current decision{}", named(id, heading), at),
+        Next::agent(format!("removes the comment \"adr: {}\" from the test", id)),
     )
 }
 
@@ -1894,6 +2096,15 @@ pub fn blame_unchanged(rel: &str) -> String {
     format!("approve: {}: blame unchanged", rel)
 }
 
+/// The approval stands as it was, and the file on disk was written again:
+/// its rows were not in the form approve writes them in.
+pub fn blame_rows_rewritten(rel: &str) -> String {
+    format!(
+        "approve: {}: rows rewritten in the form approve writes; blame unchanged",
+        rel
+    )
+}
+
 // --- commands/check/blame.rs -----------------------------------------------
 // Shared by `check`'s `blame` category (per "Does check hold a blame file
 // to its origin?", 5fddeeb5 A; "Does an origin leave the repository while
@@ -1907,7 +2118,7 @@ pub fn blame_blob_mismatch(rel: &str, origin: &str) -> String {
     refuse(
         format!("{}: blob no longer matches {}", rel, origin),
         Next::agent(format!("updates the rows for {}'s current content", origin))
-            .and_owner_runs(format!("adr approve {} again", rel)),
+            .and_owner_runs(format!("adr approve {}", rel)),
     )
 }
 
@@ -1976,7 +2187,7 @@ pub fn blame_origin_unreadable(rel: &str, origin: &str) -> String {
 pub fn bind_failed(port: u16, e: impl Display) -> String {
     refuse(
         format!("failed to bind 127.0.0.1:{}: {}", port, e),
-        Next::owner_runs("adr serve --port <a free port>"),
+        Next::owner_runs("adr serve --port <port>"),
     )
 }
 
@@ -2002,7 +2213,7 @@ pub fn done(rel: &str) -> String {
 }
 
 pub fn moot_note(rel: &str, note: &str) -> String {
-    format!("moot: {}: {}", rel, note)
+    format!("no case left: {}: {}", rel, note)
 }
 
 pub fn tiers_note_check(rel: &str, sizes: &str) -> String {
@@ -2017,8 +2228,12 @@ pub fn terms_unpaired(count: usize, list: &str) -> String {
     format!("terms: {} terms paired by nothing: {}", count, list)
 }
 
+/// A failure of `check`, with its category in front as every failure has.
 pub fn topic_file_unreadable(path: &str, e: impl Display) -> String {
-    format!("parse: {}: cannot read: {}", path, e)
+    refuse(
+        format!("parse: {}: cannot be read: {}", path, e),
+        Next::agent("fixes the file so it can be read as text (e.g. its encoding)"),
+    )
 }
 
 pub fn terms_ids_filled(n: usize) -> String {
@@ -2042,11 +2257,11 @@ pub fn plan_unchanged(rel: &str) -> String {
 }
 
 pub fn context_approved(rel: &str) -> String {
-    format!("approve: {}: context approved", rel)
+    format!("approve: {}: prose approved", rel)
 }
 
 pub fn context_unchanged(rel: &str) -> String {
-    format!("approve: {}: context unchanged", rel)
+    format!("approve: {}: prose unchanged", rel)
 }
 
 pub fn withdrawn(detail: &str) -> String {
@@ -2065,8 +2280,32 @@ pub fn removed_entries(n: usize) -> String {
     format!("removed {} entries", n)
 }
 
+/// Added to unban's line when `n` (never 0) of the words given were not
+/// banned. A count and never the words: a word given here may be a
+/// misspelling of a banned one.
+pub fn not_banned_suffix(n: usize) -> String {
+    format!("; {} of the words given were not banned", n)
+}
+
 pub fn no_new_entries() -> String {
     "no new entries".to_string()
+}
+
+/// `ban` found nothing new to add and found the ban list different from
+/// what the ledger says is banned, so it wrote the list again.
+pub fn no_new_entries_list_rewritten(n: usize) -> String {
+    format!(
+        "no new entries; the ban list did not match the ledger and was written again with {} entries",
+        n
+    )
+}
+
+/// `check --message <file>` could not read the commit message file.
+pub fn message_file_unreadable(path: &str, e: impl Display) -> String {
+    refuse(
+        format!("cannot read the commit message file {}: {}", path, e),
+        Next::agent("passes a commit message file that can be read as text"),
+    )
 }
 
 pub fn banned_added(n: usize) -> String {
@@ -2131,6 +2370,14 @@ pub fn claude_md_deleted() -> String {
 
 pub fn claude_md_import_removed() -> String {
     "uninstall: CLAUDE.md: removed the AGENTS.md import".to_string()
+}
+
+/// A hook that is there and is not what this build of install writes.
+pub fn hook_left(name: &str) -> String {
+    format!(
+        "uninstall: left .githooks/{}: it differs from what install writes",
+        name
+    )
 }
 
 pub fn hook_removed(name: &str) -> String {
@@ -2239,8 +2486,8 @@ mod tests {
             create_failed("x", e, Next::agent("retries")),
             parse_failed("x", e, Next::agent("retries")),
             stdin_read_failed(Next::agent("retries")),
-            not_a_repo("ask", Actor::Agent),
-            not_a_repo("approve", Actor::Owner),
+            not_a_repo("ask", "", Actor::Agent),
+            not_a_repo("approve", "adrdom/decisions/x.md", Actor::Owner),
             owner_refusal("approve", "adrdom/decisions/x.md"),
             owner_refusal("unban", ""),
             terms_missing(),
@@ -2252,7 +2499,7 @@ mod tests {
             terms_brief_differs(),
             terms_brief_not_staged(),
             circular_definition("a -> b -> a"),
-            term_removed_but_carried("uuid-1", "term \"x\""),
+            term_removed_but_carried("uuid-1", Some("word"), "term \"x\""),
             term_retired_but_carried("x", "term \"y\"", term_reword_and_approve()),
             term_retired_but_carried("x", "id-1: \"heading\"", Next::agent("supersedes id-1 with a new question first")),
             word_moved_off_term("word", "term", "term \"y\"", term_reword_and_approve()),
@@ -2260,7 +2507,7 @@ mod tests {
                 "word",
                 "term",
                 "id-1: \"heading\"",
-                Next::agent("restores the wording in adrdom/terms.md so \"word\" still names \"term\", or writes a question that supersedes id-1 with a new terms pairing"),
+                Next::agent("restores the wording in adrdom/terms.md so \"word\" still names \"term\", or writes a question that supersedes id-1"),
             ),
             definition_too_long("x", 3),
             terms_banned_word(3, ""),
@@ -2274,15 +2521,15 @@ mod tests {
             section_no_terms_line("x.md", "heading", "id-1", true),
             section_terms_line_malformed("x.md", "heading", "id-1", false),
             section_terms_line_malformed("x.md", "heading", "id-1", true),
-            section_term_not_found("x.md", "heading", "uuid-1", "id-1", false),
-            section_term_not_found("x.md", "heading", "uuid-1", "id-1", true),
+            section_term_not_found("x.md", "heading", "uuid-1", "word", "id-1", false),
+            section_term_not_found("x.md", "heading", "uuid-1", "word", "id-1", true),
             section_term_retired("x.md", "heading", "term", "id-1", false),
             section_term_retired("x.md", "heading", "term", "id-1", true),
-            term_definition_term_not_found("term", "uuid-1"),
+            term_definition_term_not_found("term", "uuid-1", "word"),
             term_definition_term_retired("term", "retired-term"),
             term_definition_terms_line_malformed("term"),
             frozen_depends_edited("x.md", "heading"),
-            dep_not_current_decision("x.md", "heading", "id-1"),
+            dep_not_current_decision("x.md", "heading", "id-1", Some("name")),
             dep_no_term("x.md", "heading", "widget"),
             bad_option_letter("x.md", "dependent", "target", 'Z'),
             tier_cap_exceeded("x.md", &["heading".to_string()], 0, 4),
@@ -2293,33 +2540,35 @@ mod tests {
             id_not_found("id-1"),
             already_refused("heading"),
             already_answered("heading"),
-            letter_not_an_option('Z', "heading"),
-            not_in_asked_state("heading"),
-            answer_missing_version("id-1"),
-            stale_version("heading"),
+            letter_not_an_option('Z', "heading", &['A', 'B'], "id-1", "abcd1234"),
+            not_in_asked_state("heading", "x.md"),
+            answer_missing_version("id-1", None),
+            answer_missing_version("id-1", Some(("heading", "12345678"))),
+            stale_version("heading", "x.md"),
+            already_withdrawn("heading"),
+            already_superseded("heading"),
+            not_asked_yet("heading", "x.md"),
+            not_written("heading"),
+            dep_retired_term("x.md", "heading", "widget"),
+            show_not_a_topic_file("x.md"),
             invalid_version_format("Z0ZZZZZZ"),
-            no_terms_line("id-1"),
-            malformed_terms_line("id-1"),
-            terms_line_names_gone_term("id-1", "uuid-1"),
-            terms_line_names_retired_term("id-1", "term"),
-            supersedes_not_current("id-1"),
+            no_terms_line("id-1", "heading"),
+            malformed_terms_line("id-1", "heading"),
+            terms_line_names_gone_term("id-1", "heading", "uuid-1", "word"),
+            terms_line_names_retired_term("id-1", "heading", "term"),
+            supersedes_not_current("id-1", None),
             edited_after_answered("x.md", "heading"),
             edited_after_refused("x.md", "heading"),
             plan_not_approved("x.md"),
             context_not_approved("x.md"),
             missing_answer_set("x.md", "dependent", "target"),
-            depends_on_refused("x.md", "heading", "target"),
-            ask_supersedes_not_current("x.md", "heading", "id-1"),
-            tier_blocked_refused("x.md", "heading", 2, 1, "blocker"),
-            tier_blocked_waiting("x.md", "heading", 2, 1, "blocker", "id-1", "abcd1234"),
-            tier_blocked_unasked("x.md", "heading", 2, 1, "blocker"),
-            tier_blocked_needs_ask("x.md", "heading", 2, 1, "blocker"),
+            ask_supersedes_not_current("x.md", "heading", "id-1", Some("name")),
             moot_candidate("x.md", "heading", "target", "A", 'B'),
             banned_word_in_candidate("x.md", "heading", ""),
             pairs_no_term("x.md", "heading"),
             pairs_no_term_at_write("x.md", "heading"),
             no_id_line("x.md", "heading"),
-            invalid_letter("z"),
+            invalid_letter("z", "id-1@abcd1234"),
             no_such_term("widget"),
             already_in_use(),
             settings_not_json_object("path", Next::agent("retries")),
@@ -2330,8 +2579,8 @@ mod tests {
             duplicate_id("id-1", "x.md:heading", "y.md", "heading"),
             removed_from_plan("id-1", "heading", "asked", Some("x.md")),
             removed_from_plan("id-1", "heading", "asked", None),
-            ledger_id_not_found("id-1"),
-            withdrawn_id_present("id-1", "x.md"),
+            ledger_id_not_found("id-1", Some("heading")),
+            withdrawn_id_present("id-1", "heading", "x.md"),
             refusal_without_row("x.md", "heading"),
             answer_without_row("x.md", "heading"),
             answered_text_changed("x.md", "heading", "id-1"),
@@ -2360,15 +2609,15 @@ mod tests {
             ledger_not_append_only(),
             ledger_merge_drops_rows(),
             ledger_merge_parents_unreadable(),
-            ledger_asked_id_missing("id-1"),
-            ledger_answered_without_asked("id-1"),
+            ledger_asked_id_missing("id-1", Some("heading")),
+            ledger_answered_without_asked("id-1", Some("heading")),
             ledger_push_drops_rows("refs/heads/feat", "refs/heads/main"),
             ledger_push_remote_unreadable("refs/heads/main"),
             ledger_since_drops_rows("abc123"),
             ledger_since_unreadable("abc123"),
             ledger_same_time_competition("2024-01-01T00:00:00Z", "id id-1"),
-            untested("id-1"),
-            stale_test("id-1"),
+            untested("id-1", Some("heading")),
+            stale_test("id-1", None, &["x.rs:3".to_string()]),
             duplicate_heading_in_file("heading", "x.md"),
             duplicate_heading_across_files("heading", "x.md", "y.md"),
             bad_topic_file_name("adrdom/decisions/Bad_Name.md"),
@@ -2404,6 +2653,29 @@ mod tests {
                 o
             );
         }
+        // What follows `owner runs: ` is what the agent posts to the owner
+        // and the owner pastes: a command and nothing after it. The three
+        // refusals about ledger rows a push, a merge or a commit dropped
+        // name no command, since no command restores a row.
+        for o in &outputs {
+            let Some((_, command)) = o.split_once("owner runs: ") else {
+                continue;
+            };
+            // A shell comment after the command names the heading and is
+            // not part of the command.
+            let command = command.split(" #").next().unwrap_or(command);
+            if command.starts_with("the rows ") {
+                continue;
+            }
+            assert!(
+                command.starts_with("adr ") || command.starts_with("git "),
+                "not a command: {}",
+                o
+            );
+            for prose in [" again", " if ", " to ", " and ", " with ", " first", ";", ","] {
+                assert!(!command.contains(prose), "{:?} after the command: {}", prose, o);
+            }
+        }
     }
 
     // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
@@ -2417,11 +2689,11 @@ mod tests {
     // (live), or write a question that supersedes the decision.
     #[test]
     fn section_term_not_found_answered_never_suggests_restoring_as_retired() {
-        let out = section_term_not_found("x.md", "heading", "uuid-1", "id-1", true);
+        let out = section_term_not_found("x.md", "heading", "uuid-1", "word", "id-1", true);
         assert!(!out.contains("retired"), "{}", out);
         assert!(out.contains("restores the term in adrdom/terms.md"), "{}", out);
         assert!(
-            out.contains("writes a question that supersedes id-1 with a new terms pairing"),
+            out.contains("writes a question that supersedes id-1"),
             "{}",
             out
         );

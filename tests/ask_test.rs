@@ -421,7 +421,7 @@ fn ask_pairs_nothing_for_a_word_only_on_a_retired_term() {
     assert!(!out.status.success());
     let err = stderr(&out);
     assert!(
-        err.contains("\"1.1 What is the unit of authority called?\" pairs no term"),
+        err.contains("\"1.1 What is the unit of authority called?\" uses no term"),
         "{}",
         err
     );
@@ -495,7 +495,7 @@ fn ask_refuses_a_candidate_that_pairs_no_term() {
     assert!(!out.status.success());
     let err = stderr(&out);
     assert!(
-        err.contains("\"1.1 Does this pass?\" pairs no term"),
+        err.contains("\"1.1 Does this pass?\" uses no term"),
         "{}",
         err
     );

@@ -142,12 +142,12 @@ fn check_a_refused_id_is_never_untested_but_a_tie_to_it_is_stale() {
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
     assert!(
-        !text.contains(&format!("{}: untested", REFUSABLE_ID)),
+        !line_with(&text, &REFUSABLE_ID, ": untested"),
         "a refused id must never be reported untested: {}",
         text
     );
     assert!(
-        text.contains(&format!("{}: stale (not a current decision)", REFUSABLE_ID)),
+        line_with(&text, &REFUSABLE_ID, ": tied to a test and not a current decision"),
         "a tie to a refused id must be stale: {}",
         text
     );
@@ -166,7 +166,7 @@ fn check_fails_a_refused_id_missing_from_every_file_until_withdrawn() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains(&format!("ledger id {} not found in any topic file", REFUSABLE_ID)),
+        text.contains(&format!("ledger id {} (\"1.1 Q?\") not found in any topic file", REFUSABLE_ID)),
         "{}",
         text
     );

@@ -12,11 +12,18 @@ use crate::view::{self, QState};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-pub fn run(record_arg: Option<PathBuf>) -> i32 {
+/// `all` is the `--all` flag. With no topic file and no flag `show` prints
+/// the short listing: each topic file's current decisions, heading and
+/// answer, and its next moves. With a topic file, or with `--all`, it
+/// prints the whole listing: every question in any state, the order they
+/// are asked in, what each stands on and is stood on by, what replaced a
+/// superseded one, the origins, and the blame files.
+pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
+    let whole = all || record_arg.is_some();
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("show", Actor::Agent));
+            eprintln!("{}", msg::not_a_repo("show", "", Actor::Agent));
             return 1;
         }
     };
@@ -46,7 +53,8 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
     // rather than inside `cross_file_heading_index` (which used to load
     // them all itself, then have the loop below load whichever of them it
     // was about to print all over again).
-    let all_records: Vec<RecordFile> = record::load_all(&root);
+    let (all_records, unreadable_topic_files) =
+        record::load_all_via(&root, &repo::Source::WorkingTree);
     let cross_file_headings = depends::cross_file_heading_index(&all_records, &led);
 
     // Every heading id, any state, and every blame file (per "Does show
@@ -70,11 +78,39 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
                 // Not one of the repo's topic files (an unusual path
                 // outside adrdom/decisions/, say): loaded directly, same as
                 // before this pass.
-                None => record::load(p).into_iter().collect(),
+                None if !unreadable_topic_files
+                    .iter()
+                    .any(|(f, _)| state::rel_path(&root, f) == rel) =>
+                {
+                    eprintln!("show: {}", msg::show_not_a_topic_file(&rel));
+                    return 1;
+                }
+                None => match record::load(p) {
+                    Ok(rf) => vec![rf],
+                    Err(e) => {
+                        eprintln!(
+                            "show: {}",
+                            msg::read_failed(
+                                &rel,
+                                e,
+                                msg::Next::agent("names a topic file that can be read as text")
+                            )
+                        );
+                        return 1;
+                    }
+                },
             }
         }
         None => all_records,
     };
+    // A topic file that cannot be read is named where it would have been
+    // printed; with a file argument only that file is printed, and the one
+    // asked for is refused above when it is the one that cannot be read.
+    if record_arg.is_none() {
+        for (f, e) in &unreadable_topic_files {
+            println!("{}", msg::show_topic_unreadable(&state::rel_path(&root, f), e));
+        }
+    }
 
     let tests = crate::commands::check::test_index(&root, &repo::Source::WorkingTree);
     for rf in &mut records {
@@ -82,27 +118,34 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
         // depends entries in memory (see `view::snapshot`).
         let plan_ok = state::plan_approved(&led, rf, &rf.rel) && state::context_approved(&led, rf, &rf.rel);
         depends::normalize_cross_file_deps(rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
-        print_file(
-            rf,
-            &led,
-            &terms_list,
-            &all_headings,
-            &blame_files,
-            &any_headings_all,
-            &known_ids,
-        );
+        if whole {
+            print_file(
+                rf,
+                &blame_records,
+                &led,
+                &terms_list,
+                &all_headings,
+                &blame_files,
+                &any_headings_all,
+                &known_ids,
+            );
+        } else {
+            print_file_short(rf, &led);
+        }
         let plan_refusals: Vec<String> = crate::actions::record_refusals(
             &rf.rel,
             rf,
             &terms_list,
             &phrase_lookup,
             &cross_file_headings,
+            &all_headings,
+            &blame_records,
             &led,
         )
         .into_iter()
         .map(|r| r.message)
         .collect();
-        let next = view::next_moves(rf, &led, plan_ok, &plan_refusals, &tests);
+        let next = view::next_moves(rf, &led, plan_ok, &plan_refusals, &tests, &blame_records);
         if !next.is_empty() {
             println!("{}", msg::next_heading());
             for line in next {
@@ -111,6 +154,29 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
         }
     }
 
+    // The short listing ends with the next lines of every blame file that
+    // has one; the rest of a blame file is in the whole one.
+    if !whole {
+        for bf in &blame_files {
+            let content = record::join_lines(&bf.lines);
+            let st = blame::file_state(
+                &root,
+                &repo::Source::WorkingTree,
+                bf,
+                &content,
+                &blame_records,
+                &led,
+                &any_headings_all,
+                &known_ids,
+            );
+            print_blame_next(&bf.rel, blame::next_lines(&st, bf));
+        }
+        for (rel, _) in &unreadable_blame_files {
+            print_blame_next(rel, vec![msg::next_clears(&msg::blame_file_unreadable(rel))]);
+        }
+        println!("{}", msg::show_whole_hint());
+        return 0;
+    }
     // Reuses `any_headings_all`/`known_ids` (built off `all_records`
     // above, before the clone): `blame_records` is that same set of
     // sections and ids, so the index would only be recomputed to the same
@@ -125,6 +191,35 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
     0
 }
 
+/// A blame file's heading and its next lines, printed only when it has one.
+fn print_blame_next(rel: &str, next: Vec<String>) {
+    if next.is_empty() {
+        return;
+    }
+    println!("{}", msg::show_blame(rel));
+    println!("{}", msg::next_heading());
+    for line in next {
+        println!("{}", msg::next_line(&line));
+    }
+}
+
+/// The short listing of one topic file: its topic line, then each current
+/// decision as its heading and the answer the owner picked, in file order.
+/// A question that is not a current decision is left to the next moves
+/// under the file, which name every one that still has a move.
+fn print_file_short(rf: &RecordFile, led: &Ledger) {
+    println!("{}", msg::show_topic(rf.topic.as_deref().unwrap_or(""), &rf.rel));
+    for sec in &rf.sections {
+        if view::qstate(led, sec) != QState::Answered {
+            continue;
+        }
+        println!("{}", msg::show_decision(&sec.heading_text));
+        if let Some(s) = sec.chosen_sentence() {
+            println!("{}", msg::show_chosen(&s));
+        }
+    }
+}
+
 /// `# <topic>` then each derived tier as `tier N` followed by its
 /// questions. A file whose tier derivation failed prints only its `#
 /// <topic>` line; `adr check`/`adr ask`/`adr approve` are where the
@@ -132,6 +227,7 @@ pub fn run(record_arg: Option<PathBuf>) -> i32 {
 #[allow(clippy::too_many_arguments)]
 fn print_file(
     rf: &RecordFile,
+    all: &[RecordFile],
     led: &Ledger,
     terms_list: &[Term],
     all_headings: &HashMap<String, String>,
@@ -139,7 +235,7 @@ fn print_file(
     any_headings_all: &HashMap<String, Vec<(String, String)>>,
     known_ids: &HashSet<String>,
 ) {
-    println!("{}", msg::show_topic(rf.topic.as_deref().unwrap_or("")));
+    println!("{}", msg::show_topic(rf.topic.as_deref().unwrap_or(""), &rf.rel));
 
     let Some(tiers) = &rf.tiers else {
         return;
@@ -155,6 +251,7 @@ fn print_file(
             print_question(
                 rf,
                 &rf.sections[i],
+                all,
                 led,
                 terms_list,
                 all_headings,
@@ -166,10 +263,44 @@ fn print_file(
     }
 }
 
+/// The questions whose depends line names `sec`, in the order of the topic
+/// files, each by its heading and, for a question of another file, the
+/// path of that file. A refused, superseded or withdrawn question is left
+/// out: its depends line is a record of what it stood on, nothing rests on
+/// `sec` through it any more. An entry written as a heading text names
+/// `sec` in its own file, and in another file only while `sec` is a
+/// current decision (per "What does a depends line name?").
+fn stood_on_by(rf: &RecordFile, sec: &Section, all: &[RecordFile], led: &Ledger) -> Vec<String> {
+    let heading = sec.heading_text.trim();
+    let current = sec.id.as_deref().is_some_and(|id| state::is_current(led, id));
+    let mut out = Vec::new();
+    for other in all {
+        let same_file = other.rel == rf.rel;
+        for dependent in &other.sections {
+            if (same_file && dependent.heading_text.trim() == heading) || state::is_dead(led, dependent) {
+                continue;
+            }
+            let names_it = dependent.depends.iter().any(|d| match d {
+                record::Dep::Id { id, .. } => sec.id.as_deref() == Some(id.as_str()),
+                record::Dep::Text { text, .. } => text.trim() == heading && (same_file || current),
+            });
+            if names_it {
+                out.push(if same_file {
+                    dependent.heading_text.clone()
+                } else {
+                    msg::show_question_of(&dependent.heading_text, &other.rel)
+                });
+            }
+        }
+    }
+    out
+}
+
 #[allow(clippy::too_many_arguments)]
 fn print_question(
     rf: &RecordFile,
     sec: &Section,
+    all: &[RecordFile],
     led: &Ledger,
     terms_list: &[Term],
     all_headings: &HashMap<String, String>,
@@ -198,9 +329,37 @@ fn print_question(
             .collect();
         println!("{}", msg::show_stands_on(&entries));
     }
+    // The decisions this question replaces, as words: an entry the tool
+    // has turned into an identifier is turned back into the heading.
+    if !sec.supersedes.is_empty() {
+        let names: Vec<String> = sec
+            .supersedes
+            .iter()
+            .map(|e| all_headings.get(e).cloned().unwrap_or_else(|| e.clone()))
+            .collect();
+        println!("{}", msg::show_supersedes(&names));
+    }
+    let dependents = stood_on_by(rf, sec, all, led);
+    if !dependents.is_empty() {
+        println!("{}", msg::show_stood_on_by(&dependents));
+    }
     if state == QState::Answered {
         if let Some(s) = sec.chosen_sentence() {
             println!("{}", msg::show_chosen(&s));
+        }
+    }
+    // A superseded question names what took its place: the ledger's
+    // `superseded` row holds the id of the question that replaced it.
+    if state == QState::Superseded {
+        let replaced_by = sec
+            .id
+            .as_deref()
+            .and_then(|id| led.latest_state(id))
+            .map(|row| row.detail.trim())
+            .filter(|by| !by.is_empty());
+        if let Some(by) = replaced_by {
+            let name = all_headings.get(by).map(String::as_str).unwrap_or(by);
+            println!("{}", msg::show_replaced_by(name));
         }
     }
     // Per "Does show print a blame file?", 7b05f8df A: "under each

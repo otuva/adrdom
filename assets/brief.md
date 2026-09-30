@@ -16,16 +16,31 @@ path, and some agents load the file from it at the start of a session:
 
 ## What is next
 
-Run `adr show`. It prints every question with its state, every current
-decision, and under each topic file the lines of `next`: one line for each
-move, opening with who makes it.
+Run `adr show`. It prints every current decision, its heading and under it
+the answer the owner picked, and under each topic file the lines of `next`:
+one line for each move, opening with who makes it.
 
 - A line that opens with `agent` is yours. Make these moves in the order
-  printed.
+  printed. When such a line ends with `owner runs: ...`, make your move,
+  then post that command in chat and stop.
 - A line that opens with `owner runs:` is the owner's. Post the command in
   chat and stop.
 - A line that opens with `not yet` names something whose turn has not come.
   Leave it.
+
+`adr show <topic file>` prints every question of that file: what each one
+stands on, what stands on it, and what took the place of one that was
+replaced. Read it before you write a question into that file. Each question
+opens with where it stands, in brackets:
+
+- `[no body]`: a heading of the plan, its body not written.
+- `[not asked]`: the body is written, `adr ask` has not run on it.
+- `[asked @<version>]`: it waits for the owner's answer; the version is
+  what the owner writes after the id in `adr answer`.
+- `[answered A]`: a current decision, the owner picked option A.
+- `[refused]`: the owner ruled that it cannot be settled as asked.
+- `[superseded]`: a later decision took its place.
+- `[withdrawn]`: it was asked and then struck from the plan.
 
 ## Before you build anything
 
@@ -60,20 +75,40 @@ depends: check
 A question stands on another one when its options make sense only after the
 other is answered. Write every entry that is so, and none that is not.
 
-Ask "does X" or "what does X do", not "which X", "where" or "how many": those
-assume an answer the owner has not given. One question per heading. Say the
-plan is ready and stop. The owner may strike, add or reorder headings before
-approving, or write the plan itself and approve it the same way. The owner
-runs `adr approve <file>`; after it every heading has an `id:` line and the
-entries of its `depends:` line are ids.
+If a question replaces a current decision, put a `supersedes:` line directly
+under its `depends:` line and write the heading of that decision on it
+(several headings separated by commas). It is part of the plan: `adr approve`
+turns each heading into its id. When a refusal says a heading names more
+than one decision, write the id of the one you mean in its place: it is on
+the `id:` line under that heading in its topic file.
+
+Ask "does X" or "what does X do". A heading that opens with "which",
+"where", "how many" or "how much" is refused: it assumes an answer the owner
+has not given. One question per heading: a heading with "and" or "or" in it
+is refused as two questions. Say the plan is ready and stop. The owner may
+strike, add or reorder headings before approving, or write the plan itself
+and approve it the same way. The owner runs `adr approve <file>`; after it
+every heading has an `id:` line and the entries of its `depends:` and
+`supersedes:` lines are ids.
 
 **2. Walk each question, then write its body.** Write the bodies `next`
 names. Before you write an option, read the code and the decisions it meets
-and find out three things: what the tool has to keep or do for this option
-that it does not today, which command looks and at what moment, and which
-current decision the option touches. What you find is what the option costs:
-write it on its Costs line. When you find a second question on the way, add
-its heading to the plan (see Changing a plan).
+and find out what the option asks for: what the code has to keep, which part
+of it has to look and at what moment, and which current decision the option
+touches. That is what the option costs: write it on its Costs line. When
+you find a second question on the way, add its heading to the plan (see
+Changing a plan).
+
+A question, its prose and its options hold what is asked and nothing about
+the day they were written. Three kinds of words are refused:
+
+- what the code does now: "already", "currently", "today", "right now", "at
+  the moment", "as built", "as implemented", "as is", "as it is",
+  "unchanged", "no change", "keep it", "nothing to build";
+- who said it: "said", "told", "agreed", "chose", "decided", "wants",
+  "prefers", "in chat", "in the chat", "this session", "as agreed",
+  "as discussed", "as decided", and the name of an agent;
+- a date.
 
 ```
 Problem: what breaks, in one line.
@@ -86,16 +121,15 @@ Standard: the named practice for this, stated flat.
 ```
 
 Two or three options. Strip each option to its answer to the heading and
-compare them: two options that answer it the same way are one option. If the
-question replaces a current decision, add `supersedes: <id>` under the
-heading (several ids separated by commas).
+compare them: two options that answer it the same way are one option.
 
 When `next` names an answer set, write it on that `depends:` entry: `=A`,
 `=A|B` or `=*`, the letters of the other question under which this one still
 makes sense.
 
-**3. Run `adr ask <file>`.** It asks the questions, or says what stops it
-and the move that clears it. Commit, post your lean for each question in
+**3. Run `adr ask <file>`.** It asks the questions, or prints in one run
+everything that stops it, each line with the move that clears it. Make every
+move before you run it again. Commit, post your lean for each question in
 chat, post the `owner runs: adr answer ...` lines that `next` prints, and
 stop. The owner puts a letter, or the word `refuse`, in place of `<letter>`.
 
@@ -177,8 +211,9 @@ remove or edit the hooks.
 
 ## Commands
 
-Yours: `adr show`, `adr ask`, `adr check`, `adr install`, and `adr ban` (only
-when the owner says a word is banned).
+Yours: `adr show`, `adr ask`, `adr check`, `adr install`, `adr ban` (only
+when the owner says a word is banned) and `adr ban --rebuild` (only when a
+refusal names it).
 
 The owner's, refused when you run them: `adr approve`, `adr answer`,
 `adr unban`, `adr serve`, `adr uninstall`.
