@@ -560,7 +560,7 @@ fn ask_refuses_a_two_id_supersedes_when_one_target_lost_currency_after_approval(
     let err = stderr(&ask_out);
     assert!(err.contains(old_id_2.as_str()), "{}", err);
     assert!(err.contains("which is not a current decision"), "{}", err);
-    assert!(err.contains("agent fixes the supersedes line"), "{}", err);
+    assert!(err.contains("agent removes it from the supersedes line or names a current decision"), "{}", err);
 
     let after = std::fs::read_to_string(&record).unwrap();
     assert_eq!(
@@ -855,7 +855,7 @@ fn approve_refuses_a_heading_whose_supersedes_target_is_stale() {
     assert!(err.contains("1.3 What is the third unit of authority called?"), "{}", err);
     assert!(err.contains(old_id.as_str()), "{}", err);
     assert!(err.contains("which is not a current decision"), "{}", err);
-    assert!(err.contains("agent fixes the supersedes line"), "{}", err);
+    assert!(err.contains("agent removes it from the supersedes line or names a current decision"), "{}", err);
 
     let after = std::fs::read_to_string(&record).unwrap();
     assert_eq!(after, before, "a refused approve must change nothing in the topic file");
@@ -1041,7 +1041,7 @@ fn answer_refuses_while_a_draft_sits_on_top_of_a_real_retirement() {
     let terms_path = write_record(
         &dir,
         "adrdom/terms.md",
-        "# Terms\n\n## authority\ndefinition: A fixture term for tests.\naliases: \n",
+        "# Terms\n\n## authority\ndefinition: A fixture term for tests.\naliases: \n\n## gadget\ndefinition: A second fixture term no question names.\naliases: \n",
     );
     let terms_out = adr_owner(&dir, &["approve", terms_path.to_str().unwrap()], "");
     assert!(terms_out.status.success(), "approve terms failed: {}", stderr(&terms_out));
@@ -1054,8 +1054,9 @@ fn answer_refuses_while_a_draft_sits_on_top_of_a_real_retirement() {
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
 
-    // Retire "authority" for real, with its own approve: the question is
-    // still only asked (not yet current), so this isn't refused.
+    // Retire "gadget" for real, with its own approve: no question names
+    // it, so the retire is not refused (per "Does the owner retire a term
+    // that a question names?").
     let mut retired = std::fs::read_to_string(&terms_path).unwrap();
     retired.push_str("retired: yes\n");
     std::fs::write(&terms_path, &retired).unwrap();

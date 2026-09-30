@@ -225,12 +225,14 @@ fn approve_skips_a_frozen_headings_tell_and_still_mints_a_new_skeletons_id() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
+    let frozen = frozen_tell_section_resolved();
     let content = format!(
         "# Example\n\nContext prose.\n\n{}\n\n### A new clean heading?\ndepends: widget\n",
-        frozen_tell_section_resolved()
+        frozen
     );
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
-    append_ledger_row(&dir, "answered", FROZEN_TELL_ID, "somehash", "A");
+    // The answered row carries the section's real hash, as `answer` writes it.
+    append_ledger_row(&dir, "answered", FROZEN_TELL_ID, &mirror_section_hash(&frozen), "A");
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(

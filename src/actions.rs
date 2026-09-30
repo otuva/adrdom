@@ -18,7 +18,7 @@ pub struct Outcome {
 }
 
 /// One refusal a topic file earns, tagged with the `check` category under
-/// which the identical text is filed (`parse`, `tells`, `plan`, `ids`):
+/// which the identical text is filed (`parse`, `tells`, `plan`, `ids`, or `answers`, which `check` prints from `check_answers` and does not forward from here):
 /// `approve` prefixes each with `approve: `, `check` with `<category>: `,
 /// so the same line reads either way regardless of which one printed it
 /// (one tag richer than `terms_refusals`'s plain `Vec<String>`, since a
@@ -264,7 +264,7 @@ fn finish_answer(
 }
 
 pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<Outcome, String> {
-    let Located { led, rf, idx, tf, cur_hash, .. } = locate_asked(root, id, version, Some(letter))?;
+    let Located { led, mut rf, idx, tf, cur_hash, .. } = locate_asked(root, id, version, Some(letter))?;
 
     let supersedes_val;
     {
@@ -285,33 +285,28 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
             });
         }
         supersedes_val = sec.supersedes.clone();
-        for old in &supersedes_val {
-            // A supersedes target must be current when this question was
-            // asked (per "Does one decision supersede several?", owner note
-            // 2026-09-24): the supersedes line freezes at ask, which `ask` itself now
-            // enforces. Here at answer time the target may since have moved
-            // to `superseded` -- accepted only when that happened after
-            // this question's own latest `asked` row, so a split (several
-            // newer questions each naming the same older target, asked
-            // together and answered one after another) goes through for
-            // every one of them. Compared by ledger order (row position),
-            // never the `time` string: two rows written in the same run can
-            // share a timestamp. Anything else -- never asked/answered,
-            // refused, withdrawn, or superseded before this question was
-            // asked -- refuses exactly as before.
-            let target_ok = match led.latest_state(old) {
-                Some(row) if row.event == "answered" => true,
-                Some(row) if row.event == "superseded" => {
-                    match (led.latest_asked_pos(id), led.latest_superseded_pos(old)) {
-                        (Some(asked_pos), Some(superseded_pos)) => superseded_pos > asked_pos,
-                        _ => false,
-                    }
-                }
-                _ => false,
-            };
-            if !target_ok {
-                let names = crate::view::all_heading_texts(root);
-                return Err(msg::supersedes_not_current(old, names.get(old).map(String::as_str)));
+    }
+    // `locate_asked` loads only the one file it finds, so every topic file
+    // is loaded again here for the repo-wide heading index.
+    let mut superseded_ids: Vec<String> = Vec::new();
+    {
+        let all = record::load_all(root);
+        let cross_file_headings = depends::cross_file_heading_index(&all, &led);
+        // The same normalization `ask` and `check` run before judging a
+        // file, so a cross-file heading-text entry reads the same here.
+        let phrase_lookup = terms::phrase_lookup(&tf.terms);
+        depends::normalize_cross_file_deps(&mut rf, &tf.terms, &phrase_lookup, &cross_file_headings, &led);
+        let names = crate::view::heading_texts(&all);
+        let refusals = supersedes_refusals(&rf.rel, &rf, &cross_file_headings, &names, &all, &led, Some(idx));
+        if !refusals.is_empty() {
+            return Err(refusals.into_iter().map(|r| r.message).collect::<Vec<_>>().join("\n"));
+        }
+        // The ids the entries resolve to (an entry that no longer resolves
+        // is a sibling replacer's target, already superseded: its own id).
+        for old in depends::supersedes_entries(&supersedes_val, &cross_file_headings, &led) {
+            match depends::resolve_supersedes(&old, &cross_file_headings, &led) {
+                Ok(target) => superseded_ids.push(target),
+                Err(_) => superseded_ids.push(old.trim().to_string()),
             }
         }
     }
@@ -337,7 +332,7 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
         detail: letter.to_string(),
         version: crate::version::VERSION.to_string(),
     }];
-    for old in &supersedes_val {
+    for old in &superseded_ids {
         rows.push(ledger::Row {
             time: write_time.clone(),
             event: "superseded".to_string(),
@@ -637,6 +632,7 @@ pub fn terms_refusals(
     led: &Ledger,
     source: &repo::Source,
     scan_banned: bool,
+    approved_plans: &std::collections::HashSet<String>,
 ) -> (Vec<String>, Vec<Vec<(String, String)>>) {
     let mut refusals: Vec<String> = Vec::new();
 
@@ -662,8 +658,11 @@ pub fn terms_refusals(
     // `depends:` line (once approved, an id -- possibly a term's), and
     // every non-retired term's recorded pairing, is a dependent -- the
     // widest reach of `state::dependent_entries`' three readers.
-    let dependents: Vec<state::DependentEntry> =
+    // Asked questions and not-yet-asked headings of approved plans (in the
+    // files of `approved_plans`, read as written on disk) name terms too.
+    let mut dependents: Vec<state::DependentEntry> =
         state::dependent_entries(records, led, tf, true, true);
+    dependents.extend(state::unsettled_entries(records, led, tf, approved_plans));
 
     // Step 4: every pair on a dependent must still hold in the new file.
     // `lookup` answers "what does this exact word/phrase resolve to" for
@@ -685,9 +684,17 @@ pub fn terms_refusals(
                 // carries the retired word) is never superseded (per "Does
                 // a retired term keep its words?"): the agent rewords the
                 // definition and the owner re-approves.
-                let next = match dep.source.decision_id() {
-                    Some(id) => Next::agent(format!("supersedes {} with a new question first", id)),
-                    None => msg::term_reword_and_approve(),
+                let next = match &dep.source {
+                    state::DependentSource::Decision { id, heading, .. } => {
+                        msg::term_retired_decision_next(&target.name, id, heading)
+                    }
+                    state::DependentSource::Asked { rel, heading } => {
+                        msg::term_retired_asked_next(heading, &target.name, rel)
+                    }
+                    state::DependentSource::PlanHeading { rel, .. } => {
+                        msg::term_retired_heading_next(&target.name, rel)
+                    }
+                    state::DependentSource::Term { .. } => msg::term_reword_and_approve(),
                 };
                 refusals.push(msg::term_retired_but_carried(&target.name, &label, next));
                 continue;
@@ -696,7 +703,11 @@ pub fn terms_refusals(
             // the entry, never a resolved word -- there is no word to
             // drift, only the target's removal/retirement above, so this
             // check is skipped for it (`from_word` is false).
-            if dep.from_word {
+            let is_decision_or_term = matches!(
+                dep.source,
+                state::DependentSource::Decision { .. } | state::DependentSource::Term { .. }
+            );
+            if dep.from_word && is_decision_or_term {
                 let still_resolves = lookup.get(word) == Some(uuid);
                 if !still_resolves {
                     // A decision dependent here is always current, since
@@ -782,6 +793,13 @@ fn do_approve_terms(
     // Every topic file, parsed once here and reused by `terms_refusals`
     // (no re-reading them from disk itself).
     let records: Vec<RecordFile> = record::load_all(root);
+    // Files whose plan is approved, judged on the files as written (before
+    // any normalization).
+    let approved_plans: std::collections::HashSet<String> = records
+        .iter()
+        .filter(|rf| state::plan_approved(led, rf, &rf.rel))
+        .map(|rf| rf.rel.clone())
+        .collect();
 
     // Step 2: mint ids in memory only; nothing is written to disk yet.
     let inserted = terms::mint_ids(&mut tf);
@@ -789,7 +807,15 @@ fn do_approve_terms(
     // Steps 1 (shape, post-mint), 3 (cycles), 4 (dependents), 5 (banned):
     // every refusal, all at once.
     let (refusals, pairs_per_entry) =
-        terms_refusals(root, &records, &tf, led, &repo::Source::WorkingTree, true);
+        terms_refusals(root, &records, &tf, led, &repo::Source::WorkingTree, true, &approved_plans);
+    let mut refusals = refusals;
+    // Only an approve that retires or removes a term needs to read the
+    // asked questions' terms lines; one that only adds or rewords does not.
+    if state::approve_retires_or_removes(led, &tf) {
+        for (rel, heading) in state::unreadable_asked_terms_lines(&records, led) {
+            refusals.push(msg::asked_terms_line_unreadable(&rel, &heading));
+        }
+    }
     if !refusals.is_empty() {
         let msg = refusals
             .iter()
@@ -798,6 +824,52 @@ fn do_approve_terms(
             .join("\n");
         return Err(msg);
     }
+
+    // Which terms changed since their latest `term` row (information only),
+    // and which need a new row. A term with no `term` row yet is new: it
+    // gets a row and prints nothing.
+    let term_hashes: Vec<(String, String, String)> = tf
+        .terms
+        .iter()
+        .filter_map(|t| t.id.clone().map(|id| (id, t.name.clone(), terms::term_hash(t))))
+        .collect();
+    let mut term_rows_due: Vec<(String, String, String)> = Vec::new();
+    let mut changed: Vec<(String, String)> = Vec::new();
+    for (id, name, hash) in &term_hashes {
+        match led.latest_for_id("term", id) {
+            Some(r) if r.hash == *hash => {}
+            Some(_) => {
+                changed.push((id.clone(), name.clone()));
+                term_rows_due.push((id.clone(), name.clone(), hash.clone()));
+            }
+            None => term_rows_due.push((id.clone(), name.clone(), hash.clone())),
+        }
+    }
+    // Computed here, before the file is rewritten, and printed only in the
+    // branch below that writes the `term` rows.
+    let changed_lines = {
+        let mut lines: Vec<String> = Vec::new();
+        if !changed.is_empty() {
+            let mut entries = state::dependent_entries(&records, led, &tf, true, false);
+            entries.extend(state::unsettled_entries(&records, led, &tf, &approved_plans));
+            for (id, name) in &changed {
+                let mut named_by: Vec<String> = Vec::new();
+                for e in &entries {
+                    if matches!(e.source, state::DependentSource::Term { .. }) {
+                        continue;
+                    }
+                    if e.pairs.iter().any(|(_, u)| u == id) {
+                        let label = e.source.label();
+                        if !named_by.contains(&label) {
+                            named_by.push(label);
+                        }
+                    }
+                }
+                lines.push(msg::term_definition_changed(name, &named_by));
+            }
+        }
+        lines
+    };
 
     // Step 6: write the file. `terms:` lines use the fresh pairs computed
     // above, one term at a time, in the same order as `tf.terms`.
@@ -835,27 +907,45 @@ fn do_approve_terms(
     if inserted > 0 {
         out.push(msg::terms_ids_filled(inserted));
     }
+    let write_time = ledger::write_time(led);
+    let term_rows: Vec<ledger::Row> = term_rows_due
+        .iter()
+        .map(|(id, name, hash)| ledger::Row {
+            time: write_time.clone(),
+            event: "term".to_string(),
+            id: id.clone(),
+            hash: hash.clone(),
+            detail: name.clone(),
+            version: crate::version::VERSION.to_string(),
+        })
+        .collect();
+    let append_failed = |e: std::io::Error| {
+        msg::approve_prefixed(msg::update_failed(
+            "ledger",
+            e,
+            Next::owner_runs("adr approve adrdom/terms.md"),
+        ))
+    };
 
     if state::terms_approved(led, &tf) {
-        // No new ledger row is written in this branch: the file already
-        // matches the ledger's latest `terms` row.
+        // The file already matches the ledger's latest `terms` row:
+        // nothing is written. A ledger from before `term` rows existed
+        // gets them at its next real approval, with no change listed
+        // for that one edit (no migration code in the tool).
         out.push(msg::terms_already_approved());
     } else {
         let row = ledger::Row {
-            time: ledger::write_time(led),
+            time: write_time.clone(),
             event: "terms".to_string(),
             id: "-".to_string(),
             hash: terms::file_hash(&tf),
             detail: crate::repo::TERMS_PATH.to_string(),
             version: crate::version::VERSION.to_string(),
         };
-        ledger::append(ledger_path, &[row]).map_err(|e| {
-            msg::approve_prefixed(msg::update_failed(
-                "ledger",
-                e,
-                Next::owner_runs("adr approve adrdom/terms.md"),
-            ))
-        })?;
+        let mut rows = vec![row];
+        rows.extend(term_rows);
+        ledger::append(ledger_path, &rows).map_err(append_failed)?;
+        out.extend(changed_lines);
         out.push(msg::terms_approved_now());
     }
 
@@ -903,6 +993,7 @@ pub fn record_refusals(
     cross_file_headings: &HashMap<String, Vec<(String, String)>>,
     names: &HashMap<String, String>,
     all: &[RecordFile],
+    replaced: &std::collections::HashSet<String>,
     led: &Ledger,
 ) -> Vec<Refusal> {
     let mut out: Vec<Refusal> = Vec::new();
@@ -997,6 +1088,26 @@ pub fn record_refusals(
     // to carry forward.
     for sec in &rf.sections {
         let frozen = state::is_frozen(led, sec);
+        // A frozen section whose text (the depends line included) is no
+        // longer what the ledger holds: `check` fails it right after, so
+        // approve refuses it before writing anything. A `Text` entry in
+        // it keeps its own refusal below.
+        if frozen
+            && !sec.depends.iter().any(|d| matches!(d, record::Dep::Text { .. }))
+            && state::frozen_text_edited(led, &rf.lines, sec)
+        {
+            // Category "answers": `check` prints this line from
+            // `check_answers` and forwards no `answers` refusal from here,
+            // so it prints once; `approve` refuses on every category.
+            out.push(Refusal {
+                category: "answers",
+                message: msg::answered_text_changed(
+                    rel,
+                    &sec.heading_text,
+                    sec.id.as_deref().unwrap_or(""),
+                ),
+            });
+        }
         for d in &sec.depends {
             if frozen && matches!(d, record::Dep::Text { .. }) {
                 out.push(Refusal {
@@ -1012,6 +1123,13 @@ pub fn record_refusals(
                     continue;
                 }
             }
+            // A dead section (refused, superseded, withdrawn) is history:
+            // what its line stood on when it was live is not resolved
+            // against the current decisions again, the same exemption
+            // `resolve_dep` gives a retired term.
+            if state::is_dead(led, sec) {
+                continue;
+            }
             if let Err(e) =
                 depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, cross_file_headings, led)
             {
@@ -1019,7 +1137,7 @@ pub fn record_refusals(
                 // (a retired one too), else the heading of a question in
                 // any state.
                 let name = match &e {
-                    depends::DepError::NotCurrentDecision(id) => terms_list
+                    depends::DepError::NotCurrentDecision(id) | depends::DepError::RetiredTermId(id) => terms_list
                         .iter()
                         .find(|t| t.id.as_deref() == Some(id.as_str()))
                         .map(|t| t.name.as_str())
@@ -1052,7 +1170,7 @@ pub fn record_refusals(
     // there. A refused/superseded/withdrawn question is dead and does not
     // count (`state::live_tiers`).
     if let Some(tiers) = &rf.tiers {
-        if let Some((open, answered)) = state::over_cap_headings(led, rf, tiers) {
+        if let Some((open, answered)) = state::over_cap_headings(led, rf, tiers, replaced) {
             out.push(Refusal {
                 category: "plan",
                 message: msg::tier_cap_exceeded(rel, &open, answered, record::TIER_CAP),
@@ -1060,6 +1178,117 @@ pub fn record_refusals(
         }
     }
 
+    out.extend(supersedes_refusals(rel, rf, cross_file_headings, names, all, led, None));
+
+    out
+}
+
+/// Every refusal the `supersedes:` lines of `rf` earn, the one place for the
+/// supersede rules, read by `record_refusals` (so `approve`, `check` and
+/// `show`), by `ask` for one candidate (`only`) and by `answer` for its own
+/// question. Category `plan`. Judged: each live section with a `supersedes:`
+/// line that is not frozen (an answered, refused or superseded section is
+/// history); an asked section whose text still stands is judged too, since
+/// `ask` froze its line and `answer` reads it. `only` narrows the judged
+/// sections to that index. The rules, in this order: every entry names a
+/// current decision (an asked section also accepts a target superseded after
+/// the section's latest `asked` row, a sibling replacer of the same decision
+/// answered first; compared by ledger position, never by time); the line
+/// leaves out no decision standing on a target; the section does not stand on
+/// a target; no other live, unanswered section of the file stands on a target.
+pub fn supersedes_refusals(
+    rel: &str,
+    rf: &RecordFile,
+    cross_file_headings: &HashMap<String, Vec<(String, String)>>,
+    names: &HashMap<String, String>,
+    all: &[RecordFile],
+    led: &Ledger,
+    only: Option<usize>,
+) -> Vec<Refusal> {
+    let refuse = |message: String| Refusal { category: "plan", message };
+    let mut out: Vec<Refusal> = Vec::new();
+    // (section index, asked, target ids) of each judged section.
+    let mut judged: Vec<(usize, bool, Vec<String>)> = Vec::new();
+    for (i, sec) in rf.sections.iter().enumerate() {
+        if sec.supersedes.is_empty()
+            || only.is_some_and(|o| o != i)
+            || state::is_frozen(led, sec)
+            || state::is_dead(led, sec)
+        {
+            continue;
+        }
+        let asked = sec
+            .id
+            .as_deref()
+            .is_some_and(|id| state::asked_text_stands(led, id, &record::section_hash(&rf.lines, sec)));
+        let mut ids = Vec::new();
+        for old in &depends::supersedes_entries(&sec.supersedes, cross_file_headings, led) {
+            match depends::resolve_supersedes(old, cross_file_headings, led) {
+                Ok(id) => ids.push(id),
+                Err(depends::SupersedesError::Ambiguous(files)) => {
+                    out.push(refuse(msg::ask_supersedes_ambiguous(rel, &sec.heading_text, old, &files)));
+                }
+                Err(depends::SupersedesError::NotCurrent) => {
+                    let split_sibling = asked
+                        && sec.id.as_deref().is_some_and(|id| {
+                            matches!(led.latest_state(old), Some(r) if r.event == "superseded")
+                                && matches!(
+                                    (led.latest_asked_pos(id), led.latest_superseded_pos(old)),
+                                    (Some(a), Some(s)) if s > a
+                                )
+                        });
+                    if split_sibling {
+                        ids.push(old.trim().to_string());
+                    } else {
+                        out.push(refuse(msg::ask_supersedes_not_current(
+                            rel,
+                            &sec.heading_text,
+                            old,
+                            names.get(old).map(String::as_str),
+                        )));
+                    }
+                }
+            }
+        }
+        judged.push((i, asked, ids));
+    }
+
+    // Only sections of this file: an open question of another file that
+    // stands on a replaced decision is left to check's not-current refusal.
+    let stands_on = |d: &record::Dep, target: &str| -> bool {
+        let at = rf
+            .sections
+            .iter()
+            .find(|s| s.id.as_deref() == Some(target))
+            .map(|s| (rf.rel.as_str(), s.heading_text.trim()));
+        depends::entry_names_target(d, &rf.rel, target, at)
+    };
+    for (i, asked, ids) in &judged {
+        let sec = &rf.sections[*i];
+        let missing = depends::left_out_of_supersedes(all, led, ids);
+        if !missing.is_empty() {
+            let moment = if *asked { msg::SupersedesMoment::Asked } else { msg::SupersedesMoment::Approve };
+            out.push(refuse(msg::supersedes_leaves_out(rel, &sec.heading_text, &missing, moment)));
+        }
+        for target in ids {
+            let target_name = names.get(target).map(String::as_str).unwrap_or("");
+            if sec.depends.iter().any(|d| stands_on(d, target)) {
+                out.push(refuse(msg::stands_on_what_it_supersedes(rel, &sec.heading_text, target_name)));
+            }
+            for (j, other) in rf.sections.iter().enumerate() {
+                let open = other.id.as_deref().map_or(true, |id| !state::is_current(led, id))
+                    && !state::is_dead(led, other);
+                if j != *i && open && other.depends.iter().any(|d| stands_on(d, target)) {
+                    out.push(refuse(msg::stands_on_what_the_plan_supersedes(
+                        rel,
+                        &other.heading_text,
+                        target_name,
+                        &sec.heading_text,
+                    )));
+                }
+            }
+        }
+    }
     out
 }
 
@@ -1300,8 +1529,16 @@ fn do_approve_record(
     // the first, so one `approve` call tells the agent everything it owes
     // the owner before asking again.
     let names = crate::view::heading_texts(&all_records);
+    // `all_records` is still as loaded, so its plan hashes are the raw ones.
+    let replaced_base = depends::replaced_base(
+        &all_records,
+        &depends::approved_plan_rels(&all_records, led),
+        &cross_file_headings,
+        led,
+    );
+    let replaced = depends::replaced_ids(&replaced_base, &rf, &cross_file_headings, led);
     let mut refusals: Vec<String> =
-        record_refusals(rel, &rf, terms_list, &phrase_lookup, &cross_file_headings, &names, &all_records, led)
+        record_refusals(rel, &rf, terms_list, &phrase_lookup, &cross_file_headings, &names, &all_records, &replaced, led)
             .into_iter()
             .map(|r| msg::approve_prefixed(r.message))
             .collect();
@@ -1321,27 +1558,20 @@ fn do_approve_record(
         // Once asked, the line is frozen with the body (per "Does one
         // decision supersede several?"): a split sibling's target may be
         // superseded by now, and approve leaves the line as it is.
-        let asked = sec.id.as_ref().is_some_and(|id| led.latest_asked(id).is_some());
-        if sec.supersedes.is_empty() || asked || state::is_frozen(led, sec) {
+        // An asked section whose text no longer stands as asked is being
+        // edited to be asked again: its line is turned like an unasked one's.
+        let stands_as_asked = sec.id.as_ref().is_some_and(|id| {
+            state::asked_text_stands(led, id, &record::section_hash(&rf.lines, sec))
+        });
+        if sec.supersedes.is_empty() || stands_as_asked || state::is_frozen(led, sec) {
             continue;
         }
-        let mut ids = Vec::new();
-        for old in &depends::supersedes_entries(&sec.supersedes, &cross_file_headings, led) {
-            match depends::resolve_supersedes(old, &cross_file_headings, led) {
-                Ok(id) => ids.push(id),
-                Err(depends::SupersedesError::NotCurrent) => refusals.push(msg::approve_prefixed(
-                    msg::ask_supersedes_not_current(
-                        rel,
-                        &sec.heading_text,
-                        old,
-                        names.get(old).map(String::as_str),
-                    ),
-                )),
-                Err(depends::SupersedesError::Ambiguous(files)) => refusals.push(msg::approve_prefixed(
-                    msg::ask_supersedes_ambiguous(rel, &sec.heading_text, old, &files),
-                )),
-            }
-        }
+        // A target that names no decision (or several) is `record_refusals`'
+        // refusal above; only the ones that resolve are turned.
+        let ids: Vec<String> = depends::supersedes_entries(&sec.supersedes, &cross_file_headings, led)
+            .iter()
+            .filter_map(|old| depends::resolve_supersedes(old, &cross_file_headings, led).ok())
+            .collect();
         supersedes_ids.insert(i, ids);
     }
 
@@ -1553,7 +1783,8 @@ fn do_approve_record(
         .tiers
         .as_ref()
         .expect("derive_error refuses above whenever tiers is None");
-    let live = state::live_tiers(led, &work_rf, tiers);
+    let replaced = depends::replaced_ids(&replaced_base, &work_rf, &cross_file_headings, led);
+    let live = state::live_tiers(led, &work_rf, tiers, &replaced);
     let tiers_str = record::tier_sizes(&live)
         .into_iter()
         .map(|(t, c)| format!("{} ({})", t, c))

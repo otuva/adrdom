@@ -116,3 +116,37 @@ Standard: dependency-ordered work stops at the unmet prerequisite and names it; 
   Costs: questions standing on the refused one reach the owner with their ground gone.
 
 **Answer:** A
+
+### Does a supersedes line name every current decision standing on its target?
+depends: f4f667ad-8714-4e65-897b-c7002e423c28=A, 2bae531b-c4df-48a0-89a0-3d52726741ea, aef1b384-2b33-47a2-92a8-ec7f8fb258ef, e2533580-1486-4dc9-8697-e6c53605fe72
+id: 796a2544-43e5-43db-b5d3-8a4e737ec9c6
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answer=b36113a1-1384-4e4c-a798-8399f4181366, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, current=e2533580-1486-4dc9-8697-e6c53605fe72, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, decisions=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, refuses=0942e445-0163-423e-8ba7-84dd8ac07045, superseded=2bae531b-c4df-48a0-89a0-3d52726741ea, supersedes=2bae531b-c4df-48a0-89a0-3d52726741ea, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
+
+Problem: a decision leaves force while decisions standing on it stay current, and nothing says so.
+Standard: referential integrity: a record that others reference is not removed while the references stand.
+
+- A) Yes: the line names every current decision standing on a named target, in every topic file and through the decisions standing on those, and approve refuses a line that leaves one out and names the missing ones.
+  Why: no decision loses its ground unnoticed; the plan holds the whole tree that changes, and the owner reads it as one.
+  Costs: approve reads every topic file to find the tree; a dependent in another file leaves force with the root, and its replacement is written in the root's file or after the root's answer.
+- B) No: the line names what the agent chooses, and check reports every current decision left standing on a superseded one until a question supersedes it.
+  Why: a small change stays small; the owner is not made to decide again what would not move.
+  Costs: between the answer and the follow-up questions, current decisions stand on nothing; the report is the only guard, and the follow-up rests on the agent.
+
+**Answer:** A
+
+### Does a tier hold its cap by the count after its supersedes lines take effect?
+depends: f4f667ad-8714-4e65-897b-c7002e423c28=A, 15d82e53-e344-4347-b639-3bf6eb9ef1b4, f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, 2bae531b-c4df-48a0-89a0-3d52726741ea
+id: f416062c-211f-4d20-a6bf-23a561b5f59b
+terms: answered=b36113a1-1384-4e4c-a798-8399f4181366, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, refusal=0942e445-0163-423e-8ba7-84dd8ac07045, refused=0942e445-0163-423e-8ba7-84dd8ac07045, superseded=2bae531b-c4df-48a0-89a0-3d52726741ea, supersedes=2bae531b-c4df-48a0-89a0-3d52726741ea, tier=f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6, withdrawn=e4a2ef0c-3354-4c9b-a8d9-9e204e544d85
+
+Problem: a question replacing a decision in a full tier is refused on the cap, the old and the new counted together, so a decision in a full tier cannot be replaced in its own file.
+Standard: a limit on a set is judged on the set as the change leaves it.
+
+- A) Yes: a decision named on the supersedes line of a question not yet answered is left out of its tier's count, so the cap holds by what the tier holds once the replacement is answered.
+  Why: a replacement in a full tier is a legal move, and the file that holds a subject keeps holding it.
+  Costs: approve and ask count from the supersedes lines of open questions; a refused or withdrawn replacement puts the old back in the count, and two replacements of one decision count as two.
+- B) No: every question that is not refused, superseded or withdrawn counts, old and new alike, and a replacement in a full tier goes to another topic file.
+  Why: one count, read straight off the file.
+  Costs: a full tier takes no replacement in its own file, so the replacement lands in a file away from the subject it changes, and the refusal names moves that do not fit a replacement.
+
+**Answer:** A

@@ -125,6 +125,11 @@ pub fn load_terms_via(root: &Path, source: &crate::repo::Source) -> Option<Terms
 pub enum DependentSource {
     Decision { rel: String, heading: String, id: String },
     Term { name: String },
+    /// An asked question (latest ledger state `asked`), by its terms line.
+    Asked { rel: String, heading: String },
+    /// A heading of an approved plan with an id and no ledger state yet,
+    /// by its heading text.
+    PlanHeading { rel: String, heading: String },
 }
 
 impl DependentSource {
@@ -134,15 +139,141 @@ impl DependentSource {
         match self {
             DependentSource::Decision { rel, heading, .. } => format!("{}: \"{}\"", rel, heading),
             DependentSource::Term { name } => format!("term \"{}\"", name),
+            DependentSource::Asked { rel, heading } | DependentSource::PlanHeading { rel, heading } => {
+                format!("{}: \"{}\"", rel, heading)
+            }
         }
     }
 
     pub fn decision_id(&self) -> Option<&str> {
         match self {
             DependentSource::Decision { id, .. } => Some(id),
-            DependentSource::Term { .. } => None,
+            _ => None,
         }
     }
+}
+
+/// Whether `t`, a retired entry, still has its retirement to record: the
+/// ledger's latest `term` row for its id is missing or holds another hash
+/// (the hash covers the retired flag, so an approved retire matches).
+pub fn retire_unrecorded(led: &Ledger, t: &terms::Term) -> bool {
+    match &t.id {
+        Some(id) => led
+            .latest_for_id("term", id)
+            .map_or(true, |r| r.hash != terms::term_hash(t)),
+        None => true,
+    }
+}
+
+/// Whether the terms approve of `tf` retires or removes a term: an entry
+/// with the retired flag whose retirement is not recorded yet, or an id
+/// with a `term` row and no entry in `tf`.
+pub fn approve_retires_or_removes(led: &Ledger, tf: &TermsFile) -> bool {
+    if tf.terms.iter().any(|t| t.retired && retire_unrecorded(led, t)) {
+        return true;
+    }
+    led.rows.iter().any(|r| {
+        r.event == "term" && !tf.terms.iter().any(|t| t.id.as_deref() == Some(r.id.as_str()))
+    })
+}
+
+/// The asked questions, and the not-yet-asked headings of approved plans,
+/// that name a term of `tf` (retired ones included): the dependents a
+/// term's retirement or removal must also clear, beyond the current
+/// decisions `dependent_entries` reads. An asked question is read by its
+/// frozen terms line; a heading with an id and no ledger state at all, in
+/// a file whose rel is in `approved_plans`, by its heading text resolved
+/// against every term with the retired flag ignored, a retired term counted
+/// only while its retirement has no matching `term` row (a word a current
+/// term also owns keeps resolving to the current term). Refused,
+/// superseded, withdrawn and answered questions are never returned here.
+pub fn unsettled_entries(
+    records: &[RecordFile],
+    led: &Ledger,
+    tf: &TermsFile,
+    approved_plans: &std::collections::HashSet<String>,
+) -> Vec<DependentEntry> {
+    let current: Vec<terms::Term> = tf.terms.iter().filter(|t| !t.retired).cloned().collect();
+    let retired: Vec<terms::Term> = tf
+        .terms
+        .iter()
+        .filter(|t| t.retired)
+        // Only a retire not yet recorded: the `term` row's hash covers the
+        // retired flag, so an approved retire has a matching row and a
+        // heading written after it is not a dependent of this approve.
+        .filter(|t| retire_unrecorded(led, t))
+        .cloned()
+        .map(|mut t| {
+            t.retired = false;
+            t
+        })
+        .collect();
+    let mut out = Vec::new();
+    for rf in records {
+        for sec in &rf.sections {
+            let Some(id) = &sec.id else { continue };
+            match led.latest_state(id).map(|r| r.event.as_str()) {
+                Some("asked") => {
+                    let pairs: Vec<(String, String)> = sec
+                        .terms_line
+                        .and_then(|tl| terms::parse_terms_line(rf.lines[tl].trim_end()))
+                        .unwrap_or_default();
+                    if !pairs.is_empty() {
+                        out.push(DependentEntry {
+                            source: DependentSource::Asked {
+                                rel: rf.rel.clone(),
+                                heading: sec.heading_text.clone(),
+                            },
+                            pairs,
+                            from_word: true,
+                        });
+                    }
+                }
+                None if approved_plans.contains(&rf.rel) => {
+                    let mut pairs = terms::resolve(&sec.heading_text, &current);
+                    for p in terms::resolve(&sec.heading_text, &retired) {
+                        if !pairs.iter().any(|(w, _)| *w == p.0) {
+                            pairs.push(p);
+                        }
+                    }
+                    if !pairs.is_empty() {
+                        out.push(DependentEntry {
+                            source: DependentSource::PlanHeading {
+                                rel: rf.rel.clone(),
+                                heading: sec.heading_text.clone(),
+                            },
+                            pairs,
+                            from_word: true,
+                        });
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    out
+}
+
+/// The (rel, heading) of every asked question whose `terms:` line is
+/// present but cannot be read. `unsettled_entries` cannot tell what such a
+/// question names, so a retire it should refuse would pass; the terms
+/// approve refuses on these instead. A question with no `terms:` line at
+/// all names no term and is not listed.
+pub fn unreadable_asked_terms_lines(records: &[RecordFile], led: &Ledger) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for rf in records {
+        for sec in &rf.sections {
+            let Some(id) = &sec.id else { continue };
+            if led.latest_state(id).map(|r| r.event.as_str()) != Some("asked") {
+                continue;
+            }
+            let Some(tl) = sec.terms_line else { continue };
+            if terms::parse_terms_line(rf.lines[tl].trim_end()).is_none() {
+                out.push((rf.rel.clone(), sec.heading_text.clone()));
+            }
+        }
+    }
+    out
 }
 
 /// One source's pairing to one or more terms: the pairs themselves, and
@@ -310,6 +441,14 @@ pub fn is_dead(led: &Ledger, sec: &Section) -> bool {
         .unwrap_or(false)
 }
 
+/// True when `sec` is named on the supersedes line of a question not
+/// answered yet (`depends::replaced_ids`): it is left out of its tier's
+/// count, so the cap holds by what the tier holds once that question is
+/// answered.
+fn is_replaced(sec: &Section, replaced: &std::collections::HashSet<String>) -> bool {
+    sec.id.as_ref().is_some_and(|id| replaced.contains(id))
+}
+
 /// `tiers` (index-aligned with `rf.sections`, as `rf.tiers` is) with every
 /// dead section's entry (`is_dead`) left out: the tier cap (per "Does the
 /// tool cap the questions in a tier?") counts
@@ -318,11 +457,16 @@ pub fn is_dead(led: &Ledger, sec: &Section) -> bool {
 /// reads `rf.tiers` whole. The one place that filters before counting, so
 /// `record::over_cap`/`record::tier_sizes` (which take a plain tier list
 /// and have no ledger access) stay ignorant of ledger state.
-pub fn live_tiers(led: &Ledger, rf: &RecordFile, tiers: &[usize]) -> Vec<usize> {
+pub fn live_tiers(
+    led: &Ledger,
+    rf: &RecordFile,
+    tiers: &[usize],
+    replaced: &std::collections::HashSet<String>,
+) -> Vec<usize> {
     rf.sections
         .iter()
         .zip(tiers)
-        .filter(|(sec, _)| !is_dead(led, sec))
+        .filter(|(sec, _)| !is_dead(led, sec) && !is_replaced(sec, replaced))
         .map(|(_, &t)| t)
         .collect()
 }
@@ -360,12 +504,13 @@ pub fn over_cap_headings(
     led: &Ledger,
     rf: &RecordFile,
     tiers: &[usize],
+    replaced: &std::collections::HashSet<String>,
 ) -> Option<(Vec<String>, usize)> {
     let live: Vec<(&Section, usize)> = rf
         .sections
         .iter()
         .zip(tiers)
-        .filter(|(sec, _)| !is_dead(led, sec))
+        .filter(|(sec, _)| !is_dead(led, sec) && !is_replaced(sec, replaced))
         .map(|(sec, &t)| (sec, t))
         .collect();
     let live_tiers: Vec<usize> = live.iter().map(|(_, t)| *t).collect();
@@ -519,6 +664,24 @@ pub fn closed_match(led: &Ledger, cur_hash: &str, sec: &Section, id: &str) -> Cl
         }
     } else {
         ClosedMatch::NotClosed
+    }
+}
+
+/// True when `sec` is frozen (`is_frozen`) and its text as it stands in
+/// `lines` is not the text the ledger holds for it: the same judgment
+/// `check` passes in `check_answers` (`closed_match` for a section with an
+/// answer or refusal line, else the latest `asked` row's hash), shared so
+/// `approve` refuses before writing what `check` would fail right after.
+pub fn frozen_text_edited(led: &Ledger, lines: &[String], sec: &Section) -> bool {
+    let Some(id) = &sec.id else { return false };
+    if !is_frozen(led, sec) {
+        return false;
+    }
+    let cur = crate::record::section_hash(lines, sec);
+    if sec.answer_line.is_some() || sec.is_refused() {
+        matches!(closed_match(led, &cur, sec, id), ClosedMatch::Edited)
+    } else {
+        led.latest_asked(id).is_some_and(|r| r.hash != cur)
     }
 }
 

@@ -110,8 +110,16 @@ pub fn run(record_path: PathBuf) -> i32 {
     // Every heading by its identifier, any state: a refusal names the
     // question beside an identifier.
     let names = crate::view::heading_texts(&all_records);
+    // `all_records` is still as loaded, so its plan hashes are the raw ones.
+    let replaced_base = depends::replaced_base(
+        &all_records,
+        &depends::approved_plan_rels(&all_records, &led),
+        &cross_file_headings,
+        &led,
+    );
+    let replaced = depends::replaced_ids(&replaced_base, &rf, &cross_file_headings, &led);
     let shape_msgs: Vec<String> =
-        actions::record_refusals(&rel, &rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &all_records, &led)
+        actions::record_refusals(&rel, &rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &all_records, &replaced, &led)
             .into_iter()
             .filter(|r| r.category == "parse")
             .map(|r| format!("ask: {}", r.message))
@@ -202,7 +210,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     // file-wide (mirrors approve's cap check, prefixed `ask:`). Dead
     // (refused/superseded/withdrawn) questions don't count.
     if let Some(tiers) = &rf.tiers {
-        if let Some((open, answered)) = state::over_cap_headings(&led, &rf, tiers) {
+        if let Some((open, answered)) = state::over_cap_headings(&led, &rf, tiers, &replaced) {
             eprintln!("ask: {}", msg::tier_cap_exceeded(&rel, &open, answered, record::TIER_CAP));
             return 1;
         }
@@ -301,26 +309,15 @@ pub fn run(record_path: PathBuf) -> i32 {
             continue;
         }
 
-        // Supersedes target must be current (per "Does one decision
-        // supersede several?", owner note 2026-09-24): the supersedes
-        // line freezes at ask, so a candidate naming a target that is not
-        // current right now -- never answered, refused, withdrawn, or
-        // already superseded -- refuses here, even when it was current at
-        // approval (per "Does approve turn the supersedes line into
-        // identifiers?": approve turns the line, ask checks the target
-        // once more). `answer` later accepts a target that was superseded
-        // after this question's own `asked` row (a split), but never one
-        // that was already stale before it was ever asked.
-        for old in &sec.supersedes {
-            if !state::is_current(&led, old) {
-                refusals.push(msg::ask_supersedes_not_current(
-                    &rel,
-                    &sec.heading_text,
-                    old,
-                    names.get(old).map(String::as_str),
-                ));
-            }
-        }
+        // The supersede rules (`actions::supersedes_refusals`, the one place
+        // `approve`, `check` and `answer` read too): the line freezes at ask,
+        // so a candidate naming a target that is not current, leaving out a
+        // decision standing on one, or standing on one refuses here.
+        refusals.extend(
+            actions::supersedes_refusals(&rel, &rf, &cross_file_headings, &names, &all_records, &led, Some(i))
+                .into_iter()
+                .map(|r| r.message),
+        );
 
         // Moot refusal: this candidate's own entry in `moot_pairs`, matched
         // by section index since two sections may share a heading text.

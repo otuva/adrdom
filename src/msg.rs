@@ -383,6 +383,20 @@ pub fn dep_not_current_decision(rel: &str, heading: &str, id: &str, name: Option
     )
 }
 
+/// A live section's depends line names, by identifier, a term that is
+/// retired.
+pub fn dep_retired_term_id(rel: &str, heading: &str, id: &str, name: Option<&str>) -> String {
+    refuse(
+        format!(
+            "{}: \"{}\" depends on the term {}, which is retired",
+            rel,
+            heading,
+            name.map_or_else(|| id.to_string(), |n| format!("\"{}\"", n))
+        ),
+        Next::agent("names a term that is not retired or removes the entry"),
+    )
+}
+
 pub fn dep_no_term(rel: &str, heading: &str, text: &str) -> String {
     refuse(
         format!(
@@ -802,13 +816,6 @@ fn named(id: &str, name: Option<&str>) -> String {
     }
 }
 
-pub fn supersedes_not_current(id: &str, name: Option<&str>) -> String {
-    refuse(
-        format!("supersedes target {} is not a current decision", named(id, name)),
-        Next::agent("fixes the supersedes line"),
-    )
-}
-
 // --- ask.rs -----------------------------------------------------------------
 
 pub fn edited_after_answered(path: &str, heading: &str) -> String {
@@ -850,14 +857,86 @@ pub fn missing_answer_set(rel: &str, dependent: &str, target: &str) -> String {
 }
 
 pub fn ask_supersedes_not_current(rel: &str, heading: &str, old: &str, name: Option<&str>) -> String {
+    let target = if crate::record::is_uuid(old) {
+        named(old, name)
+    } else {
+        format!("\"{}\"", old)
+    };
     refuse(
         format!(
             "{}: \"{}\": supersedes {}, which is not a current decision",
-            rel,
-            heading,
-            named(old, name)
+            rel, heading, target
         ),
-        Next::agent("fixes the supersedes line"),
+        Next::agent("removes it from the supersedes line or names a current decision"),
+    )
+}
+
+/// The moment a refusal about the supersedes line is printed: it decides
+/// whether the agent's move ends in asking again.
+#[derive(Clone, Copy)]
+pub enum SupersedesMoment {
+    /// `approve`: nothing of the question has been asked yet.
+    Approve,
+    /// `ask` or `answer`: the question was, or is about to be, asked.
+    Asked,
+}
+
+/// The supersedes line of `heading` leaves out current decisions standing
+/// on what it replaces. `missing` are `(file, heading, id)`; a heading of
+/// another file is printed with its file.
+pub fn supersedes_leaves_out(
+    rel: &str,
+    heading: &str,
+    missing: &[(String, String, String)],
+    moment: SupersedesMoment,
+) -> String {
+    let names = missing
+        .iter()
+        .map(|(file, h, _)| {
+            if file == rel {
+                format!("\"{}\"", h)
+            } else {
+                format!("{}: \"{}\"", file, h)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    refuse(
+        format!(
+            "{}: \"{}\": supersedes a decision that current decisions stand on, and the line leaves out {}",
+            rel, heading, names
+        ),
+        Next::agent(match moment {
+            SupersedesMoment::Approve => "adds them to the supersedes line",
+            SupersedesMoment::Asked => "adds them to the supersedes line and asks again",
+        }),
+    )
+}
+
+/// A question whose depends line names a decision that its own supersedes
+/// line replaces.
+pub fn stands_on_what_it_supersedes(rel: &str, heading: &str, target: &str) -> String {
+    refuse(
+        format!(
+            "{}: \"{}\" stands on \"{}\", which it supersedes",
+            rel, heading, target
+        ),
+        Next::agent("removes that entry from its depends line"),
+    )
+}
+
+/// A question of the plan stands on a decision that another question of the
+/// same plan supersedes.
+pub fn stands_on_what_the_plan_supersedes(rel: &str, heading: &str, target: &str, replacer: &str) -> String {
+    refuse(
+        format!(
+            "{}: \"{}\" stands on \"{}\", which \"{}\" supersedes",
+            rel, heading, target, replacer
+        ),
+        Next::agent(format!(
+            "makes it stand on \"{}\" or removes the entry from its depends line",
+            replacer
+        )),
     )
 }
 
@@ -1474,6 +1553,15 @@ pub fn section_no_terms_line(rel: &str, heading: &str, id: &str, answered: bool)
         Next::agent("re-asks so the terms line is written")
     };
     refuse(format!("{}: {}: no terms line", rel, heading), next)
+}
+
+/// approve of the terms file found an asked question whose `terms:` line
+/// cannot be read, so it cannot tell which terms the question names.
+pub fn asked_terms_line_unreadable(rel: &str, heading: &str) -> String {
+    refuse(
+        format!("{}: {}: terms line cannot be read", rel, heading),
+        Next::agent(format!("restores {} from git (e.g. git checkout -- {})", rel, rel)),
+    )
 }
 
 /// A section's `terms:` line is present but doesn't parse (per
@@ -2248,6 +2336,21 @@ pub fn terms_approved_now() -> String {
     "approve: adrdom/terms.md: approved".to_string()
 }
 
+/// One line per term whose entry changed at approve (its name, definition,
+/// aliases or retired flag: what the ledger row hashes): the live
+/// questions (`named_by`, already labelled) that name it.
+pub fn term_definition_changed(name: &str, named_by: &[String]) -> String {
+    if named_by.is_empty() {
+        format!("approve: term \"{}\" changed; named by no question", name)
+    } else {
+        format!(
+            "approve: term \"{}\" changed; named by {}",
+            name,
+            named_by.join(", ")
+        )
+    }
+}
+
 pub fn plan_approved(rel: &str) -> String {
     format!("approve: {}: plan approved", rel)
 }
@@ -2457,6 +2560,45 @@ pub fn gitattributes_up_to_date() -> String {
     "install: adrdom/.gitattributes: already up to date".to_string()
 }
 
+/// The first part of every retired-term move: the agent takes the flag off
+/// the one entry, leaving every other edit in the file as it is.
+fn unretire(term: &str) -> String {
+    format!("takes `retired: yes` off \"{}\" in adrdom/terms.md", term)
+}
+
+/// The `Next` for `term_retired_but_carried` when the dependent is a
+/// current decision: take the retire back (approving a topic file is
+/// refused while terms.md waits for approval), then supersede the decision.
+pub fn term_retired_decision_next(term: &str, id: &str, heading: &str) -> Next {
+    Next::agent(format!(
+        "{}, then supersedes {} (\"{}\") with a new question",
+        unretire(term),
+        id,
+        heading
+    ))
+}
+
+/// The `Next` for `term_retired_but_carried` when the dependent is an
+/// asked question: reword it so it no longer names the term and ask it
+/// again, or strike it from the plan.
+pub fn term_retired_asked_next(heading: &str, term: &str, rel: &str) -> Next {
+    Next::agent(format!(
+        "{}, then rewords \"{}\" so it does not name \"{}\" and runs adr ask {}, or strikes it from the plan",
+        unretire(term),
+        heading,
+        term,
+        rel
+    ))
+}
+
+/// The `Next` for `term_retired_but_carried` when the dependent is a
+/// heading of an approved plan that is not asked yet: reword or strike the
+/// heading, then the owner approves the changed plan.
+pub fn term_retired_heading_next(term: &str, rel: &str) -> Next {
+    Next::agent(format!("{}, then rewords the heading or strikes it from the plan", unretire(term)))
+        .and_owner_runs(format!("adr approve {}", rel))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2501,7 +2643,7 @@ mod tests {
             circular_definition("a -> b -> a"),
             term_removed_but_carried("uuid-1", Some("word"), "term \"x\""),
             term_retired_but_carried("x", "term \"y\"", term_reword_and_approve()),
-            term_retired_but_carried("x", "id-1: \"heading\"", Next::agent("supersedes id-1 with a new question first")),
+            term_retired_but_carried("x", "id-1: \"heading\"", term_retired_decision_next("x", "id-1", "heading")),
             word_moved_off_term("word", "term", "term \"y\"", term_reword_and_approve()),
             word_moved_off_term(
                 "word",
@@ -2530,6 +2672,7 @@ mod tests {
             term_definition_terms_line_malformed("term"),
             frozen_depends_edited("x.md", "heading"),
             dep_not_current_decision("x.md", "heading", "id-1", Some("name")),
+            dep_retired_term_id("x.md", "heading", "id-1", Some("name")),
             dep_no_term("x.md", "heading", "widget"),
             bad_option_letter("x.md", "dependent", "target", 'Z'),
             tier_cap_exceeded("x.md", &["heading".to_string()], 0, 4),
@@ -2556,7 +2699,6 @@ mod tests {
             malformed_terms_line("id-1", "heading"),
             terms_line_names_gone_term("id-1", "heading", "uuid-1", "word"),
             terms_line_names_retired_term("id-1", "heading", "term"),
-            supersedes_not_current("id-1", None),
             edited_after_answered("x.md", "heading"),
             edited_after_refused("x.md", "heading"),
             plan_not_approved("x.md"),

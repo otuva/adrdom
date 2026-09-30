@@ -137,12 +137,14 @@ fn show_prints_tiers_states_stands_on_and_chosen_sentence() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/tiered.md", TIERED_RECORD);
-    append_ledger_row_at(&dir, "asked", "id-root", "h-root", "1.1 Root?", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "answered", "id-root", "h-root", "A", "2024-01-01T00:00:01Z");
-    // The open question's `asked` row carries the hash of its text as it
-    // stands: a stand-in hash would read as "edited since it was asked",
-    // and show prints no version and no owner command for that.
+    // Every row carries the hash of its section's text as it stands: a
+    // stand-in hash reads as "edited since", for the answered root as for
+    // the open question (show prints no version and no owner command then).
     let rf = adr::record::load(&record).unwrap();
+    let root = rf.sections.iter().find(|s| s.id.as_deref() == Some("id-root")).unwrap();
+    let root_hash = adr::record::section_hash(&rf.lines, root);
+    append_ledger_row_at(&dir, "asked", "id-root", &root_hash, "1.1 Root?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", "id-root", &root_hash, "A", "2024-01-01T00:00:01Z");
     let open = rf.sections.iter().find(|s| s.id.as_deref() == Some("id-open")).unwrap();
     let open_hash = adr::record::section_hash(&rf.lines, open);
     append_ledger_row(&dir, "asked", "id-open", &open_hash, "2.1 Depends on root?");
