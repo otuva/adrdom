@@ -522,6 +522,24 @@ pub fn closed_match(led: &Ledger, cur_hash: &str, sec: &Section, id: &str) -> Cl
     }
 }
 
+/// True when `sec` is frozen (`is_frozen`) and its text as it stands in
+/// `lines` is not the text the ledger holds for it: the same judgment
+/// `check` passes in `check_answers` (`closed_match` for a section with an
+/// answer or refusal line, else the latest `asked` row's hash), shared so
+/// `approve` refuses before writing what `check` would fail right after.
+pub fn frozen_text_edited(led: &Ledger, lines: &[String], sec: &Section) -> bool {
+    let Some(id) = &sec.id else { return false };
+    if !is_frozen(led, sec) {
+        return false;
+    }
+    let cur = crate::record::section_hash(lines, sec);
+    if sec.answer_line.is_some() || sec.is_refused() {
+        matches!(closed_match(led, &cur, sec, id), ClosedMatch::Edited)
+    } else {
+        led.latest_asked(id).is_some_and(|r| r.hash != cur)
+    }
+}
+
 /// One ruling a question earned toward its `id`: an answered letter, or a
 /// refusal. Per "Does check fail a question answered with two different
 /// options?" (e3200081-9995-4bbe-983f-2f430dc341e7, rule 8): a refusal and

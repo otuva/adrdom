@@ -997,6 +997,23 @@ pub fn record_refusals(
     // to carry forward.
     for sec in &rf.sections {
         let frozen = state::is_frozen(led, sec);
+        // A frozen section whose text (the depends line included) is no
+        // longer what the ledger holds: `check` fails it right after, so
+        // approve refuses it before writing anything. A `Text` entry in
+        // it keeps its own refusal below.
+        if frozen
+            && !sec.depends.iter().any(|d| matches!(d, record::Dep::Text { .. }))
+            && state::frozen_text_edited(led, &rf.lines, sec)
+        {
+            out.push(Refusal {
+                category: "plan",
+                message: msg::answered_text_changed(
+                    rel,
+                    &sec.heading_text,
+                    sec.id.as_deref().unwrap_or(""),
+                ),
+            });
+        }
         for d in &sec.depends {
             if frozen && matches!(d, record::Dep::Text { .. }) {
                 out.push(Refusal {
