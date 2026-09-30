@@ -2560,16 +2560,21 @@ pub fn gitattributes_up_to_date() -> String {
     "install: adrdom/.gitattributes: already up to date".to_string()
 }
 
-const RESTORE_TERMS: &str =
-    "restores adrdom/terms.md from git (e.g. git checkout -- adrdom/terms.md)";
+/// The first part of every retired-term move: the agent takes the flag off
+/// the one entry, leaving every other edit in the file as it is.
+fn unretire(term: &str) -> String {
+    format!("takes `retired: yes` off \"{}\" in adrdom/terms.md", term)
+}
 
 /// The `Next` for `term_retired_but_carried` when the dependent is a
-/// current decision: put terms.md back (approving a topic file is refused
-/// while it waits for approval), then supersede the decision.
-pub fn term_retired_decision_next(id: &str, heading: &str) -> Next {
+/// current decision: take the retire back (approving a topic file is
+/// refused while terms.md waits for approval), then supersede the decision.
+pub fn term_retired_decision_next(term: &str, id: &str, heading: &str) -> Next {
     Next::agent(format!(
         "{}, then supersedes {} (\"{}\") with a new question",
-        RESTORE_TERMS, id, heading
+        unretire(term),
+        id,
+        heading
     ))
 }
 
@@ -2579,15 +2584,18 @@ pub fn term_retired_decision_next(id: &str, heading: &str) -> Next {
 pub fn term_retired_asked_next(heading: &str, term: &str, rel: &str) -> Next {
     Next::agent(format!(
         "{}, then rewords \"{}\" so it does not name \"{}\" and runs adr ask {}, or strikes it from the plan",
-        RESTORE_TERMS, heading, term, rel
+        unretire(term),
+        heading,
+        term,
+        rel
     ))
 }
 
 /// The `Next` for `term_retired_but_carried` when the dependent is a
 /// heading of an approved plan that is not asked yet: reword or strike the
 /// heading, then the owner approves the changed plan.
-pub fn term_retired_heading_next(rel: &str) -> Next {
-    Next::agent(format!("{}, then rewords the heading or strikes it from the plan", RESTORE_TERMS))
+pub fn term_retired_heading_next(term: &str, rel: &str) -> Next {
+    Next::agent(format!("{}, then rewords the heading or strikes it from the plan", unretire(term)))
         .and_owner_runs(format!("adr approve {}", rel))
 }
 
@@ -2635,7 +2643,7 @@ mod tests {
             circular_definition("a -> b -> a"),
             term_removed_but_carried("uuid-1", Some("word"), "term \"x\""),
             term_retired_but_carried("x", "term \"y\"", term_reword_and_approve()),
-            term_retired_but_carried("x", "id-1: \"heading\"", term_retired_decision_next("id-1", "heading")),
+            term_retired_but_carried("x", "id-1: \"heading\"", term_retired_decision_next("x", "id-1", "heading")),
             word_moved_off_term("word", "term", "term \"y\"", term_reword_and_approve()),
             word_moved_off_term(
                 "word",

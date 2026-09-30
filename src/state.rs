@@ -153,13 +153,38 @@ impl DependentSource {
     }
 }
 
+/// Whether `t`, a retired entry, still has its retirement to record: the
+/// ledger's latest `term` row for its id is missing or holds another hash
+/// (the hash covers the retired flag, so an approved retire matches).
+pub fn retire_unrecorded(led: &Ledger, t: &terms::Term) -> bool {
+    match &t.id {
+        Some(id) => led
+            .latest_for_id("term", id)
+            .map_or(true, |r| r.hash != terms::term_hash(t)),
+        None => true,
+    }
+}
+
+/// Whether the terms approve of `tf` retires or removes a term: an entry
+/// with the retired flag whose retirement is not recorded yet, or an id
+/// with a `term` row and no entry in `tf`.
+pub fn approve_retires_or_removes(led: &Ledger, tf: &TermsFile) -> bool {
+    if tf.terms.iter().any(|t| t.retired && retire_unrecorded(led, t)) {
+        return true;
+    }
+    led.rows.iter().any(|r| {
+        r.event == "term" && !tf.terms.iter().any(|t| t.id.as_deref() == Some(r.id.as_str()))
+    })
+}
+
 /// The asked questions, and the not-yet-asked headings of approved plans,
 /// that name a term of `tf` (retired ones included): the dependents a
 /// term's retirement or removal must also clear, beyond the current
 /// decisions `dependent_entries` reads. An asked question is read by its
 /// frozen terms line; a heading with an id and no ledger state at all, in
 /// a file whose rel is in `approved_plans`, by its heading text resolved
-/// against every term with the retired flag ignored (a word a current
+/// against every term with the retired flag ignored, a retired term counted
+/// only while its retirement has no matching `term` row (a word a current
 /// term also owns keeps resolving to the current term). Refused,
 /// superseded, withdrawn and answered questions are never returned here.
 pub fn unsettled_entries(
@@ -173,6 +198,10 @@ pub fn unsettled_entries(
         .terms
         .iter()
         .filter(|t| t.retired)
+        // Only a retire not yet recorded: the `term` row's hash covers the
+        // retired flag, so an approved retire has a matching row and a
+        // heading written after it is not a dependent of this approve.
+        .filter(|t| retire_unrecorded(led, t))
         .cloned()
         .map(|mut t| {
             t.retired = false;

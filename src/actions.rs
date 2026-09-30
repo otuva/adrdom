@@ -264,7 +264,7 @@ fn finish_answer(
 }
 
 pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<Outcome, String> {
-    let Located { led, rf, idx, tf, cur_hash, .. } = locate_asked(root, id, version, Some(letter))?;
+    let Located { led, mut rf, idx, tf, cur_hash, .. } = locate_asked(root, id, version, Some(letter))?;
 
     let supersedes_val;
     {
@@ -286,13 +286,28 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
         }
         supersedes_val = sec.supersedes.clone();
     }
+    // `locate_asked` loads only the one file it finds, so every topic file
+    // is loaded again here for the repo-wide heading index.
+    let mut superseded_ids: Vec<String> = Vec::new();
     {
         let all = record::load_all(root);
         let cross_file_headings = depends::cross_file_heading_index(&all, &led);
+        // The same normalization `ask` and `check` run before judging a
+        // file, so a cross-file heading-text entry reads the same here.
+        let phrase_lookup = terms::phrase_lookup(&tf.terms);
+        depends::normalize_cross_file_deps(&mut rf, &tf.terms, &phrase_lookup, &cross_file_headings, &led);
         let names = crate::view::heading_texts(&all);
         let refusals = supersedes_refusals(&rf.rel, &rf, &cross_file_headings, &names, &all, &led, Some(idx));
         if !refusals.is_empty() {
             return Err(refusals.into_iter().map(|r| r.message).collect::<Vec<_>>().join("\n"));
+        }
+        // The ids the entries resolve to (an entry that no longer resolves
+        // is a sibling replacer's target, already superseded: its own id).
+        for old in depends::supersedes_entries(&supersedes_val, &cross_file_headings, &led) {
+            match depends::resolve_supersedes(&old, &cross_file_headings, &led) {
+                Ok(target) => superseded_ids.push(target),
+                Err(_) => superseded_ids.push(old.trim().to_string()),
+            }
         }
     }
 
@@ -317,7 +332,7 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
         detail: letter.to_string(),
         version: crate::version::VERSION.to_string(),
     }];
-    for old in &supersedes_val {
+    for old in &superseded_ids {
         rows.push(ledger::Row {
             time: write_time.clone(),
             event: "superseded".to_string(),
@@ -671,13 +686,13 @@ pub fn terms_refusals(
                 // definition and the owner re-approves.
                 let next = match &dep.source {
                     state::DependentSource::Decision { id, heading, .. } => {
-                        msg::term_retired_decision_next(id, heading)
+                        msg::term_retired_decision_next(&target.name, id, heading)
                     }
                     state::DependentSource::Asked { rel, heading } => {
                         msg::term_retired_asked_next(heading, &target.name, rel)
                     }
                     state::DependentSource::PlanHeading { rel, .. } => {
-                        msg::term_retired_heading_next(rel)
+                        msg::term_retired_heading_next(&target.name, rel)
                     }
                     state::DependentSource::Term { .. } => msg::term_reword_and_approve(),
                 };
@@ -794,8 +809,12 @@ fn do_approve_terms(
     let (refusals, pairs_per_entry) =
         terms_refusals(root, &records, &tf, led, &repo::Source::WorkingTree, true, &approved_plans);
     let mut refusals = refusals;
-    for (rel, heading) in state::unreadable_asked_terms_lines(&records, led) {
-        refusals.push(msg::asked_terms_line_unreadable(&rel, &heading));
+    // Only an approve that retires or removes a term needs to read the
+    // asked questions' terms lines; one that only adds or rewords does not.
+    if state::approve_retires_or_removes(led, &tf) {
+        for (rel, heading) in state::unreadable_asked_terms_lines(&records, led) {
+            refusals.push(msg::asked_terms_line_unreadable(&rel, &heading));
+        }
     }
     if !refusals.is_empty() {
         let msg = refusals
@@ -826,26 +845,31 @@ fn do_approve_terms(
             None => term_rows_due.push((id.clone(), name.clone(), hash.clone())),
         }
     }
-    let mut changed_lines: Vec<String> = Vec::new();
-    if !changed.is_empty() {
-        let mut entries = state::dependent_entries(&records, led, &tf, true, false);
-        entries.extend(state::unsettled_entries(&records, led, &tf, &approved_plans));
-        for (id, name) in &changed {
-            let mut named_by: Vec<String> = Vec::new();
-            for e in &entries {
-                if matches!(e.source, state::DependentSource::Term { .. }) {
-                    continue;
-                }
-                if e.pairs.iter().any(|(_, u)| u == id) {
-                    let label = e.source.label();
-                    if !named_by.contains(&label) {
-                        named_by.push(label);
+    // Computed here, before the file is rewritten, and printed only in the
+    // branch below that writes the `term` rows.
+    let changed_lines = {
+        let mut lines: Vec<String> = Vec::new();
+        if !changed.is_empty() {
+            let mut entries = state::dependent_entries(&records, led, &tf, true, false);
+            entries.extend(state::unsettled_entries(&records, led, &tf, &approved_plans));
+            for (id, name) in &changed {
+                let mut named_by: Vec<String> = Vec::new();
+                for e in &entries {
+                    if matches!(e.source, state::DependentSource::Term { .. }) {
+                        continue;
+                    }
+                    if e.pairs.iter().any(|(_, u)| u == id) {
+                        let label = e.source.label();
+                        if !named_by.contains(&label) {
+                            named_by.push(label);
+                        }
                     }
                 }
+                lines.push(msg::term_definition_changed(name, &named_by));
             }
-            changed_lines.push(msg::term_definition_changed(name, &named_by));
         }
-    }
+        lines
+    };
 
     // Step 6: write the file. `terms:` lines use the fresh pairs computed
     // above, one term at a time, in the same order as `tf.terms`.
@@ -883,8 +907,6 @@ fn do_approve_terms(
     if inserted > 0 {
         out.push(msg::terms_ids_filled(inserted));
     }
-    out.extend(changed_lines);
-
     let write_time = ledger::write_time(led);
     let term_rows: Vec<ledger::Row> = term_rows_due
         .iter()
@@ -923,6 +945,7 @@ fn do_approve_terms(
         let mut rows = vec![row];
         rows.extend(term_rows);
         ledger::append(ledger_path, &rows).map_err(append_failed)?;
+        out.extend(changed_lines);
         out.push(msg::terms_approved_now());
     }
 

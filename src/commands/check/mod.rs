@@ -134,8 +134,9 @@ fn build(
     // pulls the missing-answered-id lines the same way.
     let names = crate::view::heading_texts(&records);
     // Which plans are approved comes from `raw_hashes`, taken before the
-    // normalize pass; the replaced-id set is built once and extended per
-    // file with that file's own `supersedes:` lines.
+    // normalize pass; computed once and shared with `check_terms`. The
+    // replaced-id set is built once and extended per file with that file's
+    // own `supersedes:` lines.
     let approved_rels: std::collections::HashSet<String> = raw_hashes
         .iter()
         .filter(|(rel, (plan_h, _))| state::plan_approved_hash(&led, rel, plan_h))
@@ -175,7 +176,7 @@ fn build(
         &raw_hashes,
     );
     push_failures(&mut failures, plan_failures);
-    let (terms_failures, terms_notes) = terms::check_terms(root, &records, &led, &source, &raw_hashes);
+    let (terms_failures, terms_notes) = terms::check_terms(root, &records, &led, &source, &approved_rels);
     push_failures(&mut failures, terms_failures);
     let (blame_failures, blame_notes) = blame::check_blame(root, &source, &records, &led);
     push_failures(&mut failures, blame_failures);

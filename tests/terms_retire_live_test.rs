@@ -81,8 +81,8 @@ fn assert_retire_refused(dir: &Path, terms: &Path, rows_before: usize, heading: 
     let err = stderr(&out);
     assert!(err.contains(heading), "stderr should name {:?}: {}", heading, err);
     assert!(
-        err.contains("restores adrdom/terms.md from git"),
-        "stderr should name the restore: {}",
+        err.contains("takes `retired: yes` off \"decision\" in adrdom/terms.md"),
+        "stderr should name the un-retire: {}",
         err
     );
     assert_eq!(terms_rows(dir), rows_before, "a refused retire writes no terms row");
@@ -178,4 +178,63 @@ fn retire_refused_when_an_asked_questions_terms_line_cannot_be_read() {
     assert!(err.contains(H_DECISION), "stderr should name the question: {}", err);
     assert!(err.contains("git checkout -- adrdom/decisions/example.md"), "{}", err);
     assert_eq!(terms_rows(&dir), rows, "a refused retire writes no terms row");
+}
+
+const TERMS_DECISION_RETIRED_PLUS_NEW: &str = "# Terms\n\n\
+## decision\n\
+id: 33333333-3333-3333-3333-333333333333\n\
+definition: A choice answered by the owner.\n\
+aliases: \n\
+retired: yes\n\
+\n\
+## verdict\n\
+id: 44444444-4444-4444-4444-444444444444\n\
+definition: A ruling reached after deliberation.\n\
+aliases: \n\
+\n\
+## ruling\n\
+definition: A formal finding.\n\
+aliases: \n";
+
+// adr: db58d4b8-9e64-44b0-99a2-acb7f05d5b4e
+#[test]
+fn a_heading_written_after_a_retire_was_approved_does_not_block_terms_approve_or_check() {
+    let (dir, record, terms) =
+        setup(&format!("# Example\n{}", sec(H_VERDICT, "verdict", false)));
+    // Nothing names "decision": the retire passes and writes its term row.
+    let out = retire(&dir, &terms);
+    assert!(out.status.success(), "retire should pass: {}", stderr(&out));
+    // A new heading that merely contains the retired word, then approved.
+    let c = std::fs::read_to_string(&record).unwrap();
+    std::fs::write(&record, format!("{}{}", c, sec(H_DECISION, "verdict", false))).unwrap();
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(out.status.success(), "plan approve failed: {}", stderr(&out));
+    // An unrelated terms edit (a new term) still approves.
+    std::fs::write(&terms, TERMS_DECISION_RETIRED_PLUS_NEW).unwrap();
+    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    assert!(out.status.success(), "terms approve refused: {}{}", stdout(&out), stderr(&out));
+    let out = adr(&dir, &["check"], &[], "");
+    let all = format!("{}{}", stdout(&out), stderr(&out));
+    assert!(!all.contains("retired but used by"), "check names the heading: {}", all);
+    assert!(!all.contains(H_DECISION), "check names the heading: {}", all);
+}
+
+// adr: db58d4b8-9e64-44b0-99a2-acb7f05d5b4e
+#[test]
+fn unreadable_terms_line_blocks_only_an_approve_that_retires_or_removes() {
+    let (dir, record, terms) =
+        setup(&format!("# Example\n{}", sec(H_DECISION, "decision", true)));
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let text = std::fs::read_to_string(&record).unwrap();
+    let line = text.lines().find(|l| l.starts_with("terms: ")).unwrap().to_string();
+    std::fs::write(&record, text.replacen(&line, "terms: decision", 1)).unwrap();
+    // Only adds a term: passes.
+    let with_new = format!("{}\n## ruling\ndefinition: A formal finding.\naliases: \n", TERMS_TWO_ENTRIES);
+    std::fs::write(&terms, with_new).unwrap();
+    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    assert!(out.status.success(), "adding a term should pass: {}{}", stdout(&out), stderr(&out));
+    // Retires: refused, naming the unreadable line.
+    let out = retire(&dir, &terms);
+    assert!(!out.status.success());
+    assert!(stderr(&out).contains("terms line cannot be read"), "{}", stderr(&out));
 }
