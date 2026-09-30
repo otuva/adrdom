@@ -524,6 +524,7 @@ fn check_fails_on_a_renamed_answered_option_never_as_answer_without_row() {
 // every other test here through `write_test_comment`); the same comment
 // placed under adrdom/, or left untracked, does not, so `check` still
 // notes the decision untested until it is tracked outside adrdom/.
+// adr: 4319a653-6901-446c-94ab-6420ef472134
 #[test]
 fn check_tests_ignores_a_tie_under_adrdom_and_an_untracked_tie() {
     let dir = init_repo();
@@ -2185,6 +2186,7 @@ fn check_staged_treats_a_staged_deleted_topic_file_as_gone() {
 // content is what is about to enter the commit); the same tie sitting
 // only in the working tree, outside a commit, is what plain `adr check`
 // reads instead.
+// adr: 4319a653-6901-446c-94ab-6420ef472134
 #[test]
 fn check_staged_reads_a_newly_staged_test_files_tie_from_the_index() {
     let dir = init_repo();

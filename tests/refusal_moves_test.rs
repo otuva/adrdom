@@ -74,6 +74,7 @@ fn an_entry_on_an_unanswered_question_of_another_file_says_it_waits() {
     assert!(out.status.success(), "{}", stderr(&out));
 }
 
+// adr: 4319a653-6901-446c-94ab-6420ef472134
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 //
 // "What ties a test to a decision?": "found by text search in every tracked
