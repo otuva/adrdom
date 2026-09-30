@@ -75,7 +75,7 @@ fn first_approve_writes_one_term_row_per_term_and_one_terms_row() {
     assert_eq!(rows.len(), 2, "{:?}", rows);
     assert!(rows.iter().any(|r| r.contains("\t33333333-3333-3333-3333-333333333333\t") && r.contains("\tdecision\t")));
     assert!(rows.iter().any(|r| r.contains("\t44444444-4444-4444-4444-444444444444\t") && r.contains("\tverdict\t")));
-    assert!(!stdout(&out).contains("definition changed"), "{}", stdout(&out));
+    assert!(!stdout(&out).contains("\" changed; named by"), "{}", stdout(&out));
 }
 
 #[test]
@@ -108,7 +108,7 @@ fn edited_definition_writes_one_row_and_names_the_live_questions() {
     let text = stdout(&out);
     let line = text
         .lines()
-        .find(|l| l.contains("term \"decision\": definition changed"))
+        .find(|l| l.contains("term \"decision\" changed"))
         .unwrap_or_else(|| panic!("no changed line: {}", text));
     assert!(line.contains(&format!("\"{}\"", H_ONE)), "{}", line);
     assert!(line.contains(&format!("\"{}\"", H_TWO)), "{}", line);
@@ -136,7 +136,7 @@ fn a_passing_retire_writes_a_term_row_with_the_new_hash() {
     std::fs::write(&terms, TERMS_VERDICT_RETIRED).unwrap();
     let out = approve_terms(&dir, &terms);
     assert!(out.status.success(), "{}", stderr(&out));
-    assert!(stdout(&out).contains("term \"verdict\": definition changed; named by no question"), "{}", stdout(&out));
+    assert!(stdout(&out).contains("term \"verdict\" changed; named by no question"), "{}", stdout(&out));
     let rows = rows_of(&dir, "term");
     assert_eq!(rows.len(), old.len() + 1);
     let last = rows

@@ -155,3 +155,27 @@ fn retire_succeeds_when_only_a_refused_question_names_the_term() {
     assert!(out.status.success(), "a refused question is not live: {}", stderr(&out));
     assert_eq!(terms_rows(&dir), rows + 1);
 }
+
+// adr: db58d4b8-9e64-44b0-99a2-acb7f05d5b4e
+#[test]
+fn retire_refused_when_an_asked_questions_terms_line_cannot_be_read() {
+    let (dir, record, terms) =
+        setup(&format!("# Example\n{}", sec(H_DECISION, "decision", true)));
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let text = std::fs::read_to_string(&record).unwrap();
+    let line = text
+        .lines()
+        .find(|l| l.starts_with("terms: "))
+        .unwrap_or_else(|| panic!("no terms line: {}", text))
+        .to_string();
+    let broken = text.replacen(&line, "terms: decision", 1);
+    assert_ne!(text, broken);
+    std::fs::write(&record, broken).unwrap();
+    let rows = terms_rows(&dir);
+    let out = retire(&dir, &terms);
+    assert!(!out.status.success(), "retire should have refused: {}{}", stdout(&out), stderr(&out));
+    let err = stderr(&out);
+    assert!(err.contains(H_DECISION), "stderr should name the question: {}", err);
+    assert!(err.contains("git checkout -- adrdom/decisions/example.md"), "{}", err);
+    assert_eq!(terms_rows(&dir), rows, "a refused retire writes no terms row");
+}

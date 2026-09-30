@@ -110,8 +110,16 @@ pub fn run(record_path: PathBuf) -> i32 {
     // Every heading by its identifier, any state: a refusal names the
     // question beside an identifier.
     let names = crate::view::heading_texts(&all_records);
+    // `all_records` is still as loaded, so its plan hashes are the raw ones.
+    let replaced_base = depends::replaced_base(
+        &all_records,
+        &depends::approved_plan_rels(&all_records, &led),
+        &cross_file_headings,
+        &led,
+    );
+    let replaced = depends::replaced_ids(&replaced_base, &rf, &cross_file_headings, &led);
     let shape_msgs: Vec<String> =
-        actions::record_refusals(&rel, &rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &all_records, &led)
+        actions::record_refusals(&rel, &rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &all_records, &replaced, &led)
             .into_iter()
             .filter(|r| r.category == "parse")
             .map(|r| format!("ask: {}", r.message))
@@ -202,7 +210,6 @@ pub fn run(record_path: PathBuf) -> i32 {
     // file-wide (mirrors approve's cap check, prefixed `ask:`). Dead
     // (refused/superseded/withdrawn) questions don't count.
     if let Some(tiers) = &rf.tiers {
-        let replaced = depends::replaced_ids(&all_records, &rf, &cross_file_headings, &led);
         if let Some((open, answered)) = state::over_cap_headings(&led, &rf, tiers, &replaced) {
             eprintln!("ask: {}", msg::tier_cap_exceeded(&rel, &open, answered, record::TIER_CAP));
             return 1;

@@ -1531,6 +1531,15 @@ pub fn section_no_terms_line(rel: &str, heading: &str, id: &str, answered: bool)
     refuse(format!("{}: {}: no terms line", rel, heading), next)
 }
 
+/// approve of the terms file found an asked question whose `terms:` line
+/// cannot be read, so it cannot tell which terms the question names.
+pub fn asked_terms_line_unreadable(rel: &str, heading: &str) -> String {
+    refuse(
+        format!("{}: {}: terms line cannot be read", rel, heading),
+        Next::agent(format!("restores {} from git (e.g. git checkout -- {})", rel, rel)),
+    )
+}
+
 /// A section's `terms:` line is present but doesn't parse (per
 /// `terms::validate_pairs`'s `Malformed`). Same answered/asked split as
 /// `section_no_terms_line`.
@@ -2303,14 +2312,15 @@ pub fn terms_approved_now() -> String {
     "approve: adrdom/terms.md: approved".to_string()
 }
 
-/// One line per term whose definition changed at approve: the live
+/// One line per term whose entry changed at approve (its name, definition,
+/// aliases or retired flag: what the ledger row hashes): the live
 /// questions (`named_by`, already labelled) that name it.
 pub fn term_definition_changed(name: &str, named_by: &[String]) -> String {
     if named_by.is_empty() {
-        format!("approve: term \"{}\": definition changed; named by no question", name)
+        format!("approve: term \"{}\" changed; named by no question", name)
     } else {
         format!(
-            "approve: term \"{}\": definition changed; named by {}",
+            "approve: term \"{}\" changed; named by {}",
             name,
             named_by.join(", ")
         )

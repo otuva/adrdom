@@ -18,7 +18,7 @@ pub struct Outcome {
 }
 
 /// One refusal a topic file earns, tagged with the `check` category under
-/// which the identical text is filed (`parse`, `tells`, `plan`, `ids`):
+/// which the identical text is filed (`parse`, `tells`, `plan`, `ids`, or `answers`, which `check` prints from `check_answers` and does not forward from here):
 /// `approve` prefixes each with `approve: `, `check` with `<category>: `,
 /// so the same line reads either way regardless of which one printed it
 /// (one tag richer than `terms_refusals`'s plain `Vec<String>`, since a
@@ -818,6 +818,10 @@ fn do_approve_terms(
     // every refusal, all at once.
     let (refusals, pairs_per_entry) =
         terms_refusals(root, &records, &tf, led, &repo::Source::WorkingTree, true, &approved_plans);
+    let mut refusals = refusals;
+    for (rel, heading) in state::unreadable_asked_terms_lines(&records, led) {
+        refusals.push(msg::asked_terms_line_unreadable(&rel, &heading));
+    }
     if !refusals.is_empty() {
         let msg = refusals
             .iter()
@@ -991,6 +995,7 @@ pub fn record_refusals(
     cross_file_headings: &HashMap<String, Vec<(String, String)>>,
     names: &HashMap<String, String>,
     all: &[RecordFile],
+    replaced: &std::collections::HashSet<String>,
     led: &Ledger,
 ) -> Vec<Refusal> {
     let mut out: Vec<Refusal> = Vec::new();
@@ -1093,8 +1098,11 @@ pub fn record_refusals(
             && !sec.depends.iter().any(|d| matches!(d, record::Dep::Text { .. }))
             && state::frozen_text_edited(led, &rf.lines, sec)
         {
+            // Category "answers": `check` prints this line from
+            // `check_answers` and forwards no `answers` refusal from here,
+            // so it prints once; `approve` refuses on every category.
             out.push(Refusal {
-                category: "plan",
+                category: "answers",
                 message: msg::answered_text_changed(
                     rel,
                     &sec.heading_text,
@@ -1164,8 +1172,7 @@ pub fn record_refusals(
     // there. A refused/superseded/withdrawn question is dead and does not
     // count (`state::live_tiers`).
     if let Some(tiers) = &rf.tiers {
-        let replaced = depends::replaced_ids(all, rf, cross_file_headings, led);
-        if let Some((open, answered)) = state::over_cap_headings(led, rf, tiers, &replaced) {
+        if let Some((open, answered)) = state::over_cap_headings(led, rf, tiers, replaced) {
             out.push(Refusal {
                 category: "plan",
                 message: msg::tier_cap_exceeded(rel, &open, answered, record::TIER_CAP),
@@ -1413,8 +1420,16 @@ fn do_approve_record(
     // the first, so one `approve` call tells the agent everything it owes
     // the owner before asking again.
     let names = crate::view::heading_texts(&all_records);
+    // `all_records` is still as loaded, so its plan hashes are the raw ones.
+    let replaced_base = depends::replaced_base(
+        &all_records,
+        &depends::approved_plan_rels(&all_records, led),
+        &cross_file_headings,
+        led,
+    );
+    let replaced = depends::replaced_ids(&replaced_base, &rf, &cross_file_headings, led);
     let mut refusals: Vec<String> =
-        record_refusals(rel, &rf, terms_list, &phrase_lookup, &cross_file_headings, &names, &all_records, led)
+        record_refusals(rel, &rf, terms_list, &phrase_lookup, &cross_file_headings, &names, &all_records, &replaced, led)
             .into_iter()
             .map(|r| msg::approve_prefixed(r.message))
             .collect();
@@ -1467,14 +1482,16 @@ fn do_approve_record(
     // stands on what the plan replaces (796a2544): collected with the other
     // refusals, before anything is written.
     {
+        // Only sections of the file being approved: an open question of
+        // another file that stands on a replaced decision is left to
+        // check's not-current refusal.
         let stands_on = |d: &record::Dep, target: &str| -> bool {
-            match d {
-                record::Dep::Id { id, .. } => id == target,
-                record::Dep::Text { text, .. } => rf
-                    .sections
-                    .iter()
-                    .any(|s| s.id.as_deref() == Some(target) && s.heading_text.trim() == text.trim()),
-            }
+            let at = rf
+                .sections
+                .iter()
+                .find(|s| s.id.as_deref() == Some(target))
+                .map(|s| (rf.rel.as_str(), s.heading_text.trim()));
+            depends::entry_names_target(d, &rf.rel, target, at)
         };
         let mut idxs: Vec<&usize> = supersedes_ids.keys().collect();
         idxs.sort();
@@ -1722,7 +1739,7 @@ fn do_approve_record(
         .tiers
         .as_ref()
         .expect("derive_error refuses above whenever tiers is None");
-    let replaced = depends::replaced_ids(&all_records, &work_rf, &cross_file_headings, led);
+    let replaced = depends::replaced_ids(&replaced_base, &work_rf, &cross_file_headings, led);
     let live = state::live_tiers(led, &work_rf, tiers, &replaced);
     let tiers_str = record::tier_sizes(&live)
         .into_iter()

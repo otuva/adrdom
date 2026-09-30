@@ -503,12 +503,8 @@ pub fn standing_on(records: &[RecordFile], led: &Ledger, target: &str) -> Vec<(S
                 if seen.contains(id) || !state::is_current(led, id) {
                     continue;
                 }
-                let stands = sec.depends.iter().any(|d| match d {
-                    Dep::Id { id: dep_id, .. } => *dep_id == cur,
-                    Dep::Text { text, .. } => cur_heading
-                        .as_ref()
-                        .is_some_and(|(rel, h)| *rel == rf.rel && text.trim() == h),
-                });
+                let at = cur_heading.as_ref().map(|(rel, h)| (rel.as_str(), h.as_str()));
+                let stands = sec.depends.iter().any(|d| entry_names_target(d, &rf.rel, &cur, at));
                 if stands {
                     seen.insert(id.clone());
                     queue.push(id.clone());
@@ -519,6 +515,25 @@ pub fn standing_on(records: &[RecordFile], led: &Ledger, target: &str) -> Vec<(S
     }
     found.sort();
     found
+}
+
+/// True when the `depends:` entry `d`, of a section in the file `holder_rel`,
+/// names the decision `target_id`: an id entry that is that id, or a
+/// heading written as text that is the heading of the target, which is
+/// `target_at` (its file's `rel` and trimmed heading) and must sit in the
+/// same file as the entry.
+pub fn entry_names_target(
+    d: &Dep,
+    holder_rel: &str,
+    target_id: &str,
+    target_at: Option<(&str, &str)>,
+) -> bool {
+    match d {
+        Dep::Id { id, .. } => id == target_id,
+        Dep::Text { text, .. } => {
+            target_at.is_some_and(|(rel, heading)| rel == holder_rel && text.trim() == heading)
+        }
+    }
 }
 
 /// What a `supersedes:` line over `ids` leaves out: every decision standing
@@ -540,35 +555,68 @@ pub fn left_out_of_supersedes(
     out
 }
 
-/// The ids of the decisions named on the `supersedes:` line of a question
-/// that is live and not answered (no body, not asked, or asked), in every
-/// topic file whose plan is approved and in `rf`, the file under judgment.
-/// An entry is an id, or a heading of a current decision (an entry that
-/// resolves to none is left out: the not-current refusal reports it).
-pub fn replaced_ids(
+/// The `rel` of every topic file in `all` whose plan is approved, judged on
+/// the file exactly as loaded. `all` must not have gone through
+/// `normalize_cross_file_deps` (that rewrites the entries the plan hash
+/// covers); a caller that normalizes its records takes the hashes before
+/// doing so and calls `state::plan_approved_hash` itself.
+pub fn approved_plan_rels(all: &[RecordFile], led: &Ledger) -> std::collections::HashSet<String> {
+    all.iter()
+        .filter(|f| state::plan_approved(led, f, &f.rel))
+        .map(|f| f.rel.clone())
+        .collect()
+}
+
+/// The ids named on the `supersedes:` lines of the live, unanswered
+/// questions of the files in `all` whose `rel` is in `approved`. Built once
+/// per command run; `replaced_ids` adds the file under judgment.
+pub fn replaced_base(
     all: &[RecordFile],
-    rf: &RecordFile,
+    approved: &std::collections::HashSet<String>,
     cross_file_headings: &HashMap<String, Vec<(String, String)>>,
     led: &Ledger,
 ) -> std::collections::HashSet<String> {
     let mut out = std::collections::HashSet::new();
-    for file in all.iter().filter(|f| f.rel != rf.rel).chain(std::iter::once(rf)) {
-        if file.rel != rf.rel && !state::plan_approved(led, file, &file.rel) {
+    for file in all.iter().filter(|f| approved.contains(&f.rel)) {
+        collect_replaced(file, cross_file_headings, led, &mut out);
+    }
+    out
+}
+
+/// The ids of the decisions named on the `supersedes:` line of a question
+/// that is live and not answered (no body, not asked, or asked), in every
+/// topic file whose plan is approved (`base`, from `replaced_base`) and in
+/// `rf`, the file under judgment. An entry is an id, or a heading of a
+/// current decision (an entry that resolves to none is left out: the
+/// not-current refusal reports it).
+pub fn replaced_ids(
+    base: &std::collections::HashSet<String>,
+    rf: &RecordFile,
+    cross_file_headings: &HashMap<String, Vec<(String, String)>>,
+    led: &Ledger,
+) -> std::collections::HashSet<String> {
+    let mut out = base.clone();
+    collect_replaced(rf, cross_file_headings, led, &mut out);
+    out
+}
+
+fn collect_replaced(
+    file: &RecordFile,
+    cross_file_headings: &HashMap<String, Vec<(String, String)>>,
+    led: &Ledger,
+    out: &mut std::collections::HashSet<String>,
+) {
+    for sec in &file.sections {
+        if sec.supersedes.is_empty() || state::is_dead(led, sec) {
             continue;
         }
-        for sec in &file.sections {
-            if sec.supersedes.is_empty() || state::is_dead(led, sec) {
-                continue;
-            }
-            if sec.id.as_deref().is_some_and(|id| state::is_current(led, id)) {
-                continue;
-            }
-            for entry in supersedes_entries(&sec.supersedes, cross_file_headings, led) {
-                if let Ok(id) = resolve_supersedes(&entry, cross_file_headings, led) {
-                    out.insert(id);
-                }
+        if sec.id.as_deref().is_some_and(|id| state::is_current(led, id)) {
+            continue;
+        }
+        for entry in supersedes_entries(&sec.supersedes, cross_file_headings, led) {
+            if let Ok(id) = resolve_supersedes(&entry, cross_file_headings, led) {
+                out.insert(id);
             }
         }
     }
-    out
 }

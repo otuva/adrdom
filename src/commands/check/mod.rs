@@ -133,10 +133,24 @@ fn build(
     // same shape/tells/depends checks `approve` already refuses on; `ids`
     // pulls the missing-answered-id lines the same way.
     let names = crate::view::heading_texts(&records);
+    // Which plans are approved comes from `raw_hashes`, taken before the
+    // normalize pass; the replaced-id set is built once and extended per
+    // file with that file's own `supersedes:` lines.
+    let approved_rels: std::collections::HashSet<String> = raw_hashes
+        .iter()
+        .filter(|(rel, (plan_h, _))| state::plan_approved_hash(&led, rel, plan_h))
+        .map(|(rel, _)| rel.clone())
+        .collect();
+    let replaced_base = depends::replaced_base(&records, &approved_rels, &cross_file_headings, &led);
+    let replaced_per_record: Vec<std::collections::HashSet<String>> = records
+        .iter()
+        .map(|rf| depends::replaced_ids(&replaced_base, rf, &cross_file_headings, &led))
+        .collect();
     let per_record_refusals: Vec<Vec<actions::Refusal>> = records
         .iter()
-        .map(|rf| {
-            actions::record_refusals(&rf.rel, rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &records, &led)
+        .zip(&replaced_per_record)
+        .map(|(rf, replaced)| {
+            actions::record_refusals(&rf.rel, rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &records, replaced, &led)
         })
         .collect();
     let missing_answered = actions::missing_answered_refusals(&records, &led);
@@ -172,14 +186,13 @@ fn build(
 
     notes.extend(moot::check_moot(&records, &led));
 
-    for rf in &records {
+    for (rf, replaced) in records.iter().zip(&replaced_per_record) {
         if let Some(tiers) = &rf.tiers {
             // Live counts only (per "Does the tool cap the questions in a
             // tier?"): a dead (refused/superseded/
             // withdrawn) question no longer holds its tier for the cap,
             // and this note is read against that same cap.
-            let replaced = depends::replaced_ids(&records, rf, &cross_file_headings, &led);
-            let live = state::live_tiers(&led, rf, tiers, &replaced);
+            let live = state::live_tiers(&led, rf, tiers, replaced);
             if live.is_empty() {
                 continue;
             }

@@ -70,6 +70,13 @@ fn approve_refuses_a_swapped_uuid_entry_in_an_answered_section() {
     assert_refused(&dir, rel, before, "Does A do a thing?");
     let chk = adr(&dir, &["check"], &[], "");
     assert!(!chk.status.success(), "check agrees it is edited");
+    let both = format!("{}{}", stdout(&chk), stderr(&chk));
+    assert_eq!(
+        both.matches("text changed since being answered").count(),
+        1,
+        "check prints the line once: {}",
+        both
+    );
 }
 
 // A frozen section that loses one of its entries is refused.

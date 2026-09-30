@@ -158,3 +158,29 @@ fn an_open_replacement_in_another_file_frees_a_slot_in_the_full_tier() {
     let out = approve(&dir, "a");
     assert!(out.status.success(), "a.md counts 3 + 1: {}", stderr(&out));
 }
+
+// adr: f416062c-211f-4d20-a6bf-23a561b5f59b
+#[test]
+fn check_counts_a_tier_as_approve_does_when_the_replacing_file_has_a_cross_file_heading_entry() {
+    let dir = init_repo();
+    let a = full_tier(&dir);
+    // b.md names a decision of a.md by its heading (approve rewrites the
+    // entry to an id on disk; check normalizes heading entries in memory
+    // before it counts) and holds an open question replacing option 1.
+    let b = format!(
+        "# B\n\n### {}\ndepends: {}\nsupersedes: {}\n{}",
+        h(9),
+        h(2),
+        h(1),
+        BODY
+    );
+    write_record(&dir, &rel("b"), &b);
+    approve_ok(&dir, "b");
+    append(&a, &sec(&h(5), None, false));
+    let out = approve(&dir, "a");
+    assert!(out.status.success(), "approve counts 3 + 1: {}", stderr(&out));
+    let chk = adr(&dir, &["check"], &[], "");
+    let both = format!("{}{}", stdout(&chk), stderr(&chk));
+    assert!(!cap_refusal(&chk), "check printed a cap refusal: {}", both);
+    assert!(both.contains("tiers: adrdom/decisions/a.md: 1 (4)"), "{}", both);
+}

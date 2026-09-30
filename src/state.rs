@@ -225,6 +225,28 @@ pub fn unsettled_entries(
     out
 }
 
+/// The (rel, heading) of every asked question whose `terms:` line is
+/// present but cannot be read. `unsettled_entries` cannot tell what such a
+/// question names, so a retire it should refuse would pass; the terms
+/// approve refuses on these instead. A question with no `terms:` line at
+/// all names no term and is not listed.
+pub fn unreadable_asked_terms_lines(records: &[RecordFile], led: &Ledger) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for rf in records {
+        for sec in &rf.sections {
+            let Some(id) = &sec.id else { continue };
+            if led.latest_state(id).map(|r| r.event.as_str()) != Some("asked") {
+                continue;
+            }
+            let Some(tl) = sec.terms_line else { continue };
+            if terms::parse_terms_line(rf.lines[tl].trim_end()).is_none() {
+                out.push((rf.rel.clone(), sec.heading_text.clone()));
+            }
+        }
+    }
+    out
+}
+
 /// One source's pairing to one or more terms: the pairs themselves, and
 /// whether each is a resolved word (subject to "did this word move off the
 /// term" checks, since a terms-line entry is a snapshot of what some prose
