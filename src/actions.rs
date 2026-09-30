@@ -314,6 +314,11 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
                 return Err(msg::supersedes_not_current(old, names.get(old).map(String::as_str)));
             }
         }
+        let all = record::load_all(root);
+        let missing = depends::left_out_of_supersedes(&all, &led, &supersedes_val);
+        if !missing.is_empty() {
+            return Err(msg::supersedes_leaves_out(&rf.rel, &sec.heading_text, &missing));
+        }
     }
 
     let heading_for_print = rf.sections[idx].heading_text.clone();
@@ -637,6 +642,7 @@ pub fn terms_refusals(
     led: &Ledger,
     source: &repo::Source,
     scan_banned: bool,
+    approved_plans: &std::collections::HashSet<String>,
 ) -> (Vec<String>, Vec<Vec<(String, String)>>) {
     let mut refusals: Vec<String> = Vec::new();
 
@@ -662,8 +668,11 @@ pub fn terms_refusals(
     // `depends:` line (once approved, an id -- possibly a term's), and
     // every non-retired term's recorded pairing, is a dependent -- the
     // widest reach of `state::dependent_entries`' three readers.
-    let dependents: Vec<state::DependentEntry> =
+    // Asked questions and not-yet-asked headings of approved plans (in the
+    // files of `approved_plans`, read as written on disk) name terms too.
+    let mut dependents: Vec<state::DependentEntry> =
         state::dependent_entries(records, led, tf, true, true);
+    dependents.extend(state::unsettled_entries(records, led, tf, approved_plans));
 
     // Step 4: every pair on a dependent must still hold in the new file.
     // `lookup` answers "what does this exact word/phrase resolve to" for
@@ -685,9 +694,17 @@ pub fn terms_refusals(
                 // carries the retired word) is never superseded (per "Does
                 // a retired term keep its words?"): the agent rewords the
                 // definition and the owner re-approves.
-                let next = match dep.source.decision_id() {
-                    Some(id) => Next::agent(format!("supersedes {} with a new question first", id)),
-                    None => msg::term_reword_and_approve(),
+                let next = match &dep.source {
+                    state::DependentSource::Decision { id, heading, .. } => {
+                        msg::term_retired_decision_next(id, heading)
+                    }
+                    state::DependentSource::Asked { rel, heading } => {
+                        msg::term_retired_asked_next(heading, &target.name, rel)
+                    }
+                    state::DependentSource::PlanHeading { rel, .. } => {
+                        msg::term_retired_heading_next(rel)
+                    }
+                    state::DependentSource::Term { .. } => msg::term_reword_and_approve(),
                 };
                 refusals.push(msg::term_retired_but_carried(&target.name, &label, next));
                 continue;
@@ -696,7 +713,11 @@ pub fn terms_refusals(
             // the entry, never a resolved word -- there is no word to
             // drift, only the target's removal/retirement above, so this
             // check is skipped for it (`from_word` is false).
-            if dep.from_word {
+            let is_decision_or_term = matches!(
+                dep.source,
+                state::DependentSource::Decision { .. } | state::DependentSource::Term { .. }
+            );
+            if dep.from_word && is_decision_or_term {
                 let still_resolves = lookup.get(word) == Some(uuid);
                 if !still_resolves {
                     // A decision dependent here is always current, since
@@ -782,6 +803,13 @@ fn do_approve_terms(
     // Every topic file, parsed once here and reused by `terms_refusals`
     // (no re-reading them from disk itself).
     let records: Vec<RecordFile> = record::load_all(root);
+    // Files whose plan is approved, judged on the files as written (before
+    // any normalization).
+    let approved_plans: std::collections::HashSet<String> = records
+        .iter()
+        .filter(|rf| state::plan_approved(led, rf, &rf.rel))
+        .map(|rf| rf.rel.clone())
+        .collect();
 
     // Step 2: mint ids in memory only; nothing is written to disk yet.
     let inserted = terms::mint_ids(&mut tf);
@@ -789,7 +817,7 @@ fn do_approve_terms(
     // Steps 1 (shape, post-mint), 3 (cycles), 4 (dependents), 5 (banned):
     // every refusal, all at once.
     let (refusals, pairs_per_entry) =
-        terms_refusals(root, &records, &tf, led, &repo::Source::WorkingTree, true);
+        terms_refusals(root, &records, &tf, led, &repo::Source::WorkingTree, true, &approved_plans);
     if !refusals.is_empty() {
         let msg = refusals
             .iter()
@@ -1076,7 +1104,8 @@ pub fn record_refusals(
     // there. A refused/superseded/withdrawn question is dead and does not
     // count (`state::live_tiers`).
     if let Some(tiers) = &rf.tiers {
-        if let Some((open, answered)) = state::over_cap_headings(led, rf, tiers) {
+        let replaced = depends::replaced_ids(all, rf, cross_file_headings, led);
+        if let Some((open, answered)) = state::over_cap_headings(led, rf, tiers, &replaced) {
             out.push(Refusal {
                 category: "plan",
                 message: msg::tier_cap_exceeded(rel, &open, answered, record::TIER_CAP),
@@ -1345,8 +1374,12 @@ fn do_approve_record(
         // Once asked, the line is frozen with the body (per "Does one
         // decision supersede several?"): a split sibling's target may be
         // superseded by now, and approve leaves the line as it is.
-        let asked = sec.id.as_ref().is_some_and(|id| led.latest_asked(id).is_some());
-        if sec.supersedes.is_empty() || asked || state::is_frozen(led, sec) {
+        // An asked section whose text no longer stands as asked is being
+        // edited to be asked again: its line is turned like an unasked one's.
+        let stands_as_asked = sec.id.as_ref().is_some_and(|id| {
+            state::asked_text_stands(led, id, &record::section_hash(&rf.lines, sec))
+        });
+        if sec.supersedes.is_empty() || stands_as_asked || state::is_frozen(led, sec) {
             continue;
         }
         let mut ids = Vec::new();
@@ -1367,6 +1400,58 @@ fn do_approve_record(
             }
         }
         supersedes_ids.insert(i, ids);
+    }
+
+    // The supersedes line names every current decision standing on what it
+    // replaces (through the ones standing on those), and nothing of the plan
+    // stands on what the plan replaces (796a2544): collected with the other
+    // refusals, before anything is written.
+    {
+        let stands_on = |d: &record::Dep, target: &str| -> bool {
+            match d {
+                record::Dep::Id { id, .. } => id == target,
+                record::Dep::Text { text, .. } => rf
+                    .sections
+                    .iter()
+                    .any(|s| s.id.as_deref() == Some(target) && s.heading_text.trim() == text.trim()),
+            }
+        };
+        let mut idxs: Vec<&usize> = supersedes_ids.keys().collect();
+        idxs.sort();
+        for &i in idxs {
+            let sec = &rf.sections[i];
+            let ids = &supersedes_ids[&i];
+            let missing = depends::left_out_of_supersedes(&all_records, led, ids);
+            if !missing.is_empty() {
+                refusals.push(msg::approve_prefixed(msg::supersedes_leaves_out(
+                    rel,
+                    &sec.heading_text,
+                    &missing,
+                )));
+            }
+            for target in ids {
+                let target_name = names.get(target).map(String::as_str).unwrap_or("");
+                if sec.depends.iter().any(|d| stands_on(d, target)) {
+                    refusals.push(msg::approve_prefixed(msg::stands_on_what_it_supersedes(
+                        rel,
+                        &sec.heading_text,
+                        target_name,
+                    )));
+                }
+                for (j, other) in rf.sections.iter().enumerate() {
+                    let open = other.id.as_deref().map_or(true, |id| !state::is_current(led, id))
+                        && !state::is_dead(led, other);
+                    if j != i && open && other.depends.iter().any(|d| stands_on(d, target)) {
+                        refusals.push(msg::approve_prefixed(msg::stands_on_what_the_plan_supersedes(
+                            rel,
+                            &other.heading_text,
+                            target_name,
+                            &sec.heading_text,
+                        )));
+                    }
+                }
+            }
+        }
     }
 
     // A letter-set suffix naming a current decision elsewhere
@@ -1577,7 +1662,8 @@ fn do_approve_record(
         .tiers
         .as_ref()
         .expect("derive_error refuses above whenever tiers is None");
-    let live = state::live_tiers(led, &work_rf, tiers);
+    let replaced = depends::replaced_ids(&all_records, &work_rf, &cross_file_headings, led);
+    let live = state::live_tiers(led, &work_rf, tiers, &replaced);
     let tiers_str = record::tier_sizes(&live)
         .into_iter()
         .map(|(t, c)| format!("{} ({})", t, c))

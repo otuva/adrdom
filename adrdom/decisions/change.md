@@ -132,6 +132,8 @@ Standard: referential integrity: a record that others reference is not removed w
   Why: a small change stays small; the owner is not made to decide again what would not move.
   Costs: between the answer and the follow-up questions, current decisions stand on nothing; the report is the only guard, and the follow-up rests on the agent.
 
+**Answer:** A
+
 ### Does a tier hold its cap by the count after its supersedes lines take effect?
 depends: f4f667ad-8714-4e65-897b-c7002e423c28=A, 15d82e53-e344-4347-b639-3bf6eb9ef1b4, f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, 2bae531b-c4df-48a0-89a0-3d52726741ea
 id: f416062c-211f-4d20-a6bf-23a561b5f59b
@@ -146,3 +148,5 @@ Standard: a limit on a set is judged on the set as the change leaves it.
 - B) No: every question that is not refused, superseded or withdrawn counts, old and new alike, and a replacement in a full tier goes to another topic file.
   Why: one count, read straight off the file.
   Costs: a full tier takes no replacement in its own file, so the replacement lands in a file away from the subject it changes, and the refusal names moves that do not fit a replacement.
+
+**Answer:** A

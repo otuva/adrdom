@@ -202,7 +202,8 @@ pub fn run(record_path: PathBuf) -> i32 {
     // file-wide (mirrors approve's cap check, prefixed `ask:`). Dead
     // (refused/superseded/withdrawn) questions don't count.
     if let Some(tiers) = &rf.tiers {
-        if let Some((open, answered)) = state::over_cap_headings(&led, &rf, tiers) {
+        let replaced = depends::replaced_ids(&all_records, &rf, &cross_file_headings, &led);
+        if let Some((open, answered)) = state::over_cap_headings(&led, &rf, tiers, &replaced) {
             eprintln!("ask: {}", msg::tier_cap_exceeded(&rel, &open, answered, record::TIER_CAP));
             return 1;
         }
@@ -311,6 +312,10 @@ pub fn run(record_path: PathBuf) -> i32 {
         // once more). `answer` later accepts a target that was superseded
         // after this question's own `asked` row (a split), but never one
         // that was already stale before it was ever asked.
+        let missing = depends::left_out_of_supersedes(&all_records, &led, &sec.supersedes);
+        if !missing.is_empty() {
+            refusals.push(msg::supersedes_leaves_out(&rel, &sec.heading_text, &missing));
+        }
         for old in &sec.supersedes {
             if !state::is_current(&led, old) {
                 refusals.push(msg::ask_supersedes_not_current(

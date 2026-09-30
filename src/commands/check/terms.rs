@@ -27,6 +27,7 @@ pub(super) fn check_terms(
     records: &[RecordFile],
     led: &Ledger,
     source: &Source,
+    raw_hashes: &std::collections::HashMap<String, (String, String)>,
 ) -> (Vec<Failure>, Vec<String>) {
     let mut out = Vec::new();
     let mut notes = Vec::new();
@@ -74,7 +75,15 @@ pub(super) fn check_terms(
     // as a tracked file, so step 5 would otherwise report the same hit
     // twice (once prefixed `banned:`, once prefixed `terms:`).
     let minted = terms::minted_copy(&tf);
-    let (refusals, _pairs) = actions::terms_refusals(root, records, &minted, led, source, false);
+    // Plans approved as written on disk: `records` were normalized in
+    // memory, so the hashes taken beforehand are what the ledger matches.
+    let approved_plans: std::collections::HashSet<String> = raw_hashes
+        .iter()
+        .filter(|(rel, (plan_h, _))| state::plan_approved_hash(led, rel, plan_h))
+        .map(|(rel, _)| rel.clone())
+        .collect();
+    let (refusals, _pairs) =
+        actions::terms_refusals(root, records, &minted, led, source, false, &approved_plans);
     let refused = !refusals.is_empty();
     for r in refusals {
         out.push(Failure {

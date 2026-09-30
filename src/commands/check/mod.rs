@@ -161,7 +161,7 @@ fn build(
         &raw_hashes,
     );
     push_failures(&mut failures, plan_failures);
-    let (terms_failures, terms_notes) = terms::check_terms(root, &records, &led, &source);
+    let (terms_failures, terms_notes) = terms::check_terms(root, &records, &led, &source, &raw_hashes);
     push_failures(&mut failures, terms_failures);
     let (blame_failures, blame_notes) = blame::check_blame(root, &source, &records, &led);
     push_failures(&mut failures, blame_failures);
@@ -178,7 +178,8 @@ fn build(
             // tier?"): a dead (refused/superseded/
             // withdrawn) question no longer holds its tier for the cap,
             // and this note is read against that same cap.
-            let live = state::live_tiers(&led, rf, tiers);
+            let replaced = depends::replaced_ids(&records, rf, &cross_file_headings, &led);
+            let live = state::live_tiers(&led, rf, tiers, &replaced);
             if live.is_empty() {
                 continue;
             }

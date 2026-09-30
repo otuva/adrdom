@@ -234,3 +234,5 @@ Standard: a record that others reference is not removed while the references sta
 - C) Yes: retire is free, and check reports every question that names a retired term.
   Why: the owner's word on a term is not held by questions.
   Costs: the records fail after an owner command, and the move to clear them is a supersede of each named decision.
+
+**Answer:** A

@@ -40,9 +40,9 @@ fn add_answered(dir: &Path, rel: &str, title: &str, sec: &str) -> String {
     id
 }
 
-/// a.md alpha answered; b.md beta stands on alpha, answered; a.md gamma
-/// supersedes alpha, answered. Returns (alpha id, beta id).
-fn scenario_until_gamma() -> (std::path::PathBuf, String, String) {
+/// a.md alpha answered; b.md beta stands on alpha, answered. Returns
+/// (dir, alpha id).
+fn alpha_and_beta() -> (std::path::PathBuf, String) {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -52,29 +52,27 @@ fn scenario_until_gamma() -> (std::path::PathBuf, String, String) {
         "A",
         &section("Does alpha hold authority?", "authority", ""),
     );
-    let beta = add_answered(
+    add_answered(
         &dir,
         "adrdom/decisions/b.md",
         "B",
         &section("Does beta hold authority?", &alpha, ""),
     );
-    add_answered(
-        &dir,
-        "adrdom/decisions/a.md",
-        "A",
-        &section("Does gamma hold authority?", "authority", &alpha),
-    );
-    (dir, alpha, beta)
+    (dir, alpha)
 }
 
 #[test]
 fn check_ignores_the_depends_line_of_a_superseded_section() {
-    let (dir, _alpha, beta) = scenario_until_gamma();
+    let (dir, _alpha) = alpha_and_beta();
     add_answered(
         &dir,
-        "adrdom/decisions/c.md",
-        "C",
-        &section("Does delta hold authority?", "authority", &beta),
+        "adrdom/decisions/a.md",
+        "A",
+        &section(
+            "Does gamma hold authority?",
+            "authority",
+            "Does alpha hold authority?, Does beta hold authority?",
+        ),
     );
 
     let out = adr(&dir, &["check"], &[], "");
@@ -94,7 +92,17 @@ fn check_ignores_the_depends_line_of_a_superseded_section() {
 
 #[test]
 fn check_still_refuses_a_live_section_standing_on_a_superseded_decision() {
-    let (dir, alpha, _beta) = scenario_until_gamma();
+    let (dir, alpha) = alpha_and_beta();
+    // The rows stand for a merge of two branches: one superseded alpha while
+    // the other answered beta standing on it.
+    append_ledger_row_at(
+        &dir,
+        "superseded",
+        &alpha,
+        "-",
+        "11111111-2222-3333-4444-555555555555",
+        "2099-01-01T00:00:00Z",
+    );
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
     assert!(!out.status.success(), "{}", text);

@@ -258,24 +258,19 @@ fn a_refusal_names_the_question_beside_its_identifier() {
         shown
     );
 
+    // Gamma takes alpha's place; beta stands on alpha, so the line names
+    // beta too (per "Does a supersedes line name every current decision
+    // standing on its target?").
     let mut a = std::fs::read_to_string(dir.join(A)).unwrap();
     a.push_str(&format!(
         "\n{}",
-        question(GAMMA, "widget", &format!("supersedes: {}\n", alpha))
+        question(GAMMA, "widget", &format!("supersedes: {}, {}\n", alpha, BETA))
     ));
     let gamma = answered(&dir, A, &a, 1);
     write_test_comment(&dir, &gamma);
 
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
-    assert!(
-        text.contains(&format!(
-            "plan: {}: \"{}\" depends on {} (\"{}\") which is not a current decision; agent",
-            B, BETA, alpha, ALPHA
-        )),
-        "{}",
-        text
-    );
     assert!(
         text.contains(&format!(
             "tested: {} (\"{}\"): tied to a test and not a current decision at tested.txt:1; agent removes",

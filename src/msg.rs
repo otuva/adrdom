@@ -861,6 +861,61 @@ pub fn ask_supersedes_not_current(rel: &str, heading: &str, old: &str, name: Opt
     )
 }
 
+/// The supersedes line of `heading` leaves out current decisions standing
+/// on what it replaces. `missing` are `(file, heading, id)`; a heading of
+/// another file is printed with its file.
+pub fn supersedes_leaves_out(
+    rel: &str,
+    heading: &str,
+    missing: &[(String, String, String)],
+) -> String {
+    let names = missing
+        .iter()
+        .map(|(file, h, _)| {
+            if file == rel {
+                format!("\"{}\"", h)
+            } else {
+                format!("{}: \"{}\"", file, h)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    refuse(
+        format!(
+            "{}: \"{}\": supersedes a decision that current decisions stand on, and the line leaves out {}",
+            rel, heading, names
+        ),
+        Next::agent("adds them to the supersedes line and asks again"),
+    )
+}
+
+/// A question whose depends line names a decision that its own supersedes
+/// line replaces.
+pub fn stands_on_what_it_supersedes(rel: &str, heading: &str, target: &str) -> String {
+    refuse(
+        format!(
+            "{}: \"{}\" stands on \"{}\", which it supersedes",
+            rel, heading, target
+        ),
+        Next::agent("removes that entry from its depends line"),
+    )
+}
+
+/// A question of the plan stands on a decision that another question of the
+/// same plan supersedes.
+pub fn stands_on_what_the_plan_supersedes(rel: &str, heading: &str, target: &str, replacer: &str) -> String {
+    refuse(
+        format!(
+            "{}: \"{}\" stands on \"{}\", which \"{}\" supersedes",
+            rel, heading, target, replacer
+        ),
+        Next::agent(format!(
+            "makes it stand on \"{}\" or removes the entry from its depends line",
+            replacer
+        )),
+    )
+}
+
 /// A `supersedes:` entry written as a heading that more than one current
 /// decision carries.
 pub fn ask_supersedes_ambiguous(rel: &str, heading: &str, entry: &str, files: &[String]) -> String {
@@ -2457,6 +2512,37 @@ pub fn gitattributes_up_to_date() -> String {
     "install: adrdom/.gitattributes: already up to date".to_string()
 }
 
+const RESTORE_TERMS: &str =
+    "restores adrdom/terms.md from git (e.g. git checkout -- adrdom/terms.md)";
+
+/// The `Next` for `term_retired_but_carried` when the dependent is a
+/// current decision: put terms.md back (approving a topic file is refused
+/// while it waits for approval), then supersede the decision.
+pub fn term_retired_decision_next(id: &str, heading: &str) -> Next {
+    Next::agent(format!(
+        "{}, then supersedes {} (\"{}\") with a new question",
+        RESTORE_TERMS, id, heading
+    ))
+}
+
+/// The `Next` for `term_retired_but_carried` when the dependent is an
+/// asked question: reword it so it no longer names the term and ask it
+/// again, or strike it from the plan.
+pub fn term_retired_asked_next(heading: &str, term: &str, rel: &str) -> Next {
+    Next::agent(format!(
+        "{}, then rewords \"{}\" so it does not name \"{}\" and runs adr ask {}, or strikes it from the plan",
+        RESTORE_TERMS, heading, term, rel
+    ))
+}
+
+/// The `Next` for `term_retired_but_carried` when the dependent is a
+/// heading of an approved plan that is not asked yet: reword or strike the
+/// heading, then the owner approves the changed plan.
+pub fn term_retired_heading_next(rel: &str) -> Next {
+    Next::agent(format!("{}, then rewords the heading or strikes it from the plan", RESTORE_TERMS))
+        .and_owner_runs(format!("adr approve {}", rel))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2501,7 +2587,7 @@ mod tests {
             circular_definition("a -> b -> a"),
             term_removed_but_carried("uuid-1", Some("word"), "term \"x\""),
             term_retired_but_carried("x", "term \"y\"", term_reword_and_approve()),
-            term_retired_but_carried("x", "id-1: \"heading\"", Next::agent("supersedes id-1 with a new question first")),
+            term_retired_but_carried("x", "id-1: \"heading\"", term_retired_decision_next("id-1", "heading")),
             word_moved_off_term("word", "term", "term \"y\"", term_reword_and_approve()),
             word_moved_off_term(
                 "word",

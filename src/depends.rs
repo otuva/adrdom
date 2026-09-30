@@ -479,3 +479,96 @@ pub fn bad_letters_for_decision(
     };
     bad_letters(rel, dependent_heading, target, letters)
 }
+
+/// The current decisions standing on `target` (an id), through the current
+/// decisions standing on those: `(rel, heading, id)`, sorted. A current
+/// decision stands on another when a `depends:` entry of it is that
+/// decision's id, or -- as a same-file heading written as text -- its
+/// heading. Questions not answered, refused, superseded or withdrawn, and
+/// headings with no body, are not part of it.
+pub fn standing_on(records: &[RecordFile], led: &Ledger, target: &str) -> Vec<(String, String, String)> {
+    let mut found: Vec<(String, String, String)> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    seen.insert(target.to_string());
+    let mut queue: Vec<String> = vec![target.to_string()];
+    while let Some(cur) = queue.pop() {
+        let cur_heading = records
+            .iter()
+            .flat_map(|rf| rf.sections.iter().map(move |s| (rf.rel.as_str(), s)))
+            .find(|(_, s)| s.id.as_deref() == Some(cur.as_str()))
+            .map(|(rel, s)| (rel.to_string(), s.heading_text.trim().to_string()));
+        for rf in records {
+            for sec in &rf.sections {
+                let Some(id) = &sec.id else { continue };
+                if seen.contains(id) || !state::is_current(led, id) {
+                    continue;
+                }
+                let stands = sec.depends.iter().any(|d| match d {
+                    Dep::Id { id: dep_id, .. } => *dep_id == cur,
+                    Dep::Text { text, .. } => cur_heading
+                        .as_ref()
+                        .is_some_and(|(rel, h)| *rel == rf.rel && text.trim() == h),
+                });
+                if stands {
+                    seen.insert(id.clone());
+                    queue.push(id.clone());
+                    found.push((rf.rel.clone(), sec.heading_text.trim().to_string(), id.clone()));
+                }
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+/// What a `supersedes:` line over `ids` leaves out: every decision standing
+/// on one of them (`standing_on`) that is not itself on the line.
+pub fn left_out_of_supersedes(
+    records: &[RecordFile],
+    led: &Ledger,
+    ids: &[String],
+) -> Vec<(String, String, String)> {
+    let mut out: Vec<(String, String, String)> = Vec::new();
+    for id in ids {
+        for t in standing_on(records, led, id) {
+            if !ids.contains(&t.2) && !out.iter().any(|o| o.2 == t.2) {
+                out.push(t);
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// The ids of the decisions named on the `supersedes:` line of a question
+/// that is live and not answered (no body, not asked, or asked), in every
+/// topic file whose plan is approved and in `rf`, the file under judgment.
+/// An entry is an id, or a heading of a current decision (an entry that
+/// resolves to none is left out: the not-current refusal reports it).
+pub fn replaced_ids(
+    all: &[RecordFile],
+    rf: &RecordFile,
+    cross_file_headings: &HashMap<String, Vec<(String, String)>>,
+    led: &Ledger,
+) -> std::collections::HashSet<String> {
+    let mut out = std::collections::HashSet::new();
+    for file in all.iter().filter(|f| f.rel != rf.rel).chain(std::iter::once(rf)) {
+        if file.rel != rf.rel && !state::plan_approved(led, file, &file.rel) {
+            continue;
+        }
+        for sec in &file.sections {
+            if sec.supersedes.is_empty() || state::is_dead(led, sec) {
+                continue;
+            }
+            if sec.id.as_deref().is_some_and(|id| state::is_current(led, id)) {
+                continue;
+            }
+            for entry in supersedes_entries(&sec.supersedes, cross_file_headings, led) {
+                if let Ok(id) = resolve_supersedes(&entry, cross_file_headings, led) {
+                    out.insert(id);
+                }
+            }
+        }
+    }
+    out
+}

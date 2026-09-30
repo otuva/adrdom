@@ -1041,7 +1041,7 @@ fn answer_refuses_while_a_draft_sits_on_top_of_a_real_retirement() {
     let terms_path = write_record(
         &dir,
         "adrdom/terms.md",
-        "# Terms\n\n## authority\ndefinition: A fixture term for tests.\naliases: \n",
+        "# Terms\n\n## authority\ndefinition: A fixture term for tests.\naliases: \n\n## gadget\ndefinition: A second fixture term no question names.\naliases: \n",
     );
     let terms_out = adr_owner(&dir, &["approve", terms_path.to_str().unwrap()], "");
     assert!(terms_out.status.success(), "approve terms failed: {}", stderr(&terms_out));
@@ -1054,8 +1054,9 @@ fn answer_refuses_while_a_draft_sits_on_top_of_a_real_retirement() {
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
 
-    // Retire "authority" for real, with its own approve: the question is
-    // still only asked (not yet current), so this isn't refused.
+    // Retire "gadget" for real, with its own approve: no question names
+    // it, so the retire is not refused (per "Does the owner retire a term
+    // that a question names?").
     let mut retired = std::fs::read_to_string(&terms_path).unwrap();
     retired.push_str("retired: yes\n");
     std::fs::write(&terms_path, &retired).unwrap();
