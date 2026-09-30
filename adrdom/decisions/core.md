@@ -264,3 +264,30 @@ Standard: traceability links are kept current, so every link from a test names a
   Costs: stale ties build up and a test can claim a decision that left force.
 
 **Answer:** A
+
+### What does check do with an untested current decision?
+depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e2533580-1486-4dc9-8697-e6c53605fe72, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f
+supersedes: 33a45b9e-8150-488e-be70-7ab2ca9adaa6, 0b962bc8-05a8-48da-9fe8-bf77c7aa6e4a, b871e776-2da5-4f1e-b4c4-fb8229657e25, f2e31cbe-1ba2-4b77-910a-b9664ce0277f
+id: 3460d220-e523-448b-aeff-baa8051b7d06
+terms: answer=b36113a1-1384-4e4c-a798-8399f4181366, answered=b36113a1-1384-4e4c-a798-8399f4181366, answers=b36113a1-1384-4e4c-a798-8399f4181366, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, current=e2533580-1486-4dc9-8697-e6c53605fe72, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, tier=f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
+
+Problem: a current decision with no test fails check once its tier is answered, so the last answer of a tier and every test of the tier reach git in one commit, and no answer of a later tier reaches git before the earlier tier is built.
+Standard: a report separates a state from a violation; work in progress is counted and shown, and a gate fires only on a rule that is broken.
+
+- A) Check reports it and fails nothing: an untested current decision is a state check prints on every run until a test names the decision.
+  Why: an answer reaches git the moment it is given, and the build follows on any tier at any commit.
+  Costs: nothing in the tool holds a decision to a test; a decision stays untested for as long as nothing is built on it.
+- B) Check fails it: a current decision with no test fails check on every run.
+  Why: every commit holds every current decision to a test.
+  Costs: an answer cannot reach git before its test, so the answers and the build of a tier land in one commit.
+- C) Check fails it once every question of its tier is answered, and reports it as waiting until then.
+  Why: the answers of a tier reach git one by one, and a tier is built whole.
+  Costs: the last answer of a tier and its build land in one commit, and no answer of a later tier reaches git before the earlier tier is built.
+
+### What does a test carry to name its decision?
+depends: 3460d220-e523-448b-aeff-baa8051b7d06=*, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, e877e4a9-2caf-4fe6-9f82-5476a2abb00b
+id: 4319a653-6901-446c-94ab-6420ef472134
+
+### Does check fail a test that names a decision that is not current?
+depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e2533580-1486-4dc9-8697-e6c53605fe72, 4319a653-6901-446c-94ab-6420ef472134
+id: 751ef30c-6a2f-4936-bf9b-b9d487146e53
