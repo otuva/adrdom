@@ -285,39 +285,14 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
             });
         }
         supersedes_val = sec.supersedes.clone();
-        for old in &supersedes_val {
-            // A supersedes target must be current when this question was
-            // asked (per "Does one decision supersede several?", owner note
-            // 2026-09-24): the supersedes line freezes at ask, which `ask` itself now
-            // enforces. Here at answer time the target may since have moved
-            // to `superseded` -- accepted only when that happened after
-            // this question's own latest `asked` row, so a split (several
-            // newer questions each naming the same older target, asked
-            // together and answered one after another) goes through for
-            // every one of them. Compared by ledger order (row position),
-            // never the `time` string: two rows written in the same run can
-            // share a timestamp. Anything else -- never asked/answered,
-            // refused, withdrawn, or superseded before this question was
-            // asked -- refuses exactly as before.
-            let target_ok = match led.latest_state(old) {
-                Some(row) if row.event == "answered" => true,
-                Some(row) if row.event == "superseded" => {
-                    match (led.latest_asked_pos(id), led.latest_superseded_pos(old)) {
-                        (Some(asked_pos), Some(superseded_pos)) => superseded_pos > asked_pos,
-                        _ => false,
-                    }
-                }
-                _ => false,
-            };
-            if !target_ok {
-                let names = crate::view::all_heading_texts(root);
-                return Err(msg::supersedes_not_current(old, names.get(old).map(String::as_str)));
-            }
-        }
+    }
+    {
         let all = record::load_all(root);
-        let missing = depends::left_out_of_supersedes(&all, &led, &supersedes_val);
-        if !missing.is_empty() {
-            return Err(msg::supersedes_leaves_out(&rf.rel, &sec.heading_text, &missing, msg::SupersedesMoment::Asked));
+        let cross_file_headings = depends::cross_file_heading_index(&all, &led);
+        let names = crate::view::heading_texts(&all);
+        let refusals = supersedes_refusals(&rf.rel, &rf, &cross_file_headings, &names, &all, &led, Some(idx));
+        if !refusals.is_empty() {
+            return Err(refusals.into_iter().map(|r| r.message).collect::<Vec<_>>().join("\n"));
         }
     }
 
@@ -1180,6 +1155,117 @@ pub fn record_refusals(
         }
     }
 
+    out.extend(supersedes_refusals(rel, rf, cross_file_headings, names, all, led, None));
+
+    out
+}
+
+/// Every refusal the `supersedes:` lines of `rf` earn, the one place for the
+/// supersede rules, read by `record_refusals` (so `approve`, `check` and
+/// `show`), by `ask` for one candidate (`only`) and by `answer` for its own
+/// question. Category `plan`. Judged: each live section with a `supersedes:`
+/// line that is not frozen (an answered, refused or superseded section is
+/// history); an asked section whose text still stands is judged too, since
+/// `ask` froze its line and `answer` reads it. `only` narrows the judged
+/// sections to that index. The rules, in this order: every entry names a
+/// current decision (an asked section also accepts a target superseded after
+/// the section's latest `asked` row, a sibling replacer of the same decision
+/// answered first; compared by ledger position, never by time); the line
+/// leaves out no decision standing on a target; the section does not stand on
+/// a target; no other live, unanswered section of the file stands on a target.
+pub fn supersedes_refusals(
+    rel: &str,
+    rf: &RecordFile,
+    cross_file_headings: &HashMap<String, Vec<(String, String)>>,
+    names: &HashMap<String, String>,
+    all: &[RecordFile],
+    led: &Ledger,
+    only: Option<usize>,
+) -> Vec<Refusal> {
+    let refuse = |message: String| Refusal { category: "plan", message };
+    let mut out: Vec<Refusal> = Vec::new();
+    // (section index, asked, target ids) of each judged section.
+    let mut judged: Vec<(usize, bool, Vec<String>)> = Vec::new();
+    for (i, sec) in rf.sections.iter().enumerate() {
+        if sec.supersedes.is_empty()
+            || only.is_some_and(|o| o != i)
+            || state::is_frozen(led, sec)
+            || state::is_dead(led, sec)
+        {
+            continue;
+        }
+        let asked = sec
+            .id
+            .as_deref()
+            .is_some_and(|id| state::asked_text_stands(led, id, &record::section_hash(&rf.lines, sec)));
+        let mut ids = Vec::new();
+        for old in &depends::supersedes_entries(&sec.supersedes, cross_file_headings, led) {
+            match depends::resolve_supersedes(old, cross_file_headings, led) {
+                Ok(id) => ids.push(id),
+                Err(depends::SupersedesError::Ambiguous(files)) => {
+                    out.push(refuse(msg::ask_supersedes_ambiguous(rel, &sec.heading_text, old, &files)));
+                }
+                Err(depends::SupersedesError::NotCurrent) => {
+                    let split_sibling = asked
+                        && sec.id.as_deref().is_some_and(|id| {
+                            matches!(led.latest_state(old), Some(r) if r.event == "superseded")
+                                && matches!(
+                                    (led.latest_asked_pos(id), led.latest_superseded_pos(old)),
+                                    (Some(a), Some(s)) if s > a
+                                )
+                        });
+                    if split_sibling {
+                        ids.push(old.trim().to_string());
+                    } else {
+                        out.push(refuse(msg::ask_supersedes_not_current(
+                            rel,
+                            &sec.heading_text,
+                            old,
+                            names.get(old).map(String::as_str),
+                        )));
+                    }
+                }
+            }
+        }
+        judged.push((i, asked, ids));
+    }
+
+    // Only sections of this file: an open question of another file that
+    // stands on a replaced decision is left to check's not-current refusal.
+    let stands_on = |d: &record::Dep, target: &str| -> bool {
+        let at = rf
+            .sections
+            .iter()
+            .find(|s| s.id.as_deref() == Some(target))
+            .map(|s| (rf.rel.as_str(), s.heading_text.trim()));
+        depends::entry_names_target(d, &rf.rel, target, at)
+    };
+    for (i, asked, ids) in &judged {
+        let sec = &rf.sections[*i];
+        let missing = depends::left_out_of_supersedes(all, led, ids);
+        if !missing.is_empty() {
+            let moment = if *asked { msg::SupersedesMoment::Asked } else { msg::SupersedesMoment::Approve };
+            out.push(refuse(msg::supersedes_leaves_out(rel, &sec.heading_text, &missing, moment)));
+        }
+        for target in ids {
+            let target_name = names.get(target).map(String::as_str).unwrap_or("");
+            if sec.depends.iter().any(|d| stands_on(d, target)) {
+                out.push(refuse(msg::stands_on_what_it_supersedes(rel, &sec.heading_text, target_name)));
+            }
+            for (j, other) in rf.sections.iter().enumerate() {
+                let open = other.id.as_deref().map_or(true, |id| !state::is_current(led, id))
+                    && !state::is_dead(led, other);
+                if j != *i && open && other.depends.iter().any(|d| stands_on(d, target)) {
+                    out.push(refuse(msg::stands_on_what_the_plan_supersedes(
+                        rel,
+                        &other.heading_text,
+                        target_name,
+                        &sec.heading_text,
+                    )));
+                }
+            }
+        }
+    }
     out
 }
 
@@ -1457,79 +1543,13 @@ fn do_approve_record(
         if sec.supersedes.is_empty() || stands_as_asked || state::is_frozen(led, sec) {
             continue;
         }
-        let mut ids = Vec::new();
-        for old in &depends::supersedes_entries(&sec.supersedes, &cross_file_headings, led) {
-            match depends::resolve_supersedes(old, &cross_file_headings, led) {
-                Ok(id) => ids.push(id),
-                Err(depends::SupersedesError::NotCurrent) => refusals.push(msg::approve_prefixed(
-                    msg::ask_supersedes_not_current(
-                        rel,
-                        &sec.heading_text,
-                        old,
-                        names.get(old).map(String::as_str),
-                    ),
-                )),
-                Err(depends::SupersedesError::Ambiguous(files)) => refusals.push(msg::approve_prefixed(
-                    msg::ask_supersedes_ambiguous(rel, &sec.heading_text, old, &files),
-                )),
-            }
-        }
+        // A target that names no decision (or several) is `record_refusals`'
+        // refusal above; only the ones that resolve are turned.
+        let ids: Vec<String> = depends::supersedes_entries(&sec.supersedes, &cross_file_headings, led)
+            .iter()
+            .filter_map(|old| depends::resolve_supersedes(old, &cross_file_headings, led).ok())
+            .collect();
         supersedes_ids.insert(i, ids);
-    }
-
-    // The supersedes line names every current decision standing on what it
-    // replaces (through the ones standing on those), and nothing of the plan
-    // stands on what the plan replaces (796a2544): collected with the other
-    // refusals, before anything is written.
-    {
-        // Only sections of the file being approved: an open question of
-        // another file that stands on a replaced decision is left to
-        // check's not-current refusal.
-        let stands_on = |d: &record::Dep, target: &str| -> bool {
-            let at = rf
-                .sections
-                .iter()
-                .find(|s| s.id.as_deref() == Some(target))
-                .map(|s| (rf.rel.as_str(), s.heading_text.trim()));
-            depends::entry_names_target(d, &rf.rel, target, at)
-        };
-        let mut idxs: Vec<&usize> = supersedes_ids.keys().collect();
-        idxs.sort();
-        for &i in idxs {
-            let sec = &rf.sections[i];
-            let ids = &supersedes_ids[&i];
-            let missing = depends::left_out_of_supersedes(&all_records, led, ids);
-            if !missing.is_empty() {
-                refusals.push(msg::approve_prefixed(msg::supersedes_leaves_out(
-                    rel,
-                    &sec.heading_text,
-                    &missing,
-                    msg::SupersedesMoment::Approve,
-                )));
-            }
-            for target in ids {
-                let target_name = names.get(target).map(String::as_str).unwrap_or("");
-                if sec.depends.iter().any(|d| stands_on(d, target)) {
-                    refusals.push(msg::approve_prefixed(msg::stands_on_what_it_supersedes(
-                        rel,
-                        &sec.heading_text,
-                        target_name,
-                    )));
-                }
-                for (j, other) in rf.sections.iter().enumerate() {
-                    let open = other.id.as_deref().map_or(true, |id| !state::is_current(led, id))
-                        && !state::is_dead(led, other);
-                    if j != i && open && other.depends.iter().any(|d| stands_on(d, target)) {
-                        refusals.push(msg::approve_prefixed(msg::stands_on_what_the_plan_supersedes(
-                            rel,
-                            &other.heading_text,
-                            target_name,
-                            &sec.heading_text,
-                        )));
-                    }
-                }
-            }
-        }
     }
 
     // A letter-set suffix naming a current decision elsewhere

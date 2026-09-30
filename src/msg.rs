@@ -816,13 +816,6 @@ fn named(id: &str, name: Option<&str>) -> String {
     }
 }
 
-pub fn supersedes_not_current(id: &str, name: Option<&str>) -> String {
-    refuse(
-        format!("supersedes target {} is not a current decision", named(id, name)),
-        Next::agent("fixes the supersedes line"),
-    )
-}
-
 // --- ask.rs -----------------------------------------------------------------
 
 pub fn edited_after_answered(path: &str, heading: &str) -> String {
@@ -2698,7 +2691,6 @@ mod tests {
             malformed_terms_line("id-1", "heading"),
             terms_line_names_gone_term("id-1", "heading", "uuid-1", "word"),
             terms_line_names_retired_term("id-1", "heading", "term"),
-            supersedes_not_current("id-1", None),
             edited_after_answered("x.md", "heading"),
             edited_after_refused("x.md", "heading"),
             plan_not_approved("x.md"),

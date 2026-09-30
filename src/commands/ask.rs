@@ -309,30 +309,15 @@ pub fn run(record_path: PathBuf) -> i32 {
             continue;
         }
 
-        // Supersedes target must be current (per "Does one decision
-        // supersede several?", owner note 2026-09-24): the supersedes
-        // line freezes at ask, so a candidate naming a target that is not
-        // current right now -- never answered, refused, withdrawn, or
-        // already superseded -- refuses here, even when it was current at
-        // approval (per "Does approve turn the supersedes line into
-        // identifiers?": approve turns the line, ask checks the target
-        // once more). `answer` later accepts a target that was superseded
-        // after this question's own `asked` row (a split), but never one
-        // that was already stale before it was ever asked.
-        let missing = depends::left_out_of_supersedes(&all_records, &led, &sec.supersedes);
-        if !missing.is_empty() {
-            refusals.push(msg::supersedes_leaves_out(&rel, &sec.heading_text, &missing, msg::SupersedesMoment::Asked));
-        }
-        for old in &sec.supersedes {
-            if !state::is_current(&led, old) {
-                refusals.push(msg::ask_supersedes_not_current(
-                    &rel,
-                    &sec.heading_text,
-                    old,
-                    names.get(old).map(String::as_str),
-                ));
-            }
-        }
+        // The supersede rules (`actions::supersedes_refusals`, the one place
+        // `approve`, `check` and `answer` read too): the line freezes at ask,
+        // so a candidate naming a target that is not current, leaving out a
+        // decision standing on one, or standing on one refuses here.
+        refusals.extend(
+            actions::supersedes_refusals(&rel, &rf, &cross_file_headings, &names, &all_records, &led, Some(i))
+                .into_iter()
+                .map(|r| r.message),
+        );
 
         // Moot refusal: this candidate's own entry in `moot_pairs`, matched
         // by section index since two sections may share a heading text.

@@ -213,3 +213,22 @@ fn answer_refuses_a_replacement_whose_target_gained_a_dependent_after_ask() {
     );
     assert_eq!(std::fs::read_to_string(&a).unwrap(), file_before);
 }
+
+// adr: 796a2544-43e5-43db-b5d3-8a4e737ec9c6
+#[test]
+fn check_prints_the_tree_refusal_once_for_an_approved_unasked_replacement_whose_target_gained_a_dependent() {
+    let dir = setup();
+    let _a = q1_gains_a_dependent_after_approve(&dir, false);
+    let out = adr(&dir, &["check"], &[], "");
+    let all = format!("{}{}", stdout(&out), stderr(&out));
+    assert!(!out.status.success(), "check should fail: {}", all);
+    for n in [Q7, "c.md", "agent adds them to the supersedes line"] {
+        assert!(all.contains(n), "check output should name {:?}: {}", n, all);
+    }
+    assert_eq!(
+        all.matches("supersedes a decision that current decisions stand on").count(),
+        1,
+        "the tree refusal is printed once: {}",
+        all
+    );
+}
