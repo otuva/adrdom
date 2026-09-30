@@ -78,10 +78,11 @@ other is answered. Write every entry that is so, and none that is not.
 Ask "does X" or "what does X do". A heading that opens with "which",
 "where", "how many" or "how much" is refused: it assumes an answer the owner
 has not given. One question per heading: a heading with "and" or "or" in it
-is refused as two questions. Say the plan is ready and stop. The owner may strike, add or reorder headings before
-approving, or write the plan itself and approve it the same way. The owner
-runs `adr approve <file>`; after it every heading has an `id:` line and the
-entries of its `depends:` line are ids.
+is refused as two questions. Say the plan is ready and stop. The owner may
+strike, add or reorder headings before approving, or write the plan itself
+and approve it the same way. The owner runs `adr approve <file>`; after it
+every heading has an `id:` line and the entries of its `depends:` line are
+ids.
 
 **2. Walk each question, then write its body.** Write the bodies `next`
 names. Before you write an option, read the code and the decisions it meets
@@ -95,11 +96,11 @@ A question, its prose and its options hold what is asked and nothing about
 the day they were written. Three kinds of words are refused:
 
 - what the code does now: "already", "currently", "today", "right now", "at
-  the moment", "as built", "as implemented", "as is", "unchanged", "no
-  change", "keep it", "nothing to build";
+  the moment", "as built", "as implemented", "as is", "as it is",
+  "unchanged", "no change", "keep it", "nothing to build";
 - who said it: "said", "told", "agreed", "chose", "decided", "wants",
-  "prefers", "as discussed", "in chat", "this session", and the name of an
-  agent;
+  "prefers", "in chat", "in the chat", "this session", "as agreed",
+  "as discussed", "as decided", and the name of an agent;
 - a date.
 
 ```

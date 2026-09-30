@@ -896,7 +896,7 @@ fn installed_brief_tells_the_owner_may_edit_or_write_the_plan() {
     let agents = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
     assert!(
         agents.contains(
-            "The owner may strike, add or reorder headings before\napproving, or write the plan itself and approve it the same way."
+            "The owner may\nstrike, add or reorder headings before approving, or write the plan itself\nand approve it the same way."
         ),
         "{}",
         agents
