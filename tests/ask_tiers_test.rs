@@ -175,7 +175,7 @@ fn ask_prints_nothing_to_ask_naming_the_owners_answer_when_a_later_tier_candidat
     );
     assert!(
         printed.contains(&format!(
-            "owner runs: adr answer {}@{} <letter> for \"1.1 What color is the widget?\"",
+            "owner runs: adr answer {}@{} <letter>  # \"1.1 What color is the widget?\"",
             q1_id,
             current_version(&dir, &q1_id)
         )),
@@ -330,7 +330,7 @@ Standard: plain words.
     assert_eq!(
         after_first_line(&stdout(&out)),
         format!(
-            "  owner runs: adr answer {}@{} <letter> for \"1.1 What color is the widget?\"\n  agent changes the plan: \"1.0 Is the widget on backorder?\" is refused and holds the questions that come after it\n  not yet, after the questions named above: \"1.2 Does the widget's paint match its color?\"",
+            "  owner runs: adr answer {}@{} <letter>  # \"1.1 What color is the widget?\"\n  agent changes the plan: \"1.0 Is the widget on backorder?\" is refused and holds the questions that come after it\n  not yet, after the questions named above: \"1.2 Does the widget's paint match its color?\"",
             q1_id_now,
             current_version(&dir, &q1_id_now)
         )
@@ -485,7 +485,7 @@ Standard: plain words.
     assert_eq!(
         after_first_line(&stdout(&out)),
         format!(
-            "  owner runs: adr answer {}@{} <letter> for \"1.0 Is the widget in stock?\"\n  agent changes the plan: \"1.1 What color is the widget?\" is refused and holds the questions that come after it\n  not yet, after the questions named above: \"1.2 Does the widget's paint match its color?\"",
+            "  owner runs: adr answer {}@{} <letter>  # \"1.0 Is the widget in stock?\"\n  agent changes the plan: \"1.1 What color is the widget?\" is refused and holds the questions that come after it\n  not yet, after the questions named above: \"1.2 Does the widget's paint match its color?\"",
             qx_id,
             current_version(&dir, &qx_id)
         )

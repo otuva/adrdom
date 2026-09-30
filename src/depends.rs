@@ -32,6 +32,9 @@ pub enum DepError {
     /// A term-shaped `Text` entry (not heading-shaped, i.e. not ending in
     /// `?`) that names no current term.
     NoTerm(String),
+    /// A term-shaped `Text` entry naming a retired term's name or alias
+    /// and no current term.
+    RetiredTerm(String),
     /// A heading-shaped `Text` entry naming no heading in its own file, but
     /// a current decision's heading text in more than one *other* topic
     /// file (the gap "Does a reference in a topic file carry the identifier
@@ -137,7 +140,20 @@ pub fn resolve_dep(
             }
             match phrase_lookup.get(&t.to_lowercase()) {
                 Some(id) => Ok(Some(DepTarget::Term(id.clone()))),
-                None => Err(DepError::NoTerm(t.to_string())),
+                None => {
+                    let lower = t.to_lowercase();
+                    let retired = terms_list.iter().any(|term| {
+                        term.retired
+                            && std::iter::once(&term.name)
+                                .chain(term.aliases.iter())
+                                .any(|n| n.trim().to_lowercase() == lower)
+                    });
+                    if retired {
+                        Err(DepError::RetiredTerm(t.to_string()))
+                    } else {
+                        Err(DepError::NoTerm(t.to_string()))
+                    }
+                }
             }
         }
     }
@@ -160,6 +176,7 @@ pub fn dep_refusal_text(rel: &str, heading: &str, err: &DepError, name: Option<&
     match err {
         DepError::NotCurrentDecision(id) => msg::dep_not_current_decision(rel, heading, id, name),
         DepError::NoTerm(text) => msg::dep_no_term(rel, heading, text),
+        DepError::RetiredTerm(text) => msg::dep_retired_term(rel, heading, text),
         DepError::AmbiguousHeading { .. } => {
             unreachable!("a heading-shaped entry never reaches dep_refusal_text; see the doc comment above")
         }

@@ -78,6 +78,13 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
                 // Not one of the repo's topic files (an unusual path
                 // outside adrdom/decisions/, say): loaded directly, same as
                 // before this pass.
+                None if !unreadable_topic_files
+                    .iter()
+                    .any(|(f, _)| state::rel_path(&root, f) == rel) =>
+                {
+                    eprintln!("show: {}", msg::show_not_a_topic_file(&rel));
+                    return 1;
+                }
                 None => match record::load(p) {
                     Ok(rf) => vec![rf],
                     Err(e) => {

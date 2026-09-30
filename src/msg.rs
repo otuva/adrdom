@@ -322,6 +322,15 @@ pub fn shape_error(rel: &str, e: &str) -> String {
     )
 }
 
+/// A `### ` line that does not end in `?` (per "What does a topic file
+/// hold?": a heading is a question).
+pub fn heading_not_a_question(rel: &str, line: usize) -> String {
+    refuse(
+        format!("{}: line {}: a heading is a question ending in ?", rel, line),
+        Next::agent("rewrites the line"),
+    )
+}
+
 pub fn section_shape_error(rel: &str, heading: &str, e: &str) -> String {
     refuse(
         format!("{}: \"{}\": {}", rel, heading, e),
@@ -381,6 +390,21 @@ pub fn dep_no_term(rel: &str, heading: &str, text: &str) -> String {
             rel, heading, text
         ),
         Next::agent("adds the term or names another"),
+    )
+}
+
+/// `show <file>` on a file that is not one of the topic files.
+pub fn show_not_a_topic_file(rel: &str) -> String {
+    refuse(
+        format!("{} is not a topic file", rel),
+        Next::agent("names a file under adrdom/decisions"),
+    )
+}
+
+pub fn dep_retired_term(rel: &str, heading: &str, text: &str) -> String {
+    refuse(
+        format!("{}: \"{}\" names the retired term \"{}\"", rel, heading, text),
+        Next::agent("names another term"),
     )
 }
 
@@ -593,8 +617,24 @@ pub fn letter_not_an_option(letter: char, heading: &str, letters: &[char], id: &
 
 pub fn not_in_asked_state(heading: &str, rel: &str) -> String {
     refuse(
-        format!("\"{}\" is not asked as it reads now", heading),
-        Next::agent(format!("runs: adr ask {}", rel)),
+        format!("\"{}\" is edited since it was asked", heading),
+        Next::agent(format!("runs adr ask {}", rel)),
+    )
+}
+
+/// A question with a body that no `ask` has put to the owner.
+pub fn not_asked_yet(heading: &str, rel: &str) -> String {
+    refuse(
+        format!("\"{}\" is not asked yet", heading),
+        Next::agent(format!("runs adr ask {}", rel)),
+    )
+}
+
+/// A question with no body yet: nothing to ask or answer.
+pub fn not_written(heading: &str) -> String {
+    refuse(
+        format!("\"{}\" has no body yet", heading),
+        Next::agent("writes its body"),
     )
 }
 
@@ -622,13 +662,10 @@ pub fn answer_missing_version(id: &str, asked: Option<(&str, &str)>) -> String {
 /// "Does an answer carry the version of the question the owner read?"):
 /// the question moved -- usually a re-ask after an edit -- since that
 /// version was read.
-pub fn stale_version(heading: &str) -> String {
+pub fn stale_version(heading: &str, id: &str, current: &str) -> String {
     refuse(
-        format!(
-            "\"{}\" has moved since that version was read; show prints it as it is, with its id and version",
-            heading
-        ),
-        Next::owner_runs("adr show"),
+        format!("\"{}\" has moved since that version was read", heading),
+        Next::owner_runs(format!("adr answer {}@{} <letter>", id, current)),
     )
 }
 
@@ -877,12 +914,12 @@ pub fn next_answer_set(dependent: &str, target: &str) -> String {
 }
 
 pub fn next_ask(rel: &str, headings: &[String]) -> String {
-    Next::agent(format!("runs adr ask {} for {}", rel, quoted(headings))).render()
+    Next::agent(format!("runs adr ask {}  # {}", rel, quoted(headings))).render()
 }
 
 pub fn next_answer(id: &str, version: &str, heading: &str) -> String {
     format!(
-        "{} for \"{}\"",
+        "{}  # \"{}\"",
         Next::owner_runs(format!("adr answer {}@{} <letter>", id, version)).render(),
         heading
     )
@@ -2433,7 +2470,11 @@ mod tests {
             not_in_asked_state("heading", "x.md"),
             answer_missing_version("id-1", None),
             answer_missing_version("id-1", Some(("heading", "12345678"))),
-            stale_version("heading"),
+            stale_version("heading", "id-1", "12345678"),
+            not_asked_yet("heading", "x.md"),
+            not_written("heading"),
+            dep_retired_term("x.md", "heading", "widget"),
+            show_not_a_topic_file("x.md"),
             invalid_version_format("Z0ZZZZZZ"),
             no_terms_line("id-1", "heading"),
             malformed_terms_line("id-1", "heading"),
@@ -2544,6 +2585,9 @@ mod tests {
             let Some((_, command)) = o.split_once("owner runs: ") else {
                 continue;
             };
+            // A shell comment after the command names the heading and is
+            // not part of the command.
+            let command = command.split(" #").next().unwrap_or(command);
             if command.starts_with("the rows ") {
                 continue;
             }

@@ -304,6 +304,18 @@ fn is_question_heading(line: &str) -> bool {
     line.starts_with("### ") && line.trim_end().ends_with('?')
 }
 
+/// The indices of the `### ` lines that do not end in `?`: a heading is a
+/// question (per "What does a topic file hold?"), so such a line is
+/// refused rather than read as prose.
+pub fn non_question_heading_lines(lines: &[String]) -> Vec<usize> {
+    lines
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| l.starts_with("### ") && !is_question_heading(l))
+        .map(|(i, _)| i)
+        .collect()
+}
+
 fn is_h1(line: &str) -> bool {
     line.starts_with("# ")
 }
@@ -609,7 +621,20 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
         if line.trim().is_empty() {
             continue;
         }
-        if let Some(v) = kv(line, "depends") {
+        // A `### ` line without `?` is refused once, by its own line
+        // (`non_question_heading_lines`); it is not also a stray line.
+        if line.starts_with("### ") {
+            continue;
+        }
+        // A `depends:` with nothing after it names nothing: it counts as a
+        // depends line with no entries, so the section is refused as having
+        // no depends line (`record_refusals`) and nothing else about it.
+        let empty_depends = line.trim_end() == "depends:";
+        if let Some(v) = kv(line, "depends").or_else(|| empty_depends.then(String::new)) {
+            if v.is_empty() {
+                depends_line_seen = true;
+                continue;
+            }
             if depends_line_seen {
                 depends_errors.push(format!("depends: second depends line, line {}", j + 1));
                 continue;
@@ -780,7 +805,7 @@ fn is_skeleton_range(lines: &[String], start: usize, end: usize) -> bool {
         // space after the colon is a typo, not a real field, so it must not
         // be silently swallowed as skeleton -- it falls through and
         // `scan_body` reports it as a stray line instead.
-        t.is_empty() || t.starts_with("depends: ") || t.starts_with("id: ")
+        t.is_empty() || t.starts_with("depends: ") || t == "depends:" || t.starts_with("id: ")
     })
 }
 

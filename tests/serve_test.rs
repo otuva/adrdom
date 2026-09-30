@@ -416,7 +416,7 @@ id: 11111111-1111-1111-1111-111111111111\n\
 definition: A choice answered by the owner.\n\
 aliases: \n";
 
-const WORDS_RECORD: &str = r#"# Topic
+const WORDS_RECORD: &str = r#"# Example
 
 Context prose.
 
@@ -502,7 +502,7 @@ id: 22222222-2222-2222-2222-222222222222\n\
 definition: A fixture term with no alias.\n\
 aliases: \n";
 
-const PLURAL_RECORD: &str = r#"# Topic
+const PLURAL_RECORD: &str = r#"# Example
 
 Context prose.
 
@@ -600,7 +600,7 @@ fn get_next_marks_term_words_in_text() {
     let _ = child.wait();
 }
 
-const UUID_INLINE_RECORD: &str = r#"# Topic
+const UUID_INLINE_RECORD: &str = r#"# Example
 
 Context prose.
 

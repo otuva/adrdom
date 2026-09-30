@@ -8,7 +8,7 @@ mod common;
 
 use common::*;
 
-const HEADING_TELL_RECORD: &str = r#"# Topic
+const HEADING_TELL_RECORD: &str = r#"# Example
 
 Context prose line.
 
@@ -44,7 +44,7 @@ fn approve_refuses_a_heading_with_a_loaded_opening() {
     assert!(text.contains("agent rewrites the line"), "{}", text);
 }
 
-const CONTEXT_TELL_RECORD: &str = r#"# Topic
+const CONTEXT_TELL_RECORD: &str = r#"# Example
 
 Claude decided this design already.
 
@@ -81,7 +81,7 @@ fn approve_refuses_a_context_line_with_a_provenance_tell() {
     assert!(text.contains("\"context\""), "{}", text);
 }
 
-const BODY_TELL_RECORD: &str = r#"# Topic
+const BODY_TELL_RECORD: &str = r#"# Example
 
 Context prose.
 
@@ -117,7 +117,7 @@ fn ask_refuses_a_candidate_with_a_code_state_tell_in_its_body() {
     assert!(text.contains("states what the code does now"), "{}", text);
 }
 
-const UNFROZEN_TELL_RECORD: &str = r#"# Topic
+const UNFROZEN_TELL_RECORD: &str = r#"# Example
 
 The team said yes.
 
@@ -189,7 +189,7 @@ fn check_passes_a_frozen_answered_section_with_a_tell() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
-    let content = format!("# Topic\n\n{}\n", frozen_tell_section());
+    let content = format!("# Example\n\n{}\n", frozen_tell_section());
     write_record(&dir, "adrdom/decisions/example.md", &content);
     append_ledger_row(&dir, "answered", FROZEN_TELL_ID, "somehash", "A");
 
@@ -226,7 +226,7 @@ fn approve_skips_a_frozen_headings_tell_and_still_mints_a_new_skeletons_id() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     let content = format!(
-        "# Topic\n\nContext prose.\n\n{}\n\n### A new clean heading?\ndepends: widget\n",
+        "# Example\n\nContext prose.\n\n{}\n\n### A new clean heading?\ndepends: widget\n",
         frozen_tell_section_resolved()
     );
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
@@ -255,7 +255,7 @@ fn approve_skips_a_frozen_headings_tell_and_still_mints_a_new_skeletons_id() {
 // already reports both (`tells::check_tells` and `plan::check_plan` both
 // run, unconditionally, every time), so this is really pinning `approve`
 // down to what `check` already does.
-const TELL_AND_BAD_DEPENDS_RECORD: &str = r#"# Topic
+const TELL_AND_BAD_DEPENDS_RECORD: &str = r#"# Example
 
 Context prose line.
 

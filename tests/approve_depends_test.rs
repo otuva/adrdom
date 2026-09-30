@@ -140,7 +140,7 @@ fn approve_refuses_a_term_entry_that_resolves_to_a_retired_term() {
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(
-        err.contains("\"1.1 Q?\" depends on \"gadget\" which is no term; agent adds the term or names another"),
+        err.contains("\"1.1 Q?\" names the retired term \"gadget\"; agent names another term"),
         "{}",
         err
     );

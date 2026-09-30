@@ -222,3 +222,49 @@ fn check_does_not_note_a_dependent_whose_set_still_includes_the_answer() {
     let text = stdout(&out);
     assert!(!text.contains("no case left:"), "{}", text);
 }
+
+// adr: fa90692a-150e-4a89-91e2-1d575cb59d0f
+//
+// A question in one file standing on a current decision of another file
+// under a set that lacks the letter it was answered with is moot, as it is
+// inside one file: check reports it and ask refuses it. `view::moot_pairs`
+// finds a target through `rf.dep_target`, which only reaches a heading of
+// the same file, so today a cross-file entry is accepted and asked.
+#[test]
+#[ignore = "needs view::moot_pairs to resolve a cross-file target (src/view.rs)"]
+fn a_cross_file_depends_entry_whose_set_lacks_the_answer_is_moot() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let q = "Problem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+
+    let a = write_record(
+        &dir,
+        "adrdom/decisions/topic-a.md",
+        &format!("# Topic A\n\n### Does the widget hold?\ndepends: widget\n\n{}", q),
+    );
+    assert!(adr_owner(&dir, &["approve", a.to_str().unwrap()], "").status.success());
+    let ask_a = adr(&dir, &["ask", a.to_str().unwrap()], &[], "");
+    assert!(ask_a.status.success(), "{}{}", stdout(&ask_a), stderr(&ask_a));
+    let a_id = std::fs::read_to_string(&a)
+        .unwrap()
+        .lines()
+        .find_map(|l| l.strip_prefix("id: "))
+        .unwrap()
+        .to_string();
+    assert!(adr_answer(&dir, &a_id, "A").status.success());
+
+    let b = write_record(
+        &dir,
+        "adrdom/decisions/topic-b.md",
+        &format!("# Topic B\n\n### Does the widget follow?\ndepends: Does the widget hold?=B\n\n{}", q),
+    );
+    let out = adr_owner(&dir, &["approve", b.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+
+    let moot = "\"Does the widget follow?\" stands on \"Does the widget hold?\"=B, answered A";
+    let check = stdout(&adr(&dir, &["check"], &[], ""));
+    assert!(check.contains(moot), "{}", check);
+    let ask = adr(&dir, &["ask", b.to_str().unwrap()], &[], "");
+    assert!(!ask.status.success(), "ask must refuse a moot question: {}", stdout(&ask));
+}

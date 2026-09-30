@@ -4,7 +4,7 @@ use common::*;
 
 /// A record with the full shape: `# topic`, context prose, two `##`
 /// groups, and `### q?` bodies with Problem/Standard/options.
-const TWO_GROUP_RECORD: &str = r#"# Topic
+const TWO_GROUP_RECORD: &str = r#"# Example
 
 Context prose line one.
 Context prose line two.
@@ -40,7 +40,7 @@ Standard: s2.
   Costs: other costs.
 "#;
 
-const ONE_QUESTION_RECORD: &str = r#"# Topic
+const ONE_QUESTION_RECORD: &str = r#"# Example
 
 Context prose.
 
@@ -59,7 +59,7 @@ Standard: s.
   Costs: other costs.
 "#;
 
-const HEADING_REMOVED: &str = "# Topic\n\nContext prose.\n";
+const HEADING_REMOVED: &str = "# Example\n\nContext prose.\n";
 
 // --- ask refusals naming `adr approve` -------------------------------
 
@@ -385,7 +385,7 @@ fn approve_withdraws_a_struck_refused_heading() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
-    let record = write_record(&dir, "adrdom/decisions/topic.md", ONE_QUESTION_RECORD);
+    let record = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
     assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
         .status
         .success());
@@ -565,7 +565,7 @@ fn approve_allows_a_vanished_heading_once_superseded() {
     // Now drop the (superseded) 1.1 heading entirely, keeping only 1.2.
     let content4 = std::fs::read_to_string(&record).unwrap();
     let idx = content4.find("### 1.2").expect("1.2 present");
-    let rebuilt = format!("# Topic\n\nContext prose.\n\n{}", &content4[idx..]);
+    let rebuilt = format!("# Example\n\nContext prose.\n\n{}", &content4[idx..]);
     std::fs::write(&record, &rebuilt).unwrap();
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -587,7 +587,7 @@ fn approve_allows_a_vanished_heading_once_superseded() {
 // adr: 1b181f10-97f4-4bbe-8939-d5842192126c
 //
 // "a topic file with no current or open question left may be deleted the
-// same way": once `a.md`'s only question is superseded and its section
+// same way": once `example.md`'s only question is superseded and its section
 // removed by an approved edit, the file holds no current or open question
 // at all; deleting it outright leaves `check` clean, exactly as removing
 // just the section did above -- no special act beyond the plan change
@@ -598,7 +598,7 @@ fn check_stays_clean_once_an_emptied_topic_file_is_deleted() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
 
-    let record_a = write_record(&dir, "adrdom/decisions/a.md", ONE_QUESTION_RECORD);
+    let record_a = write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION_RECORD);
     assert!(adr_owner(&dir, &["approve", record_a.to_str().unwrap()], "")
         .status
         .success());
@@ -617,8 +617,8 @@ fn check_stays_clean_once_an_emptied_topic_file_is_deleted() {
             .to_string()
     };
 
-    // A second, unrelated topic file supersedes old_id: a.md's only
-    // question is now superseded, not answered by anything a.md still
+    // A second, unrelated topic file supersedes old_id: example.md's only
+    // question is now superseded, not answered by anything example.md still
     // holds.
     let superseding = format!(
         "# B\n\n### 2.1 Replacement in another file?\ndepends: decision\n\nsupersedes: {}\n\nProblem: the decision needs revisiting from elsewhere.\n\nStandard: s2.\n\n- A) New answer.\n  Why: reasons.\n  Costs: costs.\n- B) Other new answer.\n  Why: other reasons.\n  Costs: other costs.\n",
@@ -635,8 +635,8 @@ fn check_stays_clean_once_an_emptied_topic_file_is_deleted() {
     let new_id = extract_ids(&content_b)[0].clone();
     assert!(adr_answer(&dir, &new_id, "A").status.success());
 
-    // a.md's only heading is superseded now: an approved edit may drop it,
-    // leaving a.md with no current or open question left at all.
+    // example.md's only heading is superseded now: an approved edit may drop it,
+    // leaving example.md with no current or open question left at all.
     std::fs::write(&record_a, HEADING_REMOVED).unwrap();
     assert!(adr_owner(&dir, &["approve", record_a.to_str().unwrap()], "")
         .status
@@ -801,7 +801,7 @@ fn approve_fills_missing_term_ids() {
 
 // --- ask writes a terms: line binding a word to the term id ------------
 
-const DECISION_QUESTION_RECORD: &str = r#"# Topic
+const DECISION_QUESTION_RECORD: &str = r#"# Example
 
 Context prose.
 
@@ -875,7 +875,7 @@ id: 22222222-2222-2222-2222-222222222222\n\
 definition: A ruling reached after deliberation.\n\
 aliases: choice\n";
 
-const CHOICE_QUESTION_RECORD: &str = r#"# Topic
+const CHOICE_QUESTION_RECORD: &str = r#"# Example
 
 Context prose.
 
@@ -1003,6 +1003,110 @@ fn approve_writes_a_terms_row_on_a_clean_edit() {
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert_eq!(ledger.lines().filter(|l| l.contains("\tterms\t")).count(), 2);
+}
+
+// --- approve refuses what check refuses for the same file -------------
+
+const WIDGET_Q: &str = "Problem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+
+fn widget_repo() -> std::path::PathBuf {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    dir
+}
+
+// adr: f97e62a4-45ab-46c6-b4b1-a674792a4493
+#[test]
+fn approve_refuses_a_heading_used_twice_in_one_file_with_the_check_line() {
+    let dir = widget_repo();
+    let twice = format!(
+        "# Topic\n\n### Does it repeat?\ndepends: widget\n\n{q}\n### Does it repeat?\ndepends: widget\n\n{q}",
+        q = WIDGET_Q
+    );
+    let record = write_record(&dir, "adrdom/decisions/topic.md", &twice);
+    let line = "duplicate heading \"Does it repeat?\" twice in adrdom/decisions/topic.md; agent renames one of the headings";
+
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(!out.status.success(), "{}", stdout(&out));
+    assert!(stderr(&out).contains(&format!("approve: {}", line)), "{}", stderr(&out));
+    let check = adr(&dir, &["check"], &[], "");
+    assert!(stdout(&check).contains(line), "{}", stdout(&check));
+
+    let renamed = twice.replacen("### Does it repeat?", "### Does it repeat again?", 1);
+    std::fs::write(&record, &renamed).unwrap();
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+}
+
+// adr: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
+#[test]
+fn approve_refuses_a_file_name_that_is_not_its_topic_with_the_check_line() {
+    let dir = widget_repo();
+    let content = format!("# Other\n\n### Does it match?\ndepends: widget\n\n{}", WIDGET_Q);
+    let record = write_record(&dir, "adrdom/decisions/topic.md", &content);
+    let line = "adrdom/decisions/topic.md: file name does not match its topic \"Other\"; agent renames the file to other.md";
+
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(!out.status.success(), "{}", stdout(&out));
+    assert!(stderr(&out).contains(&format!("approve: {}", line)), "{}", stderr(&out));
+    let check = adr(&dir, &["check"], &[], "");
+    assert!(stdout(&check).contains(line), "{}", stdout(&check));
+
+    let moved = dir.join("adrdom/decisions/other.md");
+    std::fs::rename(&record, &moved).unwrap();
+    let out = adr_owner(&dir, &["approve", moved.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+}
+
+// adr: f97e62a4-45ab-46c6-b4b1-a674792a4493
+#[test]
+fn a_heading_line_without_a_question_mark_is_refused_by_check_and_approve() {
+    let dir = widget_repo();
+    let bad = "# Topic\n\nProse.\n\n### Not a question\n";
+    let record = write_record(&dir, "adrdom/decisions/topic.md", bad);
+    let line = "adrdom/decisions/topic.md: line 5: a heading is a question ending in ?; agent rewrites the line";
+
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(!out.status.success(), "{}", stdout(&out));
+    assert!(stderr(&out).contains(line), "{}", stderr(&out));
+    let check = adr(&dir, &["check"], &[], "");
+    assert!(!check.status.success());
+    assert!(stdout(&check).contains(line), "{}", stdout(&check));
+
+    let fixed = format!("# Topic\n\nProse.\n\n### Is it a question?\ndepends: widget\n\n{}", WIDGET_Q);
+    std::fs::write(&record, &fixed).unwrap();
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(!stdout(&adr(&dir, &["check"], &[], "")).contains("a heading is a question"));
+}
+
+// adr: ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf
+#[test]
+fn an_empty_depends_line_is_refused_as_a_missing_depends_line_and_nothing_else() {
+    let dir = widget_repo();
+    for empty in ["depends:", "depends: "] {
+        let content = format!("# Topic\n\n### Does it stand on nothing?\n{}\n", empty);
+        let record = write_record(&dir, "adrdom/decisions/topic.md", &content);
+        let line = "adrdom/decisions/topic.md: \"Does it stand on nothing?\" has no depends line; agent writes what the question stands on";
+
+        let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+        assert!(!out.status.success(), "{}", stdout(&out));
+        let err = stderr(&out);
+        assert!(err.contains(line), "{}", err);
+        assert_eq!(err.trim().lines().count(), 1, "{}", err);
+        let check = stdout(&adr(&dir, &["check"], &[], ""));
+        assert!(check.contains(line), "{}", check);
+        for word in ["stray line", "missing Problem", "missing Standard", "options"] {
+            assert!(!check.contains(word), "{}: {}", word, check);
+        }
+
+        let fixed = "# Topic\n\n### Does it stand on nothing?\ndepends: widget\n";
+        std::fs::write(&record, fixed).unwrap();
+        let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+        assert!(out.status.success(), "{}", stderr(&out));
+        std::fs::remove_file(&record).unwrap();
+    }
 }
 
 // --- approve terms (4): refuses before writing, circular, already approved
@@ -1159,7 +1263,7 @@ id: 44444444-4444-4444-4444-444444444444\n\
 definition: A ruling reached after deliberation.\n\
 aliases: \n";
 
-const DECISION_RECORD_FOR_DEPENDENTS: &str = r#"# Topic
+const DECISION_RECORD_FOR_DEPENDENTS: &str = r#"# Example
 
 Context prose.
 
@@ -1283,7 +1387,7 @@ aliases: \n";
 // decision, `terms_refusals`' dependents came from a `terms:`/definition
 // line only, so retiring a term named solely by a current decision's
 // `depends:` line went unrefused.
-const DECISION_RECORD_DEPENDS_ONLY: &str = r#"# Topic
+const DECISION_RECORD_DEPENDS_ONLY: &str = r#"# Example
 
 Context prose.
 
@@ -1372,7 +1476,7 @@ aliases: decision\n";
 // that used to fail forever (unconditionally, with no exception for a
 // superseded heading, unlike the `terms:` line, which this decision
 // covers) and must now pass.
-const DECISION_RECORD_DEPENDS_ELSEWHERE: &str = r#"# Topic
+const DECISION_RECORD_DEPENDS_ELSEWHERE: &str = r#"# Example
 
 Context prose.
 
@@ -1409,7 +1513,7 @@ fn approve_allows_retiring_a_term_once_its_only_current_decision_is_superseded_a
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(
         &dir,
-        "adrdom/decisions/topic.md",
+        "adrdom/decisions/example.md",
         DECISION_RECORD_DEPENDS_ELSEWHERE,
     );
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_TWO_ENTRIES);

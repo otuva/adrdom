@@ -347,6 +347,7 @@ pub(crate) fn next_moves(
     let mut to_ask = Vec::new();
     let mut answers = Vec::new();
     let mut held = Vec::new();
+    let mut moot_lines = Vec::new();
     let mut build = Vec::new();
     let mut build_waits = Vec::new();
     let mut later = Vec::new();
@@ -355,7 +356,7 @@ pub(crate) fn next_moves(
         let heading = sec.heading_text.as_str();
         match qstate(led, sec) {
             QState::Skeleton | QState::Unasked if moot.contains(&i) => {
-                held.push(msg::next_moot(&rf.rel, heading));
+                moot_lines.push(msg::next_moot(&rf.rel, heading));
             }
             QState::Skeleton | QState::Unasked if Some(tiers[i]) != open_tier => {
                 later.push(heading.to_string());
@@ -432,6 +433,9 @@ pub(crate) fn next_moves(
     let mut out = build;
     let refused = !clears.is_empty();
     out.extend(clears);
+    // A question with no case left is dropped before anything is asked:
+    // `ask` refuses the whole run while it stands.
+    out.extend(moot_lines);
     if plan_ok {
         out.extend(bodies);
         out.extend(sets);

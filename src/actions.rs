@@ -187,11 +187,21 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
         {
             return Err(msg::invalid_version_format(version));
         }
-        if version_lower != cur_hash[..record::VERSION_LEN] {
-            return Err(msg::stale_version(&sec.heading_text));
+        // The text stands as it was asked (the version the owner would read
+        // is the current one) or it does not (never asked, or edited since:
+        // the agent's `ask` is the move and the owner has nothing to run).
+        let stands = crate::state::asked_text_stands(&led, id, &cur_hash);
+        if !stands {
+            return Err(if sec.is_skeleton {
+                msg::not_written(&sec.heading_text)
+            } else if led.latest_asked(id).is_none() {
+                msg::not_asked_yet(&sec.heading_text, &rel)
+            } else {
+                msg::not_in_asked_state(&sec.heading_text, &rel)
+            });
         }
-        if !crate::state::asked_text_stands(&led, id, &cur_hash) {
-            return Err(msg::not_in_asked_state(&sec.heading_text, &rel));
+        if version_lower != cur_hash[..record::VERSION_LEN] {
+            return Err(msg::stale_version(&sec.heading_text, id, &cur_hash[..record::VERSION_LEN]));
         }
     }
 
@@ -892,6 +902,12 @@ pub fn record_refusals(
             message: msg::shape_error(rel, e),
         });
     }
+    for i in record::non_question_heading_lines(&rf.lines) {
+        out.push(Refusal {
+            category: "parse",
+            message: msg::heading_not_a_question(rel, i + 1),
+        });
+    }
     for sec in &rf.sections {
         for e in &sec.shape_errors {
             out.push(Refusal {
@@ -1027,6 +1043,54 @@ pub fn record_refusals(
         }
     }
 
+    out
+}
+
+/// Refusals about a topic file's own name and its own headings, one
+/// function for `approve` and `check` so the two print the same lines
+/// (76bd7ef0 A): a name that is not lowercase words joined by hyphens, a
+/// topic no name can carry, a name that is not the topic, and a heading
+/// text used twice in the file. `topic` is the file's `# ` title when it
+/// has one.
+pub fn own_name_and_heading_refusals(
+    rel: &str,
+    topic: Option<&str>,
+    sections: &[record::Section],
+) -> Vec<String> {
+    let mut out = own_name_refusals(rel, topic);
+    out.extend(duplicate_heading_refusals(rel, sections));
+    out
+}
+
+/// The naming half of `own_name_and_heading_refusals`.
+pub fn own_name_refusals(rel: &str, topic: Option<&str>) -> Vec<String> {
+    let mut out = Vec::new();
+    let name = rel.rsplit('/').next().unwrap_or(rel);
+    if !repo::valid_topic_file_name(name) {
+        out.push(msg::bad_topic_file_name(rel));
+    } else if let Some(topic) = topic {
+        let expected = repo::expected_topic_file_stem(topic);
+        if !repo::valid_topic_file_name(&format!("{}.md", expected)) {
+            out.push(msg::topic_unnameable(rel, topic));
+        } else if name.strip_suffix(".md") != Some(expected.as_str()) {
+            out.push(msg::topic_file_name_mismatch(rel, topic, &expected));
+        }
+    }
+    out
+}
+
+/// The in-file duplicate heading half of `own_name_and_heading_refusals`.
+pub fn duplicate_heading_refusals(rel: &str, sections: &[record::Section]) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut counts: HashMap<&str, usize> = HashMap::new();
+    for sec in sections {
+        *counts.entry(sec.heading_text.as_str()).or_insert(0) += 1;
+    }
+    let mut dups: Vec<&str> = counts.into_iter().filter(|(_, c)| *c > 1).map(|(h, _)| h).collect();
+    dups.sort();
+    for h in dups {
+        out.push(msg::duplicate_heading_in_file(h, rel));
+    }
     out
 }
 
@@ -1188,6 +1252,10 @@ fn do_approve_record(
             .into_iter()
             .map(|r| msg::approve_prefixed(r.message))
             .collect();
+
+    for m in own_name_and_heading_refusals(rel, rf.topic.as_deref(), &rf.sections) {
+        refusals.push(msg::approve_prefixed(m));
+    }
 
     // A letter-set suffix naming a current decision elsewhere
     // (`DepTarget::Decision`, an already-id entry or a heading-shaped one

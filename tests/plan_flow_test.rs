@@ -261,7 +261,7 @@ fn plan_lifecycle_end_to_end() {
     assert_eq!(
         printed.lines().skip(1).collect::<Vec<_>>().join("\n"),
         format!(
-            "  owner runs: adr answer {}@{} <letter> for \"1.1 What color is the widget?\"\n  not yet, after the questions named above: \"1.2 Does the paint match the widget's color?\", \"1.3 Does the paint need a second coat?\"",
+            "  owner runs: adr answer {}@{} <letter>  # \"1.1 What color is the widget?\"\n  not yet, after the questions named above: \"1.2 Does the paint match the widget's color?\", \"1.3 Does the paint need a second coat?\"",
             q1_id,
             current_version(&dir, &q1_id)
         )
