@@ -757,16 +757,6 @@ pub fn missing_answer_set(rel: &str, dependent: &str, target: &str) -> String {
     )
 }
 
-pub fn depends_on_refused(rel: &str, heading: &str, target: &str) -> String {
-    refuse(
-        format!(
-            "{}: \"{}\" stands on refused \"{}\"",
-            rel, heading, target
-        ),
-        Next::agent("re-plans").and_owner_runs(format!("adr approve {}", rel)),
-    )
-}
-
 pub fn ask_supersedes_not_current(rel: &str, heading: &str, old: &str, name: Option<&str>) -> String {
     refuse(
         format!(
@@ -791,85 +781,6 @@ pub fn ask_supersedes_ambiguous(rel: &str, heading: &str, entry: &str, files: &[
             files.join(", ")
         ),
         ambiguous_heading_next(),
-    )
-}
-
-pub fn tier_blocked_refused(
-    rel: &str,
-    heading: &str,
-    cand_tier: usize,
-    open_tier: usize,
-    blocker: &str,
-) -> String {
-    refuse(
-        format!(
-            "{}: \"{}\" is in tier {}; tier {} is open, waiting on refused \"{}\"",
-            rel, heading, cand_tier, open_tier, blocker
-        ),
-        Next::agent("re-plans").and_owner_runs(format!("adr approve {}", rel)),
-    )
-}
-
-pub fn tier_blocked_waiting(
-    rel: &str,
-    heading: &str,
-    cand_tier: usize,
-    open_tier: usize,
-    blocker: &str,
-    blocker_id: &str,
-    blocker_version: &str,
-) -> String {
-    refuse(
-        format!(
-            "{}: \"{}\" is in tier {}; tier {} is open, waiting on \"{}\"",
-            rel, heading, cand_tier, open_tier, blocker
-        ),
-        Next::owner_runs(format!("adr answer {}@{} <letter>", blocker_id, blocker_version)),
-    )
-}
-
-/// The open tier still holds a bare skeleton heading (no body yet), so a
-/// later tier's candidate waits on the agent, not the owner, to write one.
-pub fn tier_blocked_unasked(
-    rel: &str,
-    heading: &str,
-    cand_tier: usize,
-    open_tier: usize,
-    blocker: &str,
-) -> String {
-    tier_blocked_on(rel, heading, cand_tier, open_tier, blocker, "writes its body and asks it first")
-}
-
-/// The open tier still holds a question with a real body -- `state::
-/// tier_blocker` only ever returns one, so this is never a skeleton --
-/// that nobody has run `ask` on yet, so a later tier's candidate waits on
-/// the agent to ask it, not to write a body that already exists.
-pub fn tier_blocked_needs_ask(
-    rel: &str,
-    heading: &str,
-    cand_tier: usize,
-    open_tier: usize,
-    blocker: &str,
-) -> String {
-    tier_blocked_on(rel, heading, cand_tier, open_tier, blocker, "asks it first")
-}
-
-/// The one sentence both tier-blocked refusals share; only the agent's
-/// next move differs.
-fn tier_blocked_on(
-    rel: &str,
-    heading: &str,
-    cand_tier: usize,
-    open_tier: usize,
-    blocker: &str,
-    next: &str,
-) -> String {
-    refuse(
-        format!(
-            "{}: \"{}\" is in tier {}; tier {} is open, waiting on unasked \"{}\"",
-            rel, heading, cand_tier, open_tier, blocker
-        ),
-        Next::agent(next),
     )
 }
 
@@ -2534,12 +2445,7 @@ mod tests {
             plan_not_approved("x.md"),
             context_not_approved("x.md"),
             missing_answer_set("x.md", "dependent", "target"),
-            depends_on_refused("x.md", "heading", "target"),
             ask_supersedes_not_current("x.md", "heading", "id-1", Some("name")),
-            tier_blocked_refused("x.md", "heading", 2, 1, "blocker"),
-            tier_blocked_waiting("x.md", "heading", 2, 1, "blocker", "id-1", "abcd1234"),
-            tier_blocked_unasked("x.md", "heading", 2, 1, "blocker"),
-            tier_blocked_needs_ask("x.md", "heading", 2, 1, "blocker"),
             moot_candidate("x.md", "heading", "target", "A", 'B'),
             banned_word_in_candidate("x.md", "heading", ""),
             pairs_no_term("x.md", "heading"),

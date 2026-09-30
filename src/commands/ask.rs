@@ -9,7 +9,7 @@ use crate::state;
 use crate::tells;
 use crate::terms;
 use crate::view;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 pub fn run(record_path: PathBuf) -> i32 {
@@ -107,7 +107,9 @@ pub fn run(record_path: PathBuf) -> i32 {
         return 1;
     }
 
-    let names = crate::view::all_heading_texts(&root);
+    // Every heading by its identifier, any state: a refusal names the
+    // question beside an identifier.
+    let names = crate::view::heading_texts(&all_records);
     let shape_msgs: Vec<String> =
         actions::record_refusals(&rel, &rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &led)
             .into_iter()
@@ -166,7 +168,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     // row. Computed against the file exactly as loaded, before any
     // mutation, so the gates below (and any refusal) see the same file
     // the owner is looking at.
-    let candidate: Vec<bool> = rf
+    let mut candidate: Vec<bool> = rf
         .sections
         .iter()
         .map(|sec| {
@@ -216,17 +218,25 @@ pub fn run(record_path: PathBuf) -> i32 {
     // never `None`.
     let open_tier: Option<usize> = state::open_tier(&rf);
 
+    // Per "Does the tool derive tiers from the depends lines?": ask asks
+    // the lowest tier with an unanswered question. A candidate in a later
+    // tier is left for a later run: it is neither refused nor asked, and
+    // when nothing at all is asked, the `next` lines printed at the end
+    // name the blocker and whose move it is.
+    if let Some(open_n) = open_tier {
+        for (i, c) in candidate.iter_mut().enumerate() {
+            if *c && rf.tier_of(i).unwrap_or(1) != open_n {
+                *c = false;
+            }
+        }
+    }
+
     // From here on every refusal is about one question and reads the same
     // file and ledger as the others, so none of them needs another to have
     // passed. They are gathered and printed together, and nothing is
     // written while there is one: a question with three faults is told all
     // three in one run.
     let mut refusals: Vec<String> = Vec::new();
-    // The questions, by index, that a refusal about what they stand on
-    // already names. The tier refusal is left out for these: its move is
-    // the owner's answer to the question the tier waits on, and that
-    // answer is not to come before the agent's own move on this question.
-    let mut named_by_depends: HashSet<usize> = HashSet::new();
 
     // Answer sets mandatory (per "Does a depends entry carry the answers
     // it holds under?"): before asking any candidate in the
@@ -269,9 +279,6 @@ pub fn run(record_path: PathBuf) -> i32 {
                             depends::bad_letters(&rel, &dependent.heading_text, target, letters)
                         }
                     };
-                    if !found.is_empty() {
-                        named_by_depends.insert(di);
-                    }
                     refusals.extend(found);
                 }
             }
@@ -292,32 +299,9 @@ pub fn run(record_path: PathBuf) -> i32 {
     // For each candidate, by its index: the identifiers its supersedes
     // line names.
     let mut supersedes_ids: HashMap<usize, Vec<String>> = HashMap::new();
-    // Every heading by its identifier, any state: a refusal names the
-    // question beside an identifier.
-    let names = crate::view::heading_texts(&all_records);
-
     for (i, sec) in rf.sections.iter().enumerate() {
         if !candidate[i] {
             continue;
-        }
-
-        // A candidate that directly stands on a refused question refuses
-        // with the specific dependency named, ahead of the generic tier
-        // rule below (whose "waiting on" blocker, chosen by file order
-        // within the open tier, need not be this candidate's own
-        // dependency even when the generic rule would also fire).
-        for d in &sec.depends {
-            if let Some(ti) = rf.dep_target(d) {
-                let target = &rf.sections[ti];
-                if target.is_refused() {
-                    refusals.push(msg::depends_on_refused(
-                        &rel,
-                        &sec.heading_text,
-                        &target.heading_text,
-                    ));
-                    named_by_depends.insert(i);
-                }
-            }
         }
 
         // Supersedes target must be current (per "Does one decision
@@ -350,71 +334,6 @@ pub fn run(record_path: PathBuf) -> i32 {
             }
         }
         supersedes_ids.insert(i, ids);
-
-        // Tier rule (per "Does the tool derive tiers from the depends
-        // lines?"): a candidate outside the open tier refuses, naming the
-        // tier's blocker (`state::tier_blocker`: the first non-skeleton
-        // unresolved section in the open tier, by file order, or the
-        // tier's own skeleton heading when it holds nothing else) and
-        // whether that blocker is refused.
-        let cand_tier = rf.tier_of(i).unwrap_or(1);
-        if let Some(open_n) = open_tier {
-            if cand_tier != open_n && !named_by_depends.contains(&i) {
-                if let Some(blocker) = state::tier_blocker(&rf, open_n) {
-                    // The next move depends on where the blocker stands:
-                    // refused -> the plan changes; asked -> the owner
-                    // answers it (by id@version, the form `answer`
-                    // takes); anything else -> the agent asks it first,
-                    // writing a body first only when the blocker is a bare
-                    // skeleton (`state::tier_blocker` returns a non-skeleton
-                    // section whenever the open tier has one, so a blocker
-                    // that reaches here unrefused and unasked already has a
-                    // body exactly when it is not a skeleton).
-                    let blocker_state = blocker
-                        .id
-                        .as_deref()
-                        .and_then(|bid| led.latest_state(bid))
-                        .map(|r| r.event.clone());
-                    let m = if blocker.is_refused() {
-                        msg::tier_blocked_refused(
-                            &rel,
-                            &sec.heading_text,
-                            cand_tier,
-                            open_n,
-                            &blocker.heading_text,
-                        )
-                    } else if blocker_state.as_deref() == Some("asked") {
-                        let bhash = record::section_hash(&rf.lines, blocker);
-                        msg::tier_blocked_waiting(
-                            &rel,
-                            &sec.heading_text,
-                            cand_tier,
-                            open_n,
-                            &blocker.heading_text,
-                            blocker.id.as_deref().unwrap_or("<id>"),
-                            &bhash[..record::VERSION_LEN],
-                        )
-                    } else if blocker.is_skeleton {
-                        msg::tier_blocked_unasked(
-                            &rel,
-                            &sec.heading_text,
-                            cand_tier,
-                            open_n,
-                            &blocker.heading_text,
-                        )
-                    } else {
-                        msg::tier_blocked_needs_ask(
-                            &rel,
-                            &sec.heading_text,
-                            cand_tier,
-                            open_n,
-                            &blocker.heading_text,
-                        )
-                    };
-                    refusals.push(m);
-                }
-            }
-        }
 
         // Moot refusal: this candidate's own entry in `moot_pairs`, matched
         // by section index since two sections may share a heading text.
@@ -545,7 +464,7 @@ pub fn run(record_path: PathBuf) -> i32 {
         // id alone no longer means "this is a candidate" -- a skeleton
         // must still never be asked, exactly as `candidate` above already
         // excludes it from becoming one.
-        if sec.is_skeleton {
+        if sec.is_skeleton || !candidate[i] {
             continue;
         }
         let Some(id) = sec.id.clone() else { continue };

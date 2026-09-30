@@ -244,21 +244,29 @@ fn plan_lifecycle_end_to_end() {
         ledger_after_ask1
     );
 
-    // --- 3. a candidate outside the open tier is refused, blocker named ---
+    // --- 3. a candidate outside the open tier is left for a later run ------
     let with_q2_body = state_3.replacen(&q2_marker(&q1_id, &q2_id), &q2_body_insert(&q1_id, &q2_id), 1);
     assert_ne!(with_q2_body, state_3, "Q2 marker must be found");
     std::fs::write(&record, &with_q2_body).unwrap();
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
+    assert!(out.status.success(), "ask should print nothing to ask: {}", stderr(&out));
+    assert!(stderr(&out).is_empty(), "{}", stderr(&out));
+    let printed = stdout(&out);
+    assert!(
+        printed.starts_with("ask: nothing to ask in ") && printed.lines().next().unwrap().ends_with("widget.md"),
+        "{}",
+        printed
+    );
     assert_eq!(
-        stderr(&out).trim_end(),
+        printed.lines().skip(1).collect::<Vec<_>>().join("\n"),
         format!(
-            "ask: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" is in tier 2; tier 1 is open, waiting on \"1.1 What color is the widget?\"; owner runs: adr answer {}@{} <letter>",
+            "  owner runs: adr answer {}@{} <letter> for \"1.1 What color is the widget?\"\n  not yet, after the questions named above: \"1.2 Does the paint match the widget's color?\", \"1.3 Does the paint need a second coat?\"",
             q1_id,
             current_version(&dir, &q1_id)
         )
     );
+    assert_eq!(asked_row_count(&dir), 1, "Q2 is not asked");
 
     // Remove that body again.
     std::fs::write(&record, &state_3).unwrap();

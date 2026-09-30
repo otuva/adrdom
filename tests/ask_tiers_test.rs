@@ -58,6 +58,24 @@ Standard: plain words.
     )
 }
 
+// What `ask` prints after its first line ("ask: nothing to ask in <file>"):
+// the `next` lines, one per move.
+fn after_first_line(printed: &str) -> String {
+    printed.lines().skip(1).collect::<Vec<_>>().join("\n")
+}
+
+// The plan change the `next` line asks for when Q2 stands on a refused
+// question: Q2's depends line names the term only, and the owner approves.
+fn unhook_q2_from_the_refused_question(dir: &std::path::Path, record: &std::path::Path) {
+    let text = std::fs::read_to_string(record).unwrap();
+    let start = text.find("### 1.2").unwrap();
+    let dep = start + text[start..].find("\ndepends: ").unwrap() + 1;
+    let end = dep + text[dep..].find('\n').unwrap();
+    let changed = format!("{}depends: widget{}", &text[..dep], &text[end..]);
+    std::fs::write(record, changed).unwrap();
+    approve_record(dir, "adrdom/decisions/example.md");
+}
+
 // --- every refusal in one run ----------------------------------------------
 
 // One run of ask names every fault of every question it was about to ask:
@@ -122,7 +140,7 @@ fn ask_names_every_fault_in_one_run() {
 // written as a tier by hand) is refused while Q1's tier is still open, and
 // only succeeds once Q1 is answered.
 #[test]
-fn ask_blocks_a_higher_tier_candidate_naming_the_open_tier_blocker() {
+fn ask_prints_nothing_to_ask_naming_the_owners_answer_when_a_later_tier_candidate_waits() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -143,21 +161,36 @@ fn ask_blocks_a_higher_tier_candidate_naming_the_open_tier_blocker() {
     approve_record(&dir, "adrdom/decisions/example.md");
     let before_refused_ask = std::fs::read_to_string(&record).unwrap();
 
+    // Q2 is in tier 2 and tier 1 is open: ask leaves it for a later run,
+    // prints that there is nothing to ask, and the `next` line names the
+    // owner's answer to Q1.
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
-    let err = stderr(&out);
-    assert_eq!(
-        err.trim_end(),
-        format!(
-            "ask: adrdom/decisions/example.md: \"1.2 Does the widget's paint match its color?\" is in tier 2; tier 1 is open, waiting on \"1.1 What color is the widget?\"; owner runs: adr answer {}@{} <letter>",
+    assert!(out.status.success(), "ask should print nothing to ask: {}", stderr(&out));
+    assert!(stderr(&out).is_empty(), "{}", stderr(&out));
+    let printed = stdout(&out);
+    assert!(
+        printed.starts_with("ask: nothing to ask in ") && printed.lines().next().unwrap().ends_with("example.md"),
+        "{}",
+        printed
+    );
+    assert!(
+        printed.contains(&format!(
+            "owner runs: adr answer {}@{} <letter> for \"1.1 What color is the widget?\"",
             q1_id,
             current_version(&dir, &q1_id)
-        )
+        )),
+        "{}",
+        printed
+    );
+    assert!(
+        printed.contains("not yet, after the questions named above: \"1.2 Does the widget's paint match its color?\""),
+        "{}",
+        printed
     );
 
     // Nothing written: ask wrote no new content and asked nothing new.
     let after = std::fs::read_to_string(&record).unwrap();
-    assert_eq!(after, before_refused_ask, "ask must not modify the file when it refuses");
+    assert_eq!(after, before_refused_ask, "ask must not modify the file when it has nothing to ask");
     assert_eq!(asked_row_count(&dir), 1, "only Q1 should be asked so far");
 
     // Now answer Q1: the same ask on Q2 succeeds.
@@ -170,7 +203,7 @@ fn ask_blocks_a_higher_tier_candidate_naming_the_open_tier_blocker() {
 }
 
 #[test]
-fn ask_prefers_the_specific_stands_on_refused_message_over_the_generic_blocker() {
+fn ask_leaves_a_candidate_standing_on_a_refused_question_and_the_plan_change_works() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -190,16 +223,26 @@ fn ask_prefers_the_specific_stands_on_refused_message_over_the_generic_blocker()
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
 
+    // Q2 stands on refused Q1, which holds tier 1 open: Q2 is left for a
+    // later run, so ask prints nothing to ask, and the `next` lines name
+    // the refused question and the plan change.
+    let before = std::fs::read_to_string(&record).unwrap();
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success());
-    let err = stderr(&out);
-    // Q2's own heading dep names Q1 directly, so the specific
-    // "stands on refused" check (which runs ahead of the generic tier-order
-    // blocker) is what fires here.
+    assert!(out.status.success(), "{}", stderr(&out));
     assert_eq!(
-        err.trim_end(),
-        "ask: adrdom/decisions/example.md: \"1.2 Does the widget's paint match its color?\" stands on refused \"1.1 What color is the widget?\"; agent re-plans, owner runs: adr approve adrdom/decisions/example.md"
+        after_first_line(&stdout(&out)),
+        "  agent changes the plan: \"1.1 What color is the widget?\" is refused and holds the questions that come after it\n  not yet, after the questions named above: \"1.2 Does the widget's paint match its color?\""
     );
+    assert_eq!(std::fs::read_to_string(&record).unwrap(), before);
+    assert_eq!(asked_row_count(&dir), 1, "Q2 is not asked");
+
+    // The move it names works: Q2 no longer stands on Q1, the plan is
+    // approved again, and ask asks Q2.
+    unhook_q2_from_the_refused_question(&dir, &record);
+    let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(out2.status.success(), "{}", stderr(&out2));
+    assert!(stdout(&out2).contains("asked: \"1.2 Does the widget's paint match its color?\" (tier 1)"), "{}", stdout(&out2));
+    assert_eq!(asked_row_count(&dir), 2);
 }
 
 // adr: 506b3c6d-3d0a-4a02-98de-3b8a573d2fe9
@@ -208,12 +251,12 @@ fn ask_prefers_the_specific_stands_on_refused_message_over_the_generic_blocker()
 // waits (ask stops it, naming the refused question) until the owner
 // approves a plan change that drops or replaces it, after which the next
 // tier can be asked": Qx (tier 1, refused) holds tier 1 open even while
-// Q2 (tier 2) depends only on Q1, never on Qx directly -- ask still
-// refuses Q2, naming refused Qx as the blocker. Once Qx's heading is
-// struck and the plan re-approved, Qx no longer holds any tier open:
-// answering Q1 opens tier 2, and ask now succeeds for Q2.
+// Q2 (tier 2) depends only on Q1, never on Qx directly -- ask leaves Q2
+// for a later run and the `next` lines it prints name refused Qx. Once
+// Qx's heading is struck and the plan re-approved, Qx no longer holds any
+// tier open: answering Q1 opens tier 2, and ask now succeeds for Q2.
 #[test]
-fn ask_names_the_generic_refused_blocker_when_the_candidate_does_not_depend_on_it() {
+fn ask_names_a_refused_question_in_the_open_tier_and_the_plan_change_works() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -273,13 +316,26 @@ Standard: plain words.
     std::fs::write(&record, &content2).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
 
+    // Q2 is left for a later run; ask prints nothing to ask and the `next`
+    // lines name refused Qx and the plan change.
+    let q1_id_now = std::fs::read_to_string(&record)
+        .unwrap()
+        .lines()
+        .skip_while(|l| !l.starts_with("### 1.1 What color"))
+        .find_map(|l| l.strip_prefix("id: "))
+        .unwrap()
+        .to_string();
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success());
-    let err = stderr(&out);
+    assert!(out.status.success(), "{}", stderr(&out));
     assert_eq!(
-        err.trim_end(),
-        "ask: adrdom/decisions/example.md: \"1.2 Does the widget's paint match its color?\" is in tier 2; tier 1 is open, waiting on refused \"1.0 Is the widget on backorder?\"; agent re-plans, owner runs: adr approve adrdom/decisions/example.md"
+        after_first_line(&stdout(&out)),
+        format!(
+            "  owner runs: adr answer {}@{} <letter> for \"1.1 What color is the widget?\"\n  agent changes the plan: \"1.0 Is the widget on backorder?\" is refused and holds the questions that come after it\n  not yet, after the questions named above: \"1.2 Does the widget's paint match its color?\"",
+            q1_id_now,
+            current_version(&dir, &q1_id_now)
+        )
     );
+    assert_eq!(asked_row_count(&dir), 2, "Q2 is not asked");
 
     // Drop Qx's heading and re-approve: the refused question no longer
     // holds any tier open, so answering Q1 opens tier 2 and ask can now
@@ -360,7 +416,7 @@ fn ask_refuses_a_tier_over_the_cap() {
 // --- stands on refused: a specific dependency, not the generic blocker ----
 
 #[test]
-fn ask_names_the_specific_refused_dependency_not_the_file_order_blocker() {
+fn ask_names_every_open_move_when_a_candidate_stands_on_a_refused_question() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -407,6 +463,7 @@ Standard: plain words.
     let after = std::fs::read_to_string(&record).unwrap();
     let ids = extract_ids(&after);
     assert_eq!(ids.len(), 2, "{}", after);
+    let qx_id = ids[0].clone();
     // Q1 ("What color...") is the second heading in the file; refuse it.
     let q1_id = after
         .lines()
@@ -424,17 +481,24 @@ Standard: plain words.
     approve_record(&dir, "adrdom/decisions/example.md");
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success());
-    let err = stderr(&out);
+    assert!(out.status.success(), "{}", stderr(&out));
     assert_eq!(
-        err.trim_end(),
-        "ask: adrdom/decisions/example.md: \"1.2 Does the widget's paint match its color?\" stands on refused \"1.1 What color is the widget?\"; agent re-plans, owner runs: adr approve adrdom/decisions/example.md"
+        after_first_line(&stdout(&out)),
+        format!(
+            "  owner runs: adr answer {}@{} <letter> for \"1.0 Is the widget in stock?\"\n  agent changes the plan: \"1.1 What color is the widget?\" is refused and holds the questions that come after it\n  not yet, after the questions named above: \"1.2 Does the widget's paint match its color?\"",
+            qx_id,
+            current_version(&dir, &qx_id)
+        )
     );
-    assert!(
-        !err.contains("1.0 Is the widget in stock?"),
-        "must not name the unrelated file-order blocker: {}",
-        err
-    );
+    assert_eq!(asked_row_count(&dir), 2, "Q2 is not asked");
+
+    // The move it names works: Q2 no longer stands on Q1, the plan is
+    // approved again, and ask asks Q2 (in tier 1, beside the open Qx).
+    unhook_q2_from_the_refused_question(&dir, &record);
+    let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(out2.status.success(), "{}", stderr(&out2));
+    assert!(stdout(&out2).contains("asked: \"1.2 Does the widget's paint match its color?\" (tier 1)"), "{}", stdout(&out2));
+    assert_eq!(asked_row_count(&dir), 3);
 }
 
 // --- open tier holds a skeleton --------------------------------------
@@ -444,13 +508,13 @@ Standard: plain words.
 // "the tool derives the tiers from the depends lines ... ask asks the
 // lowest tier with an unanswered question": a skeleton heading (approved,
 // with an id, but no body yet) still holds its tier open. A later tier's
-// candidate refuses naming the skeleton, with the agent's move ("writes
-// its body and asks it first"), not the owner's -- there is nothing yet
-// for the owner to answer. Once the skeleton gets a body, is asked, and
-// is answered, the tier it was blocking opens and the later candidate can
-// be asked.
+// candidate is left for a later run, and the `next` lines give the agent's
+// move ("writes the body"), not the owner's -- there is nothing yet for
+// the owner to answer. Once the skeleton gets a body, is asked, and is
+// answered, the tier it was blocking opens and the later candidate can be
+// asked.
 #[test]
-fn ask_blocks_a_later_tier_candidate_naming_an_unasked_skeleton() {
+fn ask_leaves_a_later_tier_candidate_while_the_open_tier_holds_a_skeleton() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -463,25 +527,24 @@ fn ask_blocks_a_later_tier_candidate_naming_an_unasked_skeleton() {
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
     approve_record(&dir, "adrdom/decisions/example.md");
 
+    // Q1 is a skeleton, so there is nothing to ask: Q2 is left for a later
+    // run and the `next` lines name the agent's move on Q1.
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success());
+    assert!(out.status.success(), "{}", stderr(&out));
     assert_eq!(
-        stderr(&out).trim_end(),
-        "ask: adrdom/decisions/example.md: \"1.2 Does the widget's paint match its color?\" is in tier 2; tier 1 is open, waiting on unasked \"1.1 What color is the widget?\"; agent writes its body and asks it first"
+        after_first_line(&stdout(&out)),
+        "  agent writes the body of \"1.1 What color is the widget?\"\n  not yet, after the questions named above: \"1.2 Does the widget's paint match its color?\""
     );
+    assert_eq!(asked_row_count(&dir), 0, "nothing is asked");
 
-    // `ask` refuses the whole run if any candidate in it fails the tier
-    // rule, so Q1 cannot be asked in the same run as a Q2 that is still
-    // blocked -- drop Q2's heading for now (keeping its already-minted
-    // `id:`/`depends:` lines, captured here, to restore verbatim once Q1
-    // is answered), give Q1 a body, and re-approve the file with only Q1
-    // left in it.
+    // The move it names works: Q1 gets its body, and ask asks Q1 alone;
+    // Q2 waits for the answer.
     let before = std::fs::read_to_string(&record).unwrap();
     let split_at = before.find("### 1.2").unwrap();
-    let q2_block = before[split_at..].to_string();
-    let mut only_q1 = before[..split_at].to_string();
-    only_q1.push_str("\nProblem: the widget's color is undecided.\n\nStandard: plain words.\n\n- A) The widget is red.\n  Why: reasons.\n  Costs: costs.\n- B) The widget is blue.\n  Why: other reasons.\n  Costs: other costs.\n");
-    std::fs::write(&record, &only_q1).unwrap();
+    let mut with_q1_body = before[..split_at].to_string();
+    with_q1_body.push_str("\nProblem: the widget's color is undecided.\n\nStandard: plain words.\n\n- A) The widget is red.\n  Why: reasons.\n  Costs: costs.\n- B) The widget is blue.\n  Why: other reasons.\n  Costs: other costs.\n\n");
+    with_q1_body.push_str(&before[split_at..]);
+    std::fs::write(&record, &with_q1_body).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
 
     let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
@@ -491,17 +554,12 @@ fn ask_blocks_a_later_tier_candidate_naming_an_unasked_skeleton() {
         "{}",
         stdout(&out2)
     );
+    assert!(!stdout(&out2).contains("(tier 2)"), "{}", stdout(&out2));
+    assert_eq!(asked_row_count(&dir), 1, "Q2 waits");
     let q1_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
     assert!(adr_answer(&dir, &q1_id, "A").status.success());
 
-    // Restore Q2 (its `depends:` line already names Q1's id, minted
-    // before it was dropped) now that Q1 is answered and tier 2 is open.
-    let mut with_q2 = std::fs::read_to_string(&record).unwrap();
-    with_q2.push('\n');
-    with_q2.push_str(&q2_block);
-    std::fs::write(&record, &with_q2).unwrap();
-    approve_record(&dir, "adrdom/decisions/example.md");
-
+    // Q1 is answered, tier 2 is open, and ask asks Q2.
     let out3 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out3.status.success(), "{}", stderr(&out3));
     assert!(
@@ -511,27 +569,37 @@ fn ask_blocks_a_later_tier_candidate_naming_an_unasked_skeleton() {
     );
 }
 
-// `state::tier_blocker` returns a non-skeleton section whenever the open
-// tier holds one: a fully written, approved question that nobody has run
-// `ask` on yet. The later candidate's move must be "asks it first", never
-// "writes its body and asks it first" -- Q1 already has a body.
+// The open tier holds a fully written, approved question that nobody has
+// run `ask` on yet. `ask` asks it in this run and leaves the later tier's
+// candidate for a later run, without a refusal; the owner's answer opens
+// tier 2 and the next run asks it.
 #[test]
-fn ask_blocks_a_later_tier_candidate_naming_an_unasked_but_already_written_question() {
+fn ask_asks_the_written_question_and_leaves_the_later_tier_candidate() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
 
-    // Q1 already carries a full body -- not a skeleton -- but has never
-    // been asked.
     let content = format!("{}{}", Q1, q2_depends_on_q1("=A"));
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
     approve_record(&dir, "adrdom/decisions/example.md");
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success());
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(stderr(&out).is_empty(), "{}", stderr(&out));
     assert_eq!(
-        stderr(&out).trim_end(),
-        "ask: adrdom/decisions/example.md: \"1.2 Does the widget's paint match its color?\" is in tier 2; tier 1 is open, waiting on unasked \"1.1 What color is the widget?\"; agent asks it first"
+        stdout(&out),
+        "asked: \"1.1 What color is the widget?\" (tier 1)\n  assumes: \"1.2 Does the widget's paint match its color?\"=A\n"
+    );
+    assert_eq!(asked_row_count(&dir), 1, "only Q1 is asked");
+
+    let q1_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
+    assert!(adr_answer(&dir, &q1_id, "A").status.success());
+    let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(out2.status.success(), "{}", stderr(&out2));
+    assert!(
+        stdout(&out2).contains("asked: \"1.2 Does the widget's paint match its color?\" (tier 2)"),
+        "{}",
+        stdout(&out2)
     );
 }
 
@@ -803,4 +871,72 @@ fn ask_refuses_when_a_refused_section_was_edited_since_refusal() {
         "{}",
         ledger_before
     );
+}
+
+// --- ask leaves a later-tier candidate for a later run ----------------------
+
+// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
+// adr: f8d92841-aef7-4cd7-bd94-0e07c03e4cb6
+//
+// core: "ask asks the lowest tier with an unanswered question"; workflow: a
+// tier is built once its questions are answered. Alpha (tier 1) and delta
+// (tier 2, standing on alpha) both have bodies and nothing is asked. `show`
+// names `ask` as alpha's move, so `ask` must take it: it asks alpha, leaves
+// delta for a later run without refusing, and after the owner answers alpha
+// the same command asks delta.
+#[test]
+fn ask_asks_the_open_tier_and_leaves_a_later_tier_candidate_for_a_later_run() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let body = "\nProblem: the widget's state is undecided.\n\nStandard: plain words.\n\n- A) Yes.\n  Why: reasons.\n  Costs: costs.\n- B) No.\n  Why: other reasons.\n  Costs: other costs.\n";
+    let content = format!(
+        "# Example\n\n### Is alpha ready?\ndepends: widget\n{body}\n### Is delta ready?\ndepends: widget, Is alpha ready?=*\n{body}"
+    );
+    let rel = "adrdom/decisions/example.md";
+    let record = write_record(&dir, rel, &content);
+    approve_record(&dir, rel);
+
+    let shown = stdout(&adr(&dir, &["show", rel], &[], ""));
+    assert!(shown.contains("agent runs adr ask"), "{}", shown);
+    assert!(shown.contains("not yet"), "{}", shown);
+
+    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(out.status.success(), "ask must take the move show named: {}", stderr(&out));
+    assert!(stdout(&out).contains("asked: \"Is alpha ready?\" (tier 1)"), "{}", stdout(&out));
+    assert!(!stdout(&out).contains("Is delta ready?\" (tier"), "{}", stdout(&out));
+    assert_eq!(asked_row_count(&dir), 1, "only alpha is asked");
+    assert!(stderr(&out).is_empty(), "{}", stderr(&out));
+
+    let text = std::fs::read_to_string(&record).unwrap();
+    let alpha_id = text
+        .lines()
+        .skip_while(|l| !l.starts_with("### Is alpha ready?"))
+        .find_map(|l| l.strip_prefix("id: "))
+        .unwrap()
+        .to_string();
+
+    // What show prints now: the owner answers alpha, delta is not yet.
+    let shown = stdout(&adr(&dir, &["show", rel], &[], ""));
+    assert!(shown.contains("owner runs: adr answer"), "{}", shown);
+    assert!(shown.contains(&alpha_id), "{}", shown);
+    assert!(
+        shown.lines().any(|l| l.contains("not yet") && l.contains("Is delta ready?")),
+        "{}",
+        shown
+    );
+
+    // A run with nothing to ask says so and names the same next lines.
+    let again = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(again.status.success(), "{}", stderr(&again));
+    assert!(stdout(&again).contains("nothing to ask in"), "{}", stdout(&again));
+    assert!(stdout(&again).contains("owner runs: adr answer"), "{}", stdout(&again));
+    assert_eq!(asked_row_count(&dir), 1);
+
+    // The owner's move; then ask asks delta.
+    assert!(adr_answer(&dir, &alpha_id, "A").status.success());
+    let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(out2.status.success(), "{}", stderr(&out2));
+    assert!(stdout(&out2).contains("asked: \"Is delta ready?\" (tier 2)"), "{}", stdout(&out2));
+    assert_eq!(asked_row_count(&dir), 2);
 }
