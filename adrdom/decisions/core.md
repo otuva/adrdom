@@ -304,6 +304,8 @@ Standard: cross-language tools mark a file with a comment carrying an identifier
   Why: the decision says where its test is.
   Costs: the decision changes whenever the test moves, and an answered decision cannot change.
 
+**Answer:** A
+
 ### Does check fail a test that names a decision that is not current?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e2533580-1486-4dc9-8697-e6c53605fe72, 4319a653-6901-446c-94ab-6420ef472134=A|B
 id: 751ef30c-6a2f-4936-bf9b-b9d487146e53
