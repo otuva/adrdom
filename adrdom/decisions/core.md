@@ -289,6 +289,7 @@ Standard: a report separates a state from a violation; work in progress is count
 ### What does a test carry to name its decision?
 depends: 3460d220-e523-448b-aeff-baa8051b7d06=*, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, e877e4a9-2caf-4fe6-9f82-5476a2abb00b
 id: 4319a653-6901-446c-94ab-6420ef472134
+terms: answered=b36113a1-1384-4e4c-a798-8399f4181366, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, identifier=e877e4a9-2caf-4fe6-9f82-5476a2abb00b
 
 Problem: the tool runs in repositories of any language and has to find which test names which decision without parsing that language.
 Standard: cross-language tools mark a file with a comment carrying an identifier in a fixed form and find it by text search.
