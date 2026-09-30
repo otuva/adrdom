@@ -2264,11 +2264,14 @@ pub fn missing_answer_selection(id: &str, version: &str) -> String {
 
 /// A note, never a failure (per "What does check do with an untested
 /// current decision?"): printed on every run until a test names the id.
-pub fn untested_note(rel: &str, heading: &str, id: &str) -> String {
-    format!(
-        "untested: {}: \"{}\"; no tracked file holds \"adr: {}\"",
-        rel, heading, id
-    )
+pub fn untested_note(at: Option<(&str, &str)>, id: &str) -> String {
+    match at {
+        Some((rel, heading)) => format!(
+            "untested: {}: \"{}\"; no tracked file holds \"adr: {}\"",
+            rel, heading, id
+        ),
+        None => format!("untested: no tracked file holds \"adr: {}\"", id),
+    }
 }
 
 pub fn tested_count(n: usize) -> String {
@@ -2821,5 +2824,15 @@ mod tests {
             "{}",
             out
         );
+    }
+
+    // A note is not a refusal: it names what is missing and carries no
+    // next move, so it is exercised apart from the refusal list above.
+    #[test]
+    fn untested_note_names_the_decision_with_or_without_its_place() {
+        let with = untested_note(Some(("x.md", "heading")), "id-1");
+        assert_eq!(with, "untested: x.md: \"heading\"; no tracked file holds \"adr: id-1\"");
+        let without = untested_note(None, "id-1");
+        assert_eq!(without, "untested: no tracked file holds \"adr: id-1\"");
     }
 }

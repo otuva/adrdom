@@ -3,8 +3,9 @@
 A control layer between AI coding agents and a repository. Decisions are
 questions in markdown topic files under `adrdom/decisions/`, answered only by the
 repository's owner, and recorded in an append-only ledger at
-`adrdom/state/ledger.tsv`; a separate check requires every current decision
-to be tested by an `adr: <uuid>` reference in the code.
+`adrdom/state/ledger.tsv`; a separate check reports a current decision with no
+`adr: <uuid>` reference in the code as untested, in one line per decision, and
+fails a reference to a decision that is not current.
 
 ## Build
 

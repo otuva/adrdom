@@ -384,13 +384,9 @@ fn check_tests_note_when_untested() {
     let out = adr(&dir, &["check"], &[], "");
     let out_text = stdout(&out);
     assert!(out.status.success(), "{}", out_text);
-    assert!(!out_text.contains("tested: 0 "), "{}", out_text);
-    assert!(!out_text.lines().any(|l| l.starts_with("tested:") && l.contains("untested")), "{}", out_text);
-    assert!(
-        out_text.contains(&format!("no tracked file holds \"adr: {}\"", id)),
-        "check must name the untested decision by id: {}",
-        out_text
-    );
+    let untested_line = |t: &str| t.lines().any(|l| l.starts_with("untested:") && l.contains(&format!("adr: {}", id)));
+    assert!(untested_line(&out_text), "check must name the untested decision by id: {}", out_text);
+    assert!(out_text.contains("tested: 0"), "{}", out_text);
 
     write_test_comment(&dir, &id);
 
@@ -401,6 +397,7 @@ fn check_tests_note_when_untested() {
         stdout(&out)
     );
     assert!(stdout(&out).contains("tested: 1"), "{}", stdout(&out));
+    assert!(!untested_line(&stdout(&out)), "{}", stdout(&out));
 }
 
 // adr: cd83e277-ebf0-4458-a77a-c526ab4cfeca
@@ -517,7 +514,6 @@ fn check_fails_on_a_renamed_answered_option_never_as_answer_without_row() {
     );
 }
 
-//
 // "a comment `adr: <id>` inside the test, found by text search in every
 // tracked file outside adrdom, ties a test to a decision". A tie written
 // in a tracked, non-Rust file outside adrdom/ counts (also relied on by
@@ -2282,7 +2278,7 @@ aliases: \n";
     assert!(!text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
 }
 
-//
+// adr: 751ef30c-6a2f-4936-bf9b-b9d487146e53
 // "Does check fail a test that names a decision that is not current?" (751ef30c A): yes -- a tie to a
 // decision whose latest ledger state is no longer `answered` is stale, and
 // the agent's move is to remove the tag or point it at the current
@@ -2290,7 +2286,6 @@ aliases: \n";
 // stale: `old_id` was genuinely current (and tested) when the tie was
 // written, then a second, real decision named `supersedes: <old_id>` and
 // took it out of force.
-// adr: 751ef30c-6a2f-4936-bf9b-b9d487146e53
 #[test]
 fn check_fails_a_test_tied_to_a_decision_that_was_later_superseded() {
     let dir = init_repo();
@@ -2346,11 +2341,10 @@ fn check_fails_a_test_tied_to_a_decision_that_was_later_superseded() {
     );
 }
 
-//
+// adr: 751ef30c-6a2f-4936-bf9b-b9d487146e53
 // The other way a tie goes stale (751ef30c A): the question it names was
 // answered with a refusal, never a lettered decision, so it never becomes
 // current at all -- a tie to it is stale from the moment it is written.
-// adr: 751ef30c-6a2f-4936-bf9b-b9d487146e53
 #[test]
 fn check_fails_a_test_tied_to_a_refused_decision() {
     let dir = init_repo();
