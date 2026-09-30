@@ -383,6 +383,20 @@ pub fn dep_not_current_decision(rel: &str, heading: &str, id: &str, name: Option
     )
 }
 
+/// A live section's depends line names, by identifier, a term that is
+/// retired.
+pub fn dep_retired_term_id(rel: &str, heading: &str, id: &str, name: Option<&str>) -> String {
+    refuse(
+        format!(
+            "{}: \"{}\" depends on the term {}, which is retired",
+            rel,
+            heading,
+            name.map_or_else(|| id.to_string(), |n| format!("\"{}\"", n))
+        ),
+        Next::agent("names a term that is not retired or removes the entry"),
+    )
+}
+
 pub fn dep_no_term(rel: &str, heading: &str, text: &str) -> String {
     refuse(
         format!(
@@ -850,15 +864,28 @@ pub fn missing_answer_set(rel: &str, dependent: &str, target: &str) -> String {
 }
 
 pub fn ask_supersedes_not_current(rel: &str, heading: &str, old: &str, name: Option<&str>) -> String {
+    let target = if crate::record::is_uuid(old) {
+        named(old, name)
+    } else {
+        format!("\"{}\"", old)
+    };
     refuse(
         format!(
             "{}: \"{}\": supersedes {}, which is not a current decision",
-            rel,
-            heading,
-            named(old, name)
+            rel, heading, target
         ),
-        Next::agent("fixes the supersedes line"),
+        Next::agent("removes it from the supersedes line or names a current decision"),
     )
+}
+
+/// The moment a refusal about the supersedes line is printed: it decides
+/// whether the agent's move ends in asking again.
+#[derive(Clone, Copy)]
+pub enum SupersedesMoment {
+    /// `approve`: nothing of the question has been asked yet.
+    Approve,
+    /// `ask` or `answer`: the question was, or is about to be, asked.
+    Asked,
 }
 
 /// The supersedes line of `heading` leaves out current decisions standing
@@ -868,6 +895,7 @@ pub fn supersedes_leaves_out(
     rel: &str,
     heading: &str,
     missing: &[(String, String, String)],
+    moment: SupersedesMoment,
 ) -> String {
     let names = missing
         .iter()
@@ -885,7 +913,10 @@ pub fn supersedes_leaves_out(
             "{}: \"{}\": supersedes a decision that current decisions stand on, and the line leaves out {}",
             rel, heading, names
         ),
-        Next::agent("adds them to the supersedes line and asks again"),
+        Next::agent(match moment {
+            SupersedesMoment::Approve => "adds them to the supersedes line",
+            SupersedesMoment::Asked => "adds them to the supersedes line and asks again",
+        }),
     )
 }
 
@@ -2640,6 +2671,7 @@ mod tests {
             term_definition_terms_line_malformed("term"),
             frozen_depends_edited("x.md", "heading"),
             dep_not_current_decision("x.md", "heading", "id-1", Some("name")),
+            dep_retired_term_id("x.md", "heading", "id-1", Some("name")),
             dep_no_term("x.md", "heading", "widget"),
             bad_option_letter("x.md", "dependent", "target", 'Z'),
             tier_cap_exceeded("x.md", &["heading".to_string()], 0, 4),

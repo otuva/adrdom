@@ -560,7 +560,7 @@ fn ask_refuses_a_two_id_supersedes_when_one_target_lost_currency_after_approval(
     let err = stderr(&ask_out);
     assert!(err.contains(old_id_2.as_str()), "{}", err);
     assert!(err.contains("which is not a current decision"), "{}", err);
-    assert!(err.contains("agent fixes the supersedes line"), "{}", err);
+    assert!(err.contains("agent removes it from the supersedes line or names a current decision"), "{}", err);
 
     let after = std::fs::read_to_string(&record).unwrap();
     assert_eq!(
@@ -855,7 +855,7 @@ fn approve_refuses_a_heading_whose_supersedes_target_is_stale() {
     assert!(err.contains("1.3 What is the third unit of authority called?"), "{}", err);
     assert!(err.contains(old_id.as_str()), "{}", err);
     assert!(err.contains("which is not a current decision"), "{}", err);
-    assert!(err.contains("agent fixes the supersedes line"), "{}", err);
+    assert!(err.contains("agent removes it from the supersedes line or names a current decision"), "{}", err);
 
     let after = std::fs::read_to_string(&record).unwrap();
     assert_eq!(after, before, "a refused approve must change nothing in the topic file");

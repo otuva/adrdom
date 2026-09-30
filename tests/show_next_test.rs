@@ -373,7 +373,7 @@ fn show_names_what_replaced_a_superseded_question() {
     assert!(!approved.status.success());
     assert!(
         stderr(&approved).contains(&format!(
-            "approve: {}: \"{}\": supersedes {}, which is not a current decision; agent fixes the supersedes line",
+            "approve: {}: \"{}\": supersedes \"{}\", which is not a current decision; agent removes it from the supersedes line or names a current decision",
             REL, THREE, ONE
         )),
         "{}",

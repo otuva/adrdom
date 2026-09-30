@@ -292,7 +292,7 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     assert!(!out.status.success());
     assert!(
         stderr(&out).contains(&format!(
-            "approve: {}: \"Does the widget delta hold?\": supersedes {} (\"{}\"), which is not a current decision; agent fixes",
+            "approve: {}: \"Does the widget delta hold?\": supersedes {} (\"{}\"), which is not a current decision; agent removes it from the supersedes line or names a current decision",
             A,
             alpha, ALPHA
         )),

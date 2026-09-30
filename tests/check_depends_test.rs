@@ -206,8 +206,7 @@ fn check_fails_a_depends_entry_on_a_retired_term_by_id_while_open() {
     let text = stdout(&out);
     assert!(
         text.contains(&format!(
-            "plan: adrdom/decisions/example.md: \"1.1 Q?\" depends on {} (\"widget\") which is not a current decision; agent names a current decision or removes the line",
-            term_id
+            "plan: adrdom/decisions/example.md: \"1.1 Q?\" depends on the term \"widget\", which is retired; agent names a term that is not retired or removes the entry"
         )),
         "{}",
         text
@@ -253,6 +252,43 @@ fn check_passes_a_depends_entry_on_a_retired_term_once_the_section_is_superseded
     let text = stdout(&out);
     assert!(!text.contains("which is not a current decision"), "{}", text);
     assert!(!text.contains("no term"), "{}", text);
+}
+
+#[test]
+fn check_names_a_retired_term_under_an_answered_question_as_a_term() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let term_id = "11111111-1111-1111-1111-111111111111";
+    let approved = format!(
+        "# Terms\n\n## tag\nid: {}\ndefinition: A small thing.\naliases: \n",
+        term_id
+    );
+    std::fs::write(dir.join("adrdom/terms.md"), &approved).unwrap();
+    approve_terms_via_ledger(&dir, &approved);
+
+    let question_id = "22222222-2222-2222-2222-222222222222";
+    let content = format!(
+        "# Topic\n\n### Does the tool keep tags?\ndepends: {term}\n\nid: {id}{body}",
+        term = term_id,
+        id = question_id,
+        body = QUESTION_BODY
+    );
+    write_record(&dir, "adrdom/decisions/notes.md", &content);
+    approve_via_ledger(&dir, "adrdom/decisions/notes.md", &content);
+    append_ledger_row_at(&dir, "asked", question_id, "h1", "Does the tool keep tags?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", question_id, "h1", "A", "2024-01-01T00:00:01Z");
+
+    // Retire the term by editing the file only; check reads it as it is.
+    std::fs::write(dir.join("adrdom/terms.md"), format!("{}retired: yes\n", approved)).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    let text = stdout(&out);
+    assert!(
+        text.contains("plan: adrdom/decisions/notes.md: \"Does the tool keep tags?\" depends on the term \"tag\", which is retired; agent names a term that is not retired or removes the entry"),
+        "{}",
+        text
+    );
+    assert!(!text.contains("which is not a current decision"), "{}", text);
 }
 
 #[test]

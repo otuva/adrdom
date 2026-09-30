@@ -321,7 +321,7 @@ pub fn run(record_path: PathBuf) -> i32 {
         // that was already stale before it was ever asked.
         let missing = depends::left_out_of_supersedes(&all_records, &led, &sec.supersedes);
         if !missing.is_empty() {
-            refusals.push(msg::supersedes_leaves_out(&rel, &sec.heading_text, &missing));
+            refusals.push(msg::supersedes_leaves_out(&rel, &sec.heading_text, &missing, msg::SupersedesMoment::Asked));
         }
         for old in &sec.supersedes {
             if !state::is_current(&led, old) {

@@ -29,6 +29,8 @@ pub enum DepError {
     /// current: neither a heading id in this file, a non-retired term id,
     /// nor a current decision.
     NotCurrentDecision(String),
+    /// An `Id` entry naming a retired term, on a live section.
+    RetiredTermId(String),
     /// A term-shaped `Text` entry (not heading-shaped, i.e. not ending in
     /// `?`) that names no current term.
     NoTerm(String),
@@ -107,7 +109,7 @@ pub fn resolve_dep(
                 if !term.retired || state::is_dead(led, sec) {
                     return Ok(Some(DepTarget::Term(id.clone())));
                 }
-                return Err(DepError::NotCurrentDecision(id.clone()));
+                return Err(DepError::RetiredTermId(id.clone()));
             }
             if state::is_current(led, id) {
                 return Ok(Some(DepTarget::Decision(id.clone())));
@@ -169,6 +171,7 @@ pub fn resolve_dep(
 pub fn dep_refusal_text(rel: &str, heading: &str, err: &DepError, name: Option<&str>) -> String {
     match err {
         DepError::NotCurrentDecision(id) => msg::dep_not_current_decision(rel, heading, id, name),
+        DepError::RetiredTermId(id) => msg::dep_retired_term_id(rel, heading, id, name),
         DepError::NoTerm(text) => msg::dep_no_term(rel, heading, text),
         DepError::RetiredTerm(text) => msg::dep_retired_term(rel, heading, text),
         DepError::AmbiguousHeading { .. } => {

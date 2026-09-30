@@ -317,7 +317,7 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
         let all = record::load_all(root);
         let missing = depends::left_out_of_supersedes(&all, &led, &supersedes_val);
         if !missing.is_empty() {
-            return Err(msg::supersedes_leaves_out(&rf.rel, &sec.heading_text, &missing));
+            return Err(msg::supersedes_leaves_out(&rf.rel, &sec.heading_text, &missing, msg::SupersedesMoment::Asked));
         }
     }
 
@@ -1139,7 +1139,7 @@ pub fn record_refusals(
                 // (a retired one too), else the heading of a question in
                 // any state.
                 let name = match &e {
-                    depends::DepError::NotCurrentDecision(id) => terms_list
+                    depends::DepError::NotCurrentDecision(id) | depends::DepError::RetiredTermId(id) => terms_list
                         .iter()
                         .find(|t| t.id.as_deref() == Some(id.as_str()))
                         .map(|t| t.name.as_str())
@@ -1504,6 +1504,7 @@ fn do_approve_record(
                     rel,
                     &sec.heading_text,
                     &missing,
+                    msg::SupersedesMoment::Approve,
                 )));
             }
             for target in ids {
