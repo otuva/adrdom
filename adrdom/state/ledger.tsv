@@ -289,3 +289,8 @@
 2026-09-30T07:06:30Z	answered	3b8da790-ea0c-4ca5-860a-980c7bc5f361	1a2edb547dc36bd401c2c0d9b47e972f59f2cdc421e888b58a6b0bff7fad0e5e	B	0.2.0
 2026-09-30T07:06:55Z	answered	f2e31cbe-1ba2-4b77-910a-b9664ce0277f	98bdd128e7a2d0f9350a8e254265d4a2cd98aa4cf26fe961d040d0a39929c0f8	A	0.2.0
 2026-09-30T08:00:02Z	approved	-	fed4cbc4c5df49279c4e5f3d28159436722db2ee4b35779715ac424a6a0da78f	adrdom/decisions/terms.md	0.2.0
+2026-09-30T10:37:22Z	approved	-	d82c1968faf3be11b62e8b4e55790a71da71bd3cc6e03c0643700f4d57b69864	adrdom/decisions/change.md	0.2.0
+2026-09-30T10:37:28Z	approved	-	3695f3b1e5578afba40132681e393c50afb47632f15d8039dc3c7b0a6c41dca3	adrdom/decisions/terms.md	0.2.0
+2026-09-30T10:39:19Z	asked	796a2544-43e5-43db-b5d3-8a4e737ec9c6	24f19d1d9be53977bc51ce3c5c106985e72a251750071ae57e0bbb22fdcc500e	Does a supersedes line name every current decision standing on its target?	0.2.0
+2026-09-30T10:39:19Z	asked	f416062c-211f-4d20-a6bf-23a561b5f59b	4de19bdda88e82be1e4df12dd0a8fbfe7c9750fd36653da6534e183a5a25819f	Does a tier hold its cap by the count after its supersedes lines take effect?	0.2.0
+2026-09-30T10:39:28Z	asked	db58d4b8-9e64-44b0-99a2-acb7f05d5b4e	2a798fe3d2859a396628abf828b2a9445d12d543f36b6fe9553fc32a3a985964	Does the owner retire a term that a question names?	0.2.0
