@@ -2303,6 +2303,20 @@ pub fn terms_approved_now() -> String {
     "approve: adrdom/terms.md: approved".to_string()
 }
 
+/// One line per term whose definition changed at approve: the live
+/// questions (`named_by`, already labelled) that name it.
+pub fn term_definition_changed(name: &str, named_by: &[String]) -> String {
+    if named_by.is_empty() {
+        format!("approve: term \"{}\": definition changed; named by no question", name)
+    } else {
+        format!(
+            "approve: term \"{}\": definition changed; named by {}",
+            name,
+            named_by.join(", ")
+        )
+    }
+}
+
 pub fn plan_approved(rel: &str) -> String {
     format!("approve: {}: plan approved", rel)
 }

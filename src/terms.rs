@@ -94,6 +94,21 @@ pub fn brief_text(tf: &TermsFile) -> String {
     out
 }
 
+/// The hash a `term` ledger row holds: sha256 over the entry's own text
+/// (name, definition, aliases, retired flag), so an edit to any of them
+/// changes it and nothing else (the id and the machine-written `terms:`
+/// line are not part of it).
+pub fn term_hash(t: &Term) -> String {
+    let text = format!(
+        "## {}\ndefinition: {}\naliases: {}\nretired: {}",
+        t.name.trim_end(),
+        t.definition.trim_end(),
+        t.aliases.join(", ").trim_end(),
+        if t.retired { "yes" } else { "no" }
+    );
+    sha256_hex(&normalize(&text))
+}
+
 pub fn file_hash(tf: &TermsFile) -> String {
     let text = tf
         .lines

@@ -827,6 +827,47 @@ fn do_approve_terms(
         return Err(msg);
     }
 
+    // Which terms changed since their latest `term` row (information only),
+    // and which need a new row. A term with no `term` row yet is new: it
+    // gets a row and prints nothing.
+    let term_hashes: Vec<(String, String, String)> = tf
+        .terms
+        .iter()
+        .filter_map(|t| t.id.clone().map(|id| (id, t.name.clone(), terms::term_hash(t))))
+        .collect();
+    let mut term_rows_due: Vec<(String, String, String)> = Vec::new();
+    let mut changed: Vec<(String, String)> = Vec::new();
+    for (id, name, hash) in &term_hashes {
+        match led.latest_for_id("term", id) {
+            Some(r) if r.hash == *hash => {}
+            Some(_) => {
+                changed.push((id.clone(), name.clone()));
+                term_rows_due.push((id.clone(), name.clone(), hash.clone()));
+            }
+            None => term_rows_due.push((id.clone(), name.clone(), hash.clone())),
+        }
+    }
+    let mut changed_lines: Vec<String> = Vec::new();
+    if !changed.is_empty() {
+        let mut entries = state::dependent_entries(&records, led, &tf, true, false);
+        entries.extend(state::unsettled_entries(&records, led, &tf, &approved_plans));
+        for (id, name) in &changed {
+            let mut named_by: Vec<String> = Vec::new();
+            for e in &entries {
+                if matches!(e.source, state::DependentSource::Term { .. }) {
+                    continue;
+                }
+                if e.pairs.iter().any(|(_, u)| u == id) {
+                    let label = e.source.label();
+                    if !named_by.contains(&label) {
+                        named_by.push(label);
+                    }
+                }
+            }
+            changed_lines.push(msg::term_definition_changed(name, &named_by));
+        }
+    }
+
     // Step 6: write the file. `terms:` lines use the fresh pairs computed
     // above, one term at a time, in the same order as `tf.terms`.
     let mut new_lines = tf.lines.clone();
@@ -863,27 +904,46 @@ fn do_approve_terms(
     if inserted > 0 {
         out.push(msg::terms_ids_filled(inserted));
     }
+    out.extend(changed_lines);
+
+    let write_time = ledger::write_time(led);
+    let term_rows: Vec<ledger::Row> = term_rows_due
+        .iter()
+        .map(|(id, name, hash)| ledger::Row {
+            time: write_time.clone(),
+            event: "term".to_string(),
+            id: id.clone(),
+            hash: hash.clone(),
+            detail: name.clone(),
+            version: crate::version::VERSION.to_string(),
+        })
+        .collect();
+    let append_failed = |e: std::io::Error| {
+        msg::approve_prefixed(msg::update_failed(
+            "ledger",
+            e,
+            Next::owner_runs("adr approve adrdom/terms.md"),
+        ))
+    };
 
     if state::terms_approved(led, &tf) {
-        // No new ledger row is written in this branch: the file already
-        // matches the ledger's latest `terms` row.
+        // The file already matches the ledger's latest `terms` row:
+        // nothing is written. A ledger from before `term` rows existed
+        // gets them at its next real approval, with no change listed
+        // for that one edit (no migration code in the tool).
         out.push(msg::terms_already_approved());
     } else {
         let row = ledger::Row {
-            time: ledger::write_time(led),
+            time: write_time.clone(),
             event: "terms".to_string(),
             id: "-".to_string(),
             hash: terms::file_hash(&tf),
             detail: crate::repo::TERMS_PATH.to_string(),
             version: crate::version::VERSION.to_string(),
         };
-        ledger::append(ledger_path, &[row]).map_err(|e| {
-            msg::approve_prefixed(msg::update_failed(
-                "ledger",
-                e,
-                Next::owner_runs("adr approve adrdom/terms.md"),
-            ))
-        })?;
+        let mut rows = vec![row];
+        rows.extend(term_rows);
+        ledger::append(ledger_path, &rows).map_err(append_failed)?;
         out.push(msg::terms_approved_now());
     }
 
