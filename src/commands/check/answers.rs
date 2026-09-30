@@ -27,7 +27,16 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                 });
             }
 
-            if sec.is_refused() {
+            if sec.answer_line.is_some() && state::is_open_again(led, id) {
+                // Asked again after an answer or a refusal and not ruled
+                // on since: no answer stands, so a line in the file, a
+                // letter or `refused`, is hand-written, whatever the rows
+                // of the earlier rulings say.
+                out.push(Failure {
+                    check: "answers".to_string(),
+                    message: msg::answer_without_row(&rf.rel, &sec.heading_text),
+                });
+            } else if sec.is_refused() {
                 // Per "Does the owner answer a question with a refusal?":
                 // a `**Answer:** refused` line needs a matching `refused`
                 // row (same id, hash = the section hash before the insert
@@ -43,14 +52,6 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                         message: msg::refusal_without_row(&rf.rel, &sec.heading_text),
                     });
                 }
-            } else if sec.answer_line.is_some() && state::is_open_again(led, id) {
-                // Asked again after two answers met and not answered since:
-                // no answer stands, so a line in the file is hand-written,
-                // whatever the rows of the earlier answers say.
-                out.push(Failure {
-                    check: "answers".to_string(),
-                    message: msg::answer_without_row(&rf.rel, &sec.heading_text),
-                });
             } else if sec.answer_line.is_some() {
                 // `state::closed_match` mirrors this exactly: every
                 // `answered` row for this id at all, so an edit that moves

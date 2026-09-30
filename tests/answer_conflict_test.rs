@@ -193,6 +193,16 @@ fn c1_flow(first: &str, second: &str, merge_target: &str, merge_source: &str) {
         "a hand-written answer line on the open question fails: {}",
         stdout(&by_hand)
     );
+    std::fs::write(&record, &open_text).unwrap();
+    // The same holds for a refusal line put back by hand.
+    std::fs::write(&record, format!("{}\n**Answer:** refused\n", open_text.trim_end())).unwrap();
+    let refused_by_hand = adr(&dir, &["check"], &[], "");
+    assert!(
+        !refused_by_hand.status.success()
+            && stdout(&refused_by_hand).contains("answer line without ledger row"),
+        "a hand-written refused line on the open question fails: {}",
+        stdout(&refused_by_hand)
+    );
     std::fs::write(&record, open_text).unwrap();
 
     // Full path: the owner answers again, A stands, check passes.
@@ -327,6 +337,19 @@ fn c1_flow_answer_then_refusal(settle_with_refusal: bool) {
         "an open question after the re-ask fails nothing: {}",
         stdout(&after_reask)
     );
+    // The refusal row of branch `b` still stands in the ledger with this
+    // very text's hash; a refusal line put back by hand is still backed by
+    // no standing ruling.
+    // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+    let open_text = std::fs::read_to_string(&record).unwrap();
+    std::fs::write(&record, format!("{}\n**Answer:** refused\n", open_text.trim_end())).unwrap();
+    let by_hand = adr(&dir, &["check"], &[], "");
+    assert!(
+        !by_hand.status.success() && stdout(&by_hand).contains("answer line without ledger row"),
+        "a hand-written refused line on the re-asked question fails: {}",
+        stdout(&by_hand)
+    );
+    std::fs::write(&record, open_text).unwrap();
 
     if settle_with_refusal {
         let answer = adr_answer(&dir, &id, "refuse");
