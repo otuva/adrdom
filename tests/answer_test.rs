@@ -1525,6 +1525,36 @@ fn answer_with_a_stale_version_is_refused_and_writes_nothing() {
     );
 }
 
+// adr: 21ae8ae0-6884-4d3c-8464-024a8a5aae2d
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// An answer for a question whose latest ledger state is `withdrawn` (its
+// heading was struck, then the section came back by hand) is told so, not
+// sent to `ask`, which never picks a withdrawn question up.
+#[test]
+fn answer_on_a_withdrawn_question_says_withdrawn_not_edited() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "authority");
+    let record = write_record(&dir, "adrdom/decisions/example.md", FIRST_QUESTION);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let full = std::fs::read_to_string(&record).unwrap();
+    let id = extract_ids(&full)[0].clone();
+    let version = current_version(&dir, &id);
+
+    std::fs::write(&record, "# Example\n\nContext prose.\n").unwrap();
+    approve_record(&dir, "adrdom/decisions/example.md");
+    std::fs::write(&record, &full).unwrap();
+
+    let out = adr_owner(&dir, &["answer", &format!("{}@{}", id, version), "A"], "");
+    assert!(!out.status.success());
+    let err = stderr(&out);
+    assert!(err.contains("was withdrawn from the plan; show prints"), "{}", err);
+    assert!(err.contains("owner runs: adr show"), "{}", err);
+    assert!(!err.contains("adr ask"), "{}", err);
+}
+
 // A letter that names no option is refused before the version is even
 // compared: an answer with both a stale version and a bad letter hears
 // about the letter, so fixing the version never uncovers a second refusal.

@@ -629,7 +629,7 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
         // A `depends:` with nothing after it names nothing: it counts as a
         // depends line with no entries, so the section is refused as having
         // no depends line (`record_refusals`) and nothing else about it.
-        let empty_depends = line.trim_end() == "depends:";
+        let empty_depends = is_bare_depends_line(line);
         if let Some(v) = kv(line, "depends").or_else(|| empty_depends.then(String::new)) {
             if v.is_empty() {
                 depends_line_seen = true;
@@ -799,6 +799,11 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
 /// of its own to stay a skeleton, but `approve` gives every heading an id,
 /// skeletons included,
 /// so a skeleton must stay a skeleton once it has one.
+/// A `depends:` line with nothing after it, indented or not.
+fn is_bare_depends_line(line: &str) -> bool {
+    line.trim() == "depends:"
+}
+
 fn is_skeleton_range(lines: &[String], start: usize, end: usize) -> bool {
     ((start + 1)..end).all(|j| {
         let t = lines[j].trim();
@@ -808,7 +813,7 @@ fn is_skeleton_range(lines: &[String], start: usize, end: usize) -> bool {
         // `scan_body` reports it as a stray line instead.
         t.is_empty()
             || t.starts_with("depends: ")
-            || t == "depends:"
+            || is_bare_depends_line(t)
             || t.starts_with("supersedes: ")
             || t.starts_with("id: ")
     })
@@ -1880,6 +1885,32 @@ mod tests {
             "{:?}",
             sec.shape_errors
         );
+    }
+
+    #[test]
+    fn bare_depends_predicate_ignores_indent() {
+        assert!(is_bare_depends_line("depends:"));
+        assert!(is_bare_depends_line("  depends:  "));
+        assert!(!is_bare_depends_line("depends: x"));
+        assert!(!is_bare_depends_line("depends:x"));
+    }
+
+    #[test]
+    fn indented_bare_depends_is_the_same_as_bare_and_a_later_real_one_is_second() {
+        for bare in ["depends:", "  depends:"] {
+            let rf = rf_from(&format!("# T\n\n### Q?\n{bare}\ndepends: widget\n"));
+            let sec = &rf.sections[0];
+            assert!(
+                sec.shape_errors.iter().any(|e| e.starts_with("depends: second depends line")),
+                "{bare:?}: {:?}",
+                sec.shape_errors
+            );
+            assert!(
+                !sec.shape_errors.iter().any(|e| e.contains("stray")),
+                "{bare:?}: {:?}",
+                sec.shape_errors
+            );
+        }
     }
 
     // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a supersedes list split

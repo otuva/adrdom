@@ -646,6 +646,30 @@ pub fn not_in_asked_state(heading: &str, rel: &str) -> String {
     )
 }
 
+/// The question's latest ledger state is `withdrawn`: it was struck from
+/// the plan, and `ask` never picks it up.
+pub fn already_withdrawn(heading: &str) -> String {
+    refuse(
+        format!(
+            "\"{}\" was withdrawn from the plan; show prints every question that waits for an answer",
+            heading
+        ),
+        Next::owner_runs("adr show"),
+    )
+}
+
+/// The question's latest ledger state is `superseded`: a newer decision
+/// replaced it.
+pub fn already_superseded(heading: &str) -> String {
+    refuse(
+        format!(
+            "\"{}\" is already superseded; show prints every question that waits for an answer",
+            heading
+        ),
+        Next::owner_runs("adr show"),
+    )
+}
+
 /// A question with a body that no `ask` has put to the owner.
 pub fn not_asked_yet(heading: &str, rel: &str) -> String {
     refuse(
@@ -686,10 +710,17 @@ pub fn answer_missing_version(id: &str, asked: Option<(&str, &str)>) -> String {
 /// "Does an answer carry the version of the question the owner read?"):
 /// the question moved -- usually a re-ask after an edit -- since that
 /// version was read.
-pub fn stale_version(heading: &str, id: &str, current: &str) -> String {
+///
+/// The refusal never prints the current version: the version on an answer
+/// is the owner's receipt of having read the text, so the owner is sent to
+/// read the file as it is now.
+pub fn stale_version(heading: &str, rel: &str) -> String {
     refuse(
-        format!("\"{}\" has moved since that version was read", heading),
-        Next::owner_runs(format!("adr answer {}@{} <letter>", id, current)),
+        format!(
+            "\"{}\" has moved since that version was read; show prints it as it is now",
+            heading
+        ),
+        Next::owner_runs(format!("adr show {}", rel)),
     )
 }
 
@@ -2513,7 +2544,9 @@ mod tests {
             not_in_asked_state("heading", "x.md"),
             answer_missing_version("id-1", None),
             answer_missing_version("id-1", Some(("heading", "12345678"))),
-            stale_version("heading", "id-1", "12345678"),
+            stale_version("heading", "x.md"),
+            already_withdrawn("heading"),
+            already_superseded("heading"),
             not_asked_yet("heading", "x.md"),
             not_written("heading"),
             dep_retired_term("x.md", "heading", "widget"),

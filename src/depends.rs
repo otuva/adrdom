@@ -141,13 +141,7 @@ pub fn resolve_dep(
             match phrase_lookup.get(&t.to_lowercase()) {
                 Some(id) => Ok(Some(DepTarget::Term(id.clone()))),
                 None => {
-                    let lower = t.to_lowercase();
-                    let retired = terms_list.iter().any(|term| {
-                        term.retired
-                            && std::iter::once(&term.name)
-                                .chain(term.aliases.iter())
-                                .any(|n| n.trim().to_lowercase() == lower)
-                    });
+                    let retired = crate::terms::is_retired_phrase(terms_list, t);
                     if retired {
                         Err(DepError::RetiredTerm(t.to_string()))
                     } else {

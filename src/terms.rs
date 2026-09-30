@@ -424,6 +424,18 @@ pub fn phrase_lookup(terms: &[Term]) -> HashMap<String, String> {
     map
 }
 
+/// True when `text` (trimmed, case-insensitive) equals the name or an alias
+/// of a retired term: the same normalisation `phrase_lookup` applies.
+pub fn is_retired_phrase(terms: &[Term], text: &str) -> bool {
+    let lower = text.to_lowercase();
+    terms.iter().any(|t| {
+        t.retired
+            && std::iter::once(&t.name)
+                .chain(t.aliases.iter())
+                .any(|n| n.trim().to_lowercase() == lower)
+    })
+}
+
 /// Whole-word/phrase, case-insensitive, longest-phrase-first, non-overlapping
 /// resolution of every term name/alias in `text`. Retired terms are never
 /// matched (per "Does a retired term keep its words?"): every new pairing sees current terms only, so a word

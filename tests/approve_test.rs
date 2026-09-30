@@ -1972,3 +1972,53 @@ fn a_supersedes_line_added_after_approval_waits_for_approval() {
     let text = format!("{}{}", stdout(&checked), stderr(&checked));
     assert!(!text.contains("plan not approved"), "{}", text);
 }
+
+// --- approve leaves the supersedes line of an asked section ---------------
+
+fn split_question(heading: &str, supersedes: Option<&str>) -> String {
+    let sup = supersedes.map(|s| format!("\nsupersedes: {}\n", s)).unwrap_or_default();
+    format!(
+        "\n### {}\ndepends: decision\n{}\nProblem: the decision at hand.\n\nStandard: s.\n\n- A) Answer A.\n  Why: reasons.\n  Costs: costs.\n- B) Answer B.\n  Why: other reasons.\n  Costs: other costs.\n",
+        heading, sup
+    )
+}
+
+// adr: 3b8da790-ea0c-4ca5-860a-980c7bc5f361
+// adr: f4f667ad-8714-4e65-897b-c7002e423c28
+//
+// "Does one decision supersede several?": two questions asked together both
+// supersede decision O; answering one supersedes O. A later approve of the
+// file (here to add a heading) leaves the asked sibling's supersedes line
+// alone instead of refusing that O is no longer current.
+#[test]
+fn approve_leaves_the_supersedes_line_of_an_asked_split_sibling() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+    let rel = "adrdom/decisions/example.md";
+    let record = write_record(&dir, rel, &format!("# Example\n\nContext prose.\n{}", split_question("Old one?", None)));
+    approve_record(&dir, rel);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let old_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
+    assert!(adr_answer(&dir, &old_id, "A").status.success());
+
+    let mut content = std::fs::read_to_string(&record).unwrap();
+    content.push_str(&split_question("New one?", Some(&old_id)));
+    content.push_str(&split_question("New two?", Some(&old_id)));
+    std::fs::write(&record, &content).unwrap();
+    approve_record(&dir, rel);
+    let ask = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(ask.status.success(), "ask failed: {}", stderr(&ask));
+    let ids: Vec<String> = extract_ids(&std::fs::read_to_string(&record).unwrap())
+        .into_iter()
+        .filter(|i| i != &old_id)
+        .collect();
+    assert_eq!(ids.len(), 2);
+    assert!(adr_answer(&dir, &ids[0], "A").status.success());
+
+    let mut content = std::fs::read_to_string(&record).unwrap();
+    content.push_str(&split_question("Added later?", None));
+    std::fs::write(&record, &content).unwrap();
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(out.status.success(), "approve refused the asked sibling: {}", stderr(&out));
+}

@@ -197,11 +197,17 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
             } else if led.latest_asked(id).is_none() {
                 msg::not_asked_yet(&sec.heading_text, &rel)
             } else {
-                msg::not_in_asked_state(&sec.heading_text, &rel)
+                match led.latest_state(id).map(|r| r.event.as_str()) {
+                    Some("withdrawn") => msg::already_withdrawn(&sec.heading_text),
+                    Some("answered") => msg::already_answered(&sec.heading_text),
+                    Some("refused") => msg::already_refused(&sec.heading_text),
+                    Some("superseded") => msg::already_superseded(&sec.heading_text),
+                    _ => msg::not_in_asked_state(&sec.heading_text, &rel),
+                }
             });
         }
         if version_lower != cur_hash[..record::VERSION_LEN] {
-            return Err(msg::stale_version(&sec.heading_text, id, &cur_hash[..record::VERSION_LEN]));
+            return Err(msg::stale_version(&sec.heading_text, &rel));
         }
     }
 
@@ -1312,7 +1318,11 @@ fn do_approve_record(
     // own hash guards the line.
     let mut supersedes_ids: HashMap<usize, Vec<String>> = HashMap::new();
     for (i, sec) in rf.sections.iter().enumerate() {
-        if sec.supersedes.is_empty() || state::is_frozen(led, sec) {
+        // Once asked, the line is frozen with the body (per "Does one
+        // decision supersede several?"): a split sibling's target may be
+        // superseded by now, and approve leaves the line as it is.
+        let asked = sec.id.as_ref().is_some_and(|id| led.latest_asked(id).is_some());
+        if sec.supersedes.is_empty() || asked || state::is_frozen(led, sec) {
             continue;
         }
         let mut ids = Vec::new();

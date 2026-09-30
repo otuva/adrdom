@@ -51,7 +51,7 @@ pub(super) fn check_plan(
     // listing rather than off `records`, so a file whose name is wrong is
     // still told so even when its content also fails to parse into one.
     for f in repo::list_decision_files_via(root, source) {
-                let rel = state::rel_path(root, &f);
+        let rel = state::rel_path(root, &f);
         let topic = records_by_rel.get(rel.as_str()).and_then(|rf| rf.topic.as_deref());
         for m in actions::own_name_refusals(&rel, topic) {
             out.push(Failure {

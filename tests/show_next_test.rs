@@ -598,9 +598,9 @@ fn answer_on_a_question_never_asked_names_the_ask() {
     assert_eq!(
         stderr(&out).trim_end(),
         format!(
-            "answer: \"{}\" has moved since that version was read; owner runs: adr answer {} <letter>",
+            "answer: \"{}\" has moved since that version was read; show prints it as it is now; owner runs: adr show {}",
             ONE,
-            id_at_version(&dir, &one)
+            REL
         )
     );
 }
