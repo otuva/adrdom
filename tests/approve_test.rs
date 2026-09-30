@@ -285,7 +285,7 @@ fn editing_a_heading_requires_reapproval_with_one_new_approved_row() {
 // --- tier rule: a later group waits on an earlier one ------------------
 
 #[test]
-fn ask_refuses_group_two_while_group_one_unanswered_then_passes_after_answer() {
+fn ask_leaves_group_two_while_group_one_unanswered_then_asks_it_after_answer() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
@@ -308,10 +308,14 @@ fn ask_refuses_group_two_while_group_one_unanswered_then_passes_after_answer() {
         .status
         .success());
 
+    // Group two waits for a later run: ask asks nothing, refuses nothing,
+    // and its `next` lines name the owner's answer to group one.
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
-    let err = stderr(&out);
-    assert!(err.contains("First question?"), "{}", err);
+    assert!(out.status.success(), "ask failed: {}", stderr(&out));
+    assert_eq!(stderr(&out), "");
+    let shown = stdout(&out);
+    assert!(shown.contains("nothing to ask"), "{}", shown);
+    assert!(shown.contains("owner runs: adr answer") && shown.contains("First question?"), "{}", shown);
 
     // Nothing newly asked: `approve` already gave group two's heading an
     // id too, so `extract_ids` no longer tells asked apart from
