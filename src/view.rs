@@ -301,13 +301,11 @@ pub(crate) fn moot_notes(rf: &RecordFile, led: &Ledger) -> Vec<String> {
         .collect()
 }
 
-/// True when the text of an asked question is the text the ledger holds
-/// for its latest `asked` row: `answer` takes the question only then, and
-/// the version `show` prints for the owner is good only then.
+/// `state::asked_text_stands` for a section of a loaded topic file: the
+/// question `answer` takes, and the one `show` prints a version for.
 pub(crate) fn asked_text_stands(led: &Ledger, rf: &RecordFile, sec: &Section) -> bool {
     let Some(id) = &sec.id else { return false };
-    led.latest_asked(id).map(|r| r.hash.as_str())
-        == Some(record::section_hash(&rf.lines, sec).as_str())
+    state::asked_text_stands(led, id, &record::section_hash(&rf.lines, sec))
 }
 
 /// What is next in one topic file, one line per move, each naming who

@@ -327,6 +327,16 @@ pub fn live_tiers(led: &Ledger, rf: &RecordFile, tiers: &[usize]) -> Vec<usize> 
         .collect()
 }
 
+/// True when the latest ledger state of `id` is `asked` and that row holds
+/// `cur_hash`, the hash of the section's text now: the text stands as it was
+/// asked. `answer` takes a question only then, `show` prints its version
+/// only then, and `next` names the owner's answer only then; an edited
+/// question is the agent's to ask again (per "Does an answer carry the
+/// version of the question the owner read?").
+pub fn asked_text_stands(led: &Ledger, id: &str, cur_hash: &str) -> bool {
+    matches!(led.latest_state(id), Some(row) if row.event == "asked" && row.hash == cur_hash)
+}
+
 /// True when the latest ledger state of `id` is `asked` although an earlier
 /// row answered or refused it: the question was asked again (per "Does
 /// check fail a question answered with two different options?") and waits

@@ -190,11 +190,8 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
         if version_lower != cur_hash[..record::VERSION_LEN] {
             return Err(msg::stale_version(&sec.heading_text));
         }
-        match led.latest_state(id) {
-            Some(row) if row.event == "asked" && row.hash == cur_hash => {}
-            _ => {
-                return Err(msg::not_in_asked_state(&sec.heading_text, &rel));
-            }
+        if !crate::state::asked_text_stands(&led, id, &cur_hash) {
+            return Err(msg::not_in_asked_state(&sec.heading_text, &rel));
         }
     }
 

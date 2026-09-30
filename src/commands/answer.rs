@@ -35,10 +35,7 @@ pub fn run(id_arg: String, letter: String) -> i32 {
                     .find(|s| s.id.as_deref() == Some(id_arg.as_str()))
                     .filter(|s| {
                         let hash = crate::record::section_hash(&rf.lines, s);
-                        s.answer_line.is_none()
-                            && led
-                                .latest_state(&id_arg)
-                                .is_some_and(|r| r.event == "asked" && r.hash == hash)
+                        s.answer_line.is_none() && crate::state::asked_text_stands(&led, &id_arg, &hash)
                     })
                     .map(|s| (s.heading_text.clone(), crate::record::version_of(&rf.lines, s)))
             });

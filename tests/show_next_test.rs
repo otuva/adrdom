@@ -456,3 +456,50 @@ tier 2\n  [no body] {three}\n    stands on: widget, {one}=A\nnext\n  agent write
     assert_eq!(stdout(&adr(&dir, &["show", "--all"], &[], "")), whole);
     assert_eq!(stdout(&adr(&dir, &["show", p], &[], "")), whole);
 }
+
+// adr: cd83e277-ebf0-4458-a77a-c526ab4cfeca
+// adr: 11be073c-ce91-44d8-833a-ef0b5e0b1672
+//
+// `show` and `answer` read one rule: a question is answerable when its
+// latest ledger row is `asked` and holds the hash of its text now. Asked
+// and unedited, `next` names the owner's answer and the answer succeeds;
+// asked and then edited, `next` names the agent's `ask` and `answer` on
+// the version the owner read refuses.
+#[test]
+fn show_and_answer_agree_on_whether_the_asked_text_stands() {
+    let (dir, path) = setup();
+    let p = path.to_str().unwrap();
+    approve_record(&dir, REL);
+    write_body(&path, ONE);
+    write_body(&path, TWO);
+    let two = id_of(&path, TWO);
+    let text = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(&path, text.replace(&format!(", {}\n", two), &format!(", {}=A\n", two))).unwrap();
+    assert!(adr(&dir, &["ask", p], &[], "").status.success());
+    let one = id_of(&path, ONE);
+    assert_eq!(
+        next(&dir),
+        vec![answer_for(&dir, &one, ONE), answer_for(&dir, &two, TWO), later(THREE)]
+    );
+
+    // Edited after it was asked: `next` hands the question back to the
+    // agent, and the version the owner read is refused.
+    let old_version = current_version(&dir, &two);
+    let text = std::fs::read_to_string(&path).unwrap();
+    let at = text.find(&format!("### {}\n", TWO)).unwrap();
+    let edited = format!(
+        "{}{}",
+        &text[..at],
+        text[at..].replacen("the widget breaks.", "the widget breaks in use.", 1)
+    );
+    std::fs::write(&path, edited).unwrap();
+    assert_eq!(
+        next(&dir),
+        vec![ask_for(&[TWO]), answer_for(&dir, &one, ONE), later(THREE)]
+    );
+    let refused = adr_owner(&dir, &["answer", &format!("{}@{}", two, old_version), "A"], "");
+    assert!(!refused.status.success());
+
+    // The unedited question is still answerable.
+    assert!(adr_answer(&dir, &one, "A").status.success());
+}
