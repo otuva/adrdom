@@ -436,8 +436,11 @@ pub(crate) fn next_moves(
         }
     }
 
-    // What is answered is built before anything new is written: the commit
-    // that carries an answer carries its code and its test.
+    // What is answered is built before anything new is written. Answers are
+    // committed as given and check reports an untested decision as a note;
+    // `next` still holds the build until the tier is answered, per "Does
+    // the agent build on a decision before its tier is fully answered?"
+    // (f8d92841 A).
     let mut out = build;
     let refused = !clears.is_empty();
     out.extend(clears);

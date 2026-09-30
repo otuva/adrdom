@@ -71,31 +71,25 @@ pub(super) fn check_tests(
 
     let mut tested_count = 0;
 
-    // The heading a question carries, whatever its state: a line that
-    // names an identifier names the question beside it.
-    let names = crate::view::heading_texts(records);
-    let heading_of = |id: &str| names.get(id).map(String::as_str);
+    // Where each question sits: a line that names an identifier names the
+    // question beside it, whatever its state.
+    let mut at: HashMap<&str, (&str, &str)> = HashMap::new();
+    for rf in records {
+        for s in &rf.sections {
+            if let Some(id) = &s.id {
+                at.insert(id.as_str(), (rf.rel.as_str(), s.heading_text.as_str()));
+            }
+        }
+    }
 
     // In the order of the identifiers, so two runs print the same lines.
     let mut untested: Vec<&String> = current.iter().filter(|id| !test_ids.contains_key(*id)).collect();
     untested.sort();
     tested_count += current.len() - untested.len();
     for id in untested {
-        // Per "Does check fail an untested decision whose tier is still
-        // open?": while a question beside it is not answered, a note.
-        let waits = records.iter().find_map(|rf| {
-            let i = rf.sections.iter().position(|s| s.id.as_deref() == Some(id.as_str()))?;
-            let sib = crate::state::unresolved_sibling(rf, i)?;
-            Some(msg::untested_waits(&rf.rel, &rf.sections[i].heading_text, &sib.heading_text, sib.is_refused()))
-        });
-        if let Some(note) = waits {
-            notes.push(note);
-            continue;
-        }
-        out.push(Failure {
-            check: "tested".to_string(),
-            message: msg::untested(id, heading_of(id)),
-        });
+        // Per "What does check do with an untested current decision?": a
+        // note on every run, never a failure.
+        notes.push(msg::untested_note(at.get(id.as_str()).copied(), id));
     }
 
     let mut stale: Vec<(&String, &Vec<String>)> =
@@ -104,7 +98,7 @@ pub(super) fn check_tests(
     for (id, locations) in stale {
         out.push(Failure {
             check: "tested".to_string(),
-            message: msg::stale_test(id, heading_of(id), locations),
+            message: msg::stale_test(id, at.get(id.as_str()).map(|(_, h)| *h), locations),
         });
     }
 

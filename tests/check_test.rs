@@ -370,29 +370,23 @@ fn check_reports_a_banned_word_inside_terms_md_exactly_once() {
     );
 }
 
-// adr: 33a45b9e-8150-488e-be70-7ab2ca9adaa6
+// adr: 3460d220-e523-448b-aeff-baa8051b7d06
 //
-// core (0): "check fails while any current decision has no test tied to
-// it". Shows both halves: check exits non-zero and names the untested
-// decision by id while nothing ties it to a test, then passes once an
-// `adr: <id>` comment exists for it.
+// An untested current decision is a note: check names it on every run and
+// exits 0, then stops naming it once an `adr: <id>` comment exists for it.
 #[test]
-fn check_tests_failure_when_untested() {
+fn check_tests_note_when_untested() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let (_record, id) = answer_one_question(&dir);
     // Nothing recorded anywhere for the id.
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
     let out_text = stdout(&out);
-    assert!(out_text.contains("tested:"), "{}", out_text);
-    assert!(out_text.contains("untested"), "{}", out_text);
-    assert!(
-        line_with(&out_text, &id, ": untested"),
-        "check must name the untested decision by id: {}",
-        out_text
-    );
+    assert!(out.status.success(), "{}", out_text);
+    let untested_line = |t: &str| t.lines().any(|l| l.starts_with("untested:") && l.contains(&format!("adr: {}", id)));
+    assert!(untested_line(&out_text), "check must name the untested decision by id: {}", out_text);
+    assert!(out_text.contains("tested: 0"), "{}", out_text);
 
     write_test_comment(&dir, &id);
 
@@ -403,6 +397,7 @@ fn check_tests_failure_when_untested() {
         stdout(&out)
     );
     assert!(stdout(&out).contains("tested: 1"), "{}", stdout(&out));
+    assert!(!untested_line(&stdout(&out)), "{}", stdout(&out));
 }
 
 // adr: cd83e277-ebf0-4458-a77a-c526ab4cfeca
@@ -519,14 +514,13 @@ fn check_fails_on_a_renamed_answered_option_never_as_answer_without_row() {
     );
 }
 
-// adr: 0b962bc8-05a8-48da-9fe8-bf77c7aa6e4a
-//
 // "a comment `adr: <id>` inside the test, found by text search in every
 // tracked file outside adrdom, ties a test to a decision". A tie written
 // in a tracked, non-Rust file outside adrdom/ counts (also relied on by
 // every other test here through `write_test_comment`); the same comment
 // placed under adrdom/, or left untracked, does not, so `check` still
-// names the decision untested until it is tracked outside adrdom/.
+// notes the decision untested until it is tracked outside adrdom/.
+// adr: 4319a653-6901-446c-94ab-6420ef472134
 #[test]
 fn check_tests_ignores_a_tie_under_adrdom_and_an_untracked_tie() {
     let dir = init_repo();
@@ -538,9 +532,9 @@ fn check_tests_ignores_a_tie_under_adrdom_and_an_untracked_tie() {
     run_git(&dir, &["add", "adrdom/note.txt"]);
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
+    assert!(out.status.success(), "{}", stdout(&out));
     assert!(
-        line_with(&stdout(&out), &id, ": untested"),
+        stdout(&out).contains(&format!("no tracked file holds \"adr: {}\"", id)),
         "a tie under adrdom/ must not count: {}",
         stdout(&out)
     );
@@ -549,9 +543,9 @@ fn check_tests_ignores_a_tie_under_adrdom_and_an_untracked_tie() {
     std::fs::write(dir.join("outside.txt"), format!("adr: {}\n", id)).unwrap();
 
     let out2 = adr(&dir, &["check"], &[], "");
-    assert!(!out2.status.success());
+    assert!(out2.status.success(), "{}", stdout(&out2));
     assert!(
-        line_with(&stdout(&out2), &id, ": untested"),
+        stdout(&out2).contains(&format!("no tracked file holds \"adr: {}\"", id)),
         "an untracked tie must not count: {}",
         stdout(&out2)
     );
@@ -2188,6 +2182,7 @@ fn check_staged_treats_a_staged_deleted_topic_file_as_gone() {
 // content is what is about to enter the commit); the same tie sitting
 // only in the working tree, outside a commit, is what plain `adr check`
 // reads instead.
+// adr: 4319a653-6901-446c-94ab-6420ef472134
 #[test]
 fn check_staged_reads_a_newly_staged_test_files_tie_from_the_index() {
     let dir = init_repo();
@@ -2208,11 +2203,11 @@ fn check_staged_reads_a_newly_staged_test_files_tie_from_the_index() {
     assert!(stdout(&out).contains("tested: 1"), "{}", stdout(&out));
 
     // Outside a commit, the working tree is read instead: the tie is gone
-    // there, so plain `adr check` calls it untested.
+    // there, so plain `adr check` notes it untested.
     let out2 = adr(&dir, &["check"], &[], "");
-    assert!(!out2.status.success(), "{}", stdout(&out2));
+    assert!(out2.status.success(), "{}", stdout(&out2));
     assert!(
-        line_with(&stdout(&out2), &id, ": untested"),
+        stdout(&out2).contains(&format!("no tracked file holds \"adr: {}\"", id)),
         "{}",
         stdout(&out2)
     );
@@ -2283,9 +2278,8 @@ aliases: \n";
     assert!(!text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
 }
 
-// adr: b871e776-2da5-4f1e-b4c4-fb8229657e25
-//
-// "Does check fail a stale test tie?" (b871e776 A): yes -- a tie to a
+// adr: 751ef30c-6a2f-4936-bf9b-b9d487146e53
+// "Does check fail a test that names a decision that is not current?" (751ef30c A): yes -- a tie to a
 // decision whose latest ledger state is no longer `answered` is stale, and
 // the agent's move is to remove the tag or point it at the current
 // decision. A later decision superseding the first is one way a tie goes
@@ -2347,9 +2341,8 @@ fn check_fails_a_test_tied_to_a_decision_that_was_later_superseded() {
     );
 }
 
-// adr: b871e776-2da5-4f1e-b4c4-fb8229657e25
-//
-// The other way a tie goes stale (b871e776 A): the question it names was
+// adr: 751ef30c-6a2f-4936-bf9b-b9d487146e53
+// The other way a tie goes stale (751ef30c A): the question it names was
 // answered with a refusal, never a lettered decision, so it never becomes
 // current at all -- a tie to it is stale from the moment it is written.
 #[test]
@@ -2488,14 +2481,14 @@ fn ask_two_in_one_tier(dir: &std::path::Path) -> (String, String) {
     (ids[0].clone(), ids[1].clone())
 }
 
-// adr: f2e31cbe-1ba2-4b77-910a-b9664ce0277f
-// adr: 33a45b9e-8150-488e-be70-7ab2ca9adaa6
+// adr: 3460d220-e523-448b-aeff-baa8051b7d06
 // adr: 154e4b9a-c811-4a84-a522-598914eb39f1
 //
-// An untested decision whose tier still holds a question that is not
-// answered is a note, not a failure; once the tier is answered it fails.
+// An untested current decision is a note whether or not its tier is open:
+// with one of two answered, one note; with both answered and no tests, two
+// notes; check exits 0 each time.
 #[test]
-fn check_an_untested_decision_waits_while_its_tier_is_open() {
+fn check_an_untested_decision_is_a_note_whether_or_not_its_tier_is_open() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let (first, second) = ask_two_in_one_tier(&dir);
@@ -2505,12 +2498,14 @@ fn check_an_untested_decision_waits_while_its_tier_is_open() {
     let text = stdout(&out);
     assert!(out.status.success(), "{}", text);
     assert!(
-        text.contains(
-            "waiting: adrdom/decisions/example.md: \"Does this pass?\" is untested; built once \"Does that pass?\" is answered"
-        ),
+        text.contains(&format!(
+            "untested: adrdom/decisions/example.md: \"Does this pass?\"; no tracked file holds \"adr: {}\"",
+            first
+        )),
         "{}",
         text
     );
+    assert_eq!(text.lines().filter(|l| l.starts_with("untested:")).count(), 1, "{}", text);
     let quiet = adr(&dir, &["check", "--quiet"], &[], "");
     assert!(quiet.status.success(), "{}", stdout(&quiet));
     assert_eq!(stdout(&quiet), "");
@@ -2522,22 +2517,25 @@ fn check_an_untested_decision_waits_while_its_tier_is_open() {
     assert!(adr_answer(&dir, &second, "A").status.success());
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
-    assert!(!out.status.success(), "{}", text);
-    assert!(line_with(&text, &first, ": untested"), "{}", text);
-    assert!(line_with(&text, &second, ": untested"), "{}", text);
+    assert!(out.status.success(), "{}", text);
+    assert!(text.contains(&format!("no tracked file holds \"adr: {}\"", first)), "{}", text);
+    assert!(text.contains(&format!("no tracked file holds \"adr: {}\"", second)), "{}", text);
+    assert_eq!(text.lines().filter(|l| l.starts_with("untested:")).count(), 2, "{}", text);
     assert!(!text.contains("waiting:"), "{}", text);
 
     write_test_comment(&dir, &first);
     write_test_comment(&dir, &second);
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
+    assert!(!stdout(&out).contains("untested:"), "{}", stdout(&out));
 }
 
-// adr: f2e31cbe-1ba2-4b77-910a-b9664ce0277f
+// adr: 3460d220-e523-448b-aeff-baa8051b7d06
 //
-// A refused sibling counts as not answered: the note names the plan change.
+// A refused sibling changes nothing for the untested decision: it is still a
+// note, and check exits 0.
 #[test]
-fn check_an_untested_decision_waits_on_a_refused_sibling() {
+fn check_an_untested_decision_is_a_note_beside_a_refused_sibling() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let (first, second) = ask_two_in_one_tier(&dir);
@@ -2548,11 +2546,6 @@ fn check_an_untested_decision_waits_on_a_refused_sibling() {
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
     assert!(out.status.success(), "{}", text);
-    assert!(
-        text.contains(
-            "waiting: adrdom/decisions/example.md: \"Does this pass?\" is untested; built once the plan changes, \"Does that pass?\" beside it is refused"
-        ),
-        "{}",
-        text
-    );
+    assert!(text.contains(&format!("no tracked file holds \"adr: {}\"", first)), "{}", text);
+    assert!(!text.contains("waiting:"), "{}", text);
 }

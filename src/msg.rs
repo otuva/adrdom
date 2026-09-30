@@ -1884,32 +1884,6 @@ pub fn ledger_same_time_competition(time: &str, subject: &str) -> String {
     )
 }
 
-/// A note, not a failure (per "Does check fail an untested decision whose
-/// tier is still open?"): the same words `show` prints for the build.
-pub fn untested_waits(rel: &str, heading: &str, beside: &str, refused: bool) -> String {
-    if refused {
-        format!(
-            "waiting: {}: \"{}\" is untested; built once the plan changes, \"{}\" beside it is refused",
-            rel, heading, beside
-        )
-    } else {
-        format!(
-            "waiting: {}: \"{}\" is untested; built once \"{}\" is answered",
-            rel, heading, beside
-        )
-    }
-}
-
-pub fn untested(id: &str, heading: Option<&str>) -> String {
-    refuse(
-        format!("{}: untested, no tracked file holds \"adr: {}\"", named(id, heading), id),
-        Next::agent(format!(
-            "writes a test that shows the code follows this decision, puts \"adr: {}\" in it and adds it to git",
-            id
-        )),
-    )
-}
-
 /// `locations` are the `path:line` places the tag was found at.
 pub fn stale_test(id: &str, heading: Option<&str>, locations: &[String]) -> String {
     let at = if locations.is_empty() {
@@ -2287,6 +2261,18 @@ pub fn missing_answer_selection(id: &str, version: &str) -> String {
 }
 
 // --- plain notes (no Next: nothing is refused) -----------------------------
+
+/// A note, never a failure (per "What does check do with an untested
+/// current decision?"): printed on every run until a test names the id.
+pub fn untested_note(at: Option<(&str, &str)>, id: &str) -> String {
+    match at {
+        Some((rel, heading)) => format!(
+            "untested: {}: \"{}\"; no tracked file holds \"adr: {}\"",
+            rel, heading, id
+        ),
+        None => format!("untested: no tracked file holds \"adr: {}\"", id),
+    }
+}
 
 pub fn tested_count(n: usize) -> String {
     format!("tested: {}", n)
@@ -2758,7 +2744,6 @@ mod tests {
             ledger_since_drops_rows("abc123"),
             ledger_since_unreadable("abc123"),
             ledger_same_time_competition("2024-01-01T00:00:00Z", "id id-1"),
-            untested("id-1", Some("heading")),
             stale_test("id-1", None, &["x.rs:3".to_string()]),
             duplicate_heading_in_file("heading", "x.md"),
             duplicate_heading_across_files("heading", "x.md", "y.md"),
@@ -2839,5 +2824,15 @@ mod tests {
             "{}",
             out
         );
+    }
+
+    // A note is not a refusal: it names what is missing and carries no
+    // next move, so it is exercised apart from the refusal list above.
+    #[test]
+    fn untested_note_names_the_decision_with_or_without_its_place() {
+        let with = untested_note(Some(("x.md", "heading")), "id-1");
+        assert_eq!(with, "untested: x.md: \"heading\"; no tracked file holds \"adr: id-1\"");
+        let without = untested_note(None, "id-1");
+        assert_eq!(without, "untested: no tracked file holds \"adr: id-1\"");
     }
 }
