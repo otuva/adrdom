@@ -2,7 +2,7 @@
 use crate::commands::check;
 use crate::depends;
 use crate::ledger::{self, Ledger};
-use crate::record::{self, RecordFile, Section};
+use crate::record::{self, Dep, RecordFile, Section};
 use crate::repo;
 use crate::state;
 use crate::terms::{self, Term};
@@ -253,17 +253,32 @@ pub(crate) struct MootPair {
 /// `moot_notes` (its formatted-string wrapper, read by `check`/the page)
 /// and `ask`'s moot refusal, so the two can never diverge on what counts
 /// as moot.
-pub(crate) fn moot_pairs(rf: &RecordFile, led: &Ledger) -> Vec<MootPair> {
+pub(crate) fn moot_pairs(rf: &RecordFile, led: &Ledger, all: &[RecordFile]) -> Vec<MootPair> {
     let mut out = Vec::new();
     for (si, sec) in rf.sections.iter().enumerate() {
         for d in &sec.depends {
             let Some(record::AnswerSet::Letters(letters)) = d.set() else {
                 continue;
             };
-            let Some(ti) = rf.dep_target(d) else {
-                continue;
+            // A same-file heading, else (an `Id` entry, which is what a
+            // cross-file heading entry is once normalized) the section of
+            // that id in any topic file.
+            let target = match rf.dep_target(d) {
+                Some(ti) => &rf.sections[ti],
+                None => {
+                    let Dep::Id { id, .. } = d else {
+                        continue;
+                    };
+                    let Some(t) = all
+                        .iter()
+                        .flat_map(|r| r.sections.iter())
+                        .find(|s| s.id.as_deref() == Some(id.as_str()))
+                    else {
+                        continue;
+                    };
+                    t
+                }
             };
-            let target = &rf.sections[ti];
             // `Answered` implies a real id (qstate only reaches it via an
             // id's ledger row), so `target.answer_letter()` below is safe.
             if qstate(led, target) != QState::Answered {
@@ -289,8 +304,8 @@ pub(crate) fn moot_pairs(rf: &RecordFile, led: &Ledger) -> Vec<MootPair> {
 /// `"<h>" stands on "<other>"=A|B, answered C`, `<h>` the dependent's
 /// heading and `<other>` the target's -- `moot_pairs`, formatted for
 /// `check`'s note and the page.
-pub(crate) fn moot_notes(rf: &RecordFile, led: &Ledger) -> Vec<String> {
-    moot_pairs(rf, led)
+pub(crate) fn moot_notes(rf: &RecordFile, led: &Ledger, all: &[RecordFile]) -> Vec<String> {
+    moot_pairs(rf, led, all)
         .into_iter()
         .map(|p| {
             format!(
@@ -329,6 +344,7 @@ pub(crate) fn next_moves(
     plan_ok: bool,
     plan_refusals: &[String],
     tests: &HashMap<String, Vec<String>>,
+    all: &[RecordFile],
 ) -> Vec<String> {
     use crate::msg;
     // What `approve` and `check` refuse in this file's plan
@@ -341,7 +357,7 @@ pub(crate) fn next_moves(
         return clears;
     };
     let open_tier = state::open_tier(rf);
-    let moot: HashSet<usize> = moot_pairs(rf, led).iter().map(|p| p.section_idx).collect();
+    let moot: HashSet<usize> = moot_pairs(rf, led, all).iter().map(|p| p.section_idx).collect();
 
     let mut bodies = Vec::new();
     let mut to_ask = Vec::new();
@@ -708,11 +724,12 @@ fn build_file_view(
     all_headings: &HashMap<String, String>,
     plan_approved: bool,
     context_approved: bool,
+    all: &[RecordFile],
 ) -> FileView {
     let path = state::rel_path(root, &rf.path);
     let done = state::file_done(rf, plan_approved, context_approved);
     let (open_tier, waits_on) = open_tier_and_waits_on(rf);
-    let moot = moot_notes(rf, led);
+    let moot = moot_notes(rf, led, all);
     let questions = rf
         .sections
         .iter()
@@ -827,6 +844,7 @@ pub fn snapshot(root: &Path) -> Snapshot {
     // one it was about to build a `FileView` for all over again.
     let records: Vec<RecordFile> = record::load_all(root);
     let cross_file_headings = depends::cross_file_heading_index(&records, &led);
+    let all_records = records.clone();
     let mut files: Vec<FileView> = Vec::new();
     for mut rf in records {
         let rel = rf.rel.clone();
@@ -848,6 +866,7 @@ pub fn snapshot(root: &Path) -> Snapshot {
             &all_headings,
             plan_ok,
             ctx_ok,
+            &all_records,
         );
         files.push(fv);
     }
@@ -1205,7 +1224,7 @@ Standard: s2.\n\n\
             &HashMap::new(),
             plan_ok,
             ctx_ok,
-        );
+            std::slice::from_ref(&rf));
         assert!(!fv.done);
 
         // Approve plan/context, then rewrite the file with every section
@@ -1244,7 +1263,7 @@ Standard: s2.\n\n\
             &HashMap::new(),
             plan_ok2,
             ctx_ok2,
-        );
+            std::slice::from_ref(&rf2));
         assert!(fv2.plan_approved);
         assert!(fv2.context_approved);
         assert!(fv2.done);
@@ -1311,7 +1330,7 @@ Standard: s2.\n\n\
             &HashMap::new(),
             plan_ok2,
             ctx_ok2,
-        );
+            std::slice::from_ref(&rf2));
         assert!(fv.plan_approved);
         assert!(fv.context_approved);
         assert!(
@@ -1416,7 +1435,7 @@ Standard: s2.\n\n\
             &HashMap::new(),
             plan_ok,
             ctx_ok,
-        );
+            std::slice::from_ref(&rf));
         let q1 = fv
             .questions
             .iter()
@@ -1462,7 +1481,7 @@ Standard: s2.\n\n\
         let rf = record::load(&record).unwrap();
         let led = ledger::read(&dir.join(repo::LEDGER_PATH));
 
-        let notes = moot_notes(&rf, &led);
+        let notes = moot_notes(&rf, &led, std::slice::from_ref(&rf));
         assert_eq!(
             notes,
             vec!["\"1.2 Dependent?\" stands on \"1.1 Root?\"=A, answered B".to_string()]
@@ -1481,7 +1500,7 @@ Standard: s2.\n\n\
             &HashMap::new(),
             plan_ok,
             ctx_ok,
-        );
+            std::slice::from_ref(&rf));
         assert_eq!(fv.moot, notes);
 
         std::fs::remove_dir_all(&dir).ok();
@@ -1498,7 +1517,7 @@ Standard: s2.\n\n\
         let rf = record::load(&record).unwrap();
         let led = ledger::read(&dir.join(repo::LEDGER_PATH));
 
-        assert!(moot_notes(&rf, &led).is_empty());
+        assert!(moot_notes(&rf, &led, std::slice::from_ref(&rf)).is_empty());
 
         std::fs::remove_dir_all(&dir).ok();
     }

@@ -19,7 +19,7 @@ use crate::view;
 pub(super) fn check_moot(records: &[RecordFile], led: &Ledger) -> Vec<String> {
     let mut out = Vec::new();
     for rf in records {
-        for note in view::moot_notes(rf, led) {
+        for note in view::moot_notes(rf, led, records) {
             out.push(msg::moot_note(&rf.rel, &note));
         }
     }

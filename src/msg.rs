@@ -531,6 +531,30 @@ fn derive_next(e: &DeriveError) -> Next {
     }
 }
 
+/// The tail of a refusal whose only move is to wait: no agent move.
+const WAIT_TAIL: &str = "; not yet, after it is answered";
+
+/// A `depends:` entry names a question of another topic file that is not
+/// answered yet.
+pub fn dep_waits_on_other_file(rel: &str, section: &str, entry: &str, other_rel: &str) -> String {
+    format!(
+        "{}: \"{}\" depends on \"{}\" ({}) which is not answered yet{}",
+        rel, section, entry, other_rel, WAIT_TAIL
+    )
+}
+
+/// A `depends:` entry names a question of another topic file that is
+/// refused.
+pub fn dep_on_refused_in_other_file(rel: &str, section: &str, entry: &str, other_rel: &str) -> String {
+    refuse(
+        format!(
+            "{}: \"{}\" depends on \"{}\" ({}) which is refused",
+            rel, section, entry, other_rel
+        ),
+        Next::agent("names another or drops the entry"),
+    )
+}
+
 pub fn derive_error(rel: &str, e: &DeriveError) -> String {
     refuse(derive_what(rel, e), derive_next(e))
 }
@@ -898,6 +922,9 @@ pub fn next_plan_unapproved(rel: &str) -> String {
 /// A refusal `approve` would print for the plan, whole, with the move it
 /// names: the agent reads it here and not among the lines of `check`.
 pub fn next_clears(refusal: &str) -> String {
+    if let Some(what) = refusal.strip_suffix(WAIT_TAIL) {
+        return format!("not yet: {}", what);
+    }
     Next::agent(format!("clears: {}", refusal)).render()
 }
 

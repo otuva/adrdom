@@ -304,19 +304,19 @@ fn show_prints_no_guess_for_an_ambiguous_cross_file_heading_dependency() {
     approve_minimal_terms(&dir, "decision");
 
     let a_id = "88888888-8888-8888-8888-888888888888";
-    append_ledger_row(&dir, "asked", a_id, "h1", "1.1 Shared heading?");
-    append_ledger_row(&dir, "answered", a_id, "h1", "A");
+    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
     let a_content = format!(
-        "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         a_id
     );
     write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
 
     let c_id = "99999999-8888-8888-8888-888888888888";
-    append_ledger_row(&dir, "asked", c_id, "h1", "1.1 Shared heading?");
-    append_ledger_row(&dir, "answered", c_id, "h1", "A");
+    append_ledger_row_at(&dir, "asked", c_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:02Z");
+    append_ledger_row_at(&dir, "answered", c_id, "h1", "A", "2024-01-01T00:00:03Z");
     let c_content = format!(
-        "# Topic C\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        "# Topic C\n\n### 1.1 Shared heading?\ndepends: decision\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         c_id
     );
     write_record(&dir, "adrdom/decisions/topic-c.md", &c_content);
@@ -340,7 +340,7 @@ fn show_prints_no_guess_for_an_ambiguous_cross_file_heading_dependency() {
     let b_block = shown[b_start..b_end].trim_end();
     assert_eq!(
         b_block,
-        "# Topic B (adrdom/decisions/topic-b.md)\nnext\n  agent clears: adrdom/decisions/topic-b.md: \"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\" which is no heading in this file and no current decision; agent names a heading of this file or a current decision",
+        "# Topic B (adrdom/decisions/topic-b.md)\nnext\n  agent clears: adrdom/decisions/topic-b.md: \"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\" which is a current decision in more than one file: adrdom/decisions/topic-a.md, adrdom/decisions/topic-c.md; agent names it by id instead",
         "an ambiguous cross-file dependency must print no guessed tier or \"stands on\": {}",
         shown
     );

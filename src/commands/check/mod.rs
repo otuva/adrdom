@@ -136,7 +136,7 @@ fn build(
     let per_record_refusals: Vec<Vec<actions::Refusal>> = records
         .iter()
         .map(|rf| {
-            actions::record_refusals(&rf.rel, rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &led)
+            actions::record_refusals(&rf.rel, rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &records, &led)
         })
         .collect();
     let missing_answered = actions::missing_answered_refusals(&records, &led);

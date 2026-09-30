@@ -111,7 +111,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     // question beside an identifier.
     let names = crate::view::heading_texts(&all_records);
     let shape_msgs: Vec<String> =
-        actions::record_refusals(&rel, &rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &led)
+        actions::record_refusals(&rel, &rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &all_records, &led)
             .into_iter()
             .filter(|r| r.category == "parse")
             .map(|r| format!("ask: {}", r.message))
@@ -294,7 +294,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     // than just the file's letter (shared with `check`/the page through
     // `view::moot_pairs`, so the two can never diverge on what counts as
     // moot). Computed once, ahead of the per-candidate loop.
-    let moot_pairs = view::moot_pairs(&rf, &led);
+    let moot_pairs = view::moot_pairs(&rf, &led, &all_records);
 
     // For each candidate, by its index: the identifiers its supersedes
     // line names.
@@ -529,7 +529,7 @@ pub fn run(record_path: PathBuf) -> i32 {
         // The plan is approved by this point (`ask` stops on an unapproved
         // one above), so what is left is named move by move.
         let tests = crate::commands::check::test_index(&root, &repo::Source::WorkingTree);
-        for line in crate::view::next_moves(&rf, &led, true, &[], &tests) {
+        for line in crate::view::next_moves(&rf, &led, true, &[], &tests, &all_records) {
             println!("{}", msg::next_line(&line));
         }
         return 0;

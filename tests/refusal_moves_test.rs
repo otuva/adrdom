@@ -36,7 +36,7 @@ const B: &str = "adrdom/decisions/b.md";
 // file which is not answered names none of the three. "adds the heading"
 // would copy that question into this file.
 #[test]
-fn an_entry_on_an_unanswered_question_of_another_file_names_what_a_line_may_name() {
+fn an_entry_on_an_unanswered_question_of_another_file_says_it_waits() {
     let dir = setup();
     let a = write_record(
         &dir,
@@ -54,9 +54,12 @@ fn an_entry_on_an_unanswered_question_of_another_file_names_what_a_line_may_name
             question("Does the widget beta hold?", "widget, Does the widget alpha hold?", "")
         ),
     );
+    // The tool holds alpha's state in the other file: the line says whose
+    // turn it is (nobody's but the owner's, through alpha), not a move the
+    // agent cannot make.
     let refusal = format!(
-        "{}: \"Does the widget beta hold?\" depends on \"Does the widget alpha hold?\" which is no heading in this file and no current decision; agent names a heading of this file or a current decision",
-        B
+        "{}: \"Does the widget beta hold?\" depends on \"Does the widget alpha hold?\" ({}) which is not answered yet; not yet, after it is answered",
+        B, A
     );
     let out = adr(&dir, &["check"], &[], "");
     assert!(stdout(&out).contains(&refusal), "{}", stdout(&out));
@@ -64,7 +67,7 @@ fn an_entry_on_an_unanswered_question_of_another_file_names_what_a_line_may_name
     assert!(!out.status.success());
     assert!(stderr(&out).contains(&refusal), "{}", stderr(&out));
 
-    // Once alpha is answered it is a current decision: the same line holds.
+    // Once alpha is answered it is a current decision: the entry holds.
     let alpha = extract_ids(&std::fs::read_to_string(&a).unwrap())[0].clone();
     assert!(adr_answer(&dir, &alpha, "A").status.success());
     let out = adr_owner(&dir, &["approve", b.to_str().unwrap()], "");

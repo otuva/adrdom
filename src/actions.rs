@@ -885,6 +885,10 @@ fn do_approve_terms(
 /// `names` is every heading by its id, of any state and any topic file
 /// (`view::all_heading_texts`), built once per command run by the caller:
 /// a refusal that names an identifier names the question beside it.
+/// `all` is every topic file loaded: a heading-shaped entry that names no
+/// current decision but a question of another topic file that is not
+/// answered (or is refused) is refused with the state the tool holds.
+#[allow(clippy::too_many_arguments)]
 pub fn record_refusals(
     rel: &str,
     rf: &RecordFile,
@@ -892,6 +896,7 @@ pub fn record_refusals(
     phrase_lookup: &HashMap<String, String>,
     cross_file_headings: &HashMap<String, Vec<(String, String)>>,
     names: &HashMap<String, String>,
+    all: &[RecordFile],
     led: &Ledger,
 ) -> Vec<Refusal> {
     let mut out: Vec<Refusal> = Vec::new();
@@ -1023,9 +1028,15 @@ pub fn record_refusals(
         }
     }
     if let Some(err) = &rf.derive_error {
+        let waiting = match err {
+            record::DeriveError::Dangling { section, entry } => {
+                waiting_on_other_file(rel, section, entry, all, led)
+            }
+            _ => None,
+        };
         out.push(Refusal {
             category: "plan",
-            message: msg::derive_error(rel, err),
+            message: waiting.unwrap_or_else(|| msg::derive_error(rel, err)),
         });
     }
 
@@ -1044,6 +1055,34 @@ pub fn record_refusals(
     }
 
     out
+}
+
+/// The refusal for a heading-shaped `depends:` entry that names a question
+/// of another topic file that is not a current decision: not answered yet
+/// (unasked or asked), or refused. `None` when no other file holds an
+/// unanswered or refused question under that heading.
+fn waiting_on_other_file(
+    rel: &str,
+    section: &str,
+    entry: &str,
+    all: &[RecordFile],
+    led: &Ledger,
+) -> Option<String> {
+    let mut refused: Option<&str> = None;
+    for other in all.iter().filter(|o| o.rel != rel) {
+        for sec in other.sections.iter().filter(|s| s.heading_text.trim() == entry.trim()) {
+            match crate::view::qstate(led, sec) {
+                crate::view::QState::Skeleton
+                | crate::view::QState::Unasked
+                | crate::view::QState::Open => {
+                    return Some(msg::dep_waits_on_other_file(rel, section, entry, &other.rel));
+                }
+                crate::view::QState::Refused => refused = Some(other.rel.as_str()),
+                _ => {}
+            }
+        }
+    }
+    refused.map(|r| msg::dep_on_refused_in_other_file(rel, section, entry, r))
 }
 
 /// Refusals about a topic file's own name and its own headings, one
@@ -1248,7 +1287,7 @@ fn do_approve_record(
     // the owner before asking again.
     let names = crate::view::heading_texts(&all_records);
     let mut refusals: Vec<String> =
-        record_refusals(rel, &rf, terms_list, &phrase_lookup, &cross_file_headings, &names, led)
+        record_refusals(rel, &rf, terms_list, &phrase_lookup, &cross_file_headings, &names, &all_records, led)
             .into_iter()
             .map(|r| msg::approve_prefixed(r.message))
             .collect();

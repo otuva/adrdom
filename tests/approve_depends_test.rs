@@ -974,3 +974,85 @@ fn ask_refuses_a_cross_file_heading_dependency_naming_two_current_decisions() {
         err
     );
 }
+
+// adr: ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf
+//
+// "What does a depends line name?": a heading of another topic file that is
+// not a current decision stays refused, and the refusal says what the tool
+// holds. Unasked or asked and unanswered, the only move is to wait: check,
+// approve and show's next print a line with no agent move, and approve
+// clears once the decision is answered. Refused, the agent names another
+// heading or drops the entry.
+fn waiting_pair(dir: &std::path::Path) -> (std::path::PathBuf, std::path::PathBuf, String) {
+    let q = "Problem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let a = write_record(
+        dir,
+        "adrdom/decisions/topic-a.md",
+        &format!("# Topic A\n\n### Does the decision hold?\ndepends: decision\n\n{}", q),
+    );
+    assert!(adr_owner(dir, &["approve", a.to_str().unwrap()], "").status.success());
+    let b = write_record(
+        dir,
+        "adrdom/decisions/topic-b.md",
+        &format!("# Topic B\n\n### Does the decision follow?\ndepends: Does the decision hold?\n\n{}", q),
+    );
+    let a_id = std::fs::read_to_string(&a)
+        .unwrap()
+        .lines()
+        .find_map(|l| l.strip_prefix("id: "))
+        .unwrap()
+        .to_string();
+    (a, b, a_id)
+}
+
+#[test]
+fn a_depends_entry_naming_an_unanswered_question_of_another_file_waits_until_it_is_answered() {
+    let dir = init_repo();
+    setup(&dir);
+    let (a, b, a_id) = waiting_pair(&dir);
+
+    let waits = "topic-b.md: \"Does the decision follow?\" depends on \"Does the decision hold?\" (adrdom/decisions/topic-a.md) which is not answered yet; not yet, after it is answered";
+    for step in 0..2 {
+        let check = stdout(&adr(&dir, &["check"], &[], ""));
+        assert!(check.contains(waits), "{}", check);
+        let out = adr_owner(&dir, &["approve", b.to_str().unwrap()], "");
+        assert!(!out.status.success());
+        assert!(stderr(&out).contains(waits), "{}", stderr(&out));
+        let show = stdout(&adr(&dir, &["show"], &[], ""));
+        assert!(
+            show.contains("not yet: adrdom/decisions/topic-b.md: \"Does the decision follow?\" depends on \"Does the decision hold?\" (adrdom/decisions/topic-a.md) which is not answered yet"),
+            "{}",
+            show
+        );
+        assert!(!show.contains("agent clears: adrdom/decisions/topic-b.md"), "{}", show);
+        if step == 0 {
+            // Asked and not answered yet: the same line.
+            let ask = adr(&dir, &["ask", a.to_str().unwrap()], &[], "");
+            assert!(ask.status.success(), "{}{}", stdout(&ask), stderr(&ask));
+        }
+    }
+
+    assert!(adr_answer(&dir, &a_id, "A").status.success());
+    let out = adr_owner(&dir, &["approve", b.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
+}
+
+#[test]
+fn a_depends_entry_naming_a_refused_question_of_another_file_says_so() {
+    let dir = init_repo();
+    setup(&dir);
+    let (a, b, a_id) = waiting_pair(&dir);
+    let ask = adr(&dir, &["ask", a.to_str().unwrap()], &[], "");
+            assert!(ask.status.success(), "{}{}", stdout(&ask), stderr(&ask));
+    let r = adr_answer(&dir, &a_id, "refuse");
+    assert!(r.status.success(), "{}{}", stdout(&r), stderr(&r));
+
+    let refused = "topic-b.md: \"Does the decision follow?\" depends on \"Does the decision hold?\" (adrdom/decisions/topic-a.md) which is refused; agent names another or drops the entry";
+    let out = adr_owner(&dir, &["approve", b.to_str().unwrap()], "");
+    assert!(!out.status.success());
+    assert!(stderr(&out).contains(refused), "{}", stderr(&out));
+    let check = stdout(&adr(&dir, &["check"], &[], ""));
+    assert!(check.contains(refused), "{}", check);
+    let show = stdout(&adr(&dir, &["show"], &[], ""));
+    assert!(show.contains("agent clears: adrdom/decisions/topic-b.md: \"Does the decision follow?\" depends on \"Does the decision hold?\""), "{}", show);
+}

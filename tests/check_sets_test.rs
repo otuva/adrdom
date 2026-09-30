@@ -227,11 +227,9 @@ fn check_does_not_note_a_dependent_whose_set_still_includes_the_answer() {
 //
 // A question in one file standing on a current decision of another file
 // under a set that lacks the letter it was answered with is moot, as it is
-// inside one file: check reports it and ask refuses it. `view::moot_pairs`
-// finds a target through `rf.dep_target`, which only reaches a heading of
-// the same file, so today a cross-file entry is accepted and asked.
+// inside one file: check reports it, ask refuses it and show's next names
+// the drop.
 #[test]
-#[ignore = "needs view::moot_pairs to resolve a cross-file target (src/view.rs)"]
 fn a_cross_file_depends_entry_whose_set_lacks_the_answer_is_moot() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
@@ -267,4 +265,16 @@ fn a_cross_file_depends_entry_whose_set_lacks_the_answer_is_moot() {
     assert!(check.contains(moot), "{}", check);
     let ask = adr(&dir, &["ask", b.to_str().unwrap()], &[], "");
     assert!(!ask.status.success(), "ask must refuse a moot question: {}", stdout(&ask));
+    let refusal = stderr(&ask);
+    assert!(
+        refusal.contains("\"Does the widget follow?\" has no case left: it stands on \"Does the widget hold?\""),
+        "{}",
+        refusal
+    );
+    let show = stdout(&adr(&dir, &["show"], &[], ""));
+    assert!(
+        show.contains("drops or replaces \"Does the widget follow?\", which has no case left"),
+        "{}",
+        show
+    );
 }

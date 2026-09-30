@@ -139,12 +139,13 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
             &phrase_lookup,
             &cross_file_headings,
             &all_headings,
+            &blame_records,
             &led,
         )
         .into_iter()
         .map(|r| r.message)
         .collect();
-        let next = view::next_moves(rf, &led, plan_ok, &plan_refusals, &tests);
+        let next = view::next_moves(rf, &led, plan_ok, &plan_refusals, &tests, &blame_records);
         if !next.is_empty() {
             println!("{}", msg::next_heading());
             for line in next {
