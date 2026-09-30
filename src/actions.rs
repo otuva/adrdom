@@ -1012,6 +1012,13 @@ pub fn record_refusals(
                     continue;
                 }
             }
+            // A dead section (refused, superseded, withdrawn) is history:
+            // what its line stood on when it was live is not resolved
+            // against the current decisions again, the same exemption
+            // `resolve_dep` gives a retired term.
+            if state::is_dead(led, sec) {
+                continue;
+            }
             if let Err(e) =
                 depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, cross_file_headings, led)
             {

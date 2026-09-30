@@ -179,6 +179,9 @@ fn build(
             // withdrawn) question no longer holds its tier for the cap,
             // and this note is read against that same cap.
             let live = state::live_tiers(&led, rf, tiers);
+            if live.is_empty() {
+                continue;
+            }
             let sizes = record::tier_sizes(&live)
                 .into_iter()
                 .map(|(t, n)| format!("{} ({})", t, n))
