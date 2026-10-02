@@ -1480,7 +1480,7 @@ Standard: plain words.
 /// Appended after Q1 is answered: never written with a tier of its own --
 /// its `depends:` line just names Q1's heading text with a mandatory
 /// `=A` set -- so its tier (2) is entirely the tool's own derivation.
-const TIER_Q2_APPENDIX: &str = "\n### 1.2 Does the widget's paint match its color?\n\ndepends: 1.1 What color is the widget?=A\n\nProblem: the paint might not match.\n\nStandard: plain words.\n\n- A) The paint matches.\n  Why: reasons.\n  Costs: costs.\n- B) The paint does not match.\n  Why: other reasons.\n  Costs: other costs.\n";
+const TIER_Q2_APPENDIX: &str = "\n### 1.2 Does the widget's paint match its color?\n\ndepends: 1.1 What color is the widget?=A\n\nProblem: the paint might not match.\n\nStandard: plain words.\n\n- A) Yes.\n  Why: reasons.\n  Costs: costs.\n- B) No.\n  Why: other reasons.\n  Costs: other costs.\n";
 
 // adr: aec860fd-22ad-44a7-99f7-222ea19537e7
 //

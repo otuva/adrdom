@@ -11,10 +11,10 @@ Problem: whether it passes.
 
 Standard: clear yes or no.
 
-- A) Yes it passes.
+- A) Yes.
   Why: reasons.
   Costs: costs.
-- B) No it does not.
+- B) No.
   Why: other reasons.
   Costs: other costs.
 "#;

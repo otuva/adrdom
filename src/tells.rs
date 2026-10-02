@@ -157,9 +157,20 @@ pub fn prose_tells_in(lines: &[String], start: usize, end: usize) -> Vec<(usize,
     out
 }
 
-/// Words of a line: runs of non-whitespace, so "Yes." is one word.
+/// Words of a line, by the repository's one definition of a word.
 fn count_words(text: &str) -> usize {
-    text.split_whitespace().count()
+    crate::text::word_runs(text).len()
+}
+
+/// Whether a heading opens with "Does", leading numbering such as "1.1"
+/// skipped.
+fn opens_with_does(heading_text: &str) -> bool {
+    heading_text
+        .split_whitespace()
+        .find(|tok| !tok.chars().all(|c| c.is_ascii_digit() || c == '.'))
+        .map(|tok| tok.to_lowercase())
+        .as_deref()
+        == Some("does")
 }
 
 /// Length refusals in `lines[start..end]` for the question headed
@@ -171,19 +182,23 @@ fn count_words(text: &str) -> usize {
 /// limit read answered text?").
 pub fn length_tells(lines: &[String], start: usize, end: usize, heading_text: &str) -> Vec<(usize, String, String)> {
     let mut out = Vec::new();
-    let closed = words(heading_text).first().map(String::as_str) == Some("does");
+    let closed = opens_with_does(heading_text);
     let end = end.min(lines.len());
     for (i, line) in lines.iter().enumerate().take(end).skip(start) {
-        let (kind, text) = if let Some(rest) = option_text(line) {
+        let (kind, text) = if let Some((_, rest)) = crate::record::parse_option_line(line) {
             ("option", rest)
-        } else if let Some(v) = line.strip_prefix("  Why: ") {
-            ("Why line", v)
-        } else if let Some(v) = line.strip_prefix("  Costs: ") {
-            ("Costs line", v)
+        } else if let Some((d, v)) = crate::record::detail_line(line) {
+            (
+                match d {
+                    crate::record::Detail::Why => "Why line",
+                    crate::record::Detail::Costs => "Costs line",
+                },
+                v.to_string(),
+            )
         } else {
             continue;
         };
-        let n = count_words(text);
+        let n = count_words(&text);
         if kind == "option" && closed {
             if n != 1 {
                 out.push((i, format!("{} words, a heading that opens with Does takes one", n), kind.to_string()));
@@ -193,16 +208,6 @@ pub fn length_tells(lines: &[String], start: usize, end: usize, heading_text: &s
         }
     }
     out
-}
-
-/// The text after `- A) ` on an option line.
-fn option_text(line: &str) -> Option<&str> {
-    let rest = line.strip_prefix("- ")?;
-    let mut chars = rest.chars();
-    if !chars.next()?.is_ascii_uppercase() {
-        return None;
-    }
-    chars.as_str().strip_prefix(") ")
 }
 
 /// Every tell in a `### ` heading's text at absolute line `line`: a loaded
@@ -294,6 +299,7 @@ mod tests {
     fn length_tells_counts_words() {
         let lines: Vec<String> = ["- A) Yes.", "  Why: short.", "- B) one two"].iter().map(|s| s.to_string()).collect();
         assert!(length_tells(&lines, 0, 3, "Does it?").len() == 1);
+        assert!(length_tells(&lines, 0, 3, "1.1 Does it?").len() == 1);
         assert!(length_tells(&lines, 0, 3, "What is it?").is_empty());
     }
 
