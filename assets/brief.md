@@ -45,7 +45,8 @@ opens with where it stands, in brackets:
 ## Before you build anything
 
 1. Read every current decision in `adr show`. Build a decision when `next`
-   names it, and not before.
+   names it, and not before. Never build a decision whose question you wrote:
+   another agent builds it.
 2. If no current decision covers what you are about to build, do not build
    it. Write the question (below) and stop until the owner answers.
 3. If a current decision looks wrong, say so in chat and stop. Never edit an
@@ -133,13 +134,19 @@ move before you run it again. Commit, post your lean for each question in
 chat, post the `owner runs: adr answer ...` lines that `next` prints, and
 stop. The owner puts a letter, or the word `refuse`, in place of `<letter>`.
 
-**4. After the answer.** Build the decisions `next` names. Tie each one to a
-test: put a comment `adr: <id>` inside a test, outside `adrdom/`, that shows
+**4. After the answer.** If you wrote the question, stop: another agent
+builds its decision from the record alone. Build the
+decisions `next` names. Tie each one to a test: put a comment `adr: <id>` inside a test, outside `adrdom/`, that shows
 the code follows the decision. Write the test if none exists, and add it to
 git. The answers are committed as they are given. `adr check` reports each
 untested decision until a test names it; the build and its tests follow.
 
 Never write or edit `id:`, `terms:` or `**Answer:**` lines yourself.
+
+## Reviewing a build
+
+When you review a build, name the decision behind each behaviour. A behaviour
+with no decision behind it is a finding.
 
 ## Changing a plan
 
