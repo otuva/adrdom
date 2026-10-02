@@ -34,3 +34,4 @@
 - embedding (embeddings): A list of numbers the tool computes from a text, so that two texts on one subject give two near lists.
 - embedding model (embedding models): The file the tool reads to compute an embedding.
 - embedding index (embedding indexes): The file holding the embeddings the tool looks a new text up against.
+- neighbour (neighbours, neighbor, neighbors): A text in the records whose embedding is near a new text's embedding.

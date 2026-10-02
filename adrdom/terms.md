@@ -206,3 +206,9 @@ id: bf7da2dd-d8a7-41b8-9898-11cf68d0e833
 terms: embeddings=fa0b0e24-b7cf-471b-94b6-6d167e8ad269
 definition: The file holding the embeddings the tool looks a new text up against.
 aliases: embedding indexes
+
+## neighbour
+id: daec9ffd-676f-4111-a359-2827bfd4527c
+terms: embedding=fa0b0e24-b7cf-471b-94b6-6d167e8ad269
+definition: A text in the records whose embedding is near a new text's embedding.
+aliases: neighbours, neighbor, neighbors
