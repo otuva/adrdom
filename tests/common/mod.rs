@@ -95,7 +95,138 @@ pub fn adr(dir: &Path, args: &[&str], envs: &[(&str, &str)], stdin: &str) -> Out
 }
 
 pub fn adr_owner(dir: &Path, args: &[&str], stdin: &str) -> Output {
+    if args.len() == 2 && args[0] == "approve" && Path::new(args[1]).ends_with("adrdom/terms.md") {
+        return approve_terms_one_entry_at_a_time(dir, args[1], stdin);
+    }
     adr(dir, args, &[("ADR_OWNER_BYPASS", "1")], stdin)
+}
+
+// Per "Does approve accept a terms edit that changes more than one entry?":
+// approve takes one entry at a time. A fixture that writes a terms file
+// holding several new or changed entries is approved the way the owner
+// would: one entry per approve, the last approve on the file as written.
+// The terms file as last approved is kept in the repository's git
+// directory so the next call knows the baseline.
+fn terms_prior_path(dir: &Path) -> PathBuf {
+    dir.join(".git").join("terms-prior-approved")
+}
+
+fn terms_blocks(tf: &terms::TermsFile) -> (Vec<String>, Vec<(terms::Term, String)>) {
+    let starts: Vec<usize> = tf.terms.iter().map(|t| t.start_line - 1).collect();
+    let first = starts.first().copied().unwrap_or(tf.lines.len());
+    let header = tf.lines[..first].to_vec();
+    let mut blocks = Vec::new();
+    for (i, t) in tf.terms.iter().enumerate() {
+        let end = starts.get(i + 1).copied().unwrap_or(tf.lines.len());
+        blocks.push((t.clone(), tf.lines[starts[i]..end].join("\n")));
+    }
+    (header, blocks)
+}
+
+fn terms_one(block: &str) -> terms::Term {
+    terms::parse(&record::split_lines(block)).terms.remove(0)
+}
+
+fn same_entry(a: &terms::Term, b: &terms::Term) -> bool {
+    match (&a.id, &b.id) {
+        (Some(x), Some(y)) => x == y,
+        _ => a.name == b.name,
+    }
+}
+
+fn approve_terms_one_entry_at_a_time(dir: &Path, arg: &str, stdin: &str) -> Output {
+    let path = dir.join("adrdom/terms.md");
+    let target_text = std::fs::read_to_string(&path).unwrap();
+    let target = terms::parse(&record::split_lines(&target_text));
+    let prior_text = std::fs::read_to_string(terms_prior_path(dir)).unwrap_or_default();
+    let prior = terms::parse(&record::split_lines(&prior_text));
+    let (header, target_blocks) = terms_blocks(&target);
+    let (_, mut cur) = terms_blocks(&prior);
+    // The steps: each target entry that is new or differs, then each
+    // prior entry the target no longer holds.
+    let mut steps: Vec<(Option<usize>, Option<terms::Term>, Option<String>)> = Vec::new();
+    for (t, text) in &target_blocks {
+        match cur.iter().position(|(c, _)| same_entry(c, t)) {
+            Some(i) if terms::term_hash(&cur[i].0) == terms::term_hash(t) => {}
+            Some(i) => steps.push((Some(i), Some(t.clone()), Some(text.clone()))),
+            None => steps.push((None, Some(t.clone()), Some(text.clone()))),
+        }
+    }
+    let removed: Vec<terms::Term> = cur
+        .iter()
+        .filter(|(c, _)| !target_blocks.iter().any(|(t, _)| same_entry(c, t)))
+        .map(|(c, _)| c.clone())
+        .collect();
+    let total = steps.len() + removed.len();
+    let run = |_: ()| adr(dir, &["approve", arg], &[("ADR_OWNER_BYPASS", "1")], stdin);
+    let mut out = None;
+    if total > 1 {
+        let mut done = 0;
+        let render = |header: &Vec<String>, cur: &Vec<(terms::Term, String)>| {
+            let mut text = header.join("\n");
+            for (_, b) in cur {
+                text.push('\n');
+                text.push_str(b);
+            }
+            text
+        };
+        for (idx, t, text) in steps {
+            match idx {
+                Some(i) => cur[i] = (t.clone().unwrap(), text.clone().unwrap()),
+                None => cur.push((t.clone().unwrap(), text.clone().unwrap())),
+            }
+            done += 1;
+            if done == total {
+                break;
+            }
+            std::fs::write(&path, render(&header, &cur)).unwrap();
+            let o = run(());
+            if !o.status.success() {
+                return o;
+            }
+            let now = std::fs::read_to_string(&path).unwrap();
+            let tf = terms::parse(&record::split_lines(&now));
+            let (h, b) = terms_blocks(&tf);
+            let _ = h;
+            cur = b;
+        }
+        for r in removed {
+            if done == total {
+                break;
+            }
+            cur.retain(|(c, _)| !same_entry(c, &r));
+            done += 1;
+            if done == total {
+                break;
+            }
+            std::fs::write(&path, render(&header, &cur)).unwrap();
+            let o = run(());
+            if !o.status.success() {
+                return o;
+            }
+            let now = std::fs::read_to_string(&path).unwrap();
+            let tf = terms::parse(&record::split_lines(&now));
+            cur = terms_blocks(&tf).1;
+        }
+        // The final approve holds the target's order and the last step's
+        // text; every earlier entry keeps what the approve before wrote.
+        let mut fin = header.join("\n");
+        for (t, text) in &target_blocks {
+            fin.push('\n');
+            match cur.iter().find(|(c, _)| same_entry(c, t)) {
+                Some((_, b)) if terms::term_hash(&terms_one(b)) == terms::term_hash(t) => fin.push_str(b),
+                _ => fin.push_str(text),
+            }
+        }
+        std::fs::write(&path, fin).unwrap();
+    }
+    out.get_or_insert_with(|| run(()));
+    let out = out.unwrap();
+    if out.status.success() {
+        let now = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(terms_prior_path(dir), now).unwrap();
+    }
+    out
 }
 
 /// The version the owner would read off `adr show` for `id` right now (per
@@ -223,7 +354,7 @@ retired: yes\n";
 
 pub const BLAME_TOPIC: &str = r#"# Example
 
-### Does this pass?
+### Is this pass?
 depends: pass
 
 Problem: whether it passes.
@@ -237,7 +368,7 @@ Standard: clear yes or no.
   Why: other reasons.
   Costs: other costs.
 
-### Does this also pass?
+### Is this also pass?
 depends: pass
 
 Problem: whether it also passes.
@@ -253,9 +384,9 @@ Standard: clear yes or no.
 "#;
 
 /// A repo with `pass`/`gone` (retired) terms approved, and `BLAME_TOPIC`
-/// approved with both headings minted an id: "Does this pass?" answered A
-/// (current), "Does this also pass?" only asked (not current). Returns
-/// (dir, id of "Does this pass?", id of "Does this also pass?").
+/// approved with both headings minted an id: "Is this pass?" answered A
+/// (current), "Is this also pass?" only asked (not current). Returns
+/// (dir, id of "Is this pass?", id of "Is this also pass?").
 pub fn blame_setup() -> (PathBuf, String, String) {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
@@ -424,6 +555,7 @@ pub fn approve_terms_via_ledger(dir: &Path, content: &str) {
     let tf = terms::load(&path)
         .unwrap_or_else(|e| panic!("approve_terms_via_ledger: failed to load terms.md: {}", e));
     let hash = terms::file_hash(&tf);
+    let _ = std::fs::write(terms_prior_path(dir), content);
     append_ledger_row(dir, "terms", "-", &hash, "adrdom/terms.md");
     std::fs::create_dir_all(dir.join("adrdom/state")).unwrap();
     std::fs::write(dir.join("adrdom/state/terms-brief.md"), terms::brief_text(&tf)).unwrap();

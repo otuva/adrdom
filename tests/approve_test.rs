@@ -932,6 +932,11 @@ fn approve_refuses_a_terms_edit_that_moves_a_word_off_a_term_carried_by_a_curren
 
     // Move the "choice" alias from `decision` to `verdict`.
     std::fs::write(&terms, TERMS_ALIAS_MOVED).unwrap();
+    let terms_rows_before = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv"))
+        .unwrap()
+        .lines()
+        .filter(|l| l.contains("\tterms\t"))
+        .count();
 
     let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
@@ -954,7 +959,9 @@ fn approve_refuses_a_terms_edit_that_moves_a_word_off_a_term_carried_by_a_curren
     assert!(!err.contains("re-asks"), "an answered decision can never be re-asked: {}", err);
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    assert_eq!(ledger.lines().filter(|l| l.contains("\tterms\t")).count(), 1);
+    // The refused approve wrote no terms row beyond the one per setup
+    // approve (the setup approves its entries one at a time).
+    assert_eq!(ledger.lines().filter(|l| l.contains("\tterms\t")).count(), terms_rows_before);
 }
 
 #[test]
@@ -1021,11 +1028,11 @@ fn widget_repo() -> std::path::PathBuf {
 fn approve_refuses_a_heading_used_twice_in_one_file_with_the_check_line() {
     let dir = widget_repo();
     let twice = format!(
-        "# Topic\n\n### Does it repeat?\ndepends: widget\n\n{q}\n### Does it repeat?\ndepends: widget\n\n{q}",
+        "# Topic\n\n### Is it repeat?\ndepends: widget\n\n{q}\n### Is it repeat?\ndepends: widget\n\n{q}",
         q = WIDGET_Q
     );
     let record = write_record(&dir, "adrdom/decisions/topic.md", &twice);
-    let line = "duplicate heading \"Does it repeat?\" twice in adrdom/decisions/topic.md; agent renames one of the headings";
+    let line = "duplicate heading \"Is it repeat?\" twice in adrdom/decisions/topic.md; agent renames one of the headings";
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success(), "{}", stdout(&out));
@@ -1033,7 +1040,7 @@ fn approve_refuses_a_heading_used_twice_in_one_file_with_the_check_line() {
     let check = adr(&dir, &["check"], &[], "");
     assert!(stdout(&check).contains(line), "{}", stdout(&check));
 
-    let renamed = twice.replacen("### Does it repeat?", "### Does it repeat again?", 1);
+    let renamed = twice.replacen("### Is it repeat?", "### Is it repeat again?", 1);
     std::fs::write(&record, &renamed).unwrap();
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
@@ -1043,7 +1050,7 @@ fn approve_refuses_a_heading_used_twice_in_one_file_with_the_check_line() {
 #[test]
 fn approve_refuses_a_file_name_that_is_not_its_topic_with_the_check_line() {
     let dir = widget_repo();
-    let content = format!("# Other\n\n### Does it match?\ndepends: widget\n\n{}", WIDGET_Q);
+    let content = format!("# Other\n\n### Is it match?\ndepends: widget\n\n{}", WIDGET_Q);
     let record = write_record(&dir, "adrdom/decisions/topic.md", &content);
     let line = "adrdom/decisions/topic.md: file name does not match its topic \"Other\"; agent renames the file to other.md";
 
@@ -1086,9 +1093,9 @@ fn a_heading_line_without_a_question_mark_is_refused_by_check_and_approve() {
 fn an_empty_depends_line_is_refused_as_a_missing_depends_line_and_nothing_else() {
     let dir = widget_repo();
     for empty in ["depends:", "depends: "] {
-        let content = format!("# Topic\n\n### Does it stand on nothing?\n{}\n", empty);
+        let content = format!("# Topic\n\n### Is it stand on nothing?\n{}\n", empty);
         let record = write_record(&dir, "adrdom/decisions/topic.md", &content);
-        let line = "adrdom/decisions/topic.md: \"Does it stand on nothing?\" has no depends line; agent writes what the question stands on";
+        let line = "adrdom/decisions/topic.md: \"Is it stand on nothing?\" has no depends line; agent writes what the question stands on";
 
         let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
         assert!(!out.status.success(), "{}", stdout(&out));
@@ -1101,7 +1108,7 @@ fn an_empty_depends_line_is_refused_as_a_missing_depends_line_and_nothing_else()
             assert!(!check.contains(word), "{}: {}", word, check);
         }
 
-        let fixed = "# Topic\n\n### Does it stand on nothing?\ndepends: widget\n";
+        let fixed = "# Topic\n\n### Is it stand on nothing?\ndepends: widget\n";
         std::fs::write(&record, fixed).unwrap();
         let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
         assert!(out.status.success(), "{}", stderr(&out));
@@ -1193,7 +1200,8 @@ fn approve_and_check_report_a_cycle_and_a_shape_error() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_CYCLE_AND_SHAPE_ERROR);
 
-    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    // The whole file as written, not one entry at a time.
+    let out = adr(&dir, &["approve", terms.to_str().unwrap()], &[("ADR_OWNER_BYPASS", "1")], "");
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(err.contains("circular definition: alpha -> alpha"), "{}", err);

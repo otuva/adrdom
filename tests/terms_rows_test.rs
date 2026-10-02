@@ -70,7 +70,8 @@ fn first_approve_writes_one_term_row_per_term_and_one_terms_row() {
     let (dir, terms, _) = setup();
     let out = approve_terms(&dir, &terms);
     assert!(out.status.success(), "{}", stderr(&out));
-    assert_eq!(rows_of(&dir, "terms").len(), 1);
+    // Two entries are approved one at a time: one terms row each.
+    assert_eq!(rows_of(&dir, "terms").len(), 2);
     let rows = rows_of(&dir, "term");
     assert_eq!(rows.len(), 2, "{:?}", rows);
     assert!(rows.iter().any(|r| r.contains("\t33333333-3333-3333-3333-333333333333\t") && r.contains("\tdecision\t")));
@@ -114,7 +115,7 @@ fn edited_definition_writes_one_row_and_names_the_live_questions() {
     assert!(line.contains(&format!("\"{}\"", H_TWO)), "{}", line);
     assert!(!text.contains("term \"verdict\""), "{}", text);
     assert_eq!(rows_of(&dir, "term").len(), before + 1);
-    assert_eq!(rows_of(&dir, "terms").len(), 2);
+    assert_eq!(rows_of(&dir, "terms").len(), 3);
 }
 
 #[test]

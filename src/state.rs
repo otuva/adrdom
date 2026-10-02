@@ -177,6 +177,20 @@ pub fn approve_retires_or_removes(led: &Ledger, tf: &TermsFile) -> bool {
     })
 }
 
+/// How many ids have a `term` row and no entry in `tf`: the entries the
+/// terms approve removes.
+pub fn removed_term_ids(led: &Ledger, tf: &TermsFile) -> usize {
+    let mut ids: Vec<&str> = led
+        .rows
+        .iter()
+        .filter(|r| r.event == "term" && !tf.terms.iter().any(|t| t.id.as_deref() == Some(r.id.as_str())))
+        .map(|r| r.id.as_str())
+        .collect();
+    ids.sort_unstable();
+    ids.dedup();
+    ids.len()
+}
+
 /// The asked questions, and the not-yet-asked headings of approved plans,
 /// that name a term of `tf` (retired ones included): the dependents a
 /// term's retirement or removal must also clear, beyond the current

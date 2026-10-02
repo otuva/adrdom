@@ -845,6 +845,15 @@ fn do_approve_terms(
             None => term_rows_due.push((id.clone(), name.clone(), hash.clone())),
         }
     }
+    // Per "Does approve accept a terms edit that changes more than one
+    // entry?": entries added, changed or removed since the latest `term`
+    // rows count together, and more than one refuses before anything is
+    // written.
+    let removed = state::removed_term_ids(led, &tf);
+    let differing = term_rows_due.len() + removed;
+    if differing > 1 {
+        return Err(msg::approve_prefixed(msg::terms_edit_too_wide(differing)));
+    }
     // Computed here, before the file is rewritten, and printed only in the
     // branch below that writes the `term` rows.
     let changed_lines = {
