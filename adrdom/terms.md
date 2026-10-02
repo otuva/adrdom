@@ -194,3 +194,9 @@ aliases: briefs
 id: fa0b0e24-b7cf-471b-94b6-6d167e8ad269
 definition: A list of numbers the tool computes from a text, so that two texts on one subject give two near lists.
 aliases: embeddings
+
+## embedding model
+id: a7b0b910-57f6-4c59-b904-b42f78db63f7
+terms: embedding=fa0b0e24-b7cf-471b-94b6-6d167e8ad269
+definition: The file the tool reads to compute an embedding.
+aliases: embedding models

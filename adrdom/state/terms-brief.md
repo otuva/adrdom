@@ -32,3 +32,4 @@
 - terms brief (terms briefs): The file under adrdom/state holding the name, aliases and definition of every term that is not retired, one term per line.
 - brief (briefs): The file at the root of a repository that tells an agent how to work in it.
 - embedding (embeddings): A list of numbers the tool computes from a text, so that two texts on one subject give two near lists.
+- embedding model (embedding models): The file the tool reads to compute an embedding.
