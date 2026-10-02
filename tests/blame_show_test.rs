@@ -20,7 +20,7 @@ fn show_prints_the_blame_file_counts_dropped_rows_and_the_from_line() {
         "docs/x.md",
         "line 1\nline 2\nline 3\nline 4\nline 5\n",
     );
-    let rows = "1-1\tdecision: Does this pass?\n\
+    let rows = "1-1\tdecision: Is this pass?\n\
 2-2\tterm: pass\n\
 3-3\tdropped: dead\n\
 4-4\tdropped: detail\n\
@@ -47,7 +47,7 @@ fn show_prints_the_blame_file_counts_dropped_rows_and_the_from_line() {
     assert!(text.contains("dropped: detail"), "{}", text);
     assert!(text.contains("dropped: copy of docs/other.md"), "{}", text);
     // The decision row: heading text and question state.
-    assert!(text.contains("Does this pass?"), "{}", text);
+    assert!(text.contains("Is this pass?"), "{}", text);
     assert!(text.contains("answered"), "{}", text);
 
     // Under the topic decision itself.
@@ -95,7 +95,7 @@ fn show_tags_a_decision_row_naming_an_unasked_question_with_the_unasked_state() 
     approve_record(&dir, "adrdom/decisions/example.md");
     // Never asked.
     let content = std::fs::read_to_string(&record).unwrap();
-    let id1 = extract_ids(&content)[0].clone(); // "Does this pass?"
+    let id1 = extract_ids(&content)[0].clone(); // "Is this pass?"
 
     let blob = write_origin(&dir, "docs/x.md", "one\n");
     let rows = format!("1-1\tdecision: {}\n", id1);
@@ -106,7 +106,7 @@ fn show_tags_a_decision_row_naming_an_unasked_question_with_the_unasked_state() 
     let out = adr(&dir, &["show", "--all"], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
-    assert!(text.contains("decision: Does this pass? [not asked]"), "{}", text);
+    assert!(text.contains("decision: Is this pass? [not asked]"), "{}", text);
 }
 
 // adr: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
@@ -125,7 +125,7 @@ fn show_tags_a_decision_row_naming_an_asked_unanswered_question_with_the_open_st
     let out = adr(&dir, &["show", "--all"], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
-    assert!(text.contains("decision: Does this also pass? [asked]"), "{}", text);
+    assert!(text.contains("decision: Is this also pass? [asked]"), "{}", text);
 }
 
 // adr: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
@@ -144,13 +144,13 @@ fn show_prints_a_from_line_per_origin_for_two_blame_files_naming_the_same_decisi
         "adrdom/blame/a.md",
         "docs/a.md",
         &blob_a,
-        "1-1\tdecision: Does this pass?\n",
+        "1-1\tdecision: Is this pass?\n",
     );
     let out = adr_owner(&dir, &["approve", path_a.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
 
     let blob_b = write_origin(&dir, "docs/b.md", "one\ntwo\n");
-    let rows_b = "1-1\tdecision: Does this pass?\n2-2\tdecision: Does this pass?\n";
+    let rows_b = "1-1\tdecision: Is this pass?\n2-2\tdecision: Is this pass?\n";
     let path_b = write_blame_file(&dir, "adrdom/blame/b.md", "docs/b.md", &blob_b, rows_b);
     let out = adr_owner(&dir, &["approve", path_b.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
@@ -235,7 +235,7 @@ fn a_dropped_row_with_extra_spaces_after_the_prefix_is_counted_and_printed_as_de
 fn show_tags_a_copy_of_heading_row_with_the_targets_state() {
     let (dir, id1, _id2) = blame_setup();
     let blob = write_origin(&dir, "docs/x.md", "one\n");
-    let rows = "1-1\tdropped: copy of Does this pass?\n";
+    let rows = "1-1\tdropped: copy of Is this pass?\n";
     let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
@@ -246,7 +246,7 @@ fn show_tags_a_copy_of_heading_row_with_the_targets_state() {
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
     assert!(
-        text.contains("dropped: copy of Does this pass? [answered A]"),
+        text.contains("dropped: copy of Is this pass? [answered A]"),
         "{}",
         text
     );

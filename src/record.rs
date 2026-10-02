@@ -328,7 +328,7 @@ fn is_h2(line: &str) -> bool {
     line.starts_with("## ")
 }
 
-fn parse_option_line(line: &str) -> Option<(char, String)> {
+pub(crate) fn parse_option_line(line: &str) -> Option<(char, String)> {
     if !line.starts_with("- ") {
         return None;
     }
@@ -359,7 +359,7 @@ fn extract_sentence(rest: &str) -> Option<String> {
 
 /// Which of the two option-detail lines a body line is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Detail {
+pub(crate) enum Detail {
     Why,
     Costs,
 }
@@ -368,7 +368,7 @@ enum Detail {
 /// plus the text after the prefix. The one place both `scan_body` (which
 /// counts these under each option) and `option_details` (which extracts
 /// their text) recognize the prefix, so the two stay in sync.
-fn detail_line(line: &str) -> Option<(Detail, &str)> {
+pub(crate) fn detail_line(line: &str) -> Option<(Detail, &str)> {
     if let Some(v) = line.strip_prefix("  Why: ") {
         return Some((Detail::Why, v));
     }

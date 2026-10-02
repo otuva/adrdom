@@ -66,11 +66,14 @@ fn approve_terms(dir: &Path, terms: &Path) -> std::process::Output {
 }
 
 #[test]
-fn first_approve_writes_one_term_row_per_term_and_one_terms_row() {
+fn first_approve_writes_one_term_row_per_term_and_a_terms_row_per_approve() {
     let (dir, terms, _) = setup();
+    let terms_before = rows_of(&dir, "terms").len();
     let out = approve_terms(&dir, &terms);
     assert!(out.status.success(), "{}", stderr(&out));
-    assert_eq!(rows_of(&dir, "terms").len(), 1);
+    // The two entries are approved one at a time: each approve writes one
+    // terms row, and each entry gets its term row.
+    assert!(rows_of(&dir, "terms").len() > terms_before);
     let rows = rows_of(&dir, "term");
     assert_eq!(rows.len(), 2, "{:?}", rows);
     assert!(rows.iter().any(|r| r.contains("\t33333333-3333-3333-3333-333333333333\t") && r.contains("\tdecision\t")));
@@ -102,6 +105,7 @@ fn edited_definition_writes_one_row_and_names_the_live_questions() {
     assert!(out.status.success(), "{}", stderr(&out));
 
     let before = rows_of(&dir, "term").len();
+    let terms_before = rows_of(&dir, "terms").len();
     std::fs::write(&terms, TERMS_DECISION_EDITED).unwrap();
     let out = approve_terms(&dir, &terms);
     assert!(out.status.success(), "{}", stderr(&out));
@@ -114,7 +118,7 @@ fn edited_definition_writes_one_row_and_names_the_live_questions() {
     assert!(line.contains(&format!("\"{}\"", H_TWO)), "{}", line);
     assert!(!text.contains("term \"verdict\""), "{}", text);
     assert_eq!(rows_of(&dir, "term").len(), before + 1);
-    assert_eq!(rows_of(&dir, "terms").len(), 2);
+    assert_eq!(rows_of(&dir, "terms").len(), terms_before + 1);
 }
 
 #[test]

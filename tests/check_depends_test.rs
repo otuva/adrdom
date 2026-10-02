@@ -268,14 +268,14 @@ fn check_names_a_retired_term_under_an_answered_question_as_a_term() {
 
     let question_id = "22222222-2222-2222-2222-222222222222";
     let content = format!(
-        "# Topic\n\n### Does the tool keep tags?\ndepends: {term}\n\nid: {id}{body}",
+        "# Topic\n\n### Is the tool keep tags?\ndepends: {term}\n\nid: {id}{body}",
         term = term_id,
         id = question_id,
         body = QUESTION_BODY
     );
     write_record(&dir, "adrdom/decisions/notes.md", &content);
     approve_via_ledger(&dir, "adrdom/decisions/notes.md", &content);
-    append_ledger_row_at(&dir, "asked", question_id, "h1", "Does the tool keep tags?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "asked", question_id, "h1", "Is the tool keep tags?", "2024-01-01T00:00:00Z");
     append_ledger_row_at(&dir, "answered", question_id, "h1", "A", "2024-01-01T00:00:01Z");
 
     // Retire the term by editing the file only; check reads it as it is.
@@ -284,7 +284,7 @@ fn check_names_a_retired_term_under_an_answered_question_as_a_term() {
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
     assert!(
-        text.contains("plan: adrdom/decisions/notes.md: \"Does the tool keep tags?\" depends on the term \"tag\", which is retired; agent names a term that is not retired or removes the entry"),
+        text.contains("plan: adrdom/decisions/notes.md: \"Is the tool keep tags?\" depends on the term \"tag\", which is retired; agent names a term that is not retired or removes the entry"),
         "{}",
         text
     );

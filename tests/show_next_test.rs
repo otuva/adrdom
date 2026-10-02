@@ -18,9 +18,9 @@ use common::*;
 use std::path::{Path, PathBuf};
 
 const REL: &str = "adrdom/decisions/gate.md";
-const ONE: &str = "Does the widget gate open?";
-const TWO: &str = "Does the widget gate close?";
-const THREE: &str = "Does the widget gate lock once it closes?";
+const ONE: &str = "Is the widget gate open?";
+const TWO: &str = "Is the widget gate close?";
+const THREE: &str = "Is the widget gate lock once it closes?";
 
 const BODY: &str = "\nProblem: the widget breaks.\n\nStandard: plain words.\n\n\
 - A) Yes the widget holds.\n  Why: reasons.\n  Costs: costs.\n\
@@ -211,7 +211,7 @@ fn show_names_the_plan_change_an_answered_decision_waits_for() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
-    const FOUR: &str = "Does the widget gate stay shut?";
+    const FOUR: &str = "Is the widget gate stay shut?";
     let plan = format!(
         "# Gate\n\n### {}\ndepends: widget\n\n### {}\ndepends: widget\n\n### {}\ndepends: widget\n",
         ONE, TWO, FOUR
@@ -271,12 +271,12 @@ fn show_prints_the_refusal_of_a_plan_as_the_next_move() {
     approve_minimal_terms(&dir, "widget");
     let mut plan = String::from("# Gate\n");
     for n in ["one", "two", "three", "four"] {
-        plan.push_str(&format!("\n### Does the widget gate {} hold?\ndepends: widget\n", n));
+        plan.push_str(&format!("\n### Is the widget gate {} hold?\ndepends: widget\n", n));
     }
     let path = write_record(&dir, REL, &plan);
     approve_record(&dir, REL);
     for n in ["one", "two", "three", "four"] {
-        write_body(&path, &format!("Does the widget gate {} hold?", n));
+        write_body(&path, &format!("Is the widget gate {} hold?", n));
     }
     assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
     for id in extract_ids(&std::fs::read_to_string(&path).unwrap()) {
@@ -285,11 +285,11 @@ fn show_prints_the_refusal_of_a_plan_as_the_next_move() {
     }
 
     let mut text = std::fs::read_to_string(&path).unwrap();
-    text.push_str("\n### Does the widget gate five hold?\ndepends: widget\n");
+    text.push_str("\n### Is the widget gate five hold?\ndepends: widget\n");
     std::fs::write(&path, text).unwrap();
 
     let refusal = format!(
-        "{}: 5 questions stand together, the most is 4: 4 answered, and \"Does the widget gate five hold?\"; \
+        "{}: 5 questions stand together, the most is 4: 4 answered, and \"Is the widget gate five hold?\"; \
 agent finds a question among the ones named that assumes the answer of another one and names that one on its depends line, \
 or moves it to another file when none does",
         REL

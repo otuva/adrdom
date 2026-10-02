@@ -65,6 +65,10 @@ pub const DATE_WHAT: &str = "carries a date";
 pub const LOADED_OPENING_WHAT: &str = "opens assuming an answer";
 pub const JOIN_WHAT: &str = "joins two questions";
 
+/// The most words an option, its Why line or its Costs line holds (per
+/// "What is the word limit of an option?").
+pub const WORD_LIMIT: usize = 20;
+
 pub const ID_PREFIX: &str = "id: ";
 pub const TERMS_PREFIX: &str = "terms: ";
 pub const DEPENDS_PREFIX: &str = "depends: ";
@@ -153,6 +157,59 @@ pub fn prose_tells_in(lines: &[String], start: usize, end: usize) -> Vec<(usize,
     out
 }
 
+/// Words of a line, by the repository's one definition of a word.
+fn count_words(text: &str) -> usize {
+    crate::text::word_runs(text).len()
+}
+
+/// Whether a heading opens with "Does", leading numbering such as "1.1"
+/// skipped.
+fn opens_with_does(heading_text: &str) -> bool {
+    heading_text
+        .split_whitespace()
+        .find(|tok| !tok.chars().all(|c| c.is_ascii_digit() || c == '.'))
+        .map(|tok| tok.to_lowercase())
+        .as_deref()
+        == Some("does")
+}
+
+/// Length refusals in `lines[start..end]` for the question headed
+/// `heading_text`: under a heading that opens with "Does" an option holds
+/// one word, and any other option, every Why line and every Costs line holds
+/// at most `WORD_LIMIT` words. Returns (absolute 0-based line, the count and
+/// limit, the line's kind). Only `ask` reads this, and only on a question
+/// not yet answered, so answered text is never judged (per "Does the word
+/// limit read answered text?").
+pub fn length_tells(lines: &[String], start: usize, end: usize, heading_text: &str) -> Vec<(usize, String, String)> {
+    let mut out = Vec::new();
+    let closed = opens_with_does(heading_text);
+    let end = end.min(lines.len());
+    for (i, line) in lines.iter().enumerate().take(end).skip(start) {
+        let (kind, text) = if let Some((_, rest)) = crate::record::parse_option_line(line) {
+            ("option", rest)
+        } else if let Some((d, v)) = crate::record::detail_line(line) {
+            (
+                match d {
+                    crate::record::Detail::Why => "Why line",
+                    crate::record::Detail::Costs => "Costs line",
+                },
+                v.to_string(),
+            )
+        } else {
+            continue;
+        };
+        let n = count_words(&text);
+        if kind == "option" && closed {
+            if n != 1 {
+                out.push((i, format!("{} words, a heading that opens with Does takes one", n), kind.to_string()));
+            }
+        } else if n > WORD_LIMIT {
+            out.push((i, format!("{} words, the limit is {}", n, WORD_LIMIT), kind.to_string()));
+        }
+    }
+    out
+}
+
 /// Every tell in a `### ` heading's text at absolute line `line`: a loaded
 /// opening, "and"/"or" joining two questions, plus the same provenance/
 /// code-state/date scan the body gets. Same result shape as
@@ -236,6 +293,14 @@ mod tests {
     fn heading_tells_join() {
         let hits = heading_tells(0, "does it store terms and definitions");
         assert!(hits.iter().any(|(_, phrase, what)| phrase == "and" && *what == JOIN_WHAT));
+    }
+
+    #[test]
+    fn length_tells_counts_words() {
+        let lines: Vec<String> = ["- A) Yes.", "  Why: short.", "- B) one two"].iter().map(|s| s.to_string()).collect();
+        assert!(length_tells(&lines, 0, 3, "Does it?").len() == 1);
+        assert!(length_tells(&lines, 0, 3, "1.1 Does it?").len() == 1);
+        assert!(length_tells(&lines, 0, 3, "What is it?").is_empty());
     }
 
     #[test]

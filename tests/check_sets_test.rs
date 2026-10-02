@@ -239,7 +239,7 @@ fn a_cross_file_depends_entry_whose_set_lacks_the_answer_is_moot() {
     let a = write_record(
         &dir,
         "adrdom/decisions/topic-a.md",
-        &format!("# Topic A\n\n### Does the widget hold?\ndepends: widget\n\n{}", q),
+        &format!("# Topic A\n\n### Is the widget hold?\ndepends: widget\n\n{}", q),
     );
     assert!(adr_owner(&dir, &["approve", a.to_str().unwrap()], "").status.success());
     let ask_a = adr(&dir, &["ask", a.to_str().unwrap()], &[], "");
@@ -255,25 +255,25 @@ fn a_cross_file_depends_entry_whose_set_lacks_the_answer_is_moot() {
     let b = write_record(
         &dir,
         "adrdom/decisions/topic-b.md",
-        &format!("# Topic B\n\n### Does the widget follow?\ndepends: Does the widget hold?=B\n\n{}", q),
+        &format!("# Topic B\n\n### Is the widget follow?\ndepends: Is the widget hold?=B\n\n{}", q),
     );
     let out = adr_owner(&dir, &["approve", b.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
 
-    let moot = "\"Does the widget follow?\" stands on \"Does the widget hold?\"=B, answered A";
+    let moot = "\"Is the widget follow?\" stands on \"Is the widget hold?\"=B, answered A";
     let check = stdout(&adr(&dir, &["check"], &[], ""));
     assert!(check.contains(moot), "{}", check);
     let ask = adr(&dir, &["ask", b.to_str().unwrap()], &[], "");
     assert!(!ask.status.success(), "ask must refuse a moot question: {}", stdout(&ask));
     let refusal = stderr(&ask);
     assert!(
-        refusal.contains("\"Does the widget follow?\" has no case left: it stands on \"Does the widget hold?\""),
+        refusal.contains("\"Is the widget follow?\" has no case left: it stands on \"Is the widget hold?\""),
         "{}",
         refusal
     );
     let show = stdout(&adr(&dir, &["show"], &[], ""));
     assert!(
-        show.contains("drops or replaces \"Does the widget follow?\", which has no case left"),
+        show.contains("drops or replaces \"Is the widget follow?\", which has no case left"),
         "{}",
         show
     );

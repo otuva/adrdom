@@ -1480,7 +1480,7 @@ Standard: plain words.
 /// Appended after Q1 is answered: never written with a tier of its own --
 /// its `depends:` line just names Q1's heading text with a mandatory
 /// `=A` set -- so its tier (2) is entirely the tool's own derivation.
-const TIER_Q2_APPENDIX: &str = "\n### 1.2 Does the widget's paint match its color?\n\ndepends: 1.1 What color is the widget?=A\n\nProblem: the paint might not match.\n\nStandard: plain words.\n\n- A) The paint matches.\n  Why: reasons.\n  Costs: costs.\n- B) The paint does not match.\n  Why: other reasons.\n  Costs: other costs.\n";
+const TIER_Q2_APPENDIX: &str = "\n### 1.2 Does the widget's paint match its color?\n\ndepends: 1.1 What color is the widget?=A\n\nProblem: the paint might not match.\n\nStandard: plain words.\n\n- A) Yes.\n  Why: reasons.\n  Costs: costs.\n- B) No.\n  Why: other reasons.\n  Costs: other costs.\n";
 
 // adr: aec860fd-22ad-44a7-99f7-222ea19537e7
 //
@@ -1679,7 +1679,7 @@ fn page_shows_a_reverted_cross_file_depends_line_as_not_approved() {
     approve_minimal_terms(&dir, "decision");
 
     // A: a real, fully approved current decision of its own.
-    let a_content = "# Topic A\n\n### 1.1 Does A do a thing?\ndepends: decision\n\nProblem: a decision.\n\nStandard: a decision.\n\n- A) x, a decision.\n  Why: w.\n  Costs: c.\n- B) y, a decision.\n  Why: w.\n  Costs: c.\n";
+    let a_content = "# Topic A\n\n### 1.1 Is A do a thing?\ndepends: decision\n\nProblem: a decision.\n\nStandard: a decision.\n\n- A) x, a decision.\n  Why: w.\n  Costs: c.\n- B) y, a decision.\n  Why: w.\n  Costs: c.\n";
     let record_a = write_record(&dir, "adrdom/decisions/topic-a.md", a_content);
     let out_a = adr_owner(&dir, &["approve", record_a.to_str().unwrap()], "");
     assert!(out_a.status.success(), "approving A failed: {}", stderr(&out_a));
@@ -1697,9 +1697,9 @@ fn page_shows_a_reverted_cross_file_depends_line_as_not_approved() {
     );
 
     // B: its only question stands on A, named by A's heading text.
-    let b_text = "1.1 Does A do a thing?";
+    let b_text = "1.1 Is A do a thing?";
     let b_content = format!(
-        "# Topic B\n\n### 1.1 Does B stand on A?\ndepends: {}\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        "# Topic B\n\n### 1.1 Is B stand on A?\ndepends: {}\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
         b_text
     );
     let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", &b_content);

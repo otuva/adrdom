@@ -46,10 +46,10 @@ Problem: the paint might not match.
 
 Standard: plain words.
 
-- A) The paint matches.
+- A) Yes.
   Why: reasons.
   Costs: costs.
-- B) The paint does not match.
+- B) No.
   Why: other reasons.
   Costs: other costs.
 "#,
@@ -101,8 +101,8 @@ fn ask_names_every_fault_in_one_run() {
                   - B) The widget is blue.\n  Why: other reasons.\n  Costs: other costs.\n";
     let body_2 = "\nProblem: the widget has no lid today.\n\n\
                   Standard: plain words.\n\n\
-                  - A) The widget has a lid.\n  Why: reasons.\n  Costs: costs.\n\
-                  - B) The widget has no lid.\n  Why: other reasons.\n  Costs: other costs.\n";
+                  - A) Yes.\n  Why: reasons.\n  Costs: costs.\n\
+                  - B) No.\n  Why: other reasons.\n  Costs: other costs.\n";
     let with_bodies = approved
         .replacen(&format!("id: {}\n", ids[0]), &format!("id: {}\n{}", ids[0], body_1), 1)
         .replacen(&format!("id: {}\n", ids[1]), &format!("id: {}\n{}", ids[1], body_2), 1);

@@ -521,7 +521,7 @@ fn ask_and_check_refuse_a_cross_file_depends_line_reverted_by_hand_after_approve
     // A: a real, fully approved current decision of its own. "decision"
     // (the fixture term `setup` approves) is repeated in the body so `ask`
     // pairs a term.
-    let a_content = "# Topic A\n\n### 1.1 Does A do a thing?\ndepends: decision\n\nProblem: a decision.\n\nStandard: a decision.\n\n- A) x, a decision.\n  Why: w.\n  Costs: c.\n- B) y, a decision.\n  Why: w.\n  Costs: c.\n";
+    let a_content = "# Topic A\n\n### 1.1 Is A do a thing?\ndepends: decision\n\nProblem: a decision.\n\nStandard: a decision.\n\n- A) x, a decision.\n  Why: w.\n  Costs: c.\n- B) y, a decision.\n  Why: w.\n  Costs: c.\n";
     let record_a = write_record(&dir, "adrdom/decisions/topic-a.md", a_content);
     let out_a = adr_owner(&dir, &["approve", record_a.to_str().unwrap()], "");
     assert!(out_a.status.success(), "approving A failed: {}", stderr(&out_a));
@@ -539,9 +539,9 @@ fn ask_and_check_refuse_a_cross_file_depends_line_reverted_by_hand_after_approve
     );
 
     // B: its only question stands on A, named by A's heading text.
-    let b_text = "1.1 Does A do a thing?";
+    let b_text = "1.1 Is A do a thing?";
     let b_content = format!(
-        "# Topic B\n\n### 1.1 Does B stand on A?\ndepends: {}\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        "# Topic B\n\n### 1.1 Is B stand on A?\ndepends: {}\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
         b_text
     );
     let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", &b_content);
@@ -586,7 +586,7 @@ fn ask_and_check_refuse_a_cross_file_depends_line_reverted_by_hand_after_approve
         checked
     );
     assert!(
-        checked.contains("body under unapproved heading \"1.1 Does B stand on A?\""),
+        checked.contains("body under unapproved heading \"1.1 Is B stand on A?\""),
         "{}",
         checked
     );
@@ -606,16 +606,16 @@ fn approve_refuses_a_depends_set_naming_an_option_a_cross_file_decision_does_not
     setup(&dir);
 
     let a_id = "11111111-2222-3333-4444-555555555555";
-    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Does A do a thing?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Is A do a thing?", "2024-01-01T00:00:00Z");
     append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
     let a_content = format!(
-        "# Topic A\n\n### 1.1 Does A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        "# Topic A\n\n### 1.1 Is A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         a_id
     );
     write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
 
     let b_content = format!(
-        "# Topic B\n\n### 1.1 Does B stand on A?\ndepends: {}=C\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        "# Topic B\n\n### 1.1 Is B stand on A?\ndepends: {}=C\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
         a_id
     );
     let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", &b_content);
@@ -625,7 +625,7 @@ fn approve_refuses_a_depends_set_naming_an_option_a_cross_file_decision_does_not
     let err = stderr(&out);
     assert!(
         err.contains(
-            "\"1.1 Does B stand on A?\" depends on \"1.1 Does A do a thing?\" names option C which \"1.1 Does A do a thing?\" does not have"
+            "\"1.1 Is B stand on A?\" depends on \"1.1 Is A do a thing?\" names option C which \"1.1 Is A do a thing?\" does not have"
         ),
         "{}",
         err
@@ -661,17 +661,17 @@ fn approve_resolves_a_cross_file_heading_dependency_and_show_turns_it_back_into_
     // uses for "a current decision", just with a real heading of its own
     // for B to name.
     let a_id = "77777777-7777-7777-7777-777777777777";
-    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Does A do a thing?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Is A do a thing?", "2024-01-01T00:00:00Z");
     append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
     let a_content = format!(
-        "# Topic A\n\n### 1.1 Does A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        "# Topic A\n\n### 1.1 Is A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         a_id
     );
     write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
 
     // B: a fresh topic file whose only question stands on A, named by A's
     // heading text.
-    let b_content = "# Topic B\n\n### 1.1 Does B stand on A?\ndepends: 1.1 Does A do a thing?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let b_content = "# Topic B\n\n### 1.1 Is B stand on A?\ndepends: 1.1 Is A do a thing?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
 
     let out = adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "");
@@ -684,7 +684,7 @@ fn approve_resolves_a_cross_file_heading_dependency_and_show_turns_it_back_into_
         approved_b
     );
     assert!(
-        !approved_b.contains("depends: 1.1 Does A do a thing?"),
+        !approved_b.contains("depends: 1.1 Is A do a thing?"),
         "the written words must not survive approve: {}",
         approved_b
     );
@@ -692,7 +692,7 @@ fn approve_resolves_a_cross_file_heading_dependency_and_show_turns_it_back_into_
     let show = adr(&dir, &["show", "--all"], &[], "");
     assert!(show.status.success(), "{}", stderr(&show));
     assert!(
-        stdout(&show).contains("stands on: 1.1 Does A do a thing?"),
+        stdout(&show).contains("stands on: 1.1 Is A do a thing?"),
         "{}",
         stdout(&show)
     );
@@ -993,13 +993,13 @@ fn waiting_pair(dir: &std::path::Path) -> (std::path::PathBuf, std::path::PathBu
     let a = write_record(
         dir,
         "adrdom/decisions/topic-a.md",
-        &format!("# Topic A\n\n### Does the decision hold?\ndepends: decision\n\n{}", q),
+        &format!("# Topic A\n\n### Is the decision hold?\ndepends: decision\n\n{}", q),
     );
     assert!(adr_owner(dir, &["approve", a.to_str().unwrap()], "").status.success());
     let b = write_record(
         dir,
         "adrdom/decisions/topic-b.md",
-        &format!("# Topic B\n\n### Does the decision follow?\ndepends: Does the decision hold?\n\n{}", q),
+        &format!("# Topic B\n\n### Is the decision follow?\ndepends: Is the decision hold?\n\n{}", q),
     );
     let a_id = std::fs::read_to_string(&a)
         .unwrap()
@@ -1016,7 +1016,7 @@ fn a_depends_entry_naming_an_unanswered_question_of_another_file_waits_until_it_
     setup(&dir);
     let (a, b, a_id) = waiting_pair(&dir);
 
-    let waits = "topic-b.md: \"Does the decision follow?\" depends on \"Does the decision hold?\" (adrdom/decisions/topic-a.md) which is not answered yet; not yet, after it is answered";
+    let waits = "topic-b.md: \"Is the decision follow?\" depends on \"Is the decision hold?\" (adrdom/decisions/topic-a.md) which is not answered yet; not yet, after it is answered";
     for step in 0..2 {
         let check = stdout(&adr(&dir, &["check"], &[], ""));
         assert!(check.contains(waits), "{}", check);
@@ -1025,7 +1025,7 @@ fn a_depends_entry_naming_an_unanswered_question_of_another_file_waits_until_it_
         assert!(stderr(&out).contains(waits), "{}", stderr(&out));
         let show = stdout(&adr(&dir, &["show"], &[], ""));
         assert!(
-            show.contains("not yet: adrdom/decisions/topic-b.md: \"Does the decision follow?\" depends on \"Does the decision hold?\" (adrdom/decisions/topic-a.md) which is not answered yet"),
+            show.contains("not yet: adrdom/decisions/topic-b.md: \"Is the decision follow?\" depends on \"Is the decision hold?\" (adrdom/decisions/topic-a.md) which is not answered yet"),
             "{}",
             show
         );
@@ -1052,12 +1052,12 @@ fn a_depends_entry_naming_a_refused_question_of_another_file_says_so() {
     let r = adr_answer(&dir, &a_id, "refuse");
     assert!(r.status.success(), "{}{}", stdout(&r), stderr(&r));
 
-    let refused = "topic-b.md: \"Does the decision follow?\" depends on \"Does the decision hold?\" (adrdom/decisions/topic-a.md) which is refused; agent names another or drops the entry";
+    let refused = "topic-b.md: \"Is the decision follow?\" depends on \"Is the decision hold?\" (adrdom/decisions/topic-a.md) which is refused; agent names another or drops the entry";
     let out = adr_owner(&dir, &["approve", b.to_str().unwrap()], "");
     assert!(!out.status.success());
     assert!(stderr(&out).contains(refused), "{}", stderr(&out));
     let check = stdout(&adr(&dir, &["check"], &[], ""));
     assert!(check.contains(refused), "{}", check);
     let show = stdout(&adr(&dir, &["show"], &[], ""));
-    assert!(show.contains("agent clears: adrdom/decisions/topic-b.md: \"Does the decision follow?\" depends on \"Does the decision hold?\""), "{}", show);
+    assert!(show.contains("agent clears: adrdom/decisions/topic-b.md: \"Is the decision follow?\" depends on \"Is the decision hold?\""), "{}", show);
 }

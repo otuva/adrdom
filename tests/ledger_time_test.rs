@@ -11,7 +11,7 @@ use common::*;
 
 const ONE_QUESTION: &str = r#"# Example
 
-### Does this pass?
+### Is this pass?
 depends: pass
 
 Problem: whether it passes.
@@ -31,7 +31,7 @@ Standard: clear yes or no.
 // in one command, nothing shared between them but the run itself.
 const TWO_QUESTIONS: &str = r#"# Example
 
-### Does this first one pass?
+### Is this first one pass?
 depends: pass
 
 Problem: whether the first one passes.
@@ -45,7 +45,7 @@ Standard: clear yes or no.
   Why: other reasons.
   Costs: other costs.
 
-### Does this second one pass?
+### Is this second one pass?
 depends: pass
 
 Problem: whether the second one passes.

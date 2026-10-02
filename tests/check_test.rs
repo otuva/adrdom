@@ -4,7 +4,7 @@ use common::*;
 
 const ONE_QUESTION: &str = r#"# Example
 
-### 3.1 Does this pass?
+### 3.1 Is this pass?
 depends: pass
 
 Problem: whether it passes.
@@ -472,7 +472,7 @@ fn check_fails_an_answered_question_whose_text_changed_since_answering() {
         text
     );
     assert!(!text.contains("re-asks"), "an answered question can never be re-asked: {}", text);
-    assert!(text.contains("3.1 Does this pass?"), "{}", text);
+    assert!(text.contains("3.1 Is this pass?"), "{}", text);
 }
 
 // adr: cd83e277-ebf0-4458-a77a-c526ab4cfeca
@@ -888,9 +888,10 @@ fn installed_brief_tells_the_owner_may_edit_or_write_the_plan() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let agents = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
+    let flat = agents.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(
-        agents.contains(
-            "The owner may\nstrike, add or reorder headings before approving, or write the plan itself\nand approve it the same way."
+        flat.contains(
+            "The owner may strike, add or reorder headings before approving, or write the plan itself and approve it the same way."
         ),
         "{}",
         agents
@@ -2171,7 +2172,7 @@ fn check_staged_treats_a_staged_deleted_topic_file_as_gone() {
     let text = stdout(&out);
     assert!(!out.status.success(), "{}", text);
     assert!(
-        text.contains(&format!("asked row id {} (\"3.1 Does this pass?\") not found in any topic file", id)),
+        text.contains(&format!("asked row id {} (\"3.1 Is this pass?\") not found in any topic file", id)),
         "a staged deletion must be read as the file being gone, at a commit: {}",
         text
     );
@@ -2438,7 +2439,7 @@ fn check_quiet_prints_what_failed_and_nothing_else() {
 
 const TWO_QUESTIONS: &str = r#"# Example
 
-### Does this pass?
+### Is this pass?
 depends: pass
 
 Problem: whether it passes.
@@ -2452,7 +2453,7 @@ Standard: clear yes or no.
   Why: other reasons.
   Costs: other costs.
 
-### Does that pass?
+### Is that pass?
 depends: pass
 
 Problem: whether that passes.
@@ -2499,7 +2500,7 @@ fn check_an_untested_decision_is_a_note_whether_or_not_its_tier_is_open() {
     assert!(out.status.success(), "{}", text);
     assert!(
         text.contains(&format!(
-            "untested: adrdom/decisions/example.md: \"Does this pass?\"; no tracked file holds \"adr: {}\"",
+            "untested: adrdom/decisions/example.md: \"Is this pass?\"; no tracked file holds \"adr: {}\"",
             first
         )),
         "{}",

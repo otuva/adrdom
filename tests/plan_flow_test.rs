@@ -90,8 +90,8 @@ fn q2_body_insert(q1_id: &str, q2_id: &str) -> String {
         "depends: {}, {}=A\nid: {}\n\n\
 Problem: the paint might not match.\n\n\
 Standard: plain words.\n\n\
-- A) The paint matches.\n  Why: reasons.\n  Costs: costs.\n\
-- B) The paint does not match.\n  Why: other reasons.\n  Costs: other costs.\n\n\
+- A) Yes.\n  Why: reasons.\n  Costs: costs.\n\
+- B) No.\n  Why: other reasons.\n  Costs: other costs.\n\n\
 ### 1.3",
         PAINT_ID, q1_id, q2_id
     )
@@ -105,8 +105,8 @@ fn q3_body_insert(q1_id: &str, q3_id: &str) -> String {
         "depends: {}, {}=*\nid: {}\n\n\
 Problem: second coat need is undecided.\n\n\
 Standard: plain words.\n\n\
-- A) A second coat of paint is needed.\n  Why: reasons.\n  Costs: costs.\n\
-- B) A second coat of paint is not needed.\n  Why: other reasons.\n  Costs: other costs.\n",
+- A) Yes.\n  Why: reasons.\n  Costs: costs.\n\
+- B) No.\n  Why: other reasons.\n  Costs: other costs.\n",
         PAINT_ID, q1_id, q3_id
     )
 }
@@ -115,8 +115,8 @@ const Q4_BLOCK: &str = "\n### 1.4 Does the paint have a glossy finish?\n\
 depends: paint, 1.1 What color is the widget?=B\n\n\
 Problem: the paint's finish is undecided.\n\n\
 Standard: plain words.\n\n\
-- A) The finish is glossy.\n  Why: reasons.\n  Costs: costs.\n\
-- B) The finish is matte.\n  Why: other reasons.\n  Costs: other costs.\n";
+- A) Yes.\n  Why: reasons.\n  Costs: costs.\n\
+- B) No.\n  Why: other reasons.\n  Costs: other costs.\n";
 
 /// The `id: <uuid>` value under the first heading in `content` starting
 /// with `heading_prefix` -- a heading's id looked up by its own text, since

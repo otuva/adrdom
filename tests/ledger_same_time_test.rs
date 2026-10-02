@@ -21,7 +21,7 @@ const COMPETES_TEXT: &str = "compete for";
 
 const ONE_QUESTION: &str = r#"# Example
 
-### 3.1 Does this pass?
+### 3.1 Is this pass?
 depends: pass
 
 Problem: whether it passes.
@@ -160,7 +160,7 @@ fn b_two_state_rows_for_one_id_at_one_time_fails() {
 
     let id = "22222222-2222-2222-2222-222222222222";
     let tie_time = "2024-01-01T00:00:00Z";
-    append_ledger_row_at(&dir, "asked", id, "hash-1", "Does this pass?", tie_time);
+    append_ledger_row_at(&dir, "asked", id, "hash-1", "Is this pass?", tie_time);
     append_ledger_row_at(&dir, "answered", id, "hash-1", "A", tie_time);
 
     let out = adr(&dir, &["check"], &[], "");
@@ -182,7 +182,7 @@ fn c_an_asked_row_with_its_assumes_rows_at_one_time_passes() {
 
     let id = "33333333-3333-3333-3333-333333333333";
     let tie_time = "2024-01-01T00:00:00Z";
-    append_ledger_row_at(&dir, "asked", id, "hash-1", "Does this pass?", tie_time);
+    append_ledger_row_at(&dir, "asked", id, "hash-1", "Is this pass?", tie_time);
     append_ledger_row_at(&dir, "assumes", id, "hash-2", "Dependent A?", tie_time);
     append_ledger_row_at(&dir, "assumes", id, "hash-3", "Dependent B?", tie_time);
 
@@ -206,8 +206,8 @@ fn d_two_byte_identical_rows_at_one_time_passes() {
 
     let id = "44444444-4444-4444-4444-444444444444";
     let tie_time = "2024-01-01T00:00:00Z";
-    append_ledger_row_at(&dir, "asked", id, "hash-1", "Does this pass?", tie_time);
-    append_ledger_row_at(&dir, "asked", id, "hash-1", "Does this pass?", tie_time);
+    append_ledger_row_at(&dir, "asked", id, "hash-1", "Is this pass?", tie_time);
+    append_ledger_row_at(&dir, "asked", id, "hash-1", "Is this pass?", tie_time);
 
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);

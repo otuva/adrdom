@@ -30,7 +30,7 @@ fn set_mode(path: &Path, mode: u32) {
 
 const A: &str = "adrdom/decisions/a.md";
 const B: &str = "adrdom/decisions/b.md";
-const WITH_COMMA: &str = "Does the widget hold, in the rain?";
+const WITH_COMMA: &str = "Is the widget hold, in the rain?";
 
 // A supersedes line takes the heading of the decision, and a heading may
 // hold a comma: the line is not cut at it. Approve turns the heading into
@@ -53,7 +53,7 @@ fn a_supersedes_line_takes_a_heading_that_holds_a_comma() {
         &format!(
             "# B\n\n{}",
             question(
-                "Does the widget gamma hold?",
+                "Is the widget gamma hold?",
                 "widget",
                 &format!("supersedes: {}\n", WITH_COMMA)
             )

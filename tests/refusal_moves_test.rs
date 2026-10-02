@@ -41,7 +41,7 @@ fn an_entry_on_an_unanswered_question_of_another_file_says_it_waits() {
     let a = write_record(
         &dir,
         A,
-        &format!("# A\n\n{}", question("Does the widget alpha hold?", "widget", "")),
+        &format!("# A\n\n{}", question("Is the widget alpha hold?", "widget", "")),
     );
     approve_record(&dir, A);
     assert!(adr(&dir, &["ask", a.to_str().unwrap()], &[], "").status.success());
@@ -51,14 +51,14 @@ fn an_entry_on_an_unanswered_question_of_another_file_says_it_waits() {
         B,
         &format!(
             "# B\n\n{}",
-            question("Does the widget beta hold?", "widget, Does the widget alpha hold?", "")
+            question("Is the widget beta hold?", "widget, Is the widget alpha hold?", "")
         ),
     );
     // The tool holds alpha's state in the other file: the line says whose
     // turn it is (nobody's but the owner's, through alpha), not a move the
     // agent cannot make.
     let refusal = format!(
-        "{}: \"Does the widget beta hold?\" depends on \"Does the widget alpha hold?\" ({}) which is not answered yet; not yet, after it is answered",
+        "{}: \"Is the widget beta hold?\" depends on \"Is the widget alpha hold?\" ({}) which is not answered yet; not yet, after it is answered",
         B, A
     );
     let out = adr(&dir, &["check"], &[], "");
@@ -86,7 +86,7 @@ fn a_tie_in_a_file_named_outside_ascii_counts() {
     let path = write_record(
         &dir,
         A,
-        &format!("# A\n\n{}", question("Does the widget alpha hold?", "widget", "")),
+        &format!("# A\n\n{}", question("Is the widget alpha hold?", "widget", "")),
     );
     approve_record(&dir, A);
     assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
@@ -129,11 +129,11 @@ fn the_ban_scan_reads_a_file_named_outside_ascii() {
 #[test]
 fn the_cap_refusal_names_the_questions_and_the_move() {
     let dir = setup();
-    const FIFTH: &str = "Does the widget hold where the widget one holds?";
+    const FIFTH: &str = "Is the widget hold where the widget one holds?";
     let plan = |fifth_depends: &str| {
         let mut content = String::from("# Cap\n\n");
         for n in ["one", "two", "three", "four"] {
-            content.push_str(&format!("### Does the widget {} hold?\ndepends: widget\n\n", n));
+            content.push_str(&format!("### Is the widget {} hold?\ndepends: widget\n\n", n));
         }
         content.push_str(&format!("### {}\ndepends: {}\n\n", FIFTH, fifth_depends));
         content
@@ -143,8 +143,8 @@ fn the_cap_refusal_names_the_questions_and_the_move() {
 
     let refusal = format!(
         "{}: 5 questions would be put to the owner together, the most is 4: \
-\"Does the widget one hold?\", \"Does the widget two hold?\", \"Does the widget three hold?\", \
-\"Does the widget four hold?\", \"{}\"; \
+\"Is the widget one hold?\", \"Is the widget two hold?\", \"Is the widget three hold?\", \
+\"Is the widget four hold?\", \"{}\"; \
 agent finds a question among these that assumes the answer of another one and names that one on its depends line, \
 or splits the file when none does",
         rel, FIFTH
@@ -155,7 +155,7 @@ or splits the file when none does",
     assert!(!out.status.success());
     assert!(stderr(&out).contains(&refusal), "{}", stderr(&out));
 
-    write_record(&dir, rel, &plan("widget, Does the widget one hold?"));
+    write_record(&dir, rel, &plan("widget, Is the widget one hold?"));
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
 }
@@ -174,7 +174,7 @@ fn the_cap_refusal_names_only_the_questions_not_answered() {
     for n in ["one", "two", "three", "four"] {
         content.push_str(&format!(
             "\n{}",
-            question(&format!("Does the widget {} hold?", n), "widget", "")
+            question(&format!("Is the widget {} hold?", n), "widget", "")
         ));
     }
     let path = write_record(&dir, rel, &content);
@@ -185,11 +185,11 @@ fn the_cap_refusal_names_only_the_questions_not_answered() {
     }
 
     let mut content = std::fs::read_to_string(&path).unwrap();
-    content.push_str("\n### Does the widget five hold?\ndepends: widget\n");
+    content.push_str("\n### Is the widget five hold?\ndepends: widget\n");
     std::fs::write(&path, content).unwrap();
 
     let refusal = format!(
-        "{}: 5 questions stand together, the most is 4: 4 answered, and \"Does the widget five hold?\"; \
+        "{}: 5 questions stand together, the most is 4: 4 answered, and \"Is the widget five hold?\"; \
 agent finds a question among the ones named that assumes the answer of another one and names that one on its depends line, \
 or moves it to another file when none does",
         rel
@@ -220,9 +220,9 @@ fn answered(dir: &std::path::Path, rel: &str, content: &str, index: usize) -> St
 #[test]
 fn a_refusal_names_the_question_beside_its_identifier() {
     let dir = setup();
-    const ALPHA: &str = "Does the widget alpha hold?";
-    const BETA: &str = "Does the widget beta hold?";
-    const GAMMA: &str = "Does the widget gamma hold?";
+    const ALPHA: &str = "Is the widget alpha hold?";
+    const BETA: &str = "Is the widget beta hold?";
+    const GAMMA: &str = "Is the widget gamma hold?";
     let alpha = answered(&dir, A, &format!("# A\n\n{}", question(ALPHA, "widget", "")), 0);
 
     // Answered, no test tied to it.
@@ -284,7 +284,7 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     // approve refuses it and names the question beside the identifier.
     let mut a = std::fs::read_to_string(dir.join(A)).unwrap();
     a.push_str(&format!(
-        "\n### Does the widget delta hold?\ndepends: widget\nsupersedes: {}\n",
+        "\n### Is the widget delta hold?\ndepends: widget\nsupersedes: {}\n",
         alpha
     ));
     std::fs::write(dir.join(A), &a).unwrap();
@@ -292,7 +292,7 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     assert!(!out.status.success());
     assert!(
         stderr(&out).contains(&format!(
-            "approve: {}: \"Does the widget delta hold?\": supersedes {} (\"{}\"), which is not a current decision; agent removes it from the supersedes line or names a current decision",
+            "approve: {}: \"Is the widget delta hold?\": supersedes {} (\"{}\"), which is not a current decision; agent removes it from the supersedes line or names a current decision",
             A,
             alpha, ALPHA
         )),
@@ -312,7 +312,7 @@ fn show_ends_without_a_word_when_its_reader_goes_away() {
     let dir = setup();
     let mut plan = String::from("# A\n");
     for n in ["one", "two", "three", "four"] {
-        plan.push_str(&format!("\n### Does the widget {} hold?\ndepends: widget\n", n));
+        plan.push_str(&format!("\n### Is the widget {} hold?\ndepends: widget\n", n));
     }
     write_record(&dir, A, &plan);
 
