@@ -236,3 +236,7 @@ Standard: a record that others reference is not removed while the references sta
   Costs: the records fail after an owner command, and the move to clear them is a supersede of each named decision.
 
 **Answer:** A
+
+### Does approve accept a terms edit that changes more than one entry?
+depends: e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 528fe6f6-6d77-42d5-9086-017048d1448d, f590059d-b681-40ec-8a1c-c8916d71f6bb, aa475aa3-05b2-429a-b33a-46b1dcb52049
+id: d16be877-9422-4f2e-a6a1-e099be9e3b2b

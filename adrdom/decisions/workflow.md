@@ -73,3 +73,11 @@ Standard: actionable error messages state what failed and what to do next.
   Costs: the agent guesses, and nothing marks a step as the owner's.
 
 **Answer:** A
+
+### Does the agent that asks a question build its decision?
+depends: f90dbd5b-8fbe-4899-8588-f8762795c2e2, 3c8d4c9c-abca-4faa-b7c1-aae39951376c, 277a8338-c57a-43cc-8b28-6b42e9347f6a, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, f8d92841-aef7-4cd7-bd94-0e07c03e4cb6
+id: 9ba58b6a-bc85-44a5-a720-d8e7a6ff7b31
+
+### Does the agent that reviews a build name a decision for each behaviour?
+depends: f90dbd5b-8fbe-4899-8588-f8762795c2e2, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, c3127af2-4c96-48d5-a164-bac49a9a09ec
+id: 125ee772-d011-4dab-b53e-97a09ec03198

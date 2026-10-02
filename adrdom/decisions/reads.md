@@ -83,3 +83,7 @@ Standard: a gate fires when its precondition is met, not before; a check that ca
   Costs: an answered decision with no test and no line naming it.
 
 **Answer:** A
+
+### Does every sentence of the brief come from a decision?
+depends: 1d9df88a-40f6-4235-a083-e063fde634fe, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, 1b98cdea-dc1b-4789-8f67-68d130d7a49d
+id: de5ed5b1-3a83-4403-8953-941cb7e94390

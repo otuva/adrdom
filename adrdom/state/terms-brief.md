@@ -30,3 +30,4 @@
 - origin (origins): A prose file outside adrdom whose text the records take in.
 - blame (blame file, blame files): A file holding, for one origin, its line ranges and what each range went to in the records.
 - terms brief (terms briefs): The file under adrdom/state holding the name, aliases and definition of every term that is not retired, one term per line.
+- brief (briefs): The file at the root of a repository that tells an agent how to work in it.

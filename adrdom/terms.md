@@ -139,6 +139,7 @@ aliases: bans, banned, banning
 
 ## install
 id: 1b98cdea-dc1b-4789-8f67-68d130d7a49d
+terms: brief=1d9df88a-40f6-4235-a083-e063fde634fe
 definition: The act that puts the tool's hooks and brief into a repository.
 aliases: installs, installed, installing
 
@@ -182,3 +183,9 @@ id: 7d44030a-3589-4f29-aaa6-12fa09908ab8
 terms: aliases=1929dc82-4128-4621-af0e-043ac181459f, definition=607cb55f-c0fa-40af-b290-c17f3ba0f812, retired=c584a68d-e54a-4ad2-8a6b-9d64ed098ae5, term=f590059d-b681-40ec-8a1c-c8916d71f6bb
 definition: The file under adrdom/state holding the name, aliases and definition of every term that is not retired, one term per line.
 aliases: terms briefs
+
+## brief
+id: 1d9df88a-40f6-4235-a083-e063fde634fe
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2
+definition: The file at the root of a repository that tells an agent how to work in it.
+aliases: briefs
