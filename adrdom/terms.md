@@ -189,3 +189,8 @@ id: 1d9df88a-40f6-4235-a083-e063fde634fe
 terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2
 definition: The file at the root of a repository that tells an agent how to work in it.
 aliases: briefs
+
+## embedding
+id: fa0b0e24-b7cf-471b-94b6-6d167e8ad269
+definition: A list of numbers the tool computes from a text, so that two texts on one subject give two near lists.
+aliases: embeddings
