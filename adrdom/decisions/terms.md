@@ -240,3 +240,14 @@ Standard: a record that others reference is not removed while the references sta
 ### Does approve accept a terms edit that changes more than one entry?
 depends: e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 528fe6f6-6d77-42d5-9086-017048d1448d, f590059d-b681-40ec-8a1c-c8916d71f6bb, aa475aa3-05b2-429a-b33a-46b1dcb52049
 id: d16be877-9422-4f2e-a6a1-e099be9e3b2b
+terms: approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, definition=607cb55f-c0fa-40af-b290-c17f3ba0f812, definitions=607cb55f-c0fa-40af-b290-c17f3ba0f812, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, refused=0942e445-0163-423e-8ba7-84dd8ac07045, terms=f590059d-b681-40ec-8a1c-c8916d71f6bb, terms file=528fe6f6-6d77-42d5-9086-017048d1448d
+
+Problem: ten definitions in one approve are not read one by one, and a definition that states a rule passes.
+Standard: a change is reviewed as one unit, and a batch hides the item that should have been refused.
+
+- A) No.
+  Why: the owner reads one definition at each approve, and a definition that states a rule stands alone.
+  Costs: a repository's first terms file needs one approve per entry.
+- B) Yes.
+  Why: one approve covers a whole edit, as it does for a plan.
+  Costs: the entry that should have been refused passes in the batch.

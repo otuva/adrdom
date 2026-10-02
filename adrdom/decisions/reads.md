@@ -87,3 +87,14 @@ Standard: a gate fires when its precondition is met, not before; a check that ca
 ### Does every sentence of the brief come from a decision?
 depends: 1d9df88a-40f6-4235-a083-e063fde634fe, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, 1b98cdea-dc1b-4789-8f67-68d130d7a49d
 id: de5ed5b1-3a83-4403-8953-941cb7e94390
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answered=b36113a1-1384-4e4c-a798-8399f4181366, brief=1d9df88a-40f6-4235-a083-e063fde634fe, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, decisions=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, identifier=e877e4a9-2caf-4fe6-9f82-5476a2abb00b, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a
+
+Problem: a sentence written into the brief by hand carries a rule no decision gave, and the agent follows it.
+Standard: generated documentation is built from the source of truth and never edited in place.
+
+- A) Yes.
+  Why: the brief is as long as the decisions, and each sentence has an identifier behind it.
+  Costs: a sentence the brief needs with no decision behind it waits for a question.
+- B) No.
+  Why: the brief can explain more than the decisions say.
+  Costs: a brief sentence binds the agent with nothing the owner answered.

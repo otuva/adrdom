@@ -77,7 +77,29 @@ Standard: actionable error messages state what failed and what to do next.
 ### Does the agent that asks a question build its decision?
 depends: f90dbd5b-8fbe-4899-8588-f8762795c2e2, 3c8d4c9c-abca-4faa-b7c1-aae39951376c, 277a8338-c57a-43cc-8b28-6b42e9347f6a, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, f8d92841-aef7-4cd7-bd94-0e07c03e4cb6
 id: 9ba58b6a-bc85-44a5-a720-d8e7a6ff7b31
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, agents=f90dbd5b-8fbe-4899-8588-f8762795c2e2, asks=3c8d4c9c-abca-4faa-b7c1-aae39951376c, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, option=43778946-d44c-4acf-a766-0a4915fce199, question=277a8338-c57a-43cc-8b28-6b42e9347f6a
+
+Problem: the agent that wrote an option builds what it meant, not what the sentence says, and the gap never shows.
+Standard: the one who writes a specification is not the one who implements it; the handover tests the text.
+
+- A) No.
+  Why: a second agent builds from the record alone, and a sentence that cannot be built from shows itself.
+  Costs: two agents per round, and the record must hold everything the builder needs.
+- B) Yes.
+  Why: one agent, one context, no handover.
+  Costs: what the agent meant and never wrote reaches the code unseen.
 
 ### Does the agent that reviews a build name a decision for each behaviour?
 depends: f90dbd5b-8fbe-4899-8588-f8762795c2e2, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, c3127af2-4c96-48d5-a164-bac49a9a09ec
 id: 125ee772-d011-4dab-b53e-97a09ec03198
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, option=43778946-d44c-4acf-a766-0a4915fce199
+
+Problem: code the tool cannot see carries rules no decision gave, and review reads it against the option text only.
+Standard: traceability review: every change links to a requirement, and an unlinked change is a finding.
+
+- A) Yes.
+  Why: a behaviour with no decision is found at the one place that reads the code.
+  Costs: the review is longer, and detail with no decision needs the reviewer to say so.
+- B) No.
+  Why: review reads for defects only.
+  Costs: a rule in the code with no decision passes.
