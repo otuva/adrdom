@@ -89,6 +89,8 @@ Standard: the one who writes a specification is not the one who implements it; t
   Why: one agent, one context, no handover.
   Costs: what the agent meant and never wrote reaches the code unseen.
 
+**Answer:** A
+
 ### Does the agent that reviews a build name a decision for each behaviour?
 depends: f90dbd5b-8fbe-4899-8588-f8762795c2e2, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, c3127af2-4c96-48d5-a164-bac49a9a09ec
 id: 125ee772-d011-4dab-b53e-97a09ec03198
@@ -103,3 +105,5 @@ Standard: traceability review: every change links to a requirement, and an unlin
 - B) No.
   Why: review reads for defects only.
   Costs: a rule in the code with no decision passes.
+
+**Answer:** A

@@ -98,3 +98,5 @@ Standard: generated documentation is built from the source of truth and never ed
 - B) No.
   Why: the brief can explain more than the decisions say.
   Costs: a brief sentence binds the agent with nothing the owner answered.
+
+**Answer:** A

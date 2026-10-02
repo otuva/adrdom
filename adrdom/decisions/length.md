@@ -18,6 +18,8 @@ Standard: a closed question takes a closed answer; a yes/no item in a form has n
   Why: an option can state the rule in full under the heading.
   Costs: one letter carries every clause of the sentence, read or not.
 
+**Answer:** A
+
 ### Does ask refuse an option over a word limit?
 depends: 3c8d4c9c-abca-4faa-b7c1-aae39951376c, 43778946-d44c-4acf-a766-0a4915fce199
 id: d808917b-0717-45ad-ab83-9fa274b9a9d4
@@ -32,6 +34,8 @@ Standard: style linters cap sentence length and fail the build on a line over th
 - B) No.
   Why: nothing is added to the tool, and the owner reads the length.
   Costs: the owner is the only guard, and a long option is where a rule hides.
+
+**Answer:** A
 
 ### What is the word limit of an option?
 depends: 43778946-d44c-4acf-a766-0a4915fce199, d808917b-0717-45ad-ab83-9fa274b9a9d4=A

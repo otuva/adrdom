@@ -251,3 +251,5 @@ Standard: a change is reviewed as one unit, and a batch hides the item that shou
 - B) Yes.
   Why: one approve covers a whole edit, as it does for a plan.
   Costs: the entry that should have been refused passes in the batch.
+
+**Answer:** A
