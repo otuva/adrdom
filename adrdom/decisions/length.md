@@ -55,6 +55,8 @@ Standard: plain-language guides cap a sentence at twenty to twenty-five words, a
   Why: room for a rule, its condition and an example.
   Costs: three rules fit in twenty-five words.
 
+**Answer:** A
+
 ### Does the word limit hold for the Why line of an option?
 depends: 43778946-d44c-4acf-a766-0a4915fce199, d808917b-0717-45ad-ab83-9fa274b9a9d4=A, 055d303b-c286-4f6c-975a-d9d8090936d4
 id: 39b76886-98f9-4019-9194-db9ab51aea1e
@@ -69,6 +71,8 @@ Standard: a rationale line in a decision record is one sentence.
 - B) No.
   Why: the Why line binds nothing, and its length harms no one.
   Costs: the long line comes back under Why.
+
+**Answer:** A
 
 ### Does the word limit hold for the Costs line of an option?
 depends: 43778946-d44c-4acf-a766-0a4915fce199, d808917b-0717-45ad-ab83-9fa274b9a9d4=A, 055d303b-c286-4f6c-975a-d9d8090936d4
@@ -85,6 +89,8 @@ Standard: a consequences line in a decision record is one sentence.
   Why: the Costs line needs room to say what the code has to keep.
   Costs: the rule moves from the option to its Costs line.
 
+**Answer:** A
+
 ### Does the word limit read answered text?
 depends: b36113a1-1384-4e4c-a798-8399f4181366, d808917b-0717-45ad-ab83-9fa274b9a9d4=A, 923818a7-05c6-4977-bbaf-53ee8f3773ef
 id: 423065fc-6d9f-40c8-a0bf-8e1779e86b38
@@ -99,3 +105,5 @@ Standard: a new lint rule runs on changed lines, and old text is left alone.
 - B) Yes.
   Why: one shape for every option in the records.
   Costs: every decision over the limit is superseded before check passes.
+
+**Answer:** A
