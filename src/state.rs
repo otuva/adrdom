@@ -172,23 +172,55 @@ pub fn approve_retires_or_removes(led: &Ledger, tf: &TermsFile) -> bool {
     if tf.terms.iter().any(|t| t.retired && retire_unrecorded(led, t)) {
         return true;
     }
-    led.rows.iter().any(|r| {
-        r.event == "term" && !tf.terms.iter().any(|t| t.id.as_deref() == Some(r.id.as_str()))
-    })
+    !removed_terms(led, tf).is_empty()
 }
 
-/// How many ids have a `term` row and no entry in `tf`: the entries the
-/// terms approve removes.
-pub fn removed_term_ids(led: &Ledger, tf: &TermsFile) -> usize {
-    let mut ids: Vec<&str> = led
-        .rows
-        .iter()
-        .filter(|r| r.event == "term" && !tf.terms.iter().any(|t| t.id.as_deref() == Some(r.id.as_str())))
-        .map(|r| r.id.as_str())
-        .collect();
-    ids.sort_unstable();
-    ids.dedup();
-    ids.len()
+/// The hash of a `term` row that records a removal: the row's detail holds
+/// the removed entry's name.
+pub const TERM_REMOVED: &str = "-";
+
+/// The entries the terms approve of `tf` removes: an id whose latest `term`
+/// row is not a removal and which `tf` no longer holds, as (id, name).
+pub fn removed_terms(led: &Ledger, tf: &TermsFile) -> Vec<(String, String)> {
+    let mut seen: Vec<&str> = Vec::new();
+    let mut out = Vec::new();
+    for r in led.rows.iter().filter(|r| r.event == "term") {
+        if seen.contains(&r.id.as_str()) {
+            continue;
+        }
+        seen.push(&r.id);
+        let latest = led.latest_for_id("term", &r.id).unwrap_or(r);
+        if latest.hash != TERM_REMOVED && !tf.terms.iter().any(|t| t.id.as_deref() == Some(r.id.as_str())) {
+            out.push((r.id.clone(), latest.detail.clone()));
+        }
+    }
+    out
+}
+
+/// The names of the entries a terms edit adds, changes or removes against
+/// the latest `term` rows (per "Does approve accept a terms edit that
+/// changes more than one entry?"): empty while the file equals its latest
+/// approval. A ledger that holds `terms` rows and no `term` rows yet (the
+/// catch-up approve) has no baseline per entry, so an entry with no row is
+/// not counted there.
+pub fn terms_edit_entries(led: &Ledger, tf: &TermsFile) -> Vec<String> {
+    if terms_approved(led, tf) {
+        return Vec::new();
+    }
+    let catch_up = !led.rows.iter().any(|r| r.event == "term")
+        && led.latest_for_path("terms", crate::repo::TERMS_PATH).is_some();
+    let mut out: Vec<String> = Vec::new();
+    for t in &tf.terms {
+        let differs = match t.id.as_deref().and_then(|id| led.latest_for_id("term", id)) {
+            Some(r) => r.hash != terms::term_hash(t),
+            None => !catch_up,
+        };
+        if differs {
+            out.push(t.name.clone());
+        }
+    }
+    out.extend(removed_terms(led, tf).into_iter().map(|(_, name)| name));
+    out
 }
 
 /// The asked questions, and the not-yet-asked headings of approved plans,

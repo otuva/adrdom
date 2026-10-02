@@ -2325,14 +2325,16 @@ pub fn terms_ids_filled(n: usize) -> String {
 
 /// A terms edit that adds, changes or removes more than one entry (per
 /// "Does approve accept a terms edit that changes more than one entry?").
-pub fn terms_edit_too_wide(count: usize) -> String {
+pub fn terms_edit_too_wide(names: &[String], approved_before: bool) -> String {
+    let list = names.iter().map(|n| format!("\"{}\"", n)).collect::<Vec<_>>().join(", ");
+    let what = if approved_before {
+        format!("{} entries differ from the last approval", names.len())
+    } else {
+        format!("{} entries are new, and the file has no approval yet", names.len())
+    };
     refuse(
-        format!(
-            "adrdom/terms.md: {} entries differ from the last approval, the most is 1",
-            count
-        ),
-        Next::agent("keeps one edit in the file, then the owner runs approve again, once for each further entry")
-            .and_owner_runs("adr approve adrdom/terms.md"),
+        format!("adrdom/terms.md: {}: {}; the most is 1", what, list),
+        Next::agent("keeps one of these edits in the file and leaves the rest for a later approve"),
     )
 }
 
@@ -2649,6 +2651,9 @@ mod tests {
             terms_brief_differs(),
             terms_brief_not_staged(),
             circular_definition("a -> b -> a"),
+            terms_edit_too_wide(&["a".to_string(), "b".to_string()], true),
+            terms_edit_too_wide(&["a".to_string(), "b".to_string()], false),
+            too_long("x.md", 3, "heading", "option", "21 words, the limit is 20"),
             term_removed_but_carried("uuid-1", Some("word"), "term \"x\""),
             term_retired_but_carried("x", "term \"y\"", term_reword_and_approve()),
             term_retired_but_carried("x", "id-1: \"heading\"", term_retired_decision_next("x", "id-1", "heading")),

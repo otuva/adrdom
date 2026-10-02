@@ -1896,8 +1896,9 @@ fn approve_refuses_retiring_a_term_while_a_new_term_takes_its_word_and_another_s
     // freed word "decision" as an alias, and "question" keeps the recorded
     // terms: line the first approve wrote for it, still naming "decision"'s
     // id.
+    // Both edits in one approve, sent raw, so the tool sees the whole file.
     std::fs::write(&terms, TERMS_ENTRY_PAIRS_ANOTHER_RETIRED_WORD_TAKEN).unwrap();
-    let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
+    let out = adr(&dir, &["approve", terms.to_str().unwrap()], &[("ADR_OWNER_BYPASS", "1")], "");
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(

@@ -91,7 +91,19 @@ pub fn adr(dir: &Path, args: &[&str], envs: &[(&str, &str)], stdin: &str) -> Out
             assert_eq!(e.kind(), std::io::ErrorKind::BrokenPipe, "{}", e);
         }
     }
-    child.wait_with_output().expect("adr should finish")
+    let out = child.wait_with_output().expect("adr should finish");
+    // A successful approve of the terms file is the baseline a later
+    // one-entry-at-a-time approve (see `adr_owner`) starts from.
+    if out.status.success()
+        && args.len() == 2
+        && args[0] == "approve"
+        && Path::new(args[1]).ends_with("adrdom/terms.md")
+    {
+        if let Ok(now) = std::fs::read_to_string(dir.join("adrdom/terms.md")) {
+            let _ = std::fs::write(terms_prior_path(dir), now);
+        }
+    }
+    out
 }
 
 pub fn adr_owner(dir: &Path, args: &[&str], stdin: &str) -> Output {
@@ -123,10 +135,6 @@ fn terms_blocks(tf: &terms::TermsFile) -> (Vec<String>, Vec<(terms::Term, String
     (header, blocks)
 }
 
-fn terms_one(block: &str) -> terms::Term {
-    terms::parse(&record::split_lines(block)).terms.remove(0)
-}
-
 fn same_entry(a: &terms::Term, b: &terms::Term) -> bool {
     match (&a.id, &b.id) {
         (Some(x), Some(y)) => x == y,
@@ -134,99 +142,79 @@ fn same_entry(a: &terms::Term, b: &terms::Term) -> bool {
     }
 }
 
+enum TermsStep {
+    Put(terms::Term, String),
+    Drop(terms::Term),
+}
+
+fn render_terms(header: &[String], blocks: &[(terms::Term, String)]) -> String {
+    let mut text = header.join("\n");
+    for (_, b) in blocks {
+        text.push('\n');
+        text.push_str(b);
+    }
+    text
+}
+
 fn approve_terms_one_entry_at_a_time(dir: &Path, arg: &str, stdin: &str) -> Output {
     let path = dir.join("adrdom/terms.md");
+    let run = || adr(dir, &["approve", arg], &[("ADR_OWNER_BYPASS", "1")], stdin);
     let target_text = std::fs::read_to_string(&path).unwrap();
     let target = terms::parse(&record::split_lines(&target_text));
     let prior_text = std::fs::read_to_string(terms_prior_path(dir)).unwrap_or_default();
     let prior = terms::parse(&record::split_lines(&prior_text));
     let (header, target_blocks) = terms_blocks(&target);
     let (_, mut cur) = terms_blocks(&prior);
-    // The steps: each target entry that is new or differs, then each
-    // prior entry the target no longer holds.
-    let mut steps: Vec<(Option<usize>, Option<terms::Term>, Option<String>)> = Vec::new();
+
+    // The steps: each target entry that is new or differs, then each prior
+    // entry the target no longer holds.
+    let mut steps: Vec<TermsStep> = Vec::new();
     for (t, text) in &target_blocks {
-        match cur.iter().position(|(c, _)| same_entry(c, t)) {
-            Some(i) if terms::term_hash(&cur[i].0) == terms::term_hash(t) => {}
-            Some(i) => steps.push((Some(i), Some(t.clone()), Some(text.clone()))),
-            None => steps.push((None, Some(t.clone()), Some(text.clone()))),
+        let same = cur.iter().find(|(c, _)| same_entry(c, t));
+        if same.map_or(true, |(c, _)| terms::term_hash(c) != terms::term_hash(t)) {
+            steps.push(TermsStep::Put(t.clone(), text.clone()));
         }
     }
-    let removed: Vec<terms::Term> = cur
-        .iter()
-        .filter(|(c, _)| !target_blocks.iter().any(|(t, _)| same_entry(c, t)))
-        .map(|(c, _)| c.clone())
-        .collect();
-    let total = steps.len() + removed.len();
-    let run = |_: ()| adr(dir, &["approve", arg], &[("ADR_OWNER_BYPASS", "1")], stdin);
-    let mut out = None;
-    if total > 1 {
-        let mut done = 0;
-        let render = |header: &Vec<String>, cur: &Vec<(terms::Term, String)>| {
-            let mut text = header.join("\n");
-            for (_, b) in cur {
-                text.push('\n');
-                text.push_str(b);
-            }
-            text
-        };
-        for (idx, t, text) in steps {
-            match idx {
-                Some(i) => cur[i] = (t.clone().unwrap(), text.clone().unwrap()),
-                None => cur.push((t.clone().unwrap(), text.clone().unwrap())),
-            }
-            done += 1;
-            if done == total {
-                break;
-            }
-            std::fs::write(&path, render(&header, &cur)).unwrap();
-            let o = run(());
-            if !o.status.success() {
-                return o;
-            }
-            let now = std::fs::read_to_string(&path).unwrap();
-            let tf = terms::parse(&record::split_lines(&now));
-            let (h, b) = terms_blocks(&tf);
-            let _ = h;
-            cur = b;
+    for (c, _) in &cur {
+        if !target_blocks.iter().any(|(t, _)| same_entry(c, t)) {
+            steps.push(TermsStep::Drop(c.clone()));
         }
-        for r in removed {
-            if done == total {
-                break;
-            }
-            cur.retain(|(c, _)| !same_entry(c, &r));
-            done += 1;
-            if done == total {
-                break;
-            }
-            std::fs::write(&path, render(&header, &cur)).unwrap();
-            let o = run(());
-            if !o.status.success() {
-                return o;
-            }
-            let now = std::fs::read_to_string(&path).unwrap();
-            let tf = terms::parse(&record::split_lines(&now));
-            cur = terms_blocks(&tf).1;
-        }
-        // The final approve holds the target's order and the last step's
-        // text; every earlier entry keeps what the approve before wrote.
-        let mut fin = header.join("\n");
-        for (t, text) in &target_blocks {
-            fin.push('\n');
-            match cur.iter().find(|(c, _)| same_entry(c, t)) {
-                Some((_, b)) if terms::term_hash(&terms_one(b)) == terms::term_hash(t) => fin.push_str(b),
-                _ => fin.push_str(text),
-            }
-        }
-        std::fs::write(&path, fin).unwrap();
     }
-    out.get_or_insert_with(|| run(()));
-    let out = out.unwrap();
-    if out.status.success() {
+    if steps.len() <= 1 {
+        return run();
+    }
+
+    // Every step but the last is approved on its own, on the file as the
+    // approve before it wrote it.
+    steps.pop();
+    for step in steps {
+        match step {
+            TermsStep::Put(t, text) => match cur.iter().position(|(c, _)| same_entry(c, &t)) {
+                Some(i) => cur[i] = (t, text),
+                None => cur.push((t, text)),
+            },
+            TermsStep::Drop(t) => cur.retain(|(c, _)| !same_entry(c, &t)),
+        }
+        std::fs::write(&path, render_terms(&header, &cur)).unwrap();
+        let o = run();
+        if !o.status.success() {
+            return o;
+        }
         let now = std::fs::read_to_string(&path).unwrap();
-        std::fs::write(terms_prior_path(dir), now).unwrap();
+        cur = terms_blocks(&terms::parse(&record::split_lines(&now))).1;
     }
-    out
+
+    // The last approve holds the target's order and its last step's text;
+    // every other entry keeps what the approve before wrote.
+    let fin: Vec<(terms::Term, String)> = target_blocks
+        .iter()
+        .map(|(t, text)| match cur.iter().find(|(c, _)| same_entry(c, t)) {
+            Some((c, b)) if terms::term_hash(c) == terms::term_hash(t) => (c.clone(), b.clone()),
+            _ => (t.clone(), text.clone()),
+        })
+        .collect();
+    std::fs::write(&path, render_terms(&header, &fin)).unwrap();
+    run()
 }
 
 /// The version the owner would read off `adr show` for `id` right now (per

@@ -636,6 +636,15 @@ pub fn terms_refusals(
 ) -> (Vec<String>, Vec<Vec<(String, String)>>) {
     let mut refusals: Vec<String> = Vec::new();
 
+    // Per "Does approve accept a terms edit that changes more than one
+    // entry?": more than one entry added, changed or removed since the
+    // latest approval is refused, here for `approve` and `check` alike.
+    let differing = state::terms_edit_entries(led, tf);
+    if differing.len() > 1 {
+        let approved_before = led.latest_for_path("terms", crate::repo::TERMS_PATH).is_some();
+        refusals.push(msg::terms_edit_too_wide(&differing, approved_before));
+    }
+
     // Step 1 (shape): "missing id" cannot appear here, since `tf` is
     // already minted.
     for e in &tf.errors {
@@ -845,15 +854,6 @@ fn do_approve_terms(
             None => term_rows_due.push((id.clone(), name.clone(), hash.clone())),
         }
     }
-    // Per "Does approve accept a terms edit that changes more than one
-    // entry?": entries added, changed or removed since the latest `term`
-    // rows count together, and more than one refuses before anything is
-    // written.
-    let removed = state::removed_term_ids(led, &tf);
-    let differing = term_rows_due.len() + removed;
-    if differing > 1 {
-        return Err(msg::approve_prefixed(msg::terms_edit_too_wide(differing)));
-    }
     // Computed here, before the file is rewritten, and printed only in the
     // branch below that writes the `term` rows.
     let changed_lines = {
@@ -953,6 +953,16 @@ fn do_approve_terms(
         };
         let mut rows = vec![row];
         rows.extend(term_rows);
+        for (id, name) in state::removed_terms(led, &tf) {
+            rows.push(ledger::Row {
+                time: write_time.clone(),
+                event: "term".to_string(),
+                id,
+                hash: state::TERM_REMOVED.to_string(),
+                detail: name,
+                version: crate::version::VERSION.to_string(),
+            });
+        }
         ledger::append(ledger_path, &rows).map_err(append_failed)?;
         out.extend(changed_lines);
         out.push(msg::terms_approved_now());
