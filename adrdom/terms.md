@@ -212,3 +212,9 @@ id: daec9ffd-676f-4111-a359-2827bfd4527c
 terms: embedding=fa0b0e24-b7cf-471b-94b6-6d167e8ad269
 definition: A text in the records whose embedding is near a new text's embedding.
 aliases: neighbours, neighbor, neighbors
+
+## reader
+id: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d
+definition: A program apart from the agent that reads records on the owner's behalf.
+aliases: readers
