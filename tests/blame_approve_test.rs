@@ -31,12 +31,12 @@ fn approve_resolves_every_destination_kind_and_writes_one_row() {
         "docs/x.md",
         "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\n",
     );
-    let rows = "1-1\tdecision: Does this pass?\n\
+    let rows = "1-1\tdecision: Is this pass?\n\
 2-2\tterm: pass\n\
 3-3\tprose: example\n\
 4-4\tdropped: dead\n\
 5-5\tdropped: detail\n\
-6-6\tdropped: copy of Does this pass?\n\
+6-6\tdropped: copy of Is this pass?\n\
 7-7\tdropped: copy of docs/other.md\n";
     let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
 
@@ -101,7 +101,7 @@ fn approving_again_with_no_change_writes_no_new_row() {
 fn approving_again_says_when_it_rewrote_the_rows() {
     let (dir, id1, _id2) = setup();
     let blob = write_origin(&dir, "docs/x.md", "line 1\n");
-    let rows = "1-1\tdecision: Does this pass?\n";
+    let rows = "1-1\tdecision: Is this pass?\n";
     let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
     let as_written = std::fs::read_to_string(&path).unwrap();
 
@@ -227,7 +227,7 @@ fn a_retired_term_refuses() {
 fn a_copy_target_in_any_state_resolves() {
     let (dir, _id1, id2) = setup();
     let blob = write_origin(&dir, "docs/noncurrent.md", "one\n");
-    let rows = "1-1\tdropped: copy of Does this also pass?\n";
+    let rows = "1-1\tdropped: copy of Is this also pass?\n";
     let path = write_blame_file(&dir, "adrdom/blame/noncurrent.md", "docs/noncurrent.md", &blob, rows);
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");

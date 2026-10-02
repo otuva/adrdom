@@ -11,7 +11,7 @@ use common::*;
 
 const PASS_RECORD: &str = r#"# Example
 
-### 1.1 Does this pass?
+### 1.1 Is this pass?
 depends: pass
 
 Problem: whether it passes.
@@ -30,7 +30,7 @@ Standard: clear yes or no.
 /// single `adr ask` picks up both ids at once -- lets a test answer one and
 /// refuse the other.
 const SECOND_QUESTION: &str = r#"
-### 1.2 Does this also pass?
+### 1.2 Is this also pass?
 depends: pass
 
 Problem: whether the second one passes too.

@@ -4,7 +4,7 @@ use common::*;
 
 const ONE_QUESTION: &str = r#"# Example
 
-### 5.1 Does this pass?
+### 5.1 Is this pass?
 depends: pass
 
 Problem: whether it passes.
@@ -71,7 +71,7 @@ fn ledger_append_only_violation_is_detected_after_a_commit() {
         .iter()
         .position(|l| l.contains("\tasked\t"))
         .expect("an asked row");
-    let tampered = lines[asked_idx].replace("Does this pass?", "rewritten after the fact");
+    let tampered = lines[asked_idx].replace("Is this pass?", "rewritten after the fact");
     lines[asked_idx] = &tampered;
     let new_content = lines.join("\n") + "\n";
     std::fs::write(&ledger_path, new_content).unwrap();
@@ -342,7 +342,7 @@ fn ledger_rows_from_ask_approve_answer_are_six_fields_with_correct_meaning() {
                 saw.insert("asked");
                 assert_eq!(ident, id, "asked row's identifier is the question's id");
                 assert_eq!(hash.len(), 64);
-                assert_eq!(detail, "5.1 Does this pass?", "detail is the heading text asked covers");
+                assert_eq!(detail, "5.1 Is this pass?", "detail is the heading text asked covers");
                 asked_hash = Some(hash.to_string());
             }
             "answered" => {
@@ -409,7 +409,7 @@ fn question_identifier_survives_reword_and_a_move_to_another_file() {
     // Reword the heading text only; approve's own id-minting only fires
     // for a heading with no id line at all, so the existing id line is
     // left untouched by this re-approve.
-    let reworded = content.replace("Does this pass?", "Does this still pass, reworded?");
+    let reworded = content.replace("Is this pass?", "Does this still pass, reworded?");
     std::fs::write(&record_path, &reworded).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
 

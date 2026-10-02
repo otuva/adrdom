@@ -485,7 +485,7 @@ aliases: authority\n";
 fn ask_refuses_a_candidate_that_pairs_no_term() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    let content = "# Example\n\n### 1.1 Does this pass?\n\nProblem: whether it passes.\n\nStandard: clear yes or no.\n\n- A) Yes it passes.\n  Why: reasons.\n  Costs: costs.\n- B) No it does not.\n  Why: other reasons.\n  Costs: other costs.\n";
+    let content = "# Example\n\n### 1.1 Is this pass?\n\nProblem: whether it passes.\n\nStandard: clear yes or no.\n\n- A) Yes it passes.\n  Why: reasons.\n  Costs: costs.\n- B) No it does not.\n  Why: other reasons.\n  Costs: other costs.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
     approve_via_ledger(&dir, "adrdom/decisions/example.md", content);
     approve_minimal_terms(&dir, "authority");
@@ -495,7 +495,7 @@ fn ask_refuses_a_candidate_that_pairs_no_term() {
     assert!(!out.status.success());
     let err = stderr(&out);
     assert!(
-        err.contains("\"1.1 Does this pass?\" uses no term"),
+        err.contains("\"1.1 Is this pass?\" uses no term"),
         "{}",
         err
     );

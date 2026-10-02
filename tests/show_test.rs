@@ -252,17 +252,17 @@ fn show_derives_tiers_for_an_unapproved_file_whose_depends_line_names_a_cross_fi
     // A: an already-answered, current decision living in a topic file of
     // its own.
     let a_id = "77777777-7777-7777-7777-777777777777";
-    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Does A do a thing?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Is A do a thing?", "2024-01-01T00:00:00Z");
     append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
     let a_content = format!(
-        "# Topic A\n\n### 1.1 Does A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        "# Topic A\n\n### 1.1 Is A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         a_id
     );
     write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
 
     // B: never approved -- its only question stands on A, named by A's
     // heading text, still unrewritten on disk.
-    let b_content = "# Topic B\n\n### 1.1 Does B stand on A?\ndepends: 1.1 Does A do a thing?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let b_content = "# Topic B\n\n### 1.1 Is B stand on A?\ndepends: 1.1 Is A do a thing?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
 
     let out = adr(&dir, &["show", "--all"], &[], "");
@@ -271,12 +271,12 @@ fn show_derives_tiers_for_an_unapproved_file_whose_depends_line_names_a_cross_fi
 
     assert!(shown.contains("# Topic B"), "{}", shown);
     assert!(
-        shown.contains("tier 1\n  [not asked] 1.1 Does B stand on A?"),
+        shown.contains("tier 1\n  [not asked] 1.1 Is B stand on A?"),
         "B's only question should land in tier 1 and be listed as unasked: {}",
         shown
     );
     assert!(
-        shown.contains("stands on: 1.1 Does A do a thing?"),
+        shown.contains("stands on: 1.1 Is A do a thing?"),
         "the cross-file dependency should resolve back to A's heading text: {}",
         shown
     );

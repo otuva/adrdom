@@ -65,6 +65,10 @@ pub const DATE_WHAT: &str = "carries a date";
 pub const LOADED_OPENING_WHAT: &str = "opens assuming an answer";
 pub const JOIN_WHAT: &str = "joins two questions";
 
+/// The most words an option, its Why line or its Costs line holds (per
+/// "What is the word limit of an option?").
+pub const WORD_LIMIT: usize = 20;
+
 pub const ID_PREFIX: &str = "id: ";
 pub const TERMS_PREFIX: &str = "terms: ";
 pub const DEPENDS_PREFIX: &str = "depends: ";
@@ -153,6 +157,54 @@ pub fn prose_tells_in(lines: &[String], start: usize, end: usize) -> Vec<(usize,
     out
 }
 
+/// Words of a line: runs of non-whitespace, so "Yes." is one word.
+fn count_words(text: &str) -> usize {
+    text.split_whitespace().count()
+}
+
+/// Length refusals in `lines[start..end]` for the question headed
+/// `heading_text`: under a heading that opens with "Does" an option holds
+/// one word, and any other option, every Why line and every Costs line holds
+/// at most `WORD_LIMIT` words. Returns (absolute 0-based line, the count and
+/// limit, the line's kind). Only `ask` reads this, and only on a question
+/// not yet answered, so answered text is never judged (per "Does the word
+/// limit read answered text?").
+pub fn length_tells(lines: &[String], start: usize, end: usize, heading_text: &str) -> Vec<(usize, String, String)> {
+    let mut out = Vec::new();
+    let closed = words(heading_text).first().map(String::as_str) == Some("does");
+    let end = end.min(lines.len());
+    for (i, line) in lines.iter().enumerate().take(end).skip(start) {
+        let (kind, text) = if let Some(rest) = option_text(line) {
+            ("option", rest)
+        } else if let Some(v) = line.strip_prefix("  Why: ") {
+            ("Why line", v)
+        } else if let Some(v) = line.strip_prefix("  Costs: ") {
+            ("Costs line", v)
+        } else {
+            continue;
+        };
+        let n = count_words(text);
+        if kind == "option" && closed {
+            if n != 1 {
+                out.push((i, format!("{} words, a heading that opens with Does takes one", n), kind.to_string()));
+            }
+        } else if n > WORD_LIMIT {
+            out.push((i, format!("{} words, the limit is {}", n, WORD_LIMIT), kind.to_string()));
+        }
+    }
+    out
+}
+
+/// The text after `- A) ` on an option line.
+fn option_text(line: &str) -> Option<&str> {
+    let rest = line.strip_prefix("- ")?;
+    let mut chars = rest.chars();
+    if !chars.next()?.is_ascii_uppercase() {
+        return None;
+    }
+    chars.as_str().strip_prefix(") ")
+}
+
 /// Every tell in a `### ` heading's text at absolute line `line`: a loaded
 /// opening, "and"/"or" joining two questions, plus the same provenance/
 /// code-state/date scan the body gets. Same result shape as
@@ -236,6 +288,13 @@ mod tests {
     fn heading_tells_join() {
         let hits = heading_tells(0, "does it store terms and definitions");
         assert!(hits.iter().any(|(_, phrase, what)| phrase == "and" && *what == JOIN_WHAT));
+    }
+
+    #[test]
+    fn length_tells_counts_words() {
+        let lines: Vec<String> = ["- A) Yes.", "  Why: short.", "- B) one two"].iter().map(|s| s.to_string()).collect();
+        assert!(length_tells(&lines, 0, 3, "Does it?").len() == 1);
+        assert!(length_tells(&lines, 0, 3, "What is it?").is_empty());
     }
 
     #[test]

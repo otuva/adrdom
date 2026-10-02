@@ -347,6 +347,15 @@ pub fn tell(rel: &str, line: usize, label: &str, phrase: &str, what: &str) -> St
     )
 }
 
+/// An option, Why line or Costs line over the length rule (per "Does ask
+/// refuse an option over a word limit?").
+pub fn too_long(rel: &str, line: usize, label: &str, kind: &str, found: &str) -> String {
+    refuse(
+        format!("{}:{}: \"{}\": the {} has {}", rel, line + 1, label, kind, found),
+        Next::agent("shortens the line"),
+    )
+}
+
 pub fn no_depends_line(rel: &str, heading: &str) -> String {
     refuse(
         format!("{}: \"{}\" has no depends line", rel, heading),
@@ -2312,6 +2321,19 @@ pub fn topic_file_unreadable(path: &str, e: impl Display) -> String {
 
 pub fn terms_ids_filled(n: usize) -> String {
     format!("approve: adrdom/terms.md: {} missing id(s) filled", n)
+}
+
+/// A terms edit that adds, changes or removes more than one entry (per
+/// "Does approve accept a terms edit that changes more than one entry?").
+pub fn terms_edit_too_wide(count: usize) -> String {
+    refuse(
+        format!(
+            "adrdom/terms.md: {} entries differ from the last approval, the most is 1",
+            count
+        ),
+        Next::agent("keeps one edit in the file, then the owner runs approve again, once for each further entry")
+            .and_owner_runs("adr approve adrdom/terms.md"),
+    )
 }
 
 pub fn terms_already_approved() -> String {

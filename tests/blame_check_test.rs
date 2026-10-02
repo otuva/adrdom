@@ -176,7 +176,7 @@ fn check_staged_reads_the_blame_file_from_the_index_not_the_working_tree() {
 fn check_fails_when_the_origin_is_gone_with_an_open_decision_row() {
     let (dir, _id1, id2) = blame_setup();
     let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
-    let rows = "1-1\tdecision: Does this also pass?\n2-2\tdropped: dead\n";
+    let rows = "1-1\tdecision: Is this also pass?\n2-2\tdropped: dead\n";
     let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
@@ -201,7 +201,7 @@ fn check_fails_when_the_origin_is_gone_with_an_open_decision_row() {
 fn a_renamed_origin_counts_as_missing_and_names_the_old_path() {
     let (dir, _id1, id2) = blame_setup();
     let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
-    let rows = "1-1\tdecision: Does this also pass?\n2-2\tdropped: dead\n";
+    let rows = "1-1\tdecision: Is this also pass?\n2-2\tdropped: dead\n";
     let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
@@ -227,7 +227,7 @@ fn a_renamed_origin_counts_as_missing_and_names_the_old_path() {
 fn check_passes_when_the_origin_is_gone_but_every_row_is_closed() {
     let (dir, id1, _id2) = blame_setup();
     let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
-    let rows = "1-1\tdecision: Does this pass?\n2-2\tdropped: dead\n";
+    let rows = "1-1\tdecision: Is this pass?\n2-2\tdropped: dead\n";
     let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
@@ -257,7 +257,7 @@ fn check_passes_when_the_origin_is_gone_and_the_decision_row_target_was_supersed
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let old_ids = extract_ids(&content);
-    let old_id = old_ids[0].clone(); // "Does this pass?"
+    let old_id = old_ids[0].clone(); // "Is this pass?"
     let out = adr_answer(&dir, &old_id, "A");
     assert!(out.status.success(), "{}", stderr(&out));
     // Not tagged: `old_id` is about to be superseded, so it is never a
@@ -267,7 +267,7 @@ fn check_passes_when_the_origin_is_gone_and_the_decision_row_target_was_supersed
     // A third question supersedes it.
     let mut content = std::fs::read_to_string(&record).unwrap();
     let third = format!(
-        "\n### Does this pass, revised?\ndepends: pass\nsupersedes: {}\n\n\
+        "\n### Is this pass, revised?\ndepends: pass\nsupersedes: {}\n\n\
 Problem: revisiting.\n\nStandard: clear yes or no.\n\n\
 - A) Yes it still passes.\n  Why: reasons.\n  Costs: costs.\n\
 - B) No.\n  Why: other reasons.\n  Costs: other costs.\n",
@@ -452,7 +452,7 @@ fn check_fails_naming_a_blame_file_that_cannot_be_read() {
 fn check_still_takes_the_missing_branch_for_a_truly_gone_origin() {
     let (dir, _id1, _id2) = blame_setup();
     let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
-    let rows = "1-1\tdecision: Does this also pass?\n2-2\tdropped: dead\n";
+    let rows = "1-1\tdecision: Is this also pass?\n2-2\tdropped: dead\n";
     let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));

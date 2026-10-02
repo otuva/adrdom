@@ -48,7 +48,7 @@ const CONTEXT_TELL_RECORD: &str = r#"# Example
 
 Claude decided this design already.
 
-### Does the store exist?
+### Is the store exist?
 depends: decision
 
 Problem: p.
@@ -85,7 +85,7 @@ const BODY_TELL_RECORD: &str = r#"# Example
 
 Context prose.
 
-### Does the store exist?
+### Is the store exist?
 depends: decision
 
 Problem: the team already built the store.

@@ -340,6 +340,11 @@ pub fn run(record_path: PathBuf) -> i32 {
             for (line, phrase, what) in tells::prose_tells_in(&rf.lines, s, e) {
                 refusals.push(msg::tell(&rel, line, &sec.heading_text, &phrase, what));
             }
+            // Per "Does ask refuse an option over a word limit?": the length
+            // rules read only the candidate being asked, never answered text.
+            for (line, found, kind) in tells::length_tells(&rf.lines, s, e, &sec.heading_text) {
+                refusals.push(msg::too_long(&rel, line, &sec.heading_text, &kind, &found));
+            }
         }
 
         let text = state::section_text_excluding_terms_line(&rf.lines, sec);
