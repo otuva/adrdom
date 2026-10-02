@@ -20,7 +20,8 @@ Run `adr show`. It prints every current decision, its heading and under it
 the answer the owner picked, and under each topic file the lines of `next`:
 one line for each move, opening with who makes it.
 
-- A line that opens with `agent` is yours. Make these moves in the order
+- A line that opens with `agent` is yours. A line with `builds` in it is for
+  an agent that did not write the question. Make these moves in the order
   printed. When such a line ends with `owner runs: ...`, make your move,
   then post that command in chat and stop.
 - A line that opens with `owner runs:` is the owner's. Post the command in
@@ -83,14 +84,16 @@ turns each heading into its id. When a refusal says a heading names more
 than one decision, write the id of the one you mean in its place: it is on
 the `id:` line under that heading in its topic file.
 
-Ask "does X" or "what does X do". A heading that opens with "which",
-"where", "how many" or "how much" is refused: it assumes an answer the owner
-has not given. One question per heading: a heading with "and" or "or" in it
-is refused as two questions. Say the plan is ready and stop. The owner may
-strike, add or reorder headings before approving, or write the plan itself
-and approve it the same way. The owner runs `adr approve <file>`; after it
-every heading has an `id:` line and the entries of its `depends:` and
-`supersedes:` lines are ids.
+Ask "does X" or "what does X do". Under a heading that opens with Does, an
+option holds one word. Any other option, and every Why and Costs line, holds
+twenty words at most; `adr ask` refuses a longer line. A heading that opens
+with "which", "where", "how many" or "how much" is refused: it assumes an
+answer the owner has not given. One question per heading: a heading with
+"and" or "or" in it is refused as two questions. Say the plan is ready and
+stop. The owner may strike, add or reorder headings before approving, or
+write the plan itself and approve it the same way. The owner runs
+`adr approve <file>`; after it every heading has an `id:` line and the
+entries of its `depends:` and `supersedes:` lines are ids.
 
 **2. Walk each question, then write its body.** Write the bodies `next`
 names. Before you write an option, read the code and the decisions it meets
@@ -115,9 +118,9 @@ the day they were written. Three kinds of words are refused:
 Problem: what breaks, in one line.
 Standard: the named practice for this, stated flat.
 
-- A) One sentence that answers the heading.
-  Why: what this gains.
-  Costs: what this loses.
+- A) One sentence that answers the heading, twenty words at most.
+  Why: what this gains, twenty words at most.
+  Costs: what this loses, twenty words at most.
 - B) ...
 ```
 
@@ -135,11 +138,12 @@ chat, post the `owner runs: adr answer ...` lines that `next` prints, and
 stop. The owner puts a letter, or the word `refuse`, in place of `<letter>`.
 
 **4. After the answer.** If you wrote the question, stop: another agent
-builds its decision from the record alone. Build the
-decisions `next` names. Tie each one to a test: put a comment `adr: <id>` inside a test, outside `adrdom/`, that shows
-the code follows the decision. Write the test if none exists, and add it to
-git. The answers are committed as they are given. `adr check` reports each
-untested decision until a test names it; the build and its tests follow.
+builds its decision from the record alone. Build the decisions `next` names.
+Tie each one to a test: put a comment `adr: <id>` inside a test, outside
+`adrdom/`, that shows the code follows the decision. Write the test if none
+exists, and add it to git. The answers are committed as they are given.
+`adr check` reports each untested decision until a test names it; the build
+and its tests follow.
 
 Never write or edit `id:`, `terms:` or `**Answer:**` lines yourself.
 
