@@ -1109,6 +1109,23 @@ fn do_approve_terms(
 /// current decision but a question of another topic file that is not
 /// answered (or is refused) is refused with the state the tool holds.
 #[allow(clippy::too_many_arguments)]
+/// The length refusals (`tells::length_tells`, the one function `ask` reads
+/// too) of every question of `rf` not yet asked. A question with a ledger
+/// state is never read (per "Does the word limit read answered text?").
+pub fn length_refusals(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<String> {
+    let mut out = Vec::new();
+    for sec in &rf.sections {
+        if sec.id.as_ref().is_some_and(|id| led.latest_state(id).is_some()) {
+            continue;
+        }
+        let (s, e) = record::hash_range(&rf.lines, sec);
+        for (line, found, kind) in tells::length_tells(&rf.lines, s, e, &sec.heading_text) {
+            out.push(msg::too_long(rel, line, &sec.heading_text, &kind, &found));
+        }
+    }
+    out
+}
+
 pub fn record_refusals(
     rel: &str,
     rf: &RecordFile,
@@ -1173,6 +1190,12 @@ pub fn record_refusals(
                 message: msg::tell(rel, line, &sec.heading_text, &phrase, what),
             });
         }
+    }
+    // Per "Does ask refuse an option over a word limit?" and "Does an option
+    // under a heading that opens with Does hold one word?": the same length
+    // rules `ask` enforces, found before approval in a question not yet asked.
+    for message in length_refusals(rel, rf, led) {
+        out.push(Refusal { category: "tells", message });
     }
     {
         let (cs, ce) = rf.context_range;

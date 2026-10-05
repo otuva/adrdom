@@ -162,6 +162,13 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<(String, i32), String> {
         return Ok((out, 0));
     }
 
+    // The length hits among what the run did: shown, never a stop.
+    let hits = crate::actions::length_refusals(&rel, rf, &ledger::read(&root.join(repo::LEDGER_PATH)));
+    for h in &hits {
+        out.push_str(h);
+        out.push('\n');
+    }
+
     // Step 5: the neighbours of each question with its body.
     let todo: Vec<usize> = pl.missing_body().iter().map(|q| q.idx).collect();
     if !todo.is_empty() {
@@ -193,6 +200,10 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<(String, i32), String> {
         return Ok((out, 0));
     }
     match pl.next() {
+        NextMove::Ready if !hits.is_empty() => {
+            out.push_str(&msg::plan_next_length(&rel));
+            out.push('\n');
+        }
         NextMove::Ready => {
             out.push_str(&msg::plan_ready(&rel));
             out.push('\n');

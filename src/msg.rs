@@ -357,7 +357,11 @@ pub fn tell(rel: &str, line: usize, label: &str, phrase: &str, what: &str) -> St
 pub fn too_long(rel: &str, line: usize, label: &str, kind: &str, found: &str) -> String {
     refuse(
         format!("{}:{}: \"{}\": the {} has {}", rel, line + 1, label, kind, found),
-        Next::agent("shortens the line"),
+        if found.ends_with(crate::tells::ONE_WORD_RULE) {
+            Next::agent("writes one word")
+        } else {
+            Next::agent("shortens the line")
+        },
     )
 }
 
@@ -998,6 +1002,11 @@ pub fn plan_line_wanted(heading: &str, kind: &str, name: &str) -> String {
 /// What `adr plan` has nothing left to do for.
 pub fn plan_ready(rel: &str) -> String {
     format!("plan: {}: every question has its rows and every neighbour is on a line", rel)
+}
+
+/// The run's last line while a length hit remains: the fix, then plan again.
+pub fn plan_next_length(rel: &str) -> String {
+    Next::agent(format!("fixes the lines above, then runs: adr plan {}", rel)).render_line()
 }
 
 pub fn plan_next_plan(rel: &str) -> String {
