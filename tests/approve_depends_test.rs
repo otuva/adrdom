@@ -8,7 +8,7 @@ use common::*;
 /// options.
 fn root_question(n: usize) -> String {
     format!(
-        "### {n}.1 Root {n}?\ndepends: decision\n\nProblem: p{n}.\n\nStandard: s{n}.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n",
+        "### {n}.1 Root {n}?\ndepends: decision\n\nProblem: p{n} of the decision.\n\nStandard: s{n}.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n",
         n = n
     )
 }
@@ -24,7 +24,7 @@ fn setup(dir: &std::path::Path) {
 fn approve_refuses_a_heading_with_no_depends_line() {
     let dir = init_repo();
     setup(&dir);
-    let content = "# Example\n\n### 1.1 No depends?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let content = "# Example\n\n### 1.1 No depends?\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -59,7 +59,7 @@ fn approve_accepts_all_three_depends_target_kinds_and_refuses_a_missing_line() {
     let dir = init_repo();
     setup(&dir);
 
-    let missing = "# Missing\n\n### 1.1 No depends?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let missing = "# Missing\n\n### 1.1 No depends?\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let missing_record = write_record(&dir, "adrdom/decisions/missing.md", missing);
     let out = adr_owner(&dir, &["approve", missing_record.to_str().unwrap()], "");
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
@@ -77,7 +77,7 @@ fn approve_accepts_all_three_depends_target_kinds_and_refuses_a_missing_line() {
     append_ledger_row_at(&dir, "asked", decided_id, "h1", "Some earlier heading?", "2024-01-01T00:00:00Z");
     append_ledger_row_at(&dir, "answered", decided_id, "h1", "A", "2024-01-01T00:00:01Z");
     let earlier = format!(
-        "# Earlier\n\n### 1.1 Some earlier heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        "# Earlier\n\n### 1.1 Some earlier heading?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         decided_id
     );
     write_record(&dir, "adrdom/decisions/earlier.md", &earlier);
@@ -86,9 +86,9 @@ fn approve_accepts_all_three_depends_target_kinds_and_refuses_a_missing_line() {
     // the same file ("First?"), and the current decision above.
     let content = format!(
         "# Example\n\n\
-        ### First?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
-        ### Second?\ndepends: First?=A\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
-        ### Third?\ndepends: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        ### First?\ndepends: decision\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+        ### Second?\ndepends: First?=A\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+        ### Third?\ndepends: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
         decided_id
     );
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
@@ -106,7 +106,7 @@ fn approve_accepts_all_three_depends_target_kinds_and_refuses_a_missing_line() {
 fn approve_refuses_a_term_entry_that_resolves_to_nothing() {
     let dir = init_repo();
     setup(&dir);
-    let content = "# Example\n\n### 1.1 Q?\ndepends: nosuchterm\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let content = "# Example\n\n### 1.1 Q?\ndepends: nosuchterm\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -133,7 +133,7 @@ fn approve_refuses_a_term_entry_that_resolves_to_a_retired_term() {
     write_record(&dir, "adrdom/terms.md", TERMS_ONE_RETIRED);
     approve_terms_via_ledger(&dir, TERMS_ONE_RETIRED);
 
-    let content = "# Example\n\n### 1.1 Q?\ndepends: gadget\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let content = "# Example\n\n### 1.1 Q?\ndepends: gadget\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -154,7 +154,7 @@ fn approve_refuses_a_decision_entry_that_is_not_current() {
     setup(&dir);
     let uuid = "22222222-2222-2222-2222-222222222222";
     let content = format!(
-        "# Example\n\n### 1.1 Q?\ndepends: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        "# Example\n\n### 1.1 Q?\ndepends: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
         uuid
     );
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
@@ -178,7 +178,7 @@ fn approve_refuses_a_decision_entry_that_is_not_current() {
 fn approve_refuses_a_dangling_heading_dependency() {
     let dir = init_repo();
     setup(&dir);
-    let content = "# Example\n\n### 1.1 Q?\ndepends: Missing?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let content = "# Example\n\n### 1.1 Q?\ndepends: Missing?\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -200,7 +200,7 @@ fn approve_refuses_a_dangling_heading_dependency() {
 fn approve_refuses_a_cycle_between_two_headings() {
     let dir = init_repo();
     setup(&dir);
-    let content = "# Example\n\n### A?\ndepends: B?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n### B?\ndepends: A?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let content = "# Example\n\n### A?\ndepends: B?\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n### B?\ndepends: A?\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -216,7 +216,7 @@ fn approve_refuses_a_cycle_between_two_headings() {
 fn approve_refuses_a_heading_that_depends_on_itself() {
     let dir = init_repo();
     setup(&dir);
-    let content = "# Example\n\n### A?\ndepends: A?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let content = "# Example\n\n### A?\ndepends: A?\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -274,17 +274,17 @@ fn approve_accepts_two_new_headings_when_two_in_the_tier_are_dead() {
     // term's id, as a real prior approve would have left it. Two
     // brand new skeleton headings are added to the same tier.
     let dead_a = format!(
-        "### 1.1 Dead A?\ndepends: {term}\n\nid: {a}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** refused\n",
+        "### 1.1 Dead A?\ndepends: {term}\n\nid: {a}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** refused\n",
         term = term_id,
         a = old_a
     );
     let content = format!(
         "# Example\n\n{dead_a}\n\
-### 1.2 Dead B?\ndepends: {term}\n\nid: {b}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n\n\
-### 1.3 Live C?\ndepends: decision\n\nid: {c}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
-### 1.4 Live D?\ndepends: decision\n\nid: {d}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
-### 1.5 New E?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
-### 1.6 New F?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+### 1.2 Dead B?\ndepends: {term}\n\nid: {b}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n\n\
+### 1.3 Live C?\ndepends: decision\n\nid: {c}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+### 1.4 Live D?\ndepends: decision\n\nid: {d}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+### 1.5 New E?\ndepends: decision\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+### 1.6 New F?\ndepends: decision\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
         dead_a = dead_a,
         term = term_id,
         b = old_b,
@@ -342,8 +342,8 @@ fn approve_prints_tiers_across_a_chain() {
     let dir = init_repo();
     setup(&dir);
     let content = "# Example\n\n\
-        ### A?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
-        ### B?\ndepends: A?=A\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+        ### A?\ndepends: decision\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+        ### B?\ndepends: A?=A\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -361,7 +361,7 @@ fn approve_withdraws_a_refused_id_missing_from_every_file() {
     let fake_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
     append_ledger_row(&dir, "refused", fake_id, "-", "Some vanished question?");
 
-    let content = "# Example\n\n### 1.1 Only question?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let content = "# Example\n\n### 1.1 Only question?\ndepends: decision\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -383,8 +383,8 @@ fn approve_question_hash_moves_when_only_an_answer_set_changes() {
     let dir = init_repo();
     setup(&dir);
     let content = "# Example\n\n\
-        ### 1.1 A?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
-        ### 1.2 B?\ndepends: 1.1 A?=A\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+        ### 1.1 A?\ndepends: decision\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+        ### 1.2 B?\ndepends: 1.1 A?=A\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out1 = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -445,8 +445,8 @@ fn approve_turns_a_depends_name_into_an_id_and_show_turns_it_back_into_words() {
     let dir = init_repo();
     setup(&dir);
     let content = "# Example\n\n\
-        ### 1.1 Is the widget red?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
-        ### 1.2 Does the paint match?\ndepends: 1.1 Is the widget red?=A\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+        ### 1.1 Is the widget red?\ndepends: decision\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+        ### 1.2 Does the paint match?\ndepends: 1.1 Is the widget red?=A\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -547,7 +547,7 @@ fn ask_and_check_refuse_a_cross_file_depends_line_reverted_by_hand_after_approve
     // B: its only question stands on A, named by A's heading text.
     let b_text = "1.1 Is A do a thing?";
     let b_content = format!(
-        "# Topic B\n\n### 1.1 Is B stand on A?\ndepends: {}\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        "# Topic B\n\n### 1.1 Is B stand on A?\ndepends: {}\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
         b_text
     );
     let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", &b_content);
@@ -606,13 +606,13 @@ fn approve_refuses_a_depends_set_on_an_answered_cross_file_decision() {
     append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Is A do a thing?", "2024-01-01T00:00:00Z");
     append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
     let a_content = format!(
-        "# Topic A\n\n### 1.1 Is A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        "# Topic A\n\n### 1.1 Is A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         a_id
     );
     write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
 
     let b_content = format!(
-        "# Topic B\n\n### 1.1 Is B stand on A?\ndepends: {}=A\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        "# Topic B\n\n### 1.1 Is B stand on A?\ndepends: {}=A\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
         a_id
     );
     let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", &b_content);
@@ -661,14 +661,14 @@ fn approve_resolves_a_cross_file_heading_dependency_and_show_turns_it_back_into_
     append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Is A do a thing?", "2024-01-01T00:00:00Z");
     append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
     let a_content = format!(
-        "# Topic A\n\n### 1.1 Is A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        "# Topic A\n\n### 1.1 Is A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         a_id
     );
     write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
 
     // B: a fresh topic file whose only question stands on A, named by A's
     // heading text.
-    let b_content = "# Topic B\n\n### 1.1 Is B stand on A?\ndepends: 1.1 Is A do a thing?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let b_content = "# Topic B\n\n### 1.1 Is B stand on A?\ndepends: 1.1 Is A do a thing?\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
 
     let out = adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "");
@@ -709,7 +709,7 @@ fn approve_refuses_a_cross_file_heading_dependency_naming_two_current_decisions(
     append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
     append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
     let a_content = format!(
-        "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         a_id
     );
     write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
@@ -718,12 +718,12 @@ fn approve_refuses_a_cross_file_heading_dependency_naming_two_current_decisions(
     append_ledger_row_at(&dir, "asked", c_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
     append_ledger_row_at(&dir, "answered", c_id, "h1", "A", "2024-01-01T00:00:01Z");
     let c_content = format!(
-        "# Topic C\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        "# Topic C\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         c_id
     );
     write_record(&dir, "adrdom/decisions/topic-c.md", &c_content);
 
-    let b_content = "# Topic B\n\n### 1.1 Does B stand on the shared heading?\ndepends: 1.1 Shared heading?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let b_content = "# Topic B\n\n### 1.1 Does B stand on the shared heading?\ndepends: 1.1 Shared heading?\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
 
     let out = adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "");
@@ -771,13 +771,13 @@ fn approve_refuses_a_cross_file_heading_dependency_naming_two_decisions_in_one_f
     append_ledger_row_at(&dir, "asked", c_id, "h2", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
     append_ledger_row_at(&dir, "answered", c_id, "h2", "A", "2024-01-01T00:00:01Z");
     let a_content = format!(
-        "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {a}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {c}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {a}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {c}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         a = a_id,
         c = c_id,
     );
     write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
 
-    let b_content = "# Topic B\n\n### 1.1 Does B stand on the shared heading?\ndepends: 1.1 Shared heading?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let b_content = "# Topic B\n\n### 1.1 Does B stand on the shared heading?\ndepends: 1.1 Shared heading?\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
 
     let out = adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "");
@@ -816,7 +816,7 @@ fn approve_refuses_a_real_dangling_entry_over_a_co_occurring_ambiguous_heading()
     append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
     append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
     let a_content = format!(
-        "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         a_id
     );
     write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
@@ -825,7 +825,7 @@ fn approve_refuses_a_real_dangling_entry_over_a_co_occurring_ambiguous_heading()
     append_ledger_row_at(&dir, "asked", c_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
     append_ledger_row_at(&dir, "answered", c_id, "h1", "A", "2024-01-01T00:00:01Z");
     let c_content = format!(
-        "# Topic C\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        "# Topic C\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         c_id
     );
     write_record(&dir, "adrdom/decisions/topic-c.md", &c_content);
@@ -833,10 +833,10 @@ fn approve_refuses_a_real_dangling_entry_over_a_co_occurring_ambiguous_heading()
     let b_content = "# Topic B\n\n\
 ### 1.1 Names nothing anywhere?\n\
 depends: 1.1 Nothing anywhere names this?\n\n\
-Problem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+Problem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
 ### 1.2 Does B stand on the shared heading?\n\
 depends: 1.1 Shared heading?\n\n\
-Problem: p3.\n\nStandard: s3.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+Problem: p3 of the decision.\n\nStandard: s3.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
 
     let out = adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "");
@@ -877,7 +877,7 @@ fn approve_refuses_a_frozen_sections_depends_line_hand_edited_to_a_cross_file_he
     append_ledger_row_at(&dir, "asked", y_id, "h1", "1.1 Does Y do a thing?", "2024-01-01T00:00:00Z");
     append_ledger_row_at(&dir, "answered", y_id, "h1", "A", "2024-01-01T00:00:01Z");
     let y_content = format!(
-        "# Topic Y\n\n### 1.1 Does Y do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        "# Topic Y\n\n### 1.1 Does Y do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         y_id
     );
     write_record(&dir, "adrdom/decisions/topic-y.md", &y_content);
@@ -889,7 +889,7 @@ fn approve_refuses_a_frozen_sections_depends_line_hand_edited_to_a_cross_file_he
     append_ledger_row_at(&dir, "asked", x_id, "h1", "1.1 Does X stand on something?", "2024-01-01T00:00:00Z");
     append_ledger_row_at(&dir, "answered", x_id, "h1", "A", "2024-01-01T00:00:01Z");
     let x_content = format!(
-        "# Topic X\n\n### 1.1 Does X stand on something?\ndepends: 1.1 Does Y do a thing?\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        "# Topic X\n\n### 1.1 Does X stand on something?\ndepends: 1.1 Does Y do a thing?\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         x_id
     );
     let record_x = write_record(&dir, "adrdom/decisions/topic-x.md", &x_content);
@@ -938,7 +938,7 @@ fn ask_refuses_a_cross_file_heading_dependency_naming_two_current_decisions() {
     append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
     append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
     let a_content = format!(
-        "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         a_id
     );
     write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
@@ -947,12 +947,12 @@ fn ask_refuses_a_cross_file_heading_dependency_naming_two_current_decisions() {
     append_ledger_row_at(&dir, "asked", c_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
     append_ledger_row_at(&dir, "answered", c_id, "h1", "A", "2024-01-01T00:00:01Z");
     let c_content = format!(
-        "# Topic C\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        "# Topic C\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         c_id
     );
     write_record(&dir, "adrdom/decisions/topic-c.md", &c_content);
 
-    let b_content = "# Topic B\n\n### 1.1 Does B stand on the shared heading?\ndepends: 1.1 Shared heading?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let b_content = "# Topic B\n\n### 1.1 Does B stand on the shared heading?\ndepends: 1.1 Shared heading?\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
 
     let out = adr(&dir, &["ask", record_b.to_str().unwrap()], &[], "");
@@ -986,7 +986,7 @@ fn ask_refuses_a_cross_file_heading_dependency_naming_two_current_decisions() {
 // clears once the decision is answered. Refused, the agent names another
 // heading or drops the entry.
 fn waiting_pair(dir: &std::path::Path) -> (std::path::PathBuf, std::path::PathBuf, String) {
-    let q = "Problem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let q = "Problem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let a = write_record(
         dir,
         "adrdom/decisions/topic-a.md",

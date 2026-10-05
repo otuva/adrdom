@@ -143,7 +143,8 @@ fn line_tells(i: usize, text: &str) -> Vec<(usize, String, &'static str)> {
 
 /// Every provenance, code-state, or date tell in `lines[start..end]`, tool
 /// lines skipped: (absolute 0-based line index, the matched phrase or date,
-/// what it does). Used for a section's body (`ask`, `check`) and for the
+/// what it does). Used for a section's body (`ask`, and through
+/// `actions::body_tell_refusals` `check`, `approve` and `plan`) and for the
 /// context prose (`approve`, `check`).
 pub fn prose_tells_in(lines: &[String], start: usize, end: usize) -> Vec<(usize, String, &'static str)> {
     let mut out = Vec::new();

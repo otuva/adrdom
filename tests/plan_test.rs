@@ -21,7 +21,7 @@ const PAINT_ID: &str = "99999991-9999-9999-9999-999999999999";
 
 fn body(n: &str) -> String {
     format!(
-        "\nProblem: problem {n}.\n\nStandard: standard {n}.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n",
+        "\nProblem: problem {n} of the widget.\n\nStandard: standard {n}.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n",
         n = n
     )
 }

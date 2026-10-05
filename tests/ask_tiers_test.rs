@@ -86,11 +86,11 @@ fn ask_names_every_fault_in_one_run() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
-    let body_1 = "\nProblem: the widget is already red and currently unpainted.\n\n\
+    let body_1 = "\nProblem: the widget is red and unpainted.\n\n\
                   Standard: plain words.\n\n\
                   - A) The widget is red.\n  Why: reasons.\n  Costs: costs.\n\
                   - B) The widget is blue.\n  Why: other reasons.\n  Costs: other costs.\n";
-    let body_2 = "\nProblem: the widget has no lid today.\n\n\
+    let body_2 = "\nProblem: the widget has no lid.\n\n\
                   Standard: plain words.\n\n\
                   - A) Yes.\n  Why: reasons.\n  Costs: costs.\n\
                   - B) No.\n  Why: other reasons.\n  Costs: other costs.\n";
@@ -106,7 +106,19 @@ fn ask_names_every_fault_in_one_run() {
     );
     let record = write_record(&dir, "adrdom/decisions/example.md", &plan);
     approve_record(&dir, "adrdom/decisions/example.md");
-    let with_bodies = std::fs::read_to_string(&record).unwrap();
+    // Approve cannot take the loaded words, so they are put back after it
+    // and the approval rows are written by hand: ask is the second stop.
+    let loaded = std::fs::read_to_string(&record)
+        .unwrap()
+        .replace("is red and unpainted.", "is already red and currently unpainted.")
+        .replace("no lid.", "no lid today.");
+    std::fs::write(&record, &loaded).unwrap();
+    let rf = adr::record::load(&record).unwrap();
+    let rel = "adrdom/decisions/example.md";
+    let later = "2099-01-01T00:00:00Z";
+    append_ledger_row_at(&dir, "approved", "-", &adr::record::plan_hash(&rf), rel, later);
+    append_ledger_row_at(&dir, "context", "-", &adr::record::context_hash(&rf), rel, later);
+    let with_bodies = loaded;
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));

@@ -1659,7 +1659,7 @@ fn page_shows_a_reverted_cross_file_depends_line_as_not_approved() {
     // B: its only question stands on A, named by A's heading text.
     let b_text = "1.1 Is A do a thing?";
     let b_content = format!(
-        "# Topic B\n\n### 1.1 Is B stand on A?\ndepends: {}\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        "# Topic B\n\n### 1.1 Is B stand on A?\ndepends: {}\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
         b_text
     );
     let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", &b_content);

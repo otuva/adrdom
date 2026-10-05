@@ -145,7 +145,7 @@ fn check_passes_a_skeleton_that_got_an_id_from_approve_but_was_never_asked() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "pass");
     let content = format!(
-        "{}\n### 3.2 Not asked yet?\ndepends: pass\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n  Costs: z.\n- B) w.\n  Why: y.\n  Costs: z.\n",
+        "{}\n### 3.2 Not asked yet?\ndepends: pass\n\nProblem: p of the pass.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n  Costs: z.\n- B) w.\n  Why: y.\n  Costs: z.\n",
         ONE_QUESTION
     );
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
@@ -1214,7 +1214,7 @@ fn check_counts_a_file_awaiting_approval_when_only_its_context_prose_is_stale() 
     let record = write_record(
         &dir,
         "adrdom/decisions/example.md",
-        "# Example\n\nContext prose.\n\n### 1.1 Only question?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n  Costs: c.\n- B) y.\n  Why: y.\n  Costs: c.\n",
+        "# Example\n\nContext prose.\n\n### 1.1 Only question?\ndepends: decision\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n  Costs: c.\n- B) y.\n  Why: y.\n  Costs: c.\n",
     );
     approve_record(&dir, "adrdom/decisions/example.md");
 

@@ -1,0 +1,77 @@
+// The body rules `ask` refuses, found before approval: a loaded phrase in a
+// question's body, and a question none of whose words pair to a term. Plan
+// and check report them, approve stops them.
+mod common;
+
+use common::*;
+use std::path::{Path, PathBuf};
+
+const REL: &str = "adrdom/decisions/example.md";
+
+fn question(heading: &str, problem: &str) -> String {
+    format!(
+        "# Example\n\n### {}\ndepends: decision\n\nProblem: {}\n\nStandard: plain words.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n",
+        heading, problem
+    )
+}
+
+fn unapproved(content: &str) -> (PathBuf, PathBuf) {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_terms_with(&dir, &["decision"]);
+    let rec = write_record(&dir, REL, content);
+    (dir, rec)
+}
+
+fn both(o: &std::process::Output) -> String {
+    format!("{}{}", stdout(o), stderr(o))
+}
+
+/// What check, approve and plan each print on the file.
+fn three(dir: &Path, rec: &Path) -> (String, String, String) {
+    let chk = adr(dir, &["check"], &[], "");
+    assert!(!chk.status.success(), "{}", both(&chk));
+    let apr = adr_owner(dir, &["approve", rec.to_str().unwrap()], "");
+    assert!(!apr.status.success(), "{}", both(&apr));
+    let pln = both(&adr(dir, &["plan", rec.to_str().unwrap()], &[], ""));
+    assert!(!pln.contains("owner runs: adr approve"), "{}", pln);
+    (both(&chk), stderr(&apr), pln)
+}
+
+// adr: 923818a7-05c6-4977-bbaf-53ee8f3773ef
+#[test]
+fn check_approve_and_plan_find_a_loaded_phrase_in_a_body() {
+    let (dir, rec) = unapproved(&question("Does the decision hold?", "the decision currently holds."));
+    let (chk, apr, pln) = three(&dir, &rec);
+    for out in [&chk, &apr, &pln] {
+        assert!(out.contains("\"currently\" states what the code does now"), "{}", out);
+    }
+    assert!(apr.contains("agent rewrites the line"), "{}", apr);
+}
+
+// adr: 711a7636-9f4d-402d-ae62-265208adf0ac
+#[test]
+fn check_approve_and_plan_find_a_question_that_pairs_no_term() {
+    let (dir, rec) = unapproved(&question("Does the lid hold?", "the lid is unclear."));
+    let (chk, apr, pln) = three(&dir, &rec);
+    for out in [&chk, &apr, &pln] {
+        assert!(out.contains("\"Does the lid hold?\" uses no term"), "{}", out);
+    }
+    assert!(apr.contains("agent adds the term to adrdom/terms.md or rewrites the question"), "{}", apr);
+}
+
+// adr: 711a7636-9f4d-402d-ae62-265208adf0ac
+#[test]
+fn a_heading_with_no_body_is_no_question_yet() {
+    let (dir, _) = unapproved("# Example\n\n### Does the lid hold?\ndepends: decision\n");
+    let out = both(&adr(&dir, &["check"], &[], ""));
+    assert!(!out.contains("uses no term"), "{}", out);
+}
+
+// adr: 711a7636-9f4d-402d-ae62-265208adf0ac
+#[test]
+fn a_question_with_a_term_passes() {
+    let (dir, rec) = unapproved(&question("Does the decision hold?", "the decision is unclear."));
+    let out = adr_owner(&dir, &["approve", rec.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", both(&out));
+}

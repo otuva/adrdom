@@ -181,7 +181,7 @@ fn build(
     let (test_failures, tested_count, test_notes) =
         tests::check_tests(root, &records, &led, tests, &source);
     push_failures(&mut failures, test_failures);
-    push_failures(&mut failures, tells::check_tells(root, &records, &led, &per_record_refusals));
+    push_failures(&mut failures, tells::check_tells(&per_record_refusals));
 
 
     for (rf, replaced) in records.iter().zip(&replaced_per_record) {

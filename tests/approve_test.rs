@@ -1021,7 +1021,7 @@ fn approve_writes_a_terms_row_on_a_clean_edit() {
 
 // --- approve refuses what check refuses for the same file -------------
 
-const WIDGET_Q: &str = "Problem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+const WIDGET_Q: &str = "Problem: p of the widget.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
 
 fn widget_repo() -> std::path::PathBuf {
     let dir = init_repo();
