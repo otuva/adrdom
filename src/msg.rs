@@ -2609,6 +2609,55 @@ pub fn term_retired_heading_next(term: &str, rel: &str) -> Next {
         .and_owner_runs(format!("adr approve {}", rel))
 }
 
+// --- the embedding model and the install of adrdom/.gitignore -----------------
+
+pub fn gitignore_differs() -> String {
+    refuse(
+        "adrdom/.gitignore differs from what install writes".to_string(),
+        Next::agent("runs: adr install"),
+    )
+}
+
+pub fn gitignore_missing() -> String {
+    refuse(
+        "adrdom/.gitignore is missing".to_string(),
+        Next::agent("runs: adr install"),
+    )
+}
+
+pub fn gitignore_written() -> String {
+    "install: adrdom/.gitignore: written".to_string()
+}
+
+pub fn gitignore_up_to_date() -> String {
+    "install: adrdom/.gitignore: already up to date".to_string()
+}
+
+/// The embedding model is not on this machine and this build cannot fetch it.
+#[cfg(any(not(feature = "model"), feature = "fake-model"))]
+pub fn model_missing() -> String {
+    refuse(
+        "model: the embedding model is missing".to_string(),
+        Next::agent("fetches it by running a build of adr with the model feature, or plans on another machine"),
+    )
+}
+
+/// The embedding model cannot be loaded from, or downloaded into, the cache directory.
+#[cfg(feature = "model")]
+pub fn model_load_failed(cache: &str, e: impl Display) -> String {
+    refuse(
+        format!("model: cannot load the embedding model from {}: {}", cache, e),
+        Next::agent("fetches the model by checking the network and the cache directory, then retries, or plans on another machine"),
+    )
+}
+
+pub fn embed_failed(e: impl Display) -> String {
+    refuse(
+        format!("model: cannot embed the texts: {}", e),
+        Next::agent("retries; if it persists, deletes adrdom/cache and retries"),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2760,6 +2809,13 @@ mod tests {
             hook_not_executable(".githooks/pre-commit"),
             gitattributes_differs(),
             gitattributes_missing(),
+            gitignore_differs(),
+            gitignore_missing(),
+            #[cfg(any(not(feature = "model"), feature = "fake-model"))]
+            model_missing(),
+            #[cfg(feature = "model")]
+            model_load_failed("adrdom/cache/model", "no network"),
+            embed_failed("x"),
             malformed_ledger_row(3, "bad row"),
             ledger_not_append_only(),
             ledger_merge_drops_rows(),

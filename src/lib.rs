@@ -3,6 +3,8 @@ pub mod banned;
 pub mod blame;
 pub mod commands;
 pub mod depends;
+pub mod embed;
+pub mod index;
 pub mod ledger;
 pub mod msg;
 pub mod record;

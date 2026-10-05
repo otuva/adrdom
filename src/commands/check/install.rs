@@ -61,6 +61,22 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
         }),
     }
 
+    // The rule that keeps the index out of git, held like the file above.
+    match source.read(root, repo::GITIGNORE_PATH) {
+        Some(content) => {
+            if content != crate::commands::install::GITIGNORE_CONTENT {
+                out.push(Failure {
+                    check: "install".to_string(),
+                    message: msg::gitignore_differs(),
+                });
+            }
+        }
+        None => out.push(Failure {
+            check: "install".to_string(),
+            message: msg::gitignore_missing(),
+        }),
+    }
+
     // AGENTS.md is checked unconditionally; CLAUDE.md's import is checked
     // only when .claude/ exists, the same condition used below for the
     // deny entries (4f925b13-ad16-48b8-acd1-3e30d6e308b6, answer A: the

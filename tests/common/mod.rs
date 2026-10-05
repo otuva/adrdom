@@ -77,7 +77,10 @@ pub fn adr(dir: &Path, args: &[&str], envs: &[(&str, &str)], stdin: &str) -> Out
         .env_remove("CLAUDECODE")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .stderr(Stdio::piped())
+        // Tests never download the embedding model: the fake one answers.
+        // It has an effect only in a build with the `fake-model` feature.
+        .env("ADR_FAKE_MODEL", "1");
     for (k, v) in envs {
         cmd.env(k, v);
     }

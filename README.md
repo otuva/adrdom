@@ -169,6 +169,16 @@ plan and context prose; `terms` tracks the terms file; `banned` and
 cargo test --all-features
 ```
 
+`--all-features` also builds `fake-model`, a hashed bag of words that the test
+harness selects with `ADR_FAKE_MODEL=1`, so no test downloads the embedding
+model. `ADR_NO_MODEL=1` (with `fake-model`) simulates a machine without it. One
+test uses the real model and is skipped unless asked for; it downloads the model
+into `adrdom/cache/model` the first time:
+
+```sh
+cargo test --all-features --test embed_test -- --ignored
+```
+
 `owner-bypass` is a test-only cargo feature (gated further by
 `ADR_OWNER_BYPASS=1`) that lets the integration test suite exercise
 `answer`/`approve`/`unban` non-interactively. It is not part of the default

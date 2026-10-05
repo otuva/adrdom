@@ -40,6 +40,11 @@ pub(crate) const PRE_PUSH_HOOK: &str = "#!/bin/sh\nadr check --push\nexit $?\n";
 /// compares `.codex/rules/adrdom.rules` against `codex_rules_content()`.
 pub(crate) const GITATTRIBUTES_CONTENT: &str = "state/ledger.tsv merge=union\n";
 
+/// `adrdom/.gitignore`'s whole content: the index and the model files under
+/// `adrdom/cache` stay out of git ("Does git track a file the tool can get
+/// again without the owner?").
+pub(crate) const GITIGNORE_CONTENT: &str = "cache/\n";
+
 /// `.codex/rules/adrdom.rules`'s content: one `prefix_rule` block per
 /// `OWNER_COMMANDS` entry (`commands::OWNER_COMMANDS`), `decision =
 /// "forbidden"`. `check`'s `install`
@@ -101,6 +106,17 @@ pub fn run(claude: bool, codex: bool) -> i32 {
             eprintln!(
                 "install: {}",
                 msg::write_failed(repo::GITATTRIBUTES_PATH, e, retry())
+            );
+            return 1;
+        }
+    }
+
+    match install_gitignore(&root) {
+        Ok(m) => messages.push(m),
+        Err(e) => {
+            eprintln!(
+                "install: {}",
+                msg::write_failed(repo::GITIGNORE_PATH, e, retry())
             );
             return 1;
         }
@@ -272,6 +288,19 @@ fn install_gitattributes(root: &Path) -> Result<String, String> {
     }
     fs::write(&path, GITATTRIBUTES_CONTENT).map_err(|e| e.to_string())?;
     Ok(msg::gitattributes_written())
+}
+
+/// Writes/refreshes `adrdom/.gitignore`, the same way as `install_gitattributes`.
+fn install_gitignore(root: &Path) -> Result<String, String> {
+    let path = root.join(repo::GITIGNORE_PATH);
+    let already = fs::read_to_string(&path)
+        .map(|c| c == GITIGNORE_CONTENT)
+        .unwrap_or(false);
+    if already {
+        return Ok(msg::gitignore_up_to_date());
+    }
+    fs::write(&path, GITIGNORE_CONTENT).map_err(|e| e.to_string())?;
+    Ok(msg::gitignore_written())
 }
 
 /// Locates the marker lines in `lines` (as produced by `content.split('\n')`,
