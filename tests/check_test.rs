@@ -1146,7 +1146,6 @@ fn check_passes_a_skeleton_heading_with_no_id_or_body() {
     assert!(!text.contains("parse:"), "{}", text);
 }
 
-// adr: 258107eb-2a90-4ce9-a111-d1bba047d423
 //
 // "a question body under an unapproved heading fails check": the file
 // below has never been approved (no `approved` ledger row), so its
@@ -1173,7 +1172,6 @@ fn check_fails_a_body_under_an_unapproved_heading() {
     );
 }
 
-// adr: 258107eb-2a90-4ce9-a111-d1bba047d423
 //
 // "check reports a file awaiting approval as a count ... and passes
 // (exit 0)": a plan with no body under any heading (a bare skeleton) is

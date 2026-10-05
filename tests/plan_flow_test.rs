@@ -132,7 +132,6 @@ fn id_for_heading(content: &str, heading_prefix: &str) -> String {
         .to_string()
 }
 
-// adr: f01e20ae-00fc-4ec9-a25b-88a90dffc624
 //
 // "one approval covers the headings and their depends lines; the question
 // bodies are written after it, one tier at a time, with no further

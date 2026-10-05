@@ -18,6 +18,8 @@ Standard: review a change whole, structure and content together, once.
   Why: approval stays small and early; a body follows the answers under it.
   Costs: a tie that shows only in the options is found after approval, and fixing it is a plan change.
 
+**Answer:** A
+
 ### Does approve hash each question on its own?
 depends: e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 277a8338-c57a-43cc-8b28-6b42e9347f6a
 id: 61e73795-63de-4669-b09f-48be96919325
@@ -32,6 +34,8 @@ Standard: hash content by unit and derive the whole from the parts, so one part'
 - B) No.
   Why: one row and one comparison per file.
   Costs: a question removed after approval changes the file hash and the file waits for approval again.
+
+**Answer:** A
 
 ### Does a depends entry on a question in its file carry an answer set?
 depends: 9d634996-475e-4ddc-8113-05c404ad9d5c, aef1b384-2b33-47a2-92a8-ec7f8fb258ef, f5eeaacf-1c9f-478b-8a97-2df1aaf39458=*
@@ -68,6 +72,8 @@ Standard: nearest-neighbour retrieval over embeddings of the records, a fixed co
   Why: the count follows the data; a crowded subject brings more, a lone one fewer.
   Costs: a distance is harder to set than a count and can bring none or dozens.
 
+**Answer:** A
+
 ### Does git track a file the tool can get again without the owner?
 depends: bf7da2dd-d8a7-41b8-9898-11cf68d0e833, a7b0b910-57f6-4c59-b904-b42f78db63f7
 id: 0d977e39-a657-4596-8eca-8ceb335f3081
@@ -82,6 +88,8 @@ Standard: generated and downloaded files stay out of version control and are reb
 - B) Yes.
   Why: a clone plans at once, with no download and no rebuild.
   Costs: a hundred megabytes in git and an index that changes at every plan; merges of a binary file.
+
+**Answer:** A
 
 ### What does the agent do to plan a topic file?
 depends: f90dbd5b-8fbe-4899-8588-f8762795c2e2, 94677ed8-eaf6-46e2-bc71-7392fa0805bf, de8ef568-3a8d-42ba-bef7-d7fd467b27be=*
