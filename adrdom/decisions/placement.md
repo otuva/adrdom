@@ -212,6 +212,8 @@ Standard: deduplicate a batch against itself as well as against the store.
   Why: the pool is the records; the agent wrote both headings and knows their tie.
   Costs: two headings on one rule in one plan pass; the tier cap is the only net.
 
+**Answer:** A
+
 ### Does every neighbour get a line under its heading?
 depends: aef1b384-2b33-47a2-92a8-ec7f8fb258ef, 2bae531b-c4df-48a0-89a0-3d52726741ea, 46fc51ff-66b9-4841-a953-ae0d4c2fc424=*
 id: c6451ecc-17a9-447e-a9c9-fe9b35ec789c
@@ -318,6 +320,8 @@ Standard: machine-written records are append-only and verified against history.
   Why: the file is a cache of readings, not a record; nothing to hold.
   Costs: a row written by hand passes as the reader's word, and a merge may drop rows.
 
+**Answer:** A
+
 ### Does planning stop without the reader?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 62e50382-db1b-4649-9f26-7f44c379d6fe=*
 id: 3dba486c-a399-4ce3-a794-e38c4f733403
@@ -333,6 +337,8 @@ Standard: a step whose input is missing stops and names it; no degraded mode.
   Why: the agent reads the neighbours itself; the word is a line, not a gate, so its absence stops nothing.
   Costs: two shapes of row, and the owner sees agent lines with nothing against them.
 
+**Answer:** A
+
 ### Does show print the neighbours of a question with the reader's word?
 depends: 277a8338-c57a-43cc-8b28-6b42e9347f6a, 08a1b488-32fc-4dc7-b4b3-93a6e768725f=*
 id: 97c679f6-e8e6-4970-b547-940477753d7d
@@ -347,3 +353,5 @@ Standard: a review surface shows the evidence beside the judgment.
 - B) No.
   Why: show prints what the decision on show names; the owner reads the file.
   Costs: the owner reads hashes and identifiers in a tab-separated file, or trusts the agent's line unseen.
+
+**Answer:** A
