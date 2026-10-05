@@ -200,6 +200,7 @@ Standard: a step whose input is missing stops and names it; no degraded mode.
 ### Does the tool bring the plan's own questions as neighbours of each other?
 depends: 94677ed8-eaf6-46e2-bc71-7392fa0805bf, 62e50382-db1b-4649-9f26-7f44c379d6fe=A
 id: 4838baa4-a5df-49e7-929c-ed63b5adaf4e
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, neighbour=daec9ffd-676f-4111-a359-2827bfd4527c, neighbours=daec9ffd-676f-4111-a359-2827bfd4527c, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, tier=f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
 
 Problem: two new headings in one plan are never each other's neighbour when the pool is the records; the tie between them is written by hand and forgotten.
 Standard: deduplicate a batch against itself as well as against the store.
@@ -305,6 +306,7 @@ Standard: expensive judgments are stored keyed by their inputs, in a file the to
 ### Does check hold the reader's file as it holds the ledger?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 08a1b488-32fc-4dc7-b4b3-93a6e768725f=A
 id: 26c5352f-3f82-4376-9dc2-8ccc0074d080
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, install=1b98cdea-dc1b-4789-8f67-68d130d7a49d, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641
 
 Problem: a file the tool writes and the agent may edit is a file the agent will edit; a row changed by hand says what the reader did not.
 Standard: machine-written records are append-only and verified against history.
@@ -319,6 +321,7 @@ Standard: machine-written records are append-only and verified against history.
 ### Does planning stop without the reader?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 62e50382-db1b-4649-9f26-7f44c379d6fe=*
 id: 3dba486c-a399-4ce3-a794-e38c4f733403
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, neighbour=daec9ffd-676f-4111-a359-2827bfd4527c, neighbours=daec9ffd-676f-4111-a359-2827bfd4527c, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641
 
 Problem: the reader is a program apart from the tool; a machine without it brings neighbours with no word, and a plan with wordless rows is a plan with a hole.
 Standard: a step whose input is missing stops and names it; no degraded mode.
@@ -333,12 +336,13 @@ Standard: a step whose input is missing stops and names it; no degraded mode.
 ### Does show print the neighbours of a question with the reader's word?
 depends: 277a8338-c57a-43cc-8b28-6b42e9347f6a, 08a1b488-32fc-4dc7-b4b3-93a6e768725f=*
 id: 97c679f6-e8e6-4970-b547-940477753d7d
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, approval=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, identifiers=e877e4a9-2caf-4fe6-9f82-5476a2abb00b, neighbour=daec9ffd-676f-4111-a359-2827bfd4527c, neighbours=daec9ffd-676f-4111-a359-2827bfd4527c, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
 
 Problem: the rows live in a file the owner never opens; at approval the owner has to see each heading, its neighbours, the reader's word and the agent's line together.
 Standard: a review surface shows the evidence beside the judgment.
 
 - A) Yes.
-  Why: under each open question, one line per neighbour: its name, the reader's word, the agent's line; the page too.
+  Why: under each open question, one line per neighbour: its name, the reader's word, the agent's line.
   Costs: show with a topic file reads the reader's file; the page too.
 - B) No.
   Why: show prints what the decision on show names; the owner reads the file.

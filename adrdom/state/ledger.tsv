@@ -438,3 +438,7 @@
 2026-10-05T11:32:30Z	answered	902bd279-e6c1-4a21-9637-a3a43f360bae	3dd5033c60fa02d255bcfd1eb5d16db8f512dfae4ff802b3f69c835e35c13eae	A	0.2.0
 2026-10-05T11:49:22Z	answered	08a1b488-32fc-4dc7-b4b3-93a6e768725f	69611061876baa13daac36387aedc5ee73a4403f47fdb84d46af0aa65c263932	A	0.2.0
 2026-10-05T11:49:34Z	answered	f5c242b6-e2f6-45a3-8c61-c743f3ad794f	4d07aa936b2f4ca3593bc568c4dc7b4972a48131bed990b02d745b151b90475f	A	0.2.0
+2026-10-05T11:50:30Z	asked	4838baa4-a5df-49e7-929c-ed63b5adaf4e	9cf228ffc42cac4f21b8abbfb70c17b32a8bcb716439606837a102de8d9a2f0c	Does the tool bring the plan's own questions as neighbours of each other?	0.2.0
+2026-10-05T11:50:30Z	asked	26c5352f-3f82-4376-9dc2-8ccc0074d080	b686a05d48d93209abff8fc725cc8637317b63f909c1589535e03b57d5165c69	Does check hold the reader's file as it holds the ledger?	0.2.0
+2026-10-05T11:50:30Z	asked	3dba486c-a399-4ce3-a794-e38c4f733403	3e3c70f49a92a27f7dfa649b2dd83dce8f3bf8e89f66198ce305518901d643ff	Does planning stop without the reader?	0.2.0
+2026-10-05T11:50:30Z	asked	97c679f6-e8e6-4970-b547-940477753d7d	1366496e8b2befbf1d72605133907a22e002b1ebf118ad45d36547a9195da2dd	Does show print the neighbours of a question with the reader's word?	0.2.0
