@@ -144,7 +144,10 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<(String, i32), String> {
     }
     // The length hits in every body written so far, whatever step the file
     // is at: shown, never a stop.
-    let hits = crate::actions::length_refusals(&rel, rf, &ledger::read(&root.join(repo::LEDGER_PATH)));
+    let led_now = ledger::read(&root.join(repo::LEDGER_PATH));
+    let mut hits = crate::actions::length_refusals(&rel, rf, &led_now);
+    // A set letter its same-file target has no option for: shown the same way.
+    hits.extend(crate::actions::letter_refusals(&rel, rf, &led_now));
     for h in &hits {
         out.push_str(h);
         out.push('\n');

@@ -241,7 +241,7 @@ pub(crate) fn asked_text_stands(led: &Ledger, rf: &RecordFile, sec: &Section) ->
 /// out from the tiers. In order: the decisions to build (per "Does the
 /// agent build on a decision before its tier is fully answered?": built
 /// once every question beside it is answered), the bodies to write, the
-/// answer sets to write, the questions to ask, the approval the file waits
+/// questions to ask, the approval the file waits
 /// for, the answers the owner owes, a refused question that holds
 /// the rest, the decisions that wait for a question beside them, and the
 /// questions whose turn has not come. Empty when nothing is left to do.
@@ -326,24 +326,6 @@ pub(crate) fn next_moves(
         }
     }
 
-    // Per "Does a depends entry carry the answers it holds under?": every
-    // entry that names a question about to be asked carries its letters
-    // before `ask` runs. Named once the target has its options.
-    let mut sets = Vec::new();
-    for (ti, target) in rf.sections.iter().enumerate() {
-        if Some(tiers[ti]) != open_tier || target.is_skeleton || !state::tier_unresolved(target) {
-            continue;
-        }
-        for (di, set) in rf.dependents_of(ti) {
-            if set.is_none() {
-                sets.push(msg::next_answer_set(
-                    &rf.sections[di].heading_text,
-                    &target.heading_text,
-                ));
-            }
-        }
-    }
-
     // What is answered is built before anything new is written. Answers are
     // committed as given and check reports an untested decision as a note;
     // `next` still holds the build until the tier is answered, per "Does
@@ -358,7 +340,6 @@ pub(crate) fn next_moves(
         if bare && planning.is_some() {
             out.extend(plan_moves(rf, planning));
         }
-        out.extend(sets);
         if !to_ask.is_empty() {
             out.push(msg::next_ask(&rf.rel, &to_ask));
         }

@@ -903,6 +903,17 @@ pub fn missing_answer_set(rel: &str, dependent: &str, target: &str) -> String {
     )
 }
 
+pub fn set_on_term(rel: &str, dependent: &str) -> String {
+    refuse(
+        format!(
+            "{}: \"{}\" depends on a term under an answer set, and a term has no options",
+            rel, dependent
+        ),
+        Next::agent("removes the answer set from that depends entry")
+            .and_owner_runs(format!("adr approve {}", rel)),
+    )
+}
+
 pub fn set_on_answered_question(rel: &str, dependent: &str, target: &str) -> String {
     refuse(
         format!(
@@ -1204,14 +1215,6 @@ pub fn next_write_lines(headings: &[String]) -> String {
 /// Headings of the plan with no body: the bodies are written before approve.
 pub fn next_write_bodies(headings: &[String]) -> String {
     Next::agent(format!("writes the body of {}", quoted(headings))).render()
-}
-
-pub fn next_answer_set(dependent: &str, target: &str) -> String {
-    Next::agent(format!(
-        "writes =A, =A|B or =* on the depends line of \"{}\" where it names \"{}\"",
-        dependent, target
-    ))
-    .render()
 }
 
 pub fn next_ask(rel: &str, headings: &[String]) -> String {
@@ -2486,6 +2489,20 @@ pub fn tested_count(n: usize) -> String {
 
 pub fn plan_awaiting(count: usize, list: &str) -> String {
     format!("plan: {} file(s) awaiting approval: {}", count, list)
+}
+
+/// The questions of `rel` that differ from its last approval (per "Does
+/// approve hash each question on its own?"): a note, never a failure.
+pub fn plan_changed(rel: &str, changed: &[String], struck: &[String]) -> String {
+    let mut parts = Vec::new();
+    if !changed.is_empty() {
+        let list: Vec<String> = changed.iter().map(|h| format!("\"{}\"", h)).collect();
+        parts.push(format!("new or changed: {}", list.join(", ")));
+    }
+    if !struck.is_empty() {
+        parts.push(format!("struck: {}", struck.join(", ")));
+    }
+    format!("plan: {}: {}", rel, parts.join("; "))
 }
 
 pub fn done(rel: &str) -> String {

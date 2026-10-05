@@ -287,7 +287,7 @@ or moves it to another file when none does",
     assert!(!out.status.success());
     let plan_lines: Vec<String> = stdout(&out)
         .lines()
-        .filter(|l| l.starts_with("plan: ") && !l.contains("awaiting approval"))
+        .filter(|l| l.starts_with("plan: ") && !l.contains("awaiting approval") && !l.contains("new or changed"))
         .map(|l| l.to_string())
         .collect();
     assert_eq!(plan_lines, vec![format!("plan: {}", refusal)]);

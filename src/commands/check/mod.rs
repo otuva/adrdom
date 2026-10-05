@@ -171,9 +171,6 @@ fn build(
         &records,
         &led,
         &per_record_refusals,
-        &terms_list,
-        &phrase_lookup,
-        &cross_file_headings,
         &raw_hashes,
     );
     push_failures(&mut failures, plan_failures);
@@ -208,6 +205,14 @@ fn build(
 
     if !awaiting.is_empty() {
         notes.push(msg::plan_awaiting(awaiting.len(), &awaiting.join(", ")));
+        for rf in records.iter().filter(|rf| awaiting.contains(&rf.rel)) {
+            if let Some((hashes, _)) = raw_hashes.get(&rf.rel) {
+                let (changed, struck) = plan::changed_questions(rf, hashes, &led);
+                if !changed.is_empty() || !struck.is_empty() {
+                    notes.push(msg::plan_changed(&rf.rel, &changed, &struck));
+                }
+            }
+        }
     }
     notes.extend(test_notes);
     notes.extend(terms_notes);

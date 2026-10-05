@@ -594,20 +594,22 @@ fn approve_refuses_a_set_missing_on_an_asked_but_unanswered_target() {
     assert!(stderr(&out).contains("without an answer set"), "{}", stderr(&out));
 }
 
+// A set naming an option the target lacks never reaches `ask`: approve refuses
+// it first (the same message, found before approval).
 #[test]
-fn ask_refuses_a_set_naming_an_option_the_target_does_not_have() {
+fn approve_refuses_a_set_naming_an_option_the_target_does_not_have() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     let content = format!("{}{}", Q1, q2_depends_on_q1("=C"));
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
-    approve_record(&dir, "adrdom/decisions/example.md");
 
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success());
-    assert_eq!(
-        stderr(&out).trim_end(),
-        "ask: adrdom/decisions/example.md: \"1.2 Does the widget's paint match its color?\" depends on \"1.1 What color is the widget?\" names option C which \"1.1 What color is the widget?\" does not have; agent fixes the answer set to only name options the target has"
+    assert!(
+        stderr(&out).contains("\"1.2 Does the widget's paint match its color?\" depends on \"1.1 What color is the widget?\" names option C which \"1.1 What color is the widget?\" does not have"),
+        "{}",
+        stderr(&out)
     );
 }
 

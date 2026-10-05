@@ -1,12 +1,10 @@
 use super::{file_approval, Failure};
 use crate::actions::{self, Refusal};
-use crate::depends::{self, DepTarget};
 use crate::ledger::Ledger;
 use crate::msg;
-use crate::record::{AnswerSet, RecordFile};
+use crate::record::{self, RecordFile};
 use crate::repo::{self, Source};
 use crate::state;
-use crate::terms;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -33,9 +31,6 @@ pub(super) fn check_plan(
     records: &[RecordFile],
     led: &Ledger,
     refusals: &[Vec<Refusal>],
-    terms_list: &[terms::Term],
-    phrase_lookup: &HashMap<String, String>,
-    cross_file_headings: &HashMap<String, Vec<(String, String)>>,
     raw_hashes: &HashMap<String, (Vec<String>, String)>,
 ) -> (Vec<Failure>, Vec<String>) {
     let mut out = Vec::new();
@@ -78,50 +73,15 @@ pub(super) fn check_plan(
             }
         }
 
-        // A letter-set suffix on a resolved dependency validates against
-        // the target once found (per "Does a depends entry carry the
-        // answers it holds under?") -- `approve` never checks this today,
-        // so it stays a check-only extra rather than a `record_refusals`
-        // category. A same-file `Heading` target reads its options
-        // straight off `rf`; a cross-file `Decision` target (an already-id
-        // entry, or a heading-shaped one `normalize_cross_file_deps`
-        // resolved above) has its options nowhere in `rf`, so its section
-        // is found in `records` instead (`bad_letters_for_decision`).
-        // A file awaiting approval is only counted: approve refuses what is
-        // wrong in it (per "Does check fail a topic file awaiting approval?").
-        for sec in rf.sections.iter().filter(|_| plan_ok) {
-            for d in &sec.depends {
-                let Some(AnswerSet::Letters(letters)) = d.set() else {
-                    continue;
-                };
-                match depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, cross_file_headings, led) {
-                    Ok(Some(DepTarget::Heading(ti))) => {
-                        for msg in
-                            depends::bad_letters(&rel, &sec.heading_text, &rf.sections[ti], letters)
-                        {
-                            out.push(Failure {
-                                check: "plan".to_string(),
-                                message: msg,
-                            });
-                        }
-                    }
-                    Ok(Some(DepTarget::Decision(id))) => {
-                        for msg in depends::bad_letters_for_decision(
-                            &rel,
-                            &sec.heading_text,
-                            records,
-                            &id,
-                            letters,
-                        ) {
-                            out.push(Failure {
-                                check: "plan".to_string(),
-                                message: msg,
-                            });
-                        }
-                    }
-                    _ => {}
-                }
-            }
+        // A letter in a depends entry's set that the same-file target has no
+        // option for (per "Does a depends entry carry the answers it holds
+        // under?"): `actions::letter_refusals`, the function `approve` and
+        // `adr plan` read too, for every file, approved or not.
+        for msg in actions::letter_refusals(&rel, rf, led) {
+            out.push(Failure {
+                check: "plan".to_string(),
+                message: msg,
+            });
         }
 
         // Same heading twice in one file (8.3-adjacent): the cross-file
@@ -160,4 +120,51 @@ pub(super) fn check_plan(
     awaiting.sort();
     awaiting.dedup();
     (out, awaiting)
+}
+
+/// What differs in `rf` from its latest approval (per "Does approve hash each
+/// question on its own?": a removed question takes its hash with it and
+/// nothing else moves; check sees which section changed). Returns the
+/// headings of the questions whose hash has no `approved` row for the file
+/// (new or changed), and the ids of the approved questions no longer in the
+/// file and not dropped (struck). `hashes` are the file's question hashes as
+/// `raw_hashes` holds them, in section order. Empty when the file was never
+/// approved.
+pub(super) fn changed_questions(rf: &RecordFile, hashes: &[String], led: &Ledger) -> (Vec<String>, Vec<String>) {
+    let rel = rf.rel.as_str();
+    let Some(file_row) = led.latest_for_path("approved", rel) else {
+        return (Vec::new(), Vec::new());
+    };
+    let rows = || led.rows.iter().filter(|r| r.event == "approved" && r.detail == rel && r.id != "-");
+    let changed: Vec<String> = rf
+        .sections
+        .iter()
+        .zip(hashes)
+        .filter(|(sec, h)| !sec.id.as_ref().is_some_and(|id| rows().any(|r| &r.id == id && &r.hash == *h)))
+        .map(|(sec, _)| sec.heading_text.clone())
+        .collect();
+    // The approved set is the latest row of each id, minus the dropped ones;
+    // it stands for the last approval only when it derives that file hash.
+    let mut latest: Vec<(&str, &str)> = Vec::new();
+    for r in rows() {
+        match latest.iter_mut().find(|(id, _)| *id == r.id) {
+            Some(e) => e.1 = &r.hash,
+            None => latest.push((&r.id, &r.hash)),
+        }
+    }
+    let gone = |id: &str, h: &str| led.rows.iter().any(|d| d.event == "dropped" && d.id == id && d.hash == h);
+    let in_file = |id: &str| rf.sections.iter().any(|s| s.id.as_deref() == Some(id));
+    let approved: Vec<String> = latest.iter().map(|(_, h)| h.to_string()).collect();
+    let live: Vec<String> = latest.iter().filter(|(id, h)| !gone(id, h)).map(|(_, h)| h.to_string()).collect();
+    let matches = |v: &[String]| record::derive_file_hash(v) == file_row.hash;
+    let struck = if matches(&approved) || matches(&live) {
+        latest
+            .iter()
+            .filter(|(id, h)| !in_file(id) && !gone(id, h))
+            .map(|(id, _)| id.to_string())
+            .collect()
+    } else {
+        Vec::new()
+    };
+    (changed, struck)
 }

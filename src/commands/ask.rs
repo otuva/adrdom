@@ -451,10 +451,9 @@ pub fn run(record_path: PathBuf) -> i32 {
         // time so `check`'s `answers.rs` can later catch it moving.
         for (di, set) in rf.dependents_of(i) {
             let Some(set) = set else {
-                // Guaranteed not to happen: the sets-mandatory gate above
-                // already refused before any row was written if a
-                // dependent in this tier carried no set. Skip rather than
-                // panic if it somehow does.
+                // Approve refuses a dependent in the file with no set on a
+                // question not yet answered, so none is left here. Skip
+                // rather than panic if one is.
                 continue;
             };
             let dependent = &rf.sections[di];
@@ -626,9 +625,7 @@ fn do_conflict_reask(
 
     // One `assumes` row per dependent that already carries a set, exactly
     // as an ordinary ask writes them (a dependent with no set at all is
-    // skipped rather than refused: this run never ran the sets-mandatory
-    // gate an ordinary candidate in the open tier would have to pass, since
-    // this question's own tier may not even be open).
+    // skipped rather than refused).
     for (di, set) in rf.dependents_of(idx) {
         let Some(set) = set else { continue };
         let dependent = &rf.sections[di];

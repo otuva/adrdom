@@ -413,3 +413,23 @@ fn planning_stops_without_the_reader() {
     let shown = adr(&dir, &["show"], &[("ADR_NO_READER", "1")], "");
     assert!(shown.status.success(), "{}", stderr(&shown));
 }
+
+// adr: 946263aa-519a-47aa-b743-5cdcf52f5d35
+#[test]
+fn plan_shows_a_set_letter_the_target_lacks_and_does_not_say_ready() {
+    let dir = repo();
+    let second = format!("\n### {}\ndepends: widget, {}=D\n{}", H2, H1, body("two"));
+    write(&dir, &format!("# Topic\n{}{}", section(H1, &body("one")), second));
+    let mut last = String::new();
+    for _ in 0..4 {
+        last = ok(&plan(&dir));
+        assert!(last.contains(&format!("names option D which \"{}\" does not have", H1)), "{}", last);
+        assert!(!last.contains("owner runs: adr approve"), "{}", last);
+        let wanted = lines_wanted(&last);
+        if wanted.is_empty() {
+            break;
+        }
+        write_lines(&dir, &last);
+    }
+    assert!(!last.contains("owner runs: adr approve"), "{}", last);
+}

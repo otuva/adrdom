@@ -1126,6 +1126,37 @@ pub fn length_refusals(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<String> 
     out
 }
 
+/// One `bad_letters` message per answer-set letter of a depends entry on a
+/// question of `rf` that has no such option, for every question of `rf` not
+/// yet asked (per "Does a depends entry carry the answers it holds under?"):
+/// the one function `check`, `approve` and `plan` read, found before approval
+/// what `ask` refuses. Cross-file targets carry no set before they are
+/// answered, so only a same-file target is read.
+pub fn letter_refusals(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<String> {
+    let mut out = Vec::new();
+    for sec in &rf.sections {
+        if sec.id.as_ref().is_some_and(|id| led.latest_state(id).is_some()) {
+            continue;
+        }
+        for d in &sec.depends {
+            let Some(record::AnswerSet::Letters(letters)) = d.set() else {
+                continue;
+            };
+            let target = match d {
+                record::Dep::Id { id, .. } => rf.sections.iter().find(|s| s.id.as_deref() == Some(id.as_str())),
+                record::Dep::Text { text, .. } => {
+                    let t = text.trim();
+                    if t.ends_with('?') { rf.sections.iter().find(|s| s.heading_text.trim() == t) } else { None }
+                }
+            };
+            if let Some(ts) = target {
+                out.extend(depends::bad_letters(rel, &sec.heading_text, ts, letters));
+            }
+        }
+    }
+    out
+}
+
 pub fn record_refusals(
     rel: &str,
     rf: &RecordFile,
@@ -1702,6 +1733,11 @@ fn do_approve_record(
     for m in own_name_and_heading_refusals(rel, rf.topic.as_deref(), &rf.sections) {
         refusals.push(msg::approve_prefixed(m));
     }
+    // Per "Does a depends entry carry the answers it holds under?": a letter
+    // the target has no option for is found here, not at `ask`.
+    for m in letter_refusals(rel, &rf, led) {
+        refusals.push(msg::approve_prefixed(m));
+    }
 
     // Per "Does approve turn the supersedes line into identifiers?" (B):
     // each entry of a `supersedes:` line is the heading of a current
@@ -1763,6 +1799,13 @@ fn do_approve_record(
                 ),
                 DepTarget::Term(_) => (None, false),
             };
+            // An answer set names the letters of another question: a term has
+            // no options (per "Does a depends entry on a question in its file
+            // carry an answer set?").
+            if matches!(target, DepTarget::Term(_)) && d.set().is_some() {
+                refusals.push(msg::approve_prefixed(msg::set_on_term(rel, &sec.heading_text)));
+                continue;
+            }
             let Some(ts) = target_section else { continue };
             match d.set() {
                 None if in_file && ts.answer_letter().is_none() => refusals.push(msg::approve_prefixed(msg::missing_answer_set(
@@ -1958,6 +2001,33 @@ fn do_approve_record(
                 detail: rel.to_string(),
                 version: crate::version::VERSION.to_string(),
             });
+        }
+    }
+    // A set approved while its in-file target is asked and not yet answered
+    // stays after the answer (per "Does a depends entry on a question in its
+    // file carry an answer set?"): the `assumes` row `ask` writes for an
+    // entry, written here for an entry that came after the ask.
+    for sec in &work_rf.sections {
+        let Some(dep_id) = &sec.id else { continue };
+        if led.latest_asked(dep_id).is_some() {
+            continue;
+        }
+        for d in &sec.depends {
+            let record::Dep::Id { id: tid, set: Some(set) } = d else { continue };
+            let waiting = work_rf.sections.iter().any(|t| t.id.as_ref() == Some(tid))
+                && led.latest_state(tid).is_some_and(|r| r.event == "asked");
+            let hash = record::assumes_hash(dep_id, set);
+            let written = led.assumes_for(tid).iter().any(|r| &r.detail == dep_id && r.hash == hash);
+            if waiting && !written {
+                rows.push(ledger::Row {
+                    time: write_time.clone(),
+                    event: "assumes".to_string(),
+                    id: tid.clone(),
+                    hash,
+                    detail: dep_id.clone(),
+                    version: crate::version::VERSION.to_string(),
+                });
+            }
         }
     }
     let plan_changed = led
