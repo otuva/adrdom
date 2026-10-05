@@ -254,7 +254,7 @@ remove or edit the hooks.
 
 ## Commands
 
-Yours: `adr show`, `adr plan`, `adr ask`, `adr check`, `adr install`,
+Yours: `adr show`, `adr plan`, `adr read`, `adr ask`, `adr check`, `adr install`,
 `adr ban` (only when the owner says a word is banned) and
 `adr ban --rebuild` (only when a refusal names it).
 
