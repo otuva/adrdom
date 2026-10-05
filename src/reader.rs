@@ -53,7 +53,7 @@ pub const HEADING_WORDS: [&str; 3] = ["same", "depends", "unrelated"];
 pub const BODY_WORDS: [&str; 5] = ["same", "consistent", "inconsistent", "depends", "unrelated"];
 
 /// What the reader is asked.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Kind {
     /// A heading against a decision or a term.
     Heading,
