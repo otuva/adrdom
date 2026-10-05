@@ -199,6 +199,8 @@ Standard: every item put in front of a reviewer gets an explicit disposition.
   Why: only the ties that hold are written; the file stays short.
   Costs: a neighbour left off a line is unseen by approve, and the reader's word on it meets no ruling.
 
+**Answer:** A
+
 ### What does the reader say about a neighbour of a heading?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, c6e0b7d6-cdec-46da-b2bc-cda218673868=A
 id: 62e50382-db1b-4649-9f26-7f44c379d6fe
@@ -220,6 +222,8 @@ Standard: classification into a closed set with an explicit none-of-these, so th
 - C) A free sentence on how the two relate, no word.
   Why: nothing is forced into a set; every nuance of a bundled decision survives.
   Costs: nothing in the record can be compared or counted; the agent reads a sentence per neighbour and rules alone.
+
+**Answer:** A
 
 ### Does the reader's word stop a command?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, c6e0b7d6-cdec-46da-b2bc-cda218673868=*
