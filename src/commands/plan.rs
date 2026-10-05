@@ -142,6 +142,13 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<(String, i32), String> {
         pl = planning(root, rf);
         did(&pl, &todo, Step::Heading, &mut out);
     }
+    // The length hits in every body written so far, whatever step the file
+    // is at: shown, never a stop.
+    let hits = crate::actions::length_refusals(&rel, rf, &ledger::read(&root.join(repo::LEDGER_PATH)));
+    for h in &hits {
+        out.push_str(h);
+        out.push('\n');
+    }
     if !pl.lines_missing(Step::Heading).is_empty() {
         wanted(&pl, Step::Heading, &mut out);
         out.push_str(&msg::plan_next_lines(&rel));
@@ -160,13 +167,6 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<(String, i32), String> {
         out.push_str(&msg::plan_next_bodies(&rel));
         out.push('\n');
         return Ok((out, 0));
-    }
-
-    // The length hits among what the run did: shown, never a stop.
-    let hits = crate::actions::length_refusals(&rel, rf, &ledger::read(&root.join(repo::LEDGER_PATH)));
-    for h in &hits {
-        out.push_str(h);
-        out.push('\n');
     }
 
     // Step 5: the neighbours of each question with its body.

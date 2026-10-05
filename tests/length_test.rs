@@ -198,3 +198,15 @@ fn check_and_approve_find_a_many_word_option_under_a_does_heading() {
     assert!(!out.status.success());
     assert!(stderr(&out).contains("agent writes one word"), "{}", stderr(&out));
 }
+
+// adr: d808917b-0717-45ad-ab83-9fa274b9a9d4
+#[test]
+fn plan_reports_a_too_long_option_while_another_heading_waits_for_its_body() {
+    let long = question("What does the decision hold?", &words(25), "w.", "c.");
+    let content = format!("{}\n### What does the decision name?\ndepends: decision\n", long);
+    let (dir, rec) = unapproved(&content);
+    let out = adr(&dir, &["plan", rec.to_str().unwrap()], &[], "");
+    let all = both(&out);
+    // Lines first: the neighbours of each heading come with no line yet.
+    assert!(all.contains("the option has 25 words"), "{}", all);
+}

@@ -136,9 +136,9 @@ Standard: the named practice for this, stated flat.
 
 Two or three options. Under a heading that opens with Does, an option holds
 one word. Any other option, and every Why and Costs line, holds twenty words
-at most; `adr ask` refuses a longer line. Strip each option to its answer to
-the heading and compare them: two options that answer it the same way are
-one option.
+at most; `adr plan` and `adr check` report a longer line, and `adr approve`
+and `adr ask` refuse it. Strip each option to its answer to the heading and
+compare them: two options that answer it the same way are one option.
 
 A `depends:` entry on another question of this file carries its answer set:
 `=A`, `=A|B` or `=*`, the letters of the other question under which this one
