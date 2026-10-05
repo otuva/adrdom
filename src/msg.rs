@@ -1005,6 +1005,28 @@ pub fn plan_neighbour(kind: &str, name: &str, word: &str, on_line: bool) -> Stri
     format!("  {} \"{}\": {}; {}", kind, name, word, if on_line { "on a line" } else { "no line" })
 }
 
+/// One pair of current decisions the reader marked, as `adr read` prints it.
+pub fn read_pair(word: &str, first: &str, second: &str, reason: &str) -> String {
+    format!("{}: \"{}\" and \"{}\": {}", word, first, second, reason)
+}
+
+/// The move `adr read` names when a pair is marked same or inconsistent.
+pub fn read_next() -> String {
+    "next\n  agent writes a question that supersedes one decision of each same or inconsistent pair".to_string()
+}
+
+/// The last line of `adr read`.
+pub fn read_summary(now: usize, before: usize, marked: usize) -> String {
+    let pairs = if now == 1 { "pair" } else { "pairs" };
+    format!("read {} {} now, {} read before, {} marked", now, pairs, before, marked)
+}
+
+/// A reading that stopped: the reader's error, which carries the move, and
+/// how many pairs are unread; the rows of earlier chunks are kept.
+pub fn read_stopped(e: &str, unread: usize) -> String {
+    format!("{}\nread: {} {} unread", e, unread, if unread == 1 { "pair" } else { "pairs" })
+}
+
 /// One neighbour that is on no line, the move that clears it as one line.
 pub fn plan_line_wanted(heading: &str, kind: &str, name: &str) -> String {
     format!("line missing: {} \"{}\" under \"{}\"", kind, name, heading)
@@ -2848,7 +2870,7 @@ pub fn gitignore_up_to_date() -> String {
 pub fn model_missing() -> String {
     refuse(
         "model: the embedding model is missing".to_string(),
-        Next::agent("fetches it by running a build of adr with the model feature, or plans on another machine"),
+        Next::agent("fetches it by running a build of adr with the model feature, or runs it on another machine"),
     )
 }
 
@@ -2857,7 +2879,7 @@ pub fn model_missing() -> String {
 pub fn model_load_failed(cache: &str, e: impl Display) -> String {
     refuse(
         format!("model: cannot load the embedding model from {}: {}", cache, e),
-        Next::agent("fetches the model by checking the network and the cache directory, then retries, or plans on another machine"),
+        Next::agent("fetches the model by checking the network and the cache directory, then retries, or runs it on another machine"),
     )
 }
 
@@ -2872,7 +2894,7 @@ pub fn embed_failed(e: impl Display) -> String {
 pub fn reader_missing() -> String {
     refuse(
         "reader: the claude program is missing".to_string(),
-        Next::agent("installs the claude CLI, or plans on another machine"),
+        Next::agent("installs the claude CLI, or runs it on another machine"),
     )
 }
 
@@ -2881,7 +2903,7 @@ pub fn reader_missing() -> String {
 pub fn reader_failed(neighbour: &str, e: impl Display) -> String {
     refuse(
         format!("reader: no word for the neighbour {}: {}", neighbour, e),
-        Next::agent("retries; if it persists, plans on another machine"),
+        Next::agent("retries; if it persists, runs it on another machine"),
     )
 }
 
@@ -3098,6 +3120,7 @@ mod tests {
             plan_line_missing("x.md", "Does X?", "term", "widget"),
             plan_bodies_missing("x.md", &["Does X?".to_string()]),
             reader_failed("id-1", "no answer"),
+            read_stopped(&reader_failed("id-1", "no answer"), 3),
             reader_write_failed("disk full"),
             malformed_reader_row(3, "bad row"),
             reader_not_append_only(),

@@ -62,6 +62,9 @@ runtime dependencies beyond `git` on `PATH`.
   `adrdom/terms.md`: fill in missing term ids and approve it (a `terms` row),
   refusing first on a shape error, a binding that would resolve differently,
   or a newly banned word appearing in a topic file.
+- `adr read` — reads every current decision against its ten nearest current
+  decisions and prints each pair the reader marks same, inconsistent or
+  depends.
 - `adr unban` — owner-only. Read lines from stdin and remove them (and
   their tokens) from the ban list.
 - `adr ban` — read lines from stdin and ban them (and their tokens) from

@@ -301,7 +301,7 @@ fn without_the_reader_the_call_stops_with_a_message_and_writes_nothing() {
     std::env::remove_var("ADR_NO_READER");
     for e in [loaded.err().expect("load refuses"), read.unwrap_err()] {
         assert!(e.contains("the claude program is missing"), "{}", e);
-        assert!(e.contains("installs the claude CLI, or plans on another machine"), "{}", e);
+        assert!(e.contains("installs the claude CLI, or runs it on another machine"), "{}", e);
     }
     assert!(reader::read_file(&dir).rows.is_empty());
     // Every other command runs without it.
