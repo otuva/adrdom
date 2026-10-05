@@ -147,6 +147,8 @@ fn check_at_a_commit_reads_the_staged_terms_brief() {
             "add",
             "adrdom/terms.md",
             "adrdom/state/ledger.tsv",
+            "adrdom/state/reader.tsv",
+            "adrdom/.gitignore",
             "adrdom/.gitattributes",
             "AGENTS.md",
             ".githooks",
