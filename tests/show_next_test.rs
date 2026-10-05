@@ -69,6 +69,15 @@ fn ask_for(headings: &[&str]) -> String {
     format!("agent runs adr ask {}  # {}", REL, names.join(", "))
 }
 
+fn plan_for() -> String {
+    format!("agent runs: adr plan {}", REL)
+}
+
+fn lines_for(headings: &[&str]) -> String {
+    let names: Vec<String> = headings.iter().map(|h| format!("\"{}\"", h)).collect();
+    format!("agent writes lines for {}", names.join(", "))
+}
+
 fn answer_for(dir: &Path, id: &str, heading: &str) -> String {
     format!(
         "owner runs: adr answer {} <letter>  # \"{}\"",
@@ -95,7 +104,13 @@ fn show_names_the_next_move_at_every_step() {
     let (dir, path) = setup();
     let p = path.to_str().unwrap();
 
-    // A plan that waits for its approval: nothing is written under it.
+    // A plan that waits for its approval follows the planning steps: the
+    // agent plans it, writes the lines of what it read, and only then does
+    // the owner approve.
+    assert_eq!(next(&dir), vec![plan_for()]);
+    assert!(adr(&dir, &["plan", p], &[], "").status.success());
+    assert_eq!(next(&dir), vec![lines_for(&[ONE, TWO, THREE])]);
+    plan_record(&dir, REL);
     assert_eq!(next(&dir), vec![format!("owner runs: adr approve {}", REL)]);
 
     approve_record(&dir, REL);
@@ -400,7 +415,7 @@ adr show <topic file> prints every question of one file with what it stands on; 
 
     let whole = format!(
         "# Gate ({rel})\ntier 1\n  [answered A] {one}\n    stands on: widget\n    stood on by: {three}\n    Yes the widget holds.\n\
-tier 2\n  [not asked] {three}\n    stands on: widget, {one}=A\nnext\n  agent runs adr ask {rel}  # \"{three}\"\n",
+tier 2\n  [not asked] {three}\n    stands on: widget, {one}=A\n    neighbour: term \"widget\": heading: unrelated, body: unrelated; depends\nnext\n  agent runs adr ask {rel}  # \"{three}\"\n",
         rel = REL,
         one = ONE,
         three = THREE

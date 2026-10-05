@@ -33,7 +33,7 @@ use crate::reader::{self, Kind, Pair};
 use crate::record::{self, RecordFile, Section};
 use crate::state;
 use crate::terms::{self, Term};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::Path;
 
 /// What a neighbour is.
@@ -63,6 +63,24 @@ pub enum Step {
     Body,
 }
 
+/// What kind of line the agent wrote a neighbour on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LineKind {
+    Depends,
+    Supersedes,
+    Unrelated,
+}
+
+impl LineKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            LineKind::Depends => "depends",
+            LineKind::Supersedes => "supersedes",
+            LineKind::Unrelated => "unrelated",
+        }
+    }
+}
+
 /// One neighbour in the rows of a question, with what the agent wrote.
 #[derive(Debug, Clone)]
 pub struct Neighbour {
@@ -74,13 +92,17 @@ pub struct Neighbour {
     pub word: String,
     pub reason: String,
     pub on_line: bool,
+    /// The line the neighbour is on, `None` when it is on no line.
+    pub line: Option<LineKind>,
 }
 
-/// A question not yet asked, and its records.
+/// A question not yet asked (or asked and waiting), and its records.
 #[derive(Debug, Clone)]
 pub struct Question {
     pub idx: usize,
     pub heading: String,
+    /// The question is asked and waits for its answer.
+    pub asked: bool,
     pub heading_hash: String,
     pub has_body: bool,
     /// The hash of the heading and body, when it has a body.
@@ -269,26 +291,27 @@ fn line_targets(
     phrase_lookup: &HashMap<String, String>,
     cross: &HashMap<String, Vec<(String, String)>>,
     led: &Ledger,
-) -> HashSet<Target> {
+) -> HashMap<Target, LineKind> {
     let sec = &rf.sections[idx];
-    let mut out = HashSet::new();
+    let mut out = HashMap::new();
     for d in &sec.depends {
         if let Ok(Some(t)) = depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, cross, led) {
-            out.insert(match t {
+            out.entry(match t {
                 DepTarget::Heading(i) => question_target(rf, i, led),
                 DepTarget::Term(id) => Target::Term(id),
                 DepTarget::Decision(id) => Target::Decision(id),
-            });
+            })
+            .or_insert(LineKind::Depends);
         }
     }
     for e in depends::supersedes_entries(&sec.supersedes, cross, led) {
         if let Ok(id) = depends::resolve_supersedes(&e, cross, led) {
-            out.insert(Target::Decision(id));
+            out.entry(Target::Decision(id)).or_insert(LineKind::Supersedes);
         }
     }
     for e in section_unrelated_entries(idx, rf, terms_list, cross, led) {
         if let Ok(t) = resolve_ref(&e, rf, idx, terms_list, cross, led) {
-            out.insert(t);
+            out.entry(t).or_insert(LineKind::Unrelated);
         }
     }
     out
@@ -342,6 +365,35 @@ pub fn load(
     terms_list: &[Term],
     led: &Ledger,
 ) -> Planning {
+    load_inner(root, rf, all, terms_list, led, false)
+}
+
+/// `load` with the questions that are asked and wait for their answer too:
+/// what show and the page print their neighbours from ("Does show print the
+/// neighbours of a question with the reader's word?",
+/// 97c679f6-e8e6-4970-b547-940477753d7d A). Never used for the next move.
+pub fn load_shown(
+    root: &Path,
+    rf: &RecordFile,
+    all: &[RecordFile],
+    terms_list: &[Term],
+    led: &Ledger,
+) -> Planning {
+    load_inner(root, rf, all, terms_list, led, true)
+}
+
+fn is_waiting(led: &Ledger, sec: &Section) -> bool {
+    sec.id.as_deref().and_then(|id| led.latest_state(id)).is_some_and(|r| r.event == "asked")
+}
+
+fn load_inner(
+    root: &Path,
+    rf: &RecordFile,
+    all: &[RecordFile],
+    terms_list: &[Term],
+    led: &Ledger,
+    with_asked: bool,
+) -> Planning {
     let phrase_lookup = terms::phrase_lookup(terms_list);
     let cross = depends::cross_file_heading_index(all, led);
     let headings = decision_headings(all);
@@ -350,7 +402,9 @@ pub fn load(
     for r in &rows {
         by_hash.entry(r.text_hash.as_str()).or_default().push(r);
     }
-    let unasked: Vec<usize> = (0..rf.sections.len()).filter(|&i| is_unasked(led, &rf.sections[i])).collect();
+    let unasked: Vec<usize> = (0..rf.sections.len())
+        .filter(|&i| is_unasked(led, &rf.sections[i]) || (with_asked && is_waiting(led, &rf.sections[i])))
+        .collect();
     let mut by_body: HashMap<String, usize> = HashMap::new();
     for &i in &unasked {
         if !rf.sections[i].is_skeleton {
@@ -358,7 +412,7 @@ pub fn load(
         }
     }
     let pool_empty = pool_is_empty(all, led, terms_list);
-    let neighbours = |hash: &str, targets: &HashSet<Target>| -> Option<Vec<Neighbour>> {
+    let neighbours = |hash: &str, targets: &HashMap<Target, LineKind>| -> Option<Vec<Neighbour>> {
         let rs = by_hash.get(hash)?;
         // The latest row for a neighbour is the one that counts.
         let mut order: Vec<&str> = Vec::new();
@@ -380,7 +434,8 @@ pub fn load(
                 name,
                 word: r.word.clone(),
                 reason: r.reason.clone(),
-                on_line: targets.contains(&target),
+                on_line: targets.contains_key(&target),
+                line: targets.get(&target).copied(),
             });
         }
         Some(out)
@@ -400,6 +455,7 @@ pub fn load(
         questions.push(Question {
             idx: i,
             heading: sec.heading_text.clone(),
+            asked: !is_unasked(led, sec),
             heading_hash,
             has_body,
             body_hash,
@@ -482,6 +538,41 @@ impl Planning {
         }
         out
     }
+}
+
+/// The lines show and the page print under an open question: one line for
+/// each neighbour on record at either step, carrying the reader's word of
+/// each step it is on record at and the agent's line; and, for a question
+/// not yet asked that has no records, one line saying so. Nothing for an
+/// asked question with no records (planned before the records existed).
+pub fn neighbour_lines(rel: &str, q: &Question) -> Vec<String> {
+    let mut merged: Vec<(&Neighbour, Option<&str>, Option<&str>)> = Vec::new();
+    for n in &q.heading_neighbours {
+        merged.push((n, Some(n.word.as_str()), None));
+    }
+    for n in &q.body_neighbours {
+        match merged.iter_mut().find(|(m, _, _)| m.key == n.key) {
+            Some(m) => m.2 = Some(n.word.as_str()),
+            None => merged.push((n, None, Some(n.word.as_str()))),
+        }
+    }
+    let mut out: Vec<String> = merged
+        .iter()
+        .map(|(n, h, b)| {
+            let mut words = Vec::new();
+            if let Some(h) = h {
+                words.push(("heading", *h));
+            }
+            if let Some(b) = b {
+                words.push(("body", *b));
+            }
+            msg::show_neighbour(n.kind.label(), &n.name, &words, n.line.map(LineKind::label))
+        })
+        .collect();
+    if !q.asked && (!q.heading_done || (q.has_body && !q.body_done)) {
+        out.push(msg::show_no_records(rel));
+    }
+    out
 }
 
 /// The text a heading is read as: the heading alone.

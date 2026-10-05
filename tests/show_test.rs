@@ -164,7 +164,9 @@ tier 1
     stood on by: 2.1 Depends on root?
     First choice.
   [not asked] 1.2 Unasked root?
+    neighbours: no reader records yet; agent runs: adr plan adrdom/decisions/tiered.md
   [no body] 1.3 Skeleton?
+    neighbours: no reader records yet; agent runs: adr plan adrdom/decisions/tiered.md
 tier 2
   [asked @11024127] 2.1 Depends on root?
     stands on: 1.1 Root?=A

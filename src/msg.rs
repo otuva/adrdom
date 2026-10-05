@@ -1182,8 +1182,19 @@ pub fn next_clears(refusal: &str) -> String {
     Next::agent(format!("clears: {}", refusal)).render()
 }
 
-pub fn next_write_body(heading: &str) -> String {
-    Next::agent(format!("writes the body of \"{}\"", heading)).render()
+/// The agent plans the file: some question has no reader rows at a step.
+pub fn next_plan(rel: &str) -> String {
+    Next::agent(format!("runs: adr plan {}", rel)).render()
+}
+
+/// Some neighbour of a question is on no line.
+pub fn next_write_lines(headings: &[String]) -> String {
+    Next::agent(format!("writes lines for {}", quoted(headings))).render()
+}
+
+/// Headings of the plan with no body: the bodies are written before approve.
+pub fn next_write_bodies(headings: &[String]) -> String {
+    Next::agent(format!("writes the body of {}", quoted(headings))).render()
 }
 
 pub fn next_answer_set(dependent: &str, target: &str) -> String {
@@ -1308,6 +1319,19 @@ pub fn show_whole_hint() -> String {
 
 pub fn show_stands_on(entries: &[String]) -> String {
     format!("    stands on: {}", entries.join(", "))
+}
+
+/// Under an open question: one neighbour on record, with the reader's word
+/// at each step it was read at and the agent's line (`depends`,
+/// `supersedes`, `unrelated` or `no line`).
+pub fn show_neighbour(kind: &str, name: &str, words: &[(&str, &str)], line: Option<&str>) -> String {
+    let words: Vec<String> = words.iter().map(|(step, word)| format!("{}: {}", step, word)).collect();
+    format!("    neighbour: {} \"{}\": {}; {}", kind, name, words.join(", "), line.unwrap_or("no line"))
+}
+
+/// Under a question not yet asked: the reader has recorded nothing for it.
+pub fn show_no_records(rel: &str) -> String {
+    format!("    neighbours: no reader records yet; {}", Next::agent(format!("runs: adr plan {}", rel)).render())
 }
 
 pub fn show_chosen(sentence: &str) -> String {

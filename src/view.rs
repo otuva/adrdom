@@ -93,6 +93,11 @@ pub struct QuestionView {
     /// not common English, not a uuid or number, not shorter than three
     /// letters, and not already covered by `words`.
     pub no_entry: Vec<String>,
+    /// The lines `show` prints under an open question: one for each
+    /// neighbour on record, with the reader's word and the agent's line
+    /// ("Does show print the neighbours of a question with the reader's
+    /// word?", 97c679f6-e8e6-4970-b547-940477753d7d A).
+    pub neighbours: Vec<String>,
 }
 
 pub struct FileView {
@@ -244,13 +249,17 @@ pub(crate) fn asked_text_stands(led: &Ledger, rf: &RecordFile, sec: &Section) ->
 /// `plan_ok` is read by the caller off the file as loaded, before
 /// `depends::normalize_cross_file_deps` (see `snapshot`). `tests` is
 /// `check::test_index`: an answered decision with a test tied to it is
-/// built.
+/// built. `planning` is `plan::load` of the file: a plan that waits for its
+/// approval, or holds a heading with no body, follows the planning steps
+/// (plan, write lines, write bodies, approve) from it ("What does the agent
+/// do to plan a topic file?", 46fc51ff-66b9-4841-a953-ae0d4c2fc424 A).
 pub(crate) fn next_moves(
     rf: &RecordFile,
     led: &Ledger,
     plan_ok: bool,
     plan_refusals: &[String],
     tests: &HashMap<String, Vec<String>>,
+    planning: Option<&crate::plan::Planning>,
 ) -> Vec<String> {
     use crate::msg;
     // What `approve` and `check` refuse in this file's plan
@@ -264,7 +273,7 @@ pub(crate) fn next_moves(
     };
     let open_tier = state::open_tier(rf);
 
-    let mut bodies = Vec::new();
+    let mut bare = false;
     let mut to_ask = Vec::new();
     let mut answers = Vec::new();
     let mut held = Vec::new();
@@ -278,9 +287,7 @@ pub(crate) fn next_moves(
             QState::Skeleton | QState::Unasked if Some(tiers[i]) != open_tier => {
                 later.push(heading.to_string());
             }
-            QState::Skeleton | QState::Unasked if sec.is_skeleton => {
-                bodies.push(msg::next_write_body(heading));
-            }
+            QState::Skeleton | QState::Unasked if sec.is_skeleton => bare = true,
             QState::Skeleton | QState::Unasked => to_ask.push(heading.to_string()),
             QState::Open => {
                 let Some(id) = &sec.id else { continue };
@@ -346,16 +353,20 @@ pub(crate) fn next_moves(
     let refused = !clears.is_empty();
     out.extend(clears);
     if plan_ok {
-        out.extend(bodies);
+        // Approve refuses a heading with no body, so one in an approved file
+        // is one approved before it did: its body is written, then planned.
+        if bare && planning.is_some() {
+            out.extend(plan_moves(rf, planning));
+        }
         out.extend(sets);
         if !to_ask.is_empty() {
             out.push(msg::next_ask(&rf.rel, &to_ask));
         }
     } else if !refused {
-        // Nothing is written or asked under a plan that waits for its
-        // approval; what the owner owes and what is answered stands. The
-        // owner's command is named once `approve` would take the plan.
-        out.push(msg::next_plan_unapproved(&rf.rel));
+        // Nothing is asked under a plan that waits for its approval; what
+        // the owner owes and what is answered stands. The planning steps
+        // come first, the owner's command once `approve` would take the plan.
+        out.extend(plan_moves(rf, planning));
     }
     out.extend(answers);
     out.extend(held);
@@ -364,6 +375,34 @@ pub(crate) fn next_moves(
         out.push(msg::next_later(&later));
     }
     out
+}
+
+/// The next move of the planning steps for the questions of `rf` not yet
+/// asked, as lines: the owner's approve once every record is there.
+fn plan_moves(rf: &RecordFile, planning: Option<&crate::plan::Planning>) -> Vec<String> {
+    use crate::msg;
+    use crate::plan::{NextMove, Step};
+    let Some(p) = planning else {
+        return vec![msg::next_plan_unapproved(&rf.rel)];
+    };
+    match p.next() {
+        NextMove::Plan => vec![msg::next_plan(&rf.rel)],
+        NextMove::WriteLines => {
+            let mut missing = p.lines_missing(Step::Heading);
+            if missing.is_empty() {
+                missing = p.lines_missing(Step::Body);
+            }
+            let mut headings: Vec<String> = Vec::new();
+            for (q, _) in missing {
+                if !headings.contains(&q.heading) {
+                    headings.push(q.heading.clone());
+                }
+            }
+            vec![msg::next_write_lines(&headings)]
+        }
+        NextMove::WriteBodies(headings) => vec![msg::next_write_bodies(&headings)],
+        NextMove::Ready => vec![msg::next_plan_unapproved(&rf.rel)],
+    }
 }
 
 /// The text following `prefix` (e.g. `"Problem: "`) on the first matching
@@ -540,8 +579,19 @@ fn build_question_view(
     test_idx: &HashMap<String, Vec<String>>,
     terms_list: &[Term],
     all_headings: &HashMap<String, String>,
+    planning: &crate::plan::Planning,
 ) -> QuestionView {
     let state = qstate(led, sec);
+    let neighbours = if matches!(state, QState::Skeleton | QState::Unasked | QState::Open) {
+        planning
+            .questions
+            .iter()
+            .find(|q| q.heading == sec.heading_text)
+            .map(|q| crate::plan::neighbour_lines(&rf.rel, q))
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
     let tier = rf.tier_of(idx);
     let depends: Vec<String> = sec
         .depends
@@ -577,6 +627,7 @@ fn build_question_view(
     let version = record::version_of(&rf.lines, sec);
 
     QuestionView {
+        neighbours,
         id: sec.id.clone(),
         heading: sec.heading_text.clone(),
         version,
@@ -617,6 +668,7 @@ fn build_file_view(
     all_headings: &HashMap<String, String>,
     plan_approved: bool,
     context_approved: bool,
+    planning: &crate::plan::Planning,
 ) -> FileView {
     let path = state::rel_path(root, &rf.path);
     let done = state::file_done(rf, plan_approved, context_approved);
@@ -625,7 +677,7 @@ fn build_file_view(
         .sections
         .iter()
         .enumerate()
-        .map(|(idx, sec)| build_question_view(rf, idx, sec, led, test_idx, terms_list, all_headings))
+        .map(|(idx, sec)| build_question_view(rf, idx, sec, led, test_idx, terms_list, all_headings, planning))
         .collect();
 
     FileView {
@@ -734,6 +786,7 @@ pub fn snapshot(root: &Path) -> Snapshot {
     // one it was about to build a `FileView` for all over again.
     let records: Vec<RecordFile> = record::load_all(root);
     let cross_file_headings = depends::cross_file_heading_index(&records, &led);
+    let all_records = records.clone();
     let mut files: Vec<FileView> = Vec::new();
     for mut rf in records {
         let rel = rf.rel.clone();
@@ -745,6 +798,8 @@ pub fn snapshot(root: &Path) -> Snapshot {
         // copy off the by-then-normalized `rf`).
         let plan_ok = state::plan_approved(&led, &rf, &rel);
         let ctx_ok = state::context_approved(&led, &rf, &rel);
+        // Read off the file as loaded, as `plan` and `approve` read it.
+        let planning = crate::plan::load_shown(root, &rf, &all_records, &terms_list, &led);
         depends::normalize_cross_file_deps(&mut rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
         let fv = build_file_view(
             root,
@@ -755,6 +810,7 @@ pub fn snapshot(root: &Path) -> Snapshot {
             &all_headings,
             plan_ok,
             ctx_ok,
+            &planning,
         );
         files.push(fv);
     }
@@ -1114,6 +1170,7 @@ Standard: s2.\n\n\
             &HashMap::new(),
             plan_ok,
             ctx_ok,
+                &crate::plan::Planning { rel: String::new(), questions: Vec::new() },
             );
         assert!(!fv.done);
 
@@ -1153,6 +1210,7 @@ Standard: s2.\n\n\
             &HashMap::new(),
             plan_ok2,
             ctx_ok2,
+            &crate::plan::Planning { rel: String::new(), questions: Vec::new() },
         );
         assert!(fv2.plan_approved);
         assert!(fv2.context_approved);
@@ -1220,6 +1278,7 @@ Standard: s2.\n\n\
             &HashMap::new(),
             plan_ok2,
             ctx_ok2,
+            &crate::plan::Planning { rel: String::new(), questions: Vec::new() },
         );
         assert!(fv.plan_approved);
         assert!(fv.context_approved);
@@ -1325,6 +1384,7 @@ Standard: s2.\n\n\
             &HashMap::new(),
             plan_ok,
             ctx_ok,
+                &crate::plan::Planning { rel: String::new(), questions: Vec::new() },
             );
         let q1 = fv
             .questions

@@ -55,6 +55,13 @@ pub(super) fn render_next(
             esc(&q.depends.join(", "))
         ));
     }
+    if !q.neighbours.is_empty() {
+        body.push_str("<ul class=\"neighbours\">\n");
+        for line in &q.neighbours {
+            body.push_str(&format!("<li>{}</li>\n", esc(line.trim())));
+        }
+        body.push_str("</ul>\n");
+    }
 
     if q.problem.is_some() || q.standard.is_some() {
         body.push_str("<dl class=\"framing\">\n");

@@ -39,6 +39,30 @@ pub(super) fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> 
                 "<p class=\"state waiting\">The {} of this file is not approved yet.</p>\n",
                 awaiting.join(" and ")
             ));
+            // Per "Does show print the neighbours of a question with the
+            // reader's word?" (97c679f6-e8e6-4970-b547-940477753d7d A): the
+            // owner sees each heading with its neighbours, the reader's word
+            // and the agent's line where the Approve button is.
+            let unasked: Vec<&QuestionView> = f
+                .questions
+                .iter()
+                .filter(|q| matches!(q.state, QState::Skeleton | QState::Unasked))
+                .collect();
+            if !unasked.is_empty() {
+                body.push_str("<ul class=\"unasked-list\">\n");
+                for q in &unasked {
+                    body.push_str(&format!("<li>{}", esc(&q.heading)));
+                    if !q.neighbours.is_empty() {
+                        body.push_str("<ul class=\"neighbours\">");
+                        for line in &q.neighbours {
+                            body.push_str(&format!("<li>{}</li>", esc(line.trim())));
+                        }
+                        body.push_str("</ul>");
+                    }
+                    body.push_str("</li>\n");
+                }
+                body.push_str("</ul>\n");
+            }
             body.push_str(&format!(
                 "<form method=\"post\" action=\"/approve\" class=\"inline\"><input type=\"hidden\" name=\"file\" value=\"{}\"><input type=\"hidden\" name=\"t\" value=\"{}\"><button type=\"submit\">Approve {}</button></form>\n",
                 esc(&f.path),
