@@ -17,6 +17,7 @@ id: 946263aa-519a-47aa-b743-5cdcf52f5d35
 
 ### Does check fail a topic file awaiting approval?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, f5eeaacf-1c9f-478b-8a97-2df1aaf39458
+id: 912f4f3b-1213-435a-af0d-7617017fcff4
 
 ### Does answer remove a question whose answer set lacks the answer?
 depends: b36113a1-1384-4e4c-a798-8399f4181366, 946263aa-519a-47aa-b743-5cdcf52f5d35, 61e73795-63de-4669-b09f-48be96919325
