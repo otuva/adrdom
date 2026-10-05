@@ -22,8 +22,8 @@ depends: ledger, Does answer remove a question whose answer set lacks the answer
 ### What does the tool bring as neighbours for a new heading?
 depends: neighbour, decision, definition
 
-### Does git track the embedding index?
-depends: embedding index
+### Does git track a file the tool can get again without the owner?
+depends: embedding index, embedding model
 
 ### What does the agent do to plan a topic file?
 depends: agent, plan, What does the tool bring as neighbours for a new heading?
