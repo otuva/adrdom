@@ -201,6 +201,16 @@ Standard: a step whose input is missing stops and names it; no degraded mode.
 depends: 94677ed8-eaf6-46e2-bc71-7392fa0805bf, 62e50382-db1b-4649-9f26-7f44c379d6fe=A
 id: 4838baa4-a5df-49e7-929c-ed63b5adaf4e
 
+Problem: two new headings in one plan are never each other's neighbour when the pool is the records; the tie between them is written by hand and forgotten.
+Standard: deduplicate a batch against itself as well as against the store.
+
+- A) Yes.
+  Why: at the body step each question is read against the plan's nearest questions with the heading set.
+  Costs: a few more reader calls per question; two unanswered questions give no consistent or inconsistent.
+- B) No.
+  Why: the pool is the records; the agent wrote both headings and knows their tie.
+  Costs: two headings on one rule in one plan pass; the tier cap is the only net.
+
 ### Does every neighbour get a line under its heading?
 depends: aef1b384-2b33-47a2-92a8-ec7f8fb258ef, 2bae531b-c4df-48a0-89a0-3d52726741ea, 46fc51ff-66b9-4841-a953-ae0d4c2fc424=*
 id: c6451ecc-17a9-447e-a9c9-fe9b35ec789c
@@ -296,10 +306,40 @@ Standard: expensive judgments are stored keyed by their inputs, in a file the to
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 08a1b488-32fc-4dc7-b4b3-93a6e768725f=A
 id: 26c5352f-3f82-4376-9dc2-8ccc0074d080
 
+Problem: a file the tool writes and the agent may edit is a file the agent will edit; a row changed by hand says what the reader did not.
+Standard: machine-written records are append-only and verified against history.
+
+- A) Yes.
+  Why: rows present at HEAD stay byte for byte, a merge keeps both branches' rows, the permission file forbids edits.
+  Costs: install writes a second merge rule; check reads one more file at every commit.
+- B) No.
+  Why: the file is a cache of readings, not a record; nothing to hold.
+  Costs: a row written by hand passes as the reader's word, and a merge may drop rows.
+
 ### Does planning stop without the reader?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 62e50382-db1b-4649-9f26-7f44c379d6fe=*
 id: 3dba486c-a399-4ce3-a794-e38c4f733403
 
+Problem: the reader is a program apart from the tool; a machine without it brings neighbours with no word, and a plan with wordless rows is a plan with a hole.
+Standard: a step whose input is missing stops and names it; no degraded mode.
+
+- A) Yes.
+  Why: one shape of row; every neighbour on record carries a word.
+  Costs: planning needs the reader on the machine; every other command runs without it.
+- B) No.
+  Why: the agent reads the neighbours itself; the word is a line, not a gate, so its absence stops nothing.
+  Costs: two shapes of row, and the owner sees agent lines with nothing against them.
+
 ### Does show print the neighbours of a question with the reader's word?
 depends: 277a8338-c57a-43cc-8b28-6b42e9347f6a, 08a1b488-32fc-4dc7-b4b3-93a6e768725f=*
 id: 97c679f6-e8e6-4970-b547-940477753d7d
+
+Problem: the rows live in a file the owner never opens; at approval the owner has to see each heading, its neighbours, the reader's word and the agent's line together.
+Standard: a review surface shows the evidence beside the judgment.
+
+- A) Yes.
+  Why: under each open question, one line per neighbour: its name, the reader's word, the agent's line; the page too.
+  Costs: show with a topic file reads the reader's file; the page too.
+- B) No.
+  Why: show prints what the decision on show names; the owner reads the file.
+  Costs: the owner reads hashes and identifiers in a tab-separated file, or trusts the agent's line unseen.
