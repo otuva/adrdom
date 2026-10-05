@@ -54,6 +54,8 @@ Standard: read a symmetric relation once; for a directional one, state the direc
   Why: each decision has its own row for the pair, as in planning; direction is in the row, not the sentence.
   Costs: twice the reader calls, and two words that may disagree for one pair.
 
+**Answer:** A
+
 ### Does a commit run the reading of the set?
 depends: f90dbd5b-8fbe-4899-8588-f8762795c2e2, 1ab6d6c3-7e44-42de-bc2f-2e5849114aef=A
 unrelated: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 34e81f57-9b3c-4dc4-a2ba-ca227523177d, a26876ba-5789-4d05-965e-853d00d9edd2, bf6697e3-8832-4b90-b036-8fecedb55406, 26c5352f-3f82-4376-9dc2-8ccc0074d080, 19e1c023-a678-4842-a414-bb0e45c41601, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c, dfd32ef6-c2ac-40ef-b8b3-9c58732516b1, 1c27f2d6-ab62-4c5a-91b2-1488722f3c48, d8a9dfff-de89-442c-a08c-8276efab3f36, 4f925b13-ad16-48b8-acd1-3e30d6e308b6, c3127af2-4c96-48d5-a164-bac49a9a09ec, f422c5db-13d0-4ff7-9e43-b68ab44a7cb9, db56a285-946f-48b1-b073-bb1e90192185, 908bddc6-5d30-4bcc-be8d-4c470c6bff11, 4b407ee1-1e64-4ca1-842b-69773fc0e48a, 2db33118-82b4-4edf-a9cb-e92ac62738b9, 4f04bae4-98e3-48eb-9403-3257268e2d87
@@ -87,3 +89,5 @@ Standard: a scan prints its findings and the move for each; the store is for the
 - B) No.
   Why: the rows are the record; show prints them under each decision.
   Costs: the agent reads show for a hundred decisions to find three findings.
+
+**Answer:** A
