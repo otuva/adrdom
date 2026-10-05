@@ -36,6 +36,8 @@ Standard: the same closed set as for a question with its body, applied to two se
   Why: only the words that lead to a move; fewer wrong words to read.
   Costs: a missing tie between two old decisions is never named; the set keeps its untied pairs.
 
+**Answer:** A
+
 ### Does the tool read a pair of decisions in both directions?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, 1ab6d6c3-7e44-42de-bc2f-2e5849114aef=A, 908bddc6-5d30-4bcc-be8d-4c470c6bff11=A
 unrelated: f4f667ad-8714-4e65-897b-c7002e423c28, 4838baa4-a5df-49e7-929c-ed63b5adaf4e, e3200081-9995-4bbe-983f-2f430dc341e7, dad5273c-afe2-4ab1-a451-e2a5d4d9a26d, 39b76886-98f9-4019-9194-db9ab51aea1e, 277a8338-c57a-43cc-8b28-6b42e9347f6a, 385a57d5-5f76-454a-ae5d-9b0d6f5c1492, c3127af2-4c96-48d5-a164-bac49a9a09ec, 32a189a0-86e0-44d1-9392-a50c84570ada, 9ba58b6a-bc85-44a5-a720-d8e7a6ff7b31, 62e50382-db1b-4649-9f26-7f44c379d6fe, ce19c883-c61d-477b-a6d4-fee5134c6e9a, 946263aa-519a-47aa-b743-5cdcf52f5d35, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, 6108b8b2-911e-443b-abe0-4c6f8b407384, bc4291c8-98f1-499d-8e02-46e371035e70, 2db33118-82b4-4edf-a9cb-e92ac62738b9
@@ -66,6 +68,8 @@ Standard: expensive advisory analyses run on demand, not in a commit hook.
 - B) Yes.
   Why: the set is never stale; every commit reads what changed.
   Costs: every commit needs the model and the reader and waits minutes; a hook without them fails.
+
+**Answer:** A
 
 ### Does the tool print every pair the reader marks?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 1ab6d6c3-7e44-42de-bc2f-2e5849114aef=A, 908bddc6-5d30-4bcc-be8d-4c470c6bff11=*, 08a1b488-32fc-4dc7-b4b3-93a6e768725f
