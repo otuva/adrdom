@@ -153,9 +153,10 @@ again: run `adr plan <file>` until it says the file is ready.
 
 **6. Ask approval.** Say the plan is ready, post
 `owner runs: adr approve <file>` and stop. The owner reads headings, lines
-and bodies once, may strike, add or reorder headings, or write the plan
-itself and approve it the same way. After approval every heading has an
-`id:` line and the entries of its lines are ids.
+and bodies once. The owner may strike, add or reorder headings before
+approving, or write the plan itself and approve it the same way. After
+approval every heading has an `id:` line and the entries of its lines are
+ids.
 
 **Then run `adr ask <file>`.** It asks the questions, or prints in one run
 everything that stops it, each line with the move that clears it. Make every
