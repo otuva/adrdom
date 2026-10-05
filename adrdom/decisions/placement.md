@@ -92,11 +92,12 @@ Standard: a conditional item leaves with its condition; no second confirmation.
 ### What does answer write for a removed question?
 depends: e18b82d8-5271-4385-bbab-2b89e5da278f, 462e22c6-8b23-4061-9a2a-bbf8691fce60=A
 id: f5c242b6-e2f6-45a3-8c61-c743f3ad794f
+terms: answer=b36113a1-1384-4e4c-a798-8399f4181366, approval=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approved=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, identifier=e877e4a9-2caf-4fe6-9f82-5476a2abb00b, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a
 
 Problem: a question leaves the file at the owner's answer; without a row the approved set and the file disagree and nothing says why.
 Standard: an append-only log records every removal with its cause.
 
-- A) A dropped row: the question's identifier, its hash from approval, the identifier and letter of the answer that dropped it.
+- A) A dropped row: the question's identifier, its hash from approval, the identifier and letter of the dropping answer.
   Why: check verifies the drop from the row: that answer was given and the set lacked that letter.
   Costs: one row per removed question, dependents included, each naming the question it stood on.
 - B) A dropped row with the question's identifier and its hash from approval, no cause.
@@ -218,6 +219,7 @@ Standard: every item put in front of a reviewer gets an explicit disposition.
 ### What does the reader say about a neighbour of a heading?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, c6e0b7d6-cdec-46da-b2bc-cda218673868=A
 id: 62e50382-db1b-4649-9f26-7f44c379d6fe
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answer=b36113a1-1384-4e4c-a798-8399f4181366, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, depends=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, neighbour=daec9ffd-676f-4111-a359-2827bfd4527c, neighbours=daec9ffd-676f-4111-a359-2827bfd4527c, options=43778946-d44c-4acf-a766-0a4915fce199, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641
 
 Problem: at the heading step the new side has no options and no answer; consistent and inconsistent need the rules of both sides.
 Standard: a classifier gets only the labels its input can support.
@@ -252,6 +254,7 @@ Standard: classification into a closed set with an explicit none-of-these, so th
 ### Does the reader's word stop a command?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, c6e0b7d6-cdec-46da-b2bc-cda218673868=*
 id: 902bd279-e6c1-4a21-9637-a3a43f360bae
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, checked=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, checks=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641
 
 Problem: a reader is a model; a wrong word that stops a command has no exit but rewording the text, and a word that is only a line leaves a trace.
 Standard: advisory checks inform; blocking checks are deterministic.
@@ -266,19 +269,20 @@ Standard: advisory checks inform; blocking checks are deterministic.
 ### What does the tool keep of the reader's word?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, c6e0b7d6-cdec-46da-b2bc-cda218673868=*
 id: 08a1b488-32fc-4dc7-b4b3-93a6e768725f
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, approval=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, identifier=e877e4a9-2caf-4fe6-9f82-5476a2abb00b, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, neighbour=daec9ffd-676f-4111-a359-2827bfd4527c, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641
 
 Problem: a word that stays in the terminal is gone at approval; the owner sees the agent's line with nothing against it, and a pair whose texts did not change is read again.
 Standard: expensive judgments are stored keyed by their inputs, in a file the tool owns.
 
 - A) A row in its own file under adrdom/state: text hash, neighbour identifier, word, reason, prompt hash, model.
-  Why: the neighbour list is the same rows, so approve reads them anywhere; the word and reason meet the agent's line.
+  Why: the neighbour list is the same rows, so approve reads them anywhere; word and reason meet the agent's line.
   Costs: a second append-only file beside the ledger, hundreds of rows per plan, held like the ledger.
 - B) A row in the ledger: the same fields in the ledger's columns.
   Why: one log, one set of rules, nothing new to hold.
   Costs: hundreds of reader rows around tens of owner events, and two keys forced into one identifier column.
 - C) Only the word, in its own file, no reason.
   Why: short rows; the reason is read once in the terminal.
-  Costs: the owner sees a word against the agent's line and no reason; a bundled decision's clause is not named.
+  Costs: the owner sees a word against the agent's line, no reason; a bundled decision's clause is not named.
 
 ### Does check hold the reader's file as it holds the ledger?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 08a1b488-32fc-4dc7-b4b3-93a6e768725f=A
