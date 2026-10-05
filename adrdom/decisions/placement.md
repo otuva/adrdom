@@ -9,6 +9,9 @@ supersedes: Does the owner approve a plan in one step?, Does check fail a plan a
 ### Does approve hash each question on its own?
 depends: approve, question, Does the agent write the bodies before approve?
 
+### Does a depends entry on a question in its file carry an answer set?
+depends: answer set, depends, Does the agent write the bodies before approve?
+
 ### Does answer remove a question whose answer set lacks the answer?
 depends: answer, answer set, Does approve hash each question on its own?
 supersedes: Does a depends entry carry the answers it holds under?
@@ -20,7 +23,7 @@ depends: ledger, Does answer remove a question whose answer set lacks the answer
 depends: neighbour, decision, definition
 
 ### Does git track the embedding index?
-depends: embedding index, What does the tool bring as neighbours for a new heading?
+depends: embedding index
 
 ### What does the agent do to plan a topic file?
 depends: agent, plan, What does the tool bring as neighbours for a new heading?
