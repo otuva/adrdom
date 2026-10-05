@@ -52,6 +52,8 @@ Standard: a conditional item names its condition.
   Why: nothing to write; every question in the plan is asked whatever the answers below it.
   Costs: a question built on an answer the owner did not give is asked and answered anyway.
 
+**Answer:** A
+
 ### Does check fail a topic file awaiting approval?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, f5eeaacf-1c9f-478b-8a97-2df1aaf39458=*
 id: 912f4f3b-1213-435a-af0d-7617017fcff4
@@ -66,6 +68,8 @@ Standard: linters report pending items as counts and fail only what is wrong.
 - B) Yes.
   Why: nothing unapproved enters git.
   Costs: the plan with its bodies is shown in conversation only, and the hooks refuse the draft commit.
+
+**Answer:** A
 
 ### Does answer remove a question whose answer set lacks the answer?
 depends: b36113a1-1384-4e4c-a798-8399f4181366, 946263aa-519a-47aa-b743-5cdcf52f5d35=A, 61e73795-63de-4669-b09f-48be96919325=A
@@ -131,6 +135,8 @@ Standard: a pipeline with a fixed order of steps, each step's output the next st
   Why: one tool run, over the fullest text.
   Costs: lines are written with no neighbour in view, and a heading that repeats a decision gets a body first.
 
+**Answer:** A
+
 ### Does a planning step run without the record of the step before?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 46fc51ff-66b9-4841-a953-ae0d4c2fc424=*
 id: d3be71e4-ce7b-43b0-86a8-e86868521f99
@@ -149,6 +155,8 @@ Standard: a step whose input is missing stops and names it; no degraded mode.
 - B) No.
   Why: planning runs anywhere; the neighbour step is skipped with a note.
   Costs: two shapes of plan, and approve cannot tell a skipped step from a done one.
+
+**Answer:** A
 
 ### Does the tool bring the plan's own questions as neighbours of each other?
 depends: 94677ed8-eaf6-46e2-bc71-7392fa0805bf, 62e50382-db1b-4649-9f26-7f44c379d6fe
