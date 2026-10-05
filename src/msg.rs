@@ -1005,6 +1005,32 @@ pub fn plan_neighbour(kind: &str, name: &str, word: &str, on_line: bool) -> Stri
     format!("  {} \"{}\": {}; {}", kind, name, word, if on_line { "on a line" } else { "no line" })
 }
 
+/// One pair of current decisions the reader marked, as `adr read` prints it.
+pub fn read_pair(word: &str, first: &str, second: &str, reason: &str) -> String {
+    format!("{}: \"{}\" and \"{}\": {}", word, first, second, reason)
+}
+
+/// The move `adr read` names when a pair is marked same or inconsistent.
+pub fn read_next() -> String {
+    "next\n  agent writes a question that supersedes one decision of each same or inconsistent pair".to_string()
+}
+
+/// The last line of `adr read`.
+pub fn read_summary(now: usize, before: usize, marked: usize) -> String {
+    let pairs = if now == 1 { "pair" } else { "pairs" };
+    format!("read {} {} now, {} read before, {} marked", now, pairs, before, marked)
+}
+
+/// A reading that stopped: the reader's error and how many pairs are
+/// unread; the rows of earlier chunks are kept.
+pub fn read_stopped(e: &str, unread: usize) -> String {
+    format!(
+        "{}\n{}",
+        e,
+        refuse(format!("read: stopped with {} pairs unread", unread), Next::agent("runs adr read again"))
+    )
+}
+
 /// One neighbour that is on no line, the move that clears it as one line.
 pub fn plan_line_wanted(heading: &str, kind: &str, name: &str) -> String {
     format!("line missing: {} \"{}\" under \"{}\"", kind, name, heading)
@@ -3098,6 +3124,7 @@ mod tests {
             plan_line_missing("x.md", "Does X?", "term", "widget"),
             plan_bodies_missing("x.md", &["Does X?".to_string()]),
             reader_failed("id-1", "no answer"),
+            read_stopped("reader: no answer", 3),
             reader_write_failed("disk full"),
             malformed_reader_row(3, "bad row"),
             reader_not_append_only(),

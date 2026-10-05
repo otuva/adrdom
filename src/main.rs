@@ -37,6 +37,8 @@ enum Command {
         /// The topic file, adrdom/decisions/<topic>.md.
         topic_file: PathBuf,
     },
+    /// Read every current decision against its ten nearest current decisions and print each pair the reader marks same, inconsistent or depends.
+    Read,
     /// Owner-only: approve the headings and prose of a topic file, the terms file, or a blame file.
     Approve {
         /// A topic file, adrdom/terms.md, or a blame file under adrdom/blame.
@@ -133,6 +135,7 @@ fn main() {
         Command::Uninstall => commands::uninstall::run(),
         Command::Ask { topic_file } => commands::ask::run(topic_file),
         Command::Plan { topic_file } => commands::plan::run(topic_file),
+        Command::Read => commands::read::run(),
         Command::Approve { file } => commands::approve::run(file),
         Command::Answer { id, letter } => commands::answer::run(id, letter),
         Command::Show { topic_file, all } => commands::show::run(topic_file, all),
