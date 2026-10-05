@@ -104,6 +104,8 @@ Standard: an append-only log records every removal with its cause.
   Why: the shortest row that keeps the approved set whole.
   Costs: check sees the removal but cannot verify it was legal; the cause lives in git history only.
 
+**Answer:** A
+
 ### What does the tool bring as neighbours for a new heading?
 depends: daec9ffd-676f-4111-a359-2827bfd4527c, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, 607cb55f-c0fa-40af-b290-c17f3ba0f812
 id: de8ef568-3a8d-42ba-bef7-d7fd467b27be
@@ -231,6 +233,8 @@ Standard: a classifier gets only the labels its input can support.
   Why: half the reader calls; the agent reads the ten neighbours itself at the heading step.
   Costs: a heading a decision settles gets a body before it drops; the tie is named only at the body step.
 
+**Answer:** A
+
 ### What does the reader say about a neighbour of a question with its body?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 46fc51ff-66b9-4841-a953-ae0d4c2fc424=A|C
 id: c6e0b7d6-cdec-46da-b2bc-cda218673868
@@ -266,6 +270,8 @@ Standard: advisory checks inform; blocking checks are deterministic.
   Why: a same from the reader stops the heading until it is reworded or dropped.
   Costs: a wrong same has no exit but rewording; the model's word becomes a rule that cannot be checked again.
 
+**Answer:** A
+
 ### What does the tool keep of the reader's word?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, c6e0b7d6-cdec-46da-b2bc-cda218673868=*
 id: 08a1b488-32fc-4dc7-b4b3-93a6e768725f
@@ -283,6 +289,8 @@ Standard: expensive judgments are stored keyed by their inputs, in a file the to
 - C) Only the word, in its own file, no reason.
   Why: short rows; the reason is read once in the terminal.
   Costs: the owner sees a word against the agent's line, no reason; a bundled decision's clause is not named.
+
+**Answer:** A
 
 ### Does check hold the reader's file as it holds the ledger?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 08a1b488-32fc-4dc7-b4b3-93a6e768725f=A
