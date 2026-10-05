@@ -21,8 +21,8 @@
 //! The model and the reader are loaded only when there is something to read.
 //! Planning stops without them ("Does planning stop without the embedding
 //! model?", 21cdad59-4f0c-42a5-b4f3-6af946637df3; "Does planning stop
-//! without the reader?", 3dba486c-a399-4ce3-a794-e38c4f733403 A); no other
-//! command needs them.
+//! without the reader?", 3dba486c-a399-4ce3-a794-e38c4f733403 A); `adr read`
+//! loads them too.
 use crate::index;
 use crate::ledger;
 use crate::msg::{self, Actor, Next};
@@ -146,6 +146,10 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<(String, i32), String> {
     // is at: shown, never a stop.
     let led_now = ledger::read(&root.join(repo::LEDGER_PATH));
     let mut hits = crate::actions::length_refusals(&rel, rf, &led_now);
+    // A loaded phrase in a body and a question that pairs no term: shown
+    // the same way.
+    hits.extend(crate::actions::body_tell_refusals(&rel, rf, &led_now));
+    hits.extend(crate::actions::no_term_refusals(&rel, rf, &env(root).terms, &led_now));
     // A set letter its same-file target has no option for: shown the same way.
     hits.extend(crate::actions::letter_refusals(&rel, rf, &led_now));
     for h in &hits {

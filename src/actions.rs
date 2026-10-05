@@ -1126,6 +1126,45 @@ pub fn length_refusals(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<String> 
     out
 }
 
+/// The loaded phrases (`tells::prose_tells_in`, the scan `ask` reads too)
+/// in the body of every question of `rf` below its heading, a question with
+/// any ledger state (asked included, its text held by hash) skipped as its
+/// heading is (per "Does the tool stop loaded phrases in a question?"): the
+/// one function `check`, `approve` and `plan`
+/// read, found before approval what `ask` refuses.
+pub fn body_tell_refusals(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<String> {
+    let mut out = Vec::new();
+    for sec in &rf.sections {
+        if sec.id.as_ref().is_some_and(|id| led.latest_state(id).is_some()) {
+            continue;
+        }
+        let (s, e) = record::hash_range(&rf.lines, sec);
+        for (line, phrase, what) in tells::prose_tells_in(&rf.lines, s + 1, e) {
+            out.push(msg::tell(rel, line, &sec.heading_text, &phrase, what));
+        }
+    }
+    out
+}
+
+/// One `pairs_no_term` message per question of `rf` not yet asked, with its
+/// options, whose text pairs no term (`terms::resolve`, the pairing `ask`
+/// writes): the one function `check`, `approve` and `plan` read, found
+/// before approval what `ask` refuses. A heading with no body is no question
+/// yet.
+pub fn no_term_refusals(rel: &str, rf: &RecordFile, terms_list: &[terms::Term], led: &Ledger) -> Vec<String> {
+    let mut out = Vec::new();
+    for sec in &rf.sections {
+        if sec.is_skeleton || sec.id.as_ref().is_some_and(|id| led.latest_state(id).is_some()) {
+            continue;
+        }
+        let text = state::section_text_excluding_terms_line(&rf.lines, sec);
+        if terms::resolve(&text, terms_list).is_empty() {
+            out.push(msg::pairs_no_term(rel, &sec.heading_text));
+        }
+    }
+    out
+}
+
 /// One `bad_letters` message per answer-set letter of a depends entry on a
 /// question of `rf` that has no such option, for every question of `rf` not
 /// yet asked (per "Does a depends entry carry the answers it holds under?"):
@@ -1208,11 +1247,12 @@ pub fn record_refusals(
     // phrase refuses before any write -- a heading with any
     // tell (loaded opening, "and"/"or", provenance, code state, or a date),
     // or a context prose line with a provenance, code-state, or date tell.
-    // A frozen heading (state::is_frozen) is skipped: it can never be
-    // edited, so refusing on it would block this file forever once the
-    // list grows to include a word it already carried.
+    // A heading with any ledger state is skipped (asked text is held by
+    // hash, answered text is frozen): it can never be edited, so refusing
+    // on it would block this file forever once the list grows to include a
+    // word it already carried.
     for sec in &rf.sections {
-        if state::is_frozen(led, sec) {
+        if sec.id.as_ref().is_some_and(|id| led.latest_state(id).is_some()) {
             continue;
         }
         for (line, phrase, what) in tells::heading_tells(sec.start, &sec.heading_text) {
@@ -1226,6 +1266,14 @@ pub fn record_refusals(
     // under a heading that opens with Does hold one word?": the same length
     // rules `ask` enforces, found before approval in a question not yet asked.
     for message in length_refusals(rel, rf, led) {
+        out.push(Refusal { category: "tells", message });
+    }
+    // The other two body rules `ask` enforces, found the same way: a loaded
+    // phrase in a body, and a question that pairs no term.
+    for message in body_tell_refusals(rel, rf, led) {
+        out.push(Refusal { category: "tells", message });
+    }
+    for message in no_term_refusals(rel, rf, terms_list, led) {
         out.push(Refusal { category: "tells", message });
     }
     {

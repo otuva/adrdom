@@ -21,7 +21,7 @@ const PAINT_ID: &str = "99999991-9999-9999-9999-999999999999";
 
 fn body(n: &str) -> String {
     format!(
-        "\nProblem: problem {n}.\n\nStandard: standard {n}.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n",
+        "\nProblem: problem {n} of the widget.\n\nStandard: standard {n}.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n",
         n = n
     )
 }
@@ -175,6 +175,70 @@ fn the_steps_in_order_from_headings_to_approval() {
     assert_eq!(rows(&dir).len(), again, "a second run reads nothing");
     let out = approve_with(&dir, &[("ADR_NO_MODEL", "1"), ("ADR_NO_READER", "1")]);
     ok(&out);
+}
+
+/// The reader file written again with `edit` applied to the rows it picks.
+fn edit_rows(dir: &Path, pick: impl Fn(&reader::Row) -> bool, edit: impl Fn(&mut reader::Row)) {
+    let mut text = String::new();
+    for mut r in rows(dir) {
+        if pick(&r) {
+            edit(&mut r);
+        }
+        text.push_str(&reader::row_line(&r));
+        text.push('\n');
+    }
+    std::fs::write(dir.join("adrdom/state/reader.tsv"), text).unwrap();
+}
+
+/// Two questions with bodies, read at both steps, every neighbour on a line.
+fn planned(dir: &Path) {
+    write(dir, &format!("# Topic\n{}{}", section(H1, &body("one")), section(H2, &body("two"))));
+    for _ in 0..3 {
+        let out = ok(&plan(dir));
+        write_lines(dir, &out);
+    }
+    assert!(ok(&plan(dir)).contains("next: owner runs: adr approve"));
+}
+
+// adr: 08a1b488-32fc-4dc7-b4b3-93a6e768725f
+#[test]
+fn rows_from_another_prompt_or_model_are_read_again() {
+    let dir = repo();
+    planned(&dir);
+    let old = sha("the prompt before");
+
+    // Every prompt changed: both steps of both questions are read again,
+    // 3 heading pairs and 4 body pairs each.
+    edit_rows(&dir, |_| true, |r| r.prompt_hash = old.clone());
+    let before = rows(&dir).len();
+    let out = ok(&plan(&dir));
+    assert_eq!(rows(&dir).len() - before, 6 + 8, "{}", out);
+    assert!(out.contains(&format!("\"{}\": heading read", H1)), "{}", out);
+    assert!(out.contains(&format!("\"{}\": heading with its body read", H2)), "{}", out);
+    assert!(out.contains("next: owner runs: adr approve"), "{}", out);
+
+    // Only the plan prompt changed: only the rows of the other question are
+    // read again; the rows at the current body prompt stay.
+    let plan_hash = Kind::Plan.prompt_hash();
+    edit_rows(&dir, |r| r.prompt_hash == plan_hash, |r| r.prompt_hash = old.clone());
+    let before = rows(&dir).len();
+    let out = ok(&plan(&dir));
+    let made = &rows(&dir)[before..];
+    assert_eq!(made.len(), 2, "{}", out);
+    assert!(made.iter().all(|r| r.prompt_hash == plan_hash && r.neighbour.starts_with("text:")));
+    assert!(!out.contains("heading read"), "{}", out);
+
+    // Another model: everything is read again.
+    edit_rows(&dir, |_| true, |r| r.model = "an-older-model".to_string());
+    let before = rows(&dir).len();
+    let out = ok(&plan(&dir));
+    let made = &rows(&dir)[before..];
+    assert_eq!(made.len(), 6 + 8, "{}", out);
+    assert!(made.iter().all(|r| r.model == reader::MODEL));
+    // And nothing more on the next run.
+    let again = rows(&dir).len();
+    ok(&plan(&dir));
+    assert_eq!(rows(&dir).len(), again);
 }
 
 // adr: d3be71e4-ce7b-43b0-86a8-e86868521f99

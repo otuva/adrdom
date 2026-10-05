@@ -206,7 +206,10 @@ fn a_heading_written_after_a_retire_was_approved_does_not_block_terms_approve_or
     assert!(out.status.success(), "retire should pass: {}", stderr(&out));
     // A new heading that merely contains the retired word, then approved.
     let c = std::fs::read_to_string(&record).unwrap();
-    std::fs::write(&record, format!("{}{}", c, sec(H_DECISION, "verdict", true))).unwrap();
+    // The new text pairs the live term "verdict": a heading with the retired
+    // word alone pairs no term.
+    let new_sec = sec(H_DECISION, "verdict", true).replace("Problem: p.", "Problem: p of the verdict.");
+    std::fs::write(&record, format!("{}{}", c, new_sec)).unwrap();
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out.status.success(), "plan approve failed: {}", stderr(&out));
     // An unrelated terms edit (a new term) still approves.

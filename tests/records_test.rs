@@ -88,7 +88,7 @@ Context prose.
 ### Is the store exist?
 depends: decision
 
-Problem: the team already built the store.
+Problem: the team built the store for the decision.
 
 Standard: s.
 
@@ -109,6 +109,17 @@ fn ask_refuses_a_candidate_with_a_code_state_tell_in_its_body() {
     approve_terms_with(&dir, &["decision"]);
     let record = write_record(&dir, "adrdom/decisions/example.md", BODY_TELL_RECORD);
     approve_record(&dir, "adrdom/decisions/example.md");
+    // Approve cannot take the loaded word, so it is put back after it and
+    // the approval rows are written by hand: ask is the second stop.
+    let loaded = std::fs::read_to_string(&record)
+        .unwrap()
+        .replace("the team built the store", "the team already built the store");
+    std::fs::write(&record, &loaded).unwrap();
+    let rf = adr::record::load(&record).unwrap();
+    let rel = "adrdom/decisions/example.md";
+    let later = "2099-01-01T00:00:00Z";
+    append_ledger_row_at(&dir, "approved", "-", &adr::record::plan_hash(&rf), rel, later);
+    append_ledger_row_at(&dir, "context", "-", &adr::record::context_hash(&rf), rel, later);
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success(), "ask should refuse: {}", stdout(&out));
@@ -124,7 +135,7 @@ The team said yes.
 ### How many stores exist?
 depends: decision
 
-Problem: p.
+Problem: p of the decision.
 
 Standard: s.
 
@@ -144,6 +155,7 @@ Standard: s.
 fn check_reports_a_tell_in_an_unfrozen_heading_and_in_context_prose() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_terms_with(&dir, &["decision"]);
     write_record(&dir, "adrdom/decisions/example.md", UNFROZEN_TELL_RECORD);
     // No approve/ask: the section is unfrozen (never asked at all), so
     // `check` must still report it.
@@ -227,7 +239,7 @@ fn approve_skips_a_frozen_headings_tell_and_still_mints_a_new_skeletons_id() {
     approve_minimal_terms(&dir, "widget");
     let frozen = frozen_tell_section_resolved();
     let content = format!(
-        "# Example\n\nContext prose.\n\n{}\n\n### A new clean heading?\ndepends: widget\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        "# Example\n\nContext prose.\n\n{}\n\n### A new clean heading?\ndepends: widget\n\nProblem: p of the widget.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
         frozen
     );
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);

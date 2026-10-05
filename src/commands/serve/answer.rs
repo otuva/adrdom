@@ -1,6 +1,6 @@
 //! The `/next` route: picks the next question to answer and renders it,
 //! marking paired term words in its text.
-use super::html::{banner_html, esc, page};
+use super::html::{banner_html, esc, neighbours_html, page};
 use super::percent_encode;
 use crate::view::{self, FileView, QState, QuestionView, Snapshot};
 use std::collections::HashMap;
@@ -55,13 +55,7 @@ pub(super) fn render_next(
             esc(&q.depends.join(", "))
         ));
     }
-    if !q.neighbours.is_empty() {
-        body.push_str("<ul class=\"neighbours\">\n");
-        for line in &q.neighbours {
-            body.push_str(&format!("<li>{}</li>\n", esc(line.trim())));
-        }
-        body.push_str("</ul>\n");
-    }
+    body.push_str(&neighbours_html(&q.neighbours));
 
     if q.problem.is_some() || q.standard.is_some() {
         body.push_str("<dl class=\"framing\">\n");

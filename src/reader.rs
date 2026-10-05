@@ -21,7 +21,9 @@
 //!
 //! "Does planning stop without the reader?"
 //! (3dba486c-a399-4ce3-a794-e38c4f733403 A): yes. `load` refuses when the
-//! `claude` program is not on PATH. No other command loads the reader.
+//! `claude` program is not on PATH. `adr read` loads the reader too, for a
+//! `Set` pair: a current decision against another, the first text the one
+//! with the lower identifier.
 //!
 //! `Claude` runs the `claude` program with a fixed model. `Fake`, built only
 //! with the `fake-model` feature and used only when `ADR_FAKE_MODEL=1`,
@@ -44,7 +46,8 @@ use std::time::{Duration, Instant};
 
 pub const MODEL: &str = "claude-sonnet-5-5";
 const TIMEOUT: Duration = Duration::from_secs(120);
-const AT_ONCE: usize = 4;
+/// How many pairs are read at once; `adr read` hands the reader this many.
+pub const AT_ONCE: usize = 4;
 
 /// The words of a heading against a decision or a term, and of a heading
 /// against another question of the plan.
@@ -53,7 +56,7 @@ pub const HEADING_WORDS: [&str; 3] = ["same", "depends", "unrelated"];
 pub const BODY_WORDS: [&str; 5] = ["same", "consistent", "inconsistent", "depends", "unrelated"];
 
 /// What the reader is asked.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Kind {
     /// A heading against a decision or a term.
     Heading,
@@ -61,6 +64,8 @@ pub enum Kind {
     Body,
     /// A question with its body against another question of the same plan.
     Plan,
+    /// A current decision against another current decision.
+    Set,
 }
 
 impl Kind {
@@ -69,6 +74,7 @@ impl Kind {
             Kind::Heading => include_str!("../assets/reader-heading.md"),
             Kind::Body => include_str!("../assets/reader-body.md"),
             Kind::Plan => include_str!("../assets/reader-plan.md"),
+            Kind::Set => include_str!("../assets/reader-set.md"),
         }
     }
 
@@ -79,7 +85,7 @@ impl Kind {
     pub fn words(self) -> &'static [&'static str] {
         match self {
             Kind::Heading | Kind::Plan => &HEADING_WORDS,
-            Kind::Body => &BODY_WORDS,
+            Kind::Body | Kind::Set => &BODY_WORDS,
         }
     }
 
@@ -87,6 +93,7 @@ impl Kind {
         match self {
             Kind::Heading | Kind::Body => ("Existing record", "New question"),
             Kind::Plan => ("First question", "Second question"),
+            Kind::Set => ("First decision", "Second decision"),
         }
     }
 }
@@ -130,10 +137,15 @@ impl Row {
     }
 }
 
+/// A column as the reader file keeps it: tabs and newlines become a space.
+pub fn flatten(s: &str) -> String {
+    s.replace(['\t', '\n', '\r'], " ")
+}
+
 /// The reader file's line for a row: eight tab-separated columns, tabs and
 /// newlines in a column flattened to a space the way the ledger does.
 pub fn row_line(r: &Row) -> String {
-    let f = |s: &str| s.replace(['\t', '\n', '\r'], " ");
+    let f = flatten;
     [
         &r.time,
         &r.text_hash,
@@ -264,10 +276,21 @@ pub trait Reader: Sync {
 
 pub struct Claude;
 
+/// The message the reader is given for `pair`. Two decisions are given in
+/// the pair's fixed order: the new side, the lower identifier, first. Every
+/// other kind gives the record first and the new question second.
+fn user_message(pair: &Pair) -> String {
+    let (first, second) = pair.kind.labels();
+    let (a, b) = match pair.kind {
+        Kind::Set => (&pair.new_text, &pair.neighbour_text),
+        _ => (&pair.neighbour_text, &pair.new_text),
+    };
+    format!("{}:\n{}\n\n{}:\n{}", first, a, second, b)
+}
+
 impl Reader for Claude {
     fn ask(&self, pair: &Pair) -> Result<String, String> {
-        let (existing, new) = pair.kind.labels();
-        let user = format!("{}:\n{}\n\n{}:\n{}", existing, pair.neighbour_text, new, pair.new_text);
+        let user = user_message(pair);
         // A private directory made for this run: another local user cannot
         // plant settings or a CLAUDE.md in it.
         let cwd = PrivateDir::create()?;
@@ -493,6 +516,15 @@ impl Drop for PrivateDir {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // adr: 4b407ee1-1e64-4ca1-842b-69773fc0e48a
+    #[test]
+    fn a_set_pair_is_given_the_lower_identifier_first() {
+        let mut p = Pair { kind: Kind::Set, new_text: "NEW".into(), neighbour: "n".into(), neighbour_text: "NEIGHBOUR".into() };
+        assert_eq!(user_message(&p), "First decision:\nNEW\n\nSecond decision:\nNEIGHBOUR");
+        p.kind = Kind::Body;
+        assert!(user_message(&p).starts_with("Existing record:\nNEIGHBOUR"));
+    }
 
     #[test]
     fn a_run_directory_is_private_fresh_and_removed_after() {

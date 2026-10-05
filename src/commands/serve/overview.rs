@@ -1,6 +1,6 @@
 //! The `/` route: the topic list, terms summary card, and check report.
 use super::decisions::chosen_sentence;
-use super::html::{banner_html, esc, page, plural};
+use super::html::{banner_html, esc, neighbours_html, page, plural};
 use super::percent_encode;
 use super::terms::unpaired_count;
 use crate::view::{self, QState, QuestionView, Snapshot};
@@ -52,13 +52,7 @@ pub(super) fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> 
                 body.push_str("<ul class=\"unasked-list\">\n");
                 for q in &unasked {
                     body.push_str(&format!("<li>{}", esc(&q.heading)));
-                    if !q.neighbours.is_empty() {
-                        body.push_str("<ul class=\"neighbours\">");
-                        for line in &q.neighbours {
-                            body.push_str(&format!("<li>{}</li>", esc(line.trim())));
-                        }
-                        body.push_str("</ul>");
-                    }
+                    body.push_str(&neighbours_html(&q.neighbours));
                     body.push_str("</li>\n");
                 }
                 body.push_str("</ul>\n");

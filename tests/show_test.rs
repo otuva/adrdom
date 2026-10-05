@@ -136,6 +136,9 @@ Standard: s4.\n\n\
 fn show_prints_tiers_states_stands_on_and_chosen_sentence() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
+    // "root" is a word the unasked questions already carry in their
+    // headings, so they pair a term without a change of text.
+    approve_terms_with(&dir, &["root"]);
     let record = write_record(&dir, "adrdom/decisions/tiered.md", TIERED_RECORD);
     // Every row carries the hash of its section's text as it stands: a
     // stand-in hash reads as "edited since", for the answered root as for
@@ -325,7 +328,7 @@ fn show_prints_no_guess_for_an_ambiguous_cross_file_heading_dependency() {
     );
     write_record(&dir, "adrdom/decisions/topic-c.md", &c_content);
 
-    let b_content = "# Topic B\n\n### 1.1 Does B stand on the shared heading?\ndepends: 1.1 Shared heading?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let b_content = "# Topic B\n\n### 1.1 Does B stand on the shared heading?\ndepends: 1.1 Shared heading?\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
 
     let out = adr(&dir, &["show", "--all"], &[], "");

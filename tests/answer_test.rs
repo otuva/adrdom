@@ -1278,7 +1278,7 @@ fn owner_commands_refuse_without_a_tty_and_run_with_one() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
-    let content = "# Example\n\n### 1.1 Q?\ndepends: widget\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let content = "# Example\n\n### 1.1 Q?\ndepends: widget\n\nProblem: p of the widget.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     // No TTY (the test harness always pipes stdin) and CLAUDECODE cleared

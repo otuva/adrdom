@@ -126,13 +126,13 @@ fn check_passes_when_the_dependents_heading_has_extra_leading_whitespace() {
     let content = "# Colors\n\n\
 ### 1.1 Which color is the widget?\n\n\
 depends: widget\n\n\
-Problem: p.\n\n\
+Problem: p of the widget.\n\n\
 Standard: s.\n\n\
 - A) Red.\n  Why: w.\n  Costs: c.\n\
 - B) Blue.\n  Why: w.\n  Costs: c.\n\n\
 ###   Extra space?\n\
 depends: 1.1 Which color is the widget?=A\n\n\
-Problem: p.\n\n\
+Problem: p of the widget.\n\n\
 Standard: s.\n\n\
 - A) Yes.\n  Why: w.\n  Costs: c.\n\
 - B) No.\n  Why: w.\n  Costs: c.\n";

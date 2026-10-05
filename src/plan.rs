@@ -33,7 +33,7 @@ use crate::reader::{self, Kind, Pair};
 use crate::record::{self, RecordFile, Section};
 use crate::state;
 use crate::terms::{self, Term};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 /// What a neighbour is.
@@ -411,10 +411,27 @@ fn load_inner(
     let cross = depends::cross_file_heading_index(all, led);
     let headings = decision_headings(all);
     let rows = reader::read_file(root).rows;
+    // A row counts only when it was written with the prompt and the model
+    // that would read its pair now; a row from another prompt or model is
+    // kept apart, and its kind at that hash is read again.
     let mut by_hash: HashMap<&str, Vec<&reader::Row>> = HashMap::new();
+    let mut stale: HashSet<(&str, Kind)> = HashSet::new();
+    let current: HashMap<Kind, String> = [Kind::Heading, Kind::Body, Kind::Plan].into_iter().map(|k| (k, k.prompt_hash())).collect();
     for r in &rows {
-        by_hash.entry(r.text_hash.as_str()).or_default().push(r);
+        let kinds = [row_kind(Kind::Heading, &r.neighbour), row_kind(Kind::Body, &r.neighbour)];
+        if r.model == reader::MODEL && kinds.iter().any(|k| current[k] == r.prompt_hash) {
+            by_hash.entry(r.text_hash.as_str()).or_default().push(r);
+        } else {
+            for k in kinds {
+                stale.insert((r.text_hash.as_str(), k));
+            }
+        }
     }
+    // Rows of a kind at a hash, none of them current.
+    let is_stale = |hash: &str, kind: Kind| -> bool {
+        stale.contains(&(hash, kind))
+            && !by_hash.get(hash).is_some_and(|rs| rs.iter().any(|r| current[&kind] == r.prompt_hash))
+    };
     let pool_empty = pool_is_empty(all, led, terms_list);
     let build = |with_asked: bool| -> Planning {
     let unasked: Vec<usize> = (0..rf.sections.len())
@@ -460,12 +477,15 @@ fn load_inner(
         let targets = line_targets(i, rf, terms_list, &phrase_lookup, &cross, led);
         let heading_hash = record::heading_hash(sec);
         let h_rows = neighbours(&heading_hash, &targets);
-        let heading_done = h_rows.is_some() || pool_empty;
+        let heading_done = (h_rows.is_some() && !is_stale(&heading_hash, Kind::Heading)) || pool_empty;
         let has_body = !sec.is_skeleton;
         let body_hash = has_body.then(|| record::body_hash(rf, sec));
         let others = unasked.iter().filter(|&&j| j != i && !rf.sections[j].is_skeleton).count();
         let b_rows = body_hash.as_deref().and_then(|h| neighbours(h, &targets));
-        let body_done = has_body && (b_rows.is_some() || (pool_empty && others == 0));
+        let body_stale = body_hash.as_deref().is_some_and(|h| {
+            (!pool_empty && is_stale(h, Kind::Body)) || (others > 0 && is_stale(h, Kind::Plan))
+        });
+        let body_done = has_body && !body_stale && (b_rows.is_some() || (pool_empty && others == 0));
         questions.push(Question {
             idx: i,
             heading: sec.heading_text.clone(),
@@ -609,6 +629,16 @@ pub fn heading_pairs(sec: &Section, near: &[index::Neighbour]) -> Vec<Pair> {
             neighbour_text: n.text.clone(),
         })
         .collect()
+}
+
+/// The kind of prompt a row at a hash of `step` was read with: at a body
+/// hash, `Plan` for another question of the file, `Body` for the rest.
+fn row_kind(step: Kind, neighbour: &str) -> Kind {
+    match step {
+        Kind::Heading => Kind::Heading,
+        _ if neighbour.starts_with("text:") => Kind::Plan,
+        _ => Kind::Body,
+    }
 }
 
 /// The reader's pairs for the question at `idx` with its body: each
