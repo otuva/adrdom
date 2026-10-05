@@ -18,6 +18,8 @@ Standard: periodic deduplication of a store with the same comparator used at ins
   Why: the set is read only where a new question touches it; no cost beyond planning.
   Costs: known duplicates and contradictions in the set stay until a new question lands beside them.
 
+**Answer:** A
+
 ### What does the reader say about two current decisions?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, e2533580-1486-4dc9-8697-e6c53605fe72, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, aef1b384-2b33-47a2-92a8-ec7f8fb258ef, 1ab6d6c3-7e44-42de-bc2f-2e5849114aef=A, c6e0b7d6-cdec-46da-b2bc-cda218673868
 unrelated: 277a8338-c57a-43cc-8b28-6b42e9347f6a, 2bae531b-c4df-48a0-89a0-3d52726741ea, de5ed5b1-3a83-4403-8953-941cb7e94390, f4f667ad-8714-4e65-897b-c7002e423c28, 62e50382-db1b-4649-9f26-7f44c379d6fe, dad5273c-afe2-4ab1-a451-e2a5d4d9a26d, 39b76886-98f9-4019-9194-db9ab51aea1e, 9d634996-475e-4ddc-8113-05c404ad9d5c, e3200081-9995-4bbe-983f-2f430dc341e7, ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf, 055d303b-c286-4f6c-975a-d9d8090936d4, 4b407ee1-1e64-4ca1-842b-69773fc0e48a, bc4291c8-98f1-499d-8e02-46e371035e70, 2db33118-82b4-4edf-a9cb-e92ac62738b9
