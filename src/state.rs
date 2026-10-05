@@ -37,10 +37,18 @@ fn hash_matches_latest(led: &Ledger, event: &str, rel: &str, hash: &str) -> bool
     }
 }
 
+/// True when a `dropped` row names `id`: the question left its topic file
+/// when an answer's set lacked the letter (per "Does answer remove a
+/// question whose answer set lacks the answer?"). A reference on another
+/// question's line to such an id is a known, dropped question.
+pub fn is_dropped(led: &Ledger, id: &str) -> bool {
+    led.rows.iter().any(|r| r.event == "dropped" && r.id == id)
+}
+
 /// The hashes of the questions dropped from the file `rel` since its
 /// approval: every `dropped` row whose id and hash match a per-question
-/// `approved` row for `rel`. A later area writes the `dropped` rows; the
-/// event is accepted by the ledger already.
+/// `approved` row for `rel` (written by `answer`, per "What does answer
+/// write for a removed question?").
 pub fn dropped_hashes(led: &Ledger, rel: &str) -> Vec<String> {
     led.rows
         .iter()

@@ -1,8 +1,8 @@
 // End-to-end walk of the whole plan lifecycle through the built binary:
 // approve derives and caps tiers, ask enforces
-// the derived tier order plus mandatory/moot answer sets and writes
+// the derived tier order plus mandatory answer sets and writes
 // `assumes` rows, answer accepts a refusal, check freezes a dependent's
-// answer set and reports moot notes/done, and a plan change (dropping
+// answer set and reports done, and a plan change (dropping
 // questions, adding one) withdraws the dropped id at the next approve.
 //
 // One shared fixture walks the whole story rather than one test per
@@ -102,9 +102,9 @@ fn id_for_heading(content: &str, heading_prefix: &str) -> String {
 //
 // Walk: approve one plan with every body and answer set written; ask asks
 // tier 1 and freezes the sets; the next ask stops at the open tier; after
-// the owner answers B, `check` reports the dependent on =A as moot and
-// the =* dependent asks; a frozen set edited after ask fails `check`; a
-// plan change drops Q2 and Q3 and adds Q4, withdrawing the asked Q3.
+// the owner answers B, the dependent on =A leaves the file and the =*
+// dependent asks; a frozen set edited after ask fails `check`; a
+// plan change drops Q3 and adds Q4, withdrawing the asked Q3.
 #[test]
 fn plan_lifecycle_end_to_end() {
     let dir = init_repo();
@@ -210,35 +210,18 @@ fn plan_lifecycle_end_to_end() {
     // Restore =A.
     std::fs::write(&record, &state_3).unwrap();
 
-    // --- 4. owner answers Q1; Q2's frozen set A is now moot; Q3's * asks --
+    // --- 4. owner answers Q1; Q2 (set A) leaves with the answer; Q3's * asks --
     let out = adr_answer(&dir, &q1_id, "B");
     assert!(out.status.success(), "answer failed: {}", stderr(&out));
     write_test_comment(&dir, &q1_id);
 
-    let check_out = adr(&dir, &["check"], &[], "");
-    assert!(
-        stdout(&check_out).contains(
-            "no case left: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" stands on \"1.1 What color is the widget?\"=A, answered B"
-        ),
-        "{}",
-        stdout(&check_out)
-    );
-
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
-    assert_eq!(
-        stderr(&out).trim_end(),
-        "ask: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" has no case left: it stands on \"1.1 What color is the widget?\" under A, and the answer was B; agent drops or replaces the heading, owner runs: adr approve adrdom/decisions/widget.md"
-    );
-
-    // Drop Q2 at a plan change, approve it, then Q3 asks.
+    // The answer removed Q2 (its set lacks B); the file stays approved and
+    // check passes, so Q3 asks with no second approval.
     let state_5 = std::fs::read_to_string(&record).unwrap();
-    let cut2 = state_5.find("### 1.2 Does the paint match the widget's color?").unwrap();
-    let cut3 = state_5.find("### 1.3 Does the paint need a second coat?").unwrap();
-    let state_6 = format!("{}{}", &state_5[..cut2], &state_5[cut3..]);
-    std::fs::write(&record, &state_6).unwrap();
-    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(out.status.success(), "approve failed: {}", stderr(&out));
+    assert!(!state_5.contains("### 1.2 Does the paint match the widget's color?"), "{}", state_5);
+    let check_out = adr(&dir, &["check"], &[], "");
+    assert!(check_out.status.success(), "{}{}", stdout(&check_out), stderr(&check_out));
+    assert!(!stdout(&check_out).contains("no case left"), "{}", stdout(&check_out));
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "ask should now succeed: {}", stderr(&out));

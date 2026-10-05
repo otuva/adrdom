@@ -232,6 +232,7 @@ fn finish_answer(
     idx: usize,
     answer_text: &str,
     rows: Vec<ledger::Row>,
+    drop_ids: &[String],
 ) -> Result<(), String> {
     let ledger_path = root.join(crate::repo::LEDGER_PATH);
 
@@ -243,6 +244,24 @@ fn finish_answer(
         hash_end..hash_end,
         [String::new(), format!("**Answer:** {}", answer_text)],
     );
+
+    // Per "Does answer remove a question whose answer set lacks the
+    // answer?": each dropped section leaves the file, heading through the
+    // line before the next heading, in the same write as the answer line.
+    if !drop_ids.is_empty() {
+        let mut rebuilt = record::build(rf.path.clone(), rf.rel.clone(), rf.lines.clone());
+        let mut ranges: Vec<(usize, usize)> = rebuilt
+            .sections
+            .iter()
+            .filter(|s| s.id.as_ref().is_some_and(|i| drop_ids.contains(i)))
+            .map(|s| (s.start, s.end))
+            .collect();
+        ranges.sort_unstable_by(|a, b| b.cmp(a));
+        for (start, end) in ranges {
+            rebuilt.lines.drain(start..end);
+        }
+        rf = record::build(rebuilt.path.clone(), rebuilt.rel.clone(), rebuilt.lines);
+    }
 
     record::save(&rf).map_err(|e| {
         msg::write_failed(
@@ -263,8 +282,79 @@ fn finish_answer(
     Ok(())
 }
 
+/// One question an answer removes: its id, its hash from approval, and the
+/// detail its `dropped` row carries.
+struct Drop {
+    id: String,
+    hash: String,
+    detail: String,
+}
+
+/// The questions leaving `rf` with the answer `letter` to section `idx`
+/// (per "Does answer remove a question whose answer set lacks the
+/// answer?" and "What does answer write for a removed question?"): first
+/// every question with a depends entry on it whose set lists letters
+/// without `letter` (`=*` never drops), detail `<answered id> <letter>`;
+/// then, repeatedly, every question with a depends entry on a removed one,
+/// detail the id of that removed question. Only questions of this file
+/// are searched: an entry on a question of another file names a current
+/// decision and carries no set. A question already asked, or one whose
+/// text has no `approved` row, is not removed: the answer refuses.
+fn collect_drops(rf: &RecordFile, rel: &str, led: &Ledger, idx: usize, id: &str, letter: char) -> Result<Vec<Drop>, String> {
+    let mut found: Vec<usize> = Vec::new();
+    let mut details: Vec<String> = Vec::new();
+    for (j, sec) in rf.sections.iter().enumerate() {
+        if j == idx {
+            continue;
+        }
+        let lacks = sec.depends.iter().any(|d| {
+            rf.dep_target(d) == Some(idx)
+                && matches!(d.set(), Some(record::AnswerSet::Letters(l)) if !l.contains(&letter))
+        });
+        if lacks {
+            found.push(j);
+            details.push(format!("{} {}", id, letter));
+        }
+    }
+    let mut at = 0;
+    while at < found.len() {
+        let removed = found[at];
+        let removed_id = rf.sections[removed].id.clone();
+        for (j, sec) in rf.sections.iter().enumerate() {
+            if j == idx || found.contains(&j) {
+                continue;
+            }
+            if sec.depends.iter().any(|d| rf.dep_target(d) == Some(removed)) {
+                found.push(j);
+                details.push(removed_id.clone().unwrap_or_default());
+            }
+        }
+        at += 1;
+    }
+    let mut out = Vec::new();
+    for (j, detail) in found.into_iter().zip(details) {
+        let sec = &rf.sections[j];
+        let Some(qid) = sec.id.clone() else {
+            return Err(msg::drop_without_id(&sec.heading_text));
+        };
+        if led.latest_asked(&qid).is_some() {
+            return Err(msg::drop_of_asked(&sec.heading_text));
+        }
+        let hash = record::question_hash(rf, sec);
+        let approved = led
+            .rows
+            .iter()
+            .any(|r| r.event == "approved" && r.id == qid && r.hash == hash && r.detail == rel);
+        if !approved {
+            return Err(msg::drop_not_approved(&sec.heading_text, rel));
+        }
+        out.push(Drop { id: qid, hash, detail });
+    }
+    Ok(out)
+}
+
 pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<Outcome, String> {
-    let Located { led, mut rf, idx, tf, cur_hash, .. } = locate_asked(root, id, version, Some(letter))?;
+    let Located { led, mut rf, idx, tf, cur_hash, rel } = locate_asked(root, id, version, Some(letter))?;
 
     let supersedes_val;
     {
@@ -306,6 +396,8 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
         for old in depends::supersedes_entries(&supersedes_val, &cross_file_headings, &led) {
             match depends::resolve_supersedes(&old, &cross_file_headings, &led) {
                 Ok(target) => superseded_ids.push(target),
+                // A dropped question is no decision to supersede.
+                Err(_) if state::is_dropped(&led, old.trim()) => {}
                 Err(_) => superseded_ids.push(old.trim().to_string()),
             }
         }
@@ -343,8 +435,23 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
         });
     }
 
+    // Every question of this file whose set lacks the letter, and every
+    // question standing on a removed one, leaves with this answer.
+    let drops = collect_drops(&rf, &rel, &led, idx, id, letter)?;
+    let drop_ids: Vec<String> = drops.iter().map(|d| d.id.clone()).collect();
+    for d in &drops {
+        rows.push(ledger::Row {
+            time: write_time.clone(),
+            event: "dropped".to_string(),
+            id: d.id.clone(),
+            hash: d.hash.clone(),
+            detail: d.detail.clone(),
+            version: crate::version::VERSION.to_string(),
+        });
+    }
+
     let letter_str = letter.to_string();
-    finish_answer(root, id, version, &format!("{} again", letter_str), rf, idx, &letter_str, rows)?;
+    finish_answer(root, id, version, &format!("{} again", letter_str), rf, idx, &letter_str, rows, &drop_ids)?;
 
     Ok(Outcome {
         summary: msg::answered_summary(&heading_for_print, &sentence_for_print),
@@ -387,7 +494,7 @@ pub fn do_refuse(root: &Path, id: &str, version: &str) -> Result<Outcome, String
         version: crate::version::VERSION.to_string(),
     };
 
-    finish_answer(root, id, version, "refuse again", rf, idx, "refused", vec![row])?;
+    finish_answer(root, id, version, "refuse again", rf, idx, "refused", vec![row], &[])?;
 
     let mut summary = format!("answer: {}", msg::refused_summary(&heading_for_print, &rel));
     if let Some(n) = note {
@@ -1247,6 +1354,10 @@ pub fn supersedes_refusals(
                 Err(depends::SupersedesError::Ambiguous(files)) => {
                     out.push(refuse(msg::ask_supersedes_ambiguous(rel, &sec.heading_text, old, &files)));
                 }
+                // A name whose id has a `dropped` row is a known, dropped
+                // question: the line stays as written (per "Does answer
+                // remove a question whose answer set lacks the answer?").
+                Err(depends::SupersedesError::NotCurrent) if state::is_dropped(led, old.trim()) => {}
                 Err(depends::SupersedesError::NotCurrent) => {
                     let split_sibling = asked
                         && sec.id.as_deref().is_some_and(|id| {

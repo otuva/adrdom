@@ -8,7 +8,6 @@ use crate::repo;
 use crate::state;
 use crate::tells;
 use crate::terms;
-use crate::view;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -294,13 +293,6 @@ pub fn run(record_path: PathBuf) -> i32 {
     let banned_entries: HashMap<String, Option<String>> =
         banned::read_entries(&banned_path).into_iter().collect();
 
-    // Per "Does a depends entry carry the answers it holds under?": every
-    // moot heading dep in the file, gated on the ledger's `qstate` rather
-    // than just the file's letter (shared with `check`/the page through
-    // `view::moot_pairs`, so the two can never diverge on what counts as
-    // moot). Computed once, ahead of the per-candidate loop.
-    let moot_pairs = view::moot_pairs(&rf, &led, &all_records);
-
     for (i, sec) in rf.sections.iter().enumerate() {
         if !candidate[i] {
             continue;
@@ -315,18 +307,6 @@ pub fn run(record_path: PathBuf) -> i32 {
                 .into_iter()
                 .map(|r| r.message),
         );
-
-        // Moot refusal: this candidate's own entry in `moot_pairs`, matched
-        // by section index since two sections may share a heading text.
-        if let Some(p) = moot_pairs.iter().find(|p| p.section_idx == i) {
-            refusals.push(msg::moot_candidate(
-                &rel,
-                &sec.heading_text,
-                &p.target_heading,
-                &p.set_text,
-                p.letter,
-            ));
-        }
 
         // Per "Does the tool stop loaded phrases in a question?": a
         // provenance, code-state, or date tell anywhere in the
@@ -505,7 +485,7 @@ pub fn run(record_path: PathBuf) -> i32 {
         // The plan is approved by this point (`ask` stops on an unapproved
         // one above), so what is left is named move by move.
         let tests = crate::commands::check::test_index(&root, &repo::Source::WorkingTree);
-        for line in crate::view::next_moves(&rf, &led, true, &[], &tests, &all_records) {
+        for line in crate::view::next_moves(&rf, &led, true, &[], &tests) {
             println!("{}", msg::next_line(&line));
         }
         return 0;
@@ -597,7 +577,7 @@ fn strip_answer_line(rf: &mut record::RecordFile, idx: usize) {
 /// the section's text never moved, so its hash is the same one the
 /// question was first asked under. Bypasses every other gate `run` applies
 /// to an ordinary candidate (plan/context approval, the tier cap, the open
-/// tier, moot/banned/terms checks): none of them bear on re-asking text
+/// tier, banned/terms checks): none of them bear on re-asking text
 /// that hasn't changed.
 fn do_conflict_reask(
     root: &Path,

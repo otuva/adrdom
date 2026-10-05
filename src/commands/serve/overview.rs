@@ -57,13 +57,6 @@ pub(super) fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> 
         if f.done {
             body.push_str("<p class=\"state done\">Every approved heading is answered.</p>\n");
         }
-        if !f.moot.is_empty() {
-            body.push_str("<ul class=\"notes\">\n");
-            for n in &f.moot {
-                body.push_str(&format!("<li>no case left: {}</li>\n", esc(n)));
-            }
-            body.push_str("</ul>\n");
-        }
 
         let open: Vec<&QuestionView> = f
             .questions

@@ -951,49 +951,6 @@ fn overview_lists_a_refused_question_with_the_label() {
     let _ = child.wait();
 }
 
-const MOOT_ROOT_ANSWER_B: &str = "# Moot Topic\n\n\
-### 1.1 Root?\n\n\
-id: id-root\n\n\
-Problem: p.\n\n\
-Standard: s.\n\n\
-- A) First choice.\n  Why: w.\n  Costs: c.\n\
-- B) Second choice.\n  Why: w.\n  Costs: c.\n\n\
-**Answer:** B\n\n\
-### 1.2 Dependent?\n\
-depends: 1.1 Root?=A\n\n\
-id: id-dep\n\n\
-Problem: p2.\n\n\
-Standard: s2.\n\n\
-- A) x.\n  Why: w.\n  Costs: c.\n\
-- B) y.\n  Why: w.\n  Costs: c.\n";
-
-/// A moot note (8.7 A) is shown alongside the topic on the overview, next
-/// to the check notes.
-#[test]
-fn overview_shows_a_moot_note_for_an_excluded_answer() {
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    write_record(&dir, "adrdom/decisions/moot.md", MOOT_ROOT_ANSWER_B);
-    append_ledger_row_at(&dir, "asked", "id-root", "h", "1.1 Root?", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "answered", "id-root", "h", "B", "2024-01-01T00:00:01Z");
-
-    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
-    let (port, token) = read_open_line(&mut child);
-    let cookie = format!("adr_t={}", token);
-
-    let resp = get(port, "/", Some(&cookie));
-    assert_eq!(resp.status, 200, "body: {}", resp.body);
-    assert!(
-        resp.body
-            .contains("no case left: &quot;1.2 Dependent?&quot; stands on &quot;1.1 Root?&quot;=A, answered B"),
-        "body: {}",
-        resp.body
-    );
-
-    let _ = child.kill();
-    let _ = child.wait();
-}
-
 // --- owner.md: does the adr binary serve the ui / what the ui requires ---
 
 /// Two independent (no depends between them) tier-1 questions, both

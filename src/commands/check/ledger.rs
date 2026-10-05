@@ -1,7 +1,7 @@
 use super::{dropped_state, Failure};
 use crate::ledger::{Ledger, Row};
 use crate::msg;
-use crate::record::RecordFile;
+use crate::record::{self, RecordFile};
 use crate::repo;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -142,6 +142,7 @@ pub(super) fn check_ledger(
     }
 
     out.extend(check_same_time_competition(led));
+    out.extend(check_dropped(led, records, root));
 
     let all_ids: HashSet<String> = records
         .iter()
@@ -175,6 +176,93 @@ pub(super) fn check_ledger(
         }
     }
 
+    out
+}
+
+/// Per "What does answer write for a removed question?": each `dropped`
+/// row is verified from the record alone. Its detail is `<id> <letter>` (a
+/// direct drop) or `<id>` (a dependent). The cause exists (an `answered`
+/// row for that id with that letter, or a `dropped` row for that id), an
+/// `approved` row of the question holds the row's hash, and no topic file
+/// holds the id. At the commit that removes the section, HEAD's copy of
+/// the file still holds it, and then HEAD's text must hash to the row's
+/// hash and its depends entry must show the set lacked the letter (direct)
+/// or the entry on the dropped question (dependent).
+fn check_dropped(led: &Ledger, records: &[RecordFile], root: &Path) -> Vec<Failure> {
+    let mut out = Vec::new();
+    let fail = |message: String| Failure { check: "ledger".to_string(), message };
+    for row in led.rows.iter().filter(|r| r.event == "dropped") {
+        let parts: Vec<&str> = row.detail.split(' ').collect();
+        let cause: (&str, Option<char>) = match parts.as_slice() {
+            [id] if record::is_uuid(id) => (id, None),
+            [id, l] if record::is_uuid(id) && l.chars().count() == 1 => (id, l.chars().next()),
+            _ => {
+                out.push(fail(msg::ledger_dropped_malformed(&row.id, &row.detail)));
+                continue;
+            }
+        };
+        let (cause_id, letter) = cause;
+        let cause_ok = match letter {
+            Some(l) => led
+                .rows
+                .iter()
+                .any(|r| r.event == "answered" && r.id == cause_id && r.detail == l.to_string()),
+            None => led.rows.iter().any(|r| r.event == "dropped" && r.id == cause_id),
+        };
+        if !cause_ok {
+            let what = match letter {
+                Some(l) => format!("no answered row for {} with the letter {}", cause_id, l),
+                None => format!("no dropped row for {}", cause_id),
+            };
+            out.push(fail(msg::ledger_dropped_without_cause(&row.id, &what)));
+        }
+        let approved_rows: Vec<&Row> = led
+            .rows
+            .iter()
+            .filter(|r| r.event == "approved" && r.id == row.id && r.hash == row.hash)
+            .collect();
+        if approved_rows.is_empty() {
+            out.push(fail(msg::ledger_dropped_not_approved(&row.id)));
+        }
+        for rf in records {
+            if rf.sections.iter().any(|s| s.id.as_deref() == Some(row.id.as_str())) {
+                out.push(fail(msg::ledger_dropped_still_in_file(&row.id, &rf.rel)));
+            }
+        }
+        // The commit that removes the section: HEAD's copy still holds it.
+        for a in &approved_rows {
+            let Some(content) = repo::git(root, &["show", &format!("HEAD:{}", a.detail)]) else {
+                continue;
+            };
+            let head = record::build(root.join(&a.detail), a.detail.clone(), record::split_lines(&content));
+            let Some(sec) = head.sections.iter().find(|s| s.id.as_deref() == Some(row.id.as_str())) else {
+                continue;
+            };
+            if record::question_hash(&head, sec) != row.hash {
+                out.push(fail(msg::ledger_dropped_text_differs(&row.id)));
+            }
+            let entries: Vec<&record::Dep> = sec
+                .depends
+                .iter()
+                .filter(|d| matches!(d, record::Dep::Id { id, .. } if id == cause_id))
+                .collect();
+            match letter {
+                Some(l) => {
+                    let lacks = entries
+                        .iter()
+                        .any(|d| matches!(d.set(), Some(record::AnswerSet::Letters(ls)) if !ls.contains(&l)));
+                    if !lacks {
+                        out.push(fail(msg::ledger_dropped_set_holds_letter(&row.id, &l.to_string())));
+                    }
+                }
+                None => {
+                    if entries.is_empty() {
+                        out.push(fail(msg::ledger_dropped_not_standing_on(&row.id, cause_id)));
+                    }
+                }
+            }
+        }
+    }
     out
 }
 

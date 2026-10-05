@@ -155,7 +155,7 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
         .into_iter()
         .map(|r| r.message)
         .collect();
-        let next = view::next_moves(rf, &led, plan_ok, &plan_refusals, &tests, &blame_records);
+        let next = view::next_moves(rf, &led, plan_ok, &plan_refusals, &tests);
         if !next.is_empty() {
             println!("{}", msg::next_heading());
             for line in next {

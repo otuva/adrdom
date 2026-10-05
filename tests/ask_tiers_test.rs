@@ -1,6 +1,6 @@
 // `ask`: the derived tier rule, the cap, the two refused-dependency
-// refusals (generic blocker + specific "stands on refused"), the moot
-// refusal, the mandatory-set refusals, and the `assumes` rows/tier print
+// refusals (generic blocker + specific "stands on refused"),
+// the mandatory-set refusals, and the `assumes` rows/tier print
 // that come out of a successful ask.
 //
 // Every fixture now goes through a real `adr approve` (`approve_record`)
@@ -535,7 +535,7 @@ fn ask_asks_the_written_question_and_leaves_the_later_tier_candidate() {
     );
 }
 
-// --- moot --------------------------------------------------------------
+// --- answered targets --------------------------------------------------
 
 // `approve` refuses an answer set on an entry naming an answered target.
 #[test]

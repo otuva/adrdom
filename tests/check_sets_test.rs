@@ -1,7 +1,6 @@
 // The frozen-set check on `assumes` rows (a depends line's answer set must
 // not silently change after the target was asked, but a dependent heading
-// that vanished entirely is fine), and the `moot` note for a dependent
-// whose set excludes the letter its target was actually answered with.
+// that vanished entirely is fine).
 // Most fixtures are hand-written (record content plus
 // `append_ledger_row`/`assumes_hash`) rather than through a real `adr ask`,
 // though some tests below do run `adr approve`/`adr ask` for real.
@@ -104,58 +103,6 @@ fn check_passes_when_the_dependent_heading_vanished() {
         "a vanished dependent heading must not be flagged: {}",
         text
     );
-}
-
-#[test]
-fn check_notes_a_moot_dependent() {
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "widget");
-    let content = format!(
-        "# Colors\n\n{}\n\n### 1.2 Depends on color?\ndepends: 1.1 Which color?=A\n",
-        target_section(Some("B"))
-    );
-    write_record(&dir, "adrdom/decisions/colors.md", &content);
-    // The moot note is gated on the ledger's answered state (8.7 A/check
-    // shares view.rs's `qstate` gating), not the file's `**Answer:**` line
-    // alone -- so the target needs a real `answered` row, hash matching
-    // the section as it stood before the answer line was written.
-    let hash = mirror_section_hash(&target_section(None));
-    append_ledger_row(&dir, "answered", TARGET_ID, &hash, "B");
-
-    let out = adr(&dir, &["check"], &[], "");
-    let text = stdout(&out);
-    assert!(
-        text.contains(
-            "no case left: adrdom/decisions/colors.md: \"1.2 Depends on color?\" stands on \"1.1 Which color?\"=A, answered B"
-        ),
-        "{}",
-        text
-    );
-}
-
-#[test]
-fn check_stays_silent_on_a_letter_written_in_the_file_but_never_answered_in_the_ledger() {
-    // Regression: `check_moot` used to build its note straight from the
-    // file's `**Answer:**` letter, with no ledger check at all -- so an
-    // agent-edited (or hand-edited, never-asked) answer letter produced a
-    // moot note exactly like a real, owner-answered one. `check_moot` now
-    // shares `view::moot_notes`'s gating on the ledger's `qstate`, the same
-    // rule the owner's page already used, so an id with no `answered` row
-    // is `Unasked`, not `Answered`, and the note stays silent.
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "widget");
-    let content = format!(
-        "# Colors\n\n{}\n\n### 1.2 Depends on color?\ndepends: 1.1 Which color?=A\n",
-        target_section(Some("B"))
-    );
-    write_record(&dir, "adrdom/decisions/colors.md", &content);
-    // No ledger row for TARGET_ID at all.
-
-    let out = adr(&dir, &["check"], &[], "");
-    let text = stdout(&out);
-    assert!(!text.contains("no case left:"), "{}", text);
 }
 
 #[test]

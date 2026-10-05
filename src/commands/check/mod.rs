@@ -5,7 +5,6 @@ mod done;
 mod ids;
 mod install;
 mod ledger;
-mod moot;
 mod parse;
 mod plan;
 mod push;
@@ -185,7 +184,6 @@ fn build(
     push_failures(&mut failures, test_failures);
     push_failures(&mut failures, tells::check_tells(root, &records, &led, &per_record_refusals));
 
-    notes.extend(moot::check_moot(&records, &led));
 
     for (rf, replaced) in records.iter().zip(&replaced_per_record) {
         if let Some(tiers) = &rf.tiers {

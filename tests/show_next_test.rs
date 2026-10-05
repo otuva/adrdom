@@ -462,57 +462,6 @@ fn show_and_answer_agree_on_whether_the_asked_text_stands() {
 
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 //
-// A question whose answer set lacks the answer given is moot, and `ask`
-// refuses the whole run while it stands. `next` names its drop ahead of the
-// ask for the question beside it, and once the owner approves the drop the
-// ask goes through.
-#[test]
-fn show_names_the_drop_of_a_moot_question_before_the_ask() {
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "widget");
-    let plan = format!(
-        "# Gate\n\n{}{}{}",
-        q(ONE, "widget"),
-        q(TWO, &format!("widget, {}=A", ONE)),
-        q(THREE, &format!("widget, {}=*", ONE))
-    );
-    let path = write_record(&dir, REL, &plan);
-    let p = path.to_str().unwrap();
-    approve_record(&dir, REL);
-    let one = id_of(&path, ONE);
-
-    assert!(adr(&dir, &["ask", p], &[], "").status.success());
-    assert!(adr_answer(&dir, &one, "B").status.success());
-    write_test_comment(&dir, &one);
-
-    let lines = next(&dir);
-    let drop = format!(
-        "agent drops or replaces \"{}\", which has no case left, owner runs: adr approve {}",
-        TWO, REL
-    );
-    let ask = ask_for(&[THREE]);
-    let drop_at = lines.iter().position(|l| *l == drop).unwrap_or_else(|| panic!("{:?}", lines));
-    let ask_at = lines.iter().position(|l| *l == ask).unwrap_or_else(|| panic!("{:?}", lines));
-    assert!(drop_at < ask_at, "{:?}", lines);
-    assert!(!adr(&dir, &["ask", p], &[], "").status.success());
-
-    // The drop: the heading leaves the file and the owner approves it.
-    let text = std::fs::read_to_string(&path).unwrap();
-    let from = text.find(&format!("### {}\n", TWO)).unwrap();
-    let to = text.find(&format!("### {}\n", THREE)).unwrap();
-    // The answered root no longer takes a set, so the remaining entry loses its set too.
-    let kept = format!("{}{}", &text[..from], &text[to..]).replace(&format!("{}=*", one), &one);
-    std::fs::write(&path, kept).unwrap();
-    approve_record(&dir, REL);
-    assert_eq!(next(&dir), vec![ask_for(&[THREE])]);
-    let asked = adr(&dir, &["ask", p], &[], "");
-    assert!(asked.status.success(), "{}", stderr(&asked));
-    assert!(stdout(&asked).contains(&format!("asked: \"{}\"", THREE)), "{}", stdout(&asked));
-}
-
-// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
-//
 // `answer` on a question that has a body and was never asked: show prints
 // no version for it, so the refusal names the agent's `ask`, not show. A
 // question re-asked after an edit gets the owner's line whole, with the

@@ -701,6 +701,34 @@ pub fn not_asked_yet(heading: &str, rel: &str) -> String {
     )
 }
 
+/// An answer that would remove a question that has already been asked to
+/// the owner (a removed question must never have been asked).
+pub fn drop_of_asked(heading: &str) -> String {
+    refuse(
+        format!("answering would remove \"{}\", which was asked", heading),
+        Next::agent("says so in chat and stops"),
+    )
+}
+
+/// An answer that would remove a question with no identifier.
+pub fn drop_without_id(heading: &str) -> String {
+    refuse(
+        format!("answering would remove \"{}\", which has no identifier", heading),
+        Next::agent("says so in chat and stops"),
+    )
+}
+
+/// An answer that would remove a question whose text matches no approval row.
+pub fn drop_not_approved(heading: &str, rel: &str) -> String {
+    refuse(
+        format!(
+            "answering would remove \"{}\", whose text matches no approved row of {}",
+            heading, rel
+        ),
+        Next::agent("says so in chat and stops").and_owner_runs(format!("adr approve {}", rel)),
+    )
+}
+
 /// A question with no body yet: nothing to ask or answer.
 pub fn not_written(heading: &str) -> String {
     refuse(
@@ -984,22 +1012,6 @@ pub fn ask_supersedes_ambiguous(rel: &str, heading: &str, entry: &str, files: &[
     )
 }
 
-pub fn moot_candidate(
-    rel: &str,
-    heading: &str,
-    target: &str,
-    set_str: &str,
-    letter: char,
-) -> String {
-    refuse(
-        format!(
-            "{}: \"{}\" has no case left: it stands on \"{}\" under {}, and the answer was {}",
-            rel, heading, target, set_str, letter
-        ),
-        Next::agent("drops or replaces the heading").and_owner_runs(format!("adr approve {}", rel)),
-    )
-}
-
 pub fn banned_word_in_candidate(rel: &str, heading: &str, suffix: &str) -> String {
     refuse(
         format!("{}: \"{}\": banned word{}", rel, heading, suffix),
@@ -1097,12 +1109,6 @@ pub fn next_refused(heading: &str) -> String {
         heading
     ))
     .render()
-}
-
-pub fn next_moot(rel: &str, heading: &str) -> String {
-    Next::agent(format!("drops or replaces \"{}\", which has no case left", heading))
-        .and_owner_runs(format!("adr approve {}", rel))
-        .render()
 }
 
 pub fn next_build(heading: &str, id: &str) -> String {
@@ -1843,6 +1849,62 @@ pub fn ledger_answered_without_asked(id: &str, heading: Option<&str>) -> String 
     )
 }
 
+/// A `dropped` row whose detail is neither `<id> <letter>` nor `<id>`.
+pub fn ledger_dropped_malformed(id: &str, detail: &str) -> String {
+    refuse(
+        format!("dropped row for {} has the detail \"{}\"; it holds an identifier and a letter, or an identifier", id, detail),
+        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
+    )
+}
+
+/// A `dropped` row with no answer row (direct) or no dropped row (dependent) behind it.
+pub fn ledger_dropped_without_cause(id: &str, cause: &str) -> String {
+    refuse(
+        format!("dropped row for {} has no cause: {}", id, cause),
+        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
+    )
+}
+
+/// A `dropped` row whose id and hash match no per-question approved row.
+pub fn ledger_dropped_not_approved(id: &str) -> String {
+    refuse(
+        format!("dropped row for {} matches no approved row of that question", id),
+        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
+    )
+}
+
+/// A dropped question that is still in a topic file.
+pub fn ledger_dropped_still_in_file(id: &str, rel: &str) -> String {
+    refuse(
+        format!("{} has a dropped row but is still in {}", id, rel),
+        Next::agent("removes the question from the file, or the owner's answer is run again"),
+    )
+}
+
+/// At the commit that removes a dropped question: HEAD's text hashes to something else.
+pub fn ledger_dropped_text_differs(id: &str) -> String {
+    refuse(
+        format!("dropped row for {} holds a hash that is not the hash of the text HEAD holds", id),
+        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
+    )
+}
+
+/// At the commit that removes a dropped question: HEAD's set already held the letter.
+pub fn ledger_dropped_set_holds_letter(id: &str, letter: &str) -> String {
+    refuse(
+        format!("dropped row for {} names the answer {}, which the question's set at HEAD holds", id, letter),
+        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
+    )
+}
+
+/// At the commit that removes a dropped dependent: HEAD's text does not stand on the named question.
+pub fn ledger_dropped_not_standing_on(id: &str, on: &str) -> String {
+    refuse(
+        format!("dropped row for {} says it stood on {}, which the question at HEAD does not", id, on),
+        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
+    )
+}
+
 /// `adr check --push`, one line pre-push hands it: `local_ref`'s ledger, at
 /// the sha about to be pushed, is missing a row `remote_ref` already holds
 /// at its own sha (per "Does check look at the ledger before a push?",
@@ -2294,10 +2356,6 @@ pub fn done(rel: &str) -> String {
     format!("done: {}", rel)
 }
 
-pub fn moot_note(rel: &str, note: &str) -> String {
-    format!("no case left: {}: {}", rel, note)
-}
-
 pub fn tiers_note_check(rel: &str, sizes: &str) -> String {
     format!("tiers: {}: {}", rel, sizes)
 }
@@ -2719,7 +2777,6 @@ mod tests {
             set_on_answered_question("x.md", "dependent", "target"),
             question_without_body("x.md", "heading"),
             ask_supersedes_not_current("x.md", "heading", "id-1", Some("name")),
-            moot_candidate("x.md", "heading", "target", "A", 'B'),
             banned_word_in_candidate("x.md", "heading", ""),
             pairs_no_term("x.md", "heading"),
             pairs_no_term_at_write("x.md", "heading"),
