@@ -328,7 +328,9 @@ fn ledger_rows_from_ask_approve_answer_are_six_fields_with_correct_meaning() {
             }
             "approved" => {
                 saw.insert("approved");
-                assert_eq!(ident, "-");
+                // one row per question (id column = question id) and one
+                // file row (id column '-').
+                assert!(ident == "-" || ident == id, "{}", line);
                 assert_eq!(hash.len(), 64);
                 assert_eq!(detail, "adrdom/decisions/example.md");
             }

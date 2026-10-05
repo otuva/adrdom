@@ -189,3 +189,32 @@ id: 1d9df88a-40f6-4235-a083-e063fde634fe
 terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2
 definition: The file at the root of a repository that tells an agent how to work in it.
 aliases: briefs
+
+## embedding
+id: fa0b0e24-b7cf-471b-94b6-6d167e8ad269
+definition: A list of numbers the tool computes from a text, so that two texts on one subject give two near lists.
+aliases: embeddings
+
+## embedding model
+id: a7b0b910-57f6-4c59-b904-b42f78db63f7
+terms: embedding=fa0b0e24-b7cf-471b-94b6-6d167e8ad269
+definition: The file the tool reads to compute an embedding.
+aliases: embedding models
+
+## embedding index
+id: bf7da2dd-d8a7-41b8-9898-11cf68d0e833
+terms: embeddings=fa0b0e24-b7cf-471b-94b6-6d167e8ad269
+definition: The file holding the embeddings the tool looks a new text up against.
+aliases: embedding indexes
+
+## neighbour
+id: daec9ffd-676f-4111-a359-2827bfd4527c
+terms: embedding=fa0b0e24-b7cf-471b-94b6-6d167e8ad269
+definition: A text in the records whose embedding is near a new text's embedding.
+aliases: neighbours, neighbor, neighbors
+
+## reader
+id: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d
+definition: A program apart from the agent that reads records on the owner's behalf.
+aliases: readers

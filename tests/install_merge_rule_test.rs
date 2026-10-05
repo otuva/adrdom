@@ -16,7 +16,7 @@ use std::path::Path;
 use std::process::Output;
 
 const GITATTRIBUTES_PATH: &str = "adrdom/.gitattributes";
-const GITATTRIBUTES_CONTENT: &str = "state/ledger.tsv merge=union\n";
+const GITATTRIBUTES_CONTENT: &str = "state/ledger.tsv merge=union\nstate/reader.tsv merge=union\n";
 
 fn git_ok(dir: &Path, args: &[&str]) -> Output {
     let out = run_git(dir, args);

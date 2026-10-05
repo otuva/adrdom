@@ -2,7 +2,7 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-pub const EVENTS: [&str; 13] = [
+pub const EVENTS: [&str; 14] = [
     "asked",
     "answered",
     "refused",
@@ -16,6 +16,7 @@ pub const EVENTS: [&str; 13] = [
     "unbanned",
     "assumes",
     "blame",
+    "dropped",
 ];
 
 #[derive(Debug, Clone)]
@@ -214,11 +215,13 @@ impl Ledger {
         self.rows.iter().rposition(|r| r.id == id && r.event == "superseded")
     }
 
-    /// The latest row of `event` whose `detail` column equals `path`.
+    /// The latest row of `event` whose `detail` column equals `path` and
+    /// whose id is `-`: the file's own row, never one of the per-question
+    /// `approved` rows that name the same path.
     pub fn latest_for_path(&self, event: &str, path: &str) -> Option<&Row> {
         self.rows
             .iter()
-            .rfind(|r| r.event == event && r.detail == path)
+            .rfind(|r| r.event == event && r.detail == path && r.id == "-")
     }
 
     /// The latest row of `event` for the identifier `id`.

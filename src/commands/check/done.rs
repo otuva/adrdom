@@ -11,7 +11,7 @@ use std::collections::HashMap;
 pub(super) fn check_done(
     records: &[RecordFile],
     led: &Ledger,
-    raw_hashes: &HashMap<String, (String, String)>,
+    raw_hashes: &HashMap<String, (Vec<String>, String)>,
 ) -> Vec<String> {
     let mut out = Vec::new();
     for rf in records {

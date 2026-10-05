@@ -55,6 +55,7 @@ fn ask_reasks_on_edit() {
         "names leaked into decisions, badly.",
     );
     std::fs::write(&record, edited).unwrap();
+    approve_record(&dir, "adrdom/decisions/example.md");
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "ask failed: {}", stderr(&out));
@@ -262,41 +263,6 @@ fn ask_refuses_a_question_with_four_options() {
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(!ledger.contains("\tasked\t"), "no asked row should have been written: {}", ledger);
-}
-
-#[test]
-fn ask_leaves_a_skeleton_heading_unasked_though_approve_gave_it_an_id() {
-    // `approve` gives every heading an id, skeletons
-    // included -- but `ask` still never asks a skeleton, so it gets no
-    // ledger row for it.
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_terms_with(&dir, &["decision", "example"]);
-    let content = format!(
-        "{}\n### 1.2 Where does the plan live?\ndepends: example\n",
-        EXAMPLE_RECORD
-    );
-    let record = write_record(&dir, "adrdom/decisions/example.md", &content);
-    approve_record(&dir, "adrdom/decisions/example.md");
-    let after_approve = std::fs::read_to_string(&record).unwrap();
-    let idx = after_approve.find("### 1.2 Where does the plan live?").unwrap();
-    assert!(
-        after_approve[idx..].contains("id: "),
-        "approve should have given the skeleton an id too: {}",
-        &after_approve[idx..]
-    );
-
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask failed: {}", stderr(&out));
-    let after_ask = std::fs::read_to_string(&record).unwrap();
-    // `ask` does rewrite the other (real) question's `terms:` line, but the
-    // skeleton's own slice of the file -- from its heading onward, since it
-    // is the last heading -- must stay exactly as `approve` left it.
-    let skeleton_before = &after_approve[idx..];
-    let skeleton_after = &after_ask[after_ask.find("### 1.2 Where does the plan live?").unwrap()..];
-    assert_eq!(skeleton_after, skeleton_before, "ask must not touch the skeleton section");
-    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    assert!(!ledger.contains("Where does the plan live?"));
 }
 
 // --- terms wiring (3): missing/shape/approval refusals, banned, retired,

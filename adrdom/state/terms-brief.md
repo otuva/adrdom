@@ -31,3 +31,8 @@
 - blame (blame file, blame files): A file holding, for one origin, its line ranges and what each range went to in the records.
 - terms brief (terms briefs): The file under adrdom/state holding the name, aliases and definition of every term that is not retired, one term per line.
 - brief (briefs): The file at the root of a repository that tells an agent how to work in it.
+- embedding (embeddings): A list of numbers the tool computes from a text, so that two texts on one subject give two near lists.
+- embedding model (embedding models): The file the tool reads to compute an embedding.
+- embedding index (embedding indexes): The file holding the embeddings the tool looks a new text up against.
+- neighbour (neighbours, neighbor, neighbors): A text in the records whose embedding is near a new text's embedding.
+- reader (readers): A program apart from the agent that reads records on the owner's behalf.

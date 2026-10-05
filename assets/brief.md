@@ -55,12 +55,13 @@ opens with where it stands, in brackets:
 
 ## Asking a question
 
-**1. Write the plan.** A topic file, `adrdom/decisions/<topic>.md`, holds the
-questions on one subject: one `# <Topic>` line, a few lines of prose, then
-the headings. Under each heading put one `depends:` line, comma separated:
-one entry for each thing the question stands on -- a term by its name,
-another heading in this file by its text, or a current decision by its
-heading text, the same as a heading in this file.
+The plan is made in six steps, each on the record of the one before. Run
+`adr plan <file>` at each step: it reads the file, does the step the file is
+at, and prints what it did and the next move.
+
+**1. Write the headings.** A topic file, `adrdom/decisions/<topic>.md`, holds
+the questions on one subject: one `# <Topic>` line, a few lines of prose,
+then the headings.
 
 ```
 # Hooks
@@ -68,40 +69,49 @@ heading text, the same as a heading in this file.
 What the git hooks run and when.
 
 ### Does the pre-commit hook run the tests?
-depends: hook, Does check read staged files only?
 
 ### Does check read staged files only?
-depends: check
 ```
 
-A question stands on another one when its options make sense only after the
-other is answered. Write every entry that is so, and none that is not.
+Ask "does X" or "what does X do". A heading that opens with "which",
+"where", "how many" or "how much" is refused: it assumes an answer the owner
+has not given. One question per heading: a heading with "and" or "or" in it
+is refused as two questions.
 
-If a question replaces a current decision, put a `supersedes:` line directly
-under its `depends:` line and write the heading of that decision on it
-(several headings separated by commas). It is part of the plan: `adr approve`
-turns each heading into its id. When a refusal says a heading names more
+**2. Run `adr plan <file>`.** For each heading it brings the ten nearest
+current decisions and term definitions, and the reader's word on each: same,
+depends or unrelated, after one sentence of reason.
+
+**3. Write the lines.** Every neighbour gets a line under its heading, one
+entry on one of three lines, comma separated:
+
+- `depends:` the question stands on it: its options make sense only after
+  the other is answered. A term by its name, another heading in this file by
+  its text, or a current decision by its heading text.
+- `supersedes:` the question replaces that current decision.
+- `unrelated:` neither.
+
+The reader's word is not a ruling; your line is. Write a `depends:` entry for
+every thing the question stands on, a neighbour or not, and none that is not.
+Run `adr plan <file>` again: it names every neighbour on no line.
+
+When a question replaces a current decision, write the heading of that
+decision on its `supersedes:` line. When a refusal says a heading names more
 than one decision, write the id of the one you mean in its place: it is on
 the `id:` line under that heading in its topic file.
 
-Ask "does X" or "what does X do". Under a heading that opens with Does, an
-option holds one word. Any other option, and every Why and Costs line, holds
-twenty words at most; `adr ask` refuses a longer line. A heading that opens
-with "which", "where", "how many" or "how much" is refused: it assumes an
-answer the owner has not given. One question per heading: a heading with
-"and" or "or" in it is refused as two questions. Say the plan is ready and
-stop. The owner may strike, add or reorder headings before approving, or
-write the plan itself and approve it the same way. The owner runs
-`adr approve <file>`; after it every heading has an `id:` line and the
-entries of its `depends:` and `supersedes:` lines are ids.
+```
+### Does the pre-commit hook run the tests?
+depends: hook, Does check read staged files only?
+unrelated: Does a hook print what check prints on a pass?
+```
 
-**2. Walk each question, then write its body.** Write the bodies `next`
-names. Before you write an option, read the code and the decisions it meets
+**4. Walk each question, then write its body.** Write the body of every
+heading. Before you write an option, read the code and the decisions it meets
 and find out what the option asks for: what the code has to keep, which part
 of it has to look and at what moment, and which current decision the option
-touches. That is what the option costs: write it on its Costs line. When
-you find a second question on the way, add its heading to the plan (see
-Changing a plan).
+touches. That is what the option costs: write it on its Costs line. When you
+find a second question on the way, add its heading and run `adr plan <file>`.
 
 A question, its prose and its options hold what is asked and nothing about
 the day they were written. Three kinds of words are refused:
@@ -124,22 +134,41 @@ Standard: the named practice for this, stated flat.
 - B) ...
 ```
 
-Two or three options. Strip each option to its answer to the heading and
+Two or three options. Under a heading that opens with Does, an option holds
+one word. Any other option, and every Why and Costs line, holds twenty words
+at most; `adr plan` and `adr check` report a longer line, and `adr approve`
+and `adr ask` refuse it. Strip each option to its answer to the heading and
 compare them: two options that answer it the same way are one option.
 
-When `next` names an answer set, write it on that `depends:` entry: `=A`,
-`=A|B` or `=*`, the letters of the other question under which this one still
-makes sense.
+A `depends:` entry on another question of this file carries its answer set:
+`=A`, `=A|B` or `=*`, the letters of the other question under which this one
+still makes sense.
 
-**3. Run `adr ask <file>`.** It asks the questions, or prints in one run
+**5. Run `adr plan <file>` again.** For each question with its body it brings
+the ten nearest current decisions and term definitions, with the reader's
+word: same, consistent, inconsistent, depends or unrelated; and the nearest
+other questions of this file, with same, depends or unrelated. Write a line
+for each new neighbour. A heading or a body changed after its step is read
+again: run `adr plan <file>` until it says the file is ready.
+
+**6. Ask approval.** Say the plan is ready, post
+`owner runs: adr approve <file>` and stop. The owner reads headings, lines
+and bodies once. The owner may strike, add or reorder headings before
+approving, or write the plan itself and approve it the same way. After
+approval every heading has an `id:` line and the entries of its lines are
+ids.
+
+**Then run `adr ask <file>`.** It asks the questions, or prints in one run
 everything that stops it, each line with the move that clears it. Make every
 move before you run it again. Commit, post your lean for each question in
 chat, post the `owner runs: adr answer ...` lines that `next` prints, and
 stop. The owner puts a letter, or the word `refuse`, in place of `<letter>`.
+When the answer is not in a question's answer set, the answer removes that
+question and every question standing on it from the file.
 
-**4. After the answer.** If you wrote the question, stop: another agent
-builds its decision from the record alone. Build the decisions `next` names.
-Tie each one to a test: put a comment `adr: <id>` inside a test, outside
+**After the answer.** If you wrote the question, stop: another agent builds
+its decision from the record alone. Build the decisions `next` names. Tie
+each one to a test: put a comment `adr: <id>` inside a test, outside
 `adrdom/`, that shows the code follows the decision. Write the test if none
 exists, and add it to git. The answers are committed as they are given.
 `adr check` reports each untested decision until a test names it; the build
@@ -154,8 +183,9 @@ with no decision behind it is a finding.
 
 ## Changing a plan
 
-To add, strike or reword a heading, or change what it depends on: edit the
-file, say in chat what changed and why, and stop. The owner approves a plan
+To add, strike or reword a heading, or change a line or a body: edit the
+file, run `adr plan <file>` until it says the file is ready, say in chat what
+changed and why, and stop. The owner approves a plan
 as a whole, and every change costs them a full re-read: when one heading
 turns out wrong, check every heading in the file for the same flaw and
 propose all the changes together, once.
@@ -223,9 +253,9 @@ remove or edit the hooks.
 
 ## Commands
 
-Yours: `adr show`, `adr ask`, `adr check`, `adr install`, `adr ban` (only
-when the owner says a word is banned) and `adr ban --rebuild` (only when a
-refusal names it).
+Yours: `adr show`, `adr plan`, `adr ask`, `adr check`, `adr install`,
+`adr ban` (only when the owner says a word is banned) and
+`adr ban --rebuild` (only when a refusal names it).
 
 The owner's, refused when you run them: `adr approve`, `adr answer`,
 `adr unban`, `adr serve`, `adr uninstall`.

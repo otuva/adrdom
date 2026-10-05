@@ -78,19 +78,17 @@ fn check_parse_failure() {
 
 #[test]
 fn check_ids_failure_missing_id() {
-    // a missing id means the plan was never approved --
-    // `approve`, not `ask`, is what gives a heading one, so the message
-    // points at `approve`.
+    // a missing id means the plan was never approved; an unapproved file
+    // is only a count note, never a failure.
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
     // No `adr approve` run, so the section has no id.
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
-    assert!(stdout(&out).contains("ids:"), "{}", stdout(&out));
+    assert!(!stdout(&out).contains("ids:"), "{}", stdout(&out));
     assert!(
-        stdout(&out).contains("plan not approved; owner runs: adr approve adrdom/decisions/example.md"),
+        stdout(&out).contains("awaiting approval: adrdom/decisions/example.md"),
         "{}",
         stdout(&out)
     );
@@ -146,12 +144,15 @@ fn check_passes_a_skeleton_that_got_an_id_from_approve_but_was_never_asked() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "pass");
-    let content = format!("{}\n### 3.2 Not written yet?\ndepends: pass\n", ONE_QUESTION);
+    let content = format!(
+        "{}\n### 3.2 Not asked yet?\ndepends: pass\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n  Costs: z.\n- B) w.\n  Why: y.\n  Costs: z.\n",
+        ONE_QUESTION
+    );
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
     approve_record(&dir, "adrdom/decisions/example.md");
 
     let after = std::fs::read_to_string(&record).unwrap();
-    let idx = after.find("### 3.2 Not written yet?").unwrap();
+    let idx = after.find("### 3.2 Not asked yet?").unwrap();
     assert!(after[idx..].contains("id: "), "{}", &after[idx..]);
 
     let out = adr(&dir, &["check"], &[], "");
@@ -1146,13 +1147,11 @@ fn check_passes_a_skeleton_heading_with_no_id_or_body() {
     assert!(!text.contains("parse:"), "{}", text);
 }
 
-// adr: 258107eb-2a90-4ce9-a111-d1bba047d423
 //
-// "a question body under an unapproved heading fails check": the file
-// below has never been approved (no `approved` ledger row), so its
-// question body fails, exactly as option A says.
+// A question body under an unapproved heading no longer fails check: the
+// file is only counted as awaiting approval.
 #[test]
-fn check_fails_a_body_under_an_unapproved_heading() {
+fn check_passes_a_body_under_an_unapproved_heading() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(
@@ -1160,20 +1159,13 @@ fn check_fails_a_body_under_an_unapproved_heading() {
         "adrdom/decisions/example.md",
         "# Example\n\n### 1.1 Does this need approval?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
     );
-    // No `approved` ledger row written: the plan is unapproved.
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
     let text = stdout(&out);
-    assert!(text.contains("plan:"), "{}", text);
-    assert!(
-        text.contains("body under unapproved heading \"1.1 Does this need approval?\""),
-        "{}",
-        text
-    );
+    assert!(!text.contains("body under unapproved heading"), "{}", text);
+    assert!(text.contains("awaiting approval"), "{}", text);
 }
 
-// adr: 258107eb-2a90-4ce9-a111-d1bba047d423
 //
 // "check reports a file awaiting approval as a count ... and passes
 // (exit 0)": a plan with no body under any heading (a bare skeleton) is

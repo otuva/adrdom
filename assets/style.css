@@ -125,6 +125,7 @@ button:hover { filter: brightness(1.08); }
 button:focus-visible { outline: 2px solid var(--hold); outline-offset: 2px; }
 .skip { color: var(--muted); }
 .stands-on { color: var(--muted); font-size: 0.92rem; margin: -0.3rem 0 0.8rem; }
+.neighbours { color: var(--muted); font-size: 0.92rem; margin: -0.3rem 0 0.8rem; padding-left: 1.2rem; }
 ul.refused-list { list-style: none; margin: 0.4rem 0; padding: 0; }
 ul.refused-list li { padding: 0.2rem 0; }
 .label.refused { color: var(--refuse); font-weight: 700; text-transform: uppercase; font-size: 0.78rem; letter-spacing: 0.03em; margin-right: 0.5rem; }

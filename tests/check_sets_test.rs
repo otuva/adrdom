@@ -1,7 +1,6 @@
 // The frozen-set check on `assumes` rows (a depends line's answer set must
 // not silently change after the target was asked, but a dependent heading
-// that vanished entirely is fine), and the `moot` note for a dependent
-// whose set excludes the letter its target was actually answered with.
+// that vanished entirely is fine).
 // Most fixtures are hand-written (record content plus
 // `append_ledger_row`/`assumes_hash`) rather than through a real `adr ask`,
 // though some tests below do run `adr approve`/`adr ask` for real.
@@ -107,58 +106,6 @@ fn check_passes_when_the_dependent_heading_vanished() {
 }
 
 #[test]
-fn check_notes_a_moot_dependent() {
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "widget");
-    let content = format!(
-        "# Colors\n\n{}\n\n### 1.2 Depends on color?\ndepends: 1.1 Which color?=A\n",
-        target_section(Some("B"))
-    );
-    write_record(&dir, "adrdom/decisions/colors.md", &content);
-    // The moot note is gated on the ledger's answered state (8.7 A/check
-    // shares view.rs's `qstate` gating), not the file's `**Answer:**` line
-    // alone -- so the target needs a real `answered` row, hash matching
-    // the section as it stood before the answer line was written.
-    let hash = mirror_section_hash(&target_section(None));
-    append_ledger_row(&dir, "answered", TARGET_ID, &hash, "B");
-
-    let out = adr(&dir, &["check"], &[], "");
-    let text = stdout(&out);
-    assert!(
-        text.contains(
-            "no case left: adrdom/decisions/colors.md: \"1.2 Depends on color?\" stands on \"1.1 Which color?\"=A, answered B"
-        ),
-        "{}",
-        text
-    );
-}
-
-#[test]
-fn check_stays_silent_on_a_letter_written_in_the_file_but_never_answered_in_the_ledger() {
-    // Regression: `check_moot` used to build its note straight from the
-    // file's `**Answer:**` letter, with no ledger check at all -- so an
-    // agent-edited (or hand-edited, never-asked) answer letter produced a
-    // moot note exactly like a real, owner-answered one. `check_moot` now
-    // shares `view::moot_notes`'s gating on the ledger's `qstate`, the same
-    // rule the owner's page already used, so an id with no `answered` row
-    // is `Unasked`, not `Answered`, and the note stays silent.
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "widget");
-    let content = format!(
-        "# Colors\n\n{}\n\n### 1.2 Depends on color?\ndepends: 1.1 Which color?=A\n",
-        target_section(Some("B"))
-    );
-    write_record(&dir, "adrdom/decisions/colors.md", &content);
-    // No ledger row for TARGET_ID at all.
-
-    let out = adr(&dir, &["check"], &[], "");
-    let text = stdout(&out);
-    assert!(!text.contains("no case left:"), "{}", text);
-}
-
-#[test]
 fn check_passes_when_the_dependents_heading_has_extra_leading_whitespace() {
     // record.rs's `heading_text` used to be trimmed only at the end, so a
     // heading written with extra space right after `### ` kept that space
@@ -171,10 +118,8 @@ fn check_passes_when_the_dependents_heading_has_extra_leading_whitespace() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
-    // "Extra space?" is a skeleton (heading + depends only, no body): it
-    // must not itself become a candidate blocked by the tier rule, but it
-    // still counts as a dependent of "Which color?" for the assumes row
-    // this ask writes.
+    // "Extra space?" stands on "Which color?" and is a dependent of it for
+    // the assumes row this ask writes.
     // the term-pairing scan now leaves out `depends:` lines
     // (they hold references, not prose), so "widget" has to appear in the
     // heading/Problem/Standard/option text itself for this to pair the term.
@@ -186,7 +131,11 @@ Standard: s.\n\n\
 - A) Red.\n  Why: w.\n  Costs: c.\n\
 - B) Blue.\n  Why: w.\n  Costs: c.\n\n\
 ###   Extra space?\n\
-depends: 1.1 Which color is the widget?=A\n";
+depends: 1.1 Which color is the widget?=A\n\n\
+Problem: p.\n\n\
+Standard: s.\n\n\
+- A) Yes.\n  Why: w.\n  Costs: c.\n\
+- B) No.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/colors.md", content);
     approve_record(&dir, "adrdom/decisions/colors.md");
 
@@ -223,14 +172,12 @@ fn check_does_not_note_a_dependent_whose_set_still_includes_the_answer() {
     assert!(!text.contains("no case left:"), "{}", text);
 }
 
-// adr: fa90692a-150e-4a89-91e2-1d575cb59d0f
 //
 // A question in one file standing on a current decision of another file
-// under a set that lacks the letter it was answered with is moot, as it is
-// inside one file: check reports it, ask refuses it and show's next names
-// the drop.
+// under a set that lacks the letter it was answered with is refused by
+// `approve`, as it is inside one file.
 #[test]
-fn a_cross_file_depends_entry_whose_set_lacks_the_answer_is_moot() {
+fn approve_refuses_a_cross_file_depends_set_on_an_answered_decision() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -255,26 +202,13 @@ fn a_cross_file_depends_entry_whose_set_lacks_the_answer_is_moot() {
     let b = write_record(
         &dir,
         "adrdom/decisions/topic-b.md",
-        &format!("# Topic B\n\n### Is the widget follow?\ndepends: Is the widget hold?=B\n\n{}", q),
+        &format!("# Topic B\n\n### Is the widget follow?\ndepends: Is the widget hold?=A\n\n{}", q),
     );
     let out = adr_owner(&dir, &["approve", b.to_str().unwrap()], "");
-    assert!(out.status.success(), "{}", stderr(&out));
-
-    let moot = "\"Is the widget follow?\" stands on \"Is the widget hold?\"=B, answered A";
-    let check = stdout(&adr(&dir, &["check"], &[], ""));
-    assert!(check.contains(moot), "{}", check);
-    let ask = adr(&dir, &["ask", b.to_str().unwrap()], &[], "");
-    assert!(!ask.status.success(), "ask must refuse a moot question: {}", stdout(&ask));
-    let refusal = stderr(&ask);
+    assert!(!out.status.success());
     assert!(
-        refusal.contains("\"Is the widget follow?\" has no case left: it stands on \"Is the widget hold?\""),
+        stderr(&out).contains("\"Is the widget follow?\" depends on \"Is the widget hold?\", which is answered, under an answer set"),
         "{}",
-        refusal
-    );
-    let show = stdout(&adr(&dir, &["show"], &[], ""));
-    assert!(
-        show.contains("drops or replaces \"Is the widget follow?\", which has no case left"),
-        "{}",
-        show
+        stderr(&out)
     );
 }

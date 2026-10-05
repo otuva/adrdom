@@ -8,7 +8,6 @@ use crate::repo;
 use crate::state;
 use crate::tells;
 use crate::terms;
-use crate::view;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -84,10 +83,10 @@ pub fn run(record_path: PathBuf) -> i32 {
     // Plan/context approval state must be read off `rf` exactly as loaded,
     // before the normalize pass below mutates its parsed `depends:`
     // entries in memory (per "..."): captured here, ahead of that
-    // mutation, and used below via `state::plan_approved_hash`/
+    // mutation, and used below via `state::plan_approved_hashes`/
     // `context_approved_hash` instead of recomputing from the
     // (by-then-normalized) `rf`.
-    let raw_plan_hash = record::plan_hash(&rf);
+    let raw_question_hashes = record::question_hashes(&rf);
     let raw_context_hash = record::context_hash(&rf);
 
     // Same pre-pass `approve`/`check` run before reading `rf.tiers`/
@@ -162,7 +161,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     // Refusal 4: plan / context must be approved before ask will touch the
     // file at all -- checked against the hashes captured before the
     // normalize pass above, never the normalized `rf`.
-    if !state::plan_approved_hash(&led, &rel, &raw_plan_hash) {
+    if !state::plan_approved_hashes(&led, &rel, &raw_question_hashes) {
         eprintln!("ask: {}", msg::plan_not_approved(&rel));
         return 1;
     }
@@ -246,11 +245,10 @@ pub fn run(record_path: PathBuf) -> i32 {
     // three in one run.
     let mut refusals: Vec<String> = Vec::new();
 
-    // Answer sets mandatory (per "Does a depends entry carry the answers
-    // it holds under?"): before asking any candidate in the
-    // open tier, every section in the file with a heading dep pointing at
-    // an open-tier section must carry an explicit set on that entry, and
-    // every set's letters must be options the target actually has. Runs
+    // Answer sets (per "Does a depends entry carry the answers it holds
+    // under?"): before asking any candidate in the open tier, every set on
+    // a heading dep pointing at an open-tier section must name only options
+    // the target actually has. Runs
     // once, ahead of the per-candidate loop, and only when there is
     // something new to ask in the open tier this run.
     if let Some(n) = open_tier {
@@ -277,12 +275,10 @@ pub fn run(record_path: PathBuf) -> i32 {
                 for (di, set) in rf.dependents_of(ti) {
                     let dependent = &rf.sections[di];
                     let found = match set {
-                        None => vec![msg::missing_answer_set(
-                            &rel,
-                            &dependent.heading_text,
-                            &target.heading_text,
-                        )],
-                        Some(record::AnswerSet::Any) => Vec::new(),
+                        // A missing set is approve's stop (per "Does a depends
+                        // entry on a question in its file carry an answer
+                        // set?"), not ask's.
+                        None | Some(record::AnswerSet::Any) => Vec::new(),
                         Some(record::AnswerSet::Letters(letters)) => {
                             depends::bad_letters(&rel, &dependent.heading_text, target, letters)
                         }
@@ -296,13 +292,6 @@ pub fn run(record_path: PathBuf) -> i32 {
     let banned_path = root.join(banned::BAN_LIST);
     let banned_entries: HashMap<String, Option<String>> =
         banned::read_entries(&banned_path).into_iter().collect();
-
-    // Per "Does a depends entry carry the answers it holds under?": every
-    // moot heading dep in the file, gated on the ledger's `qstate` rather
-    // than just the file's letter (shared with `check`/the page through
-    // `view::moot_pairs`, so the two can never diverge on what counts as
-    // moot). Computed once, ahead of the per-candidate loop.
-    let moot_pairs = view::moot_pairs(&rf, &led, &all_records);
 
     for (i, sec) in rf.sections.iter().enumerate() {
         if !candidate[i] {
@@ -318,18 +307,6 @@ pub fn run(record_path: PathBuf) -> i32 {
                 .into_iter()
                 .map(|r| r.message),
         );
-
-        // Moot refusal: this candidate's own entry in `moot_pairs`, matched
-        // by section index since two sections may share a heading text.
-        if let Some(p) = moot_pairs.iter().find(|p| p.section_idx == i) {
-            refusals.push(msg::moot_candidate(
-                &rel,
-                &sec.heading_text,
-                &p.target_heading,
-                &p.set_text,
-                p.letter,
-            ));
-        }
 
         // Per "Does the tool stop loaded phrases in a question?": a
         // provenance, code-state, or date tell anywhere in the
@@ -474,10 +451,9 @@ pub fn run(record_path: PathBuf) -> i32 {
         // time so `check`'s `answers.rs` can later catch it moving.
         for (di, set) in rf.dependents_of(i) {
             let Some(set) = set else {
-                // Guaranteed not to happen: the sets-mandatory gate above
-                // already refused before any row was written if a
-                // dependent in this tier carried no set. Skip rather than
-                // panic if it somehow does.
+                // Approve refuses a dependent in the file with no set on a
+                // question not yet answered, so none is left here. Skip
+                // rather than panic if one is.
                 continue;
             };
             let dependent = &rf.sections[di];
@@ -508,7 +484,7 @@ pub fn run(record_path: PathBuf) -> i32 {
         // The plan is approved by this point (`ask` stops on an unapproved
         // one above), so what is left is named move by move.
         let tests = crate::commands::check::test_index(&root, &repo::Source::WorkingTree);
-        for line in crate::view::next_moves(&rf, &led, true, &[], &tests, &all_records) {
+        for line in crate::view::next_moves(&rf, &led, true, &[], &tests, None) {
             println!("{}", msg::next_line(&line));
         }
         return 0;
@@ -600,7 +576,7 @@ fn strip_answer_line(rf: &mut record::RecordFile, idx: usize) {
 /// the section's text never moved, so its hash is the same one the
 /// question was first asked under. Bypasses every other gate `run` applies
 /// to an ordinary candidate (plan/context approval, the tier cap, the open
-/// tier, moot/banned/terms checks): none of them bear on re-asking text
+/// tier, banned/terms checks): none of them bear on re-asking text
 /// that hasn't changed.
 fn do_conflict_reask(
     root: &Path,
@@ -649,9 +625,7 @@ fn do_conflict_reask(
 
     // One `assumes` row per dependent that already carries a set, exactly
     // as an ordinary ask writes them (a dependent with no set at all is
-    // skipped rather than refused: this run never ran the sets-mandatory
-    // gate an ordinary candidate in the open tier would have to pass, since
-    // this question's own tier may not even be open).
+    // skipped rather than refused).
     for (di, set) in rf.dependents_of(idx) {
         let Some(set) = set else { continue };
         let dependent = &rf.sections[di];

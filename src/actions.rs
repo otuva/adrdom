@@ -232,6 +232,7 @@ fn finish_answer(
     idx: usize,
     answer_text: &str,
     rows: Vec<ledger::Row>,
+    drop_ids: &[String],
 ) -> Result<(), String> {
     let ledger_path = root.join(crate::repo::LEDGER_PATH);
 
@@ -243,6 +244,24 @@ fn finish_answer(
         hash_end..hash_end,
         [String::new(), format!("**Answer:** {}", answer_text)],
     );
+
+    // Per "Does answer remove a question whose answer set lacks the
+    // answer?": each dropped section leaves the file, heading through the
+    // line before the next heading, in the same write as the answer line.
+    if !drop_ids.is_empty() {
+        let mut rebuilt = record::build(rf.path.clone(), rf.rel.clone(), rf.lines.clone());
+        let mut ranges: Vec<(usize, usize)> = rebuilt
+            .sections
+            .iter()
+            .filter(|s| s.id.as_ref().is_some_and(|i| drop_ids.contains(i)))
+            .map(|s| (s.start, s.end))
+            .collect();
+        ranges.sort_unstable_by(|a, b| b.cmp(a));
+        for (start, end) in ranges {
+            rebuilt.lines.drain(start..end);
+        }
+        rf = record::build(rebuilt.path.clone(), rebuilt.rel.clone(), rebuilt.lines);
+    }
 
     record::save(&rf).map_err(|e| {
         msg::write_failed(
@@ -263,8 +282,79 @@ fn finish_answer(
     Ok(())
 }
 
+/// One question an answer removes: its id, its hash from approval, and the
+/// detail its `dropped` row carries.
+struct Drop {
+    id: String,
+    hash: String,
+    detail: String,
+}
+
+/// The questions leaving `rf` with the answer `letter` to section `idx`
+/// (per "Does answer remove a question whose answer set lacks the
+/// answer?" and "What does answer write for a removed question?"): first
+/// every question with a depends entry on it whose set lists letters
+/// without `letter` (`=*` never drops), detail `<answered id> <letter>`;
+/// then, repeatedly, every question with a depends entry on a removed one,
+/// detail the id of that removed question. Only questions of this file
+/// are searched: an entry on a question of another file names a current
+/// decision and carries no set. A question already asked, or one whose
+/// text has no `approved` row, is not removed: the answer refuses.
+fn collect_drops(rf: &RecordFile, rel: &str, led: &Ledger, idx: usize, id: &str, letter: char) -> Result<Vec<Drop>, String> {
+    let mut found: Vec<usize> = Vec::new();
+    let mut details: Vec<String> = Vec::new();
+    for (j, sec) in rf.sections.iter().enumerate() {
+        if j == idx {
+            continue;
+        }
+        let lacks = sec.depends.iter().any(|d| {
+            rf.dep_target(d) == Some(idx)
+                && matches!(d.set(), Some(record::AnswerSet::Letters(l)) if !l.contains(&letter))
+        });
+        if lacks {
+            found.push(j);
+            details.push(format!("{} {}", id, letter));
+        }
+    }
+    let mut at = 0;
+    while at < found.len() {
+        let removed = found[at];
+        let removed_id = rf.sections[removed].id.clone();
+        for (j, sec) in rf.sections.iter().enumerate() {
+            if j == idx || found.contains(&j) {
+                continue;
+            }
+            if sec.depends.iter().any(|d| rf.dep_target(d) == Some(removed)) {
+                found.push(j);
+                details.push(removed_id.clone().unwrap_or_default());
+            }
+        }
+        at += 1;
+    }
+    let mut out = Vec::new();
+    for (j, detail) in found.into_iter().zip(details) {
+        let sec = &rf.sections[j];
+        let Some(qid) = sec.id.clone() else {
+            return Err(msg::drop_without_id(&sec.heading_text));
+        };
+        if led.latest_asked(&qid).is_some() {
+            return Err(msg::drop_of_asked(&sec.heading_text));
+        }
+        let hash = record::question_hash(rf, sec);
+        let approved = led
+            .rows
+            .iter()
+            .any(|r| r.event == "approved" && r.id == qid && r.hash == hash && r.detail == rel);
+        if !approved {
+            return Err(msg::drop_not_approved(&sec.heading_text, rel));
+        }
+        out.push(Drop { id: qid, hash, detail });
+    }
+    Ok(out)
+}
+
 pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<Outcome, String> {
-    let Located { led, mut rf, idx, tf, cur_hash, .. } = locate_asked(root, id, version, Some(letter))?;
+    let Located { led, mut rf, idx, tf, cur_hash, rel } = locate_asked(root, id, version, Some(letter))?;
 
     let supersedes_val;
     {
@@ -343,8 +433,23 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
         });
     }
 
+    // Every question of this file whose set lacks the letter, and every
+    // question standing on a removed one, leaves with this answer.
+    let drops = collect_drops(&rf, &rel, &led, idx, id, letter)?;
+    let drop_ids: Vec<String> = drops.iter().map(|d| d.id.clone()).collect();
+    for d in &drops {
+        rows.push(ledger::Row {
+            time: write_time.clone(),
+            event: "dropped".to_string(),
+            id: d.id.clone(),
+            hash: d.hash.clone(),
+            detail: d.detail.clone(),
+            version: crate::version::VERSION.to_string(),
+        });
+    }
+
     let letter_str = letter.to_string();
-    finish_answer(root, id, version, &format!("{} again", letter_str), rf, idx, &letter_str, rows)?;
+    finish_answer(root, id, version, &format!("{} again", letter_str), rf, idx, &letter_str, rows, &drop_ids)?;
 
     Ok(Outcome {
         summary: msg::answered_summary(&heading_for_print, &sentence_for_print),
@@ -387,7 +492,7 @@ pub fn do_refuse(root: &Path, id: &str, version: &str) -> Result<Outcome, String
         version: crate::version::VERSION.to_string(),
     };
 
-    finish_answer(root, id, version, "refuse again", rf, idx, "refused", vec![row])?;
+    finish_answer(root, id, version, "refuse again", rf, idx, "refused", vec![row], &[])?;
 
     let mut summary = format!("answer: {}", msg::refused_summary(&heading_for_print, &rel));
     if let Some(n) = note {
@@ -1004,6 +1109,54 @@ fn do_approve_terms(
 /// current decision but a question of another topic file that is not
 /// answered (or is refused) is refused with the state the tool holds.
 #[allow(clippy::too_many_arguments)]
+/// The length refusals (`tells::length_tells`, the one function `ask` reads
+/// too) of every question of `rf` not yet asked. A question with a ledger
+/// state is never read (per "Does the word limit read answered text?").
+pub fn length_refusals(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<String> {
+    let mut out = Vec::new();
+    for sec in &rf.sections {
+        if sec.id.as_ref().is_some_and(|id| led.latest_state(id).is_some()) {
+            continue;
+        }
+        let (s, e) = record::hash_range(&rf.lines, sec);
+        for (line, found, kind) in tells::length_tells(&rf.lines, s, e, &sec.heading_text) {
+            out.push(msg::too_long(rel, line, &sec.heading_text, &kind, &found));
+        }
+    }
+    out
+}
+
+/// One `bad_letters` message per answer-set letter of a depends entry on a
+/// question of `rf` that has no such option, for every question of `rf` not
+/// yet asked (per "Does a depends entry carry the answers it holds under?"):
+/// the one function `check`, `approve` and `plan` read, found before approval
+/// what `ask` refuses. Cross-file targets carry no set before they are
+/// answered, so only a same-file target is read.
+pub fn letter_refusals(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<String> {
+    let mut out = Vec::new();
+    for sec in &rf.sections {
+        if sec.id.as_ref().is_some_and(|id| led.latest_state(id).is_some()) {
+            continue;
+        }
+        for d in &sec.depends {
+            let Some(record::AnswerSet::Letters(letters)) = d.set() else {
+                continue;
+            };
+            let target = match d {
+                record::Dep::Id { id, .. } => rf.sections.iter().find(|s| s.id.as_deref() == Some(id.as_str())),
+                record::Dep::Text { text, .. } => {
+                    let t = text.trim();
+                    if t.ends_with('?') { rf.sections.iter().find(|s| s.heading_text.trim() == t) } else { None }
+                }
+            };
+            if let Some(ts) = target {
+                out.extend(depends::bad_letters(rel, &sec.heading_text, ts, letters));
+            }
+        }
+    }
+    out
+}
+
 pub fn record_refusals(
     rel: &str,
     rf: &RecordFile,
@@ -1068,6 +1221,12 @@ pub fn record_refusals(
                 message: msg::tell(rel, line, &sec.heading_text, &phrase, what),
             });
         }
+    }
+    // Per "Does ask refuse an option over a word limit?" and "Does an option
+    // under a heading that opens with Does hold one word?": the same length
+    // rules `ask` enforces, found before approval in a question not yet asked.
+    for message in length_refusals(rel, rf, led) {
+        out.push(Refusal { category: "tells", message });
     }
     {
         let (cs, ce) = rf.context_range;
@@ -1198,6 +1357,13 @@ pub fn record_refusals(
     }
 
     out.extend(supersedes_refusals(rel, rf, cross_file_headings, names, all, led, None));
+
+    // Per "Does every neighbour get a line under its heading?": an
+    // `unrelated:` entry names a current decision, a term, another question
+    // of the file or a dropped question.
+    for message in crate::plan::unrelated_refusals(rel, rf, terms_list, cross_file_headings, led) {
+        out.push(Refusal { category: "plan", message });
+    }
 
     out
 }
@@ -1454,13 +1620,15 @@ fn insert_missing_ids(rf: &RecordFile, mut work_lines: Vec<String>) -> Result<Ve
                 .find(|&j| work_lines[j].starts_with("depends: "))
                 .ok_or_else(|| msg::approve_prefixed(msg::no_depends_line_bare(&sec.heading_text)))?;
             // The plan lines come first, then the id: after the
-            // `supersedes:` line when the heading has one (which is
-            // directly under `depends:`), else after `depends:`.
-            let after = if work_lines.get(depends_idx + 1).is_some_and(|l| l.starts_with("supersedes: ")) {
-                depends_idx + 1
-            } else {
-                depends_idx
-            };
+            // `supersedes:` and `unrelated:` lines when the heading has
+            // them (directly under `depends:`), else after `depends:`.
+            let mut after = depends_idx;
+            while work_lines
+                .get(after + 1)
+                .is_some_and(|l| l.starts_with("supersedes: ") || l.starts_with("unrelated: "))
+            {
+                after += 1;
+            }
             let new_id = Uuid::new_v4().to_string();
             work_lines.insert(after + 1, format!("id: {}", new_id));
         }
@@ -1565,6 +1733,11 @@ fn do_approve_record(
     for m in own_name_and_heading_refusals(rel, rf.topic.as_deref(), &rf.sections) {
         refusals.push(msg::approve_prefixed(m));
     }
+    // Per "Does a depends entry carry the answers it holds under?": a letter
+    // the target has no option for is found here, not at `ask`.
+    for m in letter_refusals(rel, &rf, led) {
+        refusals.push(msg::approve_prefixed(m));
+    }
 
     // Per "Does approve turn the supersedes line into identifiers?" (B):
     // each entry of a `supersedes:` line is the heading of a current
@@ -1594,29 +1767,79 @@ fn do_approve_record(
         supersedes_ids.insert(i, ids);
     }
 
-    // A letter-set suffix naming a current decision elsewhere
-    // (`DepTarget::Decision`, an already-id entry or a heading-shaped one
-    // the normalize pass above just resolved) must still only name that
-    // decision's own option letters -- `bad_letters` alone never sees this
-    // case, since its target always comes from `rf` itself. `check`'s own
-    // `plan` check makes the same test (and, for a same-file
-    // `DepTarget::Heading`, only `check` makes it -- see its own comment
-    // for why that half stays a check-only extra).
+    // Per "Does the agent write the bodies before approve?" and "Does a
+    // depends entry on a question in its file carry an answer set?": the
+    // plan is approved with its bodies, so approve stops a question not yet
+    // asked that has no body, that depends on a question of its file with
+    // no answer set, or that carries a set on a question already answered.
+    // A question already asked is not subject to these.
     for sec in &rf.sections {
+        let asked = sec
+            .id
+            .as_ref()
+            .is_some_and(|id| led.rows.iter().any(|r| r.event == "asked" && &r.id == id));
+        if asked {
+            continue;
+        }
+        if sec.is_skeleton {
+            refusals.push(msg::approve_prefixed(msg::question_without_body(rel, &sec.heading_text)));
+            continue;
+        }
         for d in &sec.depends {
-            let Some(record::AnswerSet::Letters(letters)) = d.set() else {
+            let Ok(Some(target)) =
+                depends::resolve_dep(d, sec, &rf, terms_list, &phrase_lookup, &cross_file_headings, led)
+            else {
                 continue;
             };
-            if let Ok(Some(DepTarget::Decision(id))) =
-                depends::resolve_dep(d, sec, &rf, terms_list, &phrase_lookup, &cross_file_headings, led)
-            {
-                for m in
-                    depends::bad_letters_for_decision(rel, &sec.heading_text, &all_records, &id, letters)
-                {
-                    refusals.push(msg::approve_prefixed(m));
+            let (target_section, in_file) = match &target {
+                DepTarget::Heading(idx) => (Some(&rf.sections[*idx]), true),
+                DepTarget::Decision(id) => (
+                    all_records.iter().find_map(|r| r.sections.iter().find(|s| s.id.as_deref() == Some(id.as_str()))),
+                    false,
+                ),
+                DepTarget::Term(_) => (None, false),
+            };
+            // An answer set names the letters of another question: a term has
+            // no options (per "Does a depends entry on a question in its file
+            // carry an answer set?").
+            if matches!(target, DepTarget::Term(_)) && d.set().is_some() {
+                refusals.push(msg::approve_prefixed(msg::set_on_term(rel, &sec.heading_text)));
+                continue;
+            }
+            let Some(ts) = target_section else { continue };
+            match d.set() {
+                None if in_file && ts.answer_letter().is_none() => refusals.push(msg::approve_prefixed(msg::missing_answer_set(
+                    rel,
+                    &sec.heading_text,
+                    &ts.heading_text,
+                ))),
+                // A set approved before its target was answered stays (per
+                // "Does a depends entry on a question in its file carry an
+                // answer set?"): a set with no `assumes` row of the target
+                // for this entry, written when the target was asked, is
+                // refused.
+                Some(_) if ts.answer_letter().is_some() && !set_frozen_at_ask(led, sec, d, ts) => {
+                    refusals.push(msg::approve_prefixed(msg::set_on_answered_question(
+                        rel,
+                        &sec.heading_text,
+                        &ts.heading_text,
+                    )))
                 }
+                _ => {}
             }
         }
+    }
+
+    // Per "What does the agent do to plan a topic file?" and "Does a
+    // planning step run without the record of the step before?": a question
+    // not yet asked is approved with the reader's rows at its heading and at
+    // its heading with its body, and every neighbour in them on a line. The
+    // rows are read as they stand; approve needs neither the model nor the
+    // reader.
+    let mut planning = crate::plan::load(root, &rf, &all_records, terms_list, led);
+    planning.rel = rel.to_string();
+    for m in planning.approve_refusals() {
+        refusals.push(msg::approve_prefixed(m));
     }
 
     // Ledger ids (asked/answered/refused/superseded/withdrawn) that now
@@ -1714,6 +1937,31 @@ fn do_approve_record(
             work_rf.lines[j] = format!("supersedes: {}", ids.join(", "));
         }
     }
+    // The `unrelated:` line holds ids too (per "Does every neighbour get a
+    // line under its heading?"): a decision, a term or a question of the
+    // file by its identifier, a dropped question as written.
+    for (i, sec) in sections_snapshot.iter().enumerate() {
+        if sec.unrelated.is_empty() || !crate::plan::is_unasked(led, sec) {
+            continue;
+        }
+        let Some(j) = (sec.start + 1..sec.end).find(|&j| work_rf.lines[j].starts_with("unrelated: ")) else {
+            continue;
+        };
+        let mut ids: Vec<String> = Vec::new();
+        for e in crate::plan::section_unrelated_entries(i, &work_rf, terms_list, &cross_file_headings, led) {
+            let id = match crate::plan::resolve_ref(&e, &work_rf, i, terms_list, &cross_file_headings, led) {
+                Ok(crate::plan::Target::Decision(id))
+                | Ok(crate::plan::Target::Term(id))
+                | Ok(crate::plan::Target::Dropped(id)) => id,
+                Ok(crate::plan::Target::Question(q)) => work_rf.sections[q].id.clone().unwrap_or(e),
+                Err(_) => e,
+            };
+            if !ids.contains(&id) {
+                ids.push(id);
+            }
+        }
+        work_rf.lines[j] = format!("unrelated: {}", ids.join(", "));
+    }
     // Reparse once more so `plan_hash`/`context_hash` and everything below
     // sees the file exactly as it will be written.
     let work_rf = record::build(work_rf.path.clone(), rel.to_string(), work_rf.lines.clone());
@@ -1732,6 +1980,56 @@ fn do_approve_record(
     let mut rows: Vec<ledger::Row> = Vec::new();
     let mut messages: Vec<String> = Vec::new();
 
+    // One row per question (per "Does approve hash each question on its
+    // own?"): its id and its own hash, written when that differs from the
+    // question's latest row for this file; then the file's row, whose hash
+    // is derived from the sorted question hashes.
+    let question_hashes = record::question_hashes(&work_rf);
+    for (sec, qh) in work_rf.sections.iter().zip(&question_hashes) {
+        let Some(id) = &sec.id else { continue };
+        let unchanged = led
+            .rows
+            .iter()
+            .rfind(|r| r.event == "approved" && &r.id == id)
+            .is_some_and(|r| &r.hash == qh && r.detail == rel);
+        if !unchanged {
+            rows.push(ledger::Row {
+                time: write_time.clone(),
+                event: "approved".to_string(),
+                id: id.clone(),
+                hash: qh.clone(),
+                detail: rel.to_string(),
+                version: crate::version::VERSION.to_string(),
+            });
+        }
+    }
+    // A set approved while its in-file target is asked and not yet answered
+    // stays after the answer (per "Does a depends entry on a question in its
+    // file carry an answer set?"): the `assumes` row `ask` writes for an
+    // entry, written here for an entry that came after the ask.
+    for sec in &work_rf.sections {
+        let Some(dep_id) = &sec.id else { continue };
+        if led.latest_asked(dep_id).is_some() {
+            continue;
+        }
+        for d in &sec.depends {
+            let record::Dep::Id { id: tid, set: Some(set) } = d else { continue };
+            let waiting = work_rf.sections.iter().any(|t| t.id.as_ref() == Some(tid))
+                && led.latest_state(tid).is_some_and(|r| r.event == "asked");
+            let hash = record::assumes_hash(dep_id, set);
+            let written = led.assumes_for(tid).iter().any(|r| &r.detail == dep_id && r.hash == hash);
+            if waiting && !written {
+                rows.push(ledger::Row {
+                    time: write_time.clone(),
+                    event: "assumes".to_string(),
+                    id: tid.clone(),
+                    hash,
+                    detail: dep_id.clone(),
+                    version: crate::version::VERSION.to_string(),
+                });
+            }
+        }
+    }
     let plan_changed = led
         .latest_for_path("approved", rel)
         .map(|r| r.hash.as_str())
@@ -1814,6 +2112,16 @@ fn do_approve_record(
     Ok(Outcome {
         summary: messages.join("\n"),
     })
+}
+
+/// True when the set on `d` is the one `ask` froze on `target` for `sec`:
+/// an `assumes` row of the target for this dependent carries the hash of
+/// exactly this entry. A set written after the target was answered has no
+/// such row, so it is a shape error.
+fn set_frozen_at_ask(led: &Ledger, sec: &record::Section, d: &record::Dep, target: &record::Section) -> bool {
+    let (Some(id), Some(tid), Some(set)) = (&sec.id, &target.id, d.set()) else { return false };
+    let hash = record::assumes_hash(id, set);
+    led.assumes_for(tid).iter().any(|r| &r.detail == id && r.hash == hash)
 }
 
 /// The final text one `depends:` entry rewrites to when `approve` rewrites

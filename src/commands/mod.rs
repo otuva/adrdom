@@ -4,6 +4,7 @@ pub mod ask;
 pub mod ban;
 pub mod check;
 pub mod install;
+pub mod plan;
 pub mod serve;
 pub mod show;
 pub mod unban;

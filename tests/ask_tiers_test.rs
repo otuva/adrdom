@@ -1,6 +1,6 @@
 // `ask`: the derived tier rule, the cap, the two refused-dependency
-// refusals (generic blocker + specific "stands on refused"), the moot
-// refusal, the mandatory-set refusals, and the `assumes` rows/tier print
+// refusals (generic blocker + specific "stands on refused"),
+// the mandatory-set refusals, and the `assumes` rows/tier print
 // that come out of a successful ask.
 //
 // Every fixture now goes through a real `adr approve` (`approve_record`)
@@ -79,22 +79,13 @@ fn unhook_q2_from_the_refused_question(dir: &std::path::Path, record: &std::path
 // --- every refusal in one run ----------------------------------------------
 
 // One run of ask names every fault of every question it was about to ask:
-// two loaded words in the first question, one in the second, and the
-// missing answer set of the question that stands on the first. Nothing is
+// two loaded words in the first question and one in the second. Nothing is
 // written and nothing is asked.
 #[test]
 fn ask_names_every_fault_in_one_run() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
-    let plan = "# Example\n\n### 1.1 What color is the widget?\ndepends: widget\n\n\
-                ### 1.2 Does the widget have a lid?\ndepends: widget\n\n\
-                ### 1.3 Does the widget's paint match its color?\ndepends: 1.1 What color is the widget?\n";
-    let record = write_record(&dir, "adrdom/decisions/example.md", plan);
-    approve_record(&dir, "adrdom/decisions/example.md");
-
-    let approved = std::fs::read_to_string(&record).unwrap();
-    let ids = extract_ids(&approved);
     let body_1 = "\nProblem: the widget is already red and currently unpainted.\n\n\
                   Standard: plain words.\n\n\
                   - A) The widget is red.\n  Why: reasons.\n  Costs: costs.\n\
@@ -103,19 +94,26 @@ fn ask_names_every_fault_in_one_run() {
                   Standard: plain words.\n\n\
                   - A) Yes.\n  Why: reasons.\n  Costs: costs.\n\
                   - B) No.\n  Why: other reasons.\n  Costs: other costs.\n";
-    let with_bodies = approved
-        .replacen(&format!("id: {}\n", ids[0]), &format!("id: {}\n{}", ids[0], body_1), 1)
-        .replacen(&format!("id: {}\n", ids[1]), &format!("id: {}\n{}", ids[1], body_2), 1);
-    assert_ne!(with_bodies, approved, "the id lines must be found");
-    std::fs::write(&record, &with_bodies).unwrap();
+    let body_3 = "\nProblem: the paint might not match.\n\n\
+                  Standard: plain words.\n\n\
+                  - A) Yes.\n  Why: reasons.\n  Costs: costs.\n\
+                  - B) No.\n  Why: other reasons.\n  Costs: other costs.\n";
+    let plan = format!(
+        "# Example\n\n### 1.1 What color is the widget?\ndepends: widget\n{}\n\
+         ### 1.2 Does the widget have a lid?\ndepends: widget\n{}\n\
+         ### 1.3 Does the widget's paint match its color?\ndepends: 1.1 What color is the widget?=A\n{}",
+        body_1, body_2, body_3
+    );
+    let record = write_record(&dir, "adrdom/decisions/example.md", &plan);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    let with_bodies = std::fs::read_to_string(&record).unwrap();
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
     let err = stderr(&out);
     let lines: Vec<&str> = err.lines().collect();
-    assert_eq!(lines.len(), 4, "{}", err);
+    assert_eq!(lines.len(), 3, "{}", err);
     assert!(lines.iter().all(|l| l.starts_with("ask: adrdom/decisions/example.md")), "{}", err);
-    assert_eq!(lines.iter().filter(|l| l.contains("without an answer set")).count(), 1, "{}", err);
     for word in ["already", "currently", "today"] {
         assert_eq!(
             lines.iter().filter(|l| l.contains(&format!("\"{}\"", word))).count(),
@@ -386,6 +384,9 @@ fn ask_refuses_a_tier_over_the_cap() {
         ));
     }
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
+    // The agent's planning moves come first; the refusal is the cap's.
+    plan_record(&dir, "adrdom/decisions/example.md");
+    let content = std::fs::read_to_string(&record).unwrap();
 
     // The cap refuses at `approve` itself now (approve checks the same cap
     // before ever minting an id), so `ask` never even gets a chance to see
@@ -501,73 +502,7 @@ Standard: plain words.
     assert_eq!(asked_row_count(&dir), 3);
 }
 
-// --- open tier holds a skeleton --------------------------------------
-
-// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
-//
-// "the tool derives the tiers from the depends lines ... ask asks the
-// lowest tier with an unanswered question": a skeleton heading (approved,
-// with an id, but no body yet) still holds its tier open. A later tier's
-// candidate is left for a later run, and the `next` lines give the agent's
-// move ("writes the body"), not the owner's -- there is nothing yet for
-// the owner to answer. Once the skeleton gets a body, is asked, and is
-// answered, the tier it was blocking opens and the later candidate can be
-// asked.
-#[test]
-fn ask_leaves_a_later_tier_candidate_while_the_open_tier_holds_a_skeleton() {
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "widget");
-
-    // Q1 starts as a bare skeleton: heading + depends only, no body.
-    let content = format!(
-        "# Example\n\n### 1.1 What color is the widget?\ndepends: widget\n{}",
-        q2_depends_on_q1("=A")
-    );
-    let record = write_record(&dir, "adrdom/decisions/example.md", &content);
-    approve_record(&dir, "adrdom/decisions/example.md");
-
-    // Q1 is a skeleton, so there is nothing to ask: Q2 is left for a later
-    // run and the `next` lines name the agent's move on Q1.
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "{}", stderr(&out));
-    assert_eq!(
-        after_first_line(&stdout(&out)),
-        "  agent writes the body of \"1.1 What color is the widget?\"\n  not yet, after the questions named above: \"1.2 Does the widget's paint match its color?\""
-    );
-    assert_eq!(asked_row_count(&dir), 0, "nothing is asked");
-
-    // The move it names works: Q1 gets its body, and ask asks Q1 alone;
-    // Q2 waits for the answer.
-    let before = std::fs::read_to_string(&record).unwrap();
-    let split_at = before.find("### 1.2").unwrap();
-    let mut with_q1_body = before[..split_at].to_string();
-    with_q1_body.push_str("\nProblem: the widget's color is undecided.\n\nStandard: plain words.\n\n- A) The widget is red.\n  Why: reasons.\n  Costs: costs.\n- B) The widget is blue.\n  Why: other reasons.\n  Costs: other costs.\n\n");
-    with_q1_body.push_str(&before[split_at..]);
-    std::fs::write(&record, &with_q1_body).unwrap();
-    approve_record(&dir, "adrdom/decisions/example.md");
-
-    let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out2.status.success(), "{}", stderr(&out2));
-    assert!(
-        stdout(&out2).contains("asked: \"1.1 What color is the widget?\" (tier 1)"),
-        "{}",
-        stdout(&out2)
-    );
-    assert!(!stdout(&out2).contains("(tier 2)"), "{}", stdout(&out2));
-    assert_eq!(asked_row_count(&dir), 1, "Q2 waits");
-    let q1_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
-    assert!(adr_answer(&dir, &q1_id, "A").status.success());
-
-    // Q1 is answered, tier 2 is open, and ask asks Q2.
-    let out3 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out3.status.success(), "{}", stderr(&out3));
-    assert!(
-        stdout(&out3).contains("asked: \"1.2 Does the widget's paint match its color?\" (tier 2)"),
-        "{}",
-        stdout(&out3)
-    );
-}
+// --- open tier holds a written question --------------------------------------
 
 // The open tier holds a fully written, approved question that nobody has
 // run `ask` on yet. `ask` asks it in this run and leaves the later tier's
@@ -603,10 +538,11 @@ fn ask_asks_the_written_question_and_leaves_the_later_tier_candidate() {
     );
 }
 
-// --- moot --------------------------------------------------------------
+// --- answered targets --------------------------------------------------
 
+// `approve` refuses an answer set on an entry naming an answered target.
 #[test]
-fn ask_refuses_a_moot_candidate() {
+fn approve_refuses_a_set_on_an_answered_target() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -617,140 +553,63 @@ fn ask_refuses_a_moot_candidate() {
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let q1_id = extract_ids(&content)[0].clone();
-    // Answer B, but Q2 will only stand on A.
     assert!(adr_answer(&dir, &q1_id, "B").status.success());
 
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(&q2_depends_on_q1("=A"));
     std::fs::write(&record, &content).unwrap();
-    approve_record(&dir, "adrdom/decisions/example.md");
-
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success());
-    assert_eq!(
-        stderr(&out).trim_end(),
-        "ask: adrdom/decisions/example.md: \"1.2 Does the widget's paint match its color?\" has no case left: it stands on \"1.1 What color is the widget?\" under A, and the answer was B; agent drops or replaces the heading, owner runs: adr approve adrdom/decisions/example.md"
-    );
+    assert!(stderr(&out).contains("answered, under an answer set"), "{}", stderr(&out));
 }
 
 // --- answer sets mandatory ------------------------------------------------
 
 #[test]
-fn ask_refuses_a_tier_n_dependent_with_no_answer_set() {
+fn approve_refuses_a_tier_n_dependent_with_no_answer_set() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
-    let content = format!(
-        "{}\n### 1.2 Does the widget's paint match its color?\ndepends: 1.1 What color is the widget?\n",
-        Q1
-    );
+    let content = format!("{}{}", Q1, q2_depends_on_q1(""));
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
-    approve_record(&dir, "adrdom/decisions/example.md");
-    let before = std::fs::read_to_string(&record).unwrap();
-
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success());
-    assert_eq!(
-        stderr(&out).trim_end(),
-        "ask: adrdom/decisions/example.md: \"1.2 Does the widget's paint match its color?\" depends on \"1.1 What color is the widget?\" without an answer set; agent writes =A, =A|B or =* on that depends line"
-    );
-    let after = std::fs::read_to_string(&record).unwrap();
-    assert_eq!(after, before);
+    assert!(stderr(&out).contains("without an answer set"), "{}", stderr(&out));
 }
 
-// adr: fa90692a-150e-4a89-91e2-1d575cb59d0f
-//
-// "when a tier's bodies are written, every depends entry naming one of its
-// questions gets the letters": the set is frozen with the question being
-// asked. A question written and answered after its target was answered
-// never needed a set, and when a new question later joins the target's
-// tier, ask asks the new one without demanding a set on that old,
-// answered line.
 #[test]
-fn ask_asks_a_new_sibling_without_a_set_on_an_answered_dependents_line() {
+fn approve_refuses_a_set_missing_on_an_asked_but_unanswered_target() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     let record = write_record(&dir, "adrdom/decisions/example.md", Q1);
     approve_record(&dir, "adrdom/decisions/example.md");
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
-    let q1_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
-    assert!(adr_answer(&dir, &q1_id, "A").status.success());
-
-    // Q2 arrives after Q1 is answered: its entry carries no set, and ask
-    // and answer take it as it is.
-    let mut content = std::fs::read_to_string(&record).unwrap();
-    content.push_str(&q2_depends_on_q1(""));
-    std::fs::write(&record, &content).unwrap();
-    approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
-    let q2_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[1].clone();
-    assert!(adr_answer(&dir, &q2_id, "A").status.success());
-
-    // Q3 joins Q1's tier. Q2's line naming Q1 still has no set; Q1 is
-    // answered, so no set is asked for, and Q3 is asked.
-    let mut content = std::fs::read_to_string(&record).unwrap();
-    content.push_str(
-        "\n### 1.3 Does the widget need a lid?\ndepends: widget\n\nProblem: p.\n\nStandard: s.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n",
-    );
-    std::fs::write(&record, &content).unwrap();
-    approve_record(&dir, "adrdom/decisions/example.md");
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "{}", stderr(&out));
-    assert!(stdout(&out).contains("asked: \"1.3 Does the widget need a lid?\" (tier 1)"), "{}", stdout(&out));
-}
-
-// adr: fa90692a-150e-4a89-91e2-1d575cb59d0f
-//
-// The mandatory-set gate must also catch a target that was asked in an
-// earlier run and is still unanswered, not only a target being asked for
-// the first time this run: Q1 is asked and left unanswered; Q2 (tier 2)
-// then joins depending on Q1 with no set, alongside a new tier-1 Q3. Q1
-// itself is not a candidate this run (already asked, unchanged), but Q3
-// is, so the gate runs -- and must still refuse on Q2's line naming Q1.
-#[test]
-fn ask_refuses_a_set_missing_on_an_asked_but_unanswered_target() {
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "widget");
-    let record = write_record(&dir, "adrdom/decisions/example.md", Q1);
-    approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
-    // Q1 is now asked, tier 1, left unanswered.
 
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(&q2_depends_on_q1(""));
-    content.push_str(
-        "\n### 1.3 Does the widget need a lid?\ndepends: widget\n\nProblem: p.\n\nStandard: s.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n",
-    );
     std::fs::write(&record, &content).unwrap();
-    approve_record(&dir, "adrdom/decisions/example.md");
-
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success());
-    assert_eq!(
-        stderr(&out).trim_end(),
-        "ask: adrdom/decisions/example.md: \"1.2 Does the widget's paint match its color?\" depends on \"1.1 What color is the widget?\" without an answer set; agent writes =A, =A|B or =* on that depends line"
-    );
+    assert!(stderr(&out).contains("without an answer set"), "{}", stderr(&out));
 }
 
+// A set naming an option the target lacks never reaches `ask`: approve refuses
+// it first (the same message, found before approval).
 #[test]
-fn ask_refuses_a_set_naming_an_option_the_target_does_not_have() {
+fn approve_refuses_a_set_naming_an_option_the_target_does_not_have() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
-    let content = format!(
-        "{}\n### 1.2 Does the widget's paint match its color?\ndepends: 1.1 What color is the widget?=C\n",
-        Q1
-    );
+    let content = format!("{}{}", Q1, q2_depends_on_q1("=C"));
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
-    approve_record(&dir, "adrdom/decisions/example.md");
 
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success());
-    assert_eq!(
-        stderr(&out).trim_end(),
-        "ask: adrdom/decisions/example.md: \"1.2 Does the widget's paint match its color?\" depends on \"1.1 What color is the widget?\" names option C which \"1.1 What color is the widget?\" does not have; agent fixes the answer set to only name options the target has"
+    assert!(
+        stderr(&out).contains("\"1.2 Does the widget's paint match its color?\" depends on \"1.1 What color is the widget?\" names option C which \"1.1 What color is the widget?\" does not have"),
+        "{}",
+        stderr(&out)
     );
 }
 
@@ -764,10 +623,7 @@ fn ask_prints_the_tier_and_writes_an_assumes_row_per_dependent() {
     // Q2 is a skeleton (heading + depends only): it must not itself become
     // a candidate blocked by the tier rule, but it still counts as a
     // dependent of Q1 for the `assumes` row this ask writes.
-    let content = format!(
-        "{}\n### 1.2 Does the widget's paint match its color?\ndepends: 1.1 What color is the widget?=B|A\n",
-        Q1
-    );
+    let content = format!("{}{}", Q1, q2_depends_on_q1("=B|A"));
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
     approve_record(&dir, "adrdom/decisions/example.md");
 

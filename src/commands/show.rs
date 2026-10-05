@@ -4,6 +4,7 @@ use crate::blame;
 use crate::depends;
 use crate::ledger::{self, Ledger};
 use crate::msg::{self, Actor};
+use crate::plan;
 use crate::record::{self, RecordFile, Section};
 use crate::repo;
 use crate::state;
@@ -125,6 +126,11 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
         // Read off the file as loaded, before the pass below rewrites its
         // depends entries in memory (see `view::snapshot`).
         let plan_ok = state::plan_approved(&led, rf, &rf.rel) && state::context_approved(&led, rf, &rf.rel);
+        // The planning state is read off the file as loaded too, the way
+        // `plan` and `approve` read it. Show reads the records; it never
+        // calls the model or the reader.
+        let (planning, shown) = plan::load_both(&root, rf, &blame_records, &terms_list, &led);
+        let shown = whole.then_some(shown);
         depends::normalize_cross_file_deps(rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
         if whole {
             print_file(
@@ -136,6 +142,7 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
                 &blame_files,
                 &any_headings_all,
                 &known_ids,
+                shown.as_ref(),
             );
         } else {
             print_file_short(rf, &led);
@@ -155,7 +162,7 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
         .into_iter()
         .map(|r| r.message)
         .collect();
-        let next = view::next_moves(rf, &led, plan_ok, &plan_refusals, &tests, &blame_records);
+        let next = view::next_moves(rf, &led, plan_ok, &plan_refusals, &tests, Some(&planning));
         if !next.is_empty() {
             println!("{}", msg::next_heading());
             for line in next {
@@ -244,6 +251,7 @@ fn print_file(
     blame_files: &[blame::BlameFile],
     any_headings_all: &HashMap<String, Vec<(String, String)>>,
     known_ids: &HashSet<String>,
+    shown: Option<&plan::Planning>,
 ) {
     println!("{}", msg::show_topic(rf.topic.as_deref().unwrap_or(""), &rf.rel));
 
@@ -268,6 +276,7 @@ fn print_file(
                 blame_files,
                 any_headings_all,
                 known_ids,
+                shown,
             );
         }
     }
@@ -317,6 +326,7 @@ fn print_question(
     blame_files: &[blame::BlameFile],
     any_headings_all: &HashMap<String, Vec<(String, String)>>,
     known_ids: &HashSet<String>,
+    shown: Option<&plan::Planning>,
 ) {
     let state = view::qstate(led, sec);
     // Per "Does an answer carry the version of the question the owner
@@ -352,6 +362,17 @@ fn print_question(
     let dependents = stood_on_by(rf, sec, all, led);
     if !dependents.is_empty() {
         println!("{}", msg::show_stood_on_by(&dependents));
+    }
+    // Per "Does show print the neighbours of a question with the reader's
+    // word?" (97c679f6-e8e6-4970-b547-940477753d7d A): under each open
+    // question, one line for each neighbour on record. Read from the
+    // reader's file; nothing is read by the model or the reader.
+    if matches!(state, QState::Skeleton | QState::Unasked | QState::Open) {
+        if let Some(q) = shown.and_then(|p| p.questions.iter().find(|q| q.heading == sec.heading_text)) {
+            for line in plan::neighbour_lines(&rf.rel, q) {
+                println!("{}", line);
+            }
+        }
     }
     if state == QState::Answered {
         if let Some(s) = sec.chosen_sentence() {

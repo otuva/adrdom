@@ -133,9 +133,9 @@ fn the_cap_refusal_names_the_questions_and_the_move() {
     let plan = |fifth_depends: &str| {
         let mut content = String::from("# Cap\n\n");
         for n in ["one", "two", "three", "four"] {
-            content.push_str(&format!("### Is the widget {} hold?\ndepends: widget\n\n", n));
+            content.push_str(&format!("{}\n", question(&format!("Is the widget {} hold?", n), "widget", "")));
         }
-        content.push_str(&format!("### {}\ndepends: {}\n\n", FIFTH, fifth_depends));
+        content.push_str(&question(FIFTH, fifth_depends, ""));
         content
     };
     let rel = "adrdom/decisions/cap.md";
@@ -155,7 +155,7 @@ or splits the file when none does",
     assert!(!out.status.success());
     assert!(stderr(&out).contains(&refusal), "{}", stderr(&out));
 
-    write_record(&dir, rel, &plan("widget, Is the widget one hold?"));
+    write_record(&dir, rel, &plan("widget, Is the widget one hold?=A"));
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
 }

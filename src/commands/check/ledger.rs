@@ -1,7 +1,7 @@
 use super::{dropped_state, Failure};
 use crate::ledger::{Ledger, Row};
 use crate::msg;
-use crate::record::RecordFile;
+use crate::record::{self, RecordFile};
 use crate::repo;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -31,117 +31,10 @@ pub(super) fn check_ledger(
         });
     }
 
-    // Built once and shared by every presence test below (the HEAD test
-    // right here, and the merge tests just after): all of them ask the same
-    // question, "is this line somewhere in `ledger_content`?", against the
-    // same `ledger_content`, so the line set only needs building once per
-    // run rather than once per ref compared.
-    let present: HashSet<&str> = ledger_content.lines().collect();
-
-    // Compared against `ledger_content` -- the same staged-or-working-tree
-    // bytes `led` was itself parsed from in `build` (per "Does check at a
-    // commit read the staged files?") -- rather than re-reading the
-    // filesystem here, so this never disagrees with `led` about which copy
-    // of the ledger it is judging. Per "Does check fail a ledger whose rows
-    // changed place?" (c10c3a49-e993-4c9f-a46b-4a1ba3646dcf A): a presence
-    // test, not a byte-prefix test -- every row line HEAD's own ledger
-    // holds must still be a line somewhere in `ledger_content`, wherever it
-    // sits; only a row that is missing or changed fails this, never one
-    // that only moved. Shares `ref_ledger_has_rows_missing` with the merge
-    // test just below -- the same rule, just against a different ref.
-    if let Some(head_content) = repo::git(root, &["show", &format!("HEAD:{}", repo::LEDGER_PATH)]) {
-        if lines_missing(&head_content, &present) {
-            out.push(Failure {
-                check: "ledger".to_string(),
-                message: msg::ledger_not_append_only(),
-            });
-        }
-    }
-
-    // Per "Does check at a merge look for the ledger rows of both
-    // branches?": at a merge, every row either side wrote must survive
-    // into the ledger being judged. The HEAD side is already the presence
-    // test just above; this covers the other side(s) -- `MERGE_HEAD`
-    // while a merge is still pending, or, once the merge commit itself
-    // exists (and nothing is pending any more), every parent named in
-    // HEAD's own commit object.
-    //
-    // The committed side reads those parents from `git cat-file commit
-    // HEAD` rather than `HEAD^1`/`HEAD^2`: in a shallow clone, `rev-parse`
-    // simply fails to resolve a parent whose object was never fetched, the
-    // same way it fails for a ref that plain doesn't exist, and treating
-    // that as "no such ref, nothing to compare" would let a shallow clone
-    // pass a merge check that never actually looked at the other side. The
-    // commit object itself still names both parents' shas regardless of
-    // which of them were fetched, so those shas -- checked one at a time
-    // with `git cat-file -e <sha>^{commit}` for whether the object is
-    // actually present -- tell the two cases apart: a parent that's fully
-    // there but just holds no ledger file at that path is nothing to
-    // compare (as before); a parent whose commit object is missing outright
-    // is a blind spot the check refuses on, once, instead of quietly
-    // passing.
-    if repo::git(root, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_some() {
-        if ref_ledger_has_rows_missing(root, "MERGE_HEAD", &present) {
-            out.push(Failure {
-                check: "ledger".to_string(),
-                message: msg::ledger_merge_drops_rows(),
-            });
-        }
-    } else {
-        let parents = head_parents(root);
-        if parents.len() >= 2 {
-            let mut unreadable = false;
-            let mut drops = false;
-            for sha in &parents {
-                if !parent_object_present(root, sha) {
-                    unreadable = true;
-                    continue;
-                }
-                if ref_ledger_has_rows_missing(root, sha, &present) {
-                    drops = true;
-                }
-            }
-            if unreadable {
-                out.push(Failure {
-                    check: "ledger".to_string(),
-                    message: msg::ledger_merge_parents_unreadable(),
-                });
-            } else if drops {
-                out.push(Failure {
-                    check: "ledger".to_string(),
-                    message: msg::ledger_merge_drops_rows(),
-                });
-            }
-        }
-    }
-
-    // Per "Does check in CI compare the ledger with the commit before the
-    // push?" (a26876ba-5789-4d05-965e-853d00d9edd2 C): `--since <commit>`
-    // adds one more presence test, against `<commit>`'s own ledger, on top
-    // of the plain check's own HEAD/merge ones above. `is_zero_sha` covers
-    // a branch's first push (CI's `github.event.before` is all zeros then):
-    // nothing to compare. `--push` runs this same presence test itself, per
-    // ref line, through `ref_ledger_has_rows_missing`/`lines_missing`
-    // directly (see `push.rs`) rather than through this `since` parameter,
-    // since a push judges only that one comparison, never the rest of
-    // `check_ledger`.
-    if let Some(commit) = since {
-        if !repo::is_zero_sha(commit) {
-            if !parent_object_present(root, commit) {
-                out.push(Failure {
-                    check: "ledger".to_string(),
-                    message: msg::ledger_since_unreadable(commit),
-                });
-            } else if ref_ledger_has_rows_missing(root, commit, &present) {
-                out.push(Failure {
-                    check: "ledger".to_string(),
-                    message: msg::ledger_since_drops_rows(commit),
-                });
-            }
-        }
-    }
+    out.extend(check_held(root, repo::LEDGER_PATH, ledger_content, since, "ledger", &LEDGER_MSGS));
 
     out.extend(check_same_time_competition(led));
+    out.extend(check_dropped(led, records, root));
 
     let all_ids: HashSet<String> = records
         .iter()
@@ -178,6 +71,248 @@ pub(super) fn check_ledger(
     out
 }
 
+/// Per "What does answer write for a removed question?": each `dropped`
+/// row is verified from the record alone. Its detail is `<id> <letter>` (a
+/// direct drop) or `<id>` (a dependent). The cause exists (an `answered`
+/// row for that id with that letter, or a `dropped` row for that id), an
+/// `approved` row of the question holds the row's hash, and no topic file
+/// holds the id. At the commit that removes the section, HEAD's copy of
+/// the file still holds it, and then HEAD's text must hash to the row's
+/// hash and its depends entry must show the set lacked the letter (direct)
+/// or the entry on the dropped question (dependent).
+fn check_dropped(led: &Ledger, records: &[RecordFile], root: &Path) -> Vec<Failure> {
+    let mut out = Vec::new();
+    let fail = |message: String| Failure { check: "ledger".to_string(), message };
+    for row in led.rows.iter().filter(|r| r.event == "dropped") {
+        let parts: Vec<&str> = row.detail.split(' ').collect();
+        let cause: (&str, Option<char>) = match parts.as_slice() {
+            [id] if record::is_uuid(id) => (id, None),
+            [id, l] if record::is_uuid(id) && l.chars().count() == 1 => (id, l.chars().next()),
+            _ => {
+                out.push(fail(msg::ledger_dropped_malformed(&row.id, &row.detail)));
+                continue;
+            }
+        };
+        let (cause_id, letter) = cause;
+        let cause_ok = match letter {
+            Some(l) => led
+                .rows
+                .iter()
+                .any(|r| r.event == "answered" && r.id == cause_id && r.detail == l.to_string()),
+            None => led.rows.iter().any(|r| r.event == "dropped" && r.id == cause_id),
+        };
+        if !cause_ok {
+            let what = match letter {
+                Some(l) => format!("no answered row for {} with the letter {}", cause_id, l),
+                None => format!("no dropped row for {}", cause_id),
+            };
+            out.push(fail(msg::ledger_dropped_without_cause(&row.id, &what)));
+        }
+        let approved_rows: Vec<&Row> = led
+            .rows
+            .iter()
+            .filter(|r| r.event == "approved" && r.id == row.id && r.hash == row.hash)
+            .collect();
+        if approved_rows.is_empty() {
+            out.push(fail(msg::ledger_dropped_not_approved(&row.id)));
+        }
+        for rf in records {
+            if rf.sections.iter().any(|s| s.id.as_deref() == Some(row.id.as_str())) {
+                out.push(fail(msg::ledger_dropped_still_in_file(&row.id, &rf.rel)));
+            }
+        }
+        // The commit that removes the section: HEAD's copy still holds it.
+        for a in &approved_rows {
+            let Some(content) = repo::git(root, &["show", &format!("HEAD:{}", a.detail)]) else {
+                continue;
+            };
+            let head = record::build(root.join(&a.detail), a.detail.clone(), record::split_lines(&content));
+            let Some(sec) = head.sections.iter().find(|s| s.id.as_deref() == Some(row.id.as_str())) else {
+                continue;
+            };
+            if record::question_hash(&head, sec) != row.hash {
+                out.push(fail(msg::ledger_dropped_text_differs(&row.id)));
+            }
+            let entries: Vec<&record::Dep> = sec
+                .depends
+                .iter()
+                .filter(|d| matches!(d, record::Dep::Id { id, .. } if id == cause_id))
+                .collect();
+            match letter {
+                Some(l) => {
+                    let lacks = entries
+                        .iter()
+                        .any(|d| matches!(d.set(), Some(record::AnswerSet::Letters(ls)) if !ls.contains(&l)));
+                    if !lacks {
+                        out.push(fail(msg::ledger_dropped_set_holds_letter(&row.id, &l.to_string())));
+                    }
+                }
+                None => {
+                    if entries.is_empty() {
+                        out.push(fail(msg::ledger_dropped_not_standing_on(&row.id, cause_id)));
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The refusals of one held file: the ledger's and the reader file's differ
+/// in what they name, not in the rule.
+pub(super) struct HeldMsgs {
+    pub not_append_only: fn() -> String,
+    pub merge_drops_rows: fn() -> String,
+    pub since_drops_rows: fn(&str) -> String,
+    /// Whether this file reports a merge parent or a `since` commit that
+    /// cannot be read; the ledger reports it, and the reader file leaves it
+    /// to that one report, since both hit the same commit.
+    pub report_unreadable: bool,
+}
+
+const LEDGER_MSGS: HeldMsgs = HeldMsgs {
+    not_append_only: msg::ledger_not_append_only,
+    merge_drops_rows: msg::ledger_merge_drops_rows,
+    since_drops_rows: msg::ledger_since_drops_rows,
+    report_unreadable: true,
+};
+
+pub(super) const READER_MSGS: HeldMsgs = HeldMsgs {
+    not_append_only: msg::reader_not_append_only,
+    merge_drops_rows: msg::reader_merge_drops_rows,
+    since_drops_rows: msg::reader_since_drops_rows,
+    report_unreadable: false,
+};
+
+/// The rows of the file at `path` (judged as `content`) that HEAD, the
+/// other side of a merge and `since` hold must all still be there, byte for
+/// byte: the one rule the ledger and the reader file are held to.
+pub(super) fn check_held(
+    root: &Path,
+    path: &str,
+    content: &str,
+    since: Option<&str>,
+    check: &str,
+    msgs: &HeldMsgs,
+) -> Vec<Failure> {
+    let ledger_content = content;
+    let mut out = Vec::new();
+    // Built once and shared by every presence test below (the HEAD test
+    // right here, and the merge tests just after): all of them ask the same
+    // question, "is this line somewhere in `ledger_content`?", against the
+    // same `ledger_content`, so the line set only needs building once per
+    // run rather than once per ref compared.
+    let present: HashSet<&str> = ledger_content.lines().collect();
+
+    // Compared against `ledger_content` -- the same staged-or-working-tree
+    // bytes `led` was itself parsed from in `build` (per "Does check at a
+    // commit read the staged files?") -- rather than re-reading the
+    // filesystem here, so this never disagrees with `led` about which copy
+    // of the ledger it is judging. Per "Does check fail a ledger whose rows
+    // changed place?" (c10c3a49-e993-4c9f-a46b-4a1ba3646dcf A): a presence
+    // test, not a byte-prefix test -- every row line HEAD's own ledger
+    // holds must still be a line somewhere in `ledger_content`, wherever it
+    // sits; only a row that is missing or changed fails this, never one
+    // that only moved. Shares `ref_ledger_has_rows_missing` with the merge
+    // test just below -- the same rule, just against a different ref.
+    if let Some(head_content) = repo::git(root, &["show", &format!("HEAD:{}", path)]) {
+        if lines_missing(&head_content, &present) {
+            out.push(Failure {
+                check: check.to_string(),
+                message: (msgs.not_append_only)(),
+            });
+        }
+    }
+
+    // Per "Does check at a merge look for the ledger rows of both
+    // branches?": at a merge, every row either side wrote must survive
+    // into the ledger being judged. The HEAD side is already the presence
+    // test just above; this covers the other side(s) -- `MERGE_HEAD`
+    // while a merge is still pending, or, once the merge commit itself
+    // exists (and nothing is pending any more), every parent named in
+    // HEAD's own commit object.
+    //
+    // The committed side reads those parents from `git cat-file commit
+    // HEAD` rather than `HEAD^1`/`HEAD^2`: in a shallow clone, `rev-parse`
+    // simply fails to resolve a parent whose object was never fetched, the
+    // same way it fails for a ref that plain doesn't exist, and treating
+    // that as "no such ref, nothing to compare" would let a shallow clone
+    // pass a merge check that never actually looked at the other side. The
+    // commit object itself still names both parents' shas regardless of
+    // which of them were fetched, so those shas -- checked one at a time
+    // with `git cat-file -e <sha>^{commit}` for whether the object is
+    // actually present -- tell the two cases apart: a parent that's fully
+    // there but just holds no ledger file at that path is nothing to
+    // compare (as before); a parent whose commit object is missing outright
+    // is a blind spot the check refuses on, once, instead of quietly
+    // passing.
+    if repo::git(root, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_some() {
+        if ref_ledger_has_rows_missing(root, path, "MERGE_HEAD", &present) {
+            out.push(Failure {
+                check: check.to_string(),
+                message: (msgs.merge_drops_rows)(),
+            });
+        }
+    } else {
+        let parents = head_parents(root);
+        if parents.len() >= 2 {
+            let mut unreadable = false;
+            let mut drops = false;
+            for sha in &parents {
+                if !parent_object_present(root, sha) {
+                    unreadable = true;
+                    continue;
+                }
+                if ref_ledger_has_rows_missing(root, path, sha, &present) {
+                    drops = true;
+                }
+            }
+            if unreadable && !msgs.report_unreadable {
+            } else if unreadable {
+                out.push(Failure {
+                    check: check.to_string(),
+                    message: msg::ledger_merge_parents_unreadable(),
+                });
+            } else if drops {
+                out.push(Failure {
+                    check: check.to_string(),
+                    message: (msgs.merge_drops_rows)(),
+                });
+            }
+        }
+    }
+
+    // Per "Does check in CI compare the ledger with the commit before the
+    // push?" (a26876ba-5789-4d05-965e-853d00d9edd2 C): `--since <commit>`
+    // adds one more presence test, against `<commit>`'s own ledger, on top
+    // of the plain check's own HEAD/merge ones above. `is_zero_sha` covers
+    // a branch's first push (CI's `github.event.before` is all zeros then):
+    // nothing to compare. `--push` runs this same presence test itself, per
+    // ref line, through `ref_ledger_has_rows_missing`/`lines_missing`
+    // directly (see `push.rs`) rather than through this `since` parameter,
+    // since a push judges only that one comparison, never the rest of
+    // `check_ledger`.
+    if let Some(commit) = since {
+        if !repo::is_zero_sha(commit) {
+            if !parent_object_present(root, commit) {
+                if msgs.report_unreadable {
+                    out.push(Failure {
+                        check: check.to_string(),
+                        message: msg::ledger_since_unreadable(commit),
+                    });
+                }
+            } else if ref_ledger_has_rows_missing(root, path, commit, &present) {
+                out.push(Failure {
+                    check: check.to_string(),
+                    message: (msgs.since_drops_rows)(commit),
+                });
+            }
+        }
+    }
+
+    out
+}
+
 /// Whether `refname`'s copy of the ledger (`git show <refname>:adrdom/state/ledger.tsv`)
 /// holds any non-empty row line missing from `present` -- the ledger being
 /// judged, already split into a line set by the caller. `refname` names
@@ -190,8 +325,8 @@ pub(super) fn check_ledger(
 /// missing, never a failure. `pub(super)`: the one comparison shared by the
 /// HEAD test above, the merge tests, `since`, and `push.rs`'s own presence
 /// test.
-pub(super) fn ref_ledger_has_rows_missing(root: &Path, refname: &str, present: &HashSet<&str>) -> bool {
-    let Some(other_content) = repo::git(root, &["show", &format!("{}:{}", refname, repo::LEDGER_PATH)]) else {
+pub(super) fn ref_ledger_has_rows_missing(root: &Path, path: &str, refname: &str, present: &HashSet<&str>) -> bool {
+    let Some(other_content) = repo::git(root, &["show", &format!("{}:{}", refname, path)]) else {
         return false;
     };
     lines_missing(&other_content, present)
@@ -293,7 +428,7 @@ fn check_same_time_competition(led: &Ledger) -> Vec<Failure> {
 
     let mut by_path: HashMap<(&str, &str), Vec<&Row>> = HashMap::new();
     for r in &led.rows {
-        if COMPETING_PATH_EVENTS.contains(&r.event.as_str()) {
+        if r.id == "-" && COMPETING_PATH_EVENTS.contains(&r.event.as_str()) {
             by_path.entry((r.event.as_str(), r.detail.as_str())).or_default().push(r);
         }
     }

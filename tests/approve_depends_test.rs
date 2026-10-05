@@ -87,7 +87,7 @@ fn approve_accepts_all_three_depends_target_kinds_and_refuses_a_missing_line() {
     let content = format!(
         "# Example\n\n\
         ### First?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
-        ### Second?\ndepends: First?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+        ### Second?\ndepends: First?=A\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
         ### Third?\ndepends: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
         decided_id
     );
@@ -283,8 +283,8 @@ fn approve_accepts_two_new_headings_when_two_in_the_tier_are_dead() {
 ### 1.2 Dead B?\ndepends: {term}\n\nid: {b}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n\n\
 ### 1.3 Live C?\ndepends: decision\n\nid: {c}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
 ### 1.4 Live D?\ndepends: decision\n\nid: {d}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
-### 1.5 New E?\ndepends: decision\n\n\
-### 1.6 New F?\ndepends: decision\n",
+### 1.5 New E?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+### 1.6 New F?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
         dead_a = dead_a,
         term = term_id,
         b = old_b,
@@ -343,7 +343,7 @@ fn approve_prints_tiers_across_a_chain() {
     setup(&dir);
     let content = "# Example\n\n\
         ### A?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
-        ### B?\ndepends: A?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+        ### B?\ndepends: A?=A\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -376,10 +376,10 @@ fn approve_withdraws_a_refused_id_missing_from_every_file() {
     );
 }
 
-// --- plan hash strips the answer set (8.7 A) --------------------------------
+// --- the question hash covers the answer set ----------------------------------
 
 #[test]
-fn approve_plan_hash_is_unaffected_by_changing_only_an_answer_set() {
+fn approve_question_hash_moves_when_only_an_answer_set_changes() {
     let dir = init_repo();
     setup(&dir);
     let content = "# Example\n\n\
@@ -409,15 +409,21 @@ fn approve_plan_hash_is_unaffected_by_changing_only_an_answer_set() {
     let changed = approved_content.replacen("=A\n", "=B\n", 1);
     std::fs::write(&record, &changed).unwrap();
 
+    // The answer set is part of the depends line, which the question hash
+    // covers: the file awaits approval again, and approve writes a new file
+    // row and a new row for 1.2 only.
+    let asked = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(stderr(&asked).contains("plan not approved"), "{}", stderr(&asked));
     let out2 = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out2.status.success(), "approve failed: {}", stderr(&out2));
-    assert!(stdout(&out2).contains("plan unchanged"), "{}", stdout(&out2));
+    assert!(!stdout(&out2).contains("plan unchanged"), "{}", stdout(&out2));
 
     let ledger2 = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let approved_count2 = ledger2.lines().filter(|l| l.contains("\tapproved\t")).count();
     assert_eq!(
-        approved_count1, approved_count2,
-        "changing only the answer set must not move the plan hash"
+        approved_count1 + 2,
+        approved_count2,
+        "changing only the answer set must move the hash of that question and the file"
     );
 }
 
@@ -440,7 +446,7 @@ fn approve_turns_a_depends_name_into_an_id_and_show_turns_it_back_into_words() {
     setup(&dir);
     let content = "# Example\n\n\
         ### 1.1 Is the widget red?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
-        ### 1.2 Does the paint match?\ndepends: 1.1 Is the widget red?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+        ### 1.2 Does the paint match?\ndepends: 1.1 Is the widget red?=A\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -455,7 +461,7 @@ fn approve_turns_a_depends_name_into_an_id_and_show_turns_it_back_into_words() {
     // B's depends line now holds A's uuid, not the words it was written
     // with.
     assert!(
-        approved.contains(&format!("### 1.2 Does the paint match?\ndepends: {}\n", a_id)),
+        approved.contains(&format!("### 1.2 Does the paint match?\ndepends: {}=A\n", a_id)),
         "expected B's depends line rewritten to A's id: {}",
         approved
     );
@@ -578,30 +584,21 @@ fn ask_and_check_refuse_a_cross_file_depends_line_reverted_by_hand_after_approve
     );
 
     let check_out = adr(&dir, &["check"], &[], "");
-    assert!(!check_out.status.success(), "{}", stdout(&check_out));
+    // An unapproved file is only a count note, never a failure of its own.
     let checked = stdout(&check_out);
     assert!(
         checked.contains("plan: 1 file(s) awaiting approval: adrdom/decisions/topic-b.md"),
         "{}",
         checked
     );
-    assert!(
-        checked.contains("body under unapproved heading \"1.1 Is B stand on A?\""),
-        "{}",
-        checked
-    );
+    assert!(!checked.contains("body under unapproved heading"), "{}", checked);
 }
 
-// adr: fa90692a-150e-4a89-91e2-1d575cb59d0f
 //
-// "Does a depends entry carry the answers it holds under?", the cross-file
-// half: a depends entry naming a current decision elsewhere by id, with an
-// answer set naming a letter that decision has no option for, is refused
-// by `approve` too, not only reported by `check` -- before this fix,
-// nothing checked a `DepTarget::Decision` target's letters at all, in any
-// command.
+// A depends entry naming an answered current decision elsewhere by id
+// must not carry an answer set: `approve` refuses it.
 #[test]
-fn approve_refuses_a_depends_set_naming_an_option_a_cross_file_decision_does_not_have() {
+fn approve_refuses_a_depends_set_on_an_answered_cross_file_decision() {
     let dir = init_repo();
     setup(&dir);
 
@@ -615,7 +612,7 @@ fn approve_refuses_a_depends_set_naming_an_option_a_cross_file_decision_does_not
     write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
 
     let b_content = format!(
-        "# Topic B\n\n### 1.1 Is B stand on A?\ndepends: {}=C\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        "# Topic B\n\n### 1.1 Is B stand on A?\ndepends: {}=A\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
         a_id
     );
     let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", &b_content);
@@ -625,7 +622,7 @@ fn approve_refuses_a_depends_set_naming_an_option_a_cross_file_decision_does_not
     let err = stderr(&out);
     assert!(
         err.contains(
-            "\"1.1 Is B stand on A?\" depends on \"1.1 Is A do a thing?\" names option C which \"1.1 Is A do a thing?\" does not have"
+            "\"1.1 Is B stand on A?\" depends on \"1.1 Is A do a thing?\", which is answered, under an answer set"
         ),
         "{}",
         err
