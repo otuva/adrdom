@@ -46,11 +46,18 @@ pub fn is_dropped(led: &Ledger, id: &str) -> bool {
 }
 
 /// The hashes of the questions dropped from the file `rel` since its
-/// approval: every `dropped` row whose id and hash match a per-question
-/// `approved` row for `rel` (written by `answer`, per "What does answer
-/// write for a removed question?").
+/// latest approval: every `dropped` row after the latest file `approved`
+/// row whose id and hash match a per-question `approved` row for `rel`
+/// (written by `answer`, per "What does answer write for a removed
+/// question?"). A drop before that approval is already out of the hash it
+/// wrote. Rows are in ledger order, so position says which came later.
 pub fn dropped_hashes(led: &Ledger, rel: &str) -> Vec<String> {
-    led.rows
+    let since = led
+        .rows
+        .iter()
+        .rposition(|r| r.event == "approved" && r.detail == rel && r.id == "-")
+        .map_or(0, |i| i + 1);
+    led.rows[since..]
         .iter()
         .filter(|d| d.event == "dropped")
         .filter(|d| {

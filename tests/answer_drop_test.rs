@@ -227,3 +227,42 @@ fn the_dropping_commit_passes_its_hook_and_afterwards_head_holds_nothing_to_veri
     let (ok, report) = check_text(&g.dir);
     assert!(ok, "{}", report);
 }
+
+// adr: 61e73795-63de-4669-b09f-48be96919325
+//
+// "approve hashes each question on its own": only a question dropped after
+// the latest approval of the file is put back into its hash. A question
+// dropped before a later approval stays out, so the file does not await
+// approval again.
+#[test]
+fn a_drop_before_the_latest_approval_is_not_put_back() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let q3 = "Is the widget gate shut?";
+    let plan = format!(
+        "# Gate\n\n{}{}{}",
+        q(ONE, "widget"),
+        q(TWO, "widget"),
+        q(q3, &format!("widget, {}=A", ONE))
+    );
+    let path = write_record(&dir, REL, &plan);
+    approve_record(&dir, REL);
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    let one = id_of(&path, ONE);
+    let two = id_of(&path, TWO);
+    assert!(adr_answer(&dir, &one, "B").status.success());
+    assert!(!std::fs::read_to_string(&path).unwrap().contains(q3));
+
+    // Re-approve with a new question that stands on Two=A, then drop it.
+    let q4 = "Is the widget gate sealed shut?";
+    let text = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(&path, format!("{}\n{}", text.trim_end(), q(q4, &format!("widget, {}=A", TWO)))).unwrap();
+    approve_record(&dir, REL);
+    assert!(adr_answer(&dir, &two, "B").status.success());
+    assert!(!std::fs::read_to_string(&path).unwrap().contains(q4));
+
+    let (ok, report) = check_text(&dir);
+    assert!(ok, "{}", report);
+    assert!(!report.contains("awaiting approval"), "{}", report);
+}

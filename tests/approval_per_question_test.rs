@@ -238,3 +238,28 @@ fn a_set_approved_before_the_answer_survives_a_reapprove_after_it() {
     let out = check_out(&dir);
     assert!(!stdout(&out).contains("answers:"), "{}{}", stdout(&out), stderr(&out));
 }
+
+// adr: 946263aa-519a-47aa-b743-5cdcf52f5d35
+//
+// A set changed after the target was answered is refused, even on a question
+// that was approved before the answer: only the set frozen when the target
+// was asked stays.
+#[test]
+fn a_set_changed_after_the_answer_on_an_approved_question_is_refused() {
+    let q2 = Q2.replace("depends: decision", "depends: 1.1 First question?=A");
+    let dir = setup(&file_of(&[Q1, &q2]));
+    assert!(approve(&dir).status.success());
+    assert!(adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "").status.success());
+    let id1 = adr::record::load(&dir.join(REL)).unwrap().sections[0].id.clone().unwrap();
+    assert!(adr_answer(&dir, &id1, "A").status.success());
+
+    let text = std::fs::read_to_string(dir.join(REL)).unwrap();
+    let (head, q2) = text.split_at(text.find("### 1.2 ").unwrap());
+    let at = q2.find("depends: ").unwrap();
+    let end = at + q2[at..].find('\n').unwrap();
+    let q2 = format!("{}depends: 1.1 First question?=A|B{}", &q2[..at], &q2[end..]);
+    std::fs::write(dir.join(REL), format!("{}{}", head, q2)).unwrap();
+    let out = approve(&dir);
+    assert!(!out.status.success(), "{}", stdout(&out));
+    assert!(stderr(&out).contains("answered, under an answer set"), "{}", stderr(&out));
+}

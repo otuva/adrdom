@@ -38,7 +38,7 @@ use crate::record::sha256_hex;
 use crate::repo;
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -268,7 +268,9 @@ impl Reader for Claude {
     fn ask(&self, pair: &Pair) -> Result<String, String> {
         let (existing, new) = pair.kind.labels();
         let user = format!("{}:\n{}\n\n{}:\n{}", existing, pair.neighbour_text, new, pair.new_text);
-        let cwd = std::env::temp_dir();
+        // A private directory made for this run: another local user cannot
+        // plant settings or a CLAUDE.md in it.
+        let cwd = PrivateDir::create()?;
         let mut child = Command::new("claude")
             .args([
                 "-p",
@@ -279,7 +281,7 @@ impl Reader for Claude {
                 "--no-session-persistence",
                 // No MCP server of the user's config loads into a reader call.
                 "--strict-mcp-config",
-                // Not the user's global settings or CLAUDE.md (cwd is a temp dir).
+                // Not the user's global settings or CLAUDE.md (cwd is a private temp dir).
                 "--setting-sources",
                 "project",
                 "--tools",
@@ -288,7 +290,7 @@ impl Reader for Claude {
                 pair.kind.prompt(),
             ])
             .arg(&user)
-            .current_dir(cwd)
+            .current_dir(&cwd.0)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -466,9 +468,43 @@ pub fn read_with(root: &Path, reader: &dyn Reader, pairs: &[Pair]) -> Result<Vec
     Ok(pairs.iter().map(|p| have[&key(p)].clone()).collect())
 }
 
+/// A fresh directory under the temp dir, named at random and open to its
+/// owner only; removed when dropped. `create_dir` fails when the name exists.
+struct PrivateDir(PathBuf);
+
+impl PrivateDir {
+    fn create() -> Result<PrivateDir, String> {
+        use std::os::unix::fs::DirBuilderExt;
+        let path = std::env::temp_dir().join(format!("adr-reader-{}", uuid::Uuid::new_v4()));
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(&path)
+            .map_err(|e| format!("cannot make a directory for claude: {}", e))?;
+        Ok(PrivateDir(path))
+    }
+}
+
+impl Drop for PrivateDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_run_directory_is_private_fresh_and_removed_after() {
+        use std::os::unix::fs::PermissionsExt;
+        let a = PrivateDir::create().unwrap();
+        let b = PrivateDir::create().unwrap();
+        assert_ne!(a.0, b.0);
+        assert_eq!(std::fs::metadata(&a.0).unwrap().permissions().mode() & 0o777, 0o700);
+        let path = a.0.clone();
+        drop(a);
+        assert!(!path.exists());
+    }
 
     fn row() -> Row {
         Row {

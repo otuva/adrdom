@@ -129,8 +129,8 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
         // The planning state is read off the file as loaded too, the way
         // `plan` and `approve` read it. Show reads the records; it never
         // calls the model or the reader.
-        let planning = plan::load(&root, rf, &blame_records, &terms_list, &led);
-        let shown = whole.then(|| plan::load_shown(&root, rf, &blame_records, &terms_list, &led));
+        let (planning, shown) = plan::load_both(&root, rf, &blame_records, &terms_list, &led);
+        let shown = whole.then_some(shown);
         depends::normalize_cross_file_deps(rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
         if whole {
             print_file(

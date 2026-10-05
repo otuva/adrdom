@@ -1749,9 +1749,10 @@ fn do_approve_record(
                 ))),
                 // A set approved before its target was answered stays (per
                 // "Does a depends entry on a question in its file carry an
-                // answer set?"): only a question with no approved row older
-                // than the target's answer is refused.
-                Some(_) if ts.answer_letter().is_some() && !approved_before_answer(led, sec, ts) => {
+                // answer set?"): a set with no `assumes` row of the target
+                // for this entry, written when the target was asked, is
+                // refused.
+                Some(_) if ts.answer_letter().is_some() && !set_frozen_at_ask(led, sec, d, ts) => {
                     refusals.push(msg::approve_prefixed(msg::set_on_answered_question(
                         rel,
                         &sec.heading_text,
@@ -2020,15 +2021,14 @@ fn do_approve_record(
     })
 }
 
-/// True when `sec` has a per-question `approved` row older than the
-/// `answered` row of `target`: the question was approved, with its set,
-/// before the target was answered. Matched by id, given at first approve.
-fn approved_before_answer(led: &Ledger, sec: &record::Section, target: &record::Section) -> bool {
-    let (Some(id), Some(tid)) = (&sec.id, &target.id) else { return false };
-    let Some(answered) = led.latest_for_id("answered", tid) else { return false };
-    led.rows
-        .iter()
-        .any(|r| r.event == "approved" && &r.id == id && r.time < answered.time)
+/// True when the set on `d` is the one `ask` froze on `target` for `sec`:
+/// an `assumes` row of the target for this dependent carries the hash of
+/// exactly this entry. A set written after the target was answered has no
+/// such row, so it is a shape error.
+fn set_frozen_at_ask(led: &Ledger, sec: &record::Section, d: &record::Dep, target: &record::Section) -> bool {
+    let (Some(id), Some(tid), Some(set)) = (&sec.id, &target.id, d.set()) else { return false };
+    let hash = record::assumes_hash(id, set);
+    led.assumes_for(tid).iter().any(|r| &r.detail == id && r.hash == hash)
 }
 
 /// The final text one `depends:` entry rewrites to when `approve` rewrites

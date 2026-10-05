@@ -23,7 +23,6 @@
 //! model?", 21cdad59-4f0c-42a5-b4f3-6af946637df3; "Does planning stop
 //! without the reader?", 3dba486c-a399-4ce3-a794-e38c4f733403 A); no other
 //! command needs them.
-use crate::embed;
 use crate::index;
 use crate::ledger;
 use crate::msg::{self, Actor, Next};
@@ -167,16 +166,18 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<(String, i32), String> {
     let todo: Vec<usize> = pl.missing_body().iter().map(|q| q.idx).collect();
     if !todo.is_empty() {
         let led = ledger::read(&root.join(repo::LEDGER_PATH));
-        let queries: Vec<String> = todo.iter().map(|&i| record::body_text(rf, &rf.sections[i])).collect();
-        let near = index::nearest(root, &led, &queries, index::NEIGHBOURS)?;
-        // The other questions not yet asked, ranked by their own text.
+        // The other questions not yet asked are ranked by their own text. One
+        // call embeds the texts of the questions to read and of every
+        // planned question.
         let planned: Vec<usize> = pl.questions.iter().filter(|q| q.has_body).map(|q| q.idx).collect();
-        let texts: Vec<String> = planned.iter().map(|&i| record::body_text(rf, &rf.sections[i])).collect();
-        let vecs = if planned.len() > 1 { embed::load(root)?.embed(&texts)? } else { Vec::new() };
+        let mut queries: Vec<String> = todo.iter().map(|&i| record::body_text(rf, &rf.sections[i])).collect();
+        queries.extend(planned.iter().map(|&i| record::body_text(rf, &rf.sections[i])));
+        let (near, qv) = index::nearest_with_vectors(root, &led, &queries, index::NEIGHBOURS)?;
+        let vecs = &qv[todo.len()..];
         for (&i, n) in todo.iter().zip(&near) {
             let own: Vec<usize> = match planned.iter().position(|&p| p == i) {
                 Some(me) if planned.len() > 1 => {
-                    index::rank(&vecs[me], &vecs, |k| k != me, index::NEIGHBOURS).into_iter().map(|(k, _)| planned[k]).collect()
+                    index::rank(&vecs[me], vecs, |k| k != me, index::NEIGHBOURS).into_iter().map(|(k, _)| planned[k]).collect()
                 }
                 _ => Vec::new(),
             };

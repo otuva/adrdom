@@ -365,7 +365,7 @@ pub fn load(
     terms_list: &[Term],
     led: &Ledger,
 ) -> Planning {
-    load_inner(root, rf, all, terms_list, led, false)
+    load_inner(root, rf, all, terms_list, led, false).0
 }
 
 /// `load` with the questions that are asked and wait for their answer too:
@@ -379,6 +379,19 @@ pub fn load_shown(
     terms_list: &[Term],
     led: &Ledger,
 ) -> Planning {
+    load_inner(root, rf, all, terms_list, led, true).1
+}
+
+/// `load` and `load_shown` together, from one read of the reader file and
+/// one pass over the records: what show prints and the next move it reads
+/// off the same file.
+pub fn load_both(
+    root: &Path,
+    rf: &RecordFile,
+    all: &[RecordFile],
+    terms_list: &[Term],
+    led: &Ledger,
+) -> (Planning, Planning) {
     load_inner(root, rf, all, terms_list, led, true)
 }
 
@@ -392,8 +405,8 @@ fn load_inner(
     all: &[RecordFile],
     terms_list: &[Term],
     led: &Ledger,
-    with_asked: bool,
-) -> Planning {
+    both: bool,
+) -> (Planning, Planning) {
     let phrase_lookup = terms::phrase_lookup(terms_list);
     let cross = depends::cross_file_heading_index(all, led);
     let headings = decision_headings(all);
@@ -402,6 +415,8 @@ fn load_inner(
     for r in &rows {
         by_hash.entry(r.text_hash.as_str()).or_default().push(r);
     }
+    let pool_empty = pool_is_empty(all, led, terms_list);
+    let build = |with_asked: bool| -> Planning {
     let unasked: Vec<usize> = (0..rf.sections.len())
         .filter(|&i| is_unasked(led, &rf.sections[i]) || (with_asked && is_waiting(led, &rf.sections[i])))
         .collect();
@@ -411,7 +426,6 @@ fn load_inner(
             by_body.entry(record::body_hash(rf, &rf.sections[i])).or_insert(i);
         }
     }
-    let pool_empty = pool_is_empty(all, led, terms_list);
     let neighbours = |hash: &str, targets: &HashMap<Target, LineKind>| -> Option<Vec<Neighbour>> {
         let rs = by_hash.get(hash)?;
         // The latest row for a neighbour is the one that counts.
@@ -466,6 +480,10 @@ fn load_inner(
         });
     }
     Planning { rel: rf.rel.clone(), questions }
+    };
+    let plain = build(false);
+    let shown = if both { build(true) } else { Planning { rel: rf.rel.clone(), questions: Vec::new() } };
+    (plain, shown)
 }
 
 impl Planning {

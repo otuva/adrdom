@@ -67,8 +67,9 @@ pub fn pool(files: &[RecordFile], led: &Ledger, terms: &[Term]) -> Vec<Rec> {
             out.push(rec("decision", id.clone(), t));
         }
     }
+    // A term with no id is not approved yet: it is not in the pool.
     for t in terms.iter().filter(|t| !t.retired) {
-        let id = t.id.clone().unwrap_or_else(|| t.name.clone());
+        let Some(id) = t.id.clone() else { continue };
         out.push(rec("term", id, format!("{}: {}", t.name, t.definition)));
     }
     out
@@ -81,7 +82,8 @@ pub type Vectors = (Vec<Vec<f32>>, Vec<Vec<f32>>);
 
 /// The stored vectors, or none when the file has no header or its header
 /// names another model than `model`: then every record is embedded again.
-/// A row whose width is not the header's is dropped.
+/// A row whose width is not the header's, or that holds a value which is
+/// not finite, is dropped.
 fn read(root: &Path, model: &str) -> HashMap<Key, Vec<f32>> {
     let mut m = HashMap::new();
     let Ok(text) = fs::read_to_string(root.join(INDEX_PATH)) else {
@@ -107,7 +109,7 @@ fn read(root: &Path, model: &str) -> HashMap<Key, Vec<f32>> {
         }
         let v: Result<Vec<f32>, _> = p[3].split(' ').map(str::parse::<f32>).collect();
         if let Ok(v) = v {
-            if v.len() == dim {
+            if v.len() == dim && v.iter().all(|x| x.is_finite()) {
                 m.insert((p[0].into(), p[1].into(), p[2].into()), v);
             }
         }
@@ -124,7 +126,7 @@ pub fn dot(a: &[f32], b: &[f32]) -> f32 {
 /// `keep` accepts, nearest first, ties by index.
 pub fn rank(query: &[f32], vecs: &[Vec<f32>], keep: impl Fn(usize) -> bool, n: usize) -> Vec<(usize, f32)> {
     let mut scored: Vec<(f32, usize)> = (0..vecs.len()).filter(|&i| keep(i)).map(|i| (dot(query, &vecs[i]), i)).collect();
-    scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal).then(a.1.cmp(&b.1)));
+    scored.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
     scored.into_iter().take(n).map(|(s, i)| (i, s)).collect()
 }
 
@@ -174,12 +176,23 @@ pub fn refresh(root: &Path, emb: &dyn Embedder, recs: &[Rec], extra: &[String]) 
 /// first. Loads the embedding model, brings the index up to date and embeds
 /// the queries in the same call. An error when the model is missing.
 pub fn nearest(root: &Path, led: &Ledger, queries: &[String], n: usize) -> Result<Vec<Vec<Neighbour>>, String> {
+    nearest_with_vectors(root, led, queries, n).map(|(near, _)| near)
+}
+
+/// `nearest`, and the vector of each query text as well, so a caller that
+/// ranks the query texts against each other does not embed them again.
+pub fn nearest_with_vectors(
+    root: &Path,
+    led: &Ledger,
+    queries: &[String],
+    n: usize,
+) -> Result<(Vec<Vec<Neighbour>>, Vec<Vec<f32>>), String> {
     let files = record::load_all(root);
     let terms = state::load_terms(root).map(|t| t.terms).unwrap_or_default();
     let recs = pool(&files, led, &terms);
     let emb = crate::embed::load(root)?;
     let (vecs, qv) = refresh(root, emb.as_ref(), &recs, queries)?;
-    Ok(qv
+    let near = qv
         .iter()
         .map(|q| {
             rank(q, &vecs, |_| true, n)
@@ -192,7 +205,8 @@ pub fn nearest(root: &Path, led: &Ledger, queries: &[String], n: usize) -> Resul
                 })
                 .collect()
         })
-        .collect())
+        .collect();
+    Ok((near, qv))
 }
 
 #[cfg(all(test, feature = "fake-model"))]
@@ -271,5 +285,40 @@ mod tests {
         let vecs = vec![vec![1.0, 0.0], vec![0.0, 1.0], vec![1.0, 0.0]];
         let r = rank(&[1.0, 0.0], &vecs, |_| true, 2);
         assert_eq!(r.iter().map(|x| x.0).collect::<Vec<_>>(), vec![0, 2]);
+    }
+
+    #[test]
+    fn a_term_with_no_id_is_not_in_the_pool() {
+        let term = |name: &str, id: Option<&str>| Term {
+            name: name.into(),
+            id: id.map(String::from),
+            definition: "d".into(),
+            aliases: Vec::new(),
+            retired: false,
+            start_line: 1,
+            id_line: None,
+            terms_line: None,
+            terms_line_idx: None,
+        };
+        let terms = vec![term("new term", None), term("old", Some("id-1"))];
+        let p = pool(&[], &Ledger { rows: Vec::new(), malformed: Vec::new() }, &terms);
+        assert_eq!(p.len(), 1);
+        assert_eq!(p[0].id, "id-1");
+    }
+
+    #[test]
+    fn a_row_with_a_value_that_is_not_finite_is_dropped_and_rank_survives_it() {
+        let root = scratch();
+        fs::create_dir_all(root.join(repo::CACHE_DIR)).unwrap();
+        fs::write(
+            root.join(INDEX_PATH),
+            "# model m dim 2\ndecision\ta\th\t1 0\ndecision\tb\th\tNaN 0\ndecision\tc\th\tinf 0\n",
+        )
+        .unwrap();
+        assert_eq!(read(&root, "m").len(), 1);
+        let vecs = vec![vec![f32::NAN, 0.0], vec![1.0, 0.0]];
+        let r = rank(&[1.0, 0.0], &vecs, |_| true, 2);
+        assert_eq!(r.len(), 2);
+        fs::remove_dir_all(&root).unwrap();
     }
 }
