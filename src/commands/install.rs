@@ -33,12 +33,14 @@ pub(crate) const PRE_PUSH_HOOK: &str = "#!/bin/sh\nadr check --push\nexit $?\n";
 
 /// `adrdom/.gitattributes`'s whole content (Decision 7,
 /// db56a285-946f-48b1-b073-bb1e90192185): the one merge rule that keeps
-/// both branches' rows at a merge for the ledger. The ban list gets no
+/// both branches' rows at a merge for the ledger, and a second one for the
+/// reader's file ("Does check hold the reader's file as it holds the
+/// ledger?", 26c5352f-3f82-4376-9dc2-8ccc0074d080). The ban list gets no
 /// such rule -- a merge conflict there is left for the owner to resolve,
 /// same as any other file `install` doesn't cover. `check`'s `install`
 /// check compares the file on disk against this text the same way it
 /// compares `.codex/rules/adrdom.rules` against `codex_rules_content()`.
-pub(crate) const GITATTRIBUTES_CONTENT: &str = "state/ledger.tsv merge=union\n";
+pub(crate) const GITATTRIBUTES_CONTENT: &str = "state/ledger.tsv merge=union\nstate/reader.tsv merge=union\n";
 
 /// `adrdom/.gitignore`'s whole content: the index and the model files under
 /// `adrdom/cache` stay out of git ("Does git track a file the tool can get
@@ -88,7 +90,11 @@ pub fn run(claude: bool, codex: bool) -> i32 {
         return 1;
     }
 
-    for path in [root.join(repo::LEDGER_PATH), root.join(banned::BAN_LIST)] {
+    for path in [
+        root.join(repo::LEDGER_PATH),
+        root.join(repo::READER_PATH),
+        root.join(banned::BAN_LIST),
+    ] {
         if let Err(e) = create_if_missing(&path, "") {
             eprintln!(
                 "install: {}",

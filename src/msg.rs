@@ -2658,6 +2658,71 @@ pub fn embed_failed(e: impl Display) -> String {
     )
 }
 
+/// The reader is not on this machine: no `claude` program on PATH.
+pub fn reader_missing() -> String {
+    refuse(
+        "reader: the claude program is missing".to_string(),
+        Next::agent("installs the claude CLI, or plans on another machine"),
+    )
+}
+
+/// The reader gave no usable word for a pair of texts; nothing of that
+/// call is kept.
+pub fn reader_failed(neighbour: &str, e: impl Display) -> String {
+    refuse(
+        format!("reader: no word for the neighbour {}: {}", neighbour, e),
+        Next::agent("retries; if it persists, plans on another machine"),
+    )
+}
+
+pub fn reader_write_failed(e: impl Display) -> String {
+    write_failed(crate::repo::READER_PATH, e, Next::agent("fixes the reader file and retries"))
+}
+
+pub fn malformed_reader_row(lineno: usize, raw: &str) -> String {
+    refuse(
+        format!(
+            "line {}: malformed row in the reader file: {}; the owner decides which rows are real before anything is committed",
+            lineno, raw
+        ),
+        Next::owner_runs("git diff adrdom/state/reader.tsv"),
+    )
+}
+
+/// A HEAD row of the reader file is missing or changed.
+pub fn reader_not_append_only() -> String {
+    refuse(
+        "a row from HEAD's reader file is missing or changed in the working copy; a row may move, none may be dropped or edited, and what is missing or changed is restored by hand".to_string(),
+        Next::owner_runs("git diff adrdom/state/reader.tsv"),
+    )
+}
+
+pub fn reader_merge_drops_rows() -> String {
+    refuse(
+        "merge drops a branch's reader rows".to_string(),
+        Next::owner_runs(
+            "the rows of the merged branch are restored from that branch, by hand, only by adding them back",
+        ),
+    )
+}
+
+pub fn reader_push_drops_rows(local_ref: &str, remote_ref: &str) -> String {
+    refuse(
+        format!(
+            "push of {} would drop reader rows the remote's {} already holds",
+            local_ref, remote_ref
+        ),
+        Next::owner_runs("the rows already on the remote branch are restored, by hand, only by adding them back, then the push runs again"),
+    )
+}
+
+pub fn reader_since_drops_rows(commit: &str) -> String {
+    refuse(
+        format!("reader file drops a row {} already holds", commit),
+        Next::owner_runs("the rows already at that commit are restored, by hand, only by adding them back"),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2816,6 +2881,14 @@ mod tests {
             #[cfg(feature = "model")]
             model_load_failed("adrdom/cache/model", "no network"),
             embed_failed("x"),
+            reader_missing(),
+            reader_failed("id-1", "no answer"),
+            reader_write_failed("disk full"),
+            malformed_reader_row(3, "bad row"),
+            reader_not_append_only(),
+            reader_merge_drops_rows(),
+            reader_since_drops_rows("abc123"),
+            reader_push_drops_rows("refs/heads/feat", "refs/heads/main"),
             malformed_ledger_row(3, "bad row"),
             ledger_not_append_only(),
             ledger_merge_drops_rows(),

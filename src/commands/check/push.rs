@@ -38,9 +38,7 @@ pub fn run() -> i32 {
 
     let mut failures: Vec<Failure> = Vec::new();
     for line in input.lines() {
-        if let Some(f) = check_one_ref(&root, line) {
-            failures.push(f);
-        }
+        failures.extend(check_one_ref(&root, line));
     }
 
     for f in &failures {
@@ -62,44 +60,47 @@ pub fn run() -> i32 {
 /// `check_ledger`'s HEAD/merge/`since` comparisons already share
 /// (`ledger::ref_ledger_has_rows_missing`'s sibling, `lines_missing`,
 /// against content this function reads itself).
-fn check_one_ref(root: &Path, line: &str) -> Option<Failure> {
+fn check_one_ref(root: &Path, line: &str) -> Vec<Failure> {
     let parts: Vec<&str> = line.split_whitespace().collect();
     if parts.len() != 4 {
-        return None;
+        return Vec::new();
     }
     let (local_ref, local_sha, remote_ref, remote_sha) = (parts[0], parts[1], parts[2], parts[3]);
 
     if repo::is_zero_sha(local_sha) {
         // The ref is being deleted on the remote: nothing of this push's
         // own to compare.
-        return None;
+        return Vec::new();
     }
     if repo::is_zero_sha(remote_sha) {
         // The ref is new on the remote: nothing it already holds to drop.
-        return None;
+        return Vec::new();
     }
 
     if !super::ledger::parent_object_present(root, remote_sha) {
-        return Some(Failure {
+        return vec![Failure {
             check: "ledger".to_string(),
             message: msg::ledger_push_remote_unreadable(remote_ref),
-        });
+        }];
     }
 
-    let Some(remote_content) = repo::git(root, &["show", &format!("{}:{}", remote_sha, repo::LEDGER_PATH)]) else {
-        // The remote commit holds no ledger file at that path: nothing to
-        // compare.
-        return None;
-    };
-    let local_content = repo::git(root, &["show", &format!("{}:{}", local_sha, repo::LEDGER_PATH)]).unwrap_or_default();
-    let present: std::collections::HashSet<&str> = local_content.lines().collect();
-
-    if super::ledger::lines_missing(&remote_content, &present) {
-        Some(Failure {
-            check: "ledger".to_string(),
-            message: msg::ledger_push_drops_rows(local_ref, remote_ref),
-        })
-    } else {
-        None
+    // The ledger and the reader file are held the same way ("Does check hold
+    // the reader's file as it holds the ledger?", 26c5352f-3f82-4376-9dc2-8ccc0074d080).
+    let mut out = Vec::new();
+    let files: [(&str, &str, String); 2] = [
+        (repo::LEDGER_PATH, "ledger", msg::ledger_push_drops_rows(local_ref, remote_ref)),
+        (repo::READER_PATH, "reader", msg::reader_push_drops_rows(local_ref, remote_ref)),
+    ];
+    for (path, check, message) in files {
+        let Some(remote_content) = repo::git(root, &["show", &format!("{}:{}", remote_sha, path)]) else {
+            // The remote commit holds no such file: nothing to compare.
+            continue;
+        };
+        let local_content = repo::git(root, &["show", &format!("{}:{}", local_sha, path)]).unwrap_or_default();
+        let present: std::collections::HashSet<&str> = local_content.lines().collect();
+        if super::ledger::lines_missing(&remote_content, &present) {
+            out.push(Failure { check: check.to_string(), message });
+        }
     }
+    out
 }

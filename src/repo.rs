@@ -11,6 +11,9 @@ pub const DECISIONS_DIR: &str = "adrdom/decisions";
 pub const STATE_DIR: &str = "adrdom/state";
 /// The append-only ledger of every act (`ask`, `answer`, `approve`, ...).
 pub const LEDGER_PATH: &str = "adrdom/state/ledger.tsv";
+/// The reader's file: one row for each word the reader gave on a pair of
+/// texts (`reader::Row`). Held by `check` the way the ledger is.
+pub const READER_PATH: &str = "adrdom/state/reader.tsv";
 /// The repo's own terms file.
 /// Where blame files live, relative to the repo root (per "What does a
 /// blame file hold?", 34f0202a A): one `<stem>.md` per origin, holding its
