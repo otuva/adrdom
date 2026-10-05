@@ -26,6 +26,34 @@ pub(super) fn plural(n: usize, one: &str, many: &str) -> String {
     }
 }
 
+/// The neighbour lines of a question, folded under a summary that counts
+/// them; a line that is not a neighbour stays outside the fold.
+pub(super) fn neighbours_html(lines: &[String]) -> String {
+    let (folded, plain): (Vec<&str>, Vec<&str>) = lines
+        .iter()
+        .map(|l| l.trim())
+        .partition(|l| l.starts_with("neighbour: "));
+    let mut out = String::new();
+    if !folded.is_empty() {
+        out.push_str(&format!(
+            "<details class=\"neighbours\"><summary>{}</summary><ul>",
+            plural(folded.len(), "neighbour", "neighbours")
+        ));
+        for l in &folded {
+            out.push_str(&format!("<li>{}</li>", esc(l)));
+        }
+        out.push_str("</ul></details>\n");
+    }
+    if !plain.is_empty() {
+        out.push_str("<ul class=\"neighbours\">");
+        for l in &plain {
+            out.push_str(&format!("<li>{}</li>", esc(l)));
+        }
+        out.push_str("</ul>\n");
+    }
+    out
+}
+
 pub(super) fn banner_html(m: Option<&String>) -> String {
     match m {
         Some(text) if !text.is_empty() => {
