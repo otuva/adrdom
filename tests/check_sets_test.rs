@@ -223,7 +223,6 @@ fn check_does_not_note_a_dependent_whose_set_still_includes_the_answer() {
     assert!(!text.contains("no case left:"), "{}", text);
 }
 
-// adr: fa90692a-150e-4a89-91e2-1d575cb59d0f
 //
 // A question in one file standing on a current decision of another file
 // under a set that lacks the letter it was answered with is moot, as it is

@@ -446,7 +446,6 @@ fn check_passes_a_depends_set_whose_letters_are_all_options_the_target_has() {
     assert!(!text.contains("does not have"), "{}", text);
 }
 
-// adr: fa90692a-150e-4a89-91e2-1d575cb59d0f
 //
 // "Does a depends entry carry the answers it holds under?": the letters on
 // a depends entry's answer set must be options the target actually has --

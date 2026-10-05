@@ -95,7 +95,6 @@ fn later(heading: &str) -> String {
 }
 
 // adr: f8d92841-aef7-4cd7-bd94-0e07c03e4cb6
-// adr: fa90692a-150e-4a89-91e2-1d575cb59d0f
 // adr: 11be073c-ce91-44d8-833a-ef0b5e0b1672
 #[test]
 fn show_names_the_next_move_at_every_step() {
@@ -506,7 +505,6 @@ fn show_and_answer_agree_on_whether_the_asked_text_stands() {
 }
 
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
-// adr: fa90692a-150e-4a89-91e2-1d575cb59d0f
 //
 // A question whose answer set lacks the answer given is moot, and `ask`
 // refuses the whole run while it stands. `next` names its drop ahead of the

@@ -658,7 +658,6 @@ fn ask_refuses_a_tier_n_dependent_with_no_answer_set() {
     assert_eq!(after, before);
 }
 
-// adr: fa90692a-150e-4a89-91e2-1d575cb59d0f
 //
 // "when a tier's bodies are written, every depends entry naming one of its
 // questions gets the letters": the set is frozen with the question being
@@ -700,7 +699,6 @@ fn ask_asks_a_new_sibling_without_a_set_on_an_answered_dependents_line() {
     assert!(stdout(&out).contains("asked: \"1.3 Does the widget need a lid?\" (tier 1)"), "{}", stdout(&out));
 }
 
-// adr: fa90692a-150e-4a89-91e2-1d575cb59d0f
 //
 // The mandatory-set gate must also catch a target that was asked in an
 // earlier run and is still unanswered, not only a target being asked for

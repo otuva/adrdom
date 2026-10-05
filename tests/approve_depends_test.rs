@@ -592,7 +592,6 @@ fn ask_and_check_refuse_a_cross_file_depends_line_reverted_by_hand_after_approve
     );
 }
 
-// adr: fa90692a-150e-4a89-91e2-1d575cb59d0f
 //
 // "Does a depends entry carry the answers it holds under?", the cross-file
 // half: a depends entry naming a current decision elsewhere by id, with an

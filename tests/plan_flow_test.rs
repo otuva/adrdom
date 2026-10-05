@@ -142,7 +142,6 @@ fn id_for_heading(content: &str, heading_prefix: &str) -> String {
 // second approve happened), and the very next `ask` succeeds straight
 // through on that body -- accepted with no new approve in between.
 //
-// adr: fa90692a-150e-4a89-91e2-1d575cb59d0f
 //
 // core: "when a tier's bodies are written, every depends entry naming one
 // of its questions gets the letters it holds under (=A, =A|B or =*); ask

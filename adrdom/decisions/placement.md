@@ -87,6 +87,8 @@ Standard: a conditional item leaves with its condition; no second confirmation.
   Why: answer writes only its answer line; the plan leaves the file to approve.
   Costs: a dead question waits in the file until the owner approves a plan without it; ask and check report it.
 
+**Answer:** A
+
 ### What does answer write for a removed question?
 depends: e18b82d8-5271-4385-bbab-2b89e5da278f, 462e22c6-8b23-4061-9a2a-bbf8691fce60=A
 id: f5c242b6-e2f6-45a3-8c61-c743f3ad794f
@@ -172,6 +174,8 @@ Standard: a pipeline stage refuses input that lacks the previous stage's output.
 - B) Yes.
   Why: the agent runs the steps in any order; approval checks that every record exists.
   Costs: the order of thinking is not held; neighbours of a heading may come after its body was written.
+
+**Answer:** A
 
 ### Does planning stop without the embedding model?
 depends: a7b0b910-57f6-4c59-b904-b42f78db63f7, de8ef568-3a8d-42ba-bef7-d7fd467b27be=*
