@@ -105,9 +105,9 @@ fn build(
     // compares against the ledger (`file_approval`, `ids::check_ids`'s
     // stale-plan filter) instead of letting them recompute the hash from
     // the (by-then-normalized) `RecordFile`.
-    let raw_hashes: HashMap<String, (String, String)> = records
+    let raw_hashes: HashMap<String, (Vec<String>, String)> = records
         .iter()
-        .map(|rf| (rf.rel.clone(), (record::plan_hash(rf), record::context_hash(rf))))
+        .map(|rf| (rf.rel.clone(), (record::question_hashes(rf), record::context_hash(rf))))
         .collect();
 
     // Heading-shaped `depends:` entries that name no heading in their own
@@ -139,7 +139,7 @@ fn build(
     // own `supersedes:` lines.
     let approved_rels: std::collections::HashSet<String> = raw_hashes
         .iter()
-        .filter(|(rel, (plan_h, _))| state::plan_approved_hash(&led, rel, plan_h))
+        .filter(|(rel, (plan_h, _))| state::plan_approved_hashes(&led, rel, plan_h))
         .map(|(rel, _)| rel.clone())
         .collect();
     let replaced_base = depends::replaced_base(&records, &approved_rels, &cross_file_headings, &led);
@@ -285,7 +285,7 @@ fn dropped_state(led: &Ledger, id: &str) -> bool {
 /// instead of guessing.
 fn file_approval(
     rf: &RecordFile,
-    raw_hashes: &HashMap<String, (String, String)>,
+    raw_hashes: &HashMap<String, (Vec<String>, String)>,
     led: &Ledger,
 ) -> (String, bool, bool) {
     let rel = rf.rel.clone();
@@ -295,7 +295,7 @@ fn file_approval(
             rel
         )
     });
-    let plan_ok = state::plan_approved_hash(led, &rel, plan_h);
+    let plan_ok = state::plan_approved_hashes(led, &rel, plan_h);
     let ctx_ok = state::context_approved_hash(led, &rel, ctx_h);
     (rel, plan_ok, ctx_ok)
 }

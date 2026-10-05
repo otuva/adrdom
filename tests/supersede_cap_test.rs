@@ -45,15 +45,6 @@ fn id_of(path: &Path, heading: &str) -> String {
     panic!("no id under {}: {}", heading, c);
 }
 
-/// Writes `body` under the id line of `heading`.
-fn write_body(path: &Path, heading: &str) {
-    let id = id_of(path, heading);
-    let c = std::fs::read_to_string(path).unwrap();
-    let with = c.replacen(&format!("id: {}\n", id), &format!("id: {}\n{}", id, BODY), 1);
-    assert_ne!(with, c);
-    std::fs::write(path, with).unwrap();
-}
-
 fn approve(dir: &Path, name: &str) -> std::process::Output {
     adr_owner(dir, &["approve", dir.join(rel(name)).to_str().unwrap()], "")
 }
@@ -95,12 +86,11 @@ fn full_tier(dir: &Path) -> PathBuf {
 fn a_fifth_heading_superseding_one_of_four_passes_approve_check_and_ask() {
     let dir = init_repo();
     let a = full_tier(&dir);
-    append(&a, &sec(&h(5), Some(&h(1)), false));
+    append(&a, &sec(&h(5), Some(&h(1)), true));
     let out = approve(&dir, "a");
     assert!(out.status.success(), "approve should pass the cap: {}", stderr(&out));
     let chk = adr(&dir, &["check"], &[], "");
     assert!(!cap_refusal(&chk), "check printed a cap refusal: {}{}", stdout(&chk), stderr(&chk));
-    write_body(&a, &h(5));
     let out = ask(&dir, "a");
     assert!(out.status.success(), "ask should pass the cap: {}", stderr(&out));
 }
@@ -110,7 +100,7 @@ fn a_fifth_heading_superseding_one_of_four_passes_approve_check_and_ask() {
 fn a_fifth_heading_superseding_nothing_still_fails_the_cap() {
     let dir = init_repo();
     let a = full_tier(&dir);
-    append(&a, &sec(&h(5), None, false));
+    append(&a, &sec(&h(5), None, true));
     let out = approve(&dir, "a");
     assert!(!out.status.success(), "approve should refuse: {}", stdout(&out));
     assert!(cap_refusal(&out), "{}", stderr(&out));
@@ -121,8 +111,8 @@ fn a_fifth_heading_superseding_nothing_still_fails_the_cap() {
 fn two_replacements_of_one_decision_in_a_full_tier_fail_the_cap() {
     let dir = init_repo();
     let a = full_tier(&dir);
-    append(&a, &sec(&h(5), Some(&h(1)), false));
-    append(&a, &sec(&h(6), Some(&h(1)), false));
+    append(&a, &sec(&h(5), Some(&h(1)), true));
+    append(&a, &sec(&h(6), Some(&h(1)), true));
     let out = approve(&dir, "a");
     assert!(!out.status.success(), "approve should refuse: {}", stdout(&out));
     assert!(cap_refusal(&out), "{}", stderr(&out));
@@ -133,15 +123,14 @@ fn two_replacements_of_one_decision_in_a_full_tier_fail_the_cap() {
 fn a_refused_replacement_returns_the_old_decision_to_the_count() {
     let dir = init_repo();
     let a = full_tier(&dir);
-    append(&a, &sec(&h(5), Some(&h(1)), false));
+    append(&a, &sec(&h(5), Some(&h(1)), true));
     approve_ok(&dir, "a");
-    write_body(&a, &h(5));
     let out = ask(&dir, "a");
     assert!(out.status.success(), "ask should pass the cap: {}", stderr(&out));
     let out = adr_answer(&dir, &id_of(&a, &h(5)), "refuse");
     assert!(out.status.success(), "refuse failed: {}", stderr(&out));
 
-    append(&a, &sec(&h(6), None, false));
+    append(&a, &sec(&h(6), None, true));
     let out = approve(&dir, "a");
     assert!(!out.status.success(), "approve should refuse: {}", stdout(&out));
     assert!(cap_refusal(&out), "{}", stderr(&out));
@@ -154,7 +143,7 @@ fn an_open_replacement_in_another_file_frees_a_slot_in_the_full_tier() {
     let a = full_tier(&dir);
     write_record(&dir, &rel("b"), &format!("# B\n{}", sec(&h(9), Some(&h(1)), true)));
     approve_ok(&dir, "b");
-    append(&a, &sec(&h(5), None, false));
+    append(&a, &sec(&h(5), None, true));
     let out = approve(&dir, "a");
     assert!(out.status.success(), "a.md counts 3 + 1: {}", stderr(&out));
 }
@@ -176,7 +165,7 @@ fn check_counts_a_tier_as_approve_does_when_the_replacing_file_has_a_cross_file_
     );
     write_record(&dir, &rel("b"), &b);
     approve_ok(&dir, "b");
-    append(&a, &sec(&h(5), None, false));
+    append(&a, &sec(&h(5), None, true));
     let out = approve(&dir, "a");
     assert!(out.status.success(), "approve counts 3 + 1: {}", stderr(&out));
     let chk = adr(&dir, &["check"], &[], "");

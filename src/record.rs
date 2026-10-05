@@ -947,37 +947,48 @@ fn analyze_shape(lines: &[String], sections: &[Section]) -> (Option<String>, (us
     (topic, context_range, shape_errors)
 }
 
-/// sha256 of, per section: the question heading line (trimmed text incl.
-/// the `### ` prefix), its `id:` line if it has one, and its `depends:`
-/// lines with any `=set` suffix stripped (per "Does a depends entry carry
-/// the answers it holds under?": approve hashes the target, not the set;
-/// per "Does a reference in a topic file carry the identifier of what it
-/// names?": the id line is now part of the plan, so minting or
-/// swapping one is a plan change), joined with `\n`. Changes on an added,
-/// reordered, or renamed heading, a heading gaining/losing/swapping its id,
-/// or a changed/added/removed depends target; unaffected by a body edit or
-/// a depends entry's answer set.
+/// sha256 of one question's own text (per "Does approve hash each question
+/// on its own?"): its heading line, its `depends:` line with the answer sets
+/// as written, its `supersedes:` line, an `unrelated:` line, and its body
+/// (Problem, Standard, options, Why, Costs), each line trimmed at its end,
+/// joined with `\n`. The `id:` line is part of it (swapping ids would re-point every
+/// depends entry naming them); the lines the tool writes after that (`terms:`,
+/// the `**Answer:**` line) and blank lines are left out, so asking or answering
+/// a question never moves its hash (approve has already written the id). Read on the text as it stands, so call
+/// it on the file after approve turned names into ids.
+pub fn question_hash(rf: &RecordFile, sec: &Section) -> String {
+    let (s, e) = hash_range(&rf.lines, sec);
+    let text = rf.lines[s..e]
+        .iter()
+        .map(|l| l.trim_end())
+        .filter(|l| {
+            !l.trim().is_empty()
+                && !l.starts_with("terms: ")
+                && !l.starts_with("**Answer:**")
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    sha256_hex(&text)
+}
+
+/// Every question's `question_hash`, in file order.
+pub fn question_hashes(rf: &RecordFile) -> Vec<String> {
+    rf.sections.iter().map(|s| question_hash(rf, s)).collect()
+}
+
+/// The file's hash derived from its parts (per "Does approve hash each
+/// question on its own?"): sha256 of the question hashes sorted and joined
+/// with `\n`. The order of the questions carries no meaning, so
+/// reordering headings moves nothing.
+pub fn derive_file_hash(question_hashes: &[String]) -> String {
+    let mut sorted: Vec<&str> = question_hashes.iter().map(|h| h.as_str()).collect();
+    sorted.sort_unstable();
+    sha256_hex(&sorted.join("\n"))
+}
+
+/// The file's derived hash over its current questions.
 pub fn plan_hash(rf: &RecordFile) -> String {
-    let mut out: Vec<String> = Vec::new();
-    for s in &rf.sections {
-        out.push(rf.lines[s.start].trim_end().to_string());
-        if let Some(id) = &s.id {
-            out.push(format!("id: {}", id));
-        }
-        for d in &s.depends {
-            let entry_text: &str = match d {
-                Dep::Id { id, .. } => id.as_str(),
-                Dep::Text { text, .. } => text.as_str(),
-            };
-            out.push(format!("depends: {}", entry_text).trim_end().to_string());
-        }
-        // The `supersedes:` line is part of the plan (3b8da790 B): a line
-        // added, changed or removed after approval moves the hash.
-        if !s.supersedes.is_empty() {
-            out.push(format!("supersedes: {}", s.supersedes.join(", ")));
-        }
-    }
-    sha256_hex(&out.join("\n"))
+    derive_file_hash(&question_hashes(rf))
 }
 
 /// sha256 of the context prose lines with leading/trailing blank lines
@@ -1394,39 +1405,34 @@ mod tests {
     }
 
     #[test]
-    fn plan_hash_changes_on_heading_add_reorder_rename_not_on_body_edit() {
+    fn plan_hash_changes_on_heading_add_rename_and_body_edit_not_on_reorder() {
         let base = rf_from(SHAPED);
         let base_hash = plan_hash(&base);
 
-        // Body-only edit: unchanged.
+        // Body edit: moves the hash (the body is part of the question).
         let body_edited = SHAPED.replace("Problem: p.", "Problem: a very different problem.");
-        let rf_body = rf_from(&body_edited);
-        assert_eq!(base_hash, plan_hash(&rf_body), "body edit must not move plan hash");
+        assert_ne!(base_hash, plan_hash(&rf_from(&body_edited)), "a body edit must move the hash");
 
         // Heading added.
         let added = format!("{}\n### 1.2 A second question?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) y.\n  Why: w.\n  Costs: c.\n- B) z.\n  Why: w.\n  Costs: c.\n", SHAPED);
-        let rf_added = rf_from(&added);
-        assert_ne!(base_hash, plan_hash(&rf_added), "adding a heading must move plan hash");
+        assert_ne!(base_hash, plan_hash(&rf_from(&added)), "adding a heading must move the hash");
 
         // Heading renamed.
         let renamed = SHAPED.replace("### 1.1 First question?", "### 1.1 First question, renamed?");
-        let rf_renamed = rf_from(&renamed);
-        assert_ne!(base_hash, plan_hash(&rf_renamed), "renaming a heading must move plan hash");
+        assert_ne!(base_hash, plan_hash(&rf_from(&renamed)), "renaming a heading must move the hash");
 
         // Headings reordered: two questions, swapped.
         let two_questions = "# Topic\n\n### 1.1 Question A?\n\nProblem: pa.\n\nStandard: sa.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) x2.\n  Why: w.\n  Costs: c.\n\n### 1.2 Question B?\n\nProblem: pb.\n\nStandard: sb.\n\n- A) y.\n  Why: w.\n  Costs: c.\n- B) y2.\n  Why: w.\n  Costs: c.\n";
         let swapped = "# Topic\n\n### 1.2 Question B?\n\nProblem: pb.\n\nStandard: sb.\n\n- A) y.\n  Why: w.\n  Costs: c.\n- B) y2.\n  Why: w.\n  Costs: c.\n\n### 1.1 Question A?\n\nProblem: pa.\n\nStandard: sa.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) x2.\n  Why: w.\n  Costs: c.\n";
-        let rf_two = rf_from(two_questions);
-        let rf_swapped = rf_from(swapped);
-        assert_ne!(
-            plan_hash(&rf_two),
-            plan_hash(&rf_swapped),
-            "reordering headings must move plan hash"
+        assert_eq!(
+            plan_hash(&rf_from(two_questions)),
+            plan_hash(&rf_from(swapped)),
+            "reordering headings must not move the derived hash"
         );
     }
 
     #[test]
-    fn plan_hash_covers_depends_targets_but_not_sets() {
+    fn question_hash_covers_depends_with_sets_and_skips_tool_lines() {
         let make = |set_suffix: &str| {
             format!(
                 "# Topic\n\n### 1.1 Q?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n### 1.2 R?\ndepends: 1.1 Q?{}\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
@@ -1435,42 +1441,19 @@ mod tests {
         };
         let with_a = rf_from(&make("=A"));
         let with_b = rf_from(&make("=B"));
-        assert_eq!(
-            plan_hash(&with_a),
-            plan_hash(&with_b),
-            "the answer set on a depends entry must not move the plan hash"
-        );
-
-        let retargeted = make("=A").replace("depends: 1.1 Q?=A", "depends: 1.1 Q renamed?=A");
-        let rf_retargeted = rf_from(&retargeted);
         assert_ne!(
-            plan_hash(&with_a),
-            plan_hash(&rf_retargeted),
-            "changing the depends target's text must move the plan hash"
+            question_hashes(&with_a)[1],
+            question_hashes(&with_b)[1],
+            "the answer set on a depends entry is part of the question hash"
         );
-    }
+        assert_eq!(question_hashes(&with_a)[0], question_hashes(&with_b)[0]);
 
-    #[test]
-    fn plan_hash_ignores_sets_on_a_one_line_multi_entry_depends() {
-        // Two heading-shaped entries on the one line (a set only ever
-        // attaches to a heading-shaped base -- a term entry like "widget"
-        // has no set syntax at all, per "Does a depends entry carry the
-        // answers it holds under?"), each carrying its own set.
-        let make = |set_a: &str, set_b: &str| {
-            format!(
-                "# Topic\n\n\
-                 ### 1.1 Q?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
-                 ### 1.2 Q2?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
-                 ### 1.3 R?\ndepends: 1.1 Q?{}, 1.2 Q2?{}\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
-                set_a, set_b
-            )
-        };
-        let a = rf_from(&make("=A", "=B"));
-        let b = rf_from(&make("=B", "=A|B"));
+        let base = "# Topic\n\n### 1.1 Q?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+        let tooled = "# Topic\n\n### 1.1 Q?\nterms: a=b\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n";
         assert_eq!(
-            plan_hash(&a),
-            plan_hash(&b),
-            "sets on either entry of a one-line depends must not move the plan hash"
+            question_hashes(&rf_from(base)),
+            question_hashes(&rf_from(tooled)),
+            "terms and Answer lines are not part of the question hash"
         );
     }
 
@@ -2099,26 +2082,13 @@ mod tests {
     }
 
     #[test]
-    fn plan_hash_changes_when_an_id_line_changes() {
+    fn question_hash_changes_when_an_id_line_changes() {
         let base = "# Topic\n\n### 1.1 Q?\n\nid: 11111111-1111-1111-1111-111111111111\n\ndepends: widget\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
         let with_id = rf_from(base);
         let no_id = rf_from(&base.replace("id: 11111111-1111-1111-1111-111111111111\n\n", ""));
-        assert_ne!(
-            plan_hash(&with_id),
-            plan_hash(&no_id),
-            "an id line appearing/disappearing must move the plan hash"
-        );
-
-        let swapped = base.replace(
-            "11111111-1111-1111-1111-111111111111",
-            "22222222-2222-2222-2222-222222222222",
-        );
-        let with_other_id = rf_from(&swapped);
-        assert_ne!(
-            plan_hash(&with_id),
-            plan_hash(&with_other_id),
-            "swapping a heading's id must move the plan hash"
-        );
+        assert_ne!(plan_hash(&with_id), plan_hash(&no_id));
+        let swapped = base.replace("11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222");
+        assert_ne!(plan_hash(&with_id), plan_hash(&rf_from(&swapped)), "swapping an id must move the hash");
     }
 
     #[test]

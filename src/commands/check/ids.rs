@@ -10,7 +10,7 @@ pub(super) fn check_ids(
     records: &[RecordFile],
     led: &Ledger,
     missing_answered: &[Refusal],
-    raw_hashes: &HashMap<String, (String, String)>,
+    raw_hashes: &HashMap<String, (Vec<String>, String)>,
 ) -> Vec<Failure> {
     let mut out = Vec::new();
     let mut seen: HashMap<String, String> = HashMap::new();
@@ -21,14 +21,11 @@ pub(super) fn check_ids(
                 continue;
             }
             match &sec.id {
-                // Per "Does the owner approve a plan in one step?": a
-                // section with no id means the plan was
-                // never approved (or an edit since moved the plan hash) --
-                // `approve`, not `ask`, is what gives it one.
-                None => out.push(Failure {
-                    check: "ids".to_string(),
-                    message: msg::heading_plan_not_approved(&rf.rel, &sec.heading_text),
-                }),
+                // A heading with no id is a question of a file awaiting
+                // approval (per "Does check fail a topic file awaiting
+                // approval?"): approve gives it one, and the file is counted
+                // as awaiting, never failed.
+                None => {}
                 Some(id) => {
                     if let Some(prev) = seen.get(id) {
                         out.push(Failure {
@@ -66,11 +63,8 @@ pub(super) fn check_ids(
     let stale: Vec<(usize, &str)> = records
         .iter()
         .filter(|rf| {
-            let plan_h = raw_hashes
-                .get(&rf.rel)
-                .map(|(p, _)| p.as_str())
-                .unwrap_or_default();
-            !state::plan_approved_hash(led, &rf.rel, plan_h)
+            let plan_h: &[String] = raw_hashes.get(&rf.rel).map(|(p, _)| p.as_slice()).unwrap_or_default();
+            !state::plan_approved_hashes(led, &rf.rel, plan_h)
         })
         .filter_map(|rf| {
             led.rows

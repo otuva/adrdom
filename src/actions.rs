@@ -1594,27 +1594,57 @@ fn do_approve_record(
         supersedes_ids.insert(i, ids);
     }
 
-    // A letter-set suffix naming a current decision elsewhere
-    // (`DepTarget::Decision`, an already-id entry or a heading-shaped one
-    // the normalize pass above just resolved) must still only name that
-    // decision's own option letters -- `bad_letters` alone never sees this
-    // case, since its target always comes from `rf` itself. `check`'s own
-    // `plan` check makes the same test (and, for a same-file
-    // `DepTarget::Heading`, only `check` makes it -- see its own comment
-    // for why that half stays a check-only extra).
+    // Per "Does the agent write the bodies before approve?" and "Does a
+    // depends entry on a question in its file carry an answer set?": the
+    // plan is approved with its bodies, so approve stops a question not yet
+    // asked that has no body, that depends on a question of its file with
+    // no answer set, or that carries a set on a question already answered.
+    // A question already asked is not subject to these.
     for sec in &rf.sections {
+        let asked = sec
+            .id
+            .as_ref()
+            .is_some_and(|id| led.rows.iter().any(|r| r.event == "asked" && &r.id == id));
+        if asked {
+            continue;
+        }
+        if sec.is_skeleton {
+            refusals.push(msg::approve_prefixed(msg::question_without_body(rel, &sec.heading_text)));
+            continue;
+        }
         for d in &sec.depends {
-            let Some(record::AnswerSet::Letters(letters)) = d.set() else {
+            let Ok(Some(target)) =
+                depends::resolve_dep(d, sec, &rf, terms_list, &phrase_lookup, &cross_file_headings, led)
+            else {
                 continue;
             };
-            if let Ok(Some(DepTarget::Decision(id))) =
-                depends::resolve_dep(d, sec, &rf, terms_list, &phrase_lookup, &cross_file_headings, led)
-            {
-                for m in
-                    depends::bad_letters_for_decision(rel, &sec.heading_text, &all_records, &id, letters)
-                {
-                    refusals.push(msg::approve_prefixed(m));
+            let (target_section, in_file) = match &target {
+                DepTarget::Heading(idx) => (Some(&rf.sections[*idx]), true),
+                DepTarget::Decision(id) => (
+                    all_records.iter().find_map(|r| r.sections.iter().find(|s| s.id.as_deref() == Some(id.as_str()))),
+                    false,
+                ),
+                DepTarget::Term(_) => (None, false),
+            };
+            let Some(ts) = target_section else { continue };
+            match d.set() {
+                None if in_file && ts.answer_letter().is_none() => refusals.push(msg::approve_prefixed(msg::missing_answer_set(
+                    rel,
+                    &sec.heading_text,
+                    &ts.heading_text,
+                ))),
+                // A set approved before its target was answered stays (per
+                // "Does a depends entry on a question in its file carry an
+                // answer set?"): only a question with no approved row older
+                // than the target's answer is refused.
+                Some(_) if ts.answer_letter().is_some() && !approved_before_answer(led, sec, ts) => {
+                    refusals.push(msg::approve_prefixed(msg::set_on_answered_question(
+                        rel,
+                        &sec.heading_text,
+                        &ts.heading_text,
+                    )))
                 }
+                _ => {}
             }
         }
     }
@@ -1732,6 +1762,29 @@ fn do_approve_record(
     let mut rows: Vec<ledger::Row> = Vec::new();
     let mut messages: Vec<String> = Vec::new();
 
+    // One row per question (per "Does approve hash each question on its
+    // own?"): its id and its own hash, written when that differs from the
+    // question's latest row for this file; then the file's row, whose hash
+    // is derived from the sorted question hashes.
+    let question_hashes = record::question_hashes(&work_rf);
+    for (sec, qh) in work_rf.sections.iter().zip(&question_hashes) {
+        let Some(id) = &sec.id else { continue };
+        let unchanged = led
+            .rows
+            .iter()
+            .rfind(|r| r.event == "approved" && &r.id == id)
+            .is_some_and(|r| &r.hash == qh && r.detail == rel);
+        if !unchanged {
+            rows.push(ledger::Row {
+                time: write_time.clone(),
+                event: "approved".to_string(),
+                id: id.clone(),
+                hash: qh.clone(),
+                detail: rel.to_string(),
+                version: crate::version::VERSION.to_string(),
+            });
+        }
+    }
     let plan_changed = led
         .latest_for_path("approved", rel)
         .map(|r| r.hash.as_str())
@@ -1814,6 +1867,17 @@ fn do_approve_record(
     Ok(Outcome {
         summary: messages.join("\n"),
     })
+}
+
+/// True when `sec` has a per-question `approved` row older than the
+/// `answered` row of `target`: the question was approved, with its set,
+/// before the target was answered. Matched by id, given at first approve.
+fn approved_before_answer(led: &Ledger, sec: &record::Section, target: &record::Section) -> bool {
+    let (Some(id), Some(tid)) = (&sec.id, &target.id) else { return false };
+    let Some(answered) = led.latest_for_id("answered", tid) else { return false };
+    led.rows
+        .iter()
+        .any(|r| r.event == "approved" && &r.id == id && r.time < answered.time)
 }
 
 /// The final text one `depends:` entry rewrites to when `approve` rewrites

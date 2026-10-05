@@ -446,47 +446,6 @@ fn check_passes_a_depends_set_whose_letters_are_all_options_the_target_has() {
     assert!(!text.contains("does not have"), "{}", text);
 }
 
-//
-// "Does a depends entry carry the answers it holds under?": the letters on
-// a depends entry's answer set must be options the target actually has --
-// this holds for a target resolved as a current decision elsewhere
-// (`DepTarget::Decision`, `A-id` an already-approved cross-file
-// reference), not only a same-file heading target
-// (`check_fails_a_depends_set_naming_an_option_the_target_does_not_have`
-// above): before this fix, only the same-file case was ever checked.
-#[test]
-fn check_fails_a_depends_set_naming_an_option_a_cross_file_decision_does_not_have() {
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "widget");
-
-    let a_id = "11111111-2222-3333-4444-555555555555";
-    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 What color is the widget?", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
-    let a_content = format!(
-        "# Topic A\n\n### 1.1 What color is the widget?\ndepends: widget\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
-        a_id
-    );
-    write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
-
-    let b_content = format!(
-        "# Topic B\n\n### 1.1 Does the paint match?\ndepends: {}=C\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
-        a_id
-    );
-    write_record(&dir, "adrdom/decisions/topic-b.md", &b_content);
-
-    let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
-    let text = stdout(&out);
-    assert!(
-        text.contains(
-            "plan: adrdom/decisions/topic-b.md: \"1.1 Does the paint match?\" depends on \"1.1 What color is the widget?\" names option C which \"1.1 What color is the widget?\" does not have"
-        ),
-        "{}",
-        text
-    );
-}
-
 #[test]
 fn check_fails_a_tier_over_the_cap() {
     let dir = init_repo();

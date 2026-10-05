@@ -26,13 +26,20 @@ const BODY: &str = "\nProblem: the widget breaks.\n\nStandard: plain words.\n\n\
 - A) Yes the widget holds.\n  Why: reasons.\n  Costs: costs.\n\
 - B) No the widget does not hold.\n  Why: other reasons.\n  Costs: other costs.\n";
 
+/// A heading, its depends line and a full body, as written before approval.
+fn q(heading: &str, depends: &str) -> String {
+    format!("### {}\ndepends: {}\n{}\n", heading, depends, BODY)
+}
+
 fn setup() -> (PathBuf, PathBuf) {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     let plan = format!(
-        "# Gate\n\n### {}\ndepends: widget\n\n### {}\ndepends: widget\n\n### {}\ndepends: widget, {}\n",
-        ONE, TWO, THREE, TWO
+        "# Gate\n\n{}{}{}",
+        q(ONE, "widget"),
+        q(TWO, "widget"),
+        q(THREE, &format!("widget, {}=A", TWO))
     );
     let path = write_record(&dir, REL, &plan);
     (dir, path)
@@ -51,23 +58,10 @@ fn next(dir: &Path) -> Vec<String> {
         .collect()
 }
 
-/// Puts a body under `heading`, after its id line.
-fn write_body(path: &Path, heading: &str) {
-    let text = std::fs::read_to_string(path).unwrap();
-    let at = text.find(&format!("### {}\n", heading)).unwrap();
-    let id_line = at + text[at..].find("\nid: ").unwrap() + 1;
-    let end = id_line + text[id_line..].find('\n').unwrap() + 1;
-    std::fs::write(path, format!("{}{}{}", &text[..end], BODY, &text[end..])).unwrap();
-}
-
 fn id_of(path: &Path, heading: &str) -> String {
     let text = std::fs::read_to_string(path).unwrap();
     let at = text.find(&format!("### {}\n", heading)).unwrap();
     extract_ids(&text[at..])[0].clone()
-}
-
-fn body_of(heading: &str) -> String {
-    format!("agent writes the body of \"{}\"", heading)
 }
 
 fn ask_for(headings: &[&str]) -> String {
@@ -105,24 +99,8 @@ fn show_names_the_next_move_at_every_step() {
     assert_eq!(next(&dir), vec![format!("owner runs: adr approve {}", REL)]);
 
     approve_record(&dir, REL);
-    assert_eq!(next(&dir), vec![body_of(ONE), body_of(TWO), later(THREE)]);
-
-    write_body(&path, ONE);
-    assert_eq!(next(&dir), vec![body_of(TWO), ask_for(&[ONE]), later(THREE)]);
-
-    // THREE names TWO on its depends line, and TWO now has its options:
-    // the letters are written before TWO is asked.
-    write_body(&path, TWO);
-    let set = format!(
-        "agent writes =A, =A|B or =* on the depends line of \"{}\" where it names \"{}\"",
-        THREE, TWO
-    );
-    assert_eq!(next(&dir), vec![set, ask_for(&[ONE, TWO]), later(THREE)]);
-
-    let two = id_of(&path, TWO);
-    let text = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, text.replace(&format!(", {}\n", two), &format!(", {}=A\n", two))).unwrap();
     assert_eq!(next(&dir), vec![ask_for(&[ONE, TWO]), later(THREE)]);
+    let two = id_of(&path, TWO);
 
     let asked = adr(&dir, &["ask", p], &[], "");
     assert!(asked.status.success(), "{}", stderr(&asked));
@@ -143,10 +121,11 @@ fn show_names_the_next_move_at_every_step() {
         assert!(said.contains(&format!("  {}", line)), "{}", said);
     }
 
-    // A body edited after it was asked: the owner's command would be
-    // refused, so the move is the agent's, to ask it again.
+    // A body edited after it was asked: the owner approves the edit, then
+    // the move is the agent's, to ask it again.
     let text = std::fs::read_to_string(&path).unwrap();
     std::fs::write(&path, text.replacen("the widget breaks.", "the widget breaks in use.", 1)).unwrap();
+    approve_record(&dir, REL);
     assert_eq!(
         next(&dir),
         vec![ask_for(&[ONE]), answer_for(&dir, &two, TWO), later(THREE)]
@@ -174,19 +153,17 @@ fn show_names_the_next_move_at_every_step() {
         ]
     );
 
-    // Both answered: they are built first, then the next body is written.
+    // Both answered: they are built first, then the next question is asked.
     assert!(adr_answer(&dir, &two, "A").status.success());
     assert_eq!(
         next(&dir),
-        vec![build_of(ONE, &one), build_of(TWO, &two), body_of(THREE)]
+        vec![build_of(ONE, &one), build_of(TWO, &two), ask_for(&[THREE])]
     );
 
     write_test_comment(&dir, &one);
     write_test_comment(&dir, &two);
-    assert_eq!(next(&dir), vec![body_of(THREE)]);
-
-    write_body(&path, THREE);
     assert_eq!(next(&dir), vec![ask_for(&[THREE])]);
+
     assert!(adr(&dir, &["ask", p], &[], "").status.success());
     let three = id_of(&path, THREE);
     assert_eq!(next(&dir), vec![answer_for(&dir, &three, THREE)]);
@@ -212,14 +189,13 @@ fn show_names_the_plan_change_an_answered_decision_waits_for() {
     approve_minimal_terms(&dir, "widget");
     const FOUR: &str = "Is the widget gate stay shut?";
     let plan = format!(
-        "# Gate\n\n### {}\ndepends: widget\n\n### {}\ndepends: widget\n\n### {}\ndepends: widget\n",
-        ONE, TWO, FOUR
+        "# Gate\n\n{}{}{}",
+        q(ONE, "widget"),
+        q(TWO, "widget"),
+        q(FOUR, "widget")
     );
     let path = write_record(&dir, REL, &plan);
     approve_record(&dir, REL);
-    write_body(&path, ONE);
-    write_body(&path, TWO);
-    write_body(&path, FOUR);
     assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
     assert!(adr_answer(&dir, &id_of(&path, ONE), "A").status.success());
     assert!(adr_answer(&dir, &id_of(&path, TWO), "refuse").status.success());
@@ -270,13 +246,10 @@ fn show_prints_the_refusal_of_a_plan_as_the_next_move() {
     approve_minimal_terms(&dir, "widget");
     let mut plan = String::from("# Gate\n");
     for n in ["one", "two", "three", "four"] {
-        plan.push_str(&format!("\n### Is the widget gate {} hold?\ndepends: widget\n", n));
+        plan.push_str(&format!("\n{}", q(&format!("Is the widget gate {} hold?", n), "widget")));
     }
     let path = write_record(&dir, REL, &plan);
     approve_record(&dir, REL);
-    for n in ["one", "two", "three", "four"] {
-        write_body(&path, &format!("Is the widget gate {} hold?", n));
-    }
     assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
     for id in extract_ids(&std::fs::read_to_string(&path).unwrap()) {
         assert!(adr_answer(&dir, &id, "A").status.success());
@@ -302,16 +275,7 @@ or moves it to another file when none does",
         .filter(|l| l.starts_with("plan: ") && !l.contains("awaiting approval"))
         .map(|l| l.to_string())
         .collect();
-    assert_eq!(
-        plan_lines,
-        vec![
-            format!("plan: {}", refusal),
-            format!(
-                "plan: {}: 4 bodies under unapproved headings; owner runs: adr approve {}",
-                REL, REL
-            ),
-        ]
-    );
+    assert_eq!(plan_lines, vec![format!("plan: {}", refusal)]);
 }
 
 // adr: f4f667ad-8714-4e65-897b-c7002e423c28
@@ -329,9 +293,8 @@ fn show_names_what_replaced_a_superseded_question() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
-    let path = write_record(&dir, REL, &format!("# Gate\n\n### {}\ndepends: widget\n", ONE));
+    let path = write_record(&dir, REL, &format!("# Gate\n\n{}", q(ONE, "widget")));
     approve_record(&dir, REL);
-    write_body(&path, ONE);
     let p = path.to_str().unwrap();
     assert!(adr(&dir, &["ask", p], &[], "").status.success());
     let one = id_of(&path, ONE);
@@ -339,7 +302,7 @@ fn show_names_what_replaced_a_superseded_question() {
 
     // The supersedes line is written with the plan, before approval.
     let mut text = std::fs::read_to_string(&path).unwrap();
-    text.push_str(&format!("\n### {}\ndepends: widget\nsupersedes: {}\n", TWO, ONE));
+    text.push_str(&format!("\n### {}\ndepends: widget\nsupersedes: {}\n{}", TWO, ONE, BODY));
     std::fs::write(&path, text).unwrap();
     approve_record(&dir, REL);
     let two = id_of(&path, TWO);
@@ -349,7 +312,6 @@ fn show_names_what_replaced_a_superseded_question() {
         "{}",
         text
     );
-    write_body(&path, TWO);
     let asked = adr(&dir, &["ask", p], &[], "");
     assert!(asked.status.success(), "{}", stderr(&asked));
     assert!(adr_answer(&dir, &two, "A").status.success());
@@ -366,7 +328,7 @@ fn show_names_what_replaced_a_superseded_question() {
     // A heading that names no current decision: approve refuses it and
     // names the move.
     let mut text = std::fs::read_to_string(&path).unwrap();
-    text.push_str(&format!("\n### {}\ndepends: widget\nsupersedes: {}\n", THREE, ONE));
+    text.push_str(&format!("\n### {}\ndepends: widget\nsupersedes: {}\n{}", THREE, ONE, BODY));
     std::fs::write(&path, text).unwrap();
     let approved = adr_owner(&dir, &["approve", p], "");
     assert!(!approved.status.success());
@@ -388,9 +350,8 @@ fn show_prints_no_next_when_nothing_is_left() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
-    let path = write_record(&dir, REL, &format!("# Gate\n\n### {}\ndepends: widget\n", ONE));
+    let path = write_record(&dir, REL, &format!("# Gate\n\n{}", q(ONE, "widget")));
     approve_record(&dir, REL);
-    write_body(&path, ONE);
     assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
     let one = id_of(&path, ONE);
     assert!(adr_answer(&dir, &one, "A").status.success());
@@ -413,15 +374,13 @@ fn show_is_short_until_it_is_asked_for_the_whole() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     let plan = format!(
-        "# Gate\n\n### {}\ndepends: widget\n\n### {}\ndepends: widget, {}\n",
-        ONE, THREE, ONE
+        "# Gate\n\n{}{}",
+        q(ONE, "widget"),
+        q(THREE, &format!("widget, {}=A", ONE))
     );
     let path = write_record(&dir, REL, &plan);
     approve_record(&dir, REL);
-    write_body(&path, ONE);
     let one = id_of(&path, ONE);
-    let text = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, text.replace(&format!(", {}\n", one), &format!(", {}=A\n", one))).unwrap();
     let p = path.to_str().unwrap();
     assert!(adr(&dir, &["ask", p], &[], "").status.success());
     assert!(adr_answer(&dir, &one, "A").status.success());
@@ -431,7 +390,7 @@ fn show_is_short_until_it_is_asked_for_the_whole() {
     assert_eq!(
         short,
         format!(
-            "# Gate ({rel})\n  {one}\n    Yes the widget holds.\nnext\n  agent writes the body of \"{three}\"\n\
+            "# Gate ({rel})\n  {one}\n    Yes the widget holds.\nnext\n  agent runs adr ask {rel}  # \"{three}\"\n\
 adr show <topic file> prints every question of one file with what it stands on; adr show --all prints all of them\n",
             rel = REL,
             one = ONE,
@@ -441,7 +400,7 @@ adr show <topic file> prints every question of one file with what it stands on; 
 
     let whole = format!(
         "# Gate ({rel})\ntier 1\n  [answered A] {one}\n    stands on: widget\n    stood on by: {three}\n    Yes the widget holds.\n\
-tier 2\n  [no body] {three}\n    stands on: widget, {one}=A\nnext\n  agent writes the body of \"{three}\"\n",
+tier 2\n  [not asked] {three}\n    stands on: widget, {one}=A\nnext\n  agent runs adr ask {rel}  # \"{three}\"\n",
         rel = REL,
         one = ONE,
         three = THREE
@@ -464,11 +423,7 @@ fn show_and_answer_agree_on_whether_the_asked_text_stands() {
     let (dir, path) = setup();
     let p = path.to_str().unwrap();
     approve_record(&dir, REL);
-    write_body(&path, ONE);
-    write_body(&path, TWO);
     let two = id_of(&path, TWO);
-    let text = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, text.replace(&format!(", {}\n", two), &format!(", {}=A\n", two))).unwrap();
     assert!(adr(&dir, &["ask", p], &[], "").status.success());
     let one = id_of(&path, ONE);
     assert_eq!(
@@ -487,6 +442,7 @@ fn show_and_answer_agree_on_whether_the_asked_text_stands() {
         text[at..].replacen("the widget breaks.", "the widget breaks in use.", 1)
     );
     std::fs::write(&path, edited).unwrap();
+    approve_record(&dir, REL);
     assert_eq!(
         next(&dir),
         vec![ask_for(&[TWO]), answer_for(&dir, &one, ONE), later(THREE)]
@@ -516,24 +472,15 @@ fn show_names_the_drop_of_a_moot_question_before_the_ask() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     let plan = format!(
-        "# Gate\n\n### {}\ndepends: widget\n\n### {}\ndepends: widget, {}\n\n### {}\ndepends: widget, {}\n",
-        ONE, TWO, ONE, THREE, ONE
+        "# Gate\n\n{}{}{}",
+        q(ONE, "widget"),
+        q(TWO, &format!("widget, {}=A", ONE)),
+        q(THREE, &format!("widget, {}=*", ONE))
     );
     let path = write_record(&dir, REL, &plan);
     let p = path.to_str().unwrap();
     approve_record(&dir, REL);
-    for h in [ONE, TWO, THREE] {
-        write_body(&path, h);
-    }
     let one = id_of(&path, ONE);
-    let mut text = std::fs::read_to_string(&path).unwrap();
-    for (heading, set) in [(TWO, "A"), (THREE, "*")] {
-        let at = text.find(&format!("### {}\n", heading)).unwrap();
-        let rest = text[at..].replacen(&format!(", {}\n", one), &format!(", {}={}\n", one, set), 1);
-        text.truncate(at);
-        text.push_str(&rest);
-    }
-    std::fs::write(&path, text).unwrap();
 
     assert!(adr(&dir, &["ask", p], &[], "").status.success());
     assert!(adr_answer(&dir, &one, "B").status.success());
@@ -554,7 +501,9 @@ fn show_names_the_drop_of_a_moot_question_before_the_ask() {
     let text = std::fs::read_to_string(&path).unwrap();
     let from = text.find(&format!("### {}\n", TWO)).unwrap();
     let to = text.find(&format!("### {}\n", THREE)).unwrap();
-    std::fs::write(&path, format!("{}{}", &text[..from], &text[to..])).unwrap();
+    // The answered root no longer takes a set, so the remaining entry loses its set too.
+    let kept = format!("{}{}", &text[..from], &text[to..]).replace(&format!("{}=*", one), &one);
+    std::fs::write(&path, kept).unwrap();
     approve_record(&dir, REL);
     assert_eq!(next(&dir), vec![ask_for(&[THREE])]);
     let asked = adr(&dir, &["ask", p], &[], "");
@@ -572,12 +521,7 @@ fn show_names_the_drop_of_a_moot_question_before_the_ask() {
 fn answer_on_a_question_never_asked_names_the_ask() {
     let (dir, path) = setup();
     approve_record(&dir, REL);
-    write_body(&path, ONE);
-    write_body(&path, TWO);
     let one = id_of(&path, ONE);
-    let two = id_of(&path, TWO);
-    let text = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, text.replace(&format!(", {}\n", two), &format!(", {}=A\n", two))).unwrap();
     let out = adr_owner(&dir, &["answer", &format!("{}@12345678", one), "A"], "");
     assert!(!out.status.success());
     assert_eq!(
@@ -591,6 +535,7 @@ fn answer_on_a_question_never_asked_names_the_ask() {
     let old = current_version(&dir, &one);
     let text = std::fs::read_to_string(&path).unwrap();
     std::fs::write(&path, text.replacen("the widget breaks.", "the widget breaks in use.", 1)).unwrap();
+    approve_record(&dir, REL);
     assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
     let out = adr_owner(&dir, &["answer", &format!("{}@{}", one, old), "A"], "");
     assert_eq!(

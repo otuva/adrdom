@@ -36,7 +36,7 @@ pub(super) fn check_plan(
     terms_list: &[terms::Term],
     phrase_lookup: &HashMap<String, String>,
     cross_file_headings: &HashMap<String, Vec<(String, String)>>,
-    raw_hashes: &HashMap<String, (String, String)>,
+    raw_hashes: &HashMap<String, (Vec<String>, String)>,
 ) -> (Vec<Failure>, Vec<String>) {
     let mut out = Vec::new();
     let mut awaiting: Vec<String> = Vec::new();
@@ -78,30 +78,6 @@ pub(super) fn check_plan(
             }
         }
 
-        // One line for the file, after its refusals above: a heading added
-        // to an approved file puts every body in it under an unapproved
-        // plan, and one line for each would bury the refusal that names
-        // the agent's move.
-        if !plan_ok {
-            let bodies: Vec<&str> = rf
-                .sections
-                .iter()
-                .filter(|sec| !sec.is_skeleton)
-                .map(|sec| sec.heading_text.as_str())
-                .collect();
-            match bodies.as_slice() {
-                [] => {}
-                [one] => out.push(Failure {
-                    check: "plan".to_string(),
-                    message: msg::body_under_unapproved_heading(&rel, one),
-                }),
-                many => out.push(Failure {
-                    check: "plan".to_string(),
-                    message: msg::bodies_under_unapproved_headings(&rel, many.len()),
-                }),
-            }
-        }
-
         // A letter-set suffix on a resolved dependency validates against
         // the target once found (per "Does a depends entry carry the
         // answers it holds under?") -- `approve` never checks this today,
@@ -111,7 +87,9 @@ pub(super) fn check_plan(
         // entry, or a heading-shaped one `normalize_cross_file_deps`
         // resolved above) has its options nowhere in `rf`, so its section
         // is found in `records` instead (`bad_letters_for_decision`).
-        for sec in &rf.sections {
+        // A file awaiting approval is only counted: approve refuses what is
+        // wrong in it (per "Does check fail a topic file awaiting approval?").
+        for sec in rf.sections.iter().filter(|_| plan_ok) {
             for d in &sec.depends {
                 let Some(AnswerSet::Letters(letters)) = d.set() else {
                     continue;

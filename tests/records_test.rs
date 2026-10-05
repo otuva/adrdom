@@ -227,7 +227,7 @@ fn approve_skips_a_frozen_headings_tell_and_still_mints_a_new_skeletons_id() {
     approve_minimal_terms(&dir, "widget");
     let frozen = frozen_tell_section_resolved();
     let content = format!(
-        "# Example\n\nContext prose.\n\n{}\n\n### A new clean heading?\ndepends: widget\n",
+        "# Example\n\nContext prose.\n\n{}\n\n### A new clean heading?\ndepends: widget\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
         frozen
     );
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);

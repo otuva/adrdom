@@ -37,10 +37,40 @@ fn hash_matches_latest(led: &Ledger, event: &str, rel: &str, hash: &str) -> bool
     }
 }
 
-/// True when `plan_hash` (computed by the caller) matches the latest
-/// `approved` ledger row for `rel`. See `hash_matches_latest`.
-pub fn plan_approved_hash(led: &Ledger, rel: &str, plan_hash: &str) -> bool {
-    hash_matches_latest(led, "approved", rel, plan_hash)
+/// The hashes of the questions dropped from the file `rel` since its
+/// approval: every `dropped` row whose id and hash match a per-question
+/// `approved` row for `rel`. A later area writes the `dropped` rows; the
+/// event is accepted by the ledger already.
+pub fn dropped_hashes(led: &Ledger, rel: &str) -> Vec<String> {
+    led.rows
+        .iter()
+        .filter(|d| d.event == "dropped")
+        .filter(|d| {
+            led.rows
+                .iter()
+                .any(|a| a.event == "approved" && a.id == d.id && a.hash == d.hash && a.detail == rel)
+        })
+        .map(|d| d.hash.clone())
+        .collect()
+}
+
+/// True when the derived hash of `question_hashes` (a file's current
+/// questions, computed by the caller) matches the latest `approved` file
+/// row for `rel`, either as it stands or with the questions dropped since
+/// approval put back (per "Does approve hash each question on its own?": a
+/// removed question takes its hash with it and nothing else moves). See
+/// `hash_matches_latest`.
+pub fn plan_approved_hashes(led: &Ledger, rel: &str, question_hashes: &[String]) -> bool {
+    if hash_matches_latest(led, "approved", rel, &record::derive_file_hash(question_hashes)) {
+        return true;
+    }
+    let dropped = dropped_hashes(led, rel);
+    if dropped.is_empty() {
+        return false;
+    }
+    let mut all: Vec<String> = question_hashes.to_vec();
+    all.extend(dropped);
+    hash_matches_latest(led, "approved", rel, &record::derive_file_hash(&all))
 }
 
 /// True when `context_hash` (computed by the caller) matches the latest
@@ -49,14 +79,14 @@ pub fn context_approved_hash(led: &Ledger, rel: &str, context_hash: &str) -> boo
     hash_matches_latest(led, "context", rel, context_hash)
 }
 
-/// True when the topic file's current plan hash matches the latest `approved`
+/// True when the topic file's current questions match the latest `approved`
 /// ledger row for `rel` (the topic file's path relative to the repo root).
 /// `rf` must not have gone through `depends::normalize_cross_file_deps` --
-/// that mutates the parsed `depends:` entries this hashes, in memory, so a
-/// caller that normalizes its `rf` must compute the hash before doing so
-/// and call `plan_approved_hash` with it instead of this.
+/// that mutates the parsed `depends:` entries these hash, in memory, so a
+/// caller that normalizes its `rf` must compute `record::question_hashes`
+/// before doing so and call `plan_approved_hashes` with them instead.
 pub fn plan_approved(led: &Ledger, rf: &RecordFile, rel: &str) -> bool {
-    plan_approved_hash(led, rel, &record::plan_hash(rf))
+    plan_approved_hashes(led, rel, &record::question_hashes(rf))
 }
 
 /// True when the topic file's current context hash matches the latest

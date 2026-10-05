@@ -171,10 +171,8 @@ fn check_passes_when_the_dependents_heading_has_extra_leading_whitespace() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
-    // "Extra space?" is a skeleton (heading + depends only, no body): it
-    // must not itself become a candidate blocked by the tier rule, but it
-    // still counts as a dependent of "Which color?" for the assumes row
-    // this ask writes.
+    // "Extra space?" stands on "Which color?" and is a dependent of it for
+    // the assumes row this ask writes.
     // the term-pairing scan now leaves out `depends:` lines
     // (they hold references, not prose), so "widget" has to appear in the
     // heading/Problem/Standard/option text itself for this to pair the term.
@@ -186,7 +184,11 @@ Standard: s.\n\n\
 - A) Red.\n  Why: w.\n  Costs: c.\n\
 - B) Blue.\n  Why: w.\n  Costs: c.\n\n\
 ###   Extra space?\n\
-depends: 1.1 Which color is the widget?=A\n";
+depends: 1.1 Which color is the widget?=A\n\n\
+Problem: p.\n\n\
+Standard: s.\n\n\
+- A) Yes.\n  Why: w.\n  Costs: c.\n\
+- B) No.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/colors.md", content);
     approve_record(&dir, "adrdom/decisions/colors.md");
 
@@ -225,11 +227,10 @@ fn check_does_not_note_a_dependent_whose_set_still_includes_the_answer() {
 
 //
 // A question in one file standing on a current decision of another file
-// under a set that lacks the letter it was answered with is moot, as it is
-// inside one file: check reports it, ask refuses it and show's next names
-// the drop.
+// under a set that lacks the letter it was answered with is refused by
+// `approve`, as it is inside one file.
 #[test]
-fn a_cross_file_depends_entry_whose_set_lacks_the_answer_is_moot() {
+fn approve_refuses_a_cross_file_depends_set_on_an_answered_decision() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -254,26 +255,13 @@ fn a_cross_file_depends_entry_whose_set_lacks_the_answer_is_moot() {
     let b = write_record(
         &dir,
         "adrdom/decisions/topic-b.md",
-        &format!("# Topic B\n\n### Is the widget follow?\ndepends: Is the widget hold?=B\n\n{}", q),
+        &format!("# Topic B\n\n### Is the widget follow?\ndepends: Is the widget hold?=A\n\n{}", q),
     );
     let out = adr_owner(&dir, &["approve", b.to_str().unwrap()], "");
-    assert!(out.status.success(), "{}", stderr(&out));
-
-    let moot = "\"Is the widget follow?\" stands on \"Is the widget hold?\"=B, answered A";
-    let check = stdout(&adr(&dir, &["check"], &[], ""));
-    assert!(check.contains(moot), "{}", check);
-    let ask = adr(&dir, &["ask", b.to_str().unwrap()], &[], "");
-    assert!(!ask.status.success(), "ask must refuse a moot question: {}", stdout(&ask));
-    let refusal = stderr(&ask);
+    assert!(!out.status.success());
     assert!(
-        refusal.contains("\"Is the widget follow?\" has no case left: it stands on \"Is the widget hold?\""),
+        stderr(&out).contains("\"Is the widget follow?\" depends on \"Is the widget hold?\", which is answered, under an answer set"),
         "{}",
-        refusal
-    );
-    let show = stdout(&adr(&dir, &["show"], &[], ""));
-    assert!(
-        show.contains("drops or replaces \"Is the widget follow?\", which has no case left"),
-        "{}",
-        show
+        stderr(&out)
     );
 }

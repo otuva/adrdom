@@ -861,7 +861,27 @@ pub fn missing_answer_set(rel: &str, dependent: &str, target: &str) -> String {
             "{}: \"{}\" depends on \"{}\" without an answer set",
             rel, dependent, target
         ),
-        Next::agent("writes =A, =A|B or =* on that depends line"),
+        Next::agent("writes =A, =A|B or =* on that depends line")
+            .and_owner_runs(format!("adr approve {}", rel)),
+    )
+}
+
+pub fn set_on_answered_question(rel: &str, dependent: &str, target: &str) -> String {
+    refuse(
+        format!(
+            "{}: \"{}\" depends on \"{}\", which is answered, under an answer set",
+            rel, dependent, target
+        ),
+        Next::agent("removes the answer set from that depends entry")
+            .and_owner_runs(format!("adr approve {}", rel)),
+    )
+}
+
+pub fn question_without_body(rel: &str, heading: &str) -> String {
+    refuse(
+        format!("{}: \"{}\" is a heading with no body", rel, heading),
+        Next::agent("writes its body, or strikes the heading")
+            .and_owner_runs(format!("adr approve {}", rel)),
     )
 }
 
@@ -1363,13 +1383,6 @@ pub fn check_parse_error(rel: &str, heading: &str, e: &str) -> String {
     refuse(
         format!("{}: {}: {}", rel, heading, e),
         Next::agent("fixes the topic file"),
-    )
-}
-
-pub fn heading_plan_not_approved(rel: &str, heading: &str) -> String {
-    refuse(
-        format!("{}: {}: plan not approved", rel, heading),
-        Next::owner_runs(format!("adr approve {}", rel)),
     )
 }
 
@@ -1976,20 +1989,6 @@ pub fn topic_unnameable(rel: &str, topic: &str) -> String {
         Next::agent(
             "rewords the topic line to letters and spaces only and names the file by it; if the file had already been approved, the owner re-approves it, since approval is keyed to the path",
         ),
-    )
-}
-
-pub fn body_under_unapproved_heading(rel: &str, heading: &str) -> String {
-    refuse(
-        format!("{}: body under unapproved heading \"{}\"", rel, heading),
-        Next::owner_runs(format!("adr approve {}", rel)),
-    )
-}
-
-pub fn bodies_under_unapproved_headings(rel: &str, count: usize) -> String {
-    refuse(
-        format!("{}: {} bodies under unapproved headings", rel, count),
-        Next::owner_runs(format!("adr approve {}", rel)),
     )
 }
 
@@ -2717,6 +2716,8 @@ mod tests {
             plan_not_approved("x.md"),
             context_not_approved("x.md"),
             missing_answer_set("x.md", "dependent", "target"),
+            set_on_answered_question("x.md", "dependent", "target"),
+            question_without_body("x.md", "heading"),
             ask_supersedes_not_current("x.md", "heading", "id-1", Some("name")),
             moot_candidate("x.md", "heading", "target", "A", 'B'),
             banned_word_in_candidate("x.md", "heading", ""),
@@ -2730,7 +2731,6 @@ mod tests {
             settings_permissions_not_object("path", Next::agent("retries")),
             settings_deny_not_array("path", Next::agent("retries")),
             check_parse_error("x.md", "heading", "duplicate id line"),
-            heading_plan_not_approved("x.md", "heading"),
             duplicate_id("id-1", "x.md:heading", "y.md", "heading"),
             removed_from_plan("id-1", "heading", "asked", Some("x.md")),
             removed_from_plan("id-1", "heading", "asked", None),
@@ -2777,8 +2777,6 @@ mod tests {
             bad_topic_file_name("adrdom/decisions/Bad_Name.md"),
             topic_file_name_mismatch("adrdom/decisions/x.md", "Y", "y"),
             topic_unnameable("adrdom/decisions/rule.md", "Rule 2"),
-            body_under_unapproved_heading("x.md", "heading"),
-            bodies_under_unapproved_headings("x.md", 3),
             bind_failed(7357, e),
             missing_answer_selection("id-1", "abcd1234"),
             blame_shape_error("adrdom/blame/x.md", "line 1: missing \"origin: <path>\""),

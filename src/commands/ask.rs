@@ -84,10 +84,10 @@ pub fn run(record_path: PathBuf) -> i32 {
     // Plan/context approval state must be read off `rf` exactly as loaded,
     // before the normalize pass below mutates its parsed `depends:`
     // entries in memory (per "..."): captured here, ahead of that
-    // mutation, and used below via `state::plan_approved_hash`/
+    // mutation, and used below via `state::plan_approved_hashes`/
     // `context_approved_hash` instead of recomputing from the
     // (by-then-normalized) `rf`.
-    let raw_plan_hash = record::plan_hash(&rf);
+    let raw_question_hashes = record::question_hashes(&rf);
     let raw_context_hash = record::context_hash(&rf);
 
     // Same pre-pass `approve`/`check` run before reading `rf.tiers`/
@@ -162,7 +162,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     // Refusal 4: plan / context must be approved before ask will touch the
     // file at all -- checked against the hashes captured before the
     // normalize pass above, never the normalized `rf`.
-    if !state::plan_approved_hash(&led, &rel, &raw_plan_hash) {
+    if !state::plan_approved_hashes(&led, &rel, &raw_question_hashes) {
         eprintln!("ask: {}", msg::plan_not_approved(&rel));
         return 1;
     }
@@ -246,11 +246,10 @@ pub fn run(record_path: PathBuf) -> i32 {
     // three in one run.
     let mut refusals: Vec<String> = Vec::new();
 
-    // Answer sets mandatory (per "Does a depends entry carry the answers
-    // it holds under?"): before asking any candidate in the
-    // open tier, every section in the file with a heading dep pointing at
-    // an open-tier section must carry an explicit set on that entry, and
-    // every set's letters must be options the target actually has. Runs
+    // Answer sets (per "Does a depends entry carry the answers it holds
+    // under?"): before asking any candidate in the open tier, every set on
+    // a heading dep pointing at an open-tier section must name only options
+    // the target actually has. Runs
     // once, ahead of the per-candidate loop, and only when there is
     // something new to ask in the open tier this run.
     if let Some(n) = open_tier {
@@ -277,12 +276,10 @@ pub fn run(record_path: PathBuf) -> i32 {
                 for (di, set) in rf.dependents_of(ti) {
                     let dependent = &rf.sections[di];
                     let found = match set {
-                        None => vec![msg::missing_answer_set(
-                            &rel,
-                            &dependent.heading_text,
-                            &target.heading_text,
-                        )],
-                        Some(record::AnswerSet::Any) => Vec::new(),
+                        // A missing set is approve's stop (per "Does a depends
+                        // entry on a question in its file carry an answer
+                        // set?"), not ask's.
+                        None | Some(record::AnswerSet::Any) => Vec::new(),
                         Some(record::AnswerSet::Letters(letters)) => {
                             depends::bad_letters(&rel, &dependent.heading_text, target, letters)
                         }
