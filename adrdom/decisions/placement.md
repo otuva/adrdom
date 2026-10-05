@@ -75,9 +75,20 @@ Standard: linters report pending items as counts and fail only what is wrong.
 depends: b36113a1-1384-4e4c-a798-8399f4181366, 946263aa-519a-47aa-b743-5cdcf52f5d35=A, 61e73795-63de-4669-b09f-48be96919325=A
 supersedes: fa90692a-150e-4a89-91e2-1d575cb59d0f
 id: 462e22c6-8b23-4061-9a2a-bbf8691fce60
+terms: answer=b36113a1-1384-4e4c-a798-8399f4181366, answer set=9d634996-475e-4ddc-8113-05c404ad9d5c, approval=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approves=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
+
+Problem: a question whose set lacks the answer is dead, and it sits in the file until a new approval removes it; the owner approves twice for one answer.
+Standard: a conditional item leaves with its condition; no second confirmation.
+
+- A) Yes.
+  Why: the owner's answer is the ruling; the question and those standing on it leave at once, no second approval.
+  Costs: answer edits the topic file past its answer line; removed text stays in git history, its hash in a row.
+- B) No.
+  Why: answer writes only its answer line; the plan leaves the file to approve.
+  Costs: a dead question waits in the file until the owner approves a plan without it; ask and check report it.
 
 ### What does answer write for a removed question?
-depends: e18b82d8-5271-4385-bbab-2b89e5da278f, 462e22c6-8b23-4061-9a2a-bbf8691fce60
+depends: e18b82d8-5271-4385-bbab-2b89e5da278f, 462e22c6-8b23-4061-9a2a-bbf8691fce60=A
 id: f5c242b6-e2f6-45a3-8c61-c743f3ad794f
 
 ### What does the tool bring as neighbours for a new heading?
@@ -140,6 +151,17 @@ Standard: a pipeline with a fixed order of steps, each step's output the next st
 ### Does a planning step run without the record of the step before?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 46fc51ff-66b9-4841-a953-ae0d4c2fc424=*
 id: d3be71e4-ce7b-43b0-86a8-e86868521f99
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, approval=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, checks=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, neighbours=daec9ffd-676f-4111-a359-2827bfd4527c, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, refused=0942e445-0163-423e-8ba7-84dd8ac07045, refuses=0942e445-0163-423e-8ba7-84dd8ac07045
+
+Problem: the steps order the work only if the tool can see that each was done; an agent that writes everything at once and runs the tool last has skipped nothing the tool can name.
+Standard: a pipeline stage refuses input that lacks the previous stage's output.
+
+- A) No.
+  Why: neighbours come for headings without bodies, lines are read before the full questions, approval reads records of the text.
+  Costs: one command whose step follows the file's state; a file with bodies under some headings only is refused.
+- B) Yes.
+  Why: the agent runs the steps in any order; approval checks that every record exists.
+  Costs: the order of thinking is not held; neighbours of a heading may come after its body was written.
 
 ### Does planning stop without the embedding model?
 depends: a7b0b910-57f6-4c59-b904-b42f78db63f7, de8ef568-3a8d-42ba-bef7-d7fd467b27be=*
@@ -165,21 +187,46 @@ id: 4838baa4-a5df-49e7-929c-ed63b5adaf4e
 ### Does every neighbour get a line under its heading?
 depends: aef1b384-2b33-47a2-92a8-ec7f8fb258ef, 2bae531b-c4df-48a0-89a0-3d52726741ea, 46fc51ff-66b9-4841-a953-ae0d4c2fc424=*
 id: c6451ecc-17a9-447e-a9c9-fe9b35ec789c
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, approval=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, depends=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, identifiers=e877e4a9-2caf-4fe6-9f82-5476a2abb00b, neighbour=daec9ffd-676f-4111-a359-2827bfd4527c, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, supersedes=2bae531b-c4df-48a0-89a0-3d52726741ea
+
+Problem: the agent writes the ties it sees; a neighbour it never ruled on looks the same as one it judged unrelated.
+Standard: every item put in front of a reviewer gets an explicit disposition.
+
+- A) Yes.
+  Why: forgetting is impossible; what is left is a wrong ruling, and that stands under the agent's own line.
+  Costs: an unrelated line joins depends and supersedes under the heading; approval turns its names to identifiers.
+- B) No.
+  Why: only the ties that hold are written; the file stays short.
+  Costs: a neighbour left off a line is unseen by approve, and the reader's word on it meets no ruling.
 
 ### What does the reader say about a neighbour of a heading?
-depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, c6e0b7d6-cdec-46da-b2bc-cda218673868
+depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, c6e0b7d6-cdec-46da-b2bc-cda218673868=A
 id: 62e50382-db1b-4649-9f26-7f44c379d6fe
 
 ### What does the reader say about a neighbour of a question with its body?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 46fc51ff-66b9-4841-a953-ae0d4c2fc424=A|C
 id: c6e0b7d6-cdec-46da-b2bc-cda218673868
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, decisions=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, depends=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, neighbour=daec9ffd-676f-4111-a359-2827bfd4527c, options=43778946-d44c-4acf-a766-0a4915fce199, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, supersede=2bae531b-c4df-48a0-89a0-3d52726741ea
+
+Problem: with the options in view the relation to a decision can be read, and a free sentence cannot be acted on; a word from a closed set can.
+Standard: classification into a closed set with an explicit none-of-these, so the reader is never forced.
+
+- A) One of same, consistent, inconsistent, depends, unrelated, after one sentence of reason.
+  Why: every relation seen between neighbouring decisions falls into one of the five; unrelated is the exit, no word is forced.
+  Costs: a bundled decision gets one word for several rules; the reason sentence names the clause it matched.
+- B) One of same, inconsistent, unrelated, after one sentence of reason.
+  Why: three words, each with its own move: drop, supersede, nothing.
+  Costs: a missing tie is not named; the agent finds depends on its own among the ten.
+- C) A free sentence on how the two relate, no word.
+  Why: nothing is forced into a set; every nuance of a bundled decision survives.
+  Costs: nothing in the record can be compared or counted; the agent reads a sentence per neighbour and rules alone.
 
 ### Does the reader's word stop a command?
-depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, c6e0b7d6-cdec-46da-b2bc-cda218673868
+depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, c6e0b7d6-cdec-46da-b2bc-cda218673868=*
 id: 902bd279-e6c1-4a21-9637-a3a43f360bae
 
 ### What does the tool keep of the reader's word?
-depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, c6e0b7d6-cdec-46da-b2bc-cda218673868
+depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, c6e0b7d6-cdec-46da-b2bc-cda218673868=*
 id: 08a1b488-32fc-4dc7-b4b3-93a6e768725f
 
 ### Does check hold the reader's file as it holds the ledger?
