@@ -71,6 +71,7 @@ fn read_all(root: &std::path::Path) -> Result<String, String> {
         out.push('\n');
         return Ok(out);
     }
+    reader::load()?;
     let emb = embed::load(root)?;
     // The whole pool is refreshed, so the cache file holds what `adr plan` keeps.
     let (all_vecs, _) = index::refresh(root, emb.as_ref(), &recs, &[])?;
@@ -93,7 +94,6 @@ fn read_all(root: &std::path::Path) -> Result<String, String> {
             neighbour_text: decisions[b].text.clone(),
         })
         .collect();
-    reader::load()?;
     let before = |have: &HashSet<(String, String, String, String)>| pairs.iter().filter(|p| have.contains(&row_key(p))).count();
     let have_keys = || -> HashSet<_> {
         reader::read_file(root).rows.iter().filter(|r| r.model == reader::MODEL).map(|r| {

@@ -1021,14 +1021,10 @@ pub fn read_summary(now: usize, before: usize, marked: usize) -> String {
     format!("read {} {} now, {} read before, {} marked", now, pairs, before, marked)
 }
 
-/// A reading that stopped: the reader's error and how many pairs are
-/// unread; the rows of earlier chunks are kept.
+/// A reading that stopped: the reader's error, which carries the move, and
+/// how many pairs are unread; the rows of earlier chunks are kept.
 pub fn read_stopped(e: &str, unread: usize) -> String {
-    format!(
-        "{}\n{}",
-        e,
-        refuse(format!("read: stopped with {} pairs unread", unread), Next::agent("runs adr read again"))
-    )
+    format!("{}\nread: {} {} unread", e, unread, if unread == 1 { "pair" } else { "pairs" })
 }
 
 /// One neighbour that is on no line, the move that clears it as one line.
@@ -2874,7 +2870,7 @@ pub fn gitignore_up_to_date() -> String {
 pub fn model_missing() -> String {
     refuse(
         "model: the embedding model is missing".to_string(),
-        Next::agent("fetches it by running a build of adr with the model feature, or plans on another machine"),
+        Next::agent("fetches it by running a build of adr with the model feature, or runs it on another machine"),
     )
 }
 
@@ -2883,7 +2879,7 @@ pub fn model_missing() -> String {
 pub fn model_load_failed(cache: &str, e: impl Display) -> String {
     refuse(
         format!("model: cannot load the embedding model from {}: {}", cache, e),
-        Next::agent("fetches the model by checking the network and the cache directory, then retries, or plans on another machine"),
+        Next::agent("fetches the model by checking the network and the cache directory, then retries, or runs it on another machine"),
     )
 }
 
@@ -2898,7 +2894,7 @@ pub fn embed_failed(e: impl Display) -> String {
 pub fn reader_missing() -> String {
     refuse(
         "reader: the claude program is missing".to_string(),
-        Next::agent("installs the claude CLI, or plans on another machine"),
+        Next::agent("installs the claude CLI, or runs it on another machine"),
     )
 }
 
@@ -2907,7 +2903,7 @@ pub fn reader_missing() -> String {
 pub fn reader_failed(neighbour: &str, e: impl Display) -> String {
     refuse(
         format!("reader: no word for the neighbour {}: {}", neighbour, e),
-        Next::agent("retries; if it persists, plans on another machine"),
+        Next::agent("retries; if it persists, runs it on another machine"),
     )
 }
 
@@ -3124,7 +3120,7 @@ mod tests {
             plan_line_missing("x.md", "Does X?", "term", "widget"),
             plan_bodies_missing("x.md", &["Does X?".to_string()]),
             reader_failed("id-1", "no answer"),
-            read_stopped("reader: no answer", 3),
+            read_stopped(&reader_failed("id-1", "no answer"), 3),
             reader_write_failed("disk full"),
             malformed_reader_row(3, "bad row"),
             reader_not_append_only(),

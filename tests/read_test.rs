@@ -399,10 +399,11 @@ fn a_stopped_reading_says_how_many_pairs_are_unread() {
     let out = read_with(&dir, &[]);
     assert!(!out.status.success(), "{}", stdout(&out));
     let err = stderr(&out);
-    let line = err.lines().find(|l| l.starts_with("read: stopped with ")).unwrap_or_else(|| panic!("{}", err));
+    assert_eq!(err.matches("agent ").count(), 1, "one move: {}", err);
+    let line = err.lines().find(|l| l.starts_with("read: ") && l.ends_with(" unread")).unwrap_or_else(|| panic!("{}", err));
     let n: usize = line
-        .strip_prefix("read: stopped with ")
-        .and_then(|r| r.strip_suffix(" pairs unread; agent runs adr read again"))
+        .strip_prefix("read: ")
+        .and_then(|r| r.strip_suffix(" pairs unread"))
         .unwrap_or_else(|| panic!("{}", line))
         .parse()
         .unwrap();
