@@ -206,6 +206,9 @@ fn every_command_but_planning_runs_without_the_model() {
     let record = write_record(&dir, "adrdom/decisions/example.md", RECORD);
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
+    // Planning made the cache with the fake model; the calls below run with
+    // the model absent, and none of them may make it again.
+    std::fs::remove_dir_all(dir.join("adrdom/cache")).unwrap();
     // `adr_owner` has no env of its own beyond the bypass, so every call below
     // is run with the model absent by hand.
     let ask = adr(&dir, &["ask", record.to_str().unwrap()], &no_model, "");

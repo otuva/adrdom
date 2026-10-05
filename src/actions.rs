@@ -396,8 +396,6 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
         for old in depends::supersedes_entries(&supersedes_val, &cross_file_headings, &led) {
             match depends::resolve_supersedes(&old, &cross_file_headings, &led) {
                 Ok(target) => superseded_ids.push(target),
-                // A dropped question is no decision to supersede.
-                Err(_) if state::is_dropped(&led, old.trim()) => {}
                 Err(_) => superseded_ids.push(old.trim().to_string()),
             }
         }
@@ -1306,6 +1304,13 @@ pub fn record_refusals(
 
     out.extend(supersedes_refusals(rel, rf, cross_file_headings, names, all, led, None));
 
+    // Per "Does every neighbour get a line under its heading?": an
+    // `unrelated:` entry names a current decision, a term, another question
+    // of the file or a dropped question.
+    for message in crate::plan::unrelated_refusals(rel, rf, terms_list, cross_file_headings, led) {
+        out.push(Refusal { category: "plan", message });
+    }
+
     out
 }
 
@@ -1354,10 +1359,6 @@ pub fn supersedes_refusals(
                 Err(depends::SupersedesError::Ambiguous(files)) => {
                     out.push(refuse(msg::ask_supersedes_ambiguous(rel, &sec.heading_text, old, &files)));
                 }
-                // A name whose id has a `dropped` row is a known, dropped
-                // question: the line stays as written (per "Does answer
-                // remove a question whose answer set lacks the answer?").
-                Err(depends::SupersedesError::NotCurrent) if state::is_dropped(led, old.trim()) => {}
                 Err(depends::SupersedesError::NotCurrent) => {
                     let split_sibling = asked
                         && sec.id.as_deref().is_some_and(|id| {
@@ -1565,13 +1566,15 @@ fn insert_missing_ids(rf: &RecordFile, mut work_lines: Vec<String>) -> Result<Ve
                 .find(|&j| work_lines[j].starts_with("depends: "))
                 .ok_or_else(|| msg::approve_prefixed(msg::no_depends_line_bare(&sec.heading_text)))?;
             // The plan lines come first, then the id: after the
-            // `supersedes:` line when the heading has one (which is
-            // directly under `depends:`), else after `depends:`.
-            let after = if work_lines.get(depends_idx + 1).is_some_and(|l| l.starts_with("supersedes: ")) {
-                depends_idx + 1
-            } else {
-                depends_idx
-            };
+            // `supersedes:` and `unrelated:` lines when the heading has
+            // them (directly under `depends:`), else after `depends:`.
+            let mut after = depends_idx;
+            while work_lines
+                .get(after + 1)
+                .is_some_and(|l| l.starts_with("supersedes: ") || l.starts_with("unrelated: "))
+            {
+                after += 1;
+            }
             let new_id = Uuid::new_v4().to_string();
             work_lines.insert(after + 1, format!("id: {}", new_id));
         }
@@ -1760,6 +1763,18 @@ fn do_approve_record(
         }
     }
 
+    // Per "What does the agent do to plan a topic file?" and "Does a
+    // planning step run without the record of the step before?": a question
+    // not yet asked is approved with the reader's rows at its heading and at
+    // its heading with its body, and every neighbour in them on a line. The
+    // rows are read as they stand; approve needs neither the model nor the
+    // reader.
+    let mut planning = crate::plan::load(root, &rf, &all_records, terms_list, led);
+    planning.rel = rel.to_string();
+    for m in planning.approve_refusals() {
+        refusals.push(msg::approve_prefixed(m));
+    }
+
     // Ledger ids (asked/answered/refused/superseded/withdrawn) that now
     // appear in no topic file at all: withdraw the asked/refused ones,
     // refuse on a current (answered, not superseded) one via
@@ -1854,6 +1869,31 @@ fn do_approve_record(
         if let Some(j) = (sec.start + 1..sec.end).find(|&j| work_rf.lines[j].starts_with("supersedes: ")) {
             work_rf.lines[j] = format!("supersedes: {}", ids.join(", "));
         }
+    }
+    // The `unrelated:` line holds ids too (per "Does every neighbour get a
+    // line under its heading?"): a decision, a term or a question of the
+    // file by its identifier, a dropped question as written.
+    for (i, sec) in sections_snapshot.iter().enumerate() {
+        if sec.unrelated.is_empty() || !crate::plan::is_unasked(led, sec) {
+            continue;
+        }
+        let Some(j) = (sec.start + 1..sec.end).find(|&j| work_rf.lines[j].starts_with("unrelated: ")) else {
+            continue;
+        };
+        let mut ids: Vec<String> = Vec::new();
+        for e in crate::plan::section_unrelated_entries(i, &work_rf, terms_list, &cross_file_headings, led) {
+            let id = match crate::plan::resolve_ref(&e, &work_rf, i, terms_list, &cross_file_headings, led) {
+                Ok(crate::plan::Target::Decision(id))
+                | Ok(crate::plan::Target::Term(id))
+                | Ok(crate::plan::Target::Dropped(id)) => id,
+                Ok(crate::plan::Target::Question(q)) => work_rf.sections[q].id.clone().unwrap_or(e),
+                Err(_) => e,
+            };
+            if !ids.contains(&id) {
+                ids.push(id);
+            }
+        }
+        work_rf.lines[j] = format!("unrelated: {}", ids.join(", "));
     }
     // Reparse once more so `plan_hash`/`context_hash` and everything below
     // sees the file exactly as it will be written.

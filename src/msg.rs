@@ -40,6 +40,11 @@ impl Next {
         self
     }
 
+    /// The `next: ...` line a command prints when it has finished.
+    pub fn render_line(&self) -> String {
+        format!("next: {}", self.render())
+    }
+
     fn render(&self) -> String {
         self.0
             .iter()
@@ -911,6 +916,104 @@ pub fn question_without_body(rel: &str, heading: &str) -> String {
         Next::agent("writes its body, or strikes the heading")
             .and_owner_runs(format!("adr approve {}", rel)),
     )
+}
+
+/// An `unrelated:` entry names no current decision, no term, no other
+/// question of the file and no dropped question.
+pub fn unrelated_names_nothing(rel: &str, heading: &str, entry: &str) -> String {
+    refuse(
+        format!(
+            "{}: \"{}\": the unrelated entry \"{}\" names no current decision, term or question of this file",
+            rel, heading, entry
+        ),
+        Next::agent("writes what it names, or removes the entry"),
+    )
+}
+
+/// An `unrelated:` entry is the heading of current decisions in several files.
+pub fn unrelated_ambiguous(rel: &str, heading: &str, entry: &str, files: &[String]) -> String {
+    refuse(
+        format!(
+            "{}: \"{}\": the unrelated entry \"{}\" is the heading of current decisions in {}",
+            rel,
+            heading,
+            entry,
+            files.join(", ")
+        ),
+        Next::agent("writes the identifier of the one it means"),
+    )
+}
+
+/// A question not yet asked has no rows of the reader at one of its hashes
+/// (`what` is `heading` or `heading with its body`).
+pub fn plan_rows_missing(rel: &str, heading: &str, what: &str) -> String {
+    refuse(
+        format!("{}: \"{}\" has no reader rows for its {}", rel, heading, what),
+        Next::agent(format!("runs: adr plan {}", rel)),
+    )
+}
+
+/// A neighbour in the reader's rows is on no depends, supersedes or
+/// unrelated line of the question.
+pub fn plan_line_missing(rel: &str, heading: &str, kind: &str, name: &str) -> String {
+    refuse(
+        format!("{}: the {} \"{}\" is a neighbour of \"{}\" and is on no line", rel, kind, name, heading),
+        Next::agent(format!(
+            "writes a depends, supersedes or unrelated line for \"{}\" under \"{}\"",
+            name, heading
+        )),
+    )
+}
+
+/// `adr plan` stops: some headings have no body while others do.
+pub fn plan_bodies_missing(rel: &str, headings: &[String]) -> String {
+    let names: Vec<String> = headings.iter().map(|h| format!("\"{}\"", h)).collect();
+    refuse(
+        format!("plan: {}: some headings have a body and these have none: {}", rel, names.join(", ")),
+        Next::agent(format!("writes the bodies of these headings, then runs: adr plan {}", rel)),
+    )
+}
+
+/// The first line of what `adr plan` did.
+pub fn plan_head(rel: &str) -> String {
+    format!("plan: {}", rel)
+}
+
+/// What `adr plan` read for one question at one step.
+pub fn plan_read(heading: &str, what: &str, count: usize) -> String {
+    format!("\"{}\": {} read, {} neighbours", heading, what, count)
+}
+
+/// One neighbour of a question: its kind, its name, the reader's word, and
+/// whether the agent's lines hold it.
+pub fn plan_neighbour(kind: &str, name: &str, word: &str, on_line: bool) -> String {
+    format!("  {} \"{}\": {}; {}", kind, name, word, if on_line { "on a line" } else { "no line" })
+}
+
+/// One neighbour that is on no line, the move that clears it as one line.
+pub fn plan_line_wanted(heading: &str, kind: &str, name: &str) -> String {
+    format!("line missing: {} \"{}\" under \"{}\"", kind, name, heading)
+}
+
+/// What `adr plan` has nothing left to do for.
+pub fn plan_ready(rel: &str) -> String {
+    format!("plan: {}: every question has its rows and every neighbour is on a line", rel)
+}
+
+pub fn plan_next_plan(rel: &str) -> String {
+    Next::agent(format!("runs: adr plan {}", rel)).render_line()
+}
+
+pub fn plan_next_lines(rel: &str) -> String {
+    Next::agent(format!("writes the lines above, then runs: adr plan {}", rel)).render_line()
+}
+
+pub fn plan_next_bodies(rel: &str) -> String {
+    Next::agent(format!("writes the bodies, then runs: adr plan {}", rel)).render_line()
+}
+
+pub fn plan_next_approve(rel: &str) -> String {
+    Next::owner_runs(format!("adr approve {}", rel)).render_line()
 }
 
 pub fn ask_supersedes_not_current(rel: &str, heading: &str, old: &str, name: Option<&str>) -> String {
@@ -2939,6 +3042,11 @@ mod tests {
             model_load_failed("adrdom/cache/model", "no network"),
             embed_failed("x"),
             reader_missing(),
+            unrelated_names_nothing("x.md", "Does X?", "Y"),
+            unrelated_ambiguous("x.md", "Does X?", "Y", &["a.md".to_string(), "b.md".to_string()]),
+            plan_rows_missing("x.md", "Does X?", "heading"),
+            plan_line_missing("x.md", "Does X?", "term", "widget"),
+            plan_bodies_missing("x.md", &["Does X?".to_string()]),
             reader_failed("id-1", "no answer"),
             reader_write_failed("disk full"),
             malformed_reader_row(3, "bad row"),

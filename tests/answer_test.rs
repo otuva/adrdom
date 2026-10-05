@@ -848,6 +848,7 @@ fn approve_refuses_a_heading_whose_supersedes_target_is_stale() {
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(&plan_lines(THIRD_QUESTION, &[&old_id]));
     std::fs::write(&record, &content).unwrap();
+    plan_record(&dir, "adrdom/decisions/example.md");
     let before = std::fs::read_to_string(&record).unwrap();
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -1331,6 +1332,7 @@ fn owner_commands_refuse_without_a_tty_and_run_with_one() {
     // skipped where CI runs; other systems' `script` takes other flags.
     #[cfg(target_os = "linux")]
     {
+        plan_record(&dir, "adrdom/decisions/example.md");
         let cmd = format!(
             "env -u CLAUDECODE {} approve {}",
             adr_bin().display(),

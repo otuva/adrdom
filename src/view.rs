@@ -509,7 +509,7 @@ fn no_entry_words(text: &str, pairs: &[(String, String)]) -> Vec<String> {
     let stripped = strip_uuid_tokens(text);
     let mut found: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for line in stripped.split('\n') {
-        if crate::tells::starts_with_any(line, &[crate::tells::ID_PREFIX, crate::tells::SUPERSEDES_PREFIX]) {
+        if crate::tells::starts_with_any(line, &[crate::tells::ID_PREFIX, crate::tells::SUPERSEDES_PREFIX, crate::tells::UNRELATED_PREFIX]) {
             continue;
         }
         for tok in crate::text::word_runs(line) {
@@ -934,6 +934,7 @@ Standard: s2.\n\n\
             heading_text: "x".to_string(),
             id: Some(id.to_string()),
             supersedes: vec![],
+            unrelated: vec![],
             depends: vec![],
             options: vec![],
             answer_line: None,
@@ -964,6 +965,7 @@ Standard: s2.\n\n\
             heading_text: "x".to_string(),
             id: Some("id-r".to_string()),
             supersedes: vec![],
+            unrelated: vec![],
             depends: vec![],
             options: vec![],
             answer_line: None,

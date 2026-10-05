@@ -877,7 +877,12 @@ pub fn section_text_excluding_terms_line(lines: &[String], sec: &Section) -> Str
             }
             !crate::tells::starts_with_any(
                 l,
-                &[crate::tells::ID_PREFIX, crate::tells::DEPENDS_PREFIX, crate::tells::SUPERSEDES_PREFIX],
+                &[
+                    crate::tells::ID_PREFIX,
+                    crate::tells::DEPENDS_PREFIX,
+                    crate::tells::SUPERSEDES_PREFIX,
+                    crate::tells::UNRELATED_PREFIX,
+                ],
             )
         })
         .map(|(_, l)| l.as_str())

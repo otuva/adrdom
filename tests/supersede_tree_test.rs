@@ -106,6 +106,7 @@ fn approve_refuses_a_supersedes_line_that_leaves_out_the_chain_above_the_target(
     ask_answer(&dir, "a", Q3);
 
     append(&a, &sec(Q4, "widget", Some(Q1), true));
+    plan_record(&dir, &rel("a"));
     let before = std::fs::read_to_string(&a).unwrap();
     let out = approve(&dir, "a");
     assert_refused_naming(&out, &[Q2, Q3]);

@@ -88,6 +88,9 @@ pub struct Section {
     pub id: Option<String>,
     /// `supersedes: ` ids, comma-separated in the source, in file order (4.14).
     pub supersedes: Vec<String>,
+    /// `unrelated: ` entries, comma-separated in the source, in file order
+    /// ("Does every neighbour get a line under its heading?").
+    pub unrelated: Vec<String>,
     /// `depends: ` entries, in file order (8.3/8.4).
     pub depends: Vec<Dep>,
     pub options: Vec<OptionRec>,
@@ -566,6 +569,7 @@ struct BodyScan {
     id: Option<String>,
     id_count: usize,
     supersedes: Vec<String>,
+    unrelated: Vec<String>,
     depends: Vec<Dep>,
     depends_errors: Vec<String>,
     /// "supersedes: second supersedes line, line N" / "terms: second terms
@@ -600,6 +604,8 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
     let mut depends_line_seen = false;
     let mut reference_line_errors: Vec<String> = Vec::new();
     let mut supersedes_line_seen = false;
+    let mut unrelated: Vec<String> = Vec::new();
+    let mut unrelated_line_seen = false;
     let mut terms_line = None;
     let mut options: Vec<OptionRec> = Vec::new();
     let mut answer_line = None;
@@ -671,6 +677,20 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
             }
             supersedes_line_seen = true;
             supersedes = v
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            continue;
+        }
+        if let Some(v) = kv(line, "unrelated") {
+            if unrelated_line_seen {
+                reference_line_errors
+                    .push(format!("unrelated: second unrelated line, line {}", j + 1));
+                continue;
+            }
+            unrelated_line_seen = true;
+            unrelated = v
                 .split(',')
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
@@ -776,6 +796,7 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
         id,
         id_count,
         supersedes,
+        unrelated,
         depends,
         depends_errors,
         reference_line_errors,
@@ -815,6 +836,7 @@ fn is_skeleton_range(lines: &[String], start: usize, end: usize) -> bool {
             || t.starts_with("depends: ")
             || is_bare_depends_line(t)
             || t.starts_with("supersedes: ")
+            || t.starts_with("unrelated: ")
             || t.starts_with("id: ")
     })
 }
@@ -885,6 +907,7 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
         heading_text,
         id: scan.id,
         supersedes: scan.supersedes,
+        unrelated: scan.unrelated,
         depends: scan.depends,
         options: scan.options,
         answer_line: scan.answer_line,
@@ -974,6 +997,45 @@ pub fn question_hash(rf: &RecordFile, sec: &Section) -> String {
 /// Every question's `question_hash`, in file order.
 pub fn question_hashes(rf: &RecordFile) -> Vec<String> {
     rf.sections.iter().map(|s| question_hash(rf, s)).collect()
+}
+
+/// sha256 of a question's heading text alone: what the planning steps key
+/// the reader's rows of a heading by ("What does the agent do to plan a
+/// topic file?").
+pub fn heading_hash(sec: &Section) -> String {
+    sha256_hex(&sec.heading_text)
+}
+
+/// A question's heading and its body, as the reader is given them: the
+/// heading text, then the Problem, Standard, options, Why and Costs lines,
+/// each trimmed at its end, joined with `\n`. The `depends:`,
+/// `supersedes:`, `unrelated:`, `id:` and `terms:` lines, the `**Answer:**`
+/// line and blank lines are left out, so a line the agent writes after the
+/// reader ran never moves it.
+pub fn body_text(rf: &RecordFile, sec: &Section) -> String {
+    let (s, e) = hash_range(&rf.lines, sec);
+    let mut parts: Vec<&str> = vec![sec.heading_text.as_str()];
+    for l in &rf.lines[(s + 1).min(e)..e] {
+        let t = l.trim_end();
+        if t.trim().is_empty()
+            || t.starts_with("depends: ")
+            || t.trim() == "depends:"
+            || t.starts_with("supersedes: ")
+            || t.starts_with("unrelated: ")
+            || t.starts_with("id: ")
+            || t.starts_with("terms: ")
+            || t.starts_with("**Answer:**")
+        {
+            continue;
+        }
+        parts.push(t);
+    }
+    parts.join("\n")
+}
+
+/// sha256 of `body_text`.
+pub fn body_hash(rf: &RecordFile, sec: &Section) -> String {
+    sha256_hex(&body_text(rf, sec))
 }
 
 /// The file's hash derived from its parts (per "Does approve hash each
@@ -1894,6 +1956,21 @@ mod tests {
                 sec.shape_errors
             );
         }
+    }
+
+    #[test]
+    fn unrelated_line_parses_is_in_the_question_hash_and_not_in_the_body_hash() {
+        let text = "# Topic\n\n### Q?\ndepends: widget\nunrelated: a, b\nid: new-id\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+        let rf = rf_from(text);
+        assert_eq!(rf.sections[0].unrelated, vec!["a".to_string(), "b".to_string()]);
+        assert!(rf.shape_errors.is_empty() && rf.sections[0].shape_errors.is_empty());
+        let other = rf_from(&text.replace("unrelated: a, b", "unrelated: a, c"));
+        assert_ne!(question_hash(&rf, &rf.sections[0]), question_hash(&other, &other.sections[0]));
+        assert_eq!(body_hash(&rf, &rf.sections[0]), body_hash(&other, &other.sections[0]));
+        assert_eq!(heading_hash(&rf.sections[0]), sha256_hex("Q?"));
+        assert!(body_text(&rf, &rf.sections[0]).starts_with("Q?\nProblem: p.\nStandard: s.\n- A) x."));
+        let twice = rf_from(&text.replace("id: new-id", "unrelated: c\nid: new-id"));
+        assert!(twice.sections[0].shape_errors.iter().any(|e| e.contains("second unrelated line")));
     }
 
     // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a supersedes list split

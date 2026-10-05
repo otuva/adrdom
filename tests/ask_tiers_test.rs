@@ -384,6 +384,9 @@ fn ask_refuses_a_tier_over_the_cap() {
         ));
     }
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
+    // The agent's planning moves come first; the refusal is the cap's.
+    plan_record(&dir, "adrdom/decisions/example.md");
+    let content = std::fs::read_to_string(&record).unwrap();
 
     // The cap refuses at `approve` itself now (approve checks the same cap
     // before ever minting an id), so `ask` never even gets a chance to see

@@ -73,13 +73,14 @@ pub const ID_PREFIX: &str = "id: ";
 pub const TERMS_PREFIX: &str = "terms: ";
 pub const DEPENDS_PREFIX: &str = "depends: ";
 pub const SUPERSEDES_PREFIX: &str = "supersedes: ";
+pub const UNRELATED_PREFIX: &str = "unrelated: ";
 pub const ANSWER_PREFIX: &str = "**Answer:**";
 
 /// Every prefix a line the tool writes can start with. `is_tool_line`
-/// checks all five; a caller that wants only some of them (e.g.
+/// checks all six; a caller that wants only some of them (e.g.
 /// id/supersedes, or id/depends/supersedes without the terms line) calls
 /// `starts_with_any` with its own subset of these constants instead.
-pub const TOOL_LINE_PREFIXES: &[&str] = &[ID_PREFIX, TERMS_PREFIX, DEPENDS_PREFIX, SUPERSEDES_PREFIX, ANSWER_PREFIX];
+pub const TOOL_LINE_PREFIXES: &[&str] = &[ID_PREFIX, TERMS_PREFIX, DEPENDS_PREFIX, SUPERSEDES_PREFIX, UNRELATED_PREFIX, ANSWER_PREFIX];
 
 /// True when `line`, trimmed of leading whitespace, starts with any of
 /// `prefixes` (each an exact prefix, e.g. `tells::ID_PREFIX`).
