@@ -1127,14 +1127,15 @@ pub fn length_refusals(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<String> 
 }
 
 /// The loaded phrases (`tells::prose_tells_in`, the scan `ask` reads too)
-/// in the body of every question of `rf` below its heading, a frozen
-/// question skipped as its heading is (per "Does the tool stop loaded
-/// phrases in a question?"): the one function `check`, `approve` and `plan`
+/// in the body of every question of `rf` below its heading, a question with
+/// any ledger state (asked included, its text held by hash) skipped as its
+/// heading is (per "Does the tool stop loaded phrases in a question?"): the
+/// one function `check`, `approve` and `plan`
 /// read, found before approval what `ask` refuses.
 pub fn body_tell_refusals(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<String> {
     let mut out = Vec::new();
     for sec in &rf.sections {
-        if state::is_frozen(led, sec) {
+        if sec.id.as_ref().is_some_and(|id| led.latest_state(id).is_some()) {
             continue;
         }
         let (s, e) = record::hash_range(&rf.lines, sec);
@@ -1246,11 +1247,12 @@ pub fn record_refusals(
     // phrase refuses before any write -- a heading with any
     // tell (loaded opening, "and"/"or", provenance, code state, or a date),
     // or a context prose line with a provenance, code-state, or date tell.
-    // A frozen heading (state::is_frozen) is skipped: it can never be
-    // edited, so refusing on it would block this file forever once the
-    // list grows to include a word it already carried.
+    // A heading with any ledger state is skipped (asked text is held by
+    // hash, answered text is frozen): it can never be edited, so refusing
+    // on it would block this file forever once the list grows to include a
+    // word it already carried.
     for sec in &rf.sections {
-        if state::is_frozen(led, sec) {
+        if sec.id.as_ref().is_some_and(|id| led.latest_state(id).is_some()) {
             continue;
         }
         for (line, phrase, what) in tells::heading_tells(sec.start, &sec.heading_text) {

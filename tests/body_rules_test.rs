@@ -75,3 +75,24 @@ fn a_question_with_a_term_passes() {
     let out = adr_owner(&dir, &["approve", rec.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", both(&out));
 }
+
+// adr: 923818a7-05c6-4977-bbaf-53ee8f3773ef
+#[test]
+fn an_asked_question_is_not_read_for_loaded_phrases() {
+    let (dir, rec) = unapproved(&question("Does the decision hold?", "the decision is unclear."));
+    approve_record(&dir, REL);
+    // The asked text is held by hash and cannot be edited, so a phrase the
+    // list grew to cover later must not fail check or approve on it: model it
+    // as an asked row for a body that carries a loaded phrase.
+    let text = std::fs::read_to_string(&rec).unwrap().replace("is unclear.", "currently holds.");
+    std::fs::write(&rec, &text).unwrap();
+    let rf = adr::record::load(&rec).unwrap();
+    let sec = &rf.sections[0];
+    let id = sec.id.clone().expect("approve gave the heading an id");
+    let hash = adr::record::section_hash(&rf.lines, sec);
+    append_ledger_row(&dir, "asked", &id, &hash, "Does the decision hold?");
+    let out = both(&adr(&dir, &["check"], &[], ""));
+    assert!(!out.contains("states what the code does now"), "{}", out);
+    let out = both(&adr_owner(&dir, &["approve", rec.to_str().unwrap()], ""));
+    assert!(!out.contains("states what the code does now"), "{}", out);
+}
