@@ -11,6 +11,9 @@ pub const DECISIONS_DIR: &str = "adrdom/decisions";
 pub const STATE_DIR: &str = "adrdom/state";
 /// The append-only ledger of every act (`ask`, `answer`, `approve`, ...).
 pub const LEDGER_PATH: &str = "adrdom/state/ledger.tsv";
+/// The reader's file: one row for each word the reader gave on a pair of
+/// texts (`reader::Row`). Held by `check` the way the ledger is.
+pub const READER_PATH: &str = "adrdom/state/reader.tsv";
 /// The repo's own terms file.
 /// Where blame files live, relative to the repo root (per "What does a
 /// blame file hold?", 34f0202a A): one `<stem>.md` per origin, holding its
@@ -35,6 +38,14 @@ pub const BAN_LIST: &str = "adrdom/state/banned.sha256";
 /// is `commands::install::GITATTRIBUTES_CONTENT`; `check`'s `install`
 /// check reads this path the same way it reads the git hooks.
 pub const GITATTRIBUTES_PATH: &str = "adrdom/.gitattributes";
+
+/// Where `adr install` writes the rule that keeps the index and the model out
+/// of git ("Does git track a file the tool can get again without the owner?").
+/// Its content is `commands::install::GITIGNORE_CONTENT`; `check`'s `install`
+/// check reads this path the same way it reads `GITATTRIBUTES_PATH`.
+pub const GITIGNORE_PATH: &str = "adrdom/.gitignore";
+/// The directory under adrdom that holds the index and the model files.
+pub const CACHE_DIR: &str = "adrdom/cache";
 
 /// Where `adr install` writes the pre-commit hook, relative to the repo
 /// root. Its content is `commands::install::PRE_COMMIT_HOOK`; `check`'s

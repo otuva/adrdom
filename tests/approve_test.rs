@@ -26,7 +26,7 @@ Standard: s1.
 
 const GROUP_TWO_ADDITION: &str = r#"
 ### 2.1 Second question?
-depends: 1.1 First question?, decision
+depends: 1.1 First question?=A, decision
 
 Problem: p2, another decision.
 
@@ -101,7 +101,9 @@ fn approve_writes_approved_and_context_rows_then_is_idempotent() {
     assert!(out.status.success(), "approve failed: {}", stderr(&out));
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    assert_eq!(ledger.lines().filter(|l| l.contains("\tapproved\t")).count(), 1);
+    // One file row (id `-`) and one row for the single question.
+    assert_eq!(ledger.lines().filter(|l| l.contains("\tapproved\t-\t")).count(), 1);
+    assert_eq!(ledger.lines().filter(|l| l.contains("\tapproved\t")).count(), 2);
     assert_eq!(ledger.lines().filter(|l| l.contains("\tcontext\t")).count(), 1);
 
     // Rerun: no new rows.
@@ -202,14 +204,14 @@ fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
     assert!(stderr(&out).contains("prose not approved"), "{}", stderr(&out));
 
     let ledger_before = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    let approved_before = ledger_before.lines().filter(|l| l.contains("\tapproved\t")).count();
+    let approved_before = ledger_before.lines().filter(|l| l.contains("\tapproved\t-\t")).count();
     let context_before = ledger_before.lines().filter(|l| l.contains("\tcontext\t")).count();
 
     let out2 = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out2.status.success(), "approve failed: {}", stderr(&out2));
 
     let ledger_after = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    let approved_after = ledger_after.lines().filter(|l| l.contains("\tapproved\t")).count();
+    let approved_after = ledger_after.lines().filter(|l| l.contains("\tapproved\t-\t")).count();
     let context_after = ledger_after.lines().filter(|l| l.contains("\tcontext\t")).count();
 
     assert_eq!(approved_after, approved_before, "plan hash did not change; no new approved row expected");
@@ -258,7 +260,7 @@ fn editing_a_heading_requires_reapproval_with_one_new_approved_row() {
     assert!(stderr(&out).contains("plan not approved"), "{}", stderr(&out));
 
     let ledger_before = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    let approved_before = ledger_before.lines().filter(|l| l.contains("\tapproved\t")).count();
+    let approved_before = ledger_before.lines().filter(|l| l.contains("\tapproved\t-\t")).count();
     let context_before = ledger_before.lines().filter(|l| l.contains("\tcontext\t")).count();
 
     let out2 = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -270,10 +272,15 @@ fn editing_a_heading_requires_reapproval_with_one_new_approved_row() {
     );
 
     let ledger_after = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    let approved_after = ledger_after.lines().filter(|l| l.contains("\tapproved\t")).count();
+    let approved_after = ledger_after.lines().filter(|l| l.contains("\tapproved\t-\t")).count();
+    // The renamed question also gets its own new row.
+    assert_eq!(
+        ledger_after.lines().filter(|l| l.contains("\tapproved\t")).count(),
+        ledger_before.lines().filter(|l| l.contains("\tapproved\t")).count() + 2
+    );
     let context_after = ledger_after.lines().filter(|l| l.contains("\tcontext\t")).count();
 
-    assert_eq!(approved_after, approved_before + 1, "exactly one new approved row expected");
+    assert_eq!(approved_after, approved_before + 1, "exactly one new file approved row expected");
     assert_eq!(context_after, context_before, "context hash did not change; no new context row expected");
 
     // ask now succeeds.
@@ -1093,7 +1100,7 @@ fn a_heading_line_without_a_question_mark_is_refused_by_check_and_approve() {
 fn an_empty_depends_line_is_refused_as_a_missing_depends_line_and_nothing_else() {
     let dir = widget_repo();
     for empty in ["depends:", "depends: "] {
-        let content = format!("# Topic\n\n### Is it stand on nothing?\n{}\n", empty);
+        let content = format!("# Topic\n\n### Is it stand on nothing?\n{}\n\n{}", empty, WIDGET_Q);
         let record = write_record(&dir, "adrdom/decisions/topic.md", &content);
         let line = "adrdom/decisions/topic.md: \"Is it stand on nothing?\" has no depends line; agent writes what the question stands on";
 
@@ -1108,7 +1115,7 @@ fn an_empty_depends_line_is_refused_as_a_missing_depends_line_and_nothing_else()
             assert!(!check.contains(word), "{}: {}", word, check);
         }
 
-        let fixed = "# Topic\n\n### Is it stand on nothing?\ndepends: widget\n";
+        let fixed = format!("# Topic\n\n### Is it stand on nothing?\ndepends: widget\n\n{}", WIDGET_Q);
         std::fs::write(&record, fixed).unwrap();
         let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
         assert!(out.status.success(), "{}", stderr(&out));
@@ -1912,8 +1919,8 @@ fn approve_refuses_retiring_a_term_while_a_new_term_takes_its_word_and_another_s
 
 // adr: 3b8da790-ea0c-4ca5-860a-980c7bc5f361
 //
-// The supersedes line belongs to the plan: a heading with only a depends
-// line and a supersedes line is a skeleton that approve accepts, and the
+// The supersedes line belongs to the plan: a heading with a depends line,
+// a supersedes line and a body is a question that approve accepts, and the
 // line reads identifiers afterwards, directly under the depends line and
 // above the id line.
 #[test]
@@ -1929,7 +1936,7 @@ fn approve_turns_a_supersedes_heading_on_a_skeleton_into_an_identifier() {
     assert!(adr_answer(&dir, &old_id, "A").status.success());
 
     let mut content = std::fs::read_to_string(&record).unwrap();
-    content.push_str("\n### 1.2 Replacement?\ndepends: decision\nsupersedes: 1.1 Only question?\n");
+    content.push_str("\n### 1.2 Replacement?\ndepends: decision\nsupersedes: 1.1 Only question?\n\nProblem: the decision at hand.\n\nStandard: s.\n\n- A) Answer A.\n  Why: reasons.\n  Costs: costs.\n- B) Answer B.\n  Why: other reasons.\n  Costs: other costs.\n");
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, rel);
     let approved = std::fs::read_to_string(&record).unwrap();
@@ -1958,7 +1965,7 @@ fn a_supersedes_line_added_after_approval_waits_for_approval() {
     assert!(adr_answer(&dir, &old_id, "A").status.success());
 
     let mut content = std::fs::read_to_string(&record).unwrap();
-    content.push_str("\n### 1.2 Replacement?\ndepends: decision\n");
+    content.push_str("\n### 1.2 Replacement?\ndepends: decision\n\nProblem: the decision at hand.\n\nStandard: s.\n\n- A) Answer A.\n  Why: reasons.\n  Costs: costs.\n- B) Answer B.\n  Why: other reasons.\n  Costs: other costs.\n");
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, rel);
     let approved = std::fs::read_to_string(&record).unwrap();

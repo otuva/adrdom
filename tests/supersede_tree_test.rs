@@ -98,14 +98,15 @@ fn assert_refused_naming(out: &std::process::Output, names: &[&str]) {
 fn approve_refuses_a_supersedes_line_that_leaves_out_the_chain_above_the_target() {
     let dir = setup();
     let a = with_q1(&dir);
-    append(&a, &sec(Q2, &format!("widget, {}=*", Q1), None, true));
+    append(&a, &sec(Q2, &format!("widget, {}", Q1), None, true));
     approve_ok(&dir, "a");
     ask_answer(&dir, "a", Q2);
-    append(&a, &sec(Q3, &format!("widget, {}=*", Q2), None, true));
+    append(&a, &sec(Q3, &format!("widget, {}", Q2), None, true));
     approve_ok(&dir, "a");
     ask_answer(&dir, "a", Q3);
 
     append(&a, &sec(Q4, "widget", Some(Q1), true));
+    plan_record(&dir, &rel("a"));
     let before = std::fs::read_to_string(&a).unwrap();
     let out = approve(&dir, "a");
     assert_refused_naming(&out, &[Q2, Q3]);
@@ -151,7 +152,7 @@ fn approve_refuses_a_heading_standing_on_what_the_same_plan_supersedes() {
     let dir = setup();
     let a = with_q1(&dir);
     append(&a, &sec(Q4, "widget", Some(Q1), true));
-    append(&a, &sec(Q6, &format!("widget, {}=*", Q1), None, true));
+    append(&a, &sec(Q6, &format!("widget, {}", Q1), None, true));
     let out = approve(&dir, "a");
     assert_refused_naming(&out, &[Q6]);
 }
@@ -161,7 +162,7 @@ fn approve_refuses_a_heading_standing_on_what_the_same_plan_supersedes() {
 fn approve_refuses_a_heading_standing_on_what_it_supersedes_itself() {
     let dir = setup();
     let a = with_q1(&dir);
-    append(&a, &sec(Q4, &format!("widget, {}=*", Q1), Some(Q1), true));
+    append(&a, &sec(Q4, &format!("widget, {}", Q1), Some(Q1), true));
     let out = approve(&dir, "a");
     assert_refused_naming(&out, &[Q4]);
 }

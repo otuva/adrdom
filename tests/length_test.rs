@@ -17,13 +17,67 @@ fn question(heading: &str, a: &str, a_why: &str, a_costs: &str) -> String {
     )
 }
 
+fn is_body_line(l: &str) -> bool {
+    let t = l.trim_start();
+    t.starts_with("- A) ") || t.starts_with("- B) ") || t.starts_with("Why:") || t.starts_with("Costs:")
+}
+
+fn shortened(content: &str) -> String {
+    content
+        .lines()
+        .map(|l| {
+            let t = l.trim_start();
+            let ind = &l[..l.len() - t.len()];
+            if t.starts_with("- A) ") || t.starts_with("- B) ") {
+                format!("{}{}Yes.", ind, &t[..5])
+            } else if t.starts_with("Why:") {
+                format!("{}Why: w.", ind)
+            } else if t.starts_with("Costs:") {
+                format!("{}Costs: c.", ind)
+            } else {
+                l.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n"
+}
+
+/// Approve takes the short version (approve refuses the long one), then the
+/// body lines are put back, so ask meets them.
 fn setup(content: &str) -> (PathBuf, PathBuf) {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_terms_with(&dir, &["decision"]);
-    let rec = write_record(&dir, "adrdom/decisions/example.md", content);
+    let rec = write_record(&dir, "adrdom/decisions/example.md", &shortened(content));
     approve_record(&dir, "adrdom/decisions/example.md");
+    let mut orig = content.lines().filter(|l| is_body_line(l));
+    let text = std::fs::read_to_string(&rec).unwrap();
+    let back: Vec<String> = text
+        .lines()
+        .map(|l| if is_body_line(l) { orig.next().unwrap().to_string() } else { l.to_string() })
+        .collect();
+    // Approve cannot take these lines, so the approval rows are written by
+    // hand: ask is the second stop for text that reaches it.
+    std::fs::write(&rec, back.join("\n") + "\n").unwrap();
+    let rf = adr::record::load(&rec).unwrap();
+    let rel = "adrdom/decisions/example.md";
+    let later = "2099-01-01T00:00:00Z";
+    append_ledger_row_at(&dir, "approved", "-", &adr::record::plan_hash(&rf), rel, later);
+    append_ledger_row_at(&dir, "context", "-", &adr::record::context_hash(&rf), rel, later);
     (dir, rec)
+}
+
+fn unapproved(content: &str) -> (PathBuf, PathBuf) {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_terms_with(&dir, &["decision"]);
+    let rec = write_record(&dir, "adrdom/decisions/example.md", content);
+    (dir, rec)
+}
+
+fn both(o: &std::process::Output) -> String {
+    format!("{}{}", stdout(o), stderr(o))
 }
 
 fn ask(dir: &PathBuf, rec: &PathBuf) -> std::process::Output {
@@ -112,4 +166,47 @@ fn the_word_limit_does_not_read_an_answered_question() {
     let out = ask(&dir, &rec);
     assert!(!stderr(&out).contains("the option has"), "{}", stderr(&out));
     assert!(out.status.success(), "{}", stderr(&out));
+    // check never reads the answered question either.
+    let chk = both(&adr(&dir, &["check"], &[], ""));
+    assert!(!chk.contains("the option has 30"), "{}", chk);
+}
+
+// adr: d808917b-0717-45ad-ab83-9fa274b9a9d4
+#[test]
+fn check_approve_and_plan_find_a_too_long_option_before_approval() {
+    let long = question("What does the decision hold?", &words(25), "w.", "c.");
+    let (dir, rec) = unapproved(&long);
+    let out = both(&adr(&dir, &["check"], &[], ""));
+    assert!(out.contains("the option has 25 words"), "{}", out);
+    let out = adr_owner(&dir, &["approve", rec.to_str().unwrap()], "");
+    assert!(!out.status.success());
+    assert!(stderr(&out).contains("the option has 25 words"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("agent shortens the line"), "{}", stderr(&out));
+    let out = adr(&dir, &["plan", rec.to_str().unwrap()], &[], "");
+    let all = format!("{}{}", stdout(&out), stderr(&out));
+    assert!(all.contains("the option has 25 words"), "{}", all);
+    assert!(!all.contains("owner runs: adr approve"), "{}", all);
+}
+
+// adr: b3cb190d-d6f1-4930-bdcd-7827e31ac62a
+#[test]
+fn check_and_approve_find_a_many_word_option_under_a_does_heading() {
+    let (dir, rec) = unapproved(&question("Does the decision hold?", "Yes: because.", "w.", "c."));
+    let out = both(&adr(&dir, &["check"], &[], ""));
+    assert!(out.contains("a heading that opens with Does takes one"), "{}", out);
+    let out = adr_owner(&dir, &["approve", rec.to_str().unwrap()], "");
+    assert!(!out.status.success());
+    assert!(stderr(&out).contains("agent writes one word"), "{}", stderr(&out));
+}
+
+// adr: d808917b-0717-45ad-ab83-9fa274b9a9d4
+#[test]
+fn plan_reports_a_too_long_option_while_another_heading_waits_for_its_body() {
+    let long = question("What does the decision hold?", &words(25), "w.", "c.");
+    let content = format!("{}\n### What does the decision name?\ndepends: decision\n", long);
+    let (dir, rec) = unapproved(&content);
+    let out = adr(&dir, &["plan", rec.to_str().unwrap()], &[], "");
+    let all = both(&out);
+    // Lines first: the neighbours of each heading come with no line yet.
+    assert!(all.contains("the option has 25 words"), "{}", all);
 }

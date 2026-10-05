@@ -525,8 +525,8 @@ fn ask_refuses_a_two_id_supersedes_when_one_target_lost_currency_after_approval(
     assert!(adr_answer(&dir, &old_id_1, "A").status.success());
     assert!(adr_answer(&dir, &old_id_2, "A").status.success());
 
-    // 1.4 (with its body) supersedes old_id_2; 1.3 supersedes both and has
-    // no body yet. Both targets are current, so approve accepts the plan.
+    // 1.4 (with its body) supersedes old_id_2; 1.3 supersedes both and waits
+    // on 1.4. Both targets are current, so approve accepts the plan.
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(&format!(
         "{}{}",
@@ -535,7 +535,15 @@ fn ask_refuses_a_two_id_supersedes_when_one_target_lost_currency_after_approval(
             &format!("depends: authority\nsupersedes: {}\n", old_id_2),
             1
         ),
-        plan_lines(THIRD_QUESTION, &[&old_id_1, &old_id_2]),
+        format!(
+            "{}{}",
+            plan_lines(THIRD_QUESTION, &[&old_id_1, &old_id_2]).replacen(
+                "depends: authority\n",
+                "depends: authority, 1.4 What is the fourth unit of authority called?=A\n",
+                1
+            ),
+            body_lines(THIRD_QUESTION)
+        ),
     ));
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, rel);
@@ -545,10 +553,8 @@ fn ask_refuses_a_two_id_supersedes_when_one_target_lost_currency_after_approval(
     let fourth_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[2].clone();
     assert!(adr_answer(&dir, &fourth_id, "A").status.success());
 
-    // The body of 1.3 is written after old_id_2 was superseded.
-    let mut content = std::fs::read_to_string(&record).unwrap();
-    content.push_str(&body_lines(THIRD_QUESTION));
-    std::fs::write(&record, &content).unwrap();
+    // 1.3 stands on 1.4 answered A, so it is asked only now, after
+    // old_id_2 was superseded.
     let before_ask = std::fs::read_to_string(&record).unwrap();
 
     let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
@@ -842,6 +848,7 @@ fn approve_refuses_a_heading_whose_supersedes_target_is_stale() {
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(&plan_lines(THIRD_QUESTION, &[&old_id]));
     std::fs::write(&record, &content).unwrap();
+    plan_record(&dir, "adrdom/decisions/example.md");
     let before = std::fs::read_to_string(&record).unwrap();
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -1325,6 +1332,7 @@ fn owner_commands_refuse_without_a_tty_and_run_with_one() {
     // skipped where CI runs; other systems' `script` takes other flags.
     #[cfg(target_os = "linux")]
     {
+        plan_record(&dir, "adrdom/decisions/example.md");
         let cmd = format!(
             "env -u CLAUDECODE {} approve {}",
             adr_bin().display(),
@@ -1494,6 +1502,7 @@ fn answer_with_a_stale_version_is_refused_and_writes_nothing() {
         "names leaked into decisions, badly.",
     );
     std::fs::write(&record, edited).unwrap();
+    approve_record(&dir, "adrdom/decisions/example.md");
     let reask = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(reask.status.success(), "reask failed: {}", stderr(&reask));
     assert_ne!(
@@ -1578,6 +1587,7 @@ fn answer_with_a_bad_letter_and_a_stale_version_is_refused_for_the_letter() {
         "names leaked into decisions, badly.",
     );
     std::fs::write(&record, edited).unwrap();
+    approve_record(&dir, "adrdom/decisions/example.md");
     let reask = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(reask.status.success(), "reask failed: {}", stderr(&reask));
     assert_ne!(current_version(&dir, &question_id), stale_version);

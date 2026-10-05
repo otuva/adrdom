@@ -100,9 +100,9 @@ fn retire_refused_while_an_asked_question_names_the_term() {
 
 // adr: db58d4b8-9e64-44b0-99a2-acb7f05d5b4e
 #[test]
-fn retire_refused_while_a_bodyless_plan_heading_names_the_term() {
+fn retire_refused_while_an_approved_unasked_plan_heading_names_the_term() {
     let (dir, _record, terms) =
-        setup(&format!("# Example\n{}", sec(H_DECISION, "verdict", false)));
+        setup(&format!("# Example\n{}", sec(H_DECISION, "verdict", true)));
     let rows = terms_rows(&dir);
     assert_retire_refused(&dir, &terms, rows, H_DECISION);
 }
@@ -200,13 +200,13 @@ aliases: \n";
 #[test]
 fn a_heading_written_after_a_retire_was_approved_does_not_block_terms_approve_or_check() {
     let (dir, record, terms) =
-        setup(&format!("# Example\n{}", sec(H_VERDICT, "verdict", false)));
+        setup(&format!("# Example\n{}", sec(H_VERDICT, "verdict", true)));
     // Nothing names "decision": the retire passes and writes its term row.
     let out = retire(&dir, &terms);
     assert!(out.status.success(), "retire should pass: {}", stderr(&out));
     // A new heading that merely contains the retired word, then approved.
     let c = std::fs::read_to_string(&record).unwrap();
-    std::fs::write(&record, format!("{}{}", c, sec(H_DECISION, "verdict", false))).unwrap();
+    std::fs::write(&record, format!("{}{}", c, sec(H_DECISION, "verdict", true))).unwrap();
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out.status.success(), "plan approve failed: {}", stderr(&out));
     // An unrelated terms edit (a new term) still approves.

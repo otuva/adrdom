@@ -73,13 +73,14 @@ pub const ID_PREFIX: &str = "id: ";
 pub const TERMS_PREFIX: &str = "terms: ";
 pub const DEPENDS_PREFIX: &str = "depends: ";
 pub const SUPERSEDES_PREFIX: &str = "supersedes: ";
+pub const UNRELATED_PREFIX: &str = "unrelated: ";
 pub const ANSWER_PREFIX: &str = "**Answer:**";
 
 /// Every prefix a line the tool writes can start with. `is_tool_line`
-/// checks all five; a caller that wants only some of them (e.g.
+/// checks all six; a caller that wants only some of them (e.g.
 /// id/supersedes, or id/depends/supersedes without the terms line) calls
 /// `starts_with_any` with its own subset of these constants instead.
-pub const TOOL_LINE_PREFIXES: &[&str] = &[ID_PREFIX, TERMS_PREFIX, DEPENDS_PREFIX, SUPERSEDES_PREFIX, ANSWER_PREFIX];
+pub const TOOL_LINE_PREFIXES: &[&str] = &[ID_PREFIX, TERMS_PREFIX, DEPENDS_PREFIX, SUPERSEDES_PREFIX, UNRELATED_PREFIX, ANSWER_PREFIX];
 
 /// True when `line`, trimmed of leading whitespace, starts with any of
 /// `prefixes` (each an exact prefix, e.g. `tells::ID_PREFIX`).
@@ -157,6 +158,9 @@ pub fn prose_tells_in(lines: &[String], start: usize, end: usize) -> Vec<(usize,
     out
 }
 
+/// What a length hit says of an option under a heading that opens with Does.
+pub const ONE_WORD_RULE: &str = "a heading that opens with Does takes one";
+
 /// Words of a line, by the repository's one definition of a word.
 fn count_words(text: &str) -> usize {
     crate::text::word_runs(text).len()
@@ -201,7 +205,7 @@ pub fn length_tells(lines: &[String], start: usize, end: usize, heading_text: &s
         let n = count_words(&text);
         if kind == "option" && closed {
             if n != 1 {
-                out.push((i, format!("{} words, a heading that opens with Does takes one", n), kind.to_string()));
+                out.push((i, format!("{} words, {}", n, ONE_WORD_RULE), kind.to_string()));
             }
         } else if n > WORD_LIMIT {
             out.push((i, format!("{} words, the limit is {}", n, WORD_LIMIT), kind.to_string()));

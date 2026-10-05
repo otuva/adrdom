@@ -5,10 +5,10 @@ mod done;
 mod ids;
 mod install;
 mod ledger;
-mod moot;
 mod parse;
 mod plan;
 mod push;
+mod reader;
 mod tells;
 mod terms;
 mod tests;
@@ -105,9 +105,9 @@ fn build(
     // compares against the ledger (`file_approval`, `ids::check_ids`'s
     // stale-plan filter) instead of letting them recompute the hash from
     // the (by-then-normalized) `RecordFile`.
-    let raw_hashes: HashMap<String, (String, String)> = records
+    let raw_hashes: HashMap<String, (Vec<String>, String)> = records
         .iter()
-        .map(|rf| (rf.rel.clone(), (record::plan_hash(rf), record::context_hash(rf))))
+        .map(|rf| (rf.rel.clone(), (record::question_hashes(rf), record::context_hash(rf))))
         .collect();
 
     // Heading-shaped `depends:` entries that name no heading in their own
@@ -139,7 +139,7 @@ fn build(
     // own `supersedes:` lines.
     let approved_rels: std::collections::HashSet<String> = raw_hashes
         .iter()
-        .filter(|(rel, (plan_h, _))| state::plan_approved_hash(&led, rel, plan_h))
+        .filter(|(rel, (plan_h, _))| state::plan_approved_hashes(&led, rel, plan_h))
         .map(|(rel, _)| rel.clone())
         .collect();
     let replaced_base = depends::replaced_base(&records, &approved_rels, &cross_file_headings, &led);
@@ -160,6 +160,7 @@ fn build(
     push_failures(&mut failures, parse::check_parse(&per_record_refusals));
     push_failures(&mut failures, ids::check_ids(&records, &led, &missing_answered, &raw_hashes));
     push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_content, since));
+    push_failures(&mut failures, reader::check_reader(root, &source, since));
     push_failures(&mut failures, banned::check_banned_ledger(&led, root, &source));
     push_failures(&mut failures, answers::check_answers(&records, &led));
     push_failures(&mut failures, banned::check_banned(root, staged, message, &source));
@@ -170,9 +171,6 @@ fn build(
         &records,
         &led,
         &per_record_refusals,
-        &terms_list,
-        &phrase_lookup,
-        &cross_file_headings,
         &raw_hashes,
     );
     push_failures(&mut failures, plan_failures);
@@ -185,7 +183,6 @@ fn build(
     push_failures(&mut failures, test_failures);
     push_failures(&mut failures, tells::check_tells(root, &records, &led, &per_record_refusals));
 
-    notes.extend(moot::check_moot(&records, &led));
 
     for (rf, replaced) in records.iter().zip(&replaced_per_record) {
         if let Some(tiers) = &rf.tiers {
@@ -208,6 +205,14 @@ fn build(
 
     if !awaiting.is_empty() {
         notes.push(msg::plan_awaiting(awaiting.len(), &awaiting.join(", ")));
+        for rf in records.iter().filter(|rf| awaiting.contains(&rf.rel)) {
+            if let Some((hashes, _)) = raw_hashes.get(&rf.rel) {
+                let (changed, struck) = plan::changed_questions(rf, hashes, &led);
+                if !changed.is_empty() || !struck.is_empty() {
+                    notes.push(msg::plan_changed(&rf.rel, &changed, &struck));
+                }
+            }
+        }
     }
     notes.extend(test_notes);
     notes.extend(terms_notes);
@@ -285,7 +290,7 @@ fn dropped_state(led: &Ledger, id: &str) -> bool {
 /// instead of guessing.
 fn file_approval(
     rf: &RecordFile,
-    raw_hashes: &HashMap<String, (String, String)>,
+    raw_hashes: &HashMap<String, (Vec<String>, String)>,
     led: &Ledger,
 ) -> (String, bool, bool) {
     let rel = rf.rel.clone();
@@ -295,7 +300,7 @@ fn file_approval(
             rel
         )
     });
-    let plan_ok = state::plan_approved_hash(led, &rel, plan_h);
+    let plan_ok = state::plan_approved_hashes(led, &rel, plan_h);
     let ctx_ok = state::context_approved_hash(led, &rel, ctx_h);
     (rel, plan_ok, ctx_ok)
 }

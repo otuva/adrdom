@@ -2,7 +2,7 @@
 use crate::commands::check;
 use crate::depends;
 use crate::ledger::{self, Ledger};
-use crate::record::{self, Dep, RecordFile, Section};
+use crate::record::{self, RecordFile, Section};
 use crate::repo;
 use crate::state;
 use crate::terms::{self, Term};
@@ -93,6 +93,11 @@ pub struct QuestionView {
     /// not common English, not a uuid or number, not shorter than three
     /// letters, and not already covered by `words`.
     pub no_entry: Vec<String>,
+    /// The lines `show` prints under an open question: one for each
+    /// neighbour on record, with the reader's word and the agent's line
+    /// ("Does show print the neighbours of a question with the reader's
+    /// word?", 97c679f6-e8e6-4970-b547-940477753d7d A).
+    pub neighbours: Vec<String>,
 }
 
 pub struct FileView {
@@ -103,13 +108,6 @@ pub struct FileView {
     pub done: bool,
     pub open_tier: Option<usize>,
     pub waits_on: Option<String>,
-    /// One note per heading dep whose set excludes the answer its target
-    /// was given (per "Does a depends entry carry the answers it holds
-    /// under?", "moot", `moot.rs`), formatted `"<h>" stands
-    /// on "<other>"=A|B, answered C` — the file-scoped counterpart to
-    /// `check`'s `moot: <rel>: ...` lines, shown alongside this file on
-    /// the overview page.
-    pub moot: Vec<String>,
     pub questions: Vec<QuestionView>,
 }
 
@@ -230,92 +228,6 @@ pub fn format_dep(
     }
 }
 
-/// One entry per heading dep in `rf` whose declared answer set excludes
-/// the letter its target was actually answered with (per "Does a depends
-/// entry carry the answers it holds under?", "moot"; mirrors `check`'s
-/// `moot.rs`, computed independently here since `record.rs` has no ledger
-/// access).
-pub(crate) struct MootPair {
-    /// The dependent's own index in `rf.sections`: lets `ask` match a
-    /// candidate by identity, since two sections may share a heading text
-    /// until `check` refuses the duplicate.
-    pub section_idx: usize,
-    pub dependent_heading: String,
-    pub target_heading: String,
-    pub set_text: String,
-    pub letter: char,
-}
-
-/// Every `MootPair` in `rf`. A target that is unanswered (gated on the
-/// ledger's `qstate`, not the raw file text, so a body edited to show a
-/// letter that was never actually asked/answered through the ledger never
-/// counts), or a set of `=*`, never produces an entry. Shared by
-/// `moot_notes` (its formatted-string wrapper, read by `check`/the page)
-/// and `ask`'s moot refusal, so the two can never diverge on what counts
-/// as moot.
-pub(crate) fn moot_pairs(rf: &RecordFile, led: &Ledger, all: &[RecordFile]) -> Vec<MootPair> {
-    let mut out = Vec::new();
-    for (si, sec) in rf.sections.iter().enumerate() {
-        for d in &sec.depends {
-            let Some(record::AnswerSet::Letters(letters)) = d.set() else {
-                continue;
-            };
-            // A same-file heading, else (an `Id` entry, which is what a
-            // cross-file heading entry is once normalized) the section of
-            // that id in any topic file.
-            let target = match rf.dep_target(d) {
-                Some(ti) => &rf.sections[ti],
-                None => {
-                    let Dep::Id { id, .. } = d else {
-                        continue;
-                    };
-                    let Some(t) = all
-                        .iter()
-                        .flat_map(|r| r.sections.iter())
-                        .find(|s| s.id.as_deref() == Some(id.as_str()))
-                    else {
-                        continue;
-                    };
-                    t
-                }
-            };
-            // `Answered` implies a real id (qstate only reaches it via an
-            // id's ledger row), so `target.answer_letter()` below is safe.
-            if qstate(led, target) != QState::Answered {
-                continue;
-            }
-            let Some(c) = target.answer_letter() else {
-                continue;
-            };
-            if !letters.contains(&c) {
-                out.push(MootPair {
-                    section_idx: si,
-                    dependent_heading: sec.heading_text.clone(),
-                    target_heading: target.heading_text.clone(),
-                    set_text: record::canonical_set(&record::AnswerSet::Letters(letters.clone())),
-                    letter: c,
-                });
-            }
-        }
-    }
-    out
-}
-
-/// `"<h>" stands on "<other>"=A|B, answered C`, `<h>` the dependent's
-/// heading and `<other>` the target's -- `moot_pairs`, formatted for
-/// `check`'s note and the page.
-pub(crate) fn moot_notes(rf: &RecordFile, led: &Ledger, all: &[RecordFile]) -> Vec<String> {
-    moot_pairs(rf, led, all)
-        .into_iter()
-        .map(|p| {
-            format!(
-                "\"{}\" stands on \"{}\"={}, answered {}",
-                p.dependent_heading, p.target_heading, p.set_text, p.letter
-            )
-        })
-        .collect()
-}
-
 /// `state::asked_text_stands` for a section of a loaded topic file: the
 /// question `answer` takes, and the one `show` prints a version for.
 pub(crate) fn asked_text_stands(led: &Ledger, rf: &RecordFile, sec: &Section) -> bool {
@@ -329,22 +241,25 @@ pub(crate) fn asked_text_stands(led: &Ledger, rf: &RecordFile, sec: &Section) ->
 /// out from the tiers. In order: the decisions to build (per "Does the
 /// agent build on a decision before its tier is fully answered?": built
 /// once every question beside it is answered), the bodies to write, the
-/// answer sets to write, the questions to ask, the approval the file waits
-/// for, the answers the owner owes, a refused or moot question that holds
+/// questions to ask, the approval the file waits
+/// for, the answers the owner owes, a refused question that holds
 /// the rest, the decisions that wait for a question beside them, and the
 /// questions whose turn has not come. Empty when nothing is left to do.
 ///
 /// `plan_ok` is read by the caller off the file as loaded, before
 /// `depends::normalize_cross_file_deps` (see `snapshot`). `tests` is
 /// `check::test_index`: an answered decision with a test tied to it is
-/// built.
+/// built. `planning` is `plan::load` of the file: a plan that waits for its
+/// approval, or holds a heading with no body, follows the planning steps
+/// (plan, write lines, write bodies, approve) from it ("What does the agent
+/// do to plan a topic file?", 46fc51ff-66b9-4841-a953-ae0d4c2fc424 A).
 pub(crate) fn next_moves(
     rf: &RecordFile,
     led: &Ledger,
     plan_ok: bool,
     plan_refusals: &[String],
     tests: &HashMap<String, Vec<String>>,
-    all: &[RecordFile],
+    planning: Option<&crate::plan::Planning>,
 ) -> Vec<String> {
     use crate::msg;
     // What `approve` and `check` refuse in this file's plan
@@ -357,13 +272,11 @@ pub(crate) fn next_moves(
         return clears;
     };
     let open_tier = state::open_tier(rf);
-    let moot: HashSet<usize> = moot_pairs(rf, led, all).iter().map(|p| p.section_idx).collect();
 
-    let mut bodies = Vec::new();
+    let mut bare = false;
     let mut to_ask = Vec::new();
     let mut answers = Vec::new();
     let mut held = Vec::new();
-    let mut moot_lines = Vec::new();
     let mut build = Vec::new();
     let mut build_waits = Vec::new();
     let mut later = Vec::new();
@@ -371,15 +284,10 @@ pub(crate) fn next_moves(
     for (i, sec) in rf.sections.iter().enumerate() {
         let heading = sec.heading_text.as_str();
         match qstate(led, sec) {
-            QState::Skeleton | QState::Unasked if moot.contains(&i) => {
-                moot_lines.push(msg::next_moot(&rf.rel, heading));
-            }
             QState::Skeleton | QState::Unasked if Some(tiers[i]) != open_tier => {
                 later.push(heading.to_string());
             }
-            QState::Skeleton | QState::Unasked if sec.is_skeleton => {
-                bodies.push(msg::next_write_body(heading));
-            }
+            QState::Skeleton | QState::Unasked if sec.is_skeleton => bare = true,
             QState::Skeleton | QState::Unasked => to_ask.push(heading.to_string()),
             QState::Open => {
                 let Some(id) = &sec.id else { continue };
@@ -418,24 +326,6 @@ pub(crate) fn next_moves(
         }
     }
 
-    // Per "Does a depends entry carry the answers it holds under?": every
-    // entry that names a question about to be asked carries its letters
-    // before `ask` runs. Named once the target has its options.
-    let mut sets = Vec::new();
-    for (ti, target) in rf.sections.iter().enumerate() {
-        if Some(tiers[ti]) != open_tier || target.is_skeleton || !state::tier_unresolved(target) {
-            continue;
-        }
-        for (di, set) in rf.dependents_of(ti) {
-            if set.is_none() {
-                sets.push(msg::next_answer_set(
-                    &rf.sections[di].heading_text,
-                    &target.heading_text,
-                ));
-            }
-        }
-    }
-
     // What is answered is built before anything new is written. Answers are
     // committed as given and check reports an untested decision as a note;
     // `next` still holds the build until the tier is answered, per "Does
@@ -444,20 +334,20 @@ pub(crate) fn next_moves(
     let mut out = build;
     let refused = !clears.is_empty();
     out.extend(clears);
-    // A question with no case left is dropped before anything is asked:
-    // `ask` refuses the whole run while it stands.
-    out.extend(moot_lines);
     if plan_ok {
-        out.extend(bodies);
-        out.extend(sets);
+        // Approve refuses a heading with no body, so one in an approved file
+        // is one approved before it did: its body is written, then planned.
+        if bare && planning.is_some() {
+            out.extend(plan_moves(rf, planning));
+        }
         if !to_ask.is_empty() {
             out.push(msg::next_ask(&rf.rel, &to_ask));
         }
     } else if !refused {
-        // Nothing is written or asked under a plan that waits for its
-        // approval; what the owner owes and what is answered stands. The
-        // owner's command is named once `approve` would take the plan.
-        out.push(msg::next_plan_unapproved(&rf.rel));
+        // Nothing is asked under a plan that waits for its approval; what
+        // the owner owes and what is answered stands. The planning steps
+        // come first, the owner's command once `approve` would take the plan.
+        out.extend(plan_moves(rf, planning));
     }
     out.extend(answers);
     out.extend(held);
@@ -466,6 +356,34 @@ pub(crate) fn next_moves(
         out.push(msg::next_later(&later));
     }
     out
+}
+
+/// The next move of the planning steps for the questions of `rf` not yet
+/// asked, as lines: the owner's approve once every record is there.
+fn plan_moves(rf: &RecordFile, planning: Option<&crate::plan::Planning>) -> Vec<String> {
+    use crate::msg;
+    use crate::plan::{NextMove, Step};
+    let Some(p) = planning else {
+        return vec![msg::next_plan_unapproved(&rf.rel)];
+    };
+    match p.next() {
+        NextMove::Plan => vec![msg::next_plan(&rf.rel)],
+        NextMove::WriteLines => {
+            let mut missing = p.lines_missing(Step::Heading);
+            if missing.is_empty() {
+                missing = p.lines_missing(Step::Body);
+            }
+            let mut headings: Vec<String> = Vec::new();
+            for (q, _) in missing {
+                if !headings.contains(&q.heading) {
+                    headings.push(q.heading.clone());
+                }
+            }
+            vec![msg::next_write_lines(&headings)]
+        }
+        NextMove::WriteBodies(headings) => vec![msg::next_write_bodies(&headings)],
+        NextMove::Ready => vec![msg::next_plan_unapproved(&rf.rel)],
+    }
 }
 
 /// The text following `prefix` (e.g. `"Problem: "`) on the first matching
@@ -611,7 +529,7 @@ fn no_entry_words(text: &str, pairs: &[(String, String)]) -> Vec<String> {
     let stripped = strip_uuid_tokens(text);
     let mut found: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for line in stripped.split('\n') {
-        if crate::tells::starts_with_any(line, &[crate::tells::ID_PREFIX, crate::tells::SUPERSEDES_PREFIX]) {
+        if crate::tells::starts_with_any(line, &[crate::tells::ID_PREFIX, crate::tells::SUPERSEDES_PREFIX, crate::tells::UNRELATED_PREFIX]) {
             continue;
         }
         for tok in crate::text::word_runs(line) {
@@ -642,8 +560,19 @@ fn build_question_view(
     test_idx: &HashMap<String, Vec<String>>,
     terms_list: &[Term],
     all_headings: &HashMap<String, String>,
+    planning: &crate::plan::Planning,
 ) -> QuestionView {
     let state = qstate(led, sec);
+    let neighbours = if matches!(state, QState::Skeleton | QState::Unasked | QState::Open) {
+        planning
+            .questions
+            .iter()
+            .find(|q| q.heading == sec.heading_text)
+            .map(|q| crate::plan::neighbour_lines(&rf.rel, q))
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
     let tier = rf.tier_of(idx);
     let depends: Vec<String> = sec
         .depends
@@ -679,6 +608,7 @@ fn build_question_view(
     let version = record::version_of(&rf.lines, sec);
 
     QuestionView {
+        neighbours,
         id: sec.id.clone(),
         heading: sec.heading_text.clone(),
         version,
@@ -719,17 +649,16 @@ fn build_file_view(
     all_headings: &HashMap<String, String>,
     plan_approved: bool,
     context_approved: bool,
-    all: &[RecordFile],
+    planning: &crate::plan::Planning,
 ) -> FileView {
     let path = state::rel_path(root, &rf.path);
     let done = state::file_done(rf, plan_approved, context_approved);
     let (open_tier, waits_on) = open_tier_and_waits_on(rf);
-    let moot = moot_notes(rf, led, all);
     let questions = rf
         .sections
         .iter()
         .enumerate()
-        .map(|(idx, sec)| build_question_view(rf, idx, sec, led, test_idx, terms_list, all_headings))
+        .map(|(idx, sec)| build_question_view(rf, idx, sec, led, test_idx, terms_list, all_headings, planning))
         .collect();
 
     FileView {
@@ -740,7 +669,6 @@ fn build_file_view(
         done,
         open_tier,
         waits_on,
-        moot,
         questions,
     }
 }
@@ -851,6 +779,8 @@ pub fn snapshot(root: &Path) -> Snapshot {
         // copy off the by-then-normalized `rf`).
         let plan_ok = state::plan_approved(&led, &rf, &rel);
         let ctx_ok = state::context_approved(&led, &rf, &rel);
+        // Read off the file as loaded, as `plan` and `approve` read it.
+        let planning = crate::plan::load_shown(root, &rf, &all_records, &terms_list, &led);
         depends::normalize_cross_file_deps(&mut rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
         let fv = build_file_view(
             root,
@@ -861,7 +791,7 @@ pub fn snapshot(root: &Path) -> Snapshot {
             &all_headings,
             plan_ok,
             ctx_ok,
-            &all_records,
+            &planning,
         );
         files.push(fv);
     }
@@ -1041,6 +971,7 @@ Standard: s2.\n\n\
             heading_text: "x".to_string(),
             id: Some(id.to_string()),
             supersedes: vec![],
+            unrelated: vec![],
             depends: vec![],
             options: vec![],
             answer_line: None,
@@ -1071,6 +1002,7 @@ Standard: s2.\n\n\
             heading_text: "x".to_string(),
             id: Some("id-r".to_string()),
             supersedes: vec![],
+            unrelated: vec![],
             depends: vec![],
             options: vec![],
             answer_line: None,
@@ -1219,7 +1151,8 @@ Standard: s2.\n\n\
             &HashMap::new(),
             plan_ok,
             ctx_ok,
-            std::slice::from_ref(&rf));
+                &crate::plan::Planning { rel: String::new(), questions: Vec::new() },
+            );
         assert!(!fv.done);
 
         // Approve plan/context, then rewrite the file with every section
@@ -1258,7 +1191,8 @@ Standard: s2.\n\n\
             &HashMap::new(),
             plan_ok2,
             ctx_ok2,
-            std::slice::from_ref(&rf2));
+            &crate::plan::Planning { rel: String::new(), questions: Vec::new() },
+        );
         assert!(fv2.plan_approved);
         assert!(fv2.context_approved);
         assert!(fv2.done);
@@ -1325,7 +1259,8 @@ Standard: s2.\n\n\
             &HashMap::new(),
             plan_ok2,
             ctx_ok2,
-            std::slice::from_ref(&rf2));
+            &crate::plan::Planning { rel: String::new(), questions: Vec::new() },
+        );
         assert!(fv.plan_approved);
         assert!(fv.context_approved);
         assert!(
@@ -1430,7 +1365,8 @@ Standard: s2.\n\n\
             &HashMap::new(),
             plan_ok,
             ctx_ok,
-            std::slice::from_ref(&rf));
+                &crate::plan::Planning { rel: String::new(), questions: Vec::new() },
+            );
         let q1 = fv
             .questions
             .iter()
@@ -1446,73 +1382,6 @@ Standard: s2.\n\n\
             .unwrap();
         assert_eq!(q2.tier, Some(2));
         assert_eq!(q2.depends, vec!["1.1 First question?".to_string()]);
-
-        std::fs::remove_dir_all(&dir).ok();
-    }
-
-    const MOOT_FIXTURE: &str = "# Topic\n\n\
-### 1.1 Root?\n\n\
-id: id-root\n\n\
-Problem: p.\n\n\
-Standard: s.\n\n\
-- A) First choice.\n  Why: w.\n  Costs: c.\n\
-- B) Second choice.\n  Why: w.\n  Costs: c.\n\n\
-**Answer:** B\n\n\
-### 1.2 Dependent?\n\
-depends: 1.1 Root?=A\n\n\
-id: id-dep\n\n\
-Problem: p2.\n\n\
-Standard: s2.\n\n\
-- A) x.\n  Why: w.\n  Costs: c.\n\
-- B) y.\n  Why: w.\n  Costs: c.\n";
-
-    #[test]
-    fn moot_notes_and_file_view_moot_name_the_excluded_answer() {
-        let dir = temp_repo();
-        let record = write_record(&dir, "adrdom/decisions/example.md", MOOT_FIXTURE);
-        append_row_at(&dir, "asked", "id-root", "h", "1.1 Root?", "2024-01-01T00:00:00Z");
-        append_row_at(&dir, "answered", "id-root", "h", "B", "2024-01-01T00:00:01Z");
-
-        let rf = record::load(&record).unwrap();
-        let led = ledger::read(&dir.join(repo::LEDGER_PATH));
-
-        let notes = moot_notes(&rf, &led, std::slice::from_ref(&rf));
-        assert_eq!(
-            notes,
-            vec!["\"1.2 Dependent?\" stands on \"1.1 Root?\"=A, answered B".to_string()]
-        );
-
-        let test_idx = HashMap::new();
-        let path = state::rel_path(&dir, &rf.path);
-        let plan_ok = state::plan_approved(&led, &rf, &path);
-        let ctx_ok = state::context_approved(&led, &rf, &path);
-        let fv = build_file_view(
-            &dir,
-            &rf,
-            &led,
-            &test_idx,
-            &[],
-            &HashMap::new(),
-            plan_ok,
-            ctx_ok,
-            std::slice::from_ref(&rf));
-        assert_eq!(fv.moot, notes);
-
-        std::fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn moot_notes_silent_when_the_answer_is_in_the_set() {
-        let dir = temp_repo();
-        let content = MOOT_FIXTURE.replace("**Answer:** B", "**Answer:** A");
-        let record = write_record(&dir, "adrdom/decisions/example.md", &content);
-        append_row(&dir, "asked", "id-root", "h", "1.1 Root?");
-        append_row(&dir, "answered", "id-root", "h", "A");
-
-        let rf = record::load(&record).unwrap();
-        let led = ledger::read(&dir.join(repo::LEDGER_PATH));
-
-        assert!(moot_notes(&rf, &led, std::slice::from_ref(&rf)).is_empty());
 
         std::fs::remove_dir_all(&dir).ok();
     }

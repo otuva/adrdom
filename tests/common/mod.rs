@@ -77,7 +77,10 @@ pub fn adr(dir: &Path, args: &[&str], envs: &[(&str, &str)], stdin: &str) -> Out
         .env_remove("CLAUDECODE")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .stderr(Stdio::piped())
+        // Tests never download the embedding model: the fake one answers.
+        // It has an effect only in a build with the `fake-model` feature.
+        .env("ADR_FAKE_MODEL", "1");
     for (k, v) in envs {
         cmd.env(k, v);
     }
@@ -109,6 +112,20 @@ pub fn adr(dir: &Path, args: &[&str], envs: &[(&str, &str)], stdin: &str) -> Out
 pub fn adr_owner(dir: &Path, args: &[&str], stdin: &str) -> Output {
     if args.len() == 2 && args[0] == "approve" && Path::new(args[1]).ends_with("adrdom/terms.md") {
         return approve_terms_one_entry_at_a_time(dir, args[1], stdin);
+    }
+    // Approve of a topic file needs the planning records first: the agent's
+    // moves of `adr plan`, done by `plan_record`.
+    if args.len() == 2
+        && args[0] == "approve"
+        && args[1].ends_with(".md")
+        && !args[1].ends_with("terms.md")
+        && !args[1].contains("adrdom/blame/")
+    {
+        let p = Path::new(args[1]);
+        let abs = if p.is_absolute() { p.to_path_buf() } else { dir.join(p) };
+        if let Ok(rel) = abs.strip_prefix(dir) {
+            plan_record(dir, &rel.to_string_lossy());
+        }
     }
     adr(dir, args, &[("ADR_OWNER_BYPASS", "1")], stdin)
 }
@@ -466,6 +483,7 @@ pub fn approve_via_ledger(dir: &Path, rel: &str, content: &str) {
 /// the command's stderr) if approve refuses, since a fixture meant to reach
 /// `ask` must be one real `approve` actually accepts.
 pub fn approve_record(dir: &Path, rel: &str) {
+    plan_record(dir, rel);
     let path = dir.join(rel);
     let out = adr_owner(dir, &["approve", path.to_str().unwrap()], "");
     assert!(
@@ -474,6 +492,68 @@ pub fn approve_record(dir: &Path, rel: &str) {
         rel,
         stderr(&out)
     );
+}
+
+/// Does the agent's moves of `adr plan` on `rel` with the fake model and the
+/// fake reader, until the tool says the file is ready: every neighbour the
+/// tool reports on no line gets an entry on the `unrelated:` line under its
+/// heading. It switches no rule off; it is the plumbing a fixture needs
+/// before the owner's approve. A plan that stops for another reason (a body
+/// missing, a shape error) is left as it is, so approve reports that.
+pub fn plan_record(dir: &Path, rel: &str) {
+    let path = dir.join(rel);
+    for _ in 0..6 {
+        let out = adr(dir, &["plan", path.to_str().unwrap()], &[], "");
+        if !out.status.success() {
+            return;
+        }
+        let wanted = lines_wanted(&stdout(&out));
+        if wanted.is_empty() {
+            return;
+        }
+        let text = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(&path, add_unrelated(&text, &wanted)).unwrap();
+    }
+}
+
+/// The (heading, name) of each `line missing: <kind> "<name>" under
+/// "<heading>"` line `adr plan` printed.
+pub fn lines_wanted(plan_stdout: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for l in plan_stdout.lines() {
+        let Some(rest) = l.strip_prefix("line missing: ") else { continue };
+        let Some((_, rest)) = rest.split_once(" \"") else { continue };
+        let Some((name, heading)) = rest.split_once("\" under \"") else { continue };
+        out.push((heading.trim_end_matches('"').to_string(), name.to_string()));
+    }
+    out
+}
+
+/// `text` with each name added to the `unrelated:` line under its heading,
+/// a new line directly under the `depends:` line (and under a `supersedes:`
+/// line that follows it) when there is none.
+pub fn add_unrelated(text: &str, wanted: &[(String, String)]) -> String {
+    let mut lines: Vec<String> = text.lines().map(String::from).collect();
+    for (heading, name) in wanted {
+        let Some(h) = lines.iter().position(|l| l.strip_prefix("### ").map(str::trim) == Some(heading.as_str())) else {
+            continue;
+        };
+        let end = (h + 1..lines.len()).find(|&j| lines[j].starts_with("### ")).unwrap_or(lines.len());
+        if let Some(j) = (h + 1..end).find(|&j| lines[j].starts_with("unrelated: ")) {
+            lines[j].push_str(&format!(", {}", name));
+            continue;
+        }
+        let mut at = (h + 1..end).find(|&j| lines[j].starts_with("depends: ")).unwrap_or(h);
+        while at + 1 < end && lines[at + 1].starts_with("supersedes: ") {
+            at += 1;
+        }
+        lines.insert(at + 1, format!("unrelated: {}", name));
+    }
+    let mut out = lines.join("\n");
+    if text.ends_with('\n') {
+        out.push('\n');
+    }
+    out
 }
 
 /// Appends a hand-crafted ledger row (bypassing every command): `event`,

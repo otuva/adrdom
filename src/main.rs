@@ -32,6 +32,11 @@ enum Command {
         /// The topic file, adrdom/decisions/<topic>.md.
         topic_file: PathBuf,
     },
+    /// Plan a topic file: bring the neighbours of its headings and of its questions with their bodies, name the lines still to write, or say it is ready for approval.
+    Plan {
+        /// The topic file, adrdom/decisions/<topic>.md.
+        topic_file: PathBuf,
+    },
     /// Owner-only: approve the headings and prose of a topic file, the terms file, or a blame file.
     Approve {
         /// A topic file, adrdom/terms.md, or a blame file under adrdom/blame.
@@ -127,6 +132,7 @@ fn main() {
         Command::Install { claude, codex } => commands::install::run(claude, codex),
         Command::Uninstall => commands::uninstall::run(),
         Command::Ask { topic_file } => commands::ask::run(topic_file),
+        Command::Plan { topic_file } => commands::plan::run(topic_file),
         Command::Approve { file } => commands::approve::run(file),
         Command::Answer { id, letter } => commands::answer::run(id, letter),
         Command::Show { topic_file, all } => commands::show::run(topic_file, all),

@@ -1,8 +1,8 @@
 // End-to-end walk of the whole plan lifecycle through the built binary:
 // approve derives and caps tiers, ask enforces
-// the derived tier order plus mandatory/moot answer sets and writes
+// the derived tier order plus mandatory answer sets and writes
 // `assumes` rows, answer accepts a refusal, check freezes a dependent's
-// answer set and reports moot notes/done, and a plan change (dropping
+// answer set and reports done, and a plan change (dropping
 // questions, adding one) withdraws the dropped id at the next approve.
 //
 // One shared fixture walks the whole story rather than one test per
@@ -26,93 +26,60 @@ use common::*;
 
 const REL: &str = "adrdom/decisions/widget.md";
 
-// --- state 0: three questions, all skeleton (heading + depends only) ------
+// --- state 0: three questions, every body written, every dependent with an
+// answer set (approve refuses a body-less heading and a set-less dependent).
 const STATE_0: &str = r#"# Widget
 
 ### 1.1 What color is the widget?
 depends: widget
 
+Problem: the widget's color is undecided.
+
+Standard: plain words.
+
+- A) The widget is red.
+  Why: reasons.
+  Costs: costs.
+- B) The widget is blue.
+  Why: other reasons.
+  Costs: other costs.
+
 ### 1.2 Does the paint match the widget's color?
-depends: paint, 1.1 What color is the widget?
+depends: paint, 1.1 What color is the widget?=A
+
+Problem: the paint might not match.
+
+Standard: plain words.
+
+- A) Yes.
+  Why: reasons.
+  Costs: costs.
+- B) No.
+  Why: other reasons.
+  Costs: other costs.
 
 ### 1.3 Does the paint need a second coat?
-depends: paint, 1.1 What color is the widget?
+depends: paint, 1.1 What color is the widget?=*
+
+Problem: second coat need is undecided.
+
+Standard: plain words.
+
+- A) Yes.
+  Why: reasons.
+  Costs: costs.
+- B) No.
+  Why: other reasons.
+  Costs: other costs.
 "#;
 
 // `approve_terms_with(&dir, &["widget", "paint"])` (tests/common/mod.rs)
 // assigns each word a fixed id in array order: "widget" is index 0,
 // "paint" is index 1.
-const WIDGET_ID: &str = "99999990-9999-9999-9999-999999999999";
 const PAINT_ID: &str = "99999991-9999-9999-9999-999999999999";
 
-/// `approve` rewrites every `Text` depends entry to the id it resolves to
-/// -- a term entry to the term's id, a heading entry to the target
-/// heading's own id -- so every marker/insert pair below that edits an
-/// already-approved file is built from those ids, never the original words.
-/// Each marker also carries the heading's own id line, which `approve` now
-/// writes directly after the (single, comma-separated) depends line rather
-/// than before it, so every marker below needs that
-/// section's own id too, not just the ids its depends line names.
-fn q1_marker(q1_id: &str) -> String {
-    format!("depends: {}\nid: {}\n\n### 1.2", WIDGET_ID, q1_id)
-}
-fn q1_body_insert(q1_id: &str) -> String {
-    format!(
-        "depends: {}\nid: {}\n\n\
-Problem: the widget's color is undecided.\n\n\
-Standard: plain words.\n\n\
-- A) The widget is red.\n  Why: reasons.\n  Costs: costs.\n\
-- B) The widget is blue.\n  Why: other reasons.\n  Costs: other costs.\n\n\
-### 1.2",
-        WIDGET_ID, q1_id
-    )
-}
-
-fn q2_set_marker(q1_id: &str, q2_id: &str) -> String {
-    format!("depends: {}, {}\nid: {}\n\n### 1.3", PAINT_ID, q1_id, q2_id)
-}
-fn q2_set_insert(q1_id: &str, q2_id: &str) -> String {
-    format!("depends: {}, {}=A\nid: {}\n\n### 1.3", PAINT_ID, q1_id, q2_id)
-}
-
-fn q3_set_marker(q1_id: &str, q3_id: &str) -> String {
-    format!("depends: {}, {}\nid: {}\n", PAINT_ID, q1_id, q3_id)
-}
-fn q3_set_insert(q1_id: &str, q3_id: &str) -> String {
-    format!("depends: {}, {}=*\nid: {}\n", PAINT_ID, q1_id, q3_id)
-}
-
-fn q2_marker(q1_id: &str, q2_id: &str) -> String {
-    format!("depends: {}, {}=A\nid: {}\n\n### 1.3", PAINT_ID, q1_id, q2_id)
-}
-fn q2_body_insert(q1_id: &str, q2_id: &str) -> String {
-    format!(
-        "depends: {}, {}=A\nid: {}\n\n\
-Problem: the paint might not match.\n\n\
-Standard: plain words.\n\n\
-- A) Yes.\n  Why: reasons.\n  Costs: costs.\n\
-- B) No.\n  Why: other reasons.\n  Costs: other costs.\n\n\
-### 1.3",
-        PAINT_ID, q1_id, q2_id
-    )
-}
-
-fn q3_tail_marker(q1_id: &str, q3_id: &str) -> String {
-    format!("depends: {}, {}=*\nid: {}\n", PAINT_ID, q1_id, q3_id)
-}
-fn q3_body_insert(q1_id: &str, q3_id: &str) -> String {
-    format!(
-        "depends: {}, {}=*\nid: {}\n\n\
-Problem: second coat need is undecided.\n\n\
-Standard: plain words.\n\n\
-- A) Yes.\n  Why: reasons.\n  Costs: costs.\n\
-- B) No.\n  Why: other reasons.\n  Costs: other costs.\n",
-        PAINT_ID, q1_id, q3_id
-    )
-}
-
 const Q4_BLOCK: &str = "\n### 1.4 Does the paint have a glossy finish?\n\
-depends: paint, 1.1 What color is the widget?=B\n\n\
+depends: paint, 1.1 What color is the widget?\n\n\
 Problem: the paint's finish is undecided.\n\n\
 Standard: plain words.\n\n\
 - A) Yes.\n  Why: reasons.\n  Costs: costs.\n\
@@ -133,29 +100,11 @@ fn id_for_heading(content: &str, heading_prefix: &str) -> String {
 }
 
 //
-// "one approval covers the headings and their depends lines; the question
-// bodies are written after it, one tier at a time, with no further
-// approval". Step 1 below approves STATE_0 -- headings and depends lines
-// only, every body still a skeleton -- in a single `approve` call; step 2
-// then grows Q1's skeleton into a full body and Q2/Q3's depends lines into
-// answer sets, and `check` confirms nothing is "awaiting approval" (no
-// second approve happened), and the very next `ask` succeeds straight
-// through on that body -- accepted with no new approve in between.
-//
-//
-// core: "when a tier's bodies are written, every depends entry naming one
-// of its questions gets the letters it holds under (=A, =A|B or =*); ask
-// stops the tier until every such set is written and freezes the sets with
-// the bodies ...; once the tier is answered, a question whose set lacks the
-// answer is moot: ask stops it, check reports it, and it leaves at the next
-// plan change (approve accepts dropping it)". This single walk shows every
-// clause: step 2 has `ask` refuse Q2 for missing an answer set, then freeze
-// Q2's `=A` and Q3's `=*` the moment `ask` asks Q1; step 5 has `check` fail
-// once Q2's frozen `=A` is edited to `=B` after that ask (freezing holds);
-// step 4 has `check` report "moot: ... stands on ... =A, answered B" and
-// `ask` refuse the same moot Q2 outright; step 7 drops the still-moot Q2
-// (and the answered-but-refused Q3) at the next `approve`, which accepts it
-// and prints "approve: withdrawn: 1.3 ...".
+// Walk: approve one plan with every body and answer set written; ask asks
+// tier 1 and freezes the sets; the next ask stops at the open tier; after
+// the owner answers B, the dependent on =A leaves the file and the =*
+// dependent asks; a frozen set edited after ask fails `check`; a
+// plan change drops Q3 and adds Q4, withdrawing the asked Q3.
 #[test]
 fn plan_lifecycle_end_to_end() {
     let dir = init_repo();
@@ -172,48 +121,24 @@ fn plan_lifecycle_end_to_end() {
         stdout(&out)
     );
 
-    // approve gave every heading (all three, skeletons included) an id.
+    // approve gave every heading (all three) an id.
     let state_0_approved = std::fs::read_to_string(&record).unwrap();
     assert_eq!(extract_ids(&state_0_approved).len(), 3, "{}", state_0_approved);
     let q1_id = id_for_heading(&state_0_approved, "### 1.1");
     let q2_id = id_for_heading(&state_0_approved, "### 1.2");
     let q3_id = id_for_heading(&state_0_approved, "### 1.3");
+    let _ = &q2_id;
 
-    // --- 2. ask refuses without answer sets; sets alone need no re-approve -
-    // Grow Q1's skeleton into a full body, editing the id-bearing file in
-    // place (not overwriting it with a separate id-less constant, which
-    // would make the id vanish and look like a plan change).
-    let state_1 = state_0_approved.replacen(&q1_marker(&q1_id), &q1_body_insert(&q1_id), 1);
-    assert_ne!(state_1, state_0_approved, "Q1 marker must be found");
-    std::fs::write(&record, &state_1).unwrap();
-
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
-    assert_eq!(
-        stderr(&out).trim_end(),
-        "ask: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" depends on \"1.1 What color is the widget?\" without an answer set; agent writes =A, =A|B or =* on that depends line\n\
-         ask: adrdom/decisions/widget.md: \"1.3 Does the paint need a second coat?\" depends on \"1.1 What color is the widget?\" without an answer set; agent writes =A, =A|B or =* on that depends line"
-    );
-    // Nothing written on refusal.
-    let after = std::fs::read_to_string(&record).unwrap();
-    assert_eq!(after, state_1, "ask must not modify the file when it refuses");
-
-    // Q2 gets =A, Q3 gets =* (sets only, target unchanged).
-    let state_2 = state_1.replacen(&q2_set_marker(&q1_id, &q2_id), &q2_set_insert(&q1_id, &q2_id), 1);
-    assert_ne!(state_2, state_1, "Q2 set marker must be found");
-    let state_2 = state_2.replacen(&q3_set_marker(&q1_id, &q3_id), &q3_set_insert(&q1_id, &q3_id), 1);
-    std::fs::write(&record, &state_2).unwrap();
-
+    // --- 2. ask asks tier 1 and writes the assumes rows --------------------
     let check_out = adr(&dir, &["check"], &[], "");
-    let check_text = stdout(&check_out);
     assert!(
-        !check_text.contains("awaiting approval"),
-        "changing only the answer sets must not require re-approval: {}",
-        check_text
+        !stdout(&check_out).contains("awaiting approval"),
+        "{}",
+        stdout(&check_out)
     );
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask should now succeed: {}", stderr(&out));
+    assert!(out.status.success(), "ask should succeed: {}", stderr(&out));
     let printed = stdout(&out);
     assert!(
         printed.contains("asked: \"1.1 What color is the widget?\" (tier 1)"),
@@ -243,10 +168,6 @@ fn plan_lifecycle_end_to_end() {
     );
 
     // --- 3. a candidate outside the open tier is left for a later run ------
-    let with_q2_body = state_3.replacen(&q2_marker(&q1_id, &q2_id), &q2_body_insert(&q1_id, &q2_id), 1);
-    assert_ne!(with_q2_body, state_3, "Q2 marker must be found");
-    std::fs::write(&record, &with_q2_body).unwrap();
-
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "ask should print nothing to ask: {}", stderr(&out));
     assert!(stderr(&out).is_empty(), "{}", stderr(&out));
@@ -266,64 +187,14 @@ fn plan_lifecycle_end_to_end() {
     );
     assert_eq!(asked_row_count(&dir), 1, "Q2 is not asked");
 
-    // Remove that body again.
-    std::fs::write(&record, &state_3).unwrap();
-
-    // --- 4. owner answers Q1; Q2's frozen set A is now moot; Q3's * asks --
-    let out = adr_answer(&dir, &q1_id, "B");
-    assert!(out.status.success(), "answer failed: {}", stderr(&out));
-    write_test_comment(&dir, &q1_id);
-
-    let state_5 = std::fs::read_to_string(&record).unwrap();
-    let check_out = adr(&dir, &["check"], &[], "");
-    assert!(
-        stdout(&check_out).contains(
-            "no case left: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" stands on \"1.1 What color is the widget?\"=A, answered B"
-        ),
-        "{}",
-        stdout(&check_out)
-    );
-
-    let with_q2_body_2 = state_5.replacen(&q2_marker(&q1_id, &q2_id), &q2_body_insert(&q1_id, &q2_id), 1);
-    assert_ne!(with_q2_body_2, state_5, "Q2 marker must be found");
-    std::fs::write(&record, &with_q2_body_2).unwrap();
-
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
-    assert_eq!(
-        stderr(&out).trim_end(),
-        "ask: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" has no case left: it stands on \"1.1 What color is the widget?\" under A, and the answer was B; agent drops or replaces the heading, owner runs: adr approve adrdom/decisions/widget.md"
-    );
-
-    // Revert Q2 to skeleton again, then give Q3 a body: it asks fine.
-    std::fs::write(&record, &state_5).unwrap();
-    let with_q3_body = state_5.replacen(&q3_tail_marker(&q1_id, &q3_id), &q3_body_insert(&q1_id, &q3_id), 1);
-    assert_ne!(with_q3_body, state_5, "Q3 marker must be found");
-    std::fs::write(&record, &with_q3_body).unwrap();
-
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask should now succeed: {}", stderr(&out));
-    assert!(
-        stdout(&out).contains("asked: \"1.3 Does the paint need a second coat?\" (tier 2)"),
-        "{}",
-        stdout(&out)
-    );
-
-    let state_7 = std::fs::read_to_string(&record).unwrap();
-    // All three headings (Q1 asked/answered, Q2 still a skeleton, Q3 just
-    // asked) already carry an id from the very first approve.
-    assert_eq!(extract_ids(&state_7).len(), 3, "{}", state_7);
-    assert_eq!(id_for_heading(&state_7, "### 1.1"), q1_id);
-    assert_eq!(id_for_heading(&state_7, "### 1.3"), q3_id);
-    assert_eq!(asked_row_count(&dir), 2, "Q1 and Q3 should be asked; Q2 stays a skeleton");
 
     // --- 5. changing the frozen set after ask is a check failure ----------
-    let set_changed = state_7.replacen(
+    let set_changed = state_3.replacen(
         &format!("depends: {}, {}=A", PAINT_ID, q1_id),
         &format!("depends: {}, {}=B", PAINT_ID, q1_id),
         1,
     );
-    assert_ne!(set_changed, state_7, "Q2's =A line must be found");
+    assert_ne!(set_changed, state_3, "Q2's =A line must be found");
     std::fs::write(&record, &set_changed).unwrap();
 
     let out = adr(&dir, &["check"], &[], "");
@@ -337,7 +208,34 @@ fn plan_lifecycle_end_to_end() {
     );
 
     // Restore =A.
-    std::fs::write(&record, &state_7).unwrap();
+    std::fs::write(&record, &state_3).unwrap();
+
+    // --- 4. owner answers Q1; Q2 (set A) leaves with the answer; Q3's * asks --
+    let out = adr_answer(&dir, &q1_id, "B");
+    assert!(out.status.success(), "answer failed: {}", stderr(&out));
+    write_test_comment(&dir, &q1_id);
+
+    // The answer removed Q2 (its set lacks B); the file stays approved and
+    // check passes, so Q3 asks with no second approval.
+    let state_5 = std::fs::read_to_string(&record).unwrap();
+    assert!(!state_5.contains("### 1.2 Does the paint match the widget's color?"), "{}", state_5);
+    let check_out = adr(&dir, &["check"], &[], "");
+    assert!(check_out.status.success(), "{}{}", stdout(&check_out), stderr(&check_out));
+    assert!(!stdout(&check_out).contains("no case left"), "{}", stdout(&check_out));
+
+    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(out.status.success(), "ask should now succeed: {}", stderr(&out));
+    assert!(
+        stdout(&out).contains("asked: \"1.3 Does the paint need a second coat?\" (tier 2)"),
+        "{}",
+        stdout(&out)
+    );
+
+    let state_7 = std::fs::read_to_string(&record).unwrap();
+    assert_eq!(extract_ids(&state_7).len(), 2, "{}", state_7);
+    assert_eq!(id_for_heading(&state_7, "### 1.1"), q1_id);
+    assert_eq!(id_for_heading(&state_7, "### 1.3"), q3_id);
+    assert_eq!(asked_row_count(&dir), 2, "Q1 and Q3 should be asked; Q2 was never asked");
 
     // --- 6. owner refuses Q3 ------------------------------------------------
     let out = adr_answer(&dir, &q3_id, "refuse");
@@ -367,8 +265,8 @@ fn plan_lifecycle_end_to_end() {
         stdout(&out)
     );
 
-    // --- 7. plan change: drop Q2 and Q3, add Q4 -----------------------------
-    let cut = state_8.find("### 1.2 Does the paint match the widget's color?").unwrap();
+    // --- 7. plan change: drop Q3, add Q4 ------------------------------------
+    let cut = state_8.find("### 1.3 Does the paint need a second coat?").unwrap();
     let mut state_9 = state_8[..cut].trim_end().to_string();
     state_9.push('\n');
     state_9.push_str(Q4_BLOCK);
@@ -399,8 +297,7 @@ fn plan_lifecycle_end_to_end() {
 
     // --- 8. owner answers Q4; tie tests; the file is done -------------------
     let state_10 = std::fs::read_to_string(&record).unwrap();
-    // Only Q1 and Q4 remain in the file at all now (Q2/Q3 were dropped, not
-    // merely left unasked), so exactly two ids remain.
+    // Only Q1 and Q4 remain in the file at all now, so exactly two ids remain.
     let ids_10 = extract_ids(&state_10);
     assert_eq!(ids_10.len(), 2, "{}", state_10);
     assert_eq!(id_for_heading(&state_10, "### 1.1"), q1_id);

@@ -562,7 +562,7 @@ pub fn left_out_of_supersedes(
 /// the file exactly as loaded. `all` must not have gone through
 /// `normalize_cross_file_deps` (that rewrites the entries the plan hash
 /// covers); a caller that normalizes its records takes the hashes before
-/// doing so and calls `state::plan_approved_hash` itself.
+/// doing so and calls `state::plan_approved_hashes` itself.
 pub fn approved_plan_rels(all: &[RecordFile], led: &Ledger) -> std::collections::HashSet<String> {
     all.iter()
         .filter(|f| state::plan_approved(led, f, &f.rel))
