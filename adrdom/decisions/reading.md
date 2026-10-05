@@ -24,6 +24,7 @@ Standard: periodic deduplication of a store with the same comparator used at ins
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, e2533580-1486-4dc9-8697-e6c53605fe72, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, aef1b384-2b33-47a2-92a8-ec7f8fb258ef, 1ab6d6c3-7e44-42de-bc2f-2e5849114aef=A, c6e0b7d6-cdec-46da-b2bc-cda218673868
 unrelated: 277a8338-c57a-43cc-8b28-6b42e9347f6a, 2bae531b-c4df-48a0-89a0-3d52726741ea, de5ed5b1-3a83-4403-8953-941cb7e94390, f4f667ad-8714-4e65-897b-c7002e423c28, 62e50382-db1b-4649-9f26-7f44c379d6fe, dad5273c-afe2-4ab1-a451-e2a5d4d9a26d, 39b76886-98f9-4019-9194-db9ab51aea1e, 9d634996-475e-4ddc-8113-05c404ad9d5c, e3200081-9995-4bbe-983f-2f430dc341e7, ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf, 055d303b-c286-4f6c-975a-d9d8090936d4, 4b407ee1-1e64-4ca1-842b-69773fc0e48a, bc4291c8-98f1-499d-8e02-46e371035e70, 2db33118-82b4-4edf-a9cb-e92ac62738b9
 id: 908bddc6-5d30-4bcc-be8d-4c470c6bff11
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answered=b36113a1-1384-4e4c-a798-8399f4181366, current=e2533580-1486-4dc9-8697-e6c53605fe72, decisions=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, depends=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, supersede=2bae531b-c4df-48a0-89a0-3d52726741ea
 
 Problem: both sides are answered, so the whole relation can be read; the words must be ones the agent can act on, and the pair has no new side.
 Standard: the same closed set as for a question with its body, applied to two settled texts.
@@ -54,6 +55,7 @@ Standard: read a symmetric relation once; for a directional one, state the direc
 depends: f90dbd5b-8fbe-4899-8588-f8762795c2e2, 1ab6d6c3-7e44-42de-bc2f-2e5849114aef=A
 unrelated: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 34e81f57-9b3c-4dc4-a2ba-ca227523177d, a26876ba-5789-4d05-965e-853d00d9edd2, bf6697e3-8832-4b90-b036-8fecedb55406, 26c5352f-3f82-4376-9dc2-8ccc0074d080, 19e1c023-a678-4842-a414-bb0e45c41601, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c, dfd32ef6-c2ac-40ef-b8b3-9c58732516b1, 1c27f2d6-ab62-4c5a-91b2-1488722f3c48, d8a9dfff-de89-442c-a08c-8276efab3f36, 4f925b13-ad16-48b8-acd1-3e30d6e308b6, c3127af2-4c96-48d5-a164-bac49a9a09ec, f422c5db-13d0-4ff7-9e43-b68ab44a7cb9, db56a285-946f-48b1-b073-bb1e90192185, 908bddc6-5d30-4bcc-be8d-4c470c6bff11, 4b407ee1-1e64-4ca1-842b-69773fc0e48a, 2db33118-82b4-4edf-a9cb-e92ac62738b9, 4f04bae4-98e3-48eb-9403-3257268e2d87
 id: bc4291c8-98f1-499d-8e02-46e371035e70
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answers=b36113a1-1384-4e4c-a798-8399f4181366, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641
 
 Problem: the reading needs the model and the reader and takes minutes; a commit runs on every machine, with neither, in seconds.
 Standard: expensive advisory analyses run on demand, not in a commit hook.
