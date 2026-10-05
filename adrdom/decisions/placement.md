@@ -8,15 +8,18 @@ supersedes: f01e20ae-00fc-4ec9-a25b-88a90dffc624, 258107eb-2a90-4ce9-a111-d1bba0
 id: f5eeaacf-1c9f-478b-8a97-2df1aaf39458
 
 ### Does approve hash each question on its own?
-depends: e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 277a8338-c57a-43cc-8b28-6b42e9347f6a, f5eeaacf-1c9f-478b-8a97-2df1aaf39458
+depends: e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 277a8338-c57a-43cc-8b28-6b42e9347f6a
 id: 61e73795-63de-4669-b09f-48be96919325
 
 ### Does a depends entry on a question in its file carry an answer set?
 depends: 9d634996-475e-4ddc-8113-05c404ad9d5c, aef1b384-2b33-47a2-92a8-ec7f8fb258ef, f5eeaacf-1c9f-478b-8a97-2df1aaf39458
 id: 946263aa-519a-47aa-b743-5cdcf52f5d35
 
+### Does check fail a topic file awaiting approval?
+depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, f5eeaacf-1c9f-478b-8a97-2df1aaf39458
+
 ### Does answer remove a question whose answer set lacks the answer?
-depends: b36113a1-1384-4e4c-a798-8399f4181366, 9d634996-475e-4ddc-8113-05c404ad9d5c, 61e73795-63de-4669-b09f-48be96919325
+depends: b36113a1-1384-4e4c-a798-8399f4181366, 946263aa-519a-47aa-b743-5cdcf52f5d35, 61e73795-63de-4669-b09f-48be96919325
 supersedes: fa90692a-150e-4a89-91e2-1d575cb59d0f
 id: 462e22c6-8b23-4061-9a2a-bbf8691fce60
 
