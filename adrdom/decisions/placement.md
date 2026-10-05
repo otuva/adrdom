@@ -3,60 +3,79 @@
 How a new question is tied to the decisions that exist: the steps of planning a topic file, the neighbours the tool brings, what the reader says about them, the line the agent writes for each, and what happens to a question whose answer set lacks the owner's answer.
 
 ### Does the agent write the bodies before approve?
-depends: agent, approve, plan
-supersedes: Does the owner approve a plan in one step?, Does check fail a plan awaiting approval?
+depends: f90dbd5b-8fbe-4899-8588-f8762795c2e2, e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 94677ed8-eaf6-46e2-bc71-7392fa0805bf
+supersedes: f01e20ae-00fc-4ec9-a25b-88a90dffc624, 258107eb-2a90-4ce9-a111-d1bba047d423
+id: f5eeaacf-1c9f-478b-8a97-2df1aaf39458
 
 ### Does approve hash each question on its own?
-depends: approve, question, Does the agent write the bodies before approve?
+depends: e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 277a8338-c57a-43cc-8b28-6b42e9347f6a, f5eeaacf-1c9f-478b-8a97-2df1aaf39458
+id: 61e73795-63de-4669-b09f-48be96919325
 
 ### Does a depends entry on a question in its file carry an answer set?
-depends: answer set, depends, Does the agent write the bodies before approve?
+depends: 9d634996-475e-4ddc-8113-05c404ad9d5c, aef1b384-2b33-47a2-92a8-ec7f8fb258ef, f5eeaacf-1c9f-478b-8a97-2df1aaf39458
+id: 946263aa-519a-47aa-b743-5cdcf52f5d35
 
 ### Does answer remove a question whose answer set lacks the answer?
-depends: answer, answer set, Does approve hash each question on its own?
-supersedes: Does a depends entry carry the answers it holds under?
+depends: b36113a1-1384-4e4c-a798-8399f4181366, 9d634996-475e-4ddc-8113-05c404ad9d5c, 61e73795-63de-4669-b09f-48be96919325
+supersedes: fa90692a-150e-4a89-91e2-1d575cb59d0f
+id: 462e22c6-8b23-4061-9a2a-bbf8691fce60
 
 ### What does answer write for a removed question?
-depends: ledger, Does answer remove a question whose answer set lacks the answer?
+depends: e18b82d8-5271-4385-bbab-2b89e5da278f, 462e22c6-8b23-4061-9a2a-bbf8691fce60
+id: f5c242b6-e2f6-45a3-8c61-c743f3ad794f
 
 ### What does the tool bring as neighbours for a new heading?
-depends: neighbour, decision, definition
+depends: daec9ffd-676f-4111-a359-2827bfd4527c, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, 607cb55f-c0fa-40af-b290-c17f3ba0f812
+id: de8ef568-3a8d-42ba-bef7-d7fd467b27be
 
 ### Does git track a file the tool can get again without the owner?
-depends: embedding index, embedding model
+depends: bf7da2dd-d8a7-41b8-9898-11cf68d0e833, a7b0b910-57f6-4c59-b904-b42f78db63f7
+id: 0d977e39-a657-4596-8eca-8ceb335f3081
 
 ### What does the agent do to plan a topic file?
-depends: agent, plan, What does the tool bring as neighbours for a new heading?
+depends: f90dbd5b-8fbe-4899-8588-f8762795c2e2, 94677ed8-eaf6-46e2-bc71-7392fa0805bf, de8ef568-3a8d-42ba-bef7-d7fd467b27be
+id: 46fc51ff-66b9-4841-a953-ae0d4c2fc424
 
 ### Does a planning step run without the record of the step before?
-depends: check, What does the agent do to plan a topic file?
+depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 46fc51ff-66b9-4841-a953-ae0d4c2fc424
+id: d3be71e4-ce7b-43b0-86a8-e86868521f99
 
 ### Does planning stop without the embedding model?
-depends: embedding model, What does the tool bring as neighbours for a new heading?
+depends: a7b0b910-57f6-4c59-b904-b42f78db63f7, de8ef568-3a8d-42ba-bef7-d7fd467b27be
+id: 21cdad59-4f0c-42a5-b4f3-6af946637df3
 
 ### Does the tool bring the plan's own questions as neighbours of each other?
-depends: plan, What does the reader say about a neighbour of a heading?
+depends: 94677ed8-eaf6-46e2-bc71-7392fa0805bf, 62e50382-db1b-4649-9f26-7f44c379d6fe
+id: 4838baa4-a5df-49e7-929c-ed63b5adaf4e
 
 ### Does every neighbour get a line under its heading?
-depends: depends, supersede, What does the agent do to plan a topic file?
+depends: aef1b384-2b33-47a2-92a8-ec7f8fb258ef, 2bae531b-c4df-48a0-89a0-3d52726741ea, 46fc51ff-66b9-4841-a953-ae0d4c2fc424
+id: c6451ecc-17a9-447e-a9c9-fe9b35ec789c
 
 ### What does the reader say about a neighbour of a heading?
-depends: reader, What does the reader say about a neighbour of a question with its body?
+depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, c6e0b7d6-cdec-46da-b2bc-cda218673868
+id: 62e50382-db1b-4649-9f26-7f44c379d6fe
 
 ### What does the reader say about a neighbour of a question with its body?
-depends: reader, What does the agent do to plan a topic file?
+depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 46fc51ff-66b9-4841-a953-ae0d4c2fc424
+id: c6e0b7d6-cdec-46da-b2bc-cda218673868
 
 ### Does the reader's word stop a command?
-depends: reader, What does the reader say about a neighbour of a question with its body?
+depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, c6e0b7d6-cdec-46da-b2bc-cda218673868
+id: 902bd279-e6c1-4a21-9637-a3a43f360bae
 
 ### What does the tool keep of the reader's word?
-depends: reader, What does the reader say about a neighbour of a question with its body?
+depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, c6e0b7d6-cdec-46da-b2bc-cda218673868
+id: 08a1b488-32fc-4dc7-b4b3-93a6e768725f
 
 ### Does check hold the reader's file as it holds the ledger?
-depends: check, What does the tool keep of the reader's word?
+depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 08a1b488-32fc-4dc7-b4b3-93a6e768725f
+id: 26c5352f-3f82-4376-9dc2-8ccc0074d080
 
 ### Does planning stop without the reader?
-depends: reader, What does the reader say about a neighbour of a heading?
+depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 62e50382-db1b-4649-9f26-7f44c379d6fe
+id: 3dba486c-a399-4ce3-a794-e38c4f733403
 
 ### Does show print the neighbours of a question with the reader's word?
-depends: question, What does the tool keep of the reader's word?
+depends: 277a8338-c57a-43cc-8b28-6b42e9347f6a, 08a1b488-32fc-4dc7-b4b3-93a6e768725f
+id: 97c679f6-e8e6-4970-b547-940477753d7d
