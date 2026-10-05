@@ -91,6 +91,16 @@ Standard: a conditional item leaves with its condition; no second confirmation.
 depends: e18b82d8-5271-4385-bbab-2b89e5da278f, 462e22c6-8b23-4061-9a2a-bbf8691fce60=A
 id: f5c242b6-e2f6-45a3-8c61-c743f3ad794f
 
+Problem: a question leaves the file at the owner's answer; without a row the approved set and the file disagree and nothing says why.
+Standard: an append-only log records every removal with its cause.
+
+- A) A dropped row: the question's identifier, its hash from approval, the identifier and letter of the answer that dropped it.
+  Why: check verifies the drop from the row: that answer was given and the set lacked that letter.
+  Costs: one row per removed question, dependents included, each naming the question it stood on.
+- B) A dropped row with the question's identifier and its hash from approval, no cause.
+  Why: the shortest row that keeps the approved set whole.
+  Costs: check sees the removal but cannot verify it was legal; the cause lives in git history only.
+
 ### What does the tool bring as neighbours for a new heading?
 depends: daec9ffd-676f-4111-a359-2827bfd4527c, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, 607cb55f-c0fa-40af-b290-c17f3ba0f812
 id: de8ef568-3a8d-42ba-bef7-d7fd467b27be
@@ -181,7 +191,7 @@ Standard: a step whose input is missing stops and names it; no degraded mode.
 **Answer:** A
 
 ### Does the tool bring the plan's own questions as neighbours of each other?
-depends: 94677ed8-eaf6-46e2-bc71-7392fa0805bf, 62e50382-db1b-4649-9f26-7f44c379d6fe
+depends: 94677ed8-eaf6-46e2-bc71-7392fa0805bf, 62e50382-db1b-4649-9f26-7f44c379d6fe=A
 id: 4838baa4-a5df-49e7-929c-ed63b5adaf4e
 
 ### Does every neighbour get a line under its heading?
@@ -204,6 +214,16 @@ Standard: every item put in front of a reviewer gets an explicit disposition.
 ### What does the reader say about a neighbour of a heading?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, c6e0b7d6-cdec-46da-b2bc-cda218673868=A
 id: 62e50382-db1b-4649-9f26-7f44c379d6fe
+
+Problem: at the heading step the new side has no options and no answer; consistent and inconsistent need the rules of both sides.
+Standard: a classifier gets only the labels its input can support.
+
+- A) One of same, depends, unrelated, after one sentence of reason.
+  Why: a heading a decision settles drops before its body is written; a missing tie is named early.
+  Costs: ten reader calls per heading, repeated at the body step because the text changes.
+- B) Nothing: the reader reads a question only with its body.
+  Why: half the reader calls; the agent reads the ten neighbours itself at the heading step.
+  Costs: a heading a decision settles gets a body before it drops; the tie is named only at the body step.
 
 ### What does the reader say about a neighbour of a question with its body?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 46fc51ff-66b9-4841-a953-ae0d4c2fc424=A|C
@@ -229,18 +249,41 @@ Standard: classification into a closed set with an explicit none-of-these, so th
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, c6e0b7d6-cdec-46da-b2bc-cda218673868=*
 id: 902bd279-e6c1-4a21-9637-a3a43f360bae
 
+Problem: a reader is a model; a wrong word that stops a command has no exit but rewording the text, and a word that is only a line leaves a trace.
+Standard: advisory checks inform; blocking checks are deterministic.
+
+- A) No.
+  Why: the agent's line is the ruling; the reader's word beside it shows the owner where they disagree.
+  Costs: a wrong line of the agent passes approve; it is seen, not stopped.
+- B) Yes.
+  Why: a same from the reader stops the heading until it is reworded or dropped.
+  Costs: a wrong same has no exit but rewording; the model's word becomes a rule that cannot be checked again.
+
 ### What does the tool keep of the reader's word?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, c6e0b7d6-cdec-46da-b2bc-cda218673868=*
 id: 08a1b488-32fc-4dc7-b4b3-93a6e768725f
 
+Problem: a word that stays in the terminal is gone at approval; the owner sees the agent's line with nothing against it, and a pair whose texts did not change is read again.
+Standard: expensive judgments are stored keyed by their inputs, in a file the tool owns.
+
+- A) A row in its own file under adrdom/state: text hash, neighbour identifier, word, reason, prompt hash, model.
+  Why: the neighbour list is the same rows, so approve reads them anywhere; the word and reason meet the agent's line.
+  Costs: a second append-only file beside the ledger, hundreds of rows per plan, held like the ledger.
+- B) A row in the ledger: the same fields in the ledger's columns.
+  Why: one log, one set of rules, nothing new to hold.
+  Costs: hundreds of reader rows around tens of owner events, and two keys forced into one identifier column.
+- C) Only the word, in its own file, no reason.
+  Why: short rows; the reason is read once in the terminal.
+  Costs: the owner sees a word against the agent's line and no reason; a bundled decision's clause is not named.
+
 ### Does check hold the reader's file as it holds the ledger?
-depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 08a1b488-32fc-4dc7-b4b3-93a6e768725f
+depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 08a1b488-32fc-4dc7-b4b3-93a6e768725f=A
 id: 26c5352f-3f82-4376-9dc2-8ccc0074d080
 
 ### Does planning stop without the reader?
-depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 62e50382-db1b-4649-9f26-7f44c379d6fe
+depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 62e50382-db1b-4649-9f26-7f44c379d6fe=*
 id: 3dba486c-a399-4ce3-a794-e38c4f733403
 
 ### Does show print the neighbours of a question with the reader's word?
-depends: 277a8338-c57a-43cc-8b28-6b42e9347f6a, 08a1b488-32fc-4dc7-b4b3-93a6e768725f
+depends: 277a8338-c57a-43cc-8b28-6b42e9347f6a, 08a1b488-32fc-4dc7-b4b3-93a6e768725f=*
 id: 97c679f6-e8e6-4970-b547-940477753d7d
