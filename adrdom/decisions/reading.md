@@ -42,6 +42,7 @@ Standard: the same closed set as for a question with its body, applied to two se
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, 1ab6d6c3-7e44-42de-bc2f-2e5849114aef=A, 908bddc6-5d30-4bcc-be8d-4c470c6bff11=A
 unrelated: f4f667ad-8714-4e65-897b-c7002e423c28, 4838baa4-a5df-49e7-929c-ed63b5adaf4e, e3200081-9995-4bbe-983f-2f430dc341e7, dad5273c-afe2-4ab1-a451-e2a5d4d9a26d, 39b76886-98f9-4019-9194-db9ab51aea1e, 277a8338-c57a-43cc-8b28-6b42e9347f6a, 385a57d5-5f76-454a-ae5d-9b0d6f5c1492, c3127af2-4c96-48d5-a164-bac49a9a09ec, 32a189a0-86e0-44d1-9392-a50c84570ada, 9ba58b6a-bc85-44a5-a720-d8e7a6ff7b31, 62e50382-db1b-4649-9f26-7f44c379d6fe, ce19c883-c61d-477b-a6d4-fee5134c6e9a, 946263aa-519a-47aa-b743-5cdcf52f5d35, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, 6108b8b2-911e-443b-abe0-4c6f8b407384, bc4291c8-98f1-499d-8e02-46e371035e70, 2db33118-82b4-4edf-a9cb-e92ac62738b9
 id: 4b407ee1-1e64-4ca1-842b-69773fc0e48a
+terms: answer=b36113a1-1384-4e4c-a798-8399f4181366, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, decisions=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, depends=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, stands on=aef1b384-2b33-47a2-92a8-ec7f8fb258ef
 
 Problem: depends is directional and two decisions have no new side; one reading gives one direction, two readings double the cost.
 Standard: read a symmetric relation once; for a directional one, state the direction in the answer.
@@ -75,6 +76,7 @@ Standard: expensive advisory analyses run on demand, not in a commit hook.
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 1ab6d6c3-7e44-42de-bc2f-2e5849114aef=A, 908bddc6-5d30-4bcc-be8d-4c470c6bff11=*, 08a1b488-32fc-4dc7-b4b3-93a6e768725f
 unrelated: 97c679f6-e8e6-4970-b547-940477753d7d, 75075c78-fe3c-4fd8-8a33-29a5913d9d34, 6108b8b2-911e-443b-abe0-4c6f8b407384, 385a57d5-5f76-454a-ae5d-9b0d6f5c1492, 902bd279-e6c1-4a21-9637-a3a43f360bae, 7b05f8df-09a5-404e-a0f0-3dd8824d1d15, 26c5352f-3f82-4376-9dc2-8ccc0074d080, 4f04bae4-98e3-48eb-9403-3257268e2d87, 154e4b9a-c811-4a84-a522-598914eb39f1, bf6697e3-8832-4b90-b036-8fecedb55406, 5892981c-f213-404f-b93f-551e4d081ebf, ce19c883-c61d-477b-a6d4-fee5134c6e9a, 055d303b-c286-4f6c-975a-d9d8090936d4, 4b407ee1-1e64-4ca1-842b-69773fc0e48a, bc4291c8-98f1-499d-8e02-46e371035e70
 id: 2db33118-82b4-4edf-a9cb-e92ac62738b9
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, decisions=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, depends=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, supersede=2bae531b-c4df-48a0-89a0-3d52726741ea
 
 Problem: the rows go to a file nobody opens; a pair the reader marks, same, inconsistent or depends, has to reach the agent as a list it can act on.
 Standard: a scan prints its findings and the move for each; the store is for the record.
