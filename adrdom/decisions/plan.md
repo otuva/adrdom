@@ -365,3 +365,5 @@ Standard: ADR collections name each file by a slug of its subject.
 - C) Anything the agent picks.
   Why: nothing new in the tool.
   Costs: two spellings of one topic make two files.
+
+**Answer:** A

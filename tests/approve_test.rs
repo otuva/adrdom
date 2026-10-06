@@ -509,7 +509,6 @@ fn approve_leaves_file_and_ledger_unchanged_when_missing_answered_id_refuses() {
 
 // --- approve allows a vanished heading once it is superseded ------------
 
-// adr: 1b181f10-97f4-4bbe-8939-d5842192126c
 //
 // "once superseded, a question's section may leave the file as a plan
 // change the owner approves, and approve allows that only for superseded
@@ -586,7 +585,6 @@ fn approve_allows_a_vanished_heading_once_superseded() {
 
 // --- a topic file with nothing current or open left may be deleted -------
 
-// adr: 1b181f10-97f4-4bbe-8939-d5842192126c
 //
 // "a topic file with no current or open question left may be deleted the
 // same way": once `example.md`'s only question is superseded and its section
@@ -1503,7 +1501,6 @@ Standard: plain words.
   Costs: other costs.
 "#;
 
-// adr: 05af74a6-36be-4923-b66f-1467b323816a
 //
 // `answered questions keep the retired term's identifier on their terms
 // line, so their meaning does not move (check stays clean for them)`.

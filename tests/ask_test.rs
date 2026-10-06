@@ -399,7 +399,6 @@ fn ask_pairs_nothing_for_a_word_only_on_a_retired_term() {
     );
 }
 
-// adr: 05af74a6-36be-4923-b66f-1467b323816a
 //
 // `retiring frees a term's words and a new term may take them`: "authority"
 // is retired below, "power" is a new current term whose alias is

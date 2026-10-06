@@ -271,6 +271,8 @@ Standard: terminology systems let a deprecated term's label pass to a new concep
   Why: a word never carries two meanings anywhere in the records.
   Costs: a split or merge loses the word.
 
+**Answer:** A
+
 ### What holds a retire of a term?
 depends: c584a68d-e54a-4ad2-8a6b-9d64ed098ae5, f590059d-b681-40ec-8a1c-c8916d71f6bb, 277a8338-c57a-43cc-8b28-6b42e9347f6a, e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 5577f646-a9d4-4785-9193-2317b9aa502d=A
 unrelated: 05af74a6-36be-4923-b66f-1467b323816a, f1294391-48b0-4ba3-82b4-c1d6b1c2c884, db58d4b8-9e64-44b0-99a2-acb7f05d5b4e, 7d44030a-3589-4f29-aaa6-12fa09908ab8, 7c306235-6243-4d79-b9aa-08ed19662779, 521e6211-344a-4b56-a1aa-07be956b3b29, 0487a1cf-eb61-4bf8-bd16-eed899d22d2c, ec3f875c-a0f8-4085-8da1-fec9dcb14377, c96518bf-470d-45c0-8b86-eaf8f54cb490, 711a7636-9f4d-402d-ae62-265208adf0ac, b0e865b4-9204-4c55-9f5b-dcb755b3a03b, 6b3d8e59-e145-49e1-860d-a79d753d745c, 1b181f10-97f4-4bbe-8939-d5842192126c, 6108b8b2-911e-443b-abe0-4c6f8b407384, aef1b384-2b33-47a2-92a8-ec7f8fb258ef
@@ -289,3 +291,5 @@ Standard: a record that others reference is not removed while the references sta
 - C) Nothing: retire is free, and check reports every question that names a retired term.
   Why: the owner's word on a term is not held by questions.
   Costs: the records fail after an owner command, and the move to clear them is a supersede of each named decision.
+
+**Answer:** A

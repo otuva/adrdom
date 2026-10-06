@@ -88,7 +88,6 @@ fn assert_retire_refused(dir: &Path, terms: &Path, rows_before: usize, heading: 
     assert_eq!(terms_rows(dir), rows_before, "a refused retire writes no terms row");
 }
 
-// adr: db58d4b8-9e64-44b0-99a2-acb7f05d5b4e
 #[test]
 fn retire_refused_while_an_asked_question_names_the_term() {
     let (dir, record, terms) =
@@ -98,7 +97,6 @@ fn retire_refused_while_an_asked_question_names_the_term() {
     assert_retire_refused(&dir, &terms, rows, H_DECISION);
 }
 
-// adr: db58d4b8-9e64-44b0-99a2-acb7f05d5b4e
 #[test]
 fn retire_refused_while_an_approved_unasked_plan_heading_names_the_term() {
     let (dir, _record, terms) =
@@ -107,7 +105,6 @@ fn retire_refused_while_an_approved_unasked_plan_heading_names_the_term() {
     assert_retire_refused(&dir, &terms, rows, H_DECISION);
 }
 
-// adr: db58d4b8-9e64-44b0-99a2-acb7f05d5b4e
 #[test]
 fn retire_succeeds_once_the_asked_question_is_struck_from_the_plan() {
     let (dir, record, terms) = setup(&format!(
@@ -139,7 +136,6 @@ fn retire_succeeds_once_the_asked_question_is_struck_from_the_plan() {
     assert_eq!(terms_rows(&dir), rows + 1);
 }
 
-// adr: db58d4b8-9e64-44b0-99a2-acb7f05d5b4e
 #[test]
 fn retire_succeeds_when_only_a_refused_question_names_the_term() {
     let (dir, record, terms) = setup(&format!(
@@ -156,7 +152,6 @@ fn retire_succeeds_when_only_a_refused_question_names_the_term() {
     assert_eq!(terms_rows(&dir), rows + 1);
 }
 
-// adr: db58d4b8-9e64-44b0-99a2-acb7f05d5b4e
 #[test]
 fn retire_refused_when_an_asked_questions_terms_line_cannot_be_read() {
     let (dir, record, terms) =
@@ -196,7 +191,6 @@ aliases: \n\
 definition: A formal finding.\n\
 aliases: \n";
 
-// adr: db58d4b8-9e64-44b0-99a2-acb7f05d5b4e
 #[test]
 fn a_heading_written_after_a_retire_was_approved_does_not_block_terms_approve_or_check() {
     let (dir, record, terms) =
@@ -222,7 +216,6 @@ fn a_heading_written_after_a_retire_was_approved_does_not_block_terms_approve_or
     assert!(!all.contains(H_DECISION), "check names the heading: {}", all);
 }
 
-// adr: db58d4b8-9e64-44b0-99a2-acb7f05d5b4e
 #[test]
 fn unreadable_terms_line_blocks_only_an_approve_that_retires_or_removes() {
     let (dir, record, terms) =

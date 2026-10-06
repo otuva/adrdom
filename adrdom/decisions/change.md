@@ -170,3 +170,5 @@ Standard: version control keeps old text; a working document drops what is repla
 - C) A superseded or refused section, into an archive file the tool owns.
   Why: out of the way and still in the tree.
   Costs: a second copy of what git keeps.
+
+**Answer:** A
