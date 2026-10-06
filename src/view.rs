@@ -80,6 +80,10 @@ pub struct QuestionView {
     /// stands as asked, and `state::answer_waits` is empty. What the page
     /// offers the owner next.
     pub answerable: bool,
+    /// The headings of the questions `answer` waits on before it takes this
+    /// asked question (`state::answer_waits`); empty when it takes it now,
+    /// or when the question is not asked.
+    pub waits_on: Vec<String>,
     pub problem: Option<String>,
     pub standard: Option<String>,
     pub options: Vec<OptionView>,
@@ -367,6 +371,69 @@ pub(crate) fn next_moves(
     out
 }
 
+/// What `approve` and `check` refuse in the plan of `rf` (the file as
+/// loaded; `all` is every topic file), each message whole: what `show`
+/// reads for `next_moves`, and what the refusal `answer` makes reads too.
+/// Normalizes a copy of `rf` the way `approve` does before judging it.
+pub(crate) fn plan_refusal_lines(
+    root: &Path,
+    rf: &RecordFile,
+    all: &[RecordFile],
+    terms_list: &[Term],
+    led: &Ledger,
+) -> Vec<String> {
+    let phrase_lookup = crate::terms::phrase_lookup(terms_list);
+    let cross_file_headings = crate::depends::cross_file_heading_index(all, led);
+    let names = all_heading_texts(root);
+    let base = crate::depends::replaced_base(all, &crate::depends::approved_plan_rels(all, led), &cross_file_headings, led);
+    let mut rf = rf.clone();
+    crate::depends::normalize_cross_file_deps(&mut rf, terms_list, &phrase_lookup, &cross_file_headings, led);
+    let replaced = crate::depends::replaced_ids(&base, &rf, &cross_file_headings, led);
+    crate::actions::record_refusals(
+        &rf.rel,
+        &rf,
+        terms_list,
+        &phrase_lookup,
+        &cross_file_headings,
+        &names,
+        all,
+        &replaced,
+        led,
+    )
+    .into_iter()
+    .map(|r| r.message)
+    .collect()
+}
+
+/// The moves `next_moves` names for one question that is not asked or was
+/// edited since (`unwritten`: it has no body), for the refusal `answer`
+/// makes of a question waiting on it, by the same rule `next_moves` applies:
+/// what `approve` refuses in the plan comes first (`plan_refusals`); then,
+/// under an approved plan, the agent's `adr ask` (or, for a question with no
+/// body, the planning move); under a plan that waits for its approval and
+/// has no refusal, the planning move, the owner's approve once every record
+/// is there.
+pub(crate) fn ask_moves(
+    rf: &RecordFile,
+    plan_ok: bool,
+    plan_refusals: &[String],
+    planning: Option<&crate::plan::Planning>,
+    heading: &str,
+    unwritten: bool,
+) -> Vec<String> {
+    let mut out: Vec<String> = plan_refusals.iter().map(|r| crate::msg::next_clears(r)).collect();
+    if plan_ok {
+        if unwritten {
+            out.extend(plan_moves(rf, planning));
+        } else {
+            out.push(crate::msg::next_ask(&rf.rel, &[heading.to_string()]));
+        }
+    } else if plan_refusals.is_empty() {
+        out.extend(plan_moves(rf, planning));
+    }
+    out
+}
+
 /// The next move of the planning steps for the questions of `rf` not yet
 /// asked, as lines: the owner's approve once every record is there.
 fn plan_moves(rf: &RecordFile, planning: Option<&crate::plan::Planning>) -> Vec<String> {
@@ -627,6 +694,17 @@ fn build_question_view(
         answerable: state == QState::Open
             && asked_text_stands(led, rf, sec)
             && state::answer_waits(rf, idx).is_empty(),
+        waits_on: if state == QState::Open && asked_text_stands(led, rf, sec) {
+            let w = state::answer_waits(rf, idx);
+            w.unanswered
+                .iter()
+                .chain(&w.refused_target)
+                .chain(&w.refused_tier)
+                .map(|&j| rf.sections[j].heading_text.clone())
+                .collect()
+        } else {
+            Vec::new()
+        },
         problem,
         standard,
         options,

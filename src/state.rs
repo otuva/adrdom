@@ -715,15 +715,6 @@ impl AnswerWaits {
     pub fn is_empty(&self) -> bool {
         self.unanswered.is_empty() && self.refused_target.is_empty() && self.refused_tier.is_empty()
     }
-
-    /// The first question it waits on, for the one-line `next`.
-    pub fn first(&self) -> Option<usize> {
-        self.unanswered
-            .first()
-            .or(self.refused_target.first())
-            .or(self.refused_tier.first())
-            .copied()
-    }
 }
 
 /// The one test `answer`, `next` and the page read to tell whether `answer`

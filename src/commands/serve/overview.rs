@@ -85,11 +85,26 @@ pub(super) fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> 
             body.push_str("<ol class=\"open-list\">\n");
             for q in &open {
                 let id = q.id.clone().unwrap_or_default();
-                body.push_str(&format!(
-                    "<li><a href=\"/next?show={}\">{}</a></li>\n",
-                    percent_encode(&id),
-                    esc(&q.heading)
-                ));
+                if q.answerable {
+                    body.push_str(&format!(
+                        "<li><a href=\"/next?show={}\">{}</a></li>\n",
+                        percent_encode(&id),
+                        esc(&q.heading)
+                    ));
+                } else if !q.waits_on.is_empty() {
+                    // `answer` would refuse it: no link, and what it waits on.
+                    let names: Vec<String> = q.waits_on.iter().map(|h| format!("<q>{}</q>", esc(h))).collect();
+                    body.push_str(&format!(
+                        "<li><span class=\"label waiting\">waiting</span> {} <span class=\"meta\">waits for {}</span></li>\n",
+                        esc(&q.heading),
+                        names.join(", ")
+                    ));
+                } else {
+                    body.push_str(&format!(
+                        "<li><span class=\"label waiting\">waiting</span> {} <span class=\"meta\">edited since it was asked; the agent asks it again</span></li>\n",
+                        esc(&q.heading)
+                    ));
+                }
             }
             body.push_str("</ol>\n");
         }

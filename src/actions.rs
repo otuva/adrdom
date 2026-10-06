@@ -161,7 +161,7 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
             Err(_) => unread.push(crate::state::rel_path(root, &f)),
         }
     }
-    let Some((rf, idx)) = found else {
+    let Some((mut rf, idx)) = found else {
         if unread.is_empty() {
             return Err(msg::id_not_found(id));
         }
@@ -171,6 +171,7 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
     // the raw path it was given, so it is recomputed here the way every
     // other caller of the single-file loader already does.
     let rel = crate::state::rel_path(root, &rf.path);
+    rf.rel = rel.clone();
 
     // Refuse when terms.md is missing, unreadable, or not approved (per
     // "Does the tool stop while the terms file waits for approval?",
@@ -240,7 +241,7 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
         }
     }
 
-    if let Some(r) = answer_gate(&rf, &led, idx, &rel) {
+    if let Some(r) = answer_gate(root, &rf, &led, &tf, idx, &rel) {
         return Err(r);
     }
 
@@ -256,12 +257,27 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
 /// that question is asked and stands as asked, else the agent's `adr ask`
 /// (or the writing of a body first); a chain that ends on a refused question
 /// names the plan change and the approval.
-fn answer_gate(rf: &RecordFile, led: &Ledger, idx: usize, rel: &str) -> Option<String> {
+fn answer_gate(root: &Path, rf: &RecordFile, led: &Ledger, tf: &terms::TermsFile, idx: usize, rel: &str) -> Option<String> {
     let w = state::answer_waits(rf, idx);
     if w.is_empty() {
         return None;
     }
     let mut waits = Vec::new();
+    // What the plan waits for, read off the file as loaded, the way `show`
+    // reads it: the move to ask a leaf is the agent's `adr ask` only when
+    // ask would take it (`view::ask_moves`, the pieces `next_moves` uses).
+    let plan_ok = state::plan_approved(led, rf, &rf.rel) && state::context_approved(led, rf, &rf.rel);
+    let loaded = std::cell::OnceCell::new();
+    let moves_for = |leaf: usize, unwritten: bool| {
+        let (planning, refusals) = loaded.get_or_init(|| {
+            let all = record::load_all(root);
+            (
+                crate::plan::load(root, rf, &all, &tf.terms, led),
+                crate::view::plan_refusal_lines(root, rf, &all, &tf.terms, led),
+            )
+        });
+        crate::view::ask_moves(rf, plan_ok, refusals, Some(planning), &rf.sections[leaf].heading_text, unwritten)
+    };
     for &t in &w.unanswered {
         let heading = rf.sections[t].heading_text.clone();
         waits.push(match answer_leaf(rf, t) {
@@ -269,12 +285,12 @@ fn answer_gate(rf: &RecordFile, led: &Ledger, idx: usize, rel: &str) -> Option<S
             Ok(leaf) => {
                 let sec = &rf.sections[leaf];
                 match &sec.id {
-                    _ if sec.is_skeleton => msg::Waits::Unwritten { heading },
+                    _ if sec.is_skeleton => msg::Waits::Unwritten { heading, moves: moves_for(leaf, true) },
                     Some(id) if state::asked_text_stands(led, id, &record::section_hash(&rf.lines, sec)) => {
                         let command = format!("adr answer {}@{} <letter>", id, record::version_of(&rf.lines, sec));
-                        msg::Waits::Unanswered { heading, command: Some(command) }
+                        msg::Waits::Unanswered { heading, command }
                     }
-                    _ => msg::Waits::Unanswered { heading, command: None },
+                    _ => msg::Waits::Asking { heading, moves: moves_for(leaf, false) },
                 }
             }
         });

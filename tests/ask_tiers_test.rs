@@ -406,13 +406,14 @@ Standard: plain words.
 // core: "four questions per tier, a value set in the tool; approve and ask
 // stop a plan with a tier over four". Five root questions (one tier) is one
 // past TIER_CAP: `approve` refuses naming the exact cap ("5 questions would
-// be put to the owner together, the most is 4"), and since the file was
-// never approved, `ask` independently refuses it too ("plan not approved") -- neither command
-// lets the over-cap plan through, and neither writes to the file on
-// refusal.
+// be put to the owner together, the most is 4") and does not modify the
+// file. This test shows only the approve side: `ask` on this never-approved
+// file stops on "plan not approved" before it reads the cap, so the ask
+// side of the cap is shown by `ask_stops_a_tier_that_a_refused_replacement_
+// in_another_file_took_over_the_cap` in supersede_cap_test.rs.
 // adr: eb2cde37-ebcb-4407-a5b0-9fcda4bd9a4e
 #[test]
-fn ask_refuses_a_tier_over_the_cap() {
+fn approve_refuses_a_tier_over_the_cap() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -428,30 +429,15 @@ fn ask_refuses_a_tier_over_the_cap() {
     plan_record(&dir, "adrdom/decisions/example.md");
     let content = std::fs::read_to_string(&record).unwrap();
 
-    // The cap refuses at `approve` itself now (approve checks the same cap
-    // before ever minting an id), so `ask` never even gets a chance to see
-    // this file approved; assert the refusal there directly instead of
-    // faking approval around it.
-    let approve_out = adr_owner(
-        &dir,
-        &["approve", record.to_str().unwrap()],
-        "",
-    );
+    let approve_out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!approve_out.status.success());
     assert!(
         stderr(&approve_out).contains("5 questions would be put to the owner together, the most is 4"),
         "{}",
         stderr(&approve_out)
     );
-
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success());
-    assert_eq!(
-        stderr(&out).trim_end(),
-        "ask: adrdom/decisions/example.md: plan not approved; owner runs: adr approve adrdom/decisions/example.md"
-    );
     let after = std::fs::read_to_string(&record).unwrap();
-    assert_eq!(after, content, "neither approve nor ask may modify the file when they refuse");
+    assert_eq!(after, content, "approve may not modify the file when it refuses");
 }
 
 // --- stands on refused: a specific dependency, not the generic blocker ----
@@ -889,4 +875,74 @@ fn ask_asks_every_tier_show_named_and_the_owners_answers_come_in_order() {
     let shown = stdout(&adr(&dir, &["show", rel], &[], ""));
     assert!(shown.contains(&format!("owner runs: adr answer {}@", delta_id)), "{}", shown);
     assert!(!shown.contains("not yet: \"Is delta"), "{}", shown);
+}
+
+// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// The refusal names the move `show` names for the question Q2 waits on. Q1 is
+// edited after it was asked: while the plan awaits approval the move is the
+// owner's approve (ask would refuse); once approved it is the agent's ask.
+#[test]
+fn answer_names_the_move_show_names_for_an_edited_target() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let rel = "adrdom/decisions/example.md";
+    let record = write_record(&dir, rel, &format!("{}{}", Q1, q2_depends_on_q1("=A")));
+    approve_record(&dir, rel);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let q2_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[1].clone();
+
+    let text = std::fs::read_to_string(&record).unwrap();
+    std::fs::write(&record, text.replacen("is undecided.", "is undecided, reworded.", 1)).unwrap();
+
+    let refused = adr_answer(&dir, &q2_id, "A");
+    assert!(!refused.status.success());
+    assert!(
+        stderr(&refused).trim_end().ends_with(&format!("owner runs: adr approve {}", rel)),
+        "{}",
+        stderr(&refused)
+    );
+    let shown = stdout(&adr(&dir, &["show", rel], &[], ""));
+    assert!(shown.contains(&format!("owner runs: adr approve {}", rel)), "{}", shown);
+
+    approve_record(&dir, rel);
+    let refused = adr_answer(&dir, &q2_id, "A");
+    assert!(!refused.status.success());
+    assert!(stderr(&refused).contains(&format!("agent runs adr ask {}", rel)), "{}", stderr(&refused));
+    let shown = stdout(&adr(&dir, &["show", rel], &[], ""));
+    assert!(shown.contains(&format!("agent runs adr ask {}", rel)), "{}", shown);
+}
+
+// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// A plan `approve` would refuse: `next` names what clears the refusal, and so
+// does the refusal of `answer`; neither tells the owner to approve.
+#[test]
+fn answer_names_the_plan_refusal_next_names_when_approve_would_refuse() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let rel = "adrdom/decisions/example.md";
+    let record = write_record(&dir, rel, &format!("{}{}", Q1, q2_depends_on_q1("=A")));
+    approve_record(&dir, rel);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let q2_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[1].clone();
+
+    // Q1 is edited and a heading with no depends line is added: approve
+    // would refuse the plan.
+    let text = std::fs::read_to_string(&record).unwrap();
+    let text = text.replacen("is undecided.", "is undecided, reworded.", 1);
+    std::fs::write(&record, format!("{}\n### 1.9 Is the widget plain?\n", text.trim_end())).unwrap();
+
+    let refused = adr_answer(&dir, &q2_id, "A");
+    assert!(!refused.status.success());
+    let err = stderr(&refused);
+    assert!(!err.contains("owner runs: adr approve"), "{}", err);
+    assert!(err.contains("1.9 Is the widget plain?"), "{}", err);
+    let shown = stdout(&adr(&dir, &["show", rel], &[], ""));
+    assert!(shown.contains("1.9 Is the widget plain?"), "{}", shown);
+    assert!(!shown.contains("owner runs: adr approve"), "{}", shown);
 }

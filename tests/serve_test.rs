@@ -1549,6 +1549,52 @@ fn page_offers_only_the_questions_answer_takes() {
     let _ = child.wait();
 }
 
+// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+//
+// The page keeps to what `answer` takes. The question standing on another
+// sits first in the file: the overview lists it as waiting, with what it
+// waits for and no link; its own page shows what it waits for and no answer
+// form; "Question p of N open" counts the questions the owner can answer
+// now (one of the two asked). After the later question is answered,
+// /next?after= wraps around to the earlier one it unlocked.
+#[test]
+fn page_shows_a_waiting_question_without_a_form_and_wraps_to_an_unlocked_one() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let q2 = TIER_Q2_APPENDIX.replace("depends: 1.1 What color is the widget?", "depends: 1.1 What color is the widget?=A");
+    let record = write_record(&dir, "adrdom/decisions/example.md", &format!("# Example\n{}\n{}", q2, TIER_Q1_RECORD.trim_start_matches("# Example\n")));
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
+    let (q2_id, q1_id) = (ids[0].clone(), ids[1].clone());
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let overview = get(port, "/", Some(&cookie));
+    assert!(overview.body.contains("waits for"), "body: {}", overview.body);
+    assert!(!overview.body.contains(&format!("/next?show={}", q2_id)), "body: {}", overview.body);
+    assert!(overview.body.contains(&format!("/next?show={}", q1_id)), "body: {}", overview.body);
+
+    let first = get(port, "/next", Some(&cookie));
+    assert!(first.body.contains("Example, tier 1"), "body: {}", first.body);
+    assert!(first.body.contains("Question 1 of 1 open"), "body: {}", first.body);
+
+    let shown = get(port, &format!("/next?show={}", q2_id), Some(&cookie));
+    assert!(shown.body.contains("Not yet: this question waits for"), "body: {}", shown.body);
+    assert!(!shown.body.contains("id=\"answer-form\""), "body: {}", shown.body);
+
+    assert!(adr_answer(&dir, &q1_id, "A").status.success());
+    let after_q1 = get(port, &format!("/next?after={}", q1_id), Some(&cookie));
+    assert!(after_q1.body.contains("Example, tier 2"), "body: {}", after_q1.body);
+    assert!(after_q1.body.contains("id=\"answer-form\""), "body: {}", after_q1.body);
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
 // adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
 //
 // "every reference carries the identifier of what it names; the agent

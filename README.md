@@ -164,7 +164,8 @@ naming `adr install --codex` as the fix.
 `time, event, id, hash, detail, version` row per event (`version` is the
 tool's `VERSION` that wrote the row; rows from before it carry five fields):
 `asked`, `answered`, `refused`, `superseded`, and `withdrawn` track a
-question; `assumes` records, at ask time, the answer set a later question
+question; `dropped` marks a question that left its topic file because an
+answer's letter was not in its answer set (asked or not; it never returns); `assumes` records, at ask time, the answer set a later question
 declared on the asked one; `approved` and `context` track a topic file's
 plan and context prose; `terms` tracks the terms file; `banned` and
 `unbanned` track the ban list.

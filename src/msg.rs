@@ -716,16 +716,19 @@ pub fn not_asked_yet(heading: &str, rel: &str) -> String {
 }
 
 /// What one question `answer` waits on: `Unanswered` with the owner's
-/// `adr answer` command once the question is asked and stands as asked
-/// (`None` while the agent has to ask it first), or a refused question the
-/// plan has to drop or replace.
+/// `adr answer` command once the question is asked and stands as asked,
+/// `Asking` while it is not (its `moves` are what `next` names for it:
+/// the agent's `adr ask`, or the owner's approval of the plan ask waits
+/// for), or a refused question the plan has to drop or replace.
 pub enum Waits {
-    Unanswered { heading: String, command: Option<String> },
+    Unanswered { heading: String, command: String },
+    Asking { heading: String, moves: Vec<String> },
     /// No decision yet and no question to answer first: the chain it waits
     /// on ends on `refused`, a refused question.
     Stuck { heading: String, refused: String },
-    /// No decision yet and no body written: the agent writes it, then asks.
-    Unwritten { heading: String },
+    /// No decision yet and no body written: `moves` are the planning move
+    /// `next` names for it.
+    Unwritten { heading: String, moves: Vec<String> },
     RefusedTarget { heading: String },
     RefusedTier { heading: String },
 }
@@ -737,10 +740,21 @@ pub enum Waits {
 /// Every question it waits on is named, each with the move that clears it.
 pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> String {
     let mut parts = Vec::new();
-    let mut ask = false;
     let mut command: Option<String> = None;
     let mut refused = Vec::new();
-    let mut unwritten = Vec::new();
+    // The moves `next` names, already rendered: agent clauses first, the
+    // one owner clause last (the lint reads what follows `owner runs: `).
+    let mut agent: Vec<String> = Vec::new();
+    let mut owner: Option<String> = None;
+    let add = |moves: Vec<String>, agent: &mut Vec<String>, owner: &mut Option<String>| {
+        for m in moves {
+            if m.starts_with("owner") {
+                owner.get_or_insert(m);
+            } else if !agent.contains(&m) {
+                agent.push(m);
+            }
+        }
+    };
     for w in waits {
         match w {
             Waits::Stuck { heading: h, refused: r } => {
@@ -749,16 +763,17 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> String {
                     refused.push(r);
                 }
             }
-            Waits::Unwritten { heading: h } => {
+            Waits::Unwritten { heading: h, moves } => {
                 parts.push(format!("\"{}\" has no decision yet and no body", h));
-                unwritten.push(h);
+                add(moves, &mut agent, &mut owner);
+            }
+            Waits::Asking { heading: h, moves } => {
+                parts.push(format!("\"{}\" has no decision yet", h));
+                add(moves, &mut agent, &mut owner);
             }
             Waits::Unanswered { heading: h, command: c } => {
                 parts.push(format!("\"{}\" has no decision yet", h));
-                match c {
-                    Some(c) => command = command.or(Some(c)),
-                    None => ask = true,
-                }
+                command = command.or(Some(c));
             }
             Waits::RefusedTarget { heading: h } => {
                 parts.push(format!("\"{}\" is refused and the question stands on it", h));
@@ -775,32 +790,19 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> String {
         }
     }
     // One owner command, last: the plan's approval when a refused question
-    // has to go, else the first answer owed.
-    let mut moves = Vec::new();
-    if !unwritten.is_empty() {
-        moves.push(Next::agent(format!(
-            "writes the body of {}, then runs adr ask {}",
-            quoted(&unwritten),
-            rel
-        )));
-    }
-    if ask {
-        moves.push(Next::agent(format!("runs adr ask {}", rel)));
-    }
+    // has to go or the plan waits for it, else the first answer owed.
+    let mut clauses = agent;
     if !refused.is_empty() {
-        moves.push(Next::agent(format!(
-            "writes the plan change that drops or replaces {}",
-            quoted(&refused)
-        )));
-        command = Some(format!("adr approve {}", rel));
+        clauses.push(
+            Next::agent(format!("writes the plan change that drops or replaces {}", quoted(&refused))).render(),
+        );
+        owner = Some(Next::owner_runs(format!("adr approve {}", rel)).render());
     }
-    if let Some(c) = command {
-        moves.push(Next::owner_runs(c));
+    if owner.is_none() {
+        owner = command.map(|c| Next::owner_runs(c).render());
     }
-    refuse(
-        format!("\"{}\" waits: {}", heading, parts.join("; ")),
-        Next::all(moves),
-    )
+    clauses.extend(owner);
+    format!("{}; {}", format!("\"{}\" waits: {}", heading, parts.join("; ")), clauses.join(", "))
 }
 
 /// The question `answer` would refuse, in the `not yet` line of `next`: the
@@ -3145,12 +3147,12 @@ mod tests {
                 "heading",
                 "x.md",
                 vec![
-                    Waits::Unanswered { heading: "target".to_string(), command: Some("adr answer id-1@abcd1234 <letter>".to_string()) },
+                    Waits::Unanswered { heading: "target".to_string(), command: "adr answer id-1@abcd1234 <letter>".to_string() },
                     Waits::RefusedTarget { heading: "refused".to_string() },
                     Waits::RefusedTier { heading: "other".to_string() },
                 ],
             ),
-            answer_waits("heading", "x.md", vec![Waits::Unanswered { heading: "target".to_string(), command: None }]),
+            answer_waits("heading", "x.md", vec![Waits::Asking { heading: "target".to_string(), moves: vec!["owner runs: adr approve x.md".to_string()] }]),
             tier_cap_exceeded("x.md", &["heading".to_string()], 0, 4),
             tier_cap_exceeded("x.md", &["heading".to_string()], 3, 4),
             derive_error("x.md", &DeriveError::SelfDep("heading".to_string())),

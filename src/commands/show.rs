@@ -114,14 +114,6 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
     }
 
     let tests = crate::commands::check::test_index(&root, &repo::Source::WorkingTree);
-    // `blame_records` is every topic file as loaded, before any
-    // normalization, so its plan hashes are the raw ones.
-    let replaced_base = depends::replaced_base(
-        &blame_records,
-        &depends::approved_plan_rels(&blame_records, &led),
-        &cross_file_headings,
-        &led,
-    );
     for rf in &mut records {
         // Read off the file as loaded, before the pass below rewrites its
         // depends entries in memory (see `view::snapshot`).
@@ -147,21 +139,7 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
         } else {
             print_file_short(rf, &led);
         }
-        let replaced = depends::replaced_ids(&replaced_base, rf, &cross_file_headings, &led);
-        let plan_refusals: Vec<String> = crate::actions::record_refusals(
-            &rf.rel,
-            rf,
-            &terms_list,
-            &phrase_lookup,
-            &cross_file_headings,
-            &all_headings,
-            &blame_records,
-            &replaced,
-            &led,
-        )
-        .into_iter()
-        .map(|r| r.message)
-        .collect();
+        let plan_refusals = view::plan_refusal_lines(&root, rf, &blame_records, &terms_list, &led);
         let next = view::next_moves(rf, &led, plan_ok, &plan_refusals, &tests, Some(&planning));
         if !next.is_empty() {
             println!("{}", msg::next_heading());

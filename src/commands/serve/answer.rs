@@ -29,9 +29,11 @@ pub(super) fn render_next(
     };
 
     let id = q.id.clone().unwrap_or_default();
+    // "Question p of N open" counts what the owner can act on now: the
+    // questions `answer` takes, the same ones the page offers.
     let open_ids: Vec<&str> = all
         .iter()
-        .filter(|(_, x)| x.state == QState::Open)
+        .filter(|(_, x)| x.answerable)
         .filter_map(|(_, x)| x.id.as_deref())
         .collect();
     let position = open_ids.iter().position(|x| *x == id).map(|p| p + 1);
@@ -116,6 +118,18 @@ pub(super) fn render_next(
         ));
     }
     body.push_str("</aside>\n");
+
+    // An asked question `answer` would refuse (reached by a link or a
+    // `show` address): what it waits on, and no answer form.
+    if !q.waits_on.is_empty() {
+        let names: Vec<String> = q.waits_on.iter().map(|h| format!("<q>{}</q>", esc(h))).collect();
+        body.push_str(&format!(
+            "<p class=\"waits\">Not yet: this question waits for {}.</p>\n<p><a class=\"skip\" href=\"/next?after={}\">Skip this one</a></p>\n</article>\n",
+            names.join(", "),
+            percent_encode(&id)
+        ));
+        return page("Answer", "/next", &body, true);
+    }
 
     body.push_str(&format!(
         "<form method=\"post\" action=\"/answer\" id=\"answer-form\">\n<input type=\"hidden\" name=\"id\" value=\"{}\">\n<input type=\"hidden\" name=\"v\" value=\"{}\">\n<input type=\"hidden\" name=\"t\" value=\"{}\">\n",
@@ -230,8 +244,11 @@ fn pick_next<'a>(
             .iter()
             .position(|(_, q)| q.id.as_deref() == Some(after_id))
         {
+            // Forward in file order first, then wrap: an answer can unlock
+            // a question above it.
             return all[pos + 1..]
                 .iter()
+                .chain(all[..pos].iter())
                 .find(|(_, q)| q.answerable)
                 .copied();
         }
