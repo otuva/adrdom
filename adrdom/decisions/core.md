@@ -376,6 +376,8 @@ Standard: a dependency is resolved before what rests on it; a build never links 
   Why: the owner answers in any order.
   Costs: a lower answer may remove an answered question, against the rule that an answered decision never changes.
 
+**Answer:** A
+
 ### What bounds the questions of a tier?
 depends: f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, 1fb71321-bb84-492f-b9d5-1444c9c444af=*, 7d47885f-3a45-45f9-a092-4314301f0d7b=*
 unrelated: aec860fd-22ad-44a7-99f7-222ea19537e7, f8d92841-aef7-4cd7-bd94-0e07c03e4cb6, 4838baa4-a5df-49e7-929c-ed63b5adaf4e, 923818a7-05c6-4977-bbaf-53ee8f3773ef, 946263aa-519a-47aa-b743-5cdcf52f5d35, 506b3c6d-3d0a-4a02-98de-3b8a573d2fe9, 98d5d389-8315-41da-9970-666e31f3a94d, 4b407ee1-1e64-4ca1-842b-69773fc0e48a, 9d634996-475e-4ddc-8113-05c404ad9d5c, 292a10b8-c287-4d71-b2bd-840da0a6de61, c6e0b7d6-cdec-46da-b2bc-cda218673868, da59b448-1afb-4469-b40e-69eda8f253c2, 055d303b-c286-4f6c-975a-d9d8090936d4, e3200081-9995-4bbe-983f-2f430dc341e7, 6b3d8e59-e145-49e1-860d-a79d753d745c, 14180eab-60a4-48d3-8efc-c1b23a96ce3a, 7327cd58-ac58-40a4-8ef2-00072fb552b2
@@ -395,10 +397,13 @@ Standard: kanban caps work in progress at every column and stops a pull past the
   Why: the value moves without a question or a release.
   Costs: one more owner command and ledger event to guard, for a value no plan has pushed against.
 
+**Answer:** A
+
 ### Does the cap count a decision that an open question supersedes?
 depends: f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, 2bae531b-c4df-48a0-89a0-3d52726741ea, e2533580-1486-4dc9-8697-e6c53605fe72, eb2cde37-ebcb-4407-a5b0-9fcda4bd9a4e=A|C, 796a2544-43e5-43db-b5d3-8a4e737ec9c6
 unrelated: 9ba58b6a-bc85-44a5-a720-d8e7a6ff7b31, 15d82e53-e344-4347-b639-3bf6eb9ef1b4, 39b76886-98f9-4019-9194-db9ab51aea1e, 32a189a0-86e0-44d1-9392-a50c84570ada, 946263aa-519a-47aa-b743-5cdcf52f5d35, 506b3c6d-3d0a-4a02-98de-3b8a573d2fe9, f4f667ad-8714-4e65-897b-c7002e423c28, f8d92841-aef7-4cd7-bd94-0e07c03e4cb6, db58d4b8-9e64-44b0-99a2-acb7f05d5b4e, 6b3d8e59-e145-49e1-860d-a79d753d745c, dad5273c-afe2-4ab1-a451-e2a5d4d9a26d, 7d47885f-3a45-45f9-a092-4314301f0d7b, 7327cd58-ac58-40a4-8ef2-00072fb552b2, 1fb71321-bb84-492f-b9d5-1444c9c444af
 id: 14180eab-60a4-48d3-8efc-c1b23a96ce3a
+terms: approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, refused=0942e445-0163-423e-8ba7-84dd8ac07045, supersedes=2bae531b-c4df-48a0-89a0-3d52726741ea, tier=f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
 
 Problem: a question replacing a decision in a full tier is refused on the cap when old and new count together, so a decision in a full tier cannot be replaced in its own file.
 Standard: a limit on a set is judged on the set as the change leaves it.
