@@ -83,7 +83,6 @@ fn ask_refuses_an_unapproved_file_naming_adr_approve() {
 
 // --- approve writes approved/context rows, idempotently --------------
 
-// adr: b741b573-a2ee-498e-98fd-3a7e7d319470
 //
 // "approve writes one event for the headings ('approved') and one for the
 // prose ('context'), each with its own hash": exactly one of each row for
@@ -171,7 +170,6 @@ fn approve_refuses_a_question_with_four_options() {
 
 // --- editing context prose requires re-approval -----------------------
 
-// adr: b741b573-a2ee-498e-98fd-3a7e7d319470
 //
 // "each with its own hash; ask stops a file where either part is
 // unapproved (e.g. the prose edited after approve)": editing only the
@@ -223,7 +221,6 @@ fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
         .success());
 }
 
-// adr: b741b573-a2ee-498e-98fd-3a7e7d319470
 //
 // "approve writes one event for the headings and one for the prose, each
 // with its own hash; ask stops a file where either part is unapproved":
@@ -1025,7 +1022,6 @@ fn widget_repo() -> std::path::PathBuf {
     dir
 }
 
-// adr: f97e62a4-45ab-46c6-b4b1-a674792a4493
 #[test]
 fn approve_refuses_a_heading_used_twice_in_one_file_with_the_check_line() {
     let dir = widget_repo();
@@ -1048,7 +1044,6 @@ fn approve_refuses_a_heading_used_twice_in_one_file_with_the_check_line() {
     assert!(out.status.success(), "{}", stderr(&out));
 }
 
-// adr: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
 #[test]
 fn approve_refuses_a_file_name_that_is_not_its_topic_with_the_check_line() {
     let dir = widget_repo();
@@ -1068,7 +1063,6 @@ fn approve_refuses_a_file_name_that_is_not_its_topic_with_the_check_line() {
     assert!(out.status.success(), "{}", stderr(&out));
 }
 
-// adr: f97e62a4-45ab-46c6-b4b1-a674792a4493
 #[test]
 fn a_heading_line_without_a_question_mark_is_refused_by_check_and_approve() {
     let dir = widget_repo();

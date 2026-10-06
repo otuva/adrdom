@@ -191,6 +191,8 @@ Standard: structured document formats fix which elements may appear where and re
   Why: every topic is explained.
   Costs: writing when there is nothing to say.
 
+**Answer:** A
+
 ### Does one question heading stand in two topic files?
 depends: 08193e75-dd89-4857-8e9f-b19e1a9e75e6, 277a8338-c57a-43cc-8b28-6b42e9347f6a
 supersedes: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
@@ -208,6 +210,8 @@ Standard: ADR collections keep one record per subject.
   Why: nothing compares headings across files.
   Costs: two answers to one question, and the files do not say which holds.
 
+**Answer:** A
+
 ### What does check do with a fault on a file awaiting approval?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 912f4f3b-1213-435a-af0d-7617017fcff4, 34e81f57-9b3c-4dc4-a2ba-ca227523177d
 unrelated: 9c3cc17e-33f4-4855-b761-f8f82381cdca, 5fddeeb5-cf54-4550-a701-dd9e4a6a81d6, aa475aa3-05b2-429a-b33a-46b1dcb52049, c10c3a49-e993-4c9f-a46b-4a1ba3646dcf, bf6697e3-8832-4b90-b036-8fecedb55406, 4bb5ef1b-da16-4206-a7d2-c7380c36a4cc, 6ef9eca6-fd8b-4211-aae7-00b37a2a9245, e879fe72-ec07-48cd-9902-2b158aaae726, 751ef30c-6a2f-4936-bf9b-b9d487146e53, 19e1c023-a678-4842-a414-bb0e45c41601, 154e4b9a-c811-4a84-a522-598914eb39f1, c3127af2-4c96-48d5-a164-bac49a9a09ec, a26876ba-5789-4d05-965e-853d00d9edd2, 8b324fe0-621b-44d9-b7fe-f8e0ee15164e, 3ce82f34-a4fc-4918-bb9b-65a0d81a6853, 28b5837d-46ae-459e-ba4c-12265ef07ac1, 5b9170f9-a48e-4ddd-a7dc-73c3be1c2fb8, 178a232e-b51c-4122-a1a9-9e9ed6970748, 9913568f-6b85-4d26-946b-c6e108f9aa51, a82db5b7-969c-44e9-9eec-876ead7099d3, 23f21671-e34c-44aa-8804-6163d975807f
@@ -223,6 +227,8 @@ Standard: a draft gets warnings; the gate fails only what is submitted.
 - B) Fails it, as on an approved file.
   Why: nothing broken enters git.
   Costs: a draft commits only when every line is right, and the hooks refuse a draft mid-work.
+
+**Answer:** A
 
 ### What does approve write for the prose above the first question?
 depends: e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 9913568f-6b85-4d26-946b-c6e108f9aa51=A|C, 61e73795-63de-4669-b09f-48be96919325
@@ -243,6 +249,8 @@ Standard: a log that hashes named parts separately says what changed; one hash o
   Why: the agent edits it freely.
   Costs: the one place in a topic file where an agent changes governed text at will.
 
+**Answer:** A
+
 ### Does ask run on a file whose prose is unapproved?
 depends: 3c8d4c9c-abca-4faa-b7c1-aae39951376c, 5b9170f9-a48e-4ddd-a7dc-73c3be1c2fb8=A|B, 7d47885f-3a45-45f9-a092-4314301f0d7b, da59b448-1afb-4469-b40e-69eda8f253c2
 unrelated: b741b573-a2ee-498e-98fd-3a7e7d319470, 912f4f3b-1213-435a-af0d-7617017fcff4, d808917b-0717-45ad-ab83-9fa274b9a9d4, aa475aa3-05b2-429a-b33a-46b1dcb52049, 4f04bae4-98e3-48eb-9403-3257268e2d87, 423065fc-6d9f-40c8-a0bf-8e1779e86b38, 9c3cc17e-33f4-4855-b761-f8f82381cdca, 4bb5ef1b-da16-4206-a7d2-c7380c36a4cc, fcab4bf9-c02d-4094-b3cb-688c4ec312dc, 21ae8ae0-6884-4d3c-8464-024a8a5aae2d, 6b3d8e59-e145-49e1-860d-a79d753d745c, 506b3c6d-3d0a-4a02-98de-3b8a573d2fe9, 11be073c-ce91-44d8-833a-ef0b5e0b1672, db58d4b8-9e64-44b0-99a2-acb7f05d5b4e, 644b43ce-be10-4e9a-a7d5-71b27c51e365, 178a232e-b51c-4122-a1a9-9e9ed6970748, 8b324fe0-621b-44d9-b7fe-f8e0ee15164e, 9913568f-6b85-4d26-946b-c6e108f9aa51, 05141f49-d9d2-407c-b60c-ebb195a05864, 23f21671-e34c-44aa-8804-6163d975807f, 28b5837d-46ae-459e-ba4c-12265ef07ac1, a82db5b7-969c-44e9-9eec-876ead7099d3
@@ -258,6 +266,8 @@ Standard: a change is reviewed whole; a part left unreviewed holds the rest.
 - B) Yes.
   Why: a prose edit never holds a question.
   Costs: the owner answers a question under scope text nobody approved.
+
+**Answer:** A
 
 ### What stands under a question's heading?
 depends: 277a8338-c57a-43cc-8b28-6b42e9347f6a, 43778946-d44c-4acf-a766-0a4915fce199, 9913568f-6b85-4d26-946b-c6e108f9aa51=A|C
@@ -278,6 +288,8 @@ Standard: MADR and Nygard templates fix the parts of an architecture record: the
   Why: the shortest question.
   Costs: the record loses why the question exists.
 
+**Answer:** A
+
 ### What binds in an answered question?
 depends: 43778946-d44c-4acf-a766-0a4915fce199, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, b36113a1-1384-4e4c-a798-8399f4181366, 178a232e-b51c-4122-a1a9-9e9ed6970748=A|B
 unrelated: 9d634996-475e-4ddc-8113-05c404ad9d5c, 277a8338-c57a-43cc-8b28-6b42e9347f6a, 946263aa-519a-47aa-b743-5cdcf52f5d35, 11be073c-ce91-44d8-833a-ef0b5e0b1672, 423065fc-6d9f-40c8-a0bf-8e1779e86b38, 462e22c6-8b23-4061-9a2a-bbf8691fce60, 7a1e7b81-0967-4ed2-8a8a-c7153056836f, f571a454-3e6c-46c1-b754-0822a5d1d667, 7327cd58-ac58-40a4-8ef2-00072fb552b2, 39b76886-98f9-4019-9194-db9ab51aea1e, 32a189a0-86e0-44d1-9392-a50c84570ada, c3127af2-4c96-48d5-a164-bac49a9a09ec, 055d303b-c286-4f6c-975a-d9d8090936d4, b782664f-7465-4e1e-99e0-13f6dd2de774, 0942e445-0163-423e-8ba7-84dd8ac07045, 711a7636-9f4d-402d-ae62-265208adf0ac, f8d92841-aef7-4cd7-bd94-0e07c03e4cb6, 8b324fe0-621b-44d9-b7fe-f8e0ee15164e, 05141f49-d9d2-407c-b60c-ebb195a05864, a82db5b7-969c-44e9-9eec-876ead7099d3, 3ce82f34-a4fc-4918-bb9b-65a0d81a6853, 5b9170f9-a48e-4ddd-a7dc-73c3be1c2fb8, 9913568f-6b85-4d26-946b-c6e108f9aa51, 23f21671-e34c-44aa-8804-6163d975807f
@@ -297,6 +309,8 @@ Standard: in a contract the operative clause binds and the recitals explain it; 
   Why: what the code has to keep is in Costs.
   Costs: two binding lines, and the Costs line turns into a second option.
 
+**Answer:** A
+
 ### Does a reference line hold its list on one line?
 depends: aef1b384-2b33-47a2-92a8-ec7f8fb258ef, 2bae531b-c4df-48a0-89a0-3d52726741ea, 178a232e-b51c-4122-a1a9-9e9ed6970748=A|B, 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
 unrelated: 5892981c-f213-404f-b93f-551e4d081ebf, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, 32a189a0-86e0-44d1-9392-a50c84570ada, 39b76886-98f9-4019-9194-db9ab51aea1e, f1294391-48b0-4ba3-82b4-c1d6b1c2c884, c6da863d-5085-402f-815a-9bb832b4df7e, 385a57d5-5f76-454a-ae5d-9b0d6f5c1492, 277a8338-c57a-43cc-8b28-6b42e9347f6a, bc4291c8-98f1-499d-8e02-46e371035e70, 055d303b-c286-4f6c-975a-d9d8090936d4, f4f667ad-8714-4e65-897b-c7002e423c28, ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf, 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4, 23f21671-e34c-44aa-8804-6163d975807f, 8b324fe0-621b-44d9-b7fe-f8e0ee15164e, 28b5837d-46ae-459e-ba4c-12265ef07ac1, 5b9170f9-a48e-4ddd-a7dc-73c3be1c2fb8, 9913568f-6b85-4d26-946b-c6e108f9aa51, 3ce82f34-a4fc-4918-bb9b-65a0d81a6853, 05141f49-d9d2-407c-b60c-ebb195a05864
@@ -313,6 +327,8 @@ Standard: one field, one line, entries separated by commas, as in email and HTTP
   Why: each entry diffs on its own.
   Costs: two layouts to parse, and a list's end is found only by what follows it.
 
+**Answer:** A
+
 ### What stops a loaded phrase in a question?
 depends: e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 3c8d4c9c-abca-4faa-b7c1-aae39951376c, 178a232e-b51c-4122-a1a9-9e9ed6970748=*
 unrelated: 923818a7-05c6-4977-bbaf-53ee8f3773ef, 902bd279-e6c1-4a21-9637-a3a43f360bae, 423065fc-6d9f-40c8-a0bf-8e1779e86b38, 277a8338-c57a-43cc-8b28-6b42e9347f6a, 735a32bd-db0c-428e-b65e-2acc750671b0, d808917b-0717-45ad-ab83-9fa274b9a9d4, 7cf81ded-be48-4777-b83e-f8a2998c1ab5, aef1b384-2b33-47a2-92a8-ec7f8fb258ef, da59b448-1afb-4469-b40e-69eda8f253c2, 6108b8b2-911e-443b-abe0-4c6f8b407384, aa475aa3-05b2-429a-b33a-46b1dcb52049, 21ae8ae0-6884-4d3c-8464-024a8a5aae2d, c3127af2-4c96-48d5-a164-bac49a9a09ec, 7a1e7b81-0967-4ed2-8a8a-c7153056836f, b741b573-a2ee-498e-98fd-3a7e7d319470, 3ce82f34-a4fc-4918-bb9b-65a0d81a6853, 5b9170f9-a48e-4ddd-a7dc-73c3be1c2fb8, 28b5837d-46ae-459e-ba4c-12265ef07ac1, 9913568f-6b85-4d26-946b-c6e108f9aa51, 05141f49-d9d2-407c-b60c-ebb195a05864, a82db5b7-969c-44e9-9eec-876ead7099d3, 23f21671-e34c-44aa-8804-6163d975807f
@@ -328,3 +344,5 @@ Standard: style linters such as Vale run when text is written, with the phrase l
 - B) A test in this repository alone, over its own records.
   Why: nothing is added to the tool.
   Costs: other repositories get no guard, and a loaded question there is caught only when the owner reads it.
+
+**Answer:** refused

@@ -213,7 +213,6 @@ fn ask_refuses_a_heading_added_after_approval_and_a_never_approved_file() {
     );
 }
 
-// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
 //
 // Decision A's "two or three lettered options" clause, the refusal path:
 // one option is too few.
@@ -239,7 +238,6 @@ fn ask_refuses_a_question_with_one_option() {
     assert!(!ledger.contains("\tasked\t"), "no asked row should have been written: {}", ledger);
 }
 
-// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
 //
 // Decision A's "two or three lettered options" clause, the other refusal
 // path: four options is too many.

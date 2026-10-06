@@ -1475,7 +1475,6 @@ mod tests {
         );
     }
 
-    // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
     //
     // Decision A's Problem/Standard presence clause, plus (via `SHAPED`
     // below) a well-formed body -- one-line Problem, one-line Standard,
@@ -1569,7 +1568,7 @@ mod tests {
         );
     }
 
-    // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- the supersedes list, like
+    // the supersedes list, like
     // depends, holds several entries as one line of comma-separated values,
     // not one entry per line.
     #[test]
@@ -1581,7 +1580,6 @@ mod tests {
         );
     }
 
-    // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
     //
     // Decision A's "each one sentence" clause, at the unit that decides
     // *which* sentence: text with a sentence terminator yields that first
@@ -1601,7 +1599,6 @@ mod tests {
         assert_eq!(extract_sentence("Ties live in code"), None);
     }
 
-    // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
     //
     // Decision A's "each one sentence" clause, the half
     // `an_option_decides_exactly_its_first_sentence` above does not cover:
@@ -1626,7 +1623,6 @@ mod tests {
         assert!(ok.sections[0].parse_errors.is_empty(), "{:?}", ok.sections[0].parse_errors);
     }
 
-    // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
     //
     // Decision A's "a second Problem:/Standard: line" fix (point 4): a
     // repeated field is reported as a duplicate, not folded into the same
@@ -1657,7 +1653,6 @@ mod tests {
         );
     }
 
-    // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
     //
     // Decision A's "the answer line comes last" clause (point 3): an
     // `**Answer:**` line with real body content after it is refused, at
@@ -1684,7 +1679,6 @@ mod tests {
         );
     }
 
-    // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
     //
     // Decision A's "the answer line comes last" clause: a second
     // `**Answer:**` line is its own shape error, not silently swallowed by
@@ -1732,7 +1726,6 @@ mod tests {
             .any(|e| e.starts_with("stray line")));
     }
 
-    // adr: 055d303b-c286-4f6c-975a-d9d8090936d4
     //
     // Decision A's "two or three lettered options" clause: four is
     // refused, three is accepted (the `ok` case below).
@@ -1773,7 +1766,7 @@ mod tests {
         assert!(sec.parse_errors.is_empty(), "{:?}", sec.parse_errors);
     }
 
-    // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a one-line, comma-
+    // a one-line, comma-
     // separated depends list with three entries parses cleanly (no shape
     // errors) and each entry keeps its own answer set independently: the
     // middle entry carries `=A`, the other two carry none.
@@ -1857,7 +1850,7 @@ mod tests {
         );
     }
 
-    // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- two heading-shaped
+    // two heading-shaped
     // entries on the *same* depends line, each with its own distinct
     // answer set: the sets must not bleed into each other or collapse to
     // one set for the whole line.
@@ -1940,7 +1933,7 @@ mod tests {
         );
     }
 
-    // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a depends list split
+    // a depends list split
     // across two lines is refused (a shape error), not read as more
     // entries of the same list.
     #[test]
@@ -2008,7 +2001,7 @@ mod tests {
         assert!(twice.sections[0].shape_errors.iter().any(|e| e.contains("second unrelated line")));
     }
 
-    // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a supersedes list split
+    // a supersedes list split
     // across two lines is refused (a shape error), not silently dropped.
     #[test]
     fn two_supersedes_lines_under_one_heading_is_a_shape_error() {
@@ -2027,7 +2020,7 @@ mod tests {
         );
     }
 
-    // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a terms list split
+    // a terms list split
     // across two lines is refused (a shape error), not silently dropped.
     #[test]
     fn two_terms_lines_under_one_heading_is_a_shape_error() {

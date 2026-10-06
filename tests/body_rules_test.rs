@@ -42,7 +42,6 @@ fn three(dir: &Path, rec: &Path, check_ok: bool) -> (String, String, String) {
     (both(&chk), stderr(&apr), pln)
 }
 
-// adr: 923818a7-05c6-4977-bbaf-53ee8f3773ef
 #[test]
 fn check_approve_and_plan_find_a_loaded_phrase_in_a_body() {
     let (dir, rec) = unapproved(&question("Does the decision hold?", "the decision currently holds."));
@@ -80,7 +79,6 @@ fn a_question_with_a_term_passes() {
     assert!(out.status.success(), "{}", both(&out));
 }
 
-// adr: 923818a7-05c6-4977-bbaf-53ee8f3773ef
 #[test]
 fn an_asked_question_is_not_read_for_loaded_phrases() {
     let (dir, rec) = unapproved(&question("Does the decision hold?", "the decision is unclear."));

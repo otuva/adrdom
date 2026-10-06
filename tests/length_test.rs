@@ -129,21 +129,18 @@ fn the_word_limit_of_an_option_is_twenty() {
     assert!(refused_for(&question("What does the decision hold?", &words(21), "w.", "c."), "option"));
 }
 
-// adr: 39b76886-98f9-4019-9194-db9ab51aea1e
 #[test]
 fn the_word_limit_holds_for_the_why_line() {
     assert!(!refused_for(&question("What does the decision hold?", "Short.", &words(20), "c."), "Why line"));
     assert!(refused_for(&question("What does the decision hold?", "Short.", &words(21), "c."), "Why line"));
 }
 
-// adr: 32a189a0-86e0-44d1-9392-a50c84570ada
 #[test]
 fn the_word_limit_holds_for_the_costs_line() {
     assert!(!refused_for(&question("What does the decision hold?", "Short.", "w.", &words(20)), "Costs line"));
     assert!(refused_for(&question("What does the decision hold?", "Short.", "w.", &words(21)), "Costs line"));
 }
 
-// adr: 423065fc-6d9f-40c8-a0bf-8e1779e86b38
 #[test]
 fn the_word_limit_does_not_read_an_answered_question() {
     // The first question was answered with an option over the limit (hand-

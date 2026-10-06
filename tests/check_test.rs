@@ -1079,7 +1079,6 @@ fn check_parse_reports_a_file_shape_error() {
     assert!(text.contains("missing h1"), "{}", text);
 }
 
-// adr: f97e62a4-45ab-46c6-b4b1-a674792a4493
 //
 // "a fixed shape: one first-level heading naming the topic, optional prose
 // under it, then the questions as third-level headings ending in \"?\";
@@ -1124,7 +1123,6 @@ Standard: s2.\n\n\
     );
 }
 
-// adr: f97e62a4-45ab-46c6-b4b1-a674792a4493
 //
 // A skeleton heading -- one with a `depends:` line but no id and no body --
 // is never a failure: check passes clean, with no `ids:` or `parse:`
@@ -1199,7 +1197,6 @@ fn check_prints_awaiting_approval_line() {
     );
 }
 
-// adr: b741b573-a2ee-498e-98fd-3a7e7d319470
 //
 // "check reports it as awaiting approval" for the case the option names:
 // the prose edited after approve, with the heading (and its `approved`
@@ -1243,7 +1240,6 @@ fn check_counts_a_file_awaiting_approval_when_only_its_context_prose_is_stale() 
     );
 }
 
-// adr: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
 //
 // "a question heading that appears in two topic files fails check": shown
 // here with files named "a.md"/"b.md", themselves valid names under the
@@ -1301,7 +1297,6 @@ fn check_notes_a_question_heading_duplicated_within_one_file_in_a_draft_and_fail
     assert!(stdout(&out).contains(want), "{}", stdout(&out));
 }
 
-// adr: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
 //
 // "each file holds one topic and is named by it in lowercase words joined
 // by hyphens, with no number or prefix": an uppercase letter and an
@@ -1327,7 +1322,6 @@ fn check_notes_a_bad_topic_file_name_in_a_draft_and_fails_it_when_approved() {
     assert!(stdout(&out).contains(want), "{}", stdout(&out));
 }
 
-// adr: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
 //
 // The other side of the same rule: lowercase words joined by single
 // hyphens is a name check accepts without complaint -- and, with an
@@ -1357,7 +1351,6 @@ fn check_passes_a_good_topic_file_name() {
     );
 }
 
-// adr: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
 //
 // "is named by it": a well-formed name that is not the h1 topic,
 // lowercased and hyphenated, fails check; the same file under the name
@@ -1392,7 +1385,6 @@ fn check_fails_a_topic_file_name_that_does_not_match_its_topic() {
     );
 }
 
-// adr: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
 //
 // "with no number": a topic whose text holds a digit has no name any file
 // can carry, so check refuses the topic text itself, whatever the file is

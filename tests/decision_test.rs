@@ -44,7 +44,6 @@ fn principle_block_is_gone_a_p1_line_inside_a_body_is_stray_and_gets_no_id() {
     );
 }
 
-// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
 //
 // Decision A's "two or three lettered options" clause.
 #[test]
@@ -105,7 +104,6 @@ fn a_question_needs_two_or_three_options() {
     }
 }
 
-// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
 //
 // Decision A's "a one-line Problem, a one-line Standard" clause: this test
 // covers presence (exactly one of each); `a_problem_or_standard_value_stays_on_one_line`
@@ -153,7 +151,6 @@ fn a_question_needs_a_problem_line_and_a_standard_line() {
     }
 }
 
-// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
 //
 // Decision A's "an indented Why line and an indented Costs line" clause.
 #[test]
@@ -199,7 +196,6 @@ fn every_option_needs_a_why_line_and_a_costs_line() {
     }
 }
 
-// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
 //
 // Decision A's "a one-line Problem, a one-line Standard" clause, the half
 // `a_question_needs_a_problem_line_and_a_standard_line` above does not
@@ -250,7 +246,6 @@ fn a_problem_or_standard_value_stays_on_one_line() {
     }
 }
 
-// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
 //
 // Decision A's "each one sentence that responds to the heading" clause.
 // An option with no decision sentence at all, and an option whose decision
@@ -353,7 +348,6 @@ fn a_missing_or_multi_sentence_decision_is_caught_by_ask_and_check() {
     }
 }
 
-// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
 //
 // Decision A's "an indented Why line and an indented Costs line" clause,
 // the half `every_option_needs_a_why_line_and_a_costs_line` above does
@@ -389,7 +383,6 @@ fn an_option_with_a_repeated_why_or_costs_line_is_refused() {
     }
 }
 
-// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
 //
 // Decision A's "the answer line comes last" clause (point 3). A body whose
 // `**Answer:**` line comes first -- the exact opposite of "comes last" --
