@@ -150,3 +150,21 @@ Standard: a limit on a set is judged on the set as the change leaves it.
   Costs: a full tier takes no replacement in its own file, so the replacement lands in a file away from the subject it changes, and the refusal names moves that do not fit a replacement.
 
 **Answer:** A
+
+### What may leave a topic file by a plan change?
+depends: supersede, refusal, topic file, Does a decision change after it is answered?, Does a refused question stay in its topic file?, plan
+supersedes: Does a superseded question leave its topic file?
+unrelated: Does a topic file close?, Does check fail a topic file awaiting approval?, Does one question heading stand in two topic files?, depends, Does a planning step run without the record of the step before?, topic, Does a supersedes line name every current decision standing on its target?, Does an origin leave the repository while its blame file has an open row?, Does ban refuse a word that appears in the repository?, Does show print every question?, Does a retired term keep its words?
+
+Problem: a decision leaves force only when superseded or refused, but if its section must stay forever, topic files fill with text no current decision needs, and a topic file can never be removed.
+Standard: version control keeps old text; a working document drops what is replaced.
+
+- A) The section of a superseded or refused question, and a file with no current or open question left.
+  Why: the file holds what is in force and what is open, and removal stays the owner's act.
+  Costs: reading an old decision's text means git history.
+- B) Nothing: every section stays in its file for good.
+  Why: everything ever answered is readable in the working file.
+  Costs: sections show never prints pile up, and a topic file can never be removed.
+- C) A superseded or refused section, into an archive file the tool owns.
+  Why: out of the way and still in the tree.
+  Costs: a second copy of what git keeps.

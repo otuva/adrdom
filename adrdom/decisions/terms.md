@@ -253,3 +253,35 @@ Standard: a change is reviewed as one unit, and a batch hides the item that shou
   Costs: the entry that should have been refused passes in the batch.
 
 **Answer:** A
+
+### Does a retired term hold its words?
+depends: retire, term, What does a term hold?
+supersedes: Does a retired term keep its words?, Does the owner retire a term that a question names?
+unrelated: What does the terms brief hold?, Does a term word keep its plain sense in the records?, Does the word limit hold for an option's Costs line?, Does an option under a heading that opens with Does hold one word?, Does the word limit hold for an option's Why line?, terms brief, Does a banned word pass when it is only quoted?, Does a superseded question leave its topic file?, Does check read the words of an answered question again?, Does approve stop a terms edit that moves a word an answered question pairs?, Does check hold the terms brief to the terms file?, What holds a retire of a term?
+
+Problem: splitting a term or merging two needs the old one retired; if it holds its words, the new terms cannot take them and new questions cannot use them.
+Standard: terminology systems let a deprecated term's label pass to a new concept while old records still point at the old identifier.
+
+- A) No.
+  Why: the right word passes to the new term on a split or merge.
+  Costs: one word may mean one thing in git history and another in the records.
+- B) Yes.
+  Why: a word never carries two meanings anywhere in the records.
+  Costs: a split or merge loses the word.
+
+### What holds a retire of a term?
+depends: retire, term, question, approve, Does a retired term hold its words?=A
+unrelated: Does a retired term keep its words?, What does the terms brief hold?, Does the owner retire a term that a question names?, terms brief, What does a term hold?, Does a term word keep its plain sense in the records?, Does the word limit hold for an option's Why line?, Does check hold the terms brief to the terms file?, Does the word limit hold for an option's Costs line?, Does ask refuse a question with no term?, Does a refusal name the command that clears it?, Does a refused question stay in its topic file?, Does a superseded question leave its topic file?, Does check read the words of an answered question again?, depends
+
+Problem: a term is retired while questions name it; check then fails them, ask has nothing to ask, answer refuses, and no command stops the retire itself.
+Standard: a record that others reference is not removed while the references stand.
+
+- A) Every question that names it: answered, asked, or a heading of an approved plan; approve refuses and names them.
+  Why: no question loses a word under it; the move is a supersede or a plan change first.
+  Costs: a term in wide use is retired only once every question naming it is superseded or struck.
+- B) A current decision that names it alone; an asked question or plan heading is reworded and asked again.
+  Why: the guard covers current decisions, and an open question is the agent's to reword.
+  Costs: the owner's retire lands the agent with rework, a version moves, a plan is approved again.
+- C) Nothing: retire is free, and check reports every question that names a retired term.
+  Why: the owner's word on a term is not held by questions.
+  Costs: the records fail after an owner command, and the move to clear them is a supersede of each named decision.

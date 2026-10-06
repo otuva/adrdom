@@ -346,3 +346,20 @@ Standard: style linters such as Vale run when text is written, with the phrase l
   Costs: other repositories get no guard, and a loaded question there is caught only when the owner reads it.
 
 **Answer:** A
+
+### What names a topic file?
+depends: topic file, topic
+unrelated: plan, Does a topic file close?, Does one question heading stand in two topic files?, What is the shape of a topic file?, depends, Does a reference in a topic file carry the identifier of what it names?, Does check fail a topic file awaiting approval?, tier, Does a superseded question leave its topic file?, Does a supersedes line name every current decision standing on its target?, What does a blame row name?
+
+Problem: a file named by a number or a prefix breaks every citation when topics are reordered, and two spellings of one topic make two files.
+Standard: ADR collections name each file by a slug of its subject.
+
+- A) Its topic, in lowercase words joined by hyphens, with no number or prefix.
+  Why: a name without a number survives reordering, and one spelling per topic.
+  Costs: the directory listing shows no order.
+- B) A number prefix for order, then its topic.
+  Why: the directory listing shows the order topics were opened.
+  Costs: renumbering breaks every citation.
+- C) Anything the agent picks.
+  Why: nothing new in the tool.
+  Costs: two spellings of one topic make two files.
