@@ -1196,6 +1196,69 @@ pub fn letter_refusals(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<String> 
     out
 }
 
+/// The three shapes of a `depends:` entry `approve` has stopped, for every
+/// question of `rf` not yet asked and with a body (per "Does a depends entry
+/// on a question in its file carry an answer set?"): a set on an entry that
+/// names a term, an entry on a question of `rf` with no answer that carries
+/// no set, and a set on an answered question that `ask` did not freeze. The
+/// one function `check`, `approve` and `plan` read, found before approval in
+/// text that can still change.
+pub fn depends_shape_refusals(
+    rel: &str,
+    rf: &RecordFile,
+    terms_list: &[terms::Term],
+    phrase_lookup: &HashMap<String, String>,
+    cross_file_headings: &HashMap<String, Vec<(String, String)>>,
+    all: &[RecordFile],
+    led: &Ledger,
+) -> Vec<String> {
+    let mut out = Vec::new();
+    for sec in &rf.sections {
+        let asked = sec.id.as_ref().is_some_and(|id| led.rows.iter().any(|r| r.event == "asked" && &r.id == id));
+        if asked || sec.is_skeleton {
+            continue;
+        }
+        for d in &sec.depends {
+            let Ok(Some(target)) =
+                depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, cross_file_headings, led)
+            else {
+                continue;
+            };
+            let (target_section, in_file) = match &target {
+                DepTarget::Heading(idx) => (Some(&rf.sections[*idx]), true),
+                DepTarget::Decision(id) => (
+                    all.iter().find_map(|r| r.sections.iter().find(|s| s.id.as_deref() == Some(id.as_str()))),
+                    false,
+                ),
+                DepTarget::Term(_) => (None, false),
+            };
+            // An answer set names the letters of another question: a term has
+            // no options (per "Does a depends entry on a question in its file
+            // carry an answer set?").
+            if matches!(target, DepTarget::Term(_)) && d.set().is_some() {
+                out.push(msg::set_on_term(rel, &sec.heading_text));
+                continue;
+            }
+            let Some(ts) = target_section else { continue };
+            match d.set() {
+                None if in_file && ts.answer_letter().is_none() => {
+                    out.push(msg::missing_answer_set(rel, &sec.heading_text, &ts.heading_text))
+                }
+                // A set approved before its target was answered stays (per
+                // "Does a depends entry on a question in its file carry an
+                // answer set?"): a set with no `assumes` row of the target
+                // for this entry, written when the target was asked, is
+                // refused.
+                Some(_) if ts.answer_letter().is_some() && !set_frozen_at_ask(led, sec, d, ts) => {
+                    out.push(msg::set_on_answered_question(rel, &sec.heading_text, &ts.heading_text))
+                }
+                _ => {}
+            }
+        }
+    }
+    out
+}
+
 pub fn record_refusals(
     rel: &str,
     rf: &RecordFile,
@@ -1275,6 +1338,10 @@ pub fn record_refusals(
     }
     for message in no_term_refusals(rel, rf, terms_list, led) {
         out.push(Refusal { category: "tells", message });
+    }
+    // The three shapes of a depends entry approve stops, found the same way.
+    for message in depends_shape_refusals(rel, rf, terms_list, phrase_lookup, cross_file_headings, all, led) {
+        out.push(Refusal { category: "plan", message });
     }
     {
         let (cs, ce) = rf.context_range;
@@ -1815,12 +1882,10 @@ fn do_approve_record(
         supersedes_ids.insert(i, ids);
     }
 
-    // Per "Does the agent write the bodies before approve?" and "Does a
-    // depends entry on a question in its file carry an answer set?": the
-    // plan is approved with its bodies, so approve stops a question not yet
-    // asked that has no body, that depends on a question of its file with
-    // no answer set, or that carries a set on a question already answered.
-    // A question already asked is not subject to these.
+    // Per "Does the agent write the bodies before approve?": the plan is
+    // approved with its bodies, so approve stops a question not yet asked
+    // that has no body. The shapes of its depends entries are
+    // `depends_shape_refusals`, read through `record_refusals` above.
     for sec in &rf.sections {
         let asked = sec
             .id
@@ -1831,50 +1896,6 @@ fn do_approve_record(
         }
         if sec.is_skeleton {
             refusals.push(msg::approve_prefixed(msg::question_without_body(rel, &sec.heading_text)));
-            continue;
-        }
-        for d in &sec.depends {
-            let Ok(Some(target)) =
-                depends::resolve_dep(d, sec, &rf, terms_list, &phrase_lookup, &cross_file_headings, led)
-            else {
-                continue;
-            };
-            let (target_section, in_file) = match &target {
-                DepTarget::Heading(idx) => (Some(&rf.sections[*idx]), true),
-                DepTarget::Decision(id) => (
-                    all_records.iter().find_map(|r| r.sections.iter().find(|s| s.id.as_deref() == Some(id.as_str()))),
-                    false,
-                ),
-                DepTarget::Term(_) => (None, false),
-            };
-            // An answer set names the letters of another question: a term has
-            // no options (per "Does a depends entry on a question in its file
-            // carry an answer set?").
-            if matches!(target, DepTarget::Term(_)) && d.set().is_some() {
-                refusals.push(msg::approve_prefixed(msg::set_on_term(rel, &sec.heading_text)));
-                continue;
-            }
-            let Some(ts) = target_section else { continue };
-            match d.set() {
-                None if in_file && ts.answer_letter().is_none() => refusals.push(msg::approve_prefixed(msg::missing_answer_set(
-                    rel,
-                    &sec.heading_text,
-                    &ts.heading_text,
-                ))),
-                // A set approved before its target was answered stays (per
-                // "Does a depends entry on a question in its file carry an
-                // answer set?"): a set with no `assumes` row of the target
-                // for this entry, written when the target was asked, is
-                // refused.
-                Some(_) if ts.answer_letter().is_some() && !set_frozen_at_ask(led, sec, d, ts) => {
-                    refusals.push(msg::approve_prefixed(msg::set_on_answered_question(
-                        rel,
-                        &sec.heading_text,
-                        &ts.heading_text,
-                    )))
-                }
-                _ => {}
-            }
         }
     }
 

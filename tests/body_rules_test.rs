@@ -34,7 +34,7 @@ fn three(dir: &Path, rec: &Path) -> (String, String, String) {
     let apr = adr_owner(dir, &["approve", rec.to_str().unwrap()], "");
     assert!(!apr.status.success(), "{}", both(&apr));
     let pln = both(&adr(dir, &["plan", rec.to_str().unwrap()], &[], ""));
-    assert!(!pln.contains("owner runs: adr approve"), "{}", pln);
+    assert!(!pln.contains("next: owner runs: adr approve"), "{}", pln);
     (both(&chk), stderr(&apr), pln)
 }
 
@@ -95,4 +95,77 @@ fn an_asked_question_is_not_read_for_loaded_phrases() {
     assert!(!out.contains("states what the code does now"), "{}", out);
     let out = both(&adr_owner(&dir, &["approve", rec.to_str().unwrap()], ""));
     assert!(!out.contains("states what the code does now"), "{}", out);
+}
+
+fn options() -> &'static str {
+    "- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n"
+}
+
+// adr: 946263aa-519a-47aa-b743-5cdcf52f5d35
+#[test]
+fn check_approve_and_plan_find_a_set_on_a_term() {
+    let (dir, _) = unapproved("# Example\n");
+    let terms = std::fs::read_to_string(dir.join("adrdom/terms.md")).unwrap();
+    let id = terms.lines().find_map(|l| l.strip_prefix("id: ")).expect("approved term has an id").trim().to_string();
+    let content = format!(
+        "# Example\n\n### Does the decision hold?\ndepends: {}=A\n\nProblem: the decision is unclear.\n\nStandard: plain words.\n\n{}",
+        id,
+        options()
+    );
+    let rec = write_record(&dir, REL, &content);
+    let (chk, apr, pln) = three(&dir, &rec);
+    for out in [&chk, &apr, &pln] {
+        assert!(out.contains("depends on a term under an answer set, and a term has no options"), "{}", out);
+    }
+    assert_eq!(apr.matches("under an answer set").count(), 1, "{}", apr);
+}
+
+// adr: 946263aa-519a-47aa-b743-5cdcf52f5d35
+#[test]
+fn check_approve_and_plan_find_an_entry_with_no_set_on_an_unanswered_question() {
+    let content = format!(
+        "# Example\n\n### Does the decision hold?\ndepends: decision\n\nProblem: the decision is unclear.\n\nStandard: plain words.\n\n{o}\n### Does the decision stay?\ndepends: Does the decision hold?\n\nProblem: the decision is unclear.\n\nStandard: plain words.\n\n{o}",
+        o = options()
+    );
+    let (dir, rec) = unapproved(&content);
+    let (chk, apr, pln) = three(&dir, &rec);
+    for out in [&chk, &apr, &pln] {
+        assert!(
+            out.contains("\"Does the decision stay?\" depends on \"Does the decision hold?\" without an answer set"),
+            "{}",
+            out
+        );
+    }
+    assert_eq!(apr.matches("without an answer set").count(), 1, "{}", apr);
+}
+
+// adr: 946263aa-519a-47aa-b743-5cdcf52f5d35
+#[test]
+fn check_approve_and_plan_find_a_set_on_an_answered_question() {
+    let target = "11111111-2222-3333-4444-555555555555";
+    let (dir, rec) = unapproved(&format!(
+        "# Example\n\n### Does the decision stand?\ndepends: {}=A\n\nProblem: the decision is unclear.\n\nStandard: plain words.\n\n{}",
+        target,
+        options()
+    ));
+    append_ledger_row_at(&dir, "asked", target, "h1", "Does the lid stay?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", target, "h1", "A", "2024-01-01T00:00:01Z");
+    write_record(
+        &dir,
+        "adrdom/decisions/other.md",
+        &format!(
+            "# Other\n\n### Does the lid stay?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n{}\n**Answer:** A\n",
+            target,
+            options()
+        ),
+    );
+    let (chk, apr, pln) = three(&dir, &rec);
+    for out in [&chk, &apr, &pln] {
+        assert!(
+            out.contains("\"Does the decision stand?\" depends on \"Does the lid stay?\", which is answered, under an answer set"),
+            "{}",
+            out
+        );
+    }
+    assert_eq!(apr.matches("which is answered, under an answer set").count(), 1, "{}", apr);
 }
