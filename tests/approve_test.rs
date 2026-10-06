@@ -374,7 +374,10 @@ fn approve_withdraws_a_struck_asked_heading() {
 // --- approve withdraws a struck refused heading --------------------------
 
 // adr: 6b3d8e59-e145-49e1-860d-a79d753d745c
-//
+// adr: 79da6500-2246-4a80-baf1-0eaf7cad49ee
+// (What may leave a topic file by a plan change? The section of a
+// superseded or refused question, and a file with no current or open
+// question left.)
 // "when the owner approves a plan that drops it the section is gone
 // (approve accepts the drop and writes a withdrawn event for it)": `id` is
 // refused (never answered, never superseded) and its section stays in the
@@ -431,6 +434,8 @@ fn approve_withdraws_a_struck_refused_heading() {
 // --- approve refuses when a current heading vanishes without a supersede --
 
 // adr: 21ae8ae0-6884-4d3c-8464-024a8a5aae2d
+// adr: 79da6500-2246-4a80-baf1-0eaf7cad49ee
+// (a current question's section may not leave a topic file by a plan change)
 //
 // "approve stops when an answered question is missing from every topic
 // file": `id` is answered and current, never superseded, yet its heading
@@ -509,10 +514,12 @@ fn approve_leaves_file_and_ledger_unchanged_when_missing_answered_id_refuses() {
 
 // --- approve allows a vanished heading once it is superseded ------------
 
+// adr: 79da6500-2246-4a80-baf1-0eaf7cad49ee
+// (What may leave a topic file by a plan change? The section of a
+// superseded or refused question, and a file with no current or open
+// question left.)
 //
-// "once superseded, a question's section may leave the file as a plan
-// change the owner approves, and approve allows that only for superseded
-// questions": old_id's section is dropped from the file entirely once it
+// old_id's section is dropped from the file entirely once it
 // is superseded, and `approve` accepts the edit (contrast
 // `approve_refuses_when_answered_heading_gone_and_not_superseded`, where
 // the same removal on a current, non-superseded id refuses). "the old
@@ -585,9 +592,12 @@ fn approve_allows_a_vanished_heading_once_superseded() {
 
 // --- a topic file with nothing current or open left may be deleted -------
 
+// adr: 79da6500-2246-4a80-baf1-0eaf7cad49ee
+// (What may leave a topic file by a plan change? The section of a
+// superseded or refused question, and a file with no current or open
+// question left.)
 //
-// "a topic file with no current or open question left may be deleted the
-// same way": once `example.md`'s only question is superseded and its section
+// A topic file with no current or open question left may be deleted: once `example.md`'s only question is superseded and its section
 // removed by an approved edit, the file holds no current or open question
 // at all; deleting it outright leaves `check` clean, exactly as removing
 // just the section did above -- no special act beyond the plan change
@@ -1047,6 +1057,7 @@ fn approve_refuses_a_heading_used_twice_in_one_file_with_the_check_line() {
 
 #[test]
 fn approve_refuses_a_file_name_that_is_not_its_topic_with_the_check_line() {
+    // adr: 625dea67-13a7-4e8e-913f-e997081a120c
     let dir = widget_repo();
     let content = format!("# Other\n\n### Is it match?\ndepends: widget\n\n{}", WIDGET_Q);
     let record = write_record(&dir, "adrdom/decisions/topic.md", &content);
@@ -1318,7 +1329,7 @@ fn approve_refuses_removing_a_term_carried_by_a_current_decision() {
     );
     assert!(err.contains("What is the decision?"), "{}", err);
     assert!(
-        err.contains("agent restores the term in adrdom/terms.md, marked retired: yes, owner runs: adr approve adrdom/terms.md"),
+        err.contains(&format!("agent restores the term in adrdom/terms.md, or first writes a question that supersedes {}, owner runs: adr approve adrdom/terms.md", id)),
         "{}",
         err
     );
@@ -1326,6 +1337,7 @@ fn approve_refuses_removing_a_term_carried_by_a_current_decision() {
 
 #[test]
 fn approve_refuses_retiring_a_term_carried_by_a_current_decision() {
+    // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", DECISION_RECORD_FOR_DEPENDENTS);
@@ -1414,6 +1426,7 @@ Standard: plain words.
 
 #[test]
 fn approve_refuses_retiring_a_term_named_only_by_a_current_decisions_depends_line() {
+    // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", DECISION_RECORD_DEPENDS_ONLY);
@@ -1502,18 +1515,19 @@ Standard: plain words.
 "#;
 
 //
-// `answered questions keep the retired term's identifier on their terms
-// line, so their meaning does not move (check stays clean for them)`.
+// "Does a retired term hold its words?" -- no: the right word passes to the
+// new term, and a superseded question keeps its retired id on its terms line.
 // 1.1's answered terms line pairs "decision"=33333333-..., and its
 // `depends:` line resolves to that same id; once 1.2 supersedes 1.1 (so
 // 1.1 is no longer a *current* decision), retiring "decision" -- and
 // handing its freed word to the new term "commitment" -- is accepted, and
 // `adr check` stays entirely clean even though 1.1's terms line and
-// depends line both still name the now-retired id: its meaning does not
-// move just because the word moved on.
+// depends line both still name the now-retired id.
 #[test]
 fn approve_allows_retiring_a_term_once_its_only_current_decision_is_superseded_and_check_stays_clean(
 ) {
+    // adr: 5577f646-a9d4-4785-9193-2317b9aa502d
+    // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(
@@ -1685,11 +1699,13 @@ id: 77777777-7777-7777-7777-777777777777\n\
 definition: A ruling reached after deliberation.\n\
 aliases: decision\n";
 
-/// 9.3 B: a retired entry's name/alias no longer belongs to it; a current
-/// entry may take it, and `approve` (which parses and shape-checks the
-/// file) does not refuse over the shared word.
+/// "Does a retired term hold its words?" -- no: a retired entry's
+/// name/alias no longer belongs to it; a current entry may take it, and
+/// `approve` (which parses and shape-checks the file) does not refuse over
+/// the shared word.
 #[test]
 fn approve_allows_a_current_term_to_take_a_retired_terms_name_or_alias() {
+    // adr: 5577f646-a9d4-4785-9193-2317b9aa502d
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms = write_record(

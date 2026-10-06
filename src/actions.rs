@@ -897,15 +897,15 @@ pub fn terms_refusals(
             let Some(target) = tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str()))
             else {
                 let word = dep.from_word.then_some(word.as_str());
-                refusals.push(msg::term_removed_but_carried(uuid, word, &label));
+                refusals.push(msg::term_removed_but_carried(uuid, word, &label, dep.source.decision_id()));
                 continue;
             };
             if target.retired {
                 // A decision dependent: the agent's move is to write a new
                 // question that supersedes it, not the owner's to make on
                 // the spot. A term dependent (its own definition still
-                // carries the retired word) is never superseded (per "Does
-                // a retired term keep its words?"): the agent rewords the
+                // carries the retired word) is never superseded (per "What
+                // holds a retire of a term?"): the agent rewords the
                 // definition and the owner re-approves.
                 let next = match &dep.source {
                     state::DependentSource::Decision { id, heading, .. } => {
@@ -1715,7 +1715,7 @@ fn waiting_on_other_file(
 
 /// Refusals about a topic file's own name and its own headings, one
 /// function for `approve` and `check` so the two print the same lines
-/// (the file name rule is a detail with no decision of its own): a name
+/// (per "What names a topic file?"): a name
 /// that is not lowercase words joined by hyphens, a
 /// topic no name can carry, a name that is not the topic, and a heading
 /// text used twice in the file. `topic` is the file's `# ` title when it

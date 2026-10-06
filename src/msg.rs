@@ -253,15 +253,30 @@ pub fn circular_definition(chain: &str) -> String {
 /// uuid that no longer exists in `adrdom/terms.md` at all.
 /// `word` is the word `source` names the term by, when it names it by a
 /// word (its terms line); a depends line names it by the identifier alone.
-pub fn term_removed_but_carried(uuid: &str, word: Option<&str>, source: &str) -> String {
+/// `decision_id` is the dependent's id when it is a current decision. Marking
+/// the term retired is not offered: a retire is held while the dependent
+/// stands (per "What holds a retire of a term?"), so the move is restoring the
+/// term as it was, or superseding the decision first.
+pub fn term_removed_but_carried(
+    uuid: &str,
+    word: Option<&str>,
+    source: &str,
+    decision_id: Option<&str>,
+) -> String {
+    let action = match decision_id {
+        Some(id) => format!(
+            "restores the term in adrdom/terms.md, or first writes a question that supersedes {}",
+            id
+        ),
+        None => "restores the term in adrdom/terms.md".to_string(),
+    };
     refuse(
         format!(
             "adrdom/terms.md: term {} removed but used by {}",
             named(uuid, word),
             source
         ),
-        Next::agent("restores the term in adrdom/terms.md, marked retired: yes")
-            .and_owner_runs("adr approve adrdom/terms.md"),
+        Next::agent(action).and_owner_runs("adr approve adrdom/terms.md"),
     )
 }
 
@@ -269,7 +284,7 @@ pub fn term_removed_but_carried(uuid: &str, word: Option<&str>, source: &str) ->
 /// dependent kind: a decision supersedes itself with a new question
 /// (built by the caller, which knows the decision's id); a term's own
 /// definition is reworded by the agent and re-approved by the owner --
-/// terms are never superseded (per "Does a retired term keep its words?"; the fix for a term-dependent is
+/// terms are never superseded (per "What holds a retire of a term?"; the fix for a term-dependent is
 /// always this same pair, so it's fixed here).
 pub fn term_retired_but_carried(name: &str, source: &str, next: Next) -> String {
     refuse(
@@ -2282,7 +2297,7 @@ pub fn duplicate_heading_across_files(heading: &str, rel1: &str, rel2: &str) -> 
 }
 
 /// The naming half of the same decision as `duplicate_heading_across_files`
-/// (the file name rule, a detail with no decision of its own): a topic file whose own file name isn't lowercase ASCII
+/// (per "What names a topic file?"): a topic file whose own file name isn't lowercase ASCII
 /// words joined by single hyphens (`repo::valid_topic_file_name`). Not part
 /// of `record_refusals`: `approve` refuses it through
 /// `actions::own_name_refusals` and `check` through its plan check, from
@@ -2302,8 +2317,8 @@ pub fn bad_topic_file_name(rel: &str) -> String {
     )
 }
 
-/// The "named by it" half of the file name rule, a detail with no decision
-/// of its own: a topic file whose name is well
+/// The "named by it" half of the file name rule (per "What names a topic
+/// file?"): a topic file whose name is well
 /// formed (`repo::valid_topic_file_name`) but is not its h1 topic text
 /// lowercased and hyphenated (`repo::expected_topic_file_stem`). Read the
 /// same way as `bad_topic_file_name`.
@@ -2320,7 +2335,7 @@ pub fn topic_file_name_mismatch(rel: &str, topic: &str, expected: &str) -> Strin
     )
 }
 
-/// The file name rule, a detail with no decision of its own, names a topic
+/// The file name rule ("What names a topic file?") names a topic
 /// file by its topic "in lowercase words joined by hyphens, with no number": a topic whose text lowercased and hyphenated
 /// (`repo::expected_topic_file_stem`) holds a digit, or holds no letter at
 /// all, has no name any file can carry, so no rename clears it and the
@@ -3124,7 +3139,8 @@ mod tests {
             terms_edit_too_wide(&["a".to_string(), "b".to_string()], true),
             terms_edit_too_wide(&["a".to_string(), "b".to_string()], false),
             too_long("x.md", 3, "heading", "option", "21 words, the limit is 20"),
-            term_removed_but_carried("uuid-1", Some("word"), "term \"x\""),
+            term_removed_but_carried("uuid-1", Some("word"), "term \"x\"", None),
+            term_removed_but_carried("uuid-1", Some("word"), "id-1: \"heading\"", Some("id-1")),
             term_retired_but_carried("x", "term \"y\"", term_reword_and_approve()),
             term_retired_but_carried("x", "id-1: \"heading\"", term_retired_decision_next("x", "id-1", "heading")),
             word_moved_off_term("word", "term", "term \"y\"", term_reword_and_approve()),
