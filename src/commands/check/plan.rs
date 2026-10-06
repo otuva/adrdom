@@ -43,7 +43,7 @@ pub(super) fn check_plan(
         records.iter().map(|rf| (rf.rel.as_str(), rf)).collect();
 
     // The file name rule (lowercase words joined by hyphens, named by its
-    // topic), a detail with no decision of its own: every file `repo::list_decision_files_via` lists through
+    // topic; per "What names a topic file?"): every file `repo::list_decision_files_via` lists through
     // `source`, by its own base name alone -- checked straight off the
     // listing rather than off `records`, so a file whose name is wrong is
     // still told so even when its content also fails to parse into one.
