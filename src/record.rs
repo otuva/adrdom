@@ -964,22 +964,18 @@ fn analyze_shape(lines: &[String], sections: &[Section]) -> (Option<String>, (us
     // Per "Does the tool derive tiers from the depends lines?": tiers are
     // derived from `depends:` lines, never written by
     // hand; a `## ` line left over from the old format is a shape error.
+    // Per "What is the shape of a topic file?" (9913568f A): a non-blank line
+    // after a `## ` line and before the next `### ` heading sits in no
+    // question and is not prose, so it is reported as a stray line (a `### `
+    // heading without `?` is reported once already, with its lines).
+    let mut after_h2 = false;
     for (i, l) in lines.iter().enumerate() {
         if is_h2(l) {
             shape_errors.push(format!("tier heading, line {}; tiers are derived", i + 1));
-        }
-    }
-
-    // Per "What is the shape of a topic file?" (9913568f A): a non-blank line
-    // after a `## ` line and before the next question heading sits in no
-    // question and is not prose, so it is reported as a stray line.
-    let mut after_h2 = false;
-    for (i, l) in lines.iter().enumerate() {
-        if is_question_heading(l) {
-            after_h2 = false;
-        } else if is_h2(l) {
             after_h2 = true;
-        } else if after_h2 && !l.trim().is_empty() && !is_h1(l) && !l.starts_with("### ") {
+        } else if l.starts_with("### ") {
+            after_h2 = false;
+        } else if after_h2 && !l.trim().is_empty() && !is_h1(l) {
             shape_errors.push(format!("stray line {}", i + 1));
         }
     }
@@ -1359,6 +1355,8 @@ mod tests {
 
     const SHAPED: &str = "# Topic\n\ncontext prose line one.\ncontext prose line two.\n\n### 1.1 First question?\n\nProblem: p.\n\nStandard: s.\n\n- A) Do the thing.\n  Why: reasons.\n  Costs: costs.\n- B) Do the other thing.\n  Why: other reasons.\n  Costs: other costs.\n";
 
+    // adr: 9913568f-6b85-4d26-946b-c6e108f9aa51
+    // "What is the shape of a topic file?": one h1, first in the file.
     #[test]
     fn h1_required_and_first() {
         let rf = rf_from("no h1 here\n\n### 1.1 Q?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
@@ -1377,6 +1375,8 @@ mod tests {
         assert!(rf4.shape_errors.is_empty(), "{:?}", rf4.shape_errors);
     }
 
+    // adr: 9913568f-6b85-4d26-946b-c6e108f9aa51
+    // "What is the shape of a topic file?": no `## ` tier heading.
     #[test]
     fn a_h2_line_is_a_tier_heading_shape_error() {
         let rf = rf_from("# Topic\n\n## Old Group\n\n### 1.1 Q?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n");
@@ -1442,6 +1442,8 @@ mod tests {
         );
     }
 
+    // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
+    // "What stands under a question's heading?": no stray line in the body.
     #[test]
     fn stray_line_in_body_is_a_shape_error_naming_the_line() {
         let content = "# Topic\n\n### 1.1 Q?\n\nProblem: p.\n\nStandard: s.\n\nthis line is not allowed\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
@@ -1461,8 +1463,9 @@ mod tests {
         );
     }
 
-    //
-    // Decision A's Problem/Standard presence clause, plus (via `SHAPED`
+    // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
+    // The body under a question's heading ("What stands under a question's heading?"):
+    // a Problem/Standard presence clause, plus (via `SHAPED`
     // below) a well-formed body -- one-line Problem, one-line Standard,
     // two options each with a Why and a Costs line -- parsing with zero
     // shape errors.
@@ -1554,7 +1557,8 @@ mod tests {
         );
     }
 
-    // the supersedes list, like
+    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
+    // "Does a reference line hold its list on one line?": the supersedes list, like
     // depends, holds several entries as one line of comma-separated values,
     // not one entry per line.
     #[test]
@@ -1566,8 +1570,8 @@ mod tests {
         );
     }
 
-    //
-    // Decision A's "each one sentence" clause, at the unit that decides
+    // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
+    // "What stands under a question's heading?", the "each one sentence" clause, at the unit that decides
     // *which* sentence: text with a sentence terminator yields that first
     // sentence -- still the sentence recorded on the option regardless of
     // what follows it, since `chosen_sentence` should show the same text
@@ -1585,8 +1589,8 @@ mod tests {
         assert_eq!(extract_sentence("Ties live in code"), None);
     }
 
-    //
-    // Decision A's "each one sentence" clause, the half
+    // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
+    // "What stands under a question's heading?", the "each one sentence" clause, the half
     // `an_option_decides_exactly_its_first_sentence` above does not cover:
     // a decision text holding a second sentence is a parse error (a
     // `terms::sentence_count` > 1 on the option's own text), not silently
@@ -1609,8 +1613,8 @@ mod tests {
         assert!(ok.sections[0].parse_errors.is_empty(), "{:?}", ok.sections[0].parse_errors);
     }
 
-    //
-    // Decision A's "a second Problem:/Standard: line" fix (point 4): a
+    // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
+    // "What stands under a question's heading?", a second Problem:/Standard: line: a
     // repeated field is reported as a duplicate, not folded into the same
     // "missing" message a zero count gets.
     #[test]
@@ -1639,8 +1643,8 @@ mod tests {
         );
     }
 
-    //
-    // Decision A's "the answer line comes last" clause (point 3): an
+    // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
+    // "What stands under a question's heading?", the answer line comes last: an
     // `**Answer:**` line with real body content after it is refused, at
     // the section-parsing level `ask`/`check` both read.
     #[test]
@@ -1665,8 +1669,8 @@ mod tests {
         );
     }
 
-    //
-    // Decision A's "the answer line comes last" clause: a second
+    // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
+    // "What stands under a question's heading?", the answer line comes last: a second
     // `**Answer:**` line is its own shape error, not silently swallowed by
     // `answer_line` being overwritten to point at the later (last) one --
     // which used to let an out-of-place early answer line escape the
@@ -1683,6 +1687,8 @@ mod tests {
         );
     }
 
+    // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
+    // "What stands under a question's heading?": no Lean line in the body.
     #[test]
     fn a_lean_line_inside_a_question_is_a_shape_error() {
         let rf = rf_from(
@@ -1694,6 +1700,8 @@ mod tests {
             .any(|e| e.starts_with("stray line")));
     }
 
+    // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
+    // "What stands under a question's heading?": a Why line belongs under an option.
     #[test]
     fn a_why_line_before_any_option_is_stray() {
         let rf = rf_from(
@@ -1712,8 +1720,8 @@ mod tests {
             .any(|e| e.starts_with("stray line")));
     }
 
-    //
-    // Decision A's "two or three lettered options" clause: four is
+    // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
+    // "What stands under a question's heading?", two or three lettered options: four is
     // refused, three is accepted (the `ok` case below).
     #[test]
     fn a_fourth_option_is_a_shape_error() {
@@ -1752,7 +1760,8 @@ mod tests {
         assert!(sec.parse_errors.is_empty(), "{:?}", sec.parse_errors);
     }
 
-    // a one-line, comma-
+    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
+    // "Does a reference line hold its list on one line?": a one-line, comma-
     // separated depends list with three entries parses cleanly (no shape
     // errors) and each entry keeps its own answer set independently: the
     // middle entry carries `=A`, the other two carry none.
@@ -1836,7 +1845,8 @@ mod tests {
         );
     }
 
-    // two heading-shaped
+    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
+    // "Does a reference line hold its list on one line?": two heading-shaped
     // entries on the *same* depends line, each with its own distinct
     // answer set: the sets must not bleed into each other or collapse to
     // one set for the whole line.
@@ -1919,7 +1929,8 @@ mod tests {
         );
     }
 
-    // a depends list split
+    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
+    // "Does a reference line hold its list on one line?": a depends list split
     // across two lines is refused (a shape error), not read as more
     // entries of the same list.
     #[test]
@@ -1987,7 +1998,8 @@ mod tests {
         assert!(twice.sections[0].shape_errors.iter().any(|e| e.contains("second unrelated line")));
     }
 
-    // a supersedes list split
+    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
+    // "Does a reference line hold its list on one line?": a supersedes list split
     // across two lines is refused (a shape error), not silently dropped.
     #[test]
     fn two_supersedes_lines_under_one_heading_is_a_shape_error() {
@@ -2006,7 +2018,8 @@ mod tests {
         );
     }
 
-    // a terms list split
+    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
+    // "Does a reference line hold its list on one line?": a terms list split
     // across two lines is refused (a shape error), not silently dropped.
     #[test]
     fn two_terms_lines_under_one_heading_is_a_shape_error() {

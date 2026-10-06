@@ -285,11 +285,6 @@ fn dropped_state(led: &Ledger, id: &str) -> bool {
     )
 }
 
-/// `actions::has_force`, the one reading `approve` shares.
-fn has_force(rf: &RecordFile, s: &record::Section, led: &Ledger) -> bool {
-    actions::has_force(rf, s, led)
-}
-
 /// Whether a finding `r` on `rf` is a note rather than a failure (per
 /// "What does check do with a fault on a file awaiting approval?", 05141f49
 /// A): the file awaits approval (`draft`), the finding is of a kind a
@@ -306,7 +301,7 @@ fn is_note(rf: &RecordFile, r: &actions::Refusal, draft: bool, led: &Ledger) -> 
     }
     // Every question the finding is about must still be able to change; a
     // finding about none is about the file as a whole.
-    !r.sections.iter().filter_map(|i| rf.sections.get(*i)).any(|s| has_force(rf, s, led))
+    !r.sections.iter().filter_map(|i| rf.sections.get(*i)).any(|s| actions::has_force(rf, s, led))
 }
 
 /// A file's plan/context approval state: its ledger-relative path, whether

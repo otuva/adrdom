@@ -58,14 +58,7 @@ pub(super) fn check_plan(
             !plan_ok || !ctx_ok
         });
         for m in actions::own_name_refusals(&rel, topic) {
-            if draft {
-                notes.push(format!("plan: {}", m));
-            } else {
-                out.push(Failure {
-                    check: "plan".to_string(),
-                    message: m,
-                });
-            }
+            push_plan(&mut out, &mut notes, draft, m);
         }
     }
 
@@ -82,14 +75,7 @@ pub(super) fn check_plan(
             if r.category != "plan" && r.category != "plan_frozen" {
                 continue;
             }
-            if is_note(rf, r, draft, led) {
-                notes.push(format!("plan: {}", r.message));
-            } else {
-                out.push(Failure {
-                    check: "plan".to_string(),
-                    message: r.message.clone(),
-                });
-            }
+            push_plan(&mut out, &mut notes, is_note(rf, r, draft, led), r.message.clone());
         }
 
         // A letter in a depends entry's set that the same-file target has no
@@ -101,14 +87,7 @@ pub(super) fn check_plan(
         // read through `is_note` like the rest and is a note on a draft.
         for m in actions::letter_refusals(&rel, rf, led) {
             let r = Refusal::new("plan", m);
-            if is_note(rf, &r, draft, led) {
-                notes.push(format!("plan: {}", r.message));
-            } else {
-                out.push(Failure {
-                    check: "plan".to_string(),
-                    message: r.message,
-                });
-            }
+            push_plan(&mut out, &mut notes, is_note(rf, &r, draft, led), r.message);
         }
 
         // Same heading twice in one file (8.3-adjacent): the cross-file
@@ -122,36 +101,29 @@ pub(super) fn check_plan(
                 .or_default()
                 .push(rel.clone());
         }
-        // The fault belongs to a question with no force (the one that copies
-        // the heading): a note when such a question sits in a draft, a
-        // failure when every question bearing the heading has force.
+        // The fault belongs to the copying question (`actions::copying_sections`):
+        // a note when one sits in a draft, a failure otherwise.
         let mut dup_headings: Vec<&str> = rf.sections.iter().map(|s| s.heading_text.as_str()).collect();
         dup_headings.sort();
         dup_headings.dedup();
         for h in dup_headings {
             let bearing: Vec<_> =
                 rf.sections.iter().filter(|s| s.heading_text == h).cloned().collect();
-            let forceless = !actions::copying_sections(rf, h, led).is_empty();
+            if bearing.len() < 2 {
+                continue;
+            }
+            let copied = !actions::copying_sections(rf, h, led).is_empty();
             for m in actions::duplicate_heading_refusals(&rel, &bearing) {
-                if draft && forceless {
-                    notes.push(format!("plan: {}", m));
-                } else {
-                    out.push(Failure {
-                        check: "plan".to_string(),
-                        message: m,
-                    });
-                }
+                push_plan(&mut out, &mut notes, draft && copied, m);
             }
         }
     }
 
-    // One heading in two topic files (23f21671 A): the fault belongs to a
-    // question with no force, the one that copies the heading (05141f49 A).
-    // A note when such a question sits in a file awaiting approval, a failure
-    // when every question bearing the heading has force or the forceless
-    // ones sit in approved files. The files are compared section by section
-    // over every section each one holds, superseded and answered ones
-    // included, the set `approve` compares too.
+    // One heading in two topic files (23f21671 A): the fault belongs to the
+    // copying question (`actions::copying_sections`, 05141f49 A). A note when
+    // one sits in a file awaiting approval, a failure otherwise. The files
+    // are compared section by section over every section each one holds,
+    // superseded and answered ones included, the set `approve` compares too.
     let mut headings: Vec<&String> = heading_files.keys().collect();
     headings.sort();
     for heading in headings {
@@ -159,24 +131,28 @@ pub(super) fn check_plan(
         paths.sort();
         paths.dedup();
         if paths.len() > 1 {
-            let draft_forceless = paths.iter().any(|rel| {
+            let copied_in_draft = paths.iter().any(|rel| {
                 records_by_rel.get(rel.as_str()).is_some_and(|rf| {
-                    awaiting.contains(rel)
-                        && !actions::copying_sections(rf, heading, led).is_empty()
+                    awaiting.contains(rel) && !actions::copying_sections(rf, heading, led).is_empty()
                 })
             });
             let message = msg::duplicate_heading_across_files(heading, &paths[0], &paths[1]);
-            if draft_forceless {
-                notes.push(format!("plan: {}", message));
-            } else {
-                out.push(Failure { check: "plan".to_string(), message });
-            }
+            push_plan(&mut out, &mut notes, copied_in_draft, message);
         }
     }
 
     awaiting.sort();
     awaiting.dedup();
     (out, notes, awaiting)
+}
+
+/// One plan finding: a note when `note`, a failure otherwise.
+fn push_plan(out: &mut Vec<Failure>, notes: &mut Vec<String>, note: bool, message: String) {
+    if note {
+        notes.push(format!("plan: {}", message));
+    } else {
+        out.push(Failure { check: "plan".to_string(), message });
+    }
 }
 
 /// What differs in `rf` from its latest approval (per "Does approve hash each

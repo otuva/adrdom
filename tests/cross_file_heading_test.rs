@@ -173,3 +173,45 @@ fn a_draft_question_copying_an_answered_heading_is_a_note_and_two_answered_ones_
     let failures = quiet(&dir);
     assert!(failures.contains(LINE), "{}", failures);
 }
+
+/// `file(title)` with an id on its question, approved by ledger rows the way
+/// `approve` writes them: one row for the question's hash, one for the file.
+fn approved_with_id(dir: &Path, rel: &str, title: &str, id: &str) -> String {
+    let text = file(title).replacen("depends: widget\n", &format!("depends: widget\n\nid: {}\n", id), 1);
+    std::fs::write(dir.join(rel), &text).unwrap();
+    let rf = adr::record::load(&dir.join(rel)).unwrap();
+    for s in &rf.sections {
+        append_ledger_row(dir, "approved", id, &adr::record::question_hash(&rf, s), rel);
+    }
+    approve_via_ledger(dir, rel, &text);
+    text
+}
+
+#[test]
+fn check_fails_a_heading_in_two_files_when_the_draft_holds_it_unchanged() {
+    // adr: 23f21671-e34c-44aa-8804-6163d975807f
+    // adr: 05141f49-d9d2-407c-b60c-ebb195a05864
+    let dir = repo();
+    let a = approved_with_id(&dir, A, "A", ID1);
+    approved_with_id(&dir, B, "B", ID2);
+    // A prose edit makes A a draft; its question is unchanged, so it is no copy.
+    write_record(&dir, A, &a.replacen("# A\n\n", "# A\n\nA line of prose.\n\n", 1));
+    let failures = quiet(&dir);
+    assert!(failures.contains(LINE), "{}", failures);
+}
+
+#[test]
+fn check_notes_a_new_heading_in_a_draft_that_copies_an_approved_one() {
+    // adr: 23f21671-e34c-44aa-8804-6163d975807f
+    // adr: 05141f49-d9d2-407c-b60c-ebb195a05864
+    let dir = repo();
+    approved_with_id(&dir, A, "A", ID1);
+    let b = file("B").replacen("### Does the widget hold?", "### Does the widget stay?", 1);
+    approve_via_ledger(&dir, B, &b);
+    // B gains a question copying A's heading: new, forceless, in a draft.
+    write_record(&dir, B, &format!("{}\n{}", b, file("B").split_once("\n\n").unwrap().1));
+    let failures = quiet(&dir);
+    assert!(!failures.contains(LINE), "{}", failures);
+    let all = stdout(&adr(&dir, &["check"], &[], ""));
+    assert!(all.contains(LINE), "{}", all);
+}
