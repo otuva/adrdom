@@ -103,11 +103,12 @@ fn parity_tier_over_cap() {
     assert_parity_note(&dir, &record, "5 questions would be put to the owner together, the most is 4");
 }
 
-// adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a depends list split across
+// a depends list split across
 // two lines is refused by both `adr approve` and `adr check` (a real CLI
 // run of each), not silently read as a continuation of the same list.
 #[test]
 fn parity_two_depends_lines() {
+    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
     // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
     let dir = init_repo();
     setup(&dir);
@@ -118,11 +119,12 @@ fn parity_two_depends_lines() {
     assert_parity_note(&dir, &record, "second depends line");
 }
 
-// adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a supersedes list split
+// a supersedes list split
 // across two lines is refused by both `adr approve` and `adr check`, not
 // silently cut to its first line.
 #[test]
 fn parity_two_supersedes_lines() {
+    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
     // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
     let dir = init_repo();
     setup(&dir);

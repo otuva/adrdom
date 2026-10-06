@@ -1284,7 +1284,7 @@ aliases: \n"
         assert_eq!(second, 0);
     }
 
-    // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- the terms list, like
+    // the terms list, like
     // depends and supersedes, is one line of comma-separated entries: two
     // pairs round-trip through one `terms:` line, not two.
     #[test]

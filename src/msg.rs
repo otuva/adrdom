@@ -2282,12 +2282,11 @@ pub fn duplicate_heading_across_files(heading: &str, rel1: &str, rel2: &str) -> 
 }
 
 /// The naming half of the same decision as `duplicate_heading_across_files`
-/// (76bd7ef0 A): a topic file whose own file name isn't lowercase ASCII
-/// words joined by single hyphens (`repo::valid_topic_file_name`). Check-
-/// only, like its duplicate-heading sibling -- neither is part of
-/// `record_refusals`, so `approve` doesn't stop on either one; naming, like
-/// cross-file duplication, needs every file in the directory, not just the
-/// one file `approve` was pointed at. No `owner runs:` clause: the fixed
+/// (the file name rule, a detail with no decision of its own): a topic file whose own file name isn't lowercase ASCII
+/// words joined by single hyphens (`repo::valid_topic_file_name`). Not part
+/// of `record_refusals`: `approve` refuses it through
+/// `actions::own_name_refusals` and `check` through its plan check, from
+/// the one message. No `owner runs:` clause: the fixed
 /// name is the agent's own choice, so there is no concrete command to name
 /// yet -- the agent's move covers telling the owner what re-approval a
 /// rename costs, when it costs one.
@@ -2303,10 +2302,11 @@ pub fn bad_topic_file_name(rel: &str) -> String {
     )
 }
 
-/// The "named by it" half of 76bd7ef0 A: a topic file whose name is well
+/// The "named by it" half of the file name rule, a detail with no decision
+/// of its own: a topic file whose name is well
 /// formed (`repo::valid_topic_file_name`) but is not its h1 topic text
-/// lowercased and hyphenated (`repo::expected_topic_file_stem`). Check-only,
-/// like `bad_topic_file_name`.
+/// lowercased and hyphenated (`repo::expected_topic_file_stem`). Read the
+/// same way as `bad_topic_file_name`.
 pub fn topic_file_name_mismatch(rel: &str, topic: &str, expected: &str) -> String {
     refuse(
         format!(
@@ -2320,11 +2320,13 @@ pub fn topic_file_name_mismatch(rel: &str, topic: &str, expected: &str) -> Strin
     )
 }
 
-/// 76bd7ef0 A names a topic file by its topic "in lowercase words joined by
-/// hyphens, with no number": a topic whose text lowercased and hyphenated
+/// The file name rule, a detail with no decision of its own, names a topic
+/// file by its topic "in lowercase words joined by hyphens, with no number": a topic whose text lowercased and hyphenated
 /// (`repo::expected_topic_file_stem`) holds a digit, or holds no letter at
 /// all, has no name any file can carry, so no rename clears it and the
-/// topic line itself has to change. Check-only, like `bad_topic_file_name`.
+/// topic line itself has to change. `approve` refuses it through
+/// `actions::own_name_refusals` and `check` through its plan check, from the
+/// one message.
 pub fn topic_unnameable(rel: &str, topic: &str) -> String {
     refuse(
         format!(

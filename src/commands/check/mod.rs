@@ -285,32 +285,23 @@ fn dropped_state(led: &Ledger, id: &str) -> bool {
     )
 }
 
-/// Whether a planning finding `r` on `rf` is a note rather than a failure
-/// (per "Does check fail a topic file awaiting approval?"): the file
-/// awaits approval (`draft`), the finding is of a planning kind (`tells`,
-/// `plan`, or a `parse` finding about the body shape), and it is not about
-/// a question whose text can no longer change (answered, refused,
-/// superseded, or asked and unedited since). Anything else fails check.
+/// Whether a finding `r` on `rf` is a note rather than a failure (per
+/// "What does check do with a fault on a file awaiting approval?", 05141f49
+/// A): the file awaits approval (`draft`), the finding is of a kind a
+/// draft can still fix (`tells`, `plan`, or any `parse` finding: the file's
+/// shape, a stray line, a line the tool writes), and it is not about a
+/// question with force. Anything else fails check; so does every finding
+/// on an approved file.
 fn is_note(rf: &RecordFile, r: &actions::Refusal, draft: bool, led: &Ledger) -> bool {
     if !draft {
         return false;
     }
-    let planning = match r.category {
-        "tells" | "plan" => true,
-        "parse" => r.planning,
-        _ => false,
-    };
-    if !planning {
+    if !matches!(r.category, "tells" | "plan" | "parse") {
         return false;
     }
     // Every question the finding is about must still be able to change; a
     // finding about none is about the file as a whole.
-    !r.sections.iter().filter_map(|i| rf.sections.get(*i)).any(|s| {
-        state::is_frozen(led, s)
-            || s.id
-                .as_deref()
-                .is_some_and(|id| state::asked_text_stands(led, id, &record::section_hash(&rf.lines, s)))
-    })
+    !r.sections.iter().filter_map(|i| rf.sections.get(*i)).any(|s| actions::has_force(rf, s, led))
 }
 
 /// A file's plan/context approval state: its ledger-relative path, whether

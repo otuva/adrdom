@@ -1063,14 +1063,13 @@ fn check_tests_ignores_adr_prefix_that_is_not_a_uuid() {
 
 #[test]
 fn check_parse_reports_a_file_shape_error() {
+    // adr: 9913568f-6b85-4d26-946b-c6e108f9aa51
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    // No h1 at all: a file-level shape error.
-    write_record(
-        &dir,
-        "adrdom/decisions/bad.md",
-        "### 4.1 A question with no h1 above it?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
-    );
+    // No h1 at all: a file-level shape error, a failure once the file is
+    // approved (a note while it awaits approval).
+    let content = "### 4.1 A question with no h1 above it?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n";
+    approve_via_ledger(&dir, "adrdom/decisions/bad.md", content);
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
@@ -1079,7 +1078,6 @@ fn check_parse_reports_a_file_shape_error() {
     assert!(text.contains("missing h1"), "{}", text);
 }
 
-// adr: f97e62a4-45ab-46c6-b4b1-a674792a4493
 //
 // "a fixed shape: one first-level heading naming the topic, optional prose
 // under it, then the questions as third-level headings ending in \"?\";
@@ -1090,6 +1088,8 @@ fn check_parse_reports_a_file_shape_error() {
 // decision describes for text nobody picked.
 #[test]
 fn check_fails_a_note_sitting_between_two_questions() {
+    // adr: 9913568f-6b85-4d26-946b-c6e108f9aa51
+    // The failure is on an approved file; a draft shows a note (05141f49).
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_empty_terms(&dir);
@@ -1105,7 +1105,7 @@ Problem: p2.\n\n\
 Standard: s2.\n\n\
 - A) x.\n  Why: y.\n  Costs: c.\n\
 - B) y.\n  Why: y.\n  Costs: c.\n";
-    write_record(&dir, "adrdom/decisions/example.md", content);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", content);
 
     let stray_line_no = content
         .lines()
@@ -1124,7 +1124,6 @@ Standard: s2.\n\n\
     );
 }
 
-// adr: f97e62a4-45ab-46c6-b4b1-a674792a4493
 //
 // A skeleton heading -- one with a `depends:` line but no id and no body --
 // is never a failure: check passes clean, with no `ids:` or `parse:`
@@ -1199,7 +1198,6 @@ fn check_prints_awaiting_approval_line() {
     );
 }
 
-// adr: b741b573-a2ee-498e-98fd-3a7e7d319470
 //
 // "check reports it as awaiting approval" for the case the option names:
 // the prose edited after approve, with the heading (and its `approved`
@@ -1243,7 +1241,6 @@ fn check_counts_a_file_awaiting_approval_when_only_its_context_prose_is_stale() 
     );
 }
 
-// adr: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
 //
 // "a question heading that appears in two topic files fails check": shown
 // here with files named "a.md"/"b.md", themselves valid names under the
@@ -1252,18 +1249,12 @@ fn check_counts_a_file_awaiting_approval_when_only_its_context_prose_is_stale() 
 // `check_passes_a_good_topic_file_name`, below, tie that half.
 #[test]
 fn check_fails_a_question_heading_duplicated_across_two_files() {
+    // adr: 23f21671-e34c-44aa-8804-6163d975807f
+    // Both files approved: a failure (a note while one awaits approval).
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    write_record(
-        &dir,
-        "adrdom/decisions/a.md",
-        "# File A\n\n### 9.9 Same heading?\n",
-    );
-    write_record(
-        &dir,
-        "adrdom/decisions/b.md",
-        "# File B\n\n### 9.9 Same heading?\n",
-    );
+    approve_via_ledger(&dir, "adrdom/decisions/a.md", "# File A\n\n### 9.9 Same heading?\n");
+    approve_via_ledger(&dir, "adrdom/decisions/b.md", "# File B\n\n### 9.9 Same heading?\n");
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
@@ -1295,13 +1286,15 @@ fn check_notes_a_question_heading_duplicated_within_one_file_in_a_draft_and_fail
     assert!(out.status.success(), "{}", stdout(&out));
     assert!(stdout(&out).contains(want), "{}", stdout(&out));
 
+    // Approved, no question has force to excuse it: a failure. (A draft
+    // question copying an answered heading is a note: see
+    // check_draft_notes_test.)
     approve_via_ledger(&dir, rel, content);
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     assert!(stdout(&out).contains(want), "{}", stdout(&out));
 }
 
-// adr: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
 //
 // "each file holds one topic and is named by it in lowercase words joined
 // by hyphens, with no number or prefix": an uppercase letter and an
@@ -1327,7 +1320,6 @@ fn check_notes_a_bad_topic_file_name_in_a_draft_and_fails_it_when_approved() {
     assert!(stdout(&out).contains(want), "{}", stdout(&out));
 }
 
-// adr: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
 //
 // The other side of the same rule: lowercase words joined by single
 // hyphens is a name check accepts without complaint -- and, with an
@@ -1357,7 +1349,6 @@ fn check_passes_a_good_topic_file_name() {
     );
 }
 
-// adr: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
 //
 // "is named by it": a well-formed name that is not the h1 topic,
 // lowercased and hyphenated, fails check; the same file under the name
@@ -1392,7 +1383,6 @@ fn check_fails_a_topic_file_name_that_does_not_match_its_topic() {
     );
 }
 
-// adr: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
 //
 // "with no number": a topic whose text holds a digit has no name any file
 // can carry, so check refuses the topic text itself, whatever the file is

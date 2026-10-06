@@ -27,10 +27,11 @@ Standard: s.
   Costs: other costs.
 "#;
 
-// adr: 923818a7-05c6-4977-bbaf-53ee8f3773ef -- approve stops a phrase-list
+// approve stops a phrase-list
 // hit in a heading (clause: "approve stops a hit in headings").
 #[test]
 fn approve_refuses_a_heading_with_a_loaded_opening() {
+    // adr: 149c9a73-16eb-46aa-9806-2950423ee1a2
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_terms_with(&dir, &["decision"]);
@@ -63,11 +64,12 @@ Standard: s.
   Costs: other costs.
 "#;
 
-// adr: 923818a7-05c6-4977-bbaf-53ee8f3773ef -- approve stops a phrase-list
+// approve stops a phrase-list
 // hit in the context prose (clause: "approve stops a hit ... in the
 // prose").
 #[test]
 fn approve_refuses_a_context_line_with_a_provenance_tell() {
+    // adr: 149c9a73-16eb-46aa-9806-2950423ee1a2
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_terms_with(&dir, &["decision"]);
@@ -100,10 +102,11 @@ Standard: s.
   Costs: other costs.
 "#;
 
-// adr: 923818a7-05c6-4977-bbaf-53ee8f3773ef -- ask stops a phrase-list hit
+// ask stops a phrase-list hit
 // in a question body (clause: "ask stops a hit in question bodies").
 #[test]
 fn ask_refuses_a_candidate_with_a_code_state_tell_in_its_body() {
+    // adr: 149c9a73-16eb-46aa-9806-2950423ee1a2
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_terms_with(&dir, &["decision"]);
@@ -147,7 +150,7 @@ Standard: s.
   Costs: other costs.
 "#;
 
-// adr: 923818a7-05c6-4977-bbaf-53ee8f3773ef -- check reports phrase-list
+// check reports phrase-list
 // hits in text that can still change: an unasked (unfrozen) heading and
 // its context prose (clause: "check reports hits in text that can still
 // change").
@@ -194,7 +197,7 @@ fn frozen_tell_section() -> String {
     )
 }
 
-// adr: 923818a7-05c6-4977-bbaf-53ee8f3773ef -- the other half of "text that
+// the other half of "text that
 // can still change": once a section is frozen (answered), check must never
 // report a tell in it -- the clause bounds check to unfrozen text, not all
 // text.

@@ -8,6 +8,7 @@ use common::*;
 
 #[test]
 fn principle_block_is_gone_a_p1_line_inside_a_body_is_stray_and_gets_no_id() {
+    // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
@@ -44,11 +45,11 @@ fn principle_block_is_gone_a_p1_line_inside_a_body_is_stray_and_gets_no_id() {
     );
 }
 
-// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
 //
-// Decision A's "two or three lettered options" clause.
+// The decision "What stands under a question's heading?" (178a232e), its "two or three lettered options" clause.
 #[test]
 fn a_question_needs_two_or_three_options() {
+    // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
 
     // One option: refused.
     {
@@ -105,13 +106,13 @@ fn a_question_needs_two_or_three_options() {
     }
 }
 
-// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
 //
-// Decision A's "a one-line Problem, a one-line Standard" clause: this test
+// The decision "What stands under a question's heading?" (178a232e), its "a one-line Problem, a one-line Standard" clause: this test
 // covers presence (exactly one of each); `a_problem_or_standard_value_stays_on_one_line`
 // below covers the "one-line" half.
 #[test]
 fn a_question_needs_a_problem_line_and_a_standard_line() {
+    // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
 
     // Missing Problem: refused.
     {
@@ -153,11 +154,11 @@ fn a_question_needs_a_problem_line_and_a_standard_line() {
     }
 }
 
-// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
 //
-// Decision A's "an indented Why line and an indented Costs line" clause.
+// The decision "What stands under a question's heading?" (178a232e), its "an indented Why line and an indented Costs line" clause.
 #[test]
 fn every_option_needs_a_why_line_and_a_costs_line() {
+    // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
 
     // Option A has no Costs: refused.
     {
@@ -199,9 +200,8 @@ fn every_option_needs_a_why_line_and_a_costs_line() {
     }
 }
 
-// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
 //
-// Decision A's "a one-line Problem, a one-line Standard" clause, the half
+// The decision "What stands under a question's heading?" (178a232e), its "a one-line Problem, a one-line Standard" clause, the half
 // `a_question_needs_a_problem_line_and_a_standard_line` above does not
 // cover: the parser has no continuation syntax for either field, so a
 // second physical line is refused rather than folded into the value.
@@ -211,6 +211,7 @@ fn every_option_needs_a_why_line_and_a_costs_line() {
 // message, distinct from the "missing" message a zero count gets.
 #[test]
 fn a_problem_or_standard_value_stays_on_one_line() {
+    // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
 
     // A continuation line under Problem: refused as a stray line.
     {
@@ -250,9 +251,8 @@ fn a_problem_or_standard_value_stays_on_one_line() {
     }
 }
 
-// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
 //
-// Decision A's "each one sentence that responds to the heading" clause.
+// The decision "What stands under a question's heading?" (178a232e), its "each one sentence that responds to the heading" clause.
 // An option with no decision sentence at all, and an option whose decision
 // text holds a second sentence, are both parse errors, and `ask` now reads
 // them (point 1/point 2) the same way `check` does, through the shared
@@ -261,6 +261,7 @@ fn a_problem_or_standard_value_stays_on_one_line() {
 // identical text afterward.
 #[test]
 fn a_missing_or_multi_sentence_decision_is_caught_by_ask_and_check() {
+    // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
     // `approve` now reads the same shared "parse" category, so it refuses
     // on either mistake too -- a file carrying one can never get an id
     // minted in the first place. Each broken case is built by approving a
@@ -353,14 +354,14 @@ fn a_missing_or_multi_sentence_decision_is_caught_by_ask_and_check() {
     }
 }
 
-// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
 //
-// Decision A's "an indented Why line and an indented Costs line" clause,
+// The decision "What stands under a question's heading?" (178a232e), its "an indented Why line and an indented Costs line" clause,
 // the half `every_option_needs_a_why_line_and_a_costs_line` above does
 // not cover: each detail line must appear exactly once per option, so a
 // repeated Why (or Costs) line is refused too, not just a missing one.
 #[test]
 fn an_option_with_a_repeated_why_or_costs_line_is_refused() {
+    // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
 
     // Option A has two Why lines: refused.
     {
@@ -389,9 +390,8 @@ fn an_option_with_a_repeated_why_or_costs_line_is_refused() {
     }
 }
 
-// adr: 055d303b-c286-4f6c-975a-d9d8090936d4
 //
-// Decision A's "the answer line comes last" clause (point 3). A body whose
+// The decision "What stands under a question's heading?" (178a232e), its "the answer line comes last" clause (point 3). A body whose
 // `**Answer:**` line comes first -- the exact opposite of "comes last" --
 // is refused by both `ask` and `check`, naming the position. `approve` now
 // reads the same shared "parse" category too, so the file is approved
@@ -450,8 +450,10 @@ fn a_lean_line_in_the_topic_file_is_stray() {
         stderr(&ask_out)
     );
 
+    // The file was never approved: a draft's finding is a note in check
+    // (912f4f3b-1213-435a-af0d-7617017fcff4).
     let check_out = adr(&dir, &["check"], &[], "");
-    assert!(!check_out.status.success());
+    assert!(check_out.status.success(), "{}", stdout(&check_out));
     assert!(
         stdout(&check_out).contains(&format!("stray line {}", stray_line_no)),
         "{}",

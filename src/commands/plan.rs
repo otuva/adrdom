@@ -65,7 +65,8 @@ pub fn run(file: PathBuf) -> i32 {
     }
 }
 
-/// The shape and parse errors of the file, and a heading used twice: the
+/// The shape and parse errors of the file, a `###` line that is no question
+/// (9913568f A), and a heading used twice: the
 /// planning keys its rows by heading text.
 fn shape_refusals(rf: &RecordFile) -> Vec<String> {
     let rel = &rf.rel;
@@ -73,6 +74,9 @@ fn shape_refusals(rf: &RecordFile) -> Vec<String> {
     for sec in &rf.sections {
         out.extend(sec.shape_errors.iter().map(|e| msg::section_shape_error(rel, &sec.heading_text, e)));
         out.extend(sec.parse_errors.iter().map(|e| msg::check_parse_error(rel, &sec.heading_text, e)));
+    }
+    for i in record::non_question_heading_lines(&rf.lines) {
+        out.push(msg::heading_not_a_question(rel, i + 1));
     }
     out.extend(crate::actions::duplicate_heading_refusals(rel, &rf.sections));
     out
