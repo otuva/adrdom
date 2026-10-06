@@ -307,7 +307,7 @@ pub fn run(record_path: PathBuf) -> i32 {
             refusals.push(msg::banned_word_in_candidate(&rel, &sec.heading_text, &suffix));
         }
 
-        // `terms::resolve` never matches a retired term (per "Does a retired term keep its words?"), so a
+        // `terms::resolve` never matches a retired term (per "Does a retired term hold its words?"), so a
         // retired-match refusal cannot fire here; a word that only a
         // retired term owns simply pairs nothing, caught by refusal 6
         // below.

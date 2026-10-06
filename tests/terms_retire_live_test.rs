@@ -33,6 +33,8 @@ const BODY: &str = "\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs
 
 const H_DECISION: &str = "What is the decision?";
 const H_VERDICT: &str = "What is the verdict?";
+// Its heading names "verdict" and never "decision": only its `depends:` line stands on "decision".
+const H_CHOICE: &str = "What is the choice of verdict?";
 
 fn sec(heading: &str, deps: &str, body: bool) -> String {
     format!("\n### {}\ndepends: {}\n{}", heading, deps, if body { BODY } else { "" })
@@ -88,9 +90,9 @@ fn assert_retire_refused(dir: &Path, terms: &Path, rows_before: usize, heading: 
     assert_eq!(terms_rows(dir), rows_before, "a refused retire writes no terms row");
 }
 
-// adr: db58d4b8-9e64-44b0-99a2-acb7f05d5b4e
 #[test]
 fn retire_refused_while_an_asked_question_names_the_term() {
+    // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
     let (dir, record, terms) =
         setup(&format!("# Example\n{}", sec(H_DECISION, "decision", true)));
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
@@ -98,18 +100,18 @@ fn retire_refused_while_an_asked_question_names_the_term() {
     assert_retire_refused(&dir, &terms, rows, H_DECISION);
 }
 
-// adr: db58d4b8-9e64-44b0-99a2-acb7f05d5b4e
 #[test]
 fn retire_refused_while_an_approved_unasked_plan_heading_names_the_term() {
+    // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
     let (dir, _record, terms) =
         setup(&format!("# Example\n{}", sec(H_DECISION, "verdict", true)));
     let rows = terms_rows(&dir);
     assert_retire_refused(&dir, &terms, rows, H_DECISION);
 }
 
-// adr: db58d4b8-9e64-44b0-99a2-acb7f05d5b4e
 #[test]
 fn retire_succeeds_once_the_asked_question_is_struck_from_the_plan() {
+    // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
     let (dir, record, terms) = setup(&format!(
         "# Example\n{}{}",
         sec(H_DECISION, "decision", true),
@@ -139,9 +141,9 @@ fn retire_succeeds_once_the_asked_question_is_struck_from_the_plan() {
     assert_eq!(terms_rows(&dir), rows + 1);
 }
 
-// adr: db58d4b8-9e64-44b0-99a2-acb7f05d5b4e
 #[test]
 fn retire_succeeds_when_only_a_refused_question_names_the_term() {
+    // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
     let (dir, record, terms) = setup(&format!(
         "# Example\n{}{}",
         sec(H_DECISION, "decision", true),
@@ -156,9 +158,9 @@ fn retire_succeeds_when_only_a_refused_question_names_the_term() {
     assert_eq!(terms_rows(&dir), rows + 1);
 }
 
-// adr: db58d4b8-9e64-44b0-99a2-acb7f05d5b4e
 #[test]
 fn retire_refused_when_an_asked_questions_terms_line_cannot_be_read() {
+    // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
     let (dir, record, terms) =
         setup(&format!("# Example\n{}", sec(H_DECISION, "decision", true)));
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
@@ -196,9 +198,9 @@ aliases: \n\
 definition: A formal finding.\n\
 aliases: \n";
 
-// adr: db58d4b8-9e64-44b0-99a2-acb7f05d5b4e
 #[test]
 fn a_heading_written_after_a_retire_was_approved_does_not_block_terms_approve_or_check() {
+    // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
     let (dir, record, terms) =
         setup(&format!("# Example\n{}", sec(H_VERDICT, "verdict", true)));
     // Nothing names "decision": the retire passes and writes its term row.
@@ -222,9 +224,9 @@ fn a_heading_written_after_a_retire_was_approved_does_not_block_terms_approve_or
     assert!(!all.contains(H_DECISION), "check names the heading: {}", all);
 }
 
-// adr: db58d4b8-9e64-44b0-99a2-acb7f05d5b4e
 #[test]
 fn unreadable_terms_line_blocks_only_an_approve_that_retires_or_removes() {
+    // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
     let (dir, record, terms) =
         setup(&format!("# Example\n{}", sec(H_DECISION, "decision", true)));
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
@@ -240,4 +242,49 @@ fn unreadable_terms_line_blocks_only_an_approve_that_retires_or_removes() {
     let out = retire(&dir, &terms);
     assert!(!out.status.success());
     assert!(stderr(&out).contains("terms line cannot be read"), "{}", stderr(&out));
+}
+
+#[test]
+fn retire_refused_while_only_an_asked_questions_depends_line_names_the_term() {
+    // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
+    let (dir, record, terms) =
+        setup(&format!("# Example\n{}", sec(H_CHOICE, "decision", true)));
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let rows = terms_rows(&dir);
+    assert_retire_refused(&dir, &terms, rows, H_CHOICE);
+}
+
+#[test]
+fn retire_refused_while_only_an_approved_unasked_headings_depends_line_names_the_term() {
+    // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
+    let (dir, _record, terms) =
+        setup(&format!("# Example\n{}", sec(H_CHOICE, "decision", true)));
+    let rows = terms_rows(&dir);
+    assert_retire_refused(&dir, &terms, rows, H_CHOICE);
+}
+
+#[test]
+fn retire_succeeds_once_the_question_naming_the_term_only_by_depends_is_struck() {
+    // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
+    let (dir, record, terms) = setup(&format!(
+        "# Example\n{}{}",
+        sec(H_CHOICE, "decision", true),
+        sec(H_VERDICT, "verdict", true)
+    ));
+    let rows = terms_rows(&dir);
+    assert_retire_refused(&dir, &terms, rows, H_CHOICE);
+    std::fs::write(&terms, TERMS_TWO_ENTRIES).unwrap();
+    let choice_id = id_of(&record, H_CHOICE);
+    let c = std::fs::read_to_string(&record).unwrap();
+    let start = c.find(&format!("### {}", H_CHOICE)).unwrap();
+    let end = c.find(&format!("### {}", H_VERDICT)).unwrap();
+    // The surviving heading's unrelated line names the struck one; the
+    // entry goes with it.
+    let rest = c[end..].replace(&format!(", {}", choice_id), "");
+    std::fs::write(&record, format!("{}{}", &c[..start], rest)).unwrap();
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(out.status.success(), "striking approve failed: {}", stderr(&out));
+    let out = retire(&dir, &terms);
+    assert!(out.status.success(), "retire should pass once struck: {}", stderr(&out));
+    assert_eq!(terms_rows(&dir), rows + 1);
 }

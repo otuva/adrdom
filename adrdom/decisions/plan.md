@@ -346,3 +346,24 @@ Standard: style linters such as Vale run when text is written, with the phrase l
   Costs: other repositories get no guard, and a loaded question there is caught only when the owner reads it.
 
 **Answer:** A
+
+### What names a topic file?
+depends: 08193e75-dd89-4857-8e9f-b19e1a9e75e6, 292a10b8-c287-4d71-b2bd-840da0a6de61, 9913568f-6b85-4d26-946b-c6e108f9aa51
+unrelated: 94677ed8-eaf6-46e2-bc71-7392fa0805bf, d981f6b0-df0d-428f-8c0e-e220b1651fa1, 23f21671-e34c-44aa-8804-6163d975807f, aef1b384-2b33-47a2-92a8-ec7f8fb258ef, 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f, 912f4f3b-1213-435a-af0d-7617017fcff4, f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, 1b181f10-97f4-4bbe-8939-d5842192126c, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, 38216d39-b064-4927-ab60-951a3c89e388
+id: 625dea67-13a7-4e8e-913f-e997081a120c
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, topic=292a10b8-c287-4d71-b2bd-840da0a6de61, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6, topics=292a10b8-c287-4d71-b2bd-840da0a6de61
+
+Problem: a file named by a number or a prefix breaks every citation when topics are reordered, and two spellings of one topic make two files.
+Standard: ADR collections name each file by a slug of its subject.
+
+- A) Its topic, in lowercase words joined by hyphens, with no number or prefix.
+  Why: a name without a number survives reordering, and one spelling per topic.
+  Costs: the directory listing shows no order.
+- B) A number prefix for order, then its topic.
+  Why: the directory listing shows the order topics were opened.
+  Costs: renumbering breaks every citation.
+- C) Anything the agent picks.
+  Why: nothing new in the tool.
+  Costs: two spellings of one topic make two files.
+
+**Answer:** A

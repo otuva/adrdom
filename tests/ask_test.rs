@@ -399,15 +399,16 @@ fn ask_pairs_nothing_for_a_word_only_on_a_retired_term() {
     );
 }
 
-// adr: 05af74a6-36be-4923-b66f-1467b323816a
 //
-// `retiring frees a term's words and a new term may take them`: "authority"
+// "Does a retired term hold its words?" -- no, so retiring frees a term's
+// words and a new term may take them: "authority"
 // is retired below, "power" is a new current term whose alias is
 // "authority", and a brand new question's use of the word "authority"
 // pairs "power"'s id -- not the retired term's -- proving the freed word
 // really did pass to the new concept.
 #[test]
 fn ask_pairs_a_word_to_the_current_term_that_took_it_from_a_retired_one() {
+    // adr: 5577f646-a9d4-4785-9193-2317b9aa502d
     // A retired term and a current term share the same word ("authority"):
     // `duplicate_word_errors` allows this since the retired entry is
     // ignored, and a new pairing (ask's terms line) sees current terms

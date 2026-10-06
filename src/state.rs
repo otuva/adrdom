@@ -190,6 +190,14 @@ impl DependentSource {
         }
     }
 
+    /// The id and heading of a current decision dependent.
+    pub fn decision_ref(&self) -> Option<(&str, &str)> {
+        match self {
+            DependentSource::Decision { id, heading, .. } => Some((id, heading)),
+            _ => None,
+        }
+    }
+
     pub fn decision_id(&self) -> Option<&str> {
         match self {
             DependentSource::Decision { id, .. } => Some(id),
@@ -271,8 +279,9 @@ pub fn terms_edit_entries(led: &Ledger, tf: &TermsFile) -> Vec<String> {
 /// The asked questions, and the not-yet-asked headings of approved plans,
 /// that name a term of `tf` (retired ones included): the dependents a
 /// term's retirement or removal must also clear, beyond the current
-/// decisions `dependent_entries` reads. An asked question is read by its
-/// frozen terms line; a heading with an id and no ledger state at all, in
+/// decisions `dependent_entries` reads (per "What holds a retire of a
+/// term?"). An asked question is read by its frozen terms line and by the
+/// term ids on its `depends:` line, an approved heading by the same ids; a heading with an id and no ledger state at all, in
 /// a file whose rel is in `approved_plans`, by its heading text resolved
 /// against every term with the retired flag ignored, a retired term counted
 /// only while its retirement has no matching `term` row (a word a current
@@ -309,14 +318,25 @@ pub fn unsettled_entries(
                         .terms_line
                         .and_then(|tl| terms::parse_terms_line(rf.lines[tl].trim_end()))
                         .unwrap_or_default();
+                    let dep_pairs = depends_term_pairs(sec, tf, &pairs);
                     if !pairs.is_empty() {
                         out.push(DependentEntry {
                             source: DependentSource::Asked {
                                 rel: rf.rel.clone(),
                                 heading: sec.heading_text.clone(),
                             },
-                            pairs,
+                            pairs: pairs.clone(),
                             from_word: true,
+                        });
+                    }
+                    for p in dep_pairs {
+                        out.push(DependentEntry {
+                            source: DependentSource::Asked {
+                                rel: rf.rel.clone(),
+                                heading: sec.heading_text.clone(),
+                            },
+                            pairs: vec![p],
+                            from_word: false,
                         });
                     }
                 }
@@ -327,6 +347,7 @@ pub fn unsettled_entries(
                             pairs.push(p);
                         }
                     }
+                    let dep_pairs = depends_term_pairs(sec, tf, &pairs);
                     if !pairs.is_empty() {
                         out.push(DependentEntry {
                             source: DependentSource::PlanHeading {
@@ -337,10 +358,43 @@ pub fn unsettled_entries(
                             from_word: true,
                         });
                     }
+                    for p in dep_pairs {
+                        out.push(DependentEntry {
+                            source: DependentSource::PlanHeading {
+                                rel: rf.rel.clone(),
+                                heading: sec.heading_text.clone(),
+                            },
+                            pairs: vec![p],
+                            from_word: false,
+                        });
+                    }
                 }
                 _ => {}
             }
         }
+    }
+    out
+}
+
+/// The terms a section's `depends:` line names by id (`(id, id)` pairs, the
+/// shape `dependent_entries` gives a depends id), leaving out an id already
+/// among `already` (the section's other pairs), so a term named both ways
+/// earns one entry.
+fn depends_term_pairs(
+    sec: &record::Section,
+    tf: &TermsFile,
+    already: &[(String, String)],
+) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    for d in &sec.depends {
+        let record::Dep::Id { id: dep_id, .. } = d else { continue };
+        if already.iter().any(|(_, u)| u == dep_id) || out.iter().any(|(_, u)| u == dep_id) {
+            continue;
+        }
+        if !tf.terms.iter().any(|t| t.id.as_deref() == Some(dep_id.as_str())) {
+            continue;
+        }
+        out.push((dep_id.clone(), dep_id.clone()));
     }
     out
 }

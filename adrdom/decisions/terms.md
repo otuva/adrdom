@@ -253,3 +253,43 @@ Standard: a change is reviewed as one unit, and a batch hides the item that shou
   Costs: the entry that should have been refused passes in the batch.
 
 **Answer:** A
+
+### Does a retired term hold its words?
+depends: c584a68d-e54a-4ad2-8a6b-9d64ed098ae5, f590059d-b681-40ec-8a1c-c8916d71f6bb, 7c306235-6243-4d79-b9aa-08ed19662779
+supersedes: 05af74a6-36be-4923-b66f-1467b323816a, db58d4b8-9e64-44b0-99a2-acb7f05d5b4e
+unrelated: f1294391-48b0-4ba3-82b4-c1d6b1c2c884, 521e6211-344a-4b56-a1aa-07be956b3b29, c96518bf-470d-45c0-8b86-eaf8f54cb490, b3cb190d-d6f1-4930-bdcd-7827e31ac62a, 0487a1cf-eb61-4bf8-bd16-eed899d22d2c, 7d44030a-3589-4f29-aaa6-12fa09908ab8, 735a32bd-db0c-428e-b65e-2acc750671b0, 1b181f10-97f4-4bbe-8939-d5842192126c, 6108b8b2-911e-443b-abe0-4c6f8b407384, 7cf81ded-be48-4777-b83e-f8a2998c1ab5, ec3f875c-a0f8-4085-8da1-fec9dcb14377, fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
+id: 5577f646-a9d4-4785-9193-2317b9aa502d
+terms: identifier=e877e4a9-2caf-4fe6-9f82-5476a2abb00b, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, retired=c584a68d-e54a-4ad2-8a6b-9d64ed098ae5, term=f590059d-b681-40ec-8a1c-c8916d71f6bb, terms=f590059d-b681-40ec-8a1c-c8916d71f6bb
+
+Problem: splitting a term or merging two needs the old one retired; if it holds its words, the new terms cannot take them and new questions cannot use them.
+Standard: terminology systems let a deprecated term's label pass to a new concept while old records still point at the old identifier.
+
+- A) No.
+  Why: the right word passes to the new term on a split or merge.
+  Costs: one word may mean one thing in git history and another in the records.
+- B) Yes.
+  Why: a word never carries two meanings anywhere in the records.
+  Costs: a split or merge loses the word.
+
+**Answer:** A
+
+### What holds a retire of a term?
+depends: c584a68d-e54a-4ad2-8a6b-9d64ed098ae5, f590059d-b681-40ec-8a1c-c8916d71f6bb, 277a8338-c57a-43cc-8b28-6b42e9347f6a, e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 5577f646-a9d4-4785-9193-2317b9aa502d=A
+unrelated: 05af74a6-36be-4923-b66f-1467b323816a, f1294391-48b0-4ba3-82b4-c1d6b1c2c884, db58d4b8-9e64-44b0-99a2-acb7f05d5b4e, 7d44030a-3589-4f29-aaa6-12fa09908ab8, 7c306235-6243-4d79-b9aa-08ed19662779, 521e6211-344a-4b56-a1aa-07be956b3b29, 0487a1cf-eb61-4bf8-bd16-eed899d22d2c, ec3f875c-a0f8-4085-8da1-fec9dcb14377, c96518bf-470d-45c0-8b86-eaf8f54cb490, 711a7636-9f4d-402d-ae62-265208adf0ac, b0e865b4-9204-4c55-9f5b-dcb755b3a03b, 6b3d8e59-e145-49e1-860d-a79d753d745c, 1b181f10-97f4-4bbe-8939-d5842192126c, 6108b8b2-911e-443b-abe0-4c6f8b407384, aef1b384-2b33-47a2-92a8-ec7f8fb258ef
+id: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answer=b36113a1-1384-4e4c-a798-8399f4181366, answered=b36113a1-1384-4e4c-a798-8399f4181366, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approved=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, asked=3c8d4c9c-abca-4faa-b7c1-aae39951376c, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, current=e2533580-1486-4dc9-8697-e6c53605fe72, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, decisions=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, refuses=0942e445-0163-423e-8ba7-84dd8ac07045, retire=c584a68d-e54a-4ad2-8a6b-9d64ed098ae5, retired=c584a68d-e54a-4ad2-8a6b-9d64ed098ae5, supersede=2bae531b-c4df-48a0-89a0-3d52726741ea, superseded=2bae531b-c4df-48a0-89a0-3d52726741ea, term=f590059d-b681-40ec-8a1c-c8916d71f6bb
+
+Problem: a term is retired while questions name it; check then fails them, ask has nothing to ask, answer refuses, and no command stops the retire itself.
+Standard: a record that others reference is not removed while the references stand.
+
+- A) Every question that names it: answered, asked, or a heading of an approved plan; approve refuses and names them.
+  Why: no question loses a word under it; the move is a supersede or a plan change first.
+  Costs: a term in wide use is retired only once every question naming it is superseded or struck.
+- B) A current decision that names it alone; an asked question or plan heading is reworded and asked again.
+  Why: the guard covers current decisions, and an open question is the agent's to reword.
+  Costs: the owner's retire lands the agent with rework, a version moves, a plan is approved again.
+- C) Nothing: retire is free, and check reports every question that names a retired term.
+  Why: the owner's word on a term is not held by questions.
+  Costs: the records fail after an owner command, and the move to clear them is a supersede of each named decision.
+
+**Answer:** A

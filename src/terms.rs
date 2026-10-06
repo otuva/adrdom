@@ -273,7 +273,7 @@ pub fn parse(lines: &[String]) -> TermsFile {
 }
 
 /// A retired entry's name and aliases are ignored here, so a current term
-/// may take a retired term's word (per "Does a retired term keep its words?"); two current entries sharing a
+/// may take a retired term's word (per "Does a retired term hold its words?"); two current entries sharing a
 /// word still refuse.
 fn duplicate_word_errors(terms: &[Term]) -> Vec<String> {
     let mut occ: HashMap<String, Vec<usize>> = HashMap::new();
@@ -410,7 +410,7 @@ fn is_boundary_ok(chars: &[char], start: usize, len: usize) -> bool {
 /// or one of its aliases exactly -- no implicit plural or other stemming
 /// (per "Does a term word keep its plain sense in the records?"): every form
 /// that should pair is written as an explicit alias. Terms without an id,
-/// and retired terms, are skipped (per "Does a retired term keep its
+/// and retired terms, are skipped (per "Does a retired term hold its
 /// words?"): a lookup never lands on a retired term, so a new pairing sees
 /// current terms only.
 ///
@@ -453,7 +453,7 @@ pub fn is_retired_phrase(terms: &[Term], text: &str) -> bool {
 
 /// Whole-word/phrase, case-insensitive, longest-phrase-first, non-overlapping
 /// resolution of every term name/alias in `text`. Retired terms are never
-/// matched (per "Does a retired term keep its words?"): every new pairing sees current terms only, so a word
+/// matched (per "Does a retired term hold its words?"): every new pairing sees current terms only, so a word
 /// that only a retired term owns resolves to nothing here (a current term
 /// is free to take that same name or alias). Terms without an id are
 /// skipped. Returned pairs are unique and sorted by matched word.
@@ -1170,7 +1170,7 @@ aliases: \n"
     #[test]
     fn resolve_excludes_retired_terms() {
         // "verdict" is retired in `sample_terms`; a word that only a
-        // retired term owns pairs nothing at all (per "Does a retired term keep its words?").
+        // retired term owns pairs nothing at all (per "Does a retired term hold its words?").
         let terms = sample_terms();
         assert!(terms.iter().find(|t| t.name == "verdict").unwrap().retired);
         let pairs = resolve("the verdict was reached", &terms);
@@ -1197,7 +1197,7 @@ aliases: \n"
     #[test]
     fn duplicate_word_errors_ignores_a_retired_entry() {
         // A retired entry and a current entry sharing the same word: no
-        // conflict, since the retired one is not counted (per "Does a retired term keep its words?").
+        // conflict, since the retired one is not counted (per "Does a retired term hold its words?").
         let terms = vec![
             Term {
                 name: "decision".to_string(),

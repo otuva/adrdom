@@ -12,7 +12,7 @@ use std::io::Read;
 /// by name or alias. Only `state::load_terms` plus the term's `id`/`name`/
 /// `aliases`/`retired` are used here, so this keeps working whatever else
 /// changes in the terms file's shape. A retired term is never matched
-/// (per "Does a retired term keep its words?"): this pairing sees current terms only, same as `terms::resolve`.
+/// (per "Does a retired term hold its words?"): this pairing sees current terms only, same as `terms::resolve`.
 fn resolve_term_uuid(tf: &crate::terms::TermsFile, name: &str) -> Option<String> {
     let needle = name.trim().to_lowercase();
     for t in &tf.terms {

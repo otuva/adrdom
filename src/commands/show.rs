@@ -150,6 +150,20 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
         }
     }
 
+    // A topic file removed, its removal not yet approved: the owner's move.
+    if record_arg.is_none() {
+        let present_ids: std::collections::HashSet<String> = blame_records
+            .iter()
+            .flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.clone()))
+            .collect();
+        for rel in crate::actions::removal_awaiting(&led, &|rel| root.join(rel).exists()) {
+            let holds = crate::actions::removal_holds(&root, &rel, &led, &present_ids).holds;
+            println!("{}", msg::show_removal_awaiting(&rel));
+            println!("{}", msg::next_heading());
+            println!("{}", msg::next_line(&msg::removal_next(&rel, &holds)));
+        }
+    }
+
     // The short listing ends with the next lines of every blame file that
     // has one; the rest of a blame file is in the whole one.
     if !whole {
