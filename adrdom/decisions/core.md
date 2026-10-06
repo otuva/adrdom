@@ -358,6 +358,8 @@ Standard: a code review puts the whole change before the reviewer at once, and t
   Why: every question reaches the owner after the answers it stands on, so none is asked in vain.
   Costs: a plan of four tiers takes four runs, each waiting on a commit and the owner's answers.
 
+**Answer:** A
+
 ### Does answer take a question standing on a question with no decision?
 depends: b36113a1-1384-4e4c-a798-8399f4181366, 9d634996-475e-4ddc-8113-05c404ad9d5c, 7d47885f-3a45-45f9-a092-4314301f0d7b=A, 462e22c6-8b23-4061-9a2a-bbf8691fce60, 506b3c6d-3d0a-4a02-98de-3b8a573d2fe9, b782664f-7465-4e1e-99e0-13f6dd2de774
 unrelated: e3200081-9995-4bbe-983f-2f430dc341e7, 946263aa-519a-47aa-b743-5cdcf52f5d35, 11be073c-ce91-44d8-833a-ef0b5e0b1672, cd83e277-ebf0-4458-a77a-c526ab4cfeca, dad5273c-afe2-4ab1-a451-e2a5d4d9a26d, 423065fc-6d9f-40c8-a0bf-8e1779e86b38, 9ba58b6a-bc85-44a5-a720-d8e7a6ff7b31, c3127af2-4c96-48d5-a164-bac49a9a09ec, f8d92841-aef7-4cd7-bd94-0e07c03e4cb6, aec860fd-22ad-44a7-99f7-222ea19537e7, 1fb71321-bb84-492f-b9d5-1444c9c444af, 14180eab-60a4-48d3-8efc-c1b23a96ce3a, eb2cde37-ebcb-4407-a5b0-9fcda4bd9a4e
