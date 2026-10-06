@@ -253,15 +253,31 @@ pub fn circular_definition(chain: &str) -> String {
 /// uuid that no longer exists in `adrdom/terms.md` at all.
 /// `word` is the word `source` names the term by, when it names it by a
 /// word (its terms line); a depends line names it by the identifier alone.
-pub fn term_removed_but_carried(uuid: &str, word: Option<&str>, source: &str) -> String {
+/// `decision` is the dependent's id and heading when it is a current
+/// decision. Marking the term retired is not offered: a retire is held while
+/// the dependent stands (per "What holds a retire of a term?"), so the move
+/// is restoring the term as it was, then superseding the decision, named the
+/// way `term_retired_decision_next` names its move.
+pub fn term_removed_but_carried(
+    uuid: &str,
+    word: Option<&str>,
+    source: &str,
+    decision: Option<(&str, &str)>,
+) -> String {
+    let next = match decision {
+        Some((id, heading)) => Next::agent(format!(
+            "restores the term in adrdom/terms.md, then supersedes {} (\"{}\") with a new question",
+            id, heading
+        )),
+        None => Next::agent("restores the term in adrdom/terms.md").and_owner_runs("adr approve adrdom/terms.md"),
+    };
     refuse(
         format!(
             "adrdom/terms.md: term {} removed but used by {}",
             named(uuid, word),
             source
         ),
-        Next::agent("restores the term in adrdom/terms.md, marked retired: yes")
-            .and_owner_runs("adr approve adrdom/terms.md"),
+        next,
     )
 }
 
@@ -269,7 +285,7 @@ pub fn term_removed_but_carried(uuid: &str, word: Option<&str>, source: &str) ->
 /// dependent kind: a decision supersedes itself with a new question
 /// (built by the caller, which knows the decision's id); a term's own
 /// definition is reworded by the agent and re-approved by the owner --
-/// terms are never superseded (per "Does a retired term keep its words?"; the fix for a term-dependent is
+/// terms are never superseded (per "What holds a retire of a term?"; the fix for a term-dependent is
 /// always this same pair, so it's fixed here).
 pub fn term_retired_but_carried(name: &str, source: &str, next: Next) -> String {
     refuse(
@@ -1687,6 +1703,12 @@ pub fn removed_from_plan(id: &str, heading: &str, event: &str, removed_file: Opt
     }
 }
 
+/// An asked/refused id whose file is removed, its removal awaiting approval:
+/// `next` is the move `removal_move` names for that file.
+pub fn removed_with_file(id: &str, heading: &str, event: &str, next: Next) -> String {
+    refuse(format!("{} (\"{}\", {}) was removed from the plan", id, heading, event), next)
+}
+
 /// `heading` is the heading the ledger holds for the question, from the
 /// row written when it was asked.
 pub fn ledger_id_not_found(id: &str, heading: Option<&str>) -> String {
@@ -2282,7 +2304,7 @@ pub fn duplicate_heading_across_files(heading: &str, rel1: &str, rel2: &str) -> 
 }
 
 /// The naming half of the same decision as `duplicate_heading_across_files`
-/// (the file name rule, a detail with no decision of its own): a topic file whose own file name isn't lowercase ASCII
+/// (per "What names a topic file?"): a topic file whose own file name isn't lowercase ASCII
 /// words joined by single hyphens (`repo::valid_topic_file_name`). Not part
 /// of `record_refusals`: `approve` refuses it through
 /// `actions::own_name_refusals` and `check` through its plan check, from
@@ -2302,8 +2324,8 @@ pub fn bad_topic_file_name(rel: &str) -> String {
     )
 }
 
-/// The "named by it" half of the file name rule, a detail with no decision
-/// of its own: a topic file whose name is well
+/// The "named by it" half of the file name rule (per "What names a topic
+/// file?"): a topic file whose name is well
 /// formed (`repo::valid_topic_file_name`) but is not its h1 topic text
 /// lowercased and hyphenated (`repo::expected_topic_file_stem`). Read the
 /// same way as `bad_topic_file_name`.
@@ -2320,7 +2342,7 @@ pub fn topic_file_name_mismatch(rel: &str, topic: &str, expected: &str) -> Strin
     )
 }
 
-/// The file name rule, a detail with no decision of its own, names a topic
+/// The file name rule ("What names a topic file?") names a topic
 /// file by its topic "in lowercase words joined by hyphens, with no number": a topic whose text lowercased and hyphenated
 /// (`repo::expected_topic_file_stem`) holds a digit, or holds no letter at
 /// all, has no name any file can carry, so no rename clears it and the
@@ -3124,7 +3146,8 @@ mod tests {
             terms_edit_too_wide(&["a".to_string(), "b".to_string()], true),
             terms_edit_too_wide(&["a".to_string(), "b".to_string()], false),
             too_long("x.md", 3, "heading", "option", "21 words, the limit is 20"),
-            term_removed_but_carried("uuid-1", Some("word"), "term \"x\""),
+            term_removed_but_carried("uuid-1", Some("word"), "term \"x\"", None),
+            term_removed_but_carried("uuid-1", Some("word"), "id-1: \"heading\"", Some(("id-1", "heading"))),
             term_retired_but_carried("x", "term \"y\"", term_reword_and_approve()),
             term_retired_but_carried("x", "id-1: \"heading\"", term_retired_decision_next("x", "id-1", "heading")),
             word_moved_off_term("word", "term", "term \"y\"", term_reword_and_approve()),
@@ -3361,4 +3384,86 @@ mod tests {
         let without = untested_note(None, "id-1");
         assert_eq!(without, "untested: no tracked file holds \"adr: id-1\"");
     }
+}
+
+/// `adr approve <path>` on a path the ledger never approved: the file was
+/// never approved, so its removal needs no owner act; the agent commits the
+/// deletion.
+pub fn removal_not_a_topic_file(rel: &str) -> String {
+    refuse(
+        format!(
+            "{} is absent and was never approved: its removal needs no owner act and there is nothing to approve",
+            rel
+        ),
+        Next::agent("commits the deletion"),
+    )
+}
+
+/// What keeps a removed topic file from being approved away: a question
+/// of it that is a current decision, asked and not answered, or approved and
+/// not yet asked.
+pub struct RemovalHold {
+    pub id: String,
+    pub heading: String,
+    pub what: &'static str,
+}
+
+/// The move that clears a removal held by `holds`, or the owner's approval
+/// when nothing holds it. The agent restores the file, then settles each
+/// hold by a plan change the owner approves: a current decision is
+/// superseded, any other question struck from the plan.
+pub fn removal_move(rel: &str, holds: &[RemovalHold]) -> Next {
+    if holds.is_empty() {
+        return Next::owner_runs(format!("adr approve {}", rel));
+    }
+    let steps: Vec<String> = holds
+        .iter()
+        .map(|h| {
+            let q = named(&h.id, Some(&h.heading));
+            if h.what == "a current decision" {
+                format!("supersedes {} with a new question", q)
+            } else {
+                format!("strikes {} from the plan", q)
+            }
+        })
+        .collect();
+    Next::agent(format!(
+        "restores {}, then {}, by a plan change",
+        rel,
+        steps.join(", ")
+    ))
+    .and_owner_runs(format!("adr approve {}", rel))
+}
+
+/// A removed topic file still held a current decision or an open question.
+pub fn removal_holds_open(rel: &str, hold: &RemovalHold) -> String {
+    refuse(
+        format!(
+            "{} cannot be removed: {} is {}",
+            rel,
+            named(&hold.id, Some(&hold.heading)),
+            hold.what
+        ),
+        removal_move(rel, std::slice::from_ref(hold)),
+    )
+}
+
+/// A topic file gone from the content check judges, its removal not yet
+/// approved: a note naming the move that clears it.
+pub fn removal_awaiting(rel: &str, holds: &[RemovalHold]) -> String {
+    format!(
+        "plan: {} removed, awaiting approval; {}",
+        rel,
+        removal_move(rel, holds).render()
+    )
+}
+
+/// `show`: a topic file removed, its removal not yet approved.
+pub fn show_removal_awaiting(rel: &str) -> String {
+    format!("# {} (removed, awaiting approval)", rel)
+}
+
+/// The next line of a removed topic file.
+pub fn removal_next(rel: &str, holds: &[RemovalHold]) -> String {
+    removal_move(rel, holds).render()
 }

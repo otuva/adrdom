@@ -127,11 +127,11 @@ fn build(
 
     // Every refusal each topic file earns on its own (shared with
     // `approve`'s `do_approve_record`), one `Vec` per record in `records`'
-    // order, plus the cross-file "answered id missing from every topic
-    // file" refusal, computed once for the whole repo. `parse`/`tells`/
-    // `plan` pull their failures from these instead of re-deriving the
-    // same shape/tells/depends checks `approve` already refuses on; `ids`
-    // pulls the missing-answered-id lines the same way.
+    // order. `parse`/`tells`/`plan` pull their failures from these instead
+    // of re-deriving the same shape/tells/depends checks `approve` already
+    // refuses on. The cross-file "answered id missing from every topic
+    // file" refusal is computed later, once, after `removed_files`, with
+    // the ids of removed files skipped; `ids` pulls its lines from that.
     let names = crate::view::heading_texts(&records);
     // Which plans are approved comes from `raw_hashes`, taken before the
     // normalize pass; computed once and shared with `check_terms`. The
@@ -154,8 +154,32 @@ fn build(
             actions::record_refusals(&rf.rel, rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &records, replaced, &led)
         })
         .collect();
-    let missing_answered = actions::missing_answered_refusals(&records, &led);
-
+    let present_ids: std::collections::HashSet<String> = records
+        .iter()
+        .flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.clone()))
+        .collect();
+    let removed_files: Vec<(String, Vec<msg::RemovalHold>)> =
+        actions::removal_awaiting(&led, &|rel| source.exists(root, rel))
+            .into_iter()
+            .map(|rel| {
+                let holds = actions::removal_holds(root, &rel, &led, &present_ids).holds;
+                (rel, holds)
+            })
+            .collect();
+    notes.extend(removed_files.iter().map(|(rel, holds)| msg::removal_awaiting(rel, holds)));
+    // An answered id of a removed file is named by the ids category with the
+    // file's removal move, so the missing-answered refusal leaves it out.
+    let in_removed_file: std::collections::HashSet<String> = led
+        .rows
+        .iter()
+        .filter(|r| r.id != "-" && r.event == "answered")
+        .filter(|r| {
+            led.latest_for_id("approved", &r.id)
+                .is_some_and(|a| removed_files.iter().any(|(rel, _)| *rel == a.detail))
+        })
+        .map(|r| r.id.clone())
+        .collect();
+    let missing_answered = actions::missing_answered_refusals_except(&records, &led, &in_removed_file);
     let mut failures: Vec<String> = unreadable_failures;
     let awaiting_early: Vec<String> = records
         .iter()
@@ -167,8 +191,8 @@ fn build(
     let (parse_failures, parse_notes) = parse::check_parse(&records, &per_record_refusals, &awaiting_early, &led);
     push_failures(&mut failures, parse_failures);
     notes.extend(parse_notes);
-    push_failures(&mut failures, ids::check_ids(&records, &led, &missing_answered, &raw_hashes));
-    push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_content, since));
+    push_failures(&mut failures, ids::check_ids(&records, &led, &missing_answered, &raw_hashes, &removed_files));
+    push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_content, since, &removed_files));
     push_failures(&mut failures, reader::check_reader(root, &source, since));
     push_failures(&mut failures, banned::check_banned_ledger(&led, root, &source));
     push_failures(&mut failures, answers::check_answers(&records, &led));

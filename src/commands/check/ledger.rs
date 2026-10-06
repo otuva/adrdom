@@ -22,6 +22,7 @@ pub(super) fn check_ledger(
     root: &Path,
     ledger_content: &str,
     since: Option<&str>,
+    removed_files: &[(String, Vec<msg::RemovalHold>)],
 ) -> Vec<Failure> {
     let mut out = Vec::new();
     for (lineno, raw) in &led.malformed {
@@ -42,12 +43,23 @@ pub(super) fn check_ledger(
         .collect();
 
     for row in &led.rows {
-        if row.event == "asked" && !all_ids.contains(&row.id) && !dropped_state(led, &row.id) {
-            out.push(Failure {
-                check: "ledger".to_string(),
-                message: msg::ledger_asked_id_missing(&row.id, Some(row.detail.as_str())),
-            });
+        if row.event != "asked" || all_ids.contains(&row.id) || dropped_state(led, &row.id) {
+            continue;
         }
+        // An id whose approved file is gone, its removal awaiting approval:
+        // every state it can be in (asked, refused, answered) is reported
+        // once by the ids check with the file's removal move, so the ledger
+        // check leaves it out (one finding per fault).
+        let in_removed = led
+            .latest_for_id("approved", &row.id)
+            .is_some_and(|a| removed_files.iter().any(|(rel, _)| *rel == a.detail));
+        if in_removed {
+            continue;
+        }
+        out.push(Failure {
+            check: "ledger".to_string(),
+            message: msg::ledger_asked_id_missing(&row.id, Some(row.detail.as_str())),
+        });
     }
 
     for row in &led.rows {
