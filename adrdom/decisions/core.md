@@ -414,3 +414,5 @@ Standard: a limit on a set is judged on the set as the change leaves it.
 - B) Yes.
   Why: one count, read straight off the file.
   Costs: a full tier takes no replacement in its own file, so the replacement lands away from its subject.
+
+**Answer:** A
