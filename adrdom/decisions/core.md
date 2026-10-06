@@ -364,6 +364,7 @@ Standard: a code review puts the whole change before the reviewer at once, and t
 depends: b36113a1-1384-4e4c-a798-8399f4181366, 9d634996-475e-4ddc-8113-05c404ad9d5c, 7d47885f-3a45-45f9-a092-4314301f0d7b=A, 462e22c6-8b23-4061-9a2a-bbf8691fce60, 506b3c6d-3d0a-4a02-98de-3b8a573d2fe9, b782664f-7465-4e1e-99e0-13f6dd2de774
 unrelated: e3200081-9995-4bbe-983f-2f430dc341e7, 946263aa-519a-47aa-b743-5cdcf52f5d35, 11be073c-ce91-44d8-833a-ef0b5e0b1672, cd83e277-ebf0-4458-a77a-c526ab4cfeca, dad5273c-afe2-4ab1-a451-e2a5d4d9a26d, 423065fc-6d9f-40c8-a0bf-8e1779e86b38, 9ba58b6a-bc85-44a5-a720-d8e7a6ff7b31, c3127af2-4c96-48d5-a164-bac49a9a09ec, f8d92841-aef7-4cd7-bd94-0e07c03e4cb6, aec860fd-22ad-44a7-99f7-222ea19537e7, 1fb71321-bb84-492f-b9d5-1444c9c444af, 14180eab-60a4-48d3-8efc-c1b23a96ce3a, eb2cde37-ebcb-4407-a5b0-9fcda4bd9a4e
 id: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+terms: answer=b36113a1-1384-4e4c-a798-8399f4181366, answer set=9d634996-475e-4ddc-8113-05c404ad9d5c, answered=b36113a1-1384-4e4c-a798-8399f4181366, answers=b36113a1-1384-4e4c-a798-8399f4181366, asked=3c8d4c9c-abca-4faa-b7c1-aae39951376c, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, refuses=0942e445-0163-423e-8ba7-84dd8ac07045, tier=f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
 
 Problem: with the whole file asked at once, a higher question answered first may be removed by the lower answer, and the owner's answer is lost.
 Standard: a dependency is resolved before what rests on it; a build never links against an object not yet built.
@@ -379,6 +380,7 @@ Standard: a dependency is resolved before what rests on it; a build never links 
 depends: f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, 1fb71321-bb84-492f-b9d5-1444c9c444af=*, 7d47885f-3a45-45f9-a092-4314301f0d7b=*
 unrelated: aec860fd-22ad-44a7-99f7-222ea19537e7, f8d92841-aef7-4cd7-bd94-0e07c03e4cb6, 4838baa4-a5df-49e7-929c-ed63b5adaf4e, 923818a7-05c6-4977-bbaf-53ee8f3773ef, 946263aa-519a-47aa-b743-5cdcf52f5d35, 506b3c6d-3d0a-4a02-98de-3b8a573d2fe9, 98d5d389-8315-41da-9970-666e31f3a94d, 4b407ee1-1e64-4ca1-842b-69773fc0e48a, 9d634996-475e-4ddc-8113-05c404ad9d5c, 292a10b8-c287-4d71-b2bd-840da0a6de61, c6e0b7d6-cdec-46da-b2bc-cda218673868, da59b448-1afb-4469-b40e-69eda8f253c2, 055d303b-c286-4f6c-975a-d9d8090936d4, e3200081-9995-4bbe-983f-2f430dc341e7, 6b3d8e59-e145-49e1-860d-a79d753d745c, 14180eab-60a4-48d3-8efc-c1b23a96ce3a, 7327cd58-ac58-40a4-8ef2-00072fb552b2
 id: eb2cde37-ebcb-4407-a5b0-9fcda4bd9a4e
+terms: approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, terms=f590059d-b681-40ec-8a1c-c8916d71f6bb, tier=f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, topic=292a10b8-c287-4d71-b2bd-840da0a6de61
 
 Problem: nothing bounds how many questions stand at one height, and a plan passes by being wide instead of deep.
 Standard: kanban caps work in progress at every column and stops a pull past the cap.
