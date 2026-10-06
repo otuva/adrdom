@@ -152,19 +152,24 @@ fn check_approve_and_plan_find_a_set_on_an_answered_question() {
         target,
         options()
     ));
-    append_ledger_row_at(&dir, "asked", target, "h1", "Does the lid stay?", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "answered", target, "h1", "A", "2024-01-01T00:00:01Z");
-    write_record(
-        &dir,
-        "adrdom/decisions/other.md",
-        &format!(
-            "# Other\n\n### Does the lid stay?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n{}\n**Answer:** A\n",
-            target,
-            options()
-        ),
+    let terms = std::fs::read_to_string(dir.join("adrdom/terms.md")).unwrap();
+    let term = terms.lines().find_map(|l| l.strip_prefix("id: ")).expect("approved term has an id").trim().to_string();
+    // The answered question is a complete, unedited one: its section hash
+    // matches its asked row and it carries its terms line, so nothing in
+    // other.md fails check and the exit code is the draft finding's alone.
+    let section = format!(
+        "### Does the lid stay?\ndepends: {}\n\nid: {}\n\nterms: decision={}\n\nProblem: p of the decision.\n\nStandard: s.\n\n{}",
+        term,
+        target,
+        term,
+        options().trim_end_matches('\n')
     );
-    // The fixture's answered file other.md has edited answered text, which fails check on its own; the finding in the draft is still a note.
-    let (chk, apr, pln) = three(&dir, &rec, false);
+    let hash = mirror_section_hash(&section);
+    append_ledger_row_at(&dir, "asked", target, &hash, "Does the lid stay?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", target, &hash, "A", "2024-01-01T00:00:01Z");
+    write_record(&dir, "adrdom/decisions/other.md", &format!("# Other\n\n{}\n\n**Answer:** A\n", section));
+    write_test_comment(&dir, target);
+    let (chk, apr, pln) = three(&dir, &rec, true);
     for out in [&chk, &apr, &pln] {
         assert!(
             out.contains("\"Does the decision stand?\" depends on \"Does the lid stay?\", which is answered, under an answer set"),

@@ -80,6 +80,19 @@ pub enum DeriveError {
     },
 }
 
+/// What a shape or parse error of a question is about, set by the parser
+/// where it makes the error (never read off the message text). `Plan` is
+/// text the agent writes into the plan (per "What does a question hold
+/// under its heading?" and "Does a reference line hold its whole list on one
+/// line?"): `check` shows it as a note on a file awaiting approval. `Fixed`
+/// is the topic file's own fixed shape (per "What does a topic file hold?"),
+/// lines the tool writes, or the ledger's record: it fails check.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShapeKind {
+    Plan,
+    Fixed,
+}
+
 #[derive(Debug, Clone)]
 pub struct Section {
     pub start: usize,
@@ -102,6 +115,9 @@ pub struct Section {
     /// `shape_errors` instead, since `ask` and `approve` must refuse on
     /// them before ever touching the file, same as every other shape rule.
     pub parse_errors: Vec<String>,
+    /// The kind of each entry of `parse_errors`, index-aligned, set where
+    /// the parser makes the error.
+    pub parse_kinds: Vec<ShapeKind>,
     /// Errors from the topic-file-shape rules (4.9/4.7/3.4/8.3): stray
     /// lines in a body, a non-skeleton question missing its
     /// Problem/Standard lines, an option count outside two-to-three, an
@@ -110,6 +126,9 @@ pub struct Section {
     /// `RecordFile::shape_errors`) before doing anything else; `check`'s
     /// `parse` check reads this and `parse_errors` together.
     pub shape_errors: Vec<String>,
+    /// The kind of each entry of `shape_errors`, index-aligned, set where
+    /// the parser makes the error.
+    pub shape_kinds: Vec<ShapeKind>,
     /// True when the heading has no non-blank line before the next
     /// heading other than `depends:` lines: no body, never a failure --
     /// `approve` still gives a skeleton heading an id.
@@ -577,6 +596,8 @@ struct BodyScan {
     /// a second line of either is refused, the same as a second depends
     /// line, rather than silently ignored.
     reference_line_errors: Vec<String>,
+    /// "terms: second terms line, line N": the tool writes that line.
+    terms_errors: Vec<String>,
     terms_line: Option<usize>,
     options: Vec<OptionRec>,
     answer_line: Option<usize>,
@@ -603,6 +624,7 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
     let mut depends_errors: Vec<String> = Vec::new();
     let mut depends_line_seen = false;
     let mut reference_line_errors: Vec<String> = Vec::new();
+    let mut terms_errors: Vec<String> = Vec::new();
     let mut supersedes_line_seen = false;
     let mut unrelated: Vec<String> = Vec::new();
     let mut unrelated_line_seen = false;
@@ -699,7 +721,7 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
         }
         if kv(line, "terms").is_some() {
             if terms_line.is_some() {
-                reference_line_errors.push(format!("terms: second terms line, line {}", j + 1));
+                terms_errors.push(format!("terms: second terms line, line {}", j + 1));
                 continue;
             }
             terms_line = Some(j);
@@ -800,6 +822,7 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
         depends,
         depends_errors,
         reference_line_errors,
+        terms_errors,
         terms_line,
         options,
         answer_line,
@@ -851,8 +874,10 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
     let scan = scan_body(lines, start, end, headings);
 
     let mut parse_errors = scan.option_errors;
+    let mut parse_kinds = vec![ShapeKind::Plan; parse_errors.len()];
     if scan.id_count > 1 {
         parse_errors.push("duplicate id line".to_string());
+        parse_kinds.push(ShapeKind::Fixed);
     }
     if let Some(v) = &scan.answer_value {
         let v = v.trim();
@@ -864,40 +889,48 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
                     .any(|o| o.letter == v.chars().next().unwrap()));
         if !valid {
             parse_errors.push(format!("answer names missing option {}", v));
+            parse_kinds.push(ShapeKind::Fixed);
         }
     }
 
-    let mut shape_errors = scan.stray_errors;
-    shape_errors.extend(scan.depends_errors);
-    shape_errors.extend(scan.reference_line_errors);
+    let mut shape_errors: Vec<String> = Vec::new();
+    let mut shape_kinds: Vec<ShapeKind> = Vec::new();
+    let mut add = |kind: ShapeKind, errs: Vec<String>| {
+        shape_kinds.extend(std::iter::repeat(kind).take(errs.len()));
+        shape_errors.extend(errs);
+    };
+    add(ShapeKind::Fixed, scan.stray_errors);
+    add(ShapeKind::Plan, scan.depends_errors);
+    add(ShapeKind::Plan, scan.reference_line_errors);
+    add(ShapeKind::Fixed, scan.terms_errors);
     if !is_skeleton {
         // A missing field (count 0) and a repeated one (count > 1) are
         // different mistakes and get different messages: a zero count is
         // the field never being written, a count over one is the same
         // field written twice (055d303b A point 4).
         match scan.problem_count {
-            0 => shape_errors.push("missing Problem line".to_string()),
+            0 => add(ShapeKind::Plan, vec!["missing Problem line".to_string()]),
             1 => {}
-            _ => shape_errors.push("duplicate Problem line".to_string()),
+            _ => add(ShapeKind::Plan, vec!["duplicate Problem line".to_string()]),
         }
         match scan.standard_count {
-            0 => shape_errors.push("missing Standard line".to_string()),
+            0 => add(ShapeKind::Plan, vec!["missing Standard line".to_string()]),
             1 => {}
-            _ => shape_errors.push("duplicate Standard line".to_string()),
+            _ => add(ShapeKind::Plan, vec!["duplicate Standard line".to_string()]),
         }
         // A skeleton heading (empty body) is exempt; a real body needs two
         // or three options.
         if scan.options.len() < 2 {
-            shape_errors.push(format!("{} options; at least two", scan.options.len()));
+            add(ShapeKind::Plan, vec![format!("{} options; at least two", scan.options.len())]);
         }
     }
-    shape_errors.extend(scan.option_shape_errors);
-    shape_errors.extend(scan.answer_errors);
+    add(ShapeKind::Plan, scan.option_shape_errors);
+    add(ShapeKind::Fixed, scan.answer_errors);
     // 055d303b A's "the answer line comes last": any non-blank line after
     // it (Problem/Standard/an option/anything else) means it isn't.
     if let Some(al) = scan.answer_line {
         if (al + 1..end).any(|j| !lines[j].trim().is_empty()) {
-            shape_errors.push(format!("answer line not last, line {}", al + 1));
+            add(ShapeKind::Fixed, vec![format!("answer line not last, line {}", al + 1)]);
         }
     }
 
@@ -913,7 +946,9 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
         answer_line: scan.answer_line,
         answer_value: scan.answer_value,
         parse_errors,
+        parse_kinds,
         shape_errors,
+        shape_kinds,
         is_skeleton,
         terms_line: scan.terms_line,
     }

@@ -162,3 +162,146 @@ fn a_heading_in_two_draft_files_still_fails() {
     assert!(!ok, "{}", text);
     assert!(text.contains("duplicate heading"), "{}", text);
 }
+
+fn quiet(dir: &Path) -> String {
+    stdout(&adr(dir, &["check", "--quiet"], &[], ""))
+}
+
+#[test]
+fn a_finding_in_an_asked_question_stays_a_failure_in_a_draft_file() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
+    let alpha = "11111111-1111-1111-1111-111111111111";
+    let beta = "22222222-2222-2222-2222-222222222222";
+    let dir = repo();
+    append_ledger_row_at(&dir, "asked", alpha, "h1", "Does the widget hold?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", alpha, "h1", "A", "2024-01-01T00:00:01Z");
+    append_ledger_row_at(&dir, "superseded", alpha, "-", "replaced", "2024-01-01T00:00:02Z");
+    let beta_section = format!(
+        "### Does the widget stay?\ndepends: {}\n\nid: {}\n\nProblem: the widget breaks.\n\nStandard: plain words.\n\n{}",
+        alpha,
+        beta,
+        OPTS.trim_end_matches('\n')
+    );
+    append_ledger_row_at(&dir, "asked", beta, &mirror_section_hash(&beta_section), "Does the widget stay?", "2024-01-01T00:00:03Z");
+    let gamma = q("Does the widget fall?", &alpha.to_string(), "the widget breaks.", OPTS);
+    // The file holds only the asked question: its finding fails check.
+    write_record(&dir, REL, &format!("# Gate\n\n{}\n", beta_section));
+    let before = quiet(&dir);
+    assert!(before.contains("which is not a current decision"), "{}", before);
+    // One unasked question added: the file now awaits approval, but the
+    // finding about the asked question still fails; the same finding about
+    // the new one is a note.
+    write_record(&dir, REL, &format!("# Gate\n\n{}\n{}", beta_section, gamma));
+    let failures = quiet(&dir);
+    assert!(failures.contains("\"Does the widget stay?\" depends on"), "{}", failures);
+    assert!(!failures.contains("\"Does the widget fall?\" depends on"), "{}", failures);
+    let all = stdout(&adr(&dir, &["check"], &[], ""));
+    assert!(all.contains("\"Does the widget fall?\" depends on"), "{}", all);
+}
+
+#[test]
+fn a_prose_finding_is_a_note_when_only_the_prose_awaits_approval() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
+    let dir = repo();
+    approve_via_ledger(&dir, REL, &format!("# Gate\n\nPlain prose.\n\n{}", good()));
+    let (ok, text) = check(&dir);
+    assert!(ok, "{}", text);
+    assert!(!text.contains("awaiting approval"), "{}", text);
+    write_record(&dir, REL, &format!("# Gate\n\nAs decided in chat.\n\n{}", good()));
+    let (ok, text) = check(&dir);
+    assert!(ok, "{}", text);
+    assert!(text.contains("tells:") && text.contains("awaiting approval"), "{}", text);
+    assert!(quiet(&dir).is_empty());
+}
+
+#[test]
+fn a_body_shape_finding_is_a_note_in_a_draft_and_a_failure_when_approved() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
+    let one_option = "- A) Yes.\n  Why: w.\n  Costs: c.\n";
+    let no_costs = "- A) Yes.\n  Why: w.\n- B) No.\n  Why: w.\n  Costs: c.\n";
+    let four = format!("{}{}{}", OPTS, "- C) Maybe.\n  Why: w.\n  Costs: c.\n", "- D) Never.\n  Why: w.\n  Costs: c.\n");
+    let no_problem = format!("### Does the widget hold?\ndepends: widget\n\nStandard: plain words.\n\n{}", OPTS);
+    let mut drafts: Vec<String> = [one_option, no_costs, four.as_str()]
+        .iter()
+        .map(|o| format!("# Gate\n\n{}", q("Does the widget hold?", "widget", "the widget breaks.", o)))
+        .collect();
+    drafts.push(format!("# Gate\n\n{}", no_problem));
+    for content in drafts {
+        let dir = repo();
+        write_record(&dir, REL, &content);
+        let (ok, text) = check(&dir);
+        assert!(ok, "{}", text);
+        assert!(text.contains("parse:"), "{}", text);
+        let dir = repo();
+        approve_via_ledger(&dir, REL, &content);
+        assert!(quiet(&dir).contains("parse:"), "{}", content);
+    }
+    // Text that belongs to no part of the shape keeps failing in a draft.
+    let dir = repo();
+    write_record(&dir, REL, &format!("# Gate\n\n{}", good().replace("Standard:", "Unknown line.\n\nStandard:")));
+    assert!(quiet(&dir).contains("parse:"), "a stray line fails");
+}
+
+#[test]
+fn a_supersedes_finding_in_an_asked_question_stays_a_failure_in_a_draft_file() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
+    let beta = "22222222-2222-2222-2222-222222222222";
+    let nothing = "33333333-3333-3333-3333-333333333333";
+    let dir = repo();
+    let beta_section = format!(
+        "### Does the widget stay?\ndepends: widget\nsupersedes: {}\n\nid: {}\n\nProblem: the widget breaks.\n\nStandard: plain words.\n\n{}",
+        nothing,
+        beta,
+        OPTS.trim_end_matches('\n')
+    );
+    append_ledger_row_at(&dir, "asked", beta, &mirror_section_hash(&beta_section), "Does the widget stay?", "2024-01-01T00:00:03Z");
+    write_record(&dir, REL, &format!("# Gate\n\n{}\n\n{}", beta_section, good().replace("hold", "fall")));
+    let failures = quiet(&dir);
+    assert!(failures.contains("Does the widget stay?") && failures.contains("which is not a current decision"), "{}", failures);
+    let all = stdout(&adr(&dir, &["check"], &[], ""));
+    assert!(all.contains("awaiting approval"), "{}", all);
+}
+
+#[test]
+fn plan_text_shape_findings_are_notes_in_a_draft_and_failures_when_approved() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
+    let with = |depends: &str, opts: &str| format!("# Gate\n\n{}", q("Does the widget hold?", depends, "the widget breaks.", opts));
+    let cases = vec![
+        ("no decision sentence", with("widget", "- A) Yes\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n")),
+        ("two sentences", with("widget", "- A) Yes. And more.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n")),
+        ("second depends line", format!("# Gate\n\n{}", good().replace("depends: widget\n", "depends: widget\ndepends: widget\n"))),
+        ("duplicate depends entry", with("widget, widget", OPTS)),
+        ("second supersedes line", format!("# Gate\n\n{}", good().replace("depends: widget\n", "depends: widget\nsupersedes: aaa\nsupersedes: bbb\n"))),
+        ("second unrelated line", format!("# Gate\n\n{}", good().replace("depends: widget\n", "depends: widget\nunrelated: aaa\nunrelated: bbb\n"))),
+    ];
+    for (name, content) in cases {
+        let dir = repo();
+        write_record(&dir, REL, &content);
+        let (ok, text) = check(&dir);
+        assert!(ok, "{}: {}", name, text);
+        assert!(text.contains("awaiting approval") && text.contains("parse:"), "{}: {}", name, text);
+        assert!(quiet(&dir).is_empty(), "{}: {}", name, quiet(&dir));
+        let dir = repo();
+        approve_via_ledger(&dir, REL, &content);
+        assert!(quiet(&dir).contains("parse:"), "{}: {}", name, quiet(&dir));
+    }
+}
+
+#[test]
+fn the_tools_own_lines_and_the_ledger_findings_stay_failures_in_a_draft() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
+    let id = "11111111-1111-1111-1111-111111111111";
+    let cases = vec![
+        ("second terms line", good().replace("depends: widget\n", "depends: widget\n\nterms: widget\n\nterms: widget\n")),
+        ("duplicate id line", good().replace("depends: widget\n", &format!("depends: widget\n\nid: {}\n\nid: {}\n", id, id))),
+        ("second answer line", format!("{}\n**Answer:** A\n\n**Answer:** B\n", good())),
+        ("answer names a missing option", format!("{}\n**Answer:** C\n", good())),
+        ("unknown line", good().replace("Standard:", "Unknown line.\n\nStandard:")),
+    ];
+    for (name, body) in cases {
+        let dir = repo();
+        write_record(&dir, REL, &format!("# Gate\n\n{}", body));
+        let failures = quiet(&dir);
+        assert!(failures.contains("parse:"), "{}: {}", name, failures);
+    }
+}

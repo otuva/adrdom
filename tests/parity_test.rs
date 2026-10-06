@@ -58,6 +58,7 @@ fn assert_parity_with(dir: &std::path::Path, record: &std::path::Path, needle: &
 
 #[test]
 fn parity_bad_depends_entry() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
     let dir = init_repo();
     setup(&dir);
     approve_empty_terms(&dir);
@@ -73,6 +74,7 @@ fn parity_bad_depends_entry() {
 
 #[test]
 fn parity_tell_in_heading() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
     let dir = init_repo();
     setup(&dir);
     approve_minimal_terms(&dir, "decision");
@@ -84,6 +86,7 @@ fn parity_tell_in_heading() {
 
 #[test]
 fn parity_tier_over_cap() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
     let dir = init_repo();
     setup(&dir);
     approve_minimal_terms(&dir, "decision");
@@ -105,13 +108,14 @@ fn parity_tier_over_cap() {
 // run of each), not silently read as a continuation of the same list.
 #[test]
 fn parity_two_depends_lines() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
     let dir = init_repo();
     setup(&dir);
     approve_minimal_terms(&dir, "decision");
     let content = "# Example\n\n### 1.1 Q?\ndepends: decision\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-    assert_parity(&dir, &record, "second depends line");
+    assert_parity_note(&dir, &record, "second depends line");
 }
 
 // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a supersedes list split
@@ -119,17 +123,19 @@ fn parity_two_depends_lines() {
 // silently cut to its first line.
 #[test]
 fn parity_two_supersedes_lines() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
     let dir = init_repo();
     setup(&dir);
     approve_minimal_terms(&dir, "decision");
     let content = "# Example\n\n### 1.1 Q?\ndepends: decision\nsupersedes: aaa\nsupersedes: bbb\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-    assert_parity(&dir, &record, "second supersedes line");
+    assert_parity_note(&dir, &record, "second supersedes line");
 }
 
 #[test]
 fn parity_missing_depends_line() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
     let dir = init_repo();
     setup(&dir);
     approve_minimal_terms(&dir, "decision");

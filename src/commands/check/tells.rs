@@ -1,4 +1,5 @@
-use super::Failure;
+use super::{is_note, Failure};
+use crate::ledger::Ledger;
 use crate::actions::Refusal;
 use crate::record::RecordFile;
 
@@ -20,13 +21,14 @@ pub(super) fn check_tells(
     records: &[RecordFile],
     refusals: &[Vec<Refusal>],
     awaiting: &[String],
+    led: &Ledger,
 ) -> (Vec<Failure>, Vec<String>) {
     let mut out = Vec::new();
     let mut notes = Vec::new();
     for (rf, refs) in records.iter().zip(refusals) {
         let draft = awaiting.contains(&rf.rel);
         for r in refs {
-            if r.category == "tells" && draft {
+            if r.category == "tells" && is_note(rf, r, draft, led) {
                 notes.push(format!("tells: {}", r.message));
             } else if r.category == "tells" {
                 out.push(Failure {

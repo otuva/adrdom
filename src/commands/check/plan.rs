@@ -1,4 +1,4 @@
-use super::{file_approval, Failure};
+use super::{file_approval, is_note, Failure};
 use crate::actions::{self, Refusal};
 use crate::ledger::Ledger;
 use crate::msg;
@@ -80,13 +80,16 @@ pub(super) fn check_plan(
         // file, computed once in `mod.rs`.
         let draft = !plan_ok || !ctx_ok;
         for r in refs {
-            if r.category == "plan_frozen" || (r.category == "plan" && !draft) {
+            if r.category != "plan" && r.category != "plan_frozen" {
+                continue;
+            }
+            if is_note(rf, r, draft, led) {
+                notes.push(format!("plan: {}", r.message));
+            } else {
                 out.push(Failure {
                     check: "plan".to_string(),
                     message: r.message.clone(),
                 });
-            } else if r.category == "plan" {
-                notes.push(format!("plan: {}", r.message));
             }
         }
 

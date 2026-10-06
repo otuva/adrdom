@@ -297,7 +297,8 @@ fn a_missing_or_multi_sentence_decision_is_caught_by_ask_and_check() {
         );
 
         let check_out = adr(&dir, &["check"], &[], "");
-        assert!(!check_out.status.success(), "check should have refused: {}", stdout(&check_out));
+        // The edited file awaits approval again: a note (912f4f3b-1213-435a-af0d-7617017fcff4).
+        assert!(check_out.status.success(), "check prints it as a note: {}", stdout(&check_out));
         assert!(
             stdout(&check_out).contains("option A has no decision sentence"),
             "{}",
@@ -328,7 +329,7 @@ fn a_missing_or_multi_sentence_decision_is_caught_by_ask_and_check() {
         );
 
         let check_out = adr(&dir, &["check"], &[], "");
-        assert!(!check_out.status.success(), "check should have refused: {}", stdout(&check_out));
+        assert!(check_out.status.success(), "check prints it as a note: {}", stdout(&check_out));
         assert!(
             stdout(&check_out).contains("option A decision text has 2 sentences, more than one"),
             "{}",

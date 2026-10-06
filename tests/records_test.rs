@@ -153,6 +153,7 @@ Standard: s.
 // change").
 #[test]
 fn check_reports_a_tell_in_an_unfrozen_heading_and_in_context_prose() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_terms_with(&dir, &["decision"]);
@@ -291,6 +292,7 @@ Standard: s.
 
 #[test]
 fn approve_and_check_report_a_tell_and_a_bad_depends_entry_together() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_empty_terms(&dir);

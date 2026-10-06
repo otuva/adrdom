@@ -27,6 +27,31 @@ pub struct Outcome {
 pub struct Refusal {
     pub category: &'static str,
     pub message: String,
+    /// The heading of the question the finding is about, `None` for a
+    /// finding about the file as a whole (its prose, headings, tiers).
+    /// `check` reads it to tell a finding in text that can still change from
+    /// one in an asked or answered question (per "Does check fail a topic
+    /// file awaiting approval?").
+    pub section: Option<String>,
+    /// A `parse` finding about the plan's body shape (a missing Problem or
+    /// Standard, an option count, a missing Why or Costs), which a file
+    /// awaiting approval shows as a note; any other `parse` finding is the
+    /// topic file's own fixed shape and fails check.
+    pub planning: bool,
+}
+
+impl Refusal {
+    pub fn new(category: &'static str, message: String) -> Refusal {
+        Refusal { category, message, section: None, planning: false }
+    }
+    pub fn in_section(mut self, heading: &str) -> Refusal {
+        self.section = Some(heading.to_string());
+        self
+    }
+    pub fn planning(mut self) -> Refusal {
+        self.planning = true;
+        self
+    }
 }
 
 /// The missing/unreadable half of the terms.md gate, shared by every
@@ -1346,23 +1371,15 @@ pub fn record_refusals(
     let mut out: Vec<Refusal> = Vec::new();
 
     for e in &rf.shape_errors {
-        out.push(Refusal {
-            category: "parse",
-            message: msg::shape_error(rel, e),
-        });
+        out.push(Refusal::new("parse", msg::shape_error(rel, e)));
     }
     for i in record::non_question_heading_lines(&rf.lines) {
-        out.push(Refusal {
-            category: "parse",
-            message: msg::heading_not_a_question(rel, i + 1),
-        });
+        out.push(Refusal::new("parse", msg::heading_not_a_question(rel, i + 1)));
     }
     for sec in &rf.sections {
-        for e in &sec.shape_errors {
-            out.push(Refusal {
-                category: "parse",
-                message: msg::section_shape_error(rel, &sec.heading_text, e),
-            });
+        for (e, kind) in sec.shape_errors.iter().zip(&sec.shape_kinds) {
+            let r = Refusal::new("parse", msg::section_shape_error(rel, &sec.heading_text, e)).in_section(&sec.heading_text);
+            out.push(if *kind == record::ShapeKind::Plan { r.planning() } else { r });
         }
     }
     // 055d303b A point 1: an option with no decision sentence (or more than
@@ -1371,11 +1388,9 @@ pub fn record_refusals(
     // category (`ask`, `approve`, `check`) refuses on them the same way it
     // already refuses on a shape error.
     for sec in &rf.sections {
-        for e in &sec.parse_errors {
-            out.push(Refusal {
-                category: "parse",
-                message: msg::check_parse_error(rel, &sec.heading_text, e),
-            });
+        for (e, kind) in sec.parse_errors.iter().zip(&sec.parse_kinds) {
+            let r = Refusal::new("parse", msg::check_parse_error(rel, &sec.heading_text, e)).in_section(&sec.heading_text);
+            out.push(if *kind == record::ShapeKind::Plan { r.planning() } else { r });
         }
     }
 
@@ -1392,37 +1407,31 @@ pub fn record_refusals(
             continue;
         }
         for (line, phrase, what) in tells::heading_tells(sec.start, &sec.heading_text) {
-            out.push(Refusal {
-                category: "tells",
-                message: msg::tell(rel, line, &sec.heading_text, &phrase, what),
-            });
+            out.push(Refusal::new("tells", msg::tell(rel, line, &sec.heading_text, &phrase, what)).in_section(&sec.heading_text));
         }
     }
     // Per "Does ask refuse an option over a word limit?" and "Does an option
     // under a heading that opens with Does hold one word?": the same length
     // rules `ask` enforces, found before approval in a question not yet asked.
     for message in length_refusals(rel, rf, led) {
-        out.push(Refusal { category: "tells", message });
+        out.push(Refusal::new("tells", message));
     }
     // The other two body rules `ask` enforces, found the same way: a loaded
     // phrase in a body, and a question that pairs no term.
     for message in body_tell_refusals(rel, rf, led) {
-        out.push(Refusal { category: "tells", message });
+        out.push(Refusal::new("tells", message));
     }
     for message in no_term_refusals(rel, rf, terms_list, led) {
-        out.push(Refusal { category: "tells", message });
+        out.push(Refusal::new("tells", message));
     }
     // The three shapes of a depends entry approve stops, found the same way.
     for message in depends_shape_refusals(rel, rf, terms_list, phrase_lookup, cross_file_headings, all, led) {
-        out.push(Refusal { category: "plan", message });
+        out.push(Refusal::new("plan", message));
     }
     {
         let (cs, ce) = rf.context_range;
         for (line, phrase, what) in tells::prose_tells_in(&rf.lines, cs, ce) {
-            out.push(Refusal {
-                category: "tells",
-                message: msg::tell(rel, line, "context", &phrase, what),
-            });
+            out.push(Refusal::new("tells", msg::tell(rel, line, "context", &phrase, what)));
         }
     }
 
@@ -1431,10 +1440,7 @@ pub fn record_refusals(
     // stands on, before anything about it is resolved or written.
     for sec in &rf.sections {
         if sec.depends.is_empty() {
-            out.push(Refusal {
-                category: "plan",
-                message: msg::no_depends_line(rel, &sec.heading_text),
-            });
+            out.push(Refusal::new("plan", msg::no_depends_line(rel, &sec.heading_text)).in_section(&sec.heading_text));
         }
     }
 
@@ -1465,21 +1471,15 @@ pub fn record_refusals(
             // Category "answers": `check` prints this line from
             // `check_answers` and forwards no `answers` refusal from here,
             // so it prints once; `approve` refuses on every category.
-            out.push(Refusal {
-                category: "answers",
-                message: msg::answered_text_changed(
+            out.push(Refusal::new("answers", msg::answered_text_changed(
                     rel,
                     &sec.heading_text,
                     sec.id.as_deref().unwrap_or(""),
-                ),
-            });
+                )));
         }
         for d in &sec.depends {
             if frozen && matches!(d, record::Dep::Text { .. }) {
-                out.push(Refusal {
-                    category: "plan_frozen",
-                    message: msg::frozen_depends_edited(rel, &sec.heading_text),
-                });
+                out.push(Refusal::new("plan_frozen", msg::frozen_depends_edited(rel, &sec.heading_text)).in_section(&sec.heading_text));
                 continue;
             }
             if let record::Dep::Text { text, .. } = d {
@@ -1510,10 +1510,9 @@ pub fn record_refusals(
                         .or_else(|| names.get(id).map(String::as_str)),
                     _ => None,
                 };
-                out.push(Refusal {
-                    category: "plan",
-                    message: depends::dep_refusal_text(rel, &sec.heading_text, &e, name),
-                });
+                out.push(
+                    Refusal::new("plan", depends::dep_refusal_text(rel, &sec.heading_text, &e, name)).in_section(&sec.heading_text),
+                );
             }
         }
     }
@@ -1524,10 +1523,7 @@ pub fn record_refusals(
             }
             _ => None,
         };
-        out.push(Refusal {
-            category: "plan",
-            message: waiting.unwrap_or_else(|| msg::derive_error(rel, err)),
-        });
+        out.push(Refusal::new("plan", waiting.unwrap_or_else(|| msg::derive_error(rel, err))));
     }
 
     // Cap (per "Does the tool cap the questions in a tier?"): no derived tier may hold more than `TIER_CAP` live
@@ -1537,10 +1533,7 @@ pub fn record_refusals(
     // count (`state::live_tiers`).
     if let Some(tiers) = &rf.tiers {
         if let Some((open, answered)) = state::over_cap_headings(led, rf, tiers, replaced) {
-            out.push(Refusal {
-                category: "plan",
-                message: msg::tier_cap_exceeded(rel, &open, answered, record::TIER_CAP),
-            });
+            out.push(Refusal::new("plan", msg::tier_cap_exceeded(rel, &open, answered, record::TIER_CAP)));
         }
     }
 
@@ -1550,7 +1543,7 @@ pub fn record_refusals(
     // `unrelated:` entry names a current decision, a term, another question
     // of the file or a dropped question.
     for message in crate::plan::unrelated_refusals(rel, rf, terms_list, cross_file_headings, led) {
-        out.push(Refusal { category: "plan", message });
+        out.push(Refusal::new("plan", message));
     }
 
     out
@@ -1578,7 +1571,7 @@ pub fn supersedes_refusals(
     led: &Ledger,
     only: Option<usize>,
 ) -> Vec<Refusal> {
-    let refuse = |message: String| Refusal { category: "plan", message };
+    let refuse = |heading: &str, message: String| Refusal::new("plan", message).in_section(heading);
     let mut out: Vec<Refusal> = Vec::new();
     // (section index, asked, target ids) of each judged section.
     let mut judged: Vec<(usize, bool, Vec<String>)> = Vec::new();
@@ -1599,7 +1592,7 @@ pub fn supersedes_refusals(
             match depends::resolve_supersedes(old, cross_file_headings, led) {
                 Ok(id) => ids.push(id),
                 Err(depends::SupersedesError::Ambiguous(files)) => {
-                    out.push(refuse(msg::ask_supersedes_ambiguous(rel, &sec.heading_text, old, &files)));
+                    out.push(refuse(&sec.heading_text, msg::ask_supersedes_ambiguous(rel, &sec.heading_text, old, &files)));
                 }
                 Err(depends::SupersedesError::NotCurrent) => {
                     let split_sibling = asked
@@ -1613,7 +1606,7 @@ pub fn supersedes_refusals(
                     if split_sibling {
                         ids.push(old.trim().to_string());
                     } else {
-                        out.push(refuse(msg::ask_supersedes_not_current(
+                        out.push(refuse(&sec.heading_text, msg::ask_supersedes_not_current(
                             rel,
                             &sec.heading_text,
                             old,
@@ -1641,18 +1634,18 @@ pub fn supersedes_refusals(
         let missing = depends::left_out_of_supersedes(all, led, ids);
         if !missing.is_empty() {
             let moment = if *asked { msg::SupersedesMoment::Asked } else { msg::SupersedesMoment::Approve };
-            out.push(refuse(msg::supersedes_leaves_out(rel, &sec.heading_text, &missing, moment)));
+            out.push(refuse(&sec.heading_text, msg::supersedes_leaves_out(rel, &sec.heading_text, &missing, moment)));
         }
         for target in ids {
             let target_name = names.get(target).map(String::as_str).unwrap_or("");
             if sec.depends.iter().any(|d| stands_on(d, target)) {
-                out.push(refuse(msg::stands_on_what_it_supersedes(rel, &sec.heading_text, target_name)));
+                out.push(refuse(&sec.heading_text, msg::stands_on_what_it_supersedes(rel, &sec.heading_text, target_name)));
             }
             for (j, other) in rf.sections.iter().enumerate() {
                 let open = other.id.as_deref().map_or(true, |id| !state::is_current(led, id))
                     && !state::is_dead(led, other);
                 if j != *i && open && other.depends.iter().any(|d| stands_on(d, target)) {
-                    out.push(refuse(msg::stands_on_what_the_plan_supersedes(
+                    out.push(refuse(&other.heading_text, msg::stands_on_what_the_plan_supersedes(
                         rel,
                         &other.heading_text,
                         target_name,
@@ -1781,10 +1774,7 @@ pub fn missing_answered_refusals(records: &[RecordFile], led: &Ledger) -> Vec<Re
                     .latest_asked(id)
                     .map(|a| a.detail.clone())
                     .unwrap_or_else(|| id.clone());
-                out.push(Refusal {
-                    category: "ids",
-                    message: msg::answered_id_missing(id, &heading),
-                });
+                out.push(Refusal::new("ids", msg::answered_id_missing(id, &heading)));
             }
         }
     }
