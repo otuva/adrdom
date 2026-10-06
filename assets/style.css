@@ -132,6 +132,8 @@ details.neighbours ul { padding-left: 1.2rem; margin: 0.3rem 0 0; }
 ul.refused-list { list-style: none; margin: 0.4rem 0; padding: 0; }
 ul.refused-list li { padding: 0.2rem 0; }
 .label.refused { color: var(--refuse); font-weight: 700; text-transform: uppercase; font-size: 0.78rem; letter-spacing: 0.03em; margin-right: 0.5rem; }
+.label.waiting { color: var(--muted); font-weight: 700; text-transform: uppercase; font-size: 0.78rem; letter-spacing: 0.03em; margin-right: 0.5rem; }
+.waits { color: var(--muted); font-size: 0.95rem; margin: 0.4rem 0 0.8rem; }
 .key-hint { color: var(--muted); font-size: 0.92rem; }
 kbd { font-family: inherit; font-size: 0.9em; padding: 0.05em 0.45em; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; background: var(--key); }
 

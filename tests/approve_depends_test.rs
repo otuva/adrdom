@@ -191,11 +191,11 @@ fn approve_refuses_a_dangling_heading_dependency() {
     );
 }
 
-// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
 //
 // "approve stops a cycle": a tier can only be derived when the depends
 // graph has no cycle, so approve refuses outright rather than print a
 // tier order it cannot compute.
+// adr: 1fb71321-bb84-492f-b9d5-1444c9c444af
 #[test]
 fn approve_refuses_a_cycle_between_two_headings() {
     let dir = init_repo();
@@ -231,6 +231,7 @@ fn approve_refuses_a_heading_that_depends_on_itself() {
 
 // --- cap (8.8 A) -----------------------------------------------------------
 
+// adr: eb2cde37-ebcb-4407-a5b0-9fcda4bd9a4e
 #[test]
 fn approve_refuses_five_root_questions_in_one_tier() {
     let dir = init_repo();
@@ -310,6 +311,7 @@ fn approve_accepts_two_new_headings_when_two_in_the_tier_are_dead() {
     assert!(text.contains("approve: tiers: 1 (4)"), "{}", text);
 }
 
+// adr: eb2cde37-ebcb-4407-a5b0-9fcda4bd9a4e
 #[test]
 fn approve_accepts_four_root_questions_in_one_tier() {
     let dir = init_repo();
@@ -328,7 +330,6 @@ fn approve_accepts_four_root_questions_in_one_tier() {
 
 // --- the tiers print --------------------------------------------------------
 
-// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
 //
 // "the tool derives the tiers from the depends lines and nothing in the
 // topic file states them; a question standing on no other question in its
@@ -337,19 +338,22 @@ fn approve_accepts_four_root_questions_in_one_tier() {
 // -- only a `depends:` line -- yet `approve` reports "A?" in tier 1 (it
 // stands on nothing in this file, only the `decision` term) and "B?" in
 // tier 2 (one above "A?", the only thing it stands on).
+// adr: 1fb71321-bb84-492f-b9d5-1444c9c444af
 #[test]
 fn approve_prints_tiers_across_a_chain() {
     let dir = init_repo();
     setup(&dir);
     let content = "# Example\n\n\
         ### A?\ndepends: decision\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
-        ### B?\ndepends: A?=A\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+        ### B?\ndepends: A?=A\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
+        ### C?\ndepends: A?=A, B?=A\n\nProblem: p3 of the decision.\n\nStandard: s3.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out.status.success(), "approve failed: {}", stderr(&out));
     let text = stdout(&out);
-    assert!(text.contains("approve: tiers: 1 (1) 2 (1)"), "{}", text);
+    // "C?" stands on "A?" (tier 1) and "B?" (tier 2): one above the highest.
+    assert!(text.contains("approve: tiers: 1 (1) 2 (1) 3 (1)"), "{}", text);
 }
 
 // --- refused id withdrawn when absent from every file (8.2 A) -------------

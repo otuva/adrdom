@@ -603,7 +603,8 @@ fn ask_refuses_a_depends_entry_that_no_longer_resolves_or_is_missing_after_appro
         stderr(&out)
     );
     let check_out = adr(&dir, &["check"], &[], "");
-    assert!(!check_out.status.success());
+    // The edited file awaits approval again: check prints the finding as a note (912f4f3b-1213-435a-af0d-7617017fcff4).
+    assert!(check_out.status.success());
     assert!(
         stdout(&check_out).contains("which is not a current decision"),
         "{}",
@@ -627,7 +628,7 @@ fn ask_refuses_a_depends_entry_that_no_longer_resolves_or_is_missing_after_appro
         stderr(&out2)
     );
     let check_out2 = adr(&dir, &["check"], &[], "");
-    assert!(!check_out2.status.success());
+    assert!(check_out2.status.success());
     assert!(
         stdout(&check_out2).contains("has no depends line"),
         "{}",

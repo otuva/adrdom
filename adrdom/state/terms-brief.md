@@ -11,7 +11,7 @@
 - supersede (supersedes, superseded, superseding): A newer decision naming an older one, which it replaces once answered.
 - topic (topics): One subject that a set of questions shares, one per file.
 - topic file (topic files): A markdown file under adrdom/decisions holding one topic.
-- tier (tiers): The questions the tool asks together, one above the highest question each of them stands on in its topic file.
+- tier (tiers): The questions of a topic file at one height, each one above the highest question it stands on.
 - terms file: The one file under adrdom that fixes the meaning of words.
 - approve (approves, approved, approving, approval, approvals): The owner's act of accepting a topic file's headings and prose, or the terms file, as they stand.
 - plan (plans): The approved headings of a topic file and what each stands on.

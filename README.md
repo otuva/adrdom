@@ -39,11 +39,14 @@ runtime dependencies beyond `git` on `PATH`.
   `adrdom/` untouched. Idempotent.
 - `adr ask <topic_file>` — write each new question's `terms:` binding line
   and record it as asked (re-asking ones that changed since they were last
-  asked); refuses on an unapproved plan/context/terms file, a
-  question outside the open tier (the lowest tier with an unanswered
-  question), a tier over the cap, a question standing on a refused question,
-  a question left moot by an answer already given, a tier with a depends
-  line into it that carries no answer set, a banned word, or a retired term.
+  asked); asks the whole file in one run, every tier at once. Refuses on an
+  unapproved plan/context/terms file, a tier over the cap, a tier with a
+  depends line into it that carries no answer set, a banned word, or a
+  retired term. Which question the owner may answer first is `answer`'s
+  rule, not `ask`'s: `answer` refuses a question standing on a question
+  with no decision, and one above a refused question's tier, until a plan
+  change; an answer outside the answer set of a question standing on the
+  answered one removes that question from the file.
 - `adr answer <id>@<version> <letter>` — owner-only. Refuses while
   `adrdom/terms.md` is unapproved; otherwise answers a question by id
   and letter, writing the `**Answer:**` line and an `answered` ledger row,
@@ -161,7 +164,8 @@ naming `adr install --codex` as the fix.
 `time, event, id, hash, detail, version` row per event (`version` is the
 tool's `VERSION` that wrote the row; rows from before it carry five fields):
 `asked`, `answered`, `refused`, `superseded`, and `withdrawn` track a
-question; `assumes` records, at ask time, the answer set a later question
+question; `dropped` marks a question that left its topic file because an
+answer's letter was not in its answer set (asked or not; it never returns); `assumes` records, at ask time, the answer set a later question
 declared on the asked one; `approved` and `context` track a topic file's
 plan and context prose; `terms` tracks the terms file; `banned` and
 `unbanned` track the ban list.

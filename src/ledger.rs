@@ -174,14 +174,16 @@ pub fn append(path: &Path, rows: &[Row]) -> std::io::Result<()> {
 
 impl Ledger {
     /// The latest row that puts an id in a state: `asked`, `answered`,
-    /// `refused`, `superseded`, or `withdrawn` are all state rows; the most
-    /// recent one wins.
+    /// `refused`, `superseded`, `withdrawn`, or `dropped` are all state rows;
+    /// the most recent one wins. A `dropped` row ends an id for good (per
+    /// "Does answer remove a question whose answer set lacks the answer?"):
+    /// the question left its file, asked or not, and never returns.
     pub fn latest_state(&self, id: &str) -> Option<&Row> {
         self.rows.iter().rfind(|r| {
             r.id == id
                 && matches!(
                     r.event.as_str(),
-                    "asked" | "answered" | "refused" | "superseded" | "withdrawn"
+                    "asked" | "answered" | "refused" | "superseded" | "withdrawn" | "dropped"
                 )
         })
     }

@@ -77,8 +77,8 @@ aliases: topic files
 
 ## tier
 id: f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
-terms: asks=3c8d4c9c-abca-4faa-b7c1-aae39951376c, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, stands on=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
-definition: The questions the tool asks together, one above the highest question each of them stands on in its topic file.
+terms: question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, stands on=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
+definition: The questions of a topic file at one height, each one above the highest question it stands on.
 aliases: tiers
 
 ## terms file

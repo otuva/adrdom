@@ -19,19 +19,28 @@ pub(super) fn render_next(
     let picked = pick_next(&all, after.map(String::as_str), show.map(String::as_str));
 
     let Some((file, q)) = picked else {
-        body.push_str("<header class=\"lead\">\n<h1>Every question is answered</h1>\n");
+        // An asked question `answer` would refuse waits on another one:
+        // nothing is wrong, but "every question is answered" would be false.
+        let waiting = all.iter().any(|(_, q)| q.state == QState::Open);
+        let title = if waiting { "No question can be answered yet" } else { "Every question is answered" };
+        body.push_str(&format!("<header class=\"lead\">\n<h1>{}</h1>\n", title));
         body.push_str("<p><a href=\"/\">Back to the overview</a></p>\n</header>\n");
         return page("Answer", "/next", &body, true);
     };
 
     let id = q.id.clone().unwrap_or_default();
+    // "Question p of N open" counts what the owner can act on now: the
+    // questions `answer` takes, the same ones the page offers.
     let open_ids: Vec<&str> = all
         .iter()
-        .filter(|(_, x)| x.state == QState::Open)
+        .filter(|(_, x)| x.answerable)
         .filter_map(|(_, x)| x.id.as_deref())
         .collect();
     let position = open_ids.iter().position(|x| *x == id).map(|p| p + 1);
 
+    if show.is_none() && after.map(String::as_str) == Some(id.as_str()) {
+        body.push_str("<p class=\"waits\">This is the only question left to answer.</p>\n");
+    }
     body.push_str("<article class=\"focus\">\n");
     body.push_str("<p class=\"where\">");
     let tier = q
@@ -112,6 +121,23 @@ pub(super) fn render_next(
         ));
     }
     body.push_str("</aside>\n");
+
+    // An asked question `answer` would refuse (reached by a link or a
+    // `show` address): what it waits on, and no answer form.
+    if !q.answerable {
+        let why = if q.waits_on.is_empty() {
+            "was edited since it was asked; the agent asks it again".to_string()
+        } else {
+            let names: Vec<String> = q.waits_on.iter().map(|h| format!("<q>{}</q>", esc(h))).collect();
+            format!("waits for {}", names.join(", "))
+        };
+        body.push_str(&format!(
+            "<p class=\"waits\">Not yet: this question {}.</p>\n<p><a class=\"skip\" href=\"/next?after={}\">Skip this one</a></p>\n</article>\n",
+            why,
+            percent_encode(&id)
+        ));
+        return page("Answer", "/next", &body, true);
+    }
 
     body.push_str(&format!(
         "<form method=\"post\" action=\"/answer\" id=\"answer-form\">\n<input type=\"hidden\" name=\"id\" value=\"{}\">\n<input type=\"hidden\" name=\"v\" value=\"{}\">\n<input type=\"hidden\" name=\"t\" value=\"{}\">\n",
@@ -226,13 +252,18 @@ fn pick_next<'a>(
             .iter()
             .position(|(_, q)| q.id.as_deref() == Some(after_id))
         {
+            // Forward in file order first, then wrap: an answer can unlock
+            // a question above it.
+            // The skipped question comes last: when it is the only one
+            // left, it is offered again.
             return all[pos + 1..]
                 .iter()
-                .find(|(_, q)| q.state == QState::Open)
+                .chain(all[..=pos].iter())
+                .find(|(_, q)| q.answerable)
                 .copied();
         }
     }
-    all.iter().find(|(_, q)| q.state == QState::Open).copied()
+    all.iter().find(|(_, q)| q.answerable).copied()
 }
 
 /// Wraps every whole-word (case-insensitive) occurrence of a paired word

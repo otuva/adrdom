@@ -157,7 +157,16 @@ fn build(
     let missing_answered = actions::missing_answered_refusals(&records, &led);
 
     let mut failures: Vec<String> = unreadable_failures;
-    push_failures(&mut failures, parse::check_parse(&per_record_refusals));
+    let awaiting_early: Vec<String> = records
+        .iter()
+        .filter_map(|rf| {
+            let (rel, plan_ok, ctx_ok) = file_approval(rf, &raw_hashes, &led);
+            (!plan_ok || !ctx_ok).then_some(rel)
+        })
+        .collect();
+    let (parse_failures, parse_notes) = parse::check_parse(&records, &per_record_refusals, &awaiting_early, &led);
+    push_failures(&mut failures, parse_failures);
+    notes.extend(parse_notes);
     push_failures(&mut failures, ids::check_ids(&records, &led, &missing_answered, &raw_hashes));
     push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_content, since));
     push_failures(&mut failures, reader::check_reader(root, &source, since));
@@ -165,7 +174,7 @@ fn build(
     push_failures(&mut failures, answers::check_answers(&records, &led));
     push_failures(&mut failures, banned::check_banned(root, staged, message, &source));
     push_failures(&mut failures, install::check_install(root, &source));
-    let (plan_failures, awaiting) = plan::check_plan(
+    let (plan_failures, plan_notes, awaiting) = plan::check_plan(
         root,
         &source,
         &records,
@@ -174,6 +183,7 @@ fn build(
         &raw_hashes,
     );
     push_failures(&mut failures, plan_failures);
+    notes.extend(plan_notes);
     let (terms_failures, terms_notes) = terms::check_terms(root, &records, &led, &source, &approved_rels);
     push_failures(&mut failures, terms_failures);
     let (blame_failures, blame_notes) = blame::check_blame(root, &source, &records, &led);
@@ -181,7 +191,9 @@ fn build(
     let (test_failures, tested_count, test_notes) =
         tests::check_tests(root, &records, &led, tests, &source);
     push_failures(&mut failures, test_failures);
-    push_failures(&mut failures, tells::check_tells(&per_record_refusals));
+    let (tells_failures, tells_notes) = tells::check_tells(&records, &per_record_refusals, &awaiting, &led);
+    push_failures(&mut failures, tells_failures);
+    notes.extend(tells_notes);
 
 
     for (rf, replaced) in records.iter().zip(&replaced_per_record) {
@@ -263,14 +275,42 @@ pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: 
     exit_code
 }
 
-/// An id whose latest state is `superseded` or `withdrawn` is no longer
-/// demanded in any topic file (4.13/6.1): the topic file it once lived in was
-/// allowed to drop it.
+/// An id whose latest state is `superseded`, `withdrawn` or `dropped` is no
+/// longer demanded in any topic file (4.13/6.1): the topic file it once
+/// lived in was allowed to drop it, or an answer removed it.
 fn dropped_state(led: &Ledger, id: &str) -> bool {
     matches!(
         led.latest_state(id).map(|r| r.event.as_str()),
-        Some("superseded") | Some("withdrawn")
+        Some("superseded") | Some("withdrawn") | Some("dropped")
     )
+}
+
+/// Whether a planning finding `r` on `rf` is a note rather than a failure
+/// (per "Does check fail a topic file awaiting approval?"): the file
+/// awaits approval (`draft`), the finding is of a planning kind (`tells`,
+/// `plan`, or a `parse` finding about the body shape), and it is not about
+/// a question whose text can no longer change (answered, refused,
+/// superseded, or asked and unedited since). Anything else fails check.
+fn is_note(rf: &RecordFile, r: &actions::Refusal, draft: bool, led: &Ledger) -> bool {
+    if !draft {
+        return false;
+    }
+    let planning = match r.category {
+        "tells" | "plan" => true,
+        "parse" => r.planning,
+        _ => false,
+    };
+    if !planning {
+        return false;
+    }
+    // Every question the finding is about must still be able to change; a
+    // finding about none is about the file as a whole.
+    !r.sections.iter().filter_map(|i| rf.sections.get(*i)).any(|s| {
+        state::is_frozen(led, s)
+            || s.id
+                .as_deref()
+                .is_some_and(|id| state::asked_text_stands(led, id, &record::section_hash(&rf.lines, s)))
+    })
 }
 
 /// A file's plan/context approval state: its ledger-relative path, whether

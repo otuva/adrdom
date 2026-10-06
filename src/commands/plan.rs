@@ -152,6 +152,13 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<(String, i32), String> {
     hits.extend(crate::actions::no_term_refusals(&rel, rf, &env(root).terms, &led_now));
     // A set letter its same-file target has no option for: shown the same way.
     hits.extend(crate::actions::letter_refusals(&rel, rf, &led_now));
+    // The three shapes of a depends entry approve stops: shown the same way.
+    {
+        let e = env(root);
+        let lookup = crate::terms::phrase_lookup(&e.terms);
+        let headings = crate::depends::cross_file_heading_index(&e.all, &led_now);
+        hits.extend(crate::actions::depends_shape_refusals(&rel, rf, &e.terms, &lookup, &headings, &e.all, &led_now));
+    }
     for h in &hits {
         out.push_str(h);
         out.push('\n');

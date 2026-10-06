@@ -35,6 +35,11 @@ impl Next {
         Next(vec![(Actor::Owner, format!("runs: {}", command.into()))])
     }
 
+    /// The clauses of every `Next` in `parts`, in order, as one.
+    pub fn all(parts: Vec<Next>) -> Next {
+        Next(parts.into_iter().flat_map(|n| n.0).collect())
+    }
+
     pub fn and_owner_runs(mut self, command: impl Into<String>) -> Next {
         self.0.push((Actor::Owner, format!("runs: {}", command.into())));
         self
@@ -710,19 +715,132 @@ pub fn not_asked_yet(heading: &str, rel: &str) -> String {
     )
 }
 
-/// An answer that would remove a question that has already been asked to
-/// the owner (a removed question must never have been asked).
-pub fn drop_of_asked(heading: &str) -> String {
-    refuse(
-        format!("answering would remove \"{}\", which was asked", heading),
-        Next::agent("says so in chat and stops"),
-    )
+/// What one question `answer` waits on: `Unanswered` with the owner's
+/// `adr answer` command once the question is asked and stands as asked,
+/// `Asking` while it is not (its `moves` are what `next` names for it:
+/// the agent's `adr ask`, or the owner's approval of the plan ask waits
+/// for), or a refused question the plan has to drop or replace.
+pub enum Waits {
+    Unanswered { heading: String, command: String },
+    Asking { heading: String, moves: Vec<String> },
+    /// No decision yet and no question to answer first: the chain it waits
+    /// on ends on `refused`, a refused question.
+    Stuck { heading: String, refused: String },
+    /// No decision yet and no body written: `moves` are the planning move
+    /// `next` names for it.
+    Unwritten { heading: String, moves: Vec<String> },
+    RefusedTarget { heading: String },
+    RefusedTier { heading: String },
+}
+
+/// `answer` (a letter or a refusal) of a question that waits: it stands on a
+/// question of its file with no decision, or a question of a lower tier is
+/// refused (per "Does answer take a question standing on a question with
+/// no decision?" and "Does a refused question hold the tiers above it?").
+/// Every question it waits on is named, each with the move that clears it.
+pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> String {
+    let mut parts = Vec::new();
+    let mut command: Option<String> = None;
+    let mut refused = Vec::new();
+    // The moves `next` names, already rendered: agent clauses first, the
+    // one owner clause last (the lint reads what follows `owner runs: `).
+    let mut agent: Vec<String> = Vec::new();
+    let mut owner: Option<String> = None;
+    let ask_prefix = next_ask(rel, &[]);
+    let add = |moves: Vec<String>, agent: &mut Vec<String>, owner: &mut Option<String>| {
+        for m in moves {
+            if m.starts_with("owner") {
+                owner.get_or_insert(m);
+            } else if let Some(headings) = m.strip_prefix(&ask_prefix) {
+                // One `adr ask` clause naming every heading, as `show` prints it.
+                match agent.iter_mut().find(|a| a.starts_with(&ask_prefix)) {
+                    Some(a) => {
+                        let have: Vec<String> = a[ask_prefix.len()..].split(", ").map(String::from).collect();
+                        for h in headings.split(", ").filter(|h| !have.iter().any(|x| x == h)) {
+                            a.push_str(", ");
+                            a.push_str(h);
+                        }
+                    }
+                    None => agent.push(m),
+                }
+            } else if !agent.contains(&m) {
+                agent.push(m);
+            }
+        }
+    };
+    for w in waits {
+        match w {
+            Waits::Stuck { heading: h, refused: r } => {
+                parts.push(format!("\"{}\" has no decision yet and waits on the refused \"{}\"", h, r));
+                if !refused.contains(&r) {
+                    refused.push(r);
+                }
+            }
+            Waits::Unwritten { heading: h, moves } => {
+                parts.push(format!("\"{}\" has no decision yet and no body", h));
+                add(moves, &mut agent, &mut owner);
+            }
+            Waits::Asking { heading: h, moves } => {
+                parts.push(format!("\"{}\" has no decision yet", h));
+                add(moves, &mut agent, &mut owner);
+            }
+            Waits::Unanswered { heading: h, command: c } => {
+                parts.push(format!("\"{}\" has no decision yet", h));
+                command = command.or(Some(c));
+            }
+            Waits::RefusedTarget { heading: h } => {
+                parts.push(format!("\"{}\" is refused and the question stands on it", h));
+                if !refused.contains(&h) {
+                    refused.push(h);
+                }
+            }
+            Waits::RefusedTier { heading: h } => {
+                parts.push(format!("\"{}\" is refused and holds the tiers above it", h));
+                if !refused.contains(&h) {
+                    refused.push(h);
+                }
+            }
+        }
+    }
+    // One owner command, last: the plan's approval when a refused question
+    // has to go or the plan waits for it, else the first answer owed.
+    let mut clauses = agent;
+    if !refused.is_empty() {
+        clauses.push(
+            Next::agent(format!("writes the plan change that drops or replaces {}", quoted(&refused))).render(),
+        );
+        owner = Some(Next::owner_runs(format!("adr approve {}", rel)).render());
+    }
+    if owner.is_none() {
+        owner = command.map(|c| Next::owner_runs(c).render());
+    }
+    clauses.extend(owner);
+    format!("{}; {}", format!("\"{}\" waits: {}", heading, parts.join("; ")), clauses.join(", "))
+}
+
+/// The question `answer` would refuse, in the `not yet` line of `next`: the
+/// questions it waits on, by heading.
+pub fn next_answer_waits(heading: &str, on: &[String]) -> String {
+    format!("not yet: \"{}\" is asked and waits for {}", heading, quoted(on))
 }
 
 /// An answer that would remove a question with no identifier.
 pub fn drop_without_id(heading: &str) -> String {
     refuse(
         format!("answering would remove \"{}\", which has no identifier", heading),
+        Next::agent("says so in chat and stops"),
+    )
+}
+
+/// An answer that would remove a question that holds a decision or a
+/// refusal (per "Does a decision change after it is answered?").
+pub fn drop_of_closed(heading: &str, refused: bool) -> String {
+    refuse(
+        format!(
+            "answering would remove \"{}\", which is {}",
+            heading,
+            if refused { "refused" } else { "answered" }
+        ),
         Next::agent("says so in chat and stops"),
     )
 }
@@ -1280,10 +1398,6 @@ pub fn next_build_waits_refused(heading: &str, beside: &str) -> String {
         "not yet: \"{}\" is answered and is built once the plan changes, \"{}\" beside it is refused",
         heading, beside
     )
-}
-
-pub fn next_later(headings: &[String]) -> String {
-    format!("not yet, after the questions named above: {}", quoted(headings))
 }
 
 // --- show: the lines of its listing ----------------------------------------
@@ -2030,6 +2144,14 @@ pub fn ledger_dropped_without_cause(id: &str, cause: &str) -> String {
 pub fn ledger_dropped_not_approved(id: &str) -> String {
     refuse(
         format!("dropped row for {} matches no approved row of that question", id),
+        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
+    )
+}
+
+/// A `dropped` row of a question with an earlier `answered` or `refused` row.
+pub fn ledger_dropped_closed(id: &str, event: &str) -> String {
+    refuse(
+        format!("dropped row for {} follows its {} row", id, event),
         Next::owner_runs("git diff adrdom/state/ledger.tsv"),
     )
 }
@@ -3034,6 +3156,16 @@ mod tests {
             dep_retired_term_id("x.md", "heading", "id-1", Some("name")),
             dep_no_term("x.md", "heading", "widget"),
             bad_option_letter("x.md", "dependent", "target", 'Z'),
+            answer_waits(
+                "heading",
+                "x.md",
+                vec![
+                    Waits::Unanswered { heading: "target".to_string(), command: "adr answer id-1@abcd1234 <letter>".to_string() },
+                    Waits::RefusedTarget { heading: "refused".to_string() },
+                    Waits::RefusedTier { heading: "other".to_string() },
+                ],
+            ),
+            answer_waits("heading", "x.md", vec![Waits::Asking { heading: "target".to_string(), moves: vec!["owner runs: adr approve x.md".to_string()] }]),
             tier_cap_exceeded("x.md", &["heading".to_string()], 0, 4),
             tier_cap_exceeded("x.md", &["heading".to_string()], 3, 4),
             derive_error("x.md", &DeriveError::SelfDep("heading".to_string())),

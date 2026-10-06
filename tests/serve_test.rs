@@ -1442,7 +1442,6 @@ Standard: plain words.
 /// set -- so its tier (2) is entirely the tool's own derivation.
 const TIER_Q2_APPENDIX: &str = "\n### 1.2 Does the widget's paint match its color?\n\ndepends: 1.1 What color is the widget?\n\nProblem: the paint might not match.\n\nStandard: plain words.\n\n- A) Yes.\n  Why: reasons.\n  Costs: costs.\n- B) No.\n  Why: other reasons.\n  Costs: other costs.\n";
 
-// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
 //
 // "show and the page print the tiers": Q1 is tier 1 (no depends line at
 // all); Q2, appended later and never written with a tier of its own,
@@ -1504,6 +1503,131 @@ fn page_prints_the_tiers_as_the_topic_advances() {
         "body: {}",
         overview2.body
     );
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+//
+// The page offers the next question `answer` would take: with Q1 and Q2
+// (standing on Q1=A) both asked, /next after Q1 offers nothing while Q1 has
+// no decision, a POST for Q2 is refused with the same text the terminal
+// prints, and once Q1 is answered the page offers Q2.
+#[test]
+fn page_offers_only_the_questions_answer_takes() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let q2 = TIER_Q2_APPENDIX.replace("depends: 1.1 What color is the widget?", "depends: 1.1 What color is the widget?=A");
+    let record = write_record(&dir, "adrdom/decisions/example.md", &format!("{}{}", TIER_Q1_RECORD, q2));
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
+    let (q1_id, q2_id) = (ids[0].clone(), ids[1].clone());
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let first = get(port, "/next", Some(&cookie));
+    assert!(first.body.contains("Example, tier 1"), "body: {}", first.body);
+    // Q2 is not offered; the skipped Q1 is the only question left.
+    let after_q1 = get(port, &format!("/next?after={}", q1_id), Some(&cookie));
+    assert!(after_q1.body.contains("only question left to answer"), "body: {}", after_q1.body);
+    assert!(!after_q1.body.contains("Example, tier 2"), "body: {}", after_q1.body);
+
+    let form = format!("id={}&v={}&answer=A&t={}", q2_id, current_version(&dir, &q2_id), token);
+    let resp = post(port, "/answer", Some(&cookie), &form);
+    assert_eq!(resp.status, 302, "body: {}", resp.body);
+    let followed = get(port, header(&resp, "Location").expect("Location header"), Some(&cookie));
+    assert!(followed.body.contains("has no decision yet"), "page did not show the refusal: {}", followed.body);
+
+    assert!(adr_answer(&dir, &q1_id, "A").status.success());
+    let after_q1 = get(port, &format!("/next?after={}", q1_id), Some(&cookie));
+    assert!(after_q1.body.contains("Example, tier 2"), "body: {}", after_q1.body);
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+//
+// The page keeps to what `answer` takes. The question standing on another
+// sits first in the file: the overview lists it as waiting, with what it
+// waits for and no link; its own page shows what it waits for and no answer
+// form; "Question p of N open" counts the questions the owner can answer
+// now (one of the two asked). After the later question is answered,
+// /next?after= wraps around to the earlier one it unlocked.
+#[test]
+fn page_shows_a_waiting_question_without_a_form_and_wraps_to_an_unlocked_one() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let q2 = TIER_Q2_APPENDIX.replace("depends: 1.1 What color is the widget?", "depends: 1.1 What color is the widget?=A");
+    let record = write_record(&dir, "adrdom/decisions/example.md", &format!("# Example\n{}\n{}", q2, TIER_Q1_RECORD.trim_start_matches("# Example\n")));
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
+    let (q2_id, q1_id) = (ids[0].clone(), ids[1].clone());
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let overview = get(port, "/", Some(&cookie));
+    assert!(overview.body.contains("waits for"), "body: {}", overview.body);
+    assert!(!overview.body.contains(&format!("/next?show={}", q2_id)), "body: {}", overview.body);
+    assert!(overview.body.contains(&format!("/next?show={}", q1_id)), "body: {}", overview.body);
+
+    let first = get(port, "/next", Some(&cookie));
+    assert!(first.body.contains("Example, tier 1"), "body: {}", first.body);
+    assert!(first.body.contains("Question 1 of 1 open"), "body: {}", first.body);
+
+    let shown = get(port, &format!("/next?show={}", q2_id), Some(&cookie));
+    assert!(shown.body.contains("Not yet: this question waits for"), "body: {}", shown.body);
+    assert!(!shown.body.contains("id=\"answer-form\""), "body: {}", shown.body);
+
+    assert!(adr_answer(&dir, &q1_id, "A").status.success());
+    let after_q1 = get(port, &format!("/next?after={}", q1_id), Some(&cookie));
+    assert!(after_q1.body.contains("Example, tier 2"), "body: {}", after_q1.body);
+    assert!(after_q1.body.contains("id=\"answer-form\""), "body: {}", after_q1.body);
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+//
+// A question edited since it was asked has no answer form on its own page
+// (`answer` refuses it); the page says what the overview says. Skipping the
+// only answerable question offers it again and says it is the only one.
+#[test]
+fn page_shows_no_form_for_an_edited_question_and_offers_the_only_one_again() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let record = write_record(&dir, "adrdom/decisions/example.md", TIER_Q1_RECORD);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let q1_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let skipped = get(port, &format!("/next?after={}", q1_id), Some(&cookie));
+    assert!(skipped.body.contains("only question left to answer"), "body: {}", skipped.body);
+    assert!(skipped.body.contains("id=\"answer-form\""), "body: {}", skipped.body);
+    assert!(!skipped.body.contains("No question can be answered yet"), "body: {}", skipped.body);
+
+    let text = std::fs::read_to_string(&record).unwrap();
+    std::fs::write(&record, text.replacen("is undecided.", "is undecided, reworded.", 1)).unwrap();
+    approve_record(&dir, "adrdom/decisions/example.md");
+
+    let shown = get(port, &format!("/next?show={}", q1_id), Some(&cookie));
+    assert!(shown.body.contains("edited since it was asked"), "body: {}", shown.body);
+    assert!(!shown.body.contains("id=\"answer-form\""), "body: {}", shown.body);
 
     let _ = child.kill();
     let _ = child.wait();
