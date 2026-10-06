@@ -500,9 +500,9 @@ fn answer_refuses_a_second_time_with_already_answered_message() {
 }
 
 // A `supersedes:` naming two ids, both current when the plan is approved;
-// one of them is superseded by another question before the question naming
-// both is asked. `ask` refuses the candidate outright: the target must be
-// current the moment the question naming it is asked, not only at approval.
+// one of them is superseded by another question after the question naming
+// both was asked (one run of ask asks both together). `answer` takes the
+// question and supersedes both targets: the sibling replacer answered first.
 //
 // adr: f4f667ad-8714-4e65-897b-c7002e423c28
 // adr: 3b8da790-ea0c-4ca5-860a-980c7bc5f361
@@ -510,7 +510,7 @@ fn answer_refuses_a_second_time_with_already_answered_message() {
 // "each target must be current when the question is asked (ask stops a
 // non-current target)".
 #[test]
-fn ask_refuses_a_two_id_supersedes_when_one_target_lost_currency_after_approval() {
+fn answer_takes_a_two_id_supersedes_when_a_sibling_replaced_one_target_after_the_ask() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -547,39 +547,31 @@ fn ask_refuses_a_two_id_supersedes_when_one_target_lost_currency_after_approval(
     ));
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, rel);
+    // One ask puts 1.4 and 1.3 to the owner together; 1.3's targets are both
+    // current then. Answering 1.4 supersedes old_id_2.
     assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
         .status
         .success());
-    let fourth_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[2].clone();
+    let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
+    let fourth_id = ids[2].clone();
     assert!(adr_answer(&dir, &fourth_id, "A").status.success());
 
-    // 1.3 stands on 1.4 answered A, so it is asked only now, after
-    // old_id_2 was superseded.
-    let before_ask = std::fs::read_to_string(&record).unwrap();
-
-    let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(
-        !ask_out.status.success(),
-        "ask should have refused: {}",
-        stdout(&ask_out)
-    );
-    let err = stderr(&ask_out);
-    assert!(err.contains(old_id_2.as_str()), "{}", err);
-    assert!(err.contains("which is not a current decision"), "{}", err);
-    assert!(err.contains("agent removes it from the supersedes line or names a current decision"), "{}", err);
-
-    let after = std::fs::read_to_string(&record).unwrap();
-    assert_eq!(
-        after, before_ask,
-        "a refused ask must change nothing in the topic file"
-    );
+    // 1.3 stands on 1.4 answered A, and old_id_2 was superseded after 1.3
+    // was asked: a sibling replacer answered first (the target stands as
+    // `supersedes_refusals` reads it), so `answer` takes 1.3 and supersedes
+    // both targets. One run asked 1.3 while both were current.
+    let third_id = ids[3].clone();
+    let out = adr_answer(&dir, &third_id, "A");
+    assert!(out.status.success(), "{}", stderr(&out));
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    assert_eq!(
-        ledger.lines().filter(|l| l.contains("\tsuperseded\t")).count(),
-        1,
-        "only the answered 1.4 may have superseded anything: {}",
-        ledger
-    );
+    for old in [&old_id_1, &old_id_2] {
+        assert!(
+            ledger.lines().any(|l| l.contains("\tsuperseded\t") && l.contains(old.as_str()) && l.contains(third_id.as_str())),
+            "{} is superseded by 1.3: {}",
+            old,
+            ledger
+        );
+    }
 }
 
 // (E3) `ask` now refuses a candidate whose `supersedes:` names an id that

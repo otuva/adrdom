@@ -81,6 +81,7 @@ fn full_tier(dir: &Path) -> PathBuf {
     p
 }
 
+// adr: 14180eab-60a4-48d3-8efc-c1b23a96ce3a
 #[test]
 fn a_fifth_heading_superseding_one_of_four_passes_approve_check_and_ask() {
     let dir = init_repo();
@@ -115,6 +116,7 @@ fn two_replacements_of_one_decision_in_a_full_tier_fail_the_cap() {
     assert!(cap_refusal(&out), "{}", stderr(&out));
 }
 
+// adr: 14180eab-60a4-48d3-8efc-c1b23a96ce3a
 #[test]
 fn a_refused_replacement_returns_the_old_decision_to_the_count() {
     let dir = init_repo();
@@ -166,4 +168,29 @@ fn check_counts_a_tier_as_approve_does_when_the_replacing_file_has_a_cross_file_
     let both = format!("{}{}", stdout(&chk), stderr(&chk));
     assert!(!cap_refusal(&chk), "check printed a cap refusal: {}", both);
     assert!(both.contains("tiers: adrdom/decisions/a.md: 1 (4)"), "{}", both);
+}
+
+// adr: eb2cde37-ebcb-4407-a5b0-9fcda4bd9a4e
+// adr: 14180eab-60a4-48d3-8efc-c1b23a96ce3a
+//
+// a.md holds four answered questions and a fifth approved while an open
+// question of b.md replaced one of the four. When b.md's question is
+// refused, the old decision is back in the count: a.md's tier holds five
+// and `ask` stops it on the cap, though a.md's plan is still approved.
+#[test]
+fn ask_stops_a_tier_that_a_refused_replacement_in_another_file_took_over_the_cap() {
+    let dir = init_repo();
+    let a = full_tier(&dir);
+    let b = write_record(&dir, &rel("b"), &format!("# B\n{}", sec(&h(9), Some(&h(1)), true)));
+    approve_ok(&dir, "b");
+    append(&a, &sec(&h(5), None, true));
+    approve_ok(&dir, "a");
+    let out = ask(&dir, "b");
+    assert!(out.status.success(), "ask b failed: {}", stderr(&out));
+    let out = adr_answer(&dir, &id_of(&b, &h(9)), "refuse");
+    assert!(out.status.success(), "refuse failed: {}", stderr(&out));
+
+    let out = ask(&dir, "a");
+    assert!(!out.status.success(), "ask a should refuse: {}", stdout(&out));
+    assert!(cap_refusal(&out), "{}", stderr(&out));
 }

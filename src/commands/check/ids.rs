@@ -85,6 +85,12 @@ pub(super) fn check_ids(
         if event == Some("withdrawn") {
             continue;
         }
+        // A dropped id left its file with an answer (per "Does answer remove
+        // a question whose answer set lacks the answer?"), asked or not;
+        // `check_dropped` verifies the row, nothing is owed here.
+        if event == Some("dropped") {
+            continue;
+        }
         // An answered-and-current id missing from every file is reported
         // below, from `missing_answered` (shared with `approve`'s
         // `missing_answered_refusals`), so it isn't printed twice here.

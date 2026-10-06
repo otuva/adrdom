@@ -19,6 +19,18 @@ fn setup(dir: &std::path::Path) {
 /// Runs `adr approve` (expecting refusal) then `adr check` (expecting
 /// failure) on the same repo, asserting `needle` appears in both outputs.
 fn assert_parity(dir: &std::path::Path, record: &std::path::Path, needle: &str) {
+    assert_parity_with(dir, record, needle, true);
+}
+
+/// The same parity for a planning finding on a file awaiting approval: check
+/// prints it as a note and exits 0 (per "Does check fail a topic file
+/// awaiting approval?", 912f4f3b-1213-435a-af0d-7617017fcff4), approve still
+/// refuses.
+fn assert_parity_note(dir: &std::path::Path, record: &std::path::Path, needle: &str) {
+    assert_parity_with(dir, record, needle, false);
+}
+
+fn assert_parity_with(dir: &std::path::Path, record: &std::path::Path, needle: &str, fails: bool) {
     let approve_out = adr_owner(dir, &["approve", record.to_str().unwrap()], "");
     assert!(
         !approve_out.status.success(),
@@ -34,7 +46,7 @@ fn assert_parity(dir: &std::path::Path, record: &std::path::Path, needle: &str) 
     );
 
     let check_out = adr(dir, &["check"], &[], "");
-    assert!(!check_out.status.success(), "check should have failed");
+    assert_eq!(!check_out.status.success(), fails, "check exit: {}", stdout(&check_out));
     let check_text = stdout(&check_out);
     assert!(
         check_text.contains(needle),
@@ -46,13 +58,14 @@ fn assert_parity(dir: &std::path::Path, record: &std::path::Path, needle: &str) 
 
 #[test]
 fn parity_bad_depends_entry() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
     let dir = init_repo();
     setup(&dir);
     approve_empty_terms(&dir);
     let content = "# Example\n\n### 1.1 Q?\ndepends: nosuchterm\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-    assert_parity(
+    assert_parity_note(
         &dir,
         &record,
         "depends on \"nosuchterm\" which is no term",
@@ -61,17 +74,19 @@ fn parity_bad_depends_entry() {
 
 #[test]
 fn parity_tell_in_heading() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
     let dir = init_repo();
     setup(&dir);
     approve_minimal_terms(&dir, "decision");
     let content = "# Example\n\nContext prose.\n\n### How many stores exist?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-    assert_parity(&dir, &record, "opens assuming an answer");
+    assert_parity_note(&dir, &record, "opens assuming an answer");
 }
 
 #[test]
 fn parity_tier_over_cap() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
     let dir = init_repo();
     setup(&dir);
     approve_minimal_terms(&dir, "decision");
@@ -85,7 +100,7 @@ fn parity_tier_over_cap() {
 ### 1.5 Q5?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-    assert_parity(&dir, &record, "5 questions would be put to the owner together, the most is 4");
+    assert_parity_note(&dir, &record, "5 questions would be put to the owner together, the most is 4");
 }
 
 // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a depends list split across
@@ -93,13 +108,14 @@ fn parity_tier_over_cap() {
 // run of each), not silently read as a continuation of the same list.
 #[test]
 fn parity_two_depends_lines() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
     let dir = init_repo();
     setup(&dir);
     approve_minimal_terms(&dir, "decision");
     let content = "# Example\n\n### 1.1 Q?\ndepends: decision\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-    assert_parity(&dir, &record, "second depends line");
+    assert_parity_note(&dir, &record, "second depends line");
 }
 
 // adr: 5892981c-f213-404f-b93f-551e4d081ebf -- a supersedes list split
@@ -107,24 +123,26 @@ fn parity_two_depends_lines() {
 // silently cut to its first line.
 #[test]
 fn parity_two_supersedes_lines() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
     let dir = init_repo();
     setup(&dir);
     approve_minimal_terms(&dir, "decision");
     let content = "# Example\n\n### 1.1 Q?\ndepends: decision\nsupersedes: aaa\nsupersedes: bbb\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-    assert_parity(&dir, &record, "second supersedes line");
+    assert_parity_note(&dir, &record, "second supersedes line");
 }
 
 #[test]
 fn parity_missing_depends_line() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
     let dir = init_repo();
     setup(&dir);
     approve_minimal_terms(&dir, "decision");
     let content = "# Example\n\n### 1.1 No depends?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-    assert_parity(&dir, &record, "\"1.1 No depends?\" has no depends line");
+    assert_parity_note(&dir, &record, "\"1.1 No depends?\" has no depends line");
 }
 
 const TERMS_BASIC: &str = "# Terms\n\n\

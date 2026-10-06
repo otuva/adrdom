@@ -19,7 +19,11 @@ pub(super) fn render_next(
     let picked = pick_next(&all, after.map(String::as_str), show.map(String::as_str));
 
     let Some((file, q)) = picked else {
-        body.push_str("<header class=\"lead\">\n<h1>Every question is answered</h1>\n");
+        // An asked question `answer` would refuse waits on another one:
+        // nothing is wrong, but "every question is answered" would be false.
+        let waiting = all.iter().any(|(_, q)| q.state == QState::Open);
+        let title = if waiting { "No question can be answered yet" } else { "Every question is answered" };
+        body.push_str(&format!("<header class=\"lead\">\n<h1>{}</h1>\n", title));
         body.push_str("<p><a href=\"/\">Back to the overview</a></p>\n</header>\n");
         return page("Answer", "/next", &body, true);
     };
@@ -228,11 +232,11 @@ fn pick_next<'a>(
         {
             return all[pos + 1..]
                 .iter()
-                .find(|(_, q)| q.state == QState::Open)
+                .find(|(_, q)| q.answerable)
                 .copied();
         }
     }
-    all.iter().find(|(_, q)| q.state == QState::Open).copied()
+    all.iter().find(|(_, q)| q.answerable).copied()
 }
 
 /// Wraps every whole-word (case-insensitive) occurrence of a paired word

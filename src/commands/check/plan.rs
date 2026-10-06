@@ -1,4 +1,4 @@
-use super::{file_approval, Failure};
+use super::{file_approval, is_note, Failure};
 use crate::actions::{self, Refusal};
 use crate::ledger::Ledger;
 use crate::msg;
@@ -15,15 +15,17 @@ use std::path::Path;
 /// depends lines?", and "Does the tool cap the questions in a tier?" --
 /// the `plan` category of `record_refusals`, computed once in
 /// `mod.rs` and shared with `approve`'s `do_approve_record`):
-/// unconditionally, regardless of the file's approval state (a derive
-/// error, a missing depends line, or an entry that resolves to nothing is a
-/// failure either way). Also reports a bad file name and a heading
+/// On a file whose plan and prose are approved each is a failure; on a file
+/// awaiting approval each is a note instead (per "Does check fail a topic
+/// file awaiting approval?": every plan finding on such a file behaves the
+/// same way, never a failure). A frozen section's edited depends line stays
+/// a failure either way (its own category, `plan_frozen`). Also reports a bad file name and a heading
 /// duplicated within one file or across two (76bd7ef0 A), plus the
 /// letter-set check below -- three more check-only extras `approve` never
 /// refuses on, so none of them is a `record_refusals` category. Returns
-/// the failures plus the sorted, deduped list of paths still awaiting
-/// approval (printed as a summary line by the caller, not a failure by
-/// itself).
+/// the failures, the notes (the findings above on a file awaiting approval),
+/// plus the sorted, deduped list of paths still awaiting approval (printed
+/// as a summary line by the caller, not a failure by itself).
 #[allow(clippy::too_many_arguments)]
 pub(super) fn check_plan(
     root: &Path,
@@ -32,8 +34,9 @@ pub(super) fn check_plan(
     led: &Ledger,
     refusals: &[Vec<Refusal>],
     raw_hashes: &HashMap<String, (Vec<String>, String)>,
-) -> (Vec<Failure>, Vec<String>) {
+) -> (Vec<Failure>, Vec<String>, Vec<String>) {
     let mut out = Vec::new();
+    let mut notes: Vec<String> = Vec::new();
     let mut awaiting: Vec<String> = Vec::new();
     let mut heading_files: HashMap<String, Vec<String>> = HashMap::new();
     let records_by_rel: HashMap<&str, &RecordFile> =
@@ -48,11 +51,22 @@ pub(super) fn check_plan(
     for f in repo::list_decision_files_via(root, source) {
         let rel = state::rel_path(root, &f);
         let topic = records_by_rel.get(rel.as_str()).and_then(|rf| rf.topic.as_deref());
+        // A file awaiting approval earns a note, an approved one a failure
+        // (per "Does check fail a topic file awaiting approval?"); a file
+        // that did not parse has no approval state read, so it fails.
+        let draft = records_by_rel.get(rel.as_str()).is_some_and(|rf| {
+            let (_, plan_ok, ctx_ok) = file_approval(rf, raw_hashes, led);
+            !plan_ok || !ctx_ok
+        });
         for m in actions::own_name_refusals(&rel, topic) {
-            out.push(Failure {
-                check: "plan".to_string(),
-                message: m,
-            });
+            if draft {
+                notes.push(format!("plan: {}", m));
+            } else {
+                out.push(Failure {
+                    check: "plan".to_string(),
+                    message: m,
+                });
+            }
         }
     }
 
@@ -64,8 +78,14 @@ pub(super) fn check_plan(
         // The missing-depends-line, entry-resolution, derive-error, and
         // tier-cap failures: `record_refusals`'s `plan` category for this
         // file, computed once in `mod.rs`.
+        let draft = !plan_ok || !ctx_ok;
         for r in refs {
-            if r.category == "plan" {
+            if r.category != "plan" && r.category != "plan_frozen" {
+                continue;
+            }
+            if is_note(rf, r, draft, led) {
+                notes.push(format!("plan: {}", r.message));
+            } else {
                 out.push(Failure {
                     check: "plan".to_string(),
                     message: r.message.clone(),
@@ -78,10 +98,14 @@ pub(super) fn check_plan(
         // under?"): `actions::letter_refusals`, the function `approve` and
         // `adr plan` read too, for every file, approved or not.
         for msg in actions::letter_refusals(&rel, rf, led) {
-            out.push(Failure {
-                check: "plan".to_string(),
-                message: msg,
-            });
+            if draft {
+                notes.push(format!("plan: {}", msg));
+            } else {
+                out.push(Failure {
+                    check: "plan".to_string(),
+                    message: msg,
+                });
+            }
         }
 
         // Same heading twice in one file (8.3-adjacent): the cross-file
@@ -96,10 +120,14 @@ pub(super) fn check_plan(
                 .push(rel.clone());
         }
         for m in actions::duplicate_heading_refusals(&rel, &rf.sections) {
-            out.push(Failure {
-                check: "plan".to_string(),
-                message: m,
-            });
+            if draft {
+                notes.push(format!("plan: {}", m));
+            } else {
+                out.push(Failure {
+                    check: "plan".to_string(),
+                    message: m,
+                });
+            }
         }
     }
 
@@ -119,7 +147,7 @@ pub(super) fn check_plan(
 
     awaiting.sort();
     awaiting.dedup();
-    (out, awaiting)
+    (out, notes, awaiting)
 }
 
 /// What differs in `rf` from its latest approval (per "Does approve hash each

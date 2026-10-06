@@ -1278,29 +1278,27 @@ fn check_fails_a_question_heading_duplicated_across_two_files() {
 }
 
 #[test]
-fn check_fails_a_question_heading_duplicated_within_one_file() {
+fn check_notes_a_question_heading_duplicated_within_one_file_in_a_draft_and_fails_it_when_approved() {
     // Regression: the cross-file dedup above only compares paths, so two
     // identical `### ` headings inside the SAME file collapsed to one path
     // and never surfaced -- and `derive_tiers`' heading index binds a
     // depends line to the first of the two only (`.or_insert`), silently.
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
+    let rel = "adrdom/decisions/dup.md";
+    let content = "# Dup\n\n### 9.9 Same heading?\ndepends: widget\n\n### 9.9 Same heading?\ndepends: widget\n";
+    let want = "plan: duplicate heading \"9.9 Same heading?\" twice in adrdom/decisions/dup.md";
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    write_record(
-        &dir,
-        "adrdom/decisions/dup.md",
-        "# File\n\n### 9.9 Same heading?\n\n### 9.9 Same heading?\n",
-    );
-
+    approve_minimal_terms(&dir, "widget");
+    write_record(&dir, rel, content);
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
-    let text = stdout(&out);
-    assert!(
-        text.contains(
-            "plan: duplicate heading \"9.9 Same heading?\" twice in adrdom/decisions/dup.md"
-        ),
-        "{}",
-        text
-    );
+    assert!(out.status.success(), "{}", stdout(&out));
+    assert!(stdout(&out).contains(want), "{}", stdout(&out));
+
+    approve_via_ledger(&dir, rel, content);
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success(), "{}", stdout(&out));
+    assert!(stdout(&out).contains(want), "{}", stdout(&out));
 }
 
 // adr: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
@@ -1310,25 +1308,23 @@ fn check_fails_a_question_heading_duplicated_within_one_file() {
 // underscore both fail the name, and check names the file and the message
 // `repo::valid_topic_file_name`/`msg::bad_topic_file_name` share.
 #[test]
-fn check_fails_a_bad_topic_file_name() {
+fn check_notes_a_bad_topic_file_name_in_a_draft_and_fails_it_when_approved() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
+    let rel = "adrdom/decisions/Bad_Name.md";
+    let content = "# Bad Name\n\n### 1.1 Q?\ndepends: widget\n";
+    let want = "plan: adrdom/decisions/Bad_Name.md: file name is not lowercase words joined by single hyphens";
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    write_record(
-        &dir,
-        "adrdom/decisions/Bad_Name.md",
-        "# File\n\n### 1.1 Q?\n",
-    );
-
+    approve_minimal_terms(&dir, "widget");
+    write_record(&dir, rel, content);
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
-    let text = stdout(&out);
-    assert!(
-        text.contains(
-            "plan: adrdom/decisions/Bad_Name.md: file name is not lowercase words joined by single hyphens"
-        ),
-        "{}",
-        text
-    );
+    assert!(out.status.success(), "{}", stdout(&out));
+    assert!(stdout(&out).contains(want), "{}", stdout(&out));
+
+    approve_via_ledger(&dir, rel, content);
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success(), "{}", stdout(&out));
+    assert!(stdout(&out).contains(want), "{}", stdout(&out));
 }
 
 // adr: 76bd7ef0-f5be-40d8-b5ba-0bd4bbd047e4
@@ -1375,7 +1371,8 @@ fn check_fails_a_topic_file_name_that_does_not_match_its_topic() {
     write_record(&dir, "adrdom/decisions/other-name.md", body);
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
+    // A draft: the finding is a note (912f4f3b-1213-435a-af0d-7617017fcff4).
+    assert!(out.status.success());
     let text = stdout(&out);
     assert!(
         text.contains(
@@ -1409,7 +1406,8 @@ fn check_fails_a_topic_whose_text_no_file_name_can_carry() {
     write_record(&dir, "adrdom/decisions/rule.md", body);
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
+    // A draft: the finding is a note (912f4f3b-1213-435a-af0d-7617017fcff4).
+    assert!(out.status.success());
     let text = stdout(&out);
     assert!(
         text.contains(

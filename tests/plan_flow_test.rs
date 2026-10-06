@@ -101,9 +101,9 @@ fn id_for_heading(content: &str, heading_prefix: &str) -> String {
 
 //
 // Walk: approve one plan with every body and answer set written; ask asks
-// tier 1 and freezes the sets; the next ask stops at the open tier; after
+// the whole file and freezes the sets; the next ask has nothing to ask; after
 // the owner answers B, the dependent on =A leaves the file and the =*
-// dependent asks; a frozen set edited after ask fails `check`; a
+// dependent stays; a frozen set edited after ask fails `check`; a
 // plan change drops Q3 and adds Q4, withdrawing the asked Q3.
 #[test]
 fn plan_lifecycle_end_to_end() {
@@ -129,7 +129,7 @@ fn plan_lifecycle_end_to_end() {
     let q3_id = id_for_heading(&state_0_approved, "### 1.3");
     let _ = &q2_id;
 
-    // --- 2. ask asks tier 1 and writes the assumes rows --------------------
+    // --- 2. ask asks the file and writes the assumes rows --------------------
     let check_out = adr(&dir, &["check"], &[], "");
     assert!(
         !stdout(&check_out).contains("awaiting approval"),
@@ -159,7 +159,13 @@ fn plan_lifecycle_end_to_end() {
     let state_3 = std::fs::read_to_string(&record).unwrap();
     assert_eq!(id_for_heading(&state_3, "### 1.1"), q1_id);
     let ledger_after_ask1 = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    assert_eq!(asked_row_count(&dir), 1, "{}", ledger_after_ask1);
+    assert!(
+        printed.contains("asked: \"1.2 Does the paint match the widget's color?\" (tier 2)")
+            && printed.contains("asked: \"1.3 Does the paint need a second coat?\" (tier 2)"),
+        "one run asks every tier: {}",
+        printed
+    );
+    assert_eq!(asked_row_count(&dir), 3, "{}", ledger_after_ask1);
     assert_eq!(
         ledger_after_ask1.lines().filter(|l| l.contains("\tassumes\t")).count(),
         2,
@@ -167,7 +173,7 @@ fn plan_lifecycle_end_to_end() {
         ledger_after_ask1
     );
 
-    // --- 3. a candidate outside the open tier is left for a later run ------
+    // --- 3. what is left names the owner's answer and what waits for it ----
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "ask should print nothing to ask: {}", stderr(&out));
     assert!(stderr(&out).is_empty(), "{}", stderr(&out));
@@ -180,12 +186,12 @@ fn plan_lifecycle_end_to_end() {
     assert_eq!(
         printed.lines().skip(1).collect::<Vec<_>>().join("\n"),
         format!(
-            "  owner runs: adr answer {}@{} <letter>  # \"1.1 What color is the widget?\"\n  not yet, after the questions named above: \"1.2 Does the paint match the widget's color?\", \"1.3 Does the paint need a second coat?\"",
+            "  owner runs: adr answer {}@{} <letter>  # \"1.1 What color is the widget?\"\n  not yet: \"1.2 Does the paint match the widget's color?\" is asked and waits for \"1.1 What color is the widget?\"\n  not yet: \"1.3 Does the paint need a second coat?\" is asked and waits for \"1.1 What color is the widget?\"",
             q1_id,
             current_version(&dir, &q1_id)
         )
     );
-    assert_eq!(asked_row_count(&dir), 1, "Q2 is not asked");
+    assert_eq!(asked_row_count(&dir), 3, "nothing new is asked");
 
 
     // --- 5. changing the frozen set after ask is a check failure ----------
@@ -210,32 +216,29 @@ fn plan_lifecycle_end_to_end() {
     // Restore =A.
     std::fs::write(&record, &state_3).unwrap();
 
-    // --- 4. owner answers Q1; Q2 (set A) leaves with the answer; Q3's * asks --
+    // --- 4. owner answers Q1; the asked Q2 (set A) leaves with the answer; Q3 stays --
     let out = adr_answer(&dir, &q1_id, "B");
     assert!(out.status.success(), "answer failed: {}", stderr(&out));
     write_test_comment(&dir, &q1_id);
 
-    // The answer removed Q2 (its set lacks B); the file stays approved and
-    // check passes, so Q3 asks with no second approval.
+    // The answer removed Q2 (asked, its set lacks B); the file stays approved
+    // and check passes.
     let state_5 = std::fs::read_to_string(&record).unwrap();
     assert!(!state_5.contains("### 1.2 Does the paint match the widget's color?"), "{}", state_5);
     let check_out = adr(&dir, &["check"], &[], "");
     assert!(check_out.status.success(), "{}{}", stdout(&check_out), stderr(&check_out));
     assert!(!stdout(&check_out).contains("no case left"), "{}", stdout(&check_out));
 
+    // Q3 was asked in the first run: nothing is left to ask.
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask should now succeed: {}", stderr(&out));
-    assert!(
-        stdout(&out).contains("asked: \"1.3 Does the paint need a second coat?\" (tier 2)"),
-        "{}",
-        stdout(&out)
-    );
+    assert!(out.status.success(), "ask should have nothing to ask: {}", stderr(&out));
+    assert!(stdout(&out).contains("nothing to ask"), "{}", stdout(&out));
 
     let state_7 = std::fs::read_to_string(&record).unwrap();
     assert_eq!(extract_ids(&state_7).len(), 2, "{}", state_7);
     assert_eq!(id_for_heading(&state_7, "### 1.1"), q1_id);
     assert_eq!(id_for_heading(&state_7, "### 1.3"), q3_id);
-    assert_eq!(asked_row_count(&dir), 2, "Q1 and Q3 should be asked; Q2 was never asked");
+    assert_eq!(asked_row_count(&dir), 3, "Q1, Q2 and Q3 were asked; Q2 was removed");
 
     // --- 6. owner refuses Q3 ------------------------------------------------
     let out = adr_answer(&dir, &q3_id, "refuse");
@@ -282,7 +285,7 @@ fn plan_lifecycle_end_to_end() {
     );
     assert!(
         !printed.contains("1.2 Does the paint match the widget's color?"),
-        "Q2 was never asked, nothing to withdraw: {}",
+        "Q2 was removed by an answer, nothing to withdraw: {}",
         printed
     );
     assert!(printed.contains("approve: tiers: 1 (1) 2 (1)"), "{}", printed);

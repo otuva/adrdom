@@ -246,11 +246,16 @@ fn a_set_approved_before_the_answer_survives_a_reapprove_after_it() {
 // was asked stays.
 #[test]
 fn a_set_changed_after_the_answer_on_an_approved_question_is_refused() {
+    // Q2 is approved while Q1 is asked and not yet answered, and no run of
+    // ask has put Q2 to the owner (one run would ask both).
     let q2 = Q2.replace("depends: decision", "depends: 1.1 First question?=A");
-    let dir = setup(&file_of(&[Q1, &q2]));
+    let dir = setup(&file_of(&[Q1]));
     assert!(approve(&dir).status.success());
     assert!(adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "").status.success());
     let id1 = adr::record::load(&dir.join(REL)).unwrap().sections[0].id.clone().unwrap();
+    let text = std::fs::read_to_string(dir.join(REL)).unwrap();
+    std::fs::write(dir.join(REL), format!("{}\n{}", text.trim_end(), q2)).unwrap();
+    assert!(approve(&dir).status.success());
     assert!(adr_answer(&dir, &id1, "A").status.success());
 
     let text = std::fs::read_to_string(dir.join(REL)).unwrap();

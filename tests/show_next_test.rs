@@ -93,8 +93,10 @@ fn build_of(heading: &str, id: &str) -> String {
     )
 }
 
-fn later(heading: &str) -> String {
-    format!("not yet, after the questions named above: \"{}\"", heading)
+/// The line for an asked question `answer` would refuse: it names what the
+/// question waits on.
+fn waits(heading: &str, on: &str) -> String {
+    format!("not yet: \"{}\" is asked and waits for \"{}\"", heading, on)
 }
 
 // adr: f8d92841-aef7-4cd7-bd94-0e07c03e4cb6
@@ -114,16 +116,19 @@ fn show_names_the_next_move_at_every_step() {
     assert_eq!(next(&dir), vec![format!("owner runs: adr approve {}", REL)]);
 
     approve_record(&dir, REL);
-    assert_eq!(next(&dir), vec![ask_for(&[ONE, TWO]), later(THREE)]);
+    // Every question is asked in one run, whatever its tier.
+    assert_eq!(next(&dir), vec![ask_for(&[ONE, TWO, THREE])]);
     let two = id_of(&path, TWO);
 
     let asked = adr(&dir, &["ask", p], &[], "");
     assert!(asked.status.success(), "{}", stderr(&asked));
     let one = id_of(&path, ONE);
+    let three = id_of(&path, THREE);
+    // `answer` takes THREE only once TWO has a decision: it stands on it.
     let waiting = vec![
         answer_for(&dir, &one, ONE),
         answer_for(&dir, &two, TWO),
-        later(THREE),
+        waits(THREE, TWO),
     ];
     assert_eq!(next(&dir), waiting);
 
@@ -143,7 +148,7 @@ fn show_names_the_next_move_at_every_step() {
     approve_record(&dir, REL);
     assert_eq!(
         next(&dir),
-        vec![ask_for(&[ONE]), answer_for(&dir, &two, TWO), later(THREE)]
+        vec![ask_for(&[ONE]), answer_for(&dir, &two, TWO), waits(THREE, TWO)]
     );
     // Its line in the listing carries no version for the owner to use.
     let shown = stdout(&adr(&dir, &["show", "--all"], &[], ""));
@@ -151,7 +156,7 @@ fn show_names_the_next_move_at_every_step() {
     assert!(adr(&dir, &["ask", p], &[], "").status.success());
     assert_eq!(
         next(&dir),
-        vec![answer_for(&dir, &one, ONE), answer_for(&dir, &two, TWO), later(THREE)]
+        vec![answer_for(&dir, &one, ONE), answer_for(&dir, &two, TWO), waits(THREE, TWO)]
     );
 
     // One of two answered: it is not built while the other is open.
@@ -164,23 +169,20 @@ fn show_names_the_next_move_at_every_step() {
                 "not yet: \"{}\" is answered and is built once \"{}\" is answered",
                 ONE, TWO
             ),
-            later(THREE),
+            waits(THREE, TWO),
         ]
     );
 
-    // Both answered: they are built first, then the next question is asked.
+    // Both answered: they are built first, and the owner's answer to THREE
+    // is named, since what it stands on has its decision.
     assert!(adr_answer(&dir, &two, "A").status.success());
     assert_eq!(
         next(&dir),
-        vec![build_of(ONE, &one), build_of(TWO, &two), ask_for(&[THREE])]
+        vec![build_of(ONE, &one), build_of(TWO, &two), answer_for(&dir, &three, THREE)]
     );
 
     write_test_comment(&dir, &one);
     write_test_comment(&dir, &two);
-    assert_eq!(next(&dir), vec![ask_for(&[THREE])]);
-
-    assert!(adr(&dir, &["ask", p], &[], "").status.success());
-    let three = id_of(&path, THREE);
     assert_eq!(next(&dir), vec![answer_for(&dir, &three, THREE)]);
 
     assert!(adr_answer(&dir, &three, "refuse").status.success());
@@ -191,6 +193,47 @@ fn show_names_the_next_move_at_every_step() {
             THREE
         )]
     );
+}
+
+// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+// adr: 506b3c6d-3d0a-4a02-98de-3b8a573d2fe9
+//
+// `next` and `answer` read one rule: an owner line is printed only for a
+// question `answer` takes now. THREE stands on TWO and sits a tier above
+// ONE. While TWO has no decision, THREE is under `not yet` and `answer`
+// refuses it. With ONE refused, THREE waits on it too, though it does not
+// stand on ONE; TWO stays answerable (same tier as the refused one).
+#[test]
+fn next_names_an_owner_answer_only_where_answer_takes_the_question() {
+    let (dir, path) = setup();
+    let p = path.to_str().unwrap();
+    approve_record(&dir, REL);
+    assert!(adr(&dir, &["ask", p], &[], "").status.success());
+    let (one, two, three) = (id_of(&path, ONE), id_of(&path, TWO), id_of(&path, THREE));
+    assert_eq!(
+        next(&dir),
+        vec![answer_for(&dir, &one, ONE), answer_for(&dir, &two, TWO), waits(THREE, TWO)]
+    );
+    assert!(!adr_answer(&dir, &three, "A").status.success());
+
+    // ONE refused: THREE waits on ONE as well; TWO is still taken.
+    assert!(adr_answer(&dir, &one, "refuse").status.success());
+    let lines = next(&dir);
+    assert!(lines.contains(&answer_for(&dir, &two, TWO)), "{:?}", lines);
+    assert!(
+        lines.contains(&format!("not yet: \"{}\" is asked and waits for \"{}\", \"{}\"", THREE, TWO, ONE)),
+        "{:?}",
+        lines
+    );
+    assert!(!lines.iter().any(|l| l.contains(&format!("adr answer {}@", three))), "{:?}", lines);
+
+    // TWO answered: THREE still waits, for the refused ONE alone.
+    assert!(adr_answer(&dir, &two, "A").status.success());
+    let lines = next(&dir);
+    assert!(lines.contains(&waits(THREE, ONE)), "{:?}", lines);
+    let refused = adr_answer(&dir, &three, "A");
+    assert!(!refused.status.success());
+    assert!(stderr(&refused).contains("is refused and holds the tiers above it"), "{}", stderr(&refused));
 }
 
 // adr: f8d92841-aef7-4cd7-bd94-0e07c03e4cb6
@@ -283,7 +326,9 @@ or moves it to another file when none does",
     assert_eq!(next(&dir), vec![format!("agent clears: {}", refusal)]);
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
+    // The edited file awaits approval again: check prints the refusal as a
+    // note (912f4f3b-1213-435a-af0d-7617017fcff4).
+    assert!(out.status.success());
     let plan_lines: Vec<String> = stdout(&out)
         .lines()
         .filter(|l| l.starts_with("plan: ") && !l.contains("awaiting approval") && !l.contains("new or changed"))
@@ -395,7 +440,10 @@ fn show_is_short_until_it_is_asked_for_the_whole() {
     approve_record(&dir, REL);
     let one = id_of(&path, ONE);
     let p = path.to_str().unwrap();
+    // One run asks both questions, THREE (tier 2) as well.
     assert!(adr(&dir, &["ask", p], &[], "").status.success());
+    let three = id_of(&path, THREE);
+    let version = current_version(&dir, &three);
     assert!(adr_answer(&dir, &one, "A").status.success());
     write_test_comment(&dir, &one);
 
@@ -403,20 +451,24 @@ fn show_is_short_until_it_is_asked_for_the_whole() {
     assert_eq!(
         short,
         format!(
-            "# Gate ({rel})\n  {one}\n    Yes the widget holds.\nnext\n  agent runs adr ask {rel}  # \"{three}\"\n\
+            "# Gate ({rel})\n  {one}\n    Yes the widget holds.\nnext\n  owner runs: adr answer {id}@{version} <letter>  # \"{three}\"\n\
 adr show <topic file> prints every question of one file with what it stands on; adr show --all prints all of them\n",
             rel = REL,
             one = ONE,
-            three = THREE
+            three = THREE,
+            id = three,
+            version = version
         )
     );
 
     let whole = format!(
         "# Gate ({rel})\ntier 1\n  [answered A] {one}\n    stands on: widget\n    stood on by: {three}\n    Yes the widget holds.\n\
-tier 2\n  [not asked] {three}\n    stands on: widget, {one}=A\n    neighbour: term \"widget\": heading: unrelated, body: unrelated; depends\nnext\n  agent runs adr ask {rel}  # \"{three}\"\n",
+tier 2\n  [asked @{version}] {three}\n    stands on: widget, {one}=A\n    neighbour: term \"widget\": heading: unrelated, body: unrelated; depends\nnext\n  owner runs: adr answer {id}@{version} <letter>  # \"{three}\"\n",
         rel = REL,
         one = ONE,
-        three = THREE
+        three = THREE,
+        id = three,
+        version = version
     );
     assert_eq!(stdout(&adr(&dir, &["show", "--all"], &[], "")), whole);
     assert_eq!(stdout(&adr(&dir, &["show", p], &[], "")), whole);
@@ -441,7 +493,7 @@ fn show_and_answer_agree_on_whether_the_asked_text_stands() {
     let one = id_of(&path, ONE);
     assert_eq!(
         next(&dir),
-        vec![answer_for(&dir, &one, ONE), answer_for(&dir, &two, TWO), later(THREE)]
+        vec![answer_for(&dir, &one, ONE), answer_for(&dir, &two, TWO), waits(THREE, TWO)]
     );
 
     // Edited after it was asked: `next` hands the question back to the
@@ -458,7 +510,7 @@ fn show_and_answer_agree_on_whether_the_asked_text_stands() {
     approve_record(&dir, REL);
     assert_eq!(
         next(&dir),
-        vec![ask_for(&[TWO]), answer_for(&dir, &one, ONE), later(THREE)]
+        vec![ask_for(&[TWO]), answer_for(&dir, &one, ONE), waits(THREE, TWO)]
     );
     let refused = adr_owner(&dir, &["answer", &format!("{}@{}", two, old_version), "A"], "");
     assert!(!refused.status.success());
