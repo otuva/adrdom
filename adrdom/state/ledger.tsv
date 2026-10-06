@@ -694,3 +694,10 @@
 2026-10-06T12:58:22Z	withdrawn	8b324fe0-621b-44d9-b7fe-f8e0ee15164e	-	What stops a loaded phrase in a question?	0.3.0
 2026-10-06T12:58:37Z	asked	149c9a73-16eb-46aa-9806-2950423ee1a2	5d66520365decd28d53bdf3bd9911eb4054ba6f0ae4d07933196dd75d43dc8cd	What holds the list of loaded phrases?	0.3.0
 2026-10-06T12:59:03Z	answered	149c9a73-16eb-46aa-9806-2950423ee1a2	5d66520365decd28d53bdf3bd9911eb4054ba6f0ae4d07933196dd75d43dc8cd	A	0.3.0
+2026-10-06T13:03:05Z	approved	0487a1cf-eb61-4bf8-bd16-eed899d22d2c	6220259492c0c7157f7ec191792a44cdcae710dbeeacd0b48705bf2b3123b601	adrdom/decisions/length.md	0.3.0
+2026-10-06T13:03:05Z	approved	c96518bf-470d-45c0-8b86-eaf8f54cb490	34f025bed0af4a37a10efcd1a8bd8548558efe5f42be72294d91ae2b795e0ccb	adrdom/decisions/length.md	0.3.0
+2026-10-06T13:03:05Z	approved	55a8abb2-0f6d-430b-99f9-a378f3f154e5	346725921559428325e6889bd15700257b0d426deebf73d0b9238a83a6406bde	adrdom/decisions/length.md	0.3.0
+2026-10-06T13:03:05Z	approved	-	56a4065a2e24c301d4c928612bb6af53503198ac7e5d23363b12d28ff54fd1a9	adrdom/decisions/length.md	0.3.0
+2026-10-06T13:03:19Z	asked	0487a1cf-eb61-4bf8-bd16-eed899d22d2c	69e763d8ef69e173410fb33dd2b059a585c3bd76babb2150168330b942644c22	Does the word limit hold for an option's Why line?	0.3.0
+2026-10-06T13:03:19Z	asked	c96518bf-470d-45c0-8b86-eaf8f54cb490	e03c9c85d6ed62744fbb17e60943c13768f915300db756ca5257d22fd1dbc4a0	Does the word limit hold for an option's Costs line?	0.3.0
+2026-10-06T13:03:19Z	asked	55a8abb2-0f6d-430b-99f9-a378f3f154e5	907ff2314cf1a9d364d50aab18db6ab63e8da117f3caa20ffa1b700a86b9bf55	Does the word limit read the text of an answered question?	0.3.0
