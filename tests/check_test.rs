@@ -1296,12 +1296,13 @@ fn check_notes_a_question_heading_duplicated_within_one_file_in_a_draft_and_fail
 }
 
 //
-// "each file holds one topic and is named by it in lowercase words joined
-// by hyphens, with no number or prefix": an uppercase letter and an
+// "What names a topic file?" Its topic, in lowercase words joined by
+// hyphens, with no number or prefix: an uppercase letter and an
 // underscore both fail the name, and check names the file and the message
 // `repo::valid_topic_file_name`/`msg::bad_topic_file_name` share.
 #[test]
 fn check_notes_a_bad_topic_file_name_in_a_draft_and_fails_it_when_approved() {
+    // adr: 625dea67-13a7-4e8e-913f-e997081a120c
     // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
     let rel = "adrdom/decisions/Bad_Name.md";
     let content = "# Bad Name\n\n### 1.1 Q?\ndepends: widget\n";
@@ -1321,11 +1322,12 @@ fn check_notes_a_bad_topic_file_name_in_a_draft_and_fails_it_when_approved() {
 }
 
 //
-// The other side of the same rule: lowercase words joined by single
+// The other side of the same rule ("What names a topic file?"): lowercase words joined by single
 // hyphens is a name check accepts without complaint -- and, with an
 // otherwise-clean skeleton heading, check passes outright.
 #[test]
 fn check_passes_a_good_topic_file_name() {
+    // adr: 625dea67-13a7-4e8e-913f-e997081a120c
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -1350,11 +1352,12 @@ fn check_passes_a_good_topic_file_name() {
 }
 
 //
-// "is named by it": a well-formed name that is not the h1 topic,
-// lowercased and hyphenated, fails check; the same file under the name
+// "What names a topic file?" Its topic: a well-formed name that is not the
+// h1 topic, lowercased and hyphenated, fails check; the same file under the name
 // its topic gives passes.
 #[test]
 fn check_fails_a_topic_file_name_that_does_not_match_its_topic() {
+    // adr: 625dea67-13a7-4e8e-913f-e997081a120c
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -1384,11 +1387,81 @@ fn check_fails_a_topic_file_name_that_does_not_match_its_topic() {
 }
 
 //
-// "with no number": a topic whose text holds a digit has no name any file
+// "What names a topic file?" Its topic, with no number or prefix: a leading
+// number fails the name, in a draft as a note and approved as a failure.
+#[test]
+fn check_notes_a_numbered_topic_file_name_in_a_draft_and_fails_it_when_approved() {
+    // adr: 625dea67-13a7-4e8e-913f-e997081a120c
+    let rel = "adrdom/decisions/01-terms.md";
+    let content = "# Terms\n\n### 1.1 Q?\ndepends: widget\n";
+    let want = "plan: adrdom/decisions/01-terms.md: file name is not lowercase words joined by single hyphens";
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    write_record(&dir, rel, content);
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "{}", stdout(&out));
+    assert!(stdout(&out).contains(want), "{}", stdout(&out));
+
+    approve_via_ledger(&dir, rel, content);
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success(), "{}", stdout(&out));
+    assert!(stdout(&out).contains(want), "{}", stdout(&out));
+}
+
+//
+// "What names a topic file?" Its topic in words joined by hyphens: a doubled
+// hyphen is not a single joining hyphen.
+#[test]
+fn check_notes_a_doubled_hyphen_in_a_topic_file_name_in_a_draft_and_fails_it_when_approved() {
+    // adr: 625dea67-13a7-4e8e-913f-e997081a120c
+    let rel = "adrdom/decisions/two--words.md";
+    let content = "# Two Words\n\n### 1.1 Q?\ndepends: widget\n";
+    let want = "plan: adrdom/decisions/two--words.md: file name is not lowercase words joined by single hyphens";
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    write_record(&dir, rel, content);
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "{}", stdout(&out));
+    assert!(stdout(&out).contains(want), "{}", stdout(&out));
+
+    approve_via_ledger(&dir, rel, content);
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success(), "{}", stdout(&out));
+    assert!(stdout(&out).contains(want), "{}", stdout(&out));
+}
+
+//
+// "What names a topic file?" Its topic, with no prefix: `adr-terms.md` is a
+// well-formed name, but not the name of the topic "Terms".
+#[test]
+fn check_reports_a_prefixed_topic_file_name_as_not_matching_its_topic() {
+    // adr: 625dea67-13a7-4e8e-913f-e997081a120c
+    let rel = "adrdom/decisions/adr-terms.md";
+    let content = "# Terms\n\n### 1.1 Q?\ndepends: widget\n";
+    let want = "plan: adrdom/decisions/adr-terms.md: file name does not match its topic \"Terms\"; agent renames the file to terms.md";
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    write_record(&dir, rel, content);
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "{}", stdout(&out));
+    assert!(stdout(&out).contains(want), "{}", stdout(&out));
+
+    approve_via_ledger(&dir, rel, content);
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success(), "{}", stdout(&out));
+    assert!(stdout(&out).contains(want), "{}", stdout(&out));
+}
+
+//
+// "What names a topic file?" Its topic with no number: a topic whose text holds a digit has no name any file
 // can carry, so check refuses the topic text itself, whatever the file is
 // called; no rename clears it, and rewording the topic does.
 #[test]
 fn check_fails_a_topic_whose_text_no_file_name_can_carry() {
+    // adr: 625dea67-13a7-4e8e-913f-e997081a120c
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
