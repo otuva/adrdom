@@ -68,15 +68,35 @@ fn approve_refuses_a_heading_that_stands_in_another_topic_file_and_writes_nothin
 }
 
 #[test]
-fn ask_refuses_a_heading_that_stands_in_another_topic_file() {
+fn a_copied_heading_never_reaches_ask_because_approve_refuses_it() {
     // adr: 23f21671-e34c-44aa-8804-6163d975807f
     let dir = repo();
     write_record(&dir, A, &file("A"));
     approve_record(&dir, A);
     let record = write_record(&dir, B, &file("B"));
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(!out.status.success() && stderr(&out).contains(LINE), "{}", stderr(&out));
+    // Ask on the unapproved copy refuses on the approval, not on the heading.
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
+    assert!(stderr(&out).contains("not approved"), "{}", stderr(&out));
     assert_eq!(asked_row_count(&dir), 0);
+}
+
+#[test]
+fn approve_of_an_unchanged_question_passes_while_a_draft_copies_its_heading() {
+    // adr: 23f21671-e34c-44aa-8804-6163d975807f
+    let dir = repo();
+    let a = format!("# A\n\n{}", answered(&dir, ID1));
+    approve_via_ledger(&dir, A, &a);
+    let b = write_record(&dir, B, &file("B"));
+    // A prose edit above the first question; the question itself is unchanged.
+    let edited = a.replacen("# A\n\n", "# A\n\nA line of prose.\n\n", 1);
+    let record = write_record(&dir, A, &edited);
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    let out = adr_owner(&dir, &["approve", b.to_str().unwrap()], "");
+    assert!(!out.status.success() && stderr(&out).contains(LINE), "{}", stderr(&out));
 }
 
 #[test]

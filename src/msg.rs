@@ -2324,7 +2324,9 @@ pub fn topic_file_name_mismatch(rel: &str, topic: &str, expected: &str) -> Strin
 /// file by its topic "in lowercase words joined by hyphens, with no number": a topic whose text lowercased and hyphenated
 /// (`repo::expected_topic_file_stem`) holds a digit, or holds no letter at
 /// all, has no name any file can carry, so no rename clears it and the
-/// topic line itself has to change. Check-only, like `bad_topic_file_name`.
+/// topic line itself has to change. `approve` refuses it through
+/// `actions::own_name_refusals` and `check` through its plan check, from the
+/// one message.
 pub fn topic_unnameable(rel: &str, topic: &str) -> String {
     refuse(
         format!(

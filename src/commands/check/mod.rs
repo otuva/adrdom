@@ -285,13 +285,9 @@ fn dropped_state(led: &Ledger, id: &str) -> bool {
     )
 }
 
-/// Whether a question has force: its text can no longer change because it
-/// is answered, refused, superseded, or asked and unedited since.
+/// `actions::has_force`, the one reading `approve` shares.
 fn has_force(rf: &RecordFile, s: &record::Section, led: &Ledger) -> bool {
-    state::is_frozen(led, s)
-        || s.id
-            .as_deref()
-            .is_some_and(|id| state::asked_text_stands(led, id, &record::section_hash(&rf.lines, s)))
+    actions::has_force(rf, s, led)
 }
 
 /// Whether a finding `r` on `rf` is a note rather than a failure (per

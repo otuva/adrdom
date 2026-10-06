@@ -131,7 +131,7 @@ pub(super) fn check_plan(
         for h in dup_headings {
             let bearing: Vec<_> =
                 rf.sections.iter().filter(|s| s.heading_text == h).cloned().collect();
-            let forceless = rf.sections.iter().any(|s| s.heading_text == h && !super::has_force(rf, s, led));
+            let forceless = !actions::copying_sections(rf, h, led).is_empty();
             for m in actions::duplicate_heading_refusals(&rel, &bearing) {
                 if draft && forceless {
                     notes.push(format!("plan: {}", m));
@@ -162,7 +162,7 @@ pub(super) fn check_plan(
             let draft_forceless = paths.iter().any(|rel| {
                 records_by_rel.get(rel.as_str()).is_some_and(|rf| {
                     awaiting.contains(rel)
-                        && rf.sections.iter().any(|s| &s.heading_text == heading && !super::has_force(rf, s, led))
+                        && !actions::copying_sections(rf, heading, led).is_empty()
                 })
             });
             let message = msg::duplicate_heading_across_files(heading, &paths[0], &paths[1]);

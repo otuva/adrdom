@@ -1762,16 +1762,49 @@ pub fn duplicate_heading_refusals(rel: &str, sections: &[record::Section]) -> Ve
     out
 }
 
-/// A heading of `sections` that also stands in another topic file of `all`
+/// Whether a question has force: its text can no longer change because it
+/// is answered, refused, superseded, or asked and unedited since.
+pub fn has_force(rf: &RecordFile, s: &record::Section, led: &Ledger) -> bool {
+    state::is_frozen(led, s)
+        || s.id
+            .as_deref()
+            .is_some_and(|id| state::asked_text_stands(led, id, &record::section_hash(&rf.lines, s)))
+}
+
+/// The questions of `rf` bearing `heading` that are the copy (05141f49 A):
+/// the ones with no force. A fault of a duplicate heading belongs to them,
+/// for `check` in a file and across files and for `approve` alike.
+pub fn copying_sections<'a>(rf: &'a RecordFile, heading: &str, led: &Ledger) -> Vec<&'a record::Section> {
+    rf.sections
+        .iter()
+        .filter(|s| s.heading_text == heading && !has_force(rf, s, led))
+        .collect()
+}
+
+/// A heading of `rf` that also stands in another topic file of `all`
 /// (23f21671 A), one line per heading with the message `check` prints. Every
 /// section of every other file counts, answered and superseded ones too,
-/// the same set `check` compares.
-pub fn cross_file_heading_refusals(rel: &str, sections: &[record::Section], all: &[RecordFile]) -> Vec<String> {
-    let mut heads: Vec<&str> = sections.iter().map(|s| s.heading_text.as_str()).collect();
+/// the same set `check` compares. Only a question this approve would newly
+/// approve (no id, or a hash with no `approved` row for the file) and that
+/// has no force is the copy; an unchanged question is not refused for it.
+pub fn cross_file_heading_refusals(rel: &str, rf: &RecordFile, all: &[RecordFile], led: &Ledger) -> Vec<String> {
+    let newly_approved = |s: &record::Section| {
+        let hash = record::question_hash(rf, s);
+        !s.id.as_ref().is_some_and(|id| {
+            led.rows
+                .iter()
+                .rfind(|r| r.event == "approved" && &r.id == id)
+                .is_some_and(|r| r.hash == hash && r.detail == rel)
+        })
+    };
+    let mut heads: Vec<&str> = rf.sections.iter().map(|s| s.heading_text.as_str()).collect();
     heads.sort();
     heads.dedup();
     let mut out = Vec::new();
     for h in heads {
+        if !copying_sections(rf, h, led).into_iter().any(newly_approved) {
+            continue;
+        }
         let mut paths: Vec<&str> = all
             .iter()
             .filter(|o| o.rel != rel && o.sections.iter().any(|s| s.heading_text == h))
@@ -1965,7 +1998,7 @@ fn do_approve_record(
     for m in own_name_and_heading_refusals(rel, rf.topic.as_deref(), &rf.sections) {
         refusals.push(msg::approve_prefixed(m));
     }
-    for m in cross_file_heading_refusals(rel, &rf.sections, &all_records) {
+    for m in cross_file_heading_refusals(rel, &rf, &all_records, led) {
         refusals.push(msg::approve_prefixed(m));
     }
     // Per "Does a depends entry carry the answers it holds under?": a letter

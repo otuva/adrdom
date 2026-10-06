@@ -868,7 +868,7 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
                     .any(|o| o.letter == v.chars().next().unwrap()));
         if !valid {
             parse_errors.push(format!("answer names missing option {}", v));
-            }
+        }
     }
 
     let mut shape_errors: Vec<String> = Vec::new();
