@@ -85,7 +85,9 @@ fn check_dropped(led: &Ledger, records: &[RecordFile], root: &Path) -> Vec<Failu
     let fail = |message: String| Failure { check: "ledger".to_string(), message };
     for (at, row) in led.rows.iter().enumerate().filter(|(_, r)| r.event == "dropped") {
         // Per "Does a decision change after it is answered?": a question
-        // that was answered or refused is never removed.
+        // that was answered or refused is never removed. `led.rows` is
+        // ordered by time when read (per "Does the tool take the order of
+        // ledger rows from their time?"), so `[..at]` is "earlier in time".
         if let Some(prior) = led.rows[..at]
             .iter()
             .find(|r| r.id == row.id && matches!(r.event.as_str(), "answered" | "refused"))

@@ -370,6 +370,8 @@ fn a_finding_in_a_draft_question_is_a_note_though_an_answered_one_shares_its_hea
     write_record(&dir, REL, &format!("# Gate\n\n{}\n\n**Answer:** A\n\n{}", answered, draft));
     let failures = quiet(&dir);
     assert!(!failures.contains("nosuchterm"), "{}", failures);
+    // The duplicate heading is about the answered question too: it fails.
+    assert!(failures.contains("duplicate heading"), "{}", failures);
     let all = stdout(&adr(&dir, &["check"], &[], ""));
     assert!(all.contains("nosuchterm"), "{}", all);
 }

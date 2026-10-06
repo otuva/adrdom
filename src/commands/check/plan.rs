@@ -97,13 +97,17 @@ pub(super) fn check_plan(
         // option for (per "Does a depends entry carry the answers it holds
         // under?"): `actions::letter_refusals`, the function `approve` and
         // `adr plan` read too, for every file, approved or not.
-        for msg in actions::letter_refusals(&rel, rf, led) {
-            if draft {
-                notes.push(format!("plan: {}", msg));
+        // The producer skips every question with a ledger state, so the
+        // dependent question here can always still change: the finding is
+        // read through `is_note` like the rest and is a note on a draft.
+        for m in actions::letter_refusals(&rel, rf, led) {
+            let r = Refusal::new("plan", m);
+            if is_note(rf, &r, draft, led) {
+                notes.push(format!("plan: {}", r.message));
             } else {
                 out.push(Failure {
                     check: "plan".to_string(),
-                    message: msg,
+                    message: r.message,
                 });
             }
         }
@@ -119,14 +123,25 @@ pub(super) fn check_plan(
                 .or_default()
                 .push(rel.clone());
         }
-        for m in actions::duplicate_heading_refusals(&rel, &rf.sections) {
-            if draft {
-                notes.push(format!("plan: {}", m));
-            } else {
-                out.push(Failure {
-                    check: "plan".to_string(),
-                    message: m,
-                });
+        // The finding is about every question bearing the heading: an answered
+        // or asked-unedited one among them keeps it a failure.
+        let mut dup_headings: Vec<&str> = rf.sections.iter().map(|s| s.heading_text.as_str()).collect();
+        dup_headings.sort();
+        dup_headings.dedup();
+        for h in dup_headings {
+            let at: Vec<usize> =
+                rf.sections.iter().enumerate().filter(|(_, s)| s.heading_text == h).map(|(i, _)| i).collect();
+            let bearing: Vec<_> = at.iter().map(|i| rf.sections[*i].clone()).collect();
+            for m in actions::duplicate_heading_refusals(&rel, &bearing) {
+                let r = Refusal::new("plan", m).in_sections(at.clone());
+                if is_note(rf, &r, draft, led) {
+                    notes.push(format!("plan: {}", r.message));
+                } else {
+                    out.push(Failure {
+                        check: "plan".to_string(),
+                        message: r.message,
+                    });
+                }
             }
         }
     }

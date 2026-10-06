@@ -141,3 +141,31 @@ fn same_rows_different_file_order_give_the_same_check_and_show_output() {
     let show_b = stdout(&adr(&dir_b, &["show", "--all"], &[], ""));
     assert_eq!(show_a, show_b, "show output must not depend on file order");
 }
+
+// adr: 385a57d5-5f76-454a-ae5d-9b0d6f5c1492
+//
+// `check_dropped` says an `answered` row comes before a `dropped` row by the
+// rows' times, not by their place in the file: the answered row sits after
+// the dropped one in the file but is earlier in time (a failure), and in the
+// other file the answered row sits first but is later in time (no failure).
+#[test]
+fn a_dropped_row_follows_an_answered_row_by_time_not_by_file_place() {
+    let q = "33333333-3333-3333-3333-333333333333";
+    let cause = "44444444-4444-4444-4444-444444444444";
+    let h = "5555555555555555555555555555555555555555555555555555555555555555";
+    let dropped = line("2024-01-01T00:00:05Z", "dropped", q, h, &format!("{} A", cause));
+    let early_answer = line("2024-01-01T00:00:03Z", "answered", q, h, "A");
+    let late_answer = line("2024-01-01T00:00:09Z", "answered", q, h, "A");
+    let want = format!("dropped row for {} follows its answered row", q);
+    for (rows, fails) in [
+        (vec![dropped.clone(), early_answer], true),
+        (vec![late_answer, dropped], false),
+    ] {
+        let dir = init_repo();
+        assert!(adr(&dir, &["install"], &[], "").status.success());
+        std::fs::create_dir_all(dir.join("adrdom/state")).unwrap();
+        std::fs::write(dir.join("adrdom/state/ledger.tsv"), rows.join("")).unwrap();
+        let text = stdout(&adr(&dir, &["check"], &[], ""));
+        assert_eq!(text.contains(&want), fails, "{}", text);
+    }
+}
