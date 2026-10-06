@@ -366,7 +366,7 @@ fn a_committed_deletion_still_holds_an_approved_unasked_heading() {
 }
 
 #[test]
-fn a_heading_struck_by_a_committed_plan_change_does_not_hold_the_removal() {
+fn a_heading_struck_by_a_committed_plan_change_does_not_hold_a_committed_deletion() {
     // adr: 79da6500-2246-4a80-baf1-0eaf7cad49ee
     let (dir, record) = setup(TWO, false);
     let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
@@ -379,6 +379,9 @@ fn a_heading_struck_by_a_committed_plan_change_does_not_hold_the_removal() {
     approve_record(&dir, REL);
     commit(&dir);
     std::fs::remove_file(&record).unwrap();
+    // The deletion is committed: HEAD has no copy, only the walk through
+    // history finds the version the strike approved.
+    commit(&dir);
 
     let before = ledger(&dir);
     let out = approve_removal(&dir);
@@ -387,4 +390,48 @@ fn a_heading_struck_by_a_committed_plan_change_does_not_hold_the_removal() {
     assert!(err.contains(&ids[0]) && err.contains("First question?"), "{}", err);
     assert!(!err.contains(&ids[1]) && !err.contains("Second question?"), "{}", err);
     assert_eq!(ledger(&dir), before);
+}
+
+#[test]
+fn check_names_each_id_of_a_committed_deletion_once_with_the_removal_move() {
+    // adr: 79da6500-2246-4a80-baf1-0eaf7cad49ee
+    let (dir, record) = setup(TWO, true);
+    let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
+    assert!(adr_answer(&dir, &ids[0], "A").status.success());
+    commit(&dir);
+    std::fs::remove_file(&record).unwrap();
+    commit(&dir);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    let text = format!("{}{}", stdout(&out), stderr(&out));
+    for id in &ids {
+        // A failure line is about the id it opens with; the move names the others.
+        let lines: Vec<&str> = text
+            .lines()
+            .filter(|l| !l.starts_with("plan:") && l.split_once(": ").is_some_and(|(_, rest)| rest.starts_with(id.as_str())))
+            .collect();
+        assert_eq!(lines.len(), 1, "{} named {} times: {}", id, lines.len(), text);
+        assert!(lines[0].contains("agent restores") && lines[0].contains(&format!("owner runs: adr approve {}", REL)), "{}", lines[0]);
+    }
+}
+
+#[test]
+fn an_uncommitted_approval_of_a_strike_falls_back_to_the_newest_committed_plan() {
+    // adr: 79da6500-2246-4a80-baf1-0eaf7cad49ee
+    let (dir, record) = setup(TWO, false);
+    let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
+    commit(&dir);
+    let text = std::fs::read_to_string(&record).unwrap();
+    let kept = text[..text.find("### 1.2").unwrap()].trim_end().to_string() + "\n";
+    let kept: String = kept.lines().filter(|l| !l.starts_with("unrelated:")).map(|l| format!("{}\n", l)).collect();
+    std::fs::write(&record, &kept).unwrap();
+    approve_record(&dir, REL);
+    // Not committed: no committed version matches the latest approval, so the
+    // newest committed version stands in and still names the struck heading.
+    std::fs::remove_file(&record).unwrap();
+    let out = approve_removal(&dir);
+    assert!(!out.status.success(), "{}", stdout(&out));
+    let err = stderr(&out);
+    assert!(err.contains(&ids[0]) && err.contains(&ids[1]), "{}", err);
 }

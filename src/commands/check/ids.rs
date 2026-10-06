@@ -95,7 +95,12 @@ pub(super) fn check_ids(
         // An answered-and-current id missing from every file is reported
         // below, from `missing_answered` (shared with `approve`'s
         // `missing_answered_refusals`), so it isn't printed twice here.
-        if event == Some("answered") {
+        // Unless its file is gone with the removal awaiting approval: the
+        // removed-file branch below names that file's move for it.
+        let in_removed = led
+            .latest_for_id("approved", &id)
+            .is_some_and(|r| removed.iter().any(|(d, _)| *d == r.detail));
+        if event == Some("answered") && !in_removed {
             continue;
         }
         // A superseded id outside a stale edit is its ordinary, permanent

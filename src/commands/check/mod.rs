@@ -154,8 +154,6 @@ fn build(
             actions::record_refusals(&rf.rel, rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &records, replaced, &led)
         })
         .collect();
-    let missing_answered = actions::missing_answered_refusals(&records, &led);
-
     let present_ids: std::collections::HashSet<String> = records
         .iter()
         .flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.clone()))
@@ -169,6 +167,19 @@ fn build(
             })
             .collect();
     notes.extend(removed_files.iter().map(|(rel, holds)| msg::removal_awaiting(rel, holds)));
+    // An answered id of a removed file is named by the ids category with the
+    // file's removal move, so the missing-answered refusal leaves it out.
+    let in_removed_file: std::collections::HashSet<String> = led
+        .rows
+        .iter()
+        .filter(|r| r.id != "-" && r.event == "answered")
+        .filter(|r| {
+            led.latest_for_id("approved", &r.id)
+                .is_some_and(|a| removed_files.iter().any(|(rel, _)| *rel == a.detail))
+        })
+        .map(|r| r.id.clone())
+        .collect();
+    let missing_answered = actions::missing_answered_refusals_except(&records, &led, &in_removed_file);
     let mut failures: Vec<String> = unreadable_failures;
     let awaiting_early: Vec<String> = records
         .iter()

@@ -677,8 +677,12 @@ pub struct RemovalHolds {
 /// name a heading already struck by an uncommitted approval; the move stays
 /// executable: restore the file, strike the heading again, approve.
 fn latest_approved_version(root: &Path, rel: &str, led: &Ledger) -> Option<RecordFile> {
+    // An approved removal is the empty plan: no version to read.
+    if led.latest_for_path("approved", rel).is_some_and(|r| r.hash == empty_plan_hash()) {
+        return None;
+    }
     // A bound on the versions read; the match is almost always the first few.
-    const WALK_LIMIT: usize = 200;
+    const WALK_LIMIT: usize = 50;
     let log = repo::git(root, &["log", "--format=%H", "--", rel])?;
     let mut newest: Option<RecordFile> = None;
     for commit in log.lines().filter(|l| !l.is_empty()).take(WALK_LIMIT) {
@@ -2022,6 +2026,13 @@ pub fn cross_file_heading_refusals(rel: &str, rf: &RecordFile, all: &[RecordFile
 /// once regardless of which file was named; `check` likewise once for the
 /// whole repo. Shared with `check`'s `ids` category.
 pub fn missing_answered_refusals(records: &[RecordFile], led: &Ledger) -> Vec<Refusal> {
+    missing_answered_refusals_except(records, led, &HashSet::new())
+}
+
+/// `missing_answered_refusals` leaving out the ids in `skip`: `check` skips
+/// the ids of a removed file awaiting removal, which its `ids` category
+/// names with the file's removal move instead. `approve` skips none.
+pub fn missing_answered_refusals_except(records: &[RecordFile], led: &Ledger, skip: &HashSet<String>) -> Vec<Refusal> {
     let mut present_ids: HashSet<String> = HashSet::new();
     for rf in records {
         for sec in &rf.sections {
@@ -2043,7 +2054,7 @@ pub fn missing_answered_refusals(records: &[RecordFile], led: &Ledger) -> Vec<Re
 
     let mut out = Vec::new();
     for id in &state_ids {
-        if present_ids.contains(id) {
+        if present_ids.contains(id) || skip.contains(id) {
             continue;
         }
         if let Some(r) = led.latest_state(id) {

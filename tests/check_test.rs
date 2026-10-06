@@ -2225,10 +2225,13 @@ fn check_staged_treats_a_staged_deleted_topic_file_as_gone() {
     let text = stdout(&out);
     assert!(!out.status.success(), "{}", text);
     assert!(
-        text.contains(&format!("asked row id {} (\"3.1 Is this pass?\") not found in any topic file", id)),
+        text.contains(&format!("ids: {} (\"3.1 Is this pass?\", answered) was removed from the plan", id))
+            && text.contains("owner runs: adr approve adrdom/decisions/example.md"),
         "a staged deletion must be read as the file being gone, at a commit: {}",
         text
     );
+    // One finding for the id: the ledger category leaves it to the ids line.
+    assert!(!text.contains("not found in any topic file"), "{}", text);
 }
 
 // A brand new test file's tie counts once it is staged, even though its
