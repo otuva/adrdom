@@ -253,22 +253,23 @@ pub fn circular_definition(chain: &str) -> String {
 /// uuid that no longer exists in `adrdom/terms.md` at all.
 /// `word` is the word `source` names the term by, when it names it by a
 /// word (its terms line); a depends line names it by the identifier alone.
-/// `decision_id` is the dependent's id when it is a current decision. Marking
-/// the term retired is not offered: a retire is held while the dependent
-/// stands (per "What holds a retire of a term?"), so the move is restoring the
-/// term as it was, or superseding the decision first.
+/// `decision` is the dependent's id and heading when it is a current
+/// decision. Marking the term retired is not offered: a retire is held while
+/// the dependent stands (per "What holds a retire of a term?"), so the move
+/// is restoring the term as it was, then superseding the decision, named the
+/// way `term_retired_decision_next` names its move.
 pub fn term_removed_but_carried(
     uuid: &str,
     word: Option<&str>,
     source: &str,
-    decision_id: Option<&str>,
+    decision: Option<(&str, &str)>,
 ) -> String {
-    let action = match decision_id {
-        Some(id) => format!(
-            "restores the term in adrdom/terms.md, or first writes a question that supersedes {}",
-            id
-        ),
-        None => "restores the term in adrdom/terms.md".to_string(),
+    let next = match decision {
+        Some((id, heading)) => Next::agent(format!(
+            "restores the term in adrdom/terms.md, then supersedes {} (\"{}\") with a new question",
+            id, heading
+        )),
+        None => Next::agent("restores the term in adrdom/terms.md").and_owner_runs("adr approve adrdom/terms.md"),
     };
     refuse(
         format!(
@@ -276,7 +277,7 @@ pub fn term_removed_but_carried(
             named(uuid, word),
             source
         ),
-        Next::agent(action).and_owner_runs("adr approve adrdom/terms.md"),
+        next,
     )
 }
 
@@ -1700,6 +1701,12 @@ pub fn removed_from_plan(id: &str, heading: &str, event: &str, removed_file: Opt
         Some(rel) => refuse(what, Next::owner_runs(format!("adr approve {}", rel))),
         None => refuse(what, Next::owner_runs("adr approve <topic file>")),
     }
+}
+
+/// An asked/refused id whose file is removed, its removal awaiting approval:
+/// `next` is the move `removal_move` names for that file.
+pub fn removed_with_file(id: &str, heading: &str, event: &str, next: Next) -> String {
+    refuse(format!("{} (\"{}\", {}) was removed from the plan", id, heading, event), next)
 }
 
 /// `heading` is the heading the ledger holds for the question, from the
@@ -3140,7 +3147,7 @@ mod tests {
             terms_edit_too_wide(&["a".to_string(), "b".to_string()], false),
             too_long("x.md", 3, "heading", "option", "21 words, the limit is 20"),
             term_removed_but_carried("uuid-1", Some("word"), "term \"x\"", None),
-            term_removed_but_carried("uuid-1", Some("word"), "id-1: \"heading\"", Some("id-1")),
+            term_removed_but_carried("uuid-1", Some("word"), "id-1: \"heading\"", Some(("id-1", "heading"))),
             term_retired_but_carried("x", "term \"y\"", term_reword_and_approve()),
             term_retired_but_carried("x", "id-1: \"heading\"", term_retired_decision_next("x", "id-1", "heading")),
             word_moved_off_term("word", "term", "term \"y\"", term_reword_and_approve()),
@@ -3388,21 +3395,60 @@ pub fn removal_not_a_topic_file(rel: &str) -> String {
     )
 }
 
-/// A removed topic file still held a question that is open.
-pub fn removal_holds_open(rel: &str, id: &str, heading: &str, what: &str) -> String {
+/// What keeps a removed topic file from being approved away: a question
+/// of it that is a current decision, asked and not answered, or approved and
+/// not yet asked.
+pub struct RemovalHold {
+    pub id: String,
+    pub heading: String,
+    pub what: &'static str,
+}
+
+/// The move that clears a removal held by `holds`, or the owner's approval
+/// when nothing holds it. The agent restores the file, then settles each
+/// hold by a plan change the owner approves: a current decision is
+/// superseded, any other question struck from the plan.
+pub fn removal_move(rel: &str, holds: &[RemovalHold]) -> Next {
+    if holds.is_empty() {
+        return Next::owner_runs(format!("adr approve {}", rel));
+    }
+    let steps: Vec<String> = holds
+        .iter()
+        .map(|h| {
+            if h.what == "a current decision" {
+                format!("supersedes {} with a new question", h.id)
+            } else {
+                format!("strikes {} from the plan", h.id)
+            }
+        })
+        .collect();
+    Next::agent(format!(
+        "restores {}, then {}, by a plan change the owner approves",
+        rel,
+        steps.join(", ")
+    ))
+}
+
+/// A removed topic file still held a current decision or an open question.
+pub fn removal_holds_open(rel: &str, hold: &RemovalHold) -> String {
     refuse(
-        format!("{} cannot be removed: {} is {}", rel, named(id, Some(heading)), what),
-        Next::agent("restores the file"),
+        format!(
+            "{} cannot be removed: {} is {}",
+            rel,
+            named(&hold.id, Some(&hold.heading)),
+            hold.what
+        ),
+        removal_move(rel, std::slice::from_ref(hold)),
     )
 }
 
 /// A topic file gone from the content check judges, its removal not yet
-/// approved: a note.
-pub fn removal_awaiting(rel: &str) -> String {
+/// approved: a note naming the move that clears it.
+pub fn removal_awaiting(rel: &str, holds: &[RemovalHold]) -> String {
     format!(
         "plan: {} removed, awaiting approval; {}",
         rel,
-        Next::owner_runs(format!("adr approve {}", rel)).render()
+        removal_move(rel, holds).render()
     )
 }
 
@@ -3411,7 +3457,7 @@ pub fn show_removal_awaiting(rel: &str) -> String {
     format!("# {} (removed, awaiting approval)", rel)
 }
 
-/// The next line of a removed topic file: the owner approves the removal.
-pub fn removal_next(rel: &str) -> String {
-    Next::owner_runs(format!("adr approve {}", rel)).render()
+/// The next line of a removed topic file.
+pub fn removal_next(rel: &str, holds: &[RemovalHold]) -> String {
+    removal_move(rel, holds).render()
 }

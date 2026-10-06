@@ -156,8 +156,19 @@ fn build(
         .collect();
     let missing_answered = actions::missing_answered_refusals(&records, &led);
 
-    let removed_files = actions::removal_awaiting(&led, &|rel| source.exists(root, rel));
-    notes.extend(removed_files.iter().map(|rel| msg::removal_awaiting(rel)));
+    let present_ids: std::collections::HashSet<String> = records
+        .iter()
+        .flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.clone()))
+        .collect();
+    let removed_files: Vec<(String, Vec<msg::RemovalHold>)> =
+        actions::removal_awaiting(&led, &|rel| source.exists(root, rel))
+            .into_iter()
+            .map(|rel| {
+                let holds = actions::removal_holds(root, &rel, &led, &present_ids).holds;
+                (rel, holds)
+            })
+            .collect();
+    notes.extend(removed_files.iter().map(|(rel, holds)| msg::removal_awaiting(rel, holds)));
     let mut failures: Vec<String> = unreadable_failures;
     let awaiting_early: Vec<String> = records
         .iter()

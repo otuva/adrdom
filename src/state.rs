@@ -190,6 +190,14 @@ impl DependentSource {
         }
     }
 
+    /// The id and heading of a current decision dependent.
+    pub fn decision_ref(&self) -> Option<(&str, &str)> {
+        match self {
+            DependentSource::Decision { id, heading, .. } => Some((id, heading)),
+            _ => None,
+        }
+    }
+
     pub fn decision_id(&self) -> Option<&str> {
         match self {
             DependentSource::Decision { id, .. } => Some(id),

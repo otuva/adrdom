@@ -11,6 +11,8 @@ const ONE: &str = "# Example\n\nContext prose.\n\n### 1.1 Only question?\ndepend
 
 const TWO: &str = "# Example\n\nContext prose.\n\n### 1.1 First question?\ndepends: decision\n\nProblem: the decision at hand.\n\nStandard: s.\n\n- A) Answer A.\n  Why: reasons.\n  Costs: costs.\n- B) Answer B.\n  Why: other reasons.\n  Costs: other costs.\n\n### 1.2 Second question?\ndepends: decision\n\nProblem: another decision.\n\nStandard: s.\n\n- A) Answer A.\n  Why: reasons.\n  Costs: costs.\n- B) Answer B.\n  Why: other reasons.\n  Costs: other costs.\n";
 
+const SECOND: &str = "\n### 1.2 Added question?\ndepends: decision\n\nProblem: another decision.\n\nStandard: s.\n\n- A) Answer A.\n  Why: reasons.\n  Costs: costs.\n- B) Answer B.\n  Why: other reasons.\n  Costs: other costs.\n";
+
 const REL: &str = "adrdom/decisions/example.md";
 
 fn ledger(dir: &Path) -> String {
@@ -116,11 +118,23 @@ fn approve_refuses_the_removal_of_a_file_holding_a_current_decision() {
     assert!(adr_answer(&dir, &id, "A").status.success());
     commit(&dir);
     std::fs::remove_file(&record).unwrap();
+
+    // check and show name the agent's move, never the owner's refused approve.
+    let out = adr(&dir, &["check"], &[], "");
+    let text = format!("{}{}", stdout(&out), stderr(&out));
+    assert!(text.contains("agent restores") && text.contains(&format!("supersedes {}", id)), "{}", text);
+    assert!(!text.contains(&format!("owner runs: adr approve {}", REL)), "{}", text);
+    let out = adr(&dir, &["show"], &[], "");
+    let text = stdout(&out);
+    assert!(text.contains("agent restores") && text.contains(&format!("supersedes {}", id)), "{}", text);
+    assert!(!text.contains(&format!("owner runs: adr approve {}", REL)), "{}", text);
+
     let before = ledger(&dir);
     let out = approve_removal(&dir);
     assert!(!out.status.success());
     let err = stderr(&out);
     assert!(err.contains(&id) && err.contains("Only question?"), "{}", err);
+    assert!(err.contains("agent restores"), "{}", err);
     assert_eq!(ledger(&dir), before);
 }
 
@@ -132,11 +146,15 @@ fn approve_refuses_the_removal_of_a_file_holding_an_asked_question() {
     commit(&dir);
     std::fs::remove_file(&record).unwrap();
 
-    // check names the file for the asked id, not the bare "not found".
+    // check names the file for the asked id, not the bare "not found", and
+    // the agent's move: the owner's approve would be refused.
     let out = adr(&dir, &["check"], &[], "");
     let text = format!("{}{}", stdout(&out), stderr(&out));
-    assert!(text.contains(&id) && text.contains(&format!("adr approve {}", REL)), "{}", text);
+    assert!(text.contains(&id) && text.contains(&format!("agent restores {}", REL)), "{}", text);
+    assert!(!text.contains(&format!("owner runs: adr approve {}", REL)), "{}", text);
     assert!(!text.contains("ledger id"), "{}", text);
+    let out = adr(&dir, &["show"], &[], "");
+    assert!(!stdout(&out).contains(&format!("owner runs: adr approve {}", REL)), "{}", stdout(&out));
 
     let before = ledger(&dir);
     let out = approve_removal(&dir);
@@ -185,5 +203,86 @@ fn show_and_plan_do_not_crash_on_a_removed_file() {
     assert!(out.status.success(), "{}", stderr(&out));
     assert!(stdout(&out).contains(&format!("adr approve {}", REL)), "{}", stdout(&out));
     let out = adr(&dir, &["plan", dir.join(REL).to_str().unwrap()], &[], "");
-    assert!(out.status.code().is_some(), "plan must exit normally");
+    let text = format!("{}{}", stdout(&out), stderr(&out));
+    assert_ne!(out.status.code(), Some(101), "plan must not panic: {}", text);
+    // A named refusal, an exit code of 1: the file is not there to plan.
+    assert_eq!(out.status.code(), Some(1), "{}", text);
+    assert!(text.contains("plan: cannot read") && text.contains("agent checks the path"), "{}", text);
+}
+
+#[test]
+fn a_question_added_asked_and_uncommitted_holds_the_removal() {
+    // adr: 79da6500-2246-4a80-baf1-0eaf7cad49ee
+    let (dir, record) = setup(ONE, true);
+    let first = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
+    assert!(adr_answer(&dir, &first, "refuse").status.success());
+    commit(&dir);
+
+    // Q2 is added, approved and asked, and never committed.
+    let both = format!("{}{}", std::fs::read_to_string(&record).unwrap(), SECOND);
+    write_record(&dir, REL, &both);
+    approve_record(&dir, REL);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
+    let second = ids.iter().find(|i| **i != first).unwrap().clone();
+    std::fs::remove_file(&record).unwrap();
+
+    let before = ledger(&dir);
+    let out = approve_removal(&dir);
+    assert!(!out.status.success(), "{}", stdout(&out));
+    let err = stderr(&out);
+    assert!(err.contains(&second) && err.contains("Added question?"), "{}", err);
+    assert_eq!(ledger(&dir), before);
+
+    // check and show agree: the agent's move, not the owner's.
+    let out = adr(&dir, &["check"], &[], "");
+    let text = format!("{}{}", stdout(&out), stderr(&out));
+    assert!(!text.contains(&format!("owner runs: adr approve {}", REL)), "{}", text);
+    let out = adr(&dir, &["show"], &[], "");
+    assert!(!stdout(&out).contains(&format!("owner runs: adr approve {}", REL)), "{}", stdout(&out));
+}
+
+#[test]
+fn approving_an_unrelated_file_leaves_the_ids_of_a_removed_file_alone() {
+    // adr: 79da6500-2246-4a80-baf1-0eaf7cad49ee
+    let (dir, record) = setup(ONE, true);
+    let id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
+    commit(&dir);
+    std::fs::remove_file(&record).unwrap();
+
+    let other = "# Other\n\n### 3.1 Unrelated decision?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) Answer A.\n  Why: reasons.\n  Costs: costs.\n- B) Answer B.\n  Why: other reasons.\n  Costs: other costs.\n";
+    write_record(&dir, "adrdom/decisions/other.md", other);
+    approve_record(&dir, "adrdom/decisions/other.md");
+    assert!(
+        !ledger(&dir).lines().any(|l| l.contains("\twithdrawn\t") && l.contains(id.as_str())),
+        "the removed file's asked id must not be withdrawn by another file's approval"
+    );
+
+    // The removal is still refused for the open question.
+    let out = approve_removal(&dir);
+    assert!(!out.status.success());
+    assert!(stderr(&out).contains("asked and not answered"), "{}", stderr(&out));
+}
+
+#[test]
+fn deleting_a_draft_never_approved_needs_no_owner_act() {
+    // adr: 79da6500-2246-4a80-baf1-0eaf7cad49ee
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "decision");
+    let record = write_record(&dir, REL, ONE);
+    commit(&dir);
+    std::fs::remove_file(&record).unwrap();
+
+    let before = ledger(&dir);
+    let out = approve_removal(&dir);
+    assert!(!out.status.success(), "{}", stdout(&out));
+    assert!(stderr(&out).contains("never approved"), "{}", stderr(&out));
+    assert_eq!(ledger(&dir), before);
+
+    let out = adr(&dir, &["check"], &[], "");
+    let text = format!("{}{}", stdout(&out), stderr(&out));
+    assert!(!text.contains(REL), "check says nothing of a removed draft: {}", text);
+    let out = adr(&dir, &["show"], &[], "");
+    assert!(!stdout(&out).contains(REL), "{}", stdout(&out));
 }
