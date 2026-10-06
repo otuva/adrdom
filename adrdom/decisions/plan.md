@@ -329,20 +329,18 @@ Standard: one field, one line, entries separated by commas, as in email and HTTP
 
 **Answer:** A
 
-### What stops a loaded phrase in a question?
-depends: e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 3c8d4c9c-abca-4faa-b7c1-aae39951376c, 178a232e-b51c-4122-a1a9-9e9ed6970748=*
-unrelated: 923818a7-05c6-4977-bbaf-53ee8f3773ef, 902bd279-e6c1-4a21-9637-a3a43f360bae, 423065fc-6d9f-40c8-a0bf-8e1779e86b38, 277a8338-c57a-43cc-8b28-6b42e9347f6a, 735a32bd-db0c-428e-b65e-2acc750671b0, d808917b-0717-45ad-ab83-9fa274b9a9d4, 7cf81ded-be48-4777-b83e-f8a2998c1ab5, aef1b384-2b33-47a2-92a8-ec7f8fb258ef, da59b448-1afb-4469-b40e-69eda8f253c2, 6108b8b2-911e-443b-abe0-4c6f8b407384, aa475aa3-05b2-429a-b33a-46b1dcb52049, 21ae8ae0-6884-4d3c-8464-024a8a5aae2d, c3127af2-4c96-48d5-a164-bac49a9a09ec, 7a1e7b81-0967-4ed2-8a8a-c7153056836f, b741b573-a2ee-498e-98fd-3a7e7d319470, 3ce82f34-a4fc-4918-bb9b-65a0d81a6853, 5b9170f9-a48e-4ddd-a7dc-73c3be1c2fb8, 28b5837d-46ae-459e-ba4c-12265ef07ac1, 9913568f-6b85-4d26-946b-c6e108f9aa51, 05141f49-d9d2-407c-b60c-ebb195a05864, a82db5b7-969c-44e9-9eec-876ead7099d3, 23f21671-e34c-44aa-8804-6163d975807f
-id: 8b324fe0-621b-44d9-b7fe-f8e0ee15164e
-terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answer=b36113a1-1384-4e4c-a798-8399f4181366, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a
+### What holds the list of loaded phrases?
+depends: 277a8338-c57a-43cc-8b28-6b42e9347f6a, 178a232e-b51c-4122-a1a9-9e9ed6970748
+unrelated: a82db5b7-969c-44e9-9eec-876ead7099d3, 08a1b488-32fc-4dc7-b4b3-93a6e768725f, c6da863d-5085-402f-815a-9bb832b4df7e, 94677ed8-eaf6-46e2-bc71-7392fa0805bf, 946263aa-519a-47aa-b743-5cdcf52f5d35, b3cb190d-d6f1-4930-bdcd-7827e31ac62a, aef1b384-2b33-47a2-92a8-ec7f8fb258ef, 528fe6f6-6d77-42d5-9086-017048d1448d, f1294391-48b0-4ba3-82b4-c1d6b1c2c884, 7a1e7b81-0967-4ed2-8a8a-c7153056836f, fcc5b6fe-9072-42ea-a25b-2be72e094bac, 28b5837d-46ae-459e-ba4c-12265ef07ac1, 6108b8b2-911e-443b-abe0-4c6f8b407384, 6b3d8e59-e145-49e1-860d-a79d753d745c, 7d47885f-3a45-45f9-a092-4314301f0d7b, 1b181f10-97f4-4bbe-8939-d5842192126c
+id: 149c9a73-16eb-46aa-9806-2950423ee1a2
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answer=b36113a1-1384-4e4c-a798-8399f4181366, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a
 
 Problem: a question that names who spoke, describes the code of the moment, carries a date, opens by assuming an answer, or joins two questions reaches the owner loaded, and the owner is the costliest place to catch it.
 Standard: style linters such as Vale run when text is written, with the phrase list kept in the tool.
 
-- A) A phrase list in the tool: approve stops a hit in headings and prose, ask one in a body.
+- A) The tool: the list lives in its code and holds for every repository.
   Why: the same guard runs in every repository and for every agent, before a loaded question reaches the owner.
   Costs: a false hit costs the agent a reword, and changing the list is a code change and a release.
-- B) A test in this repository alone, over its own records.
+- B) This repository: a file of its own, read by a test over its records.
   Why: nothing is added to the tool.
   Costs: other repositories get no guard, and a loaded question there is caught only when the owner reads it.
-
-**Answer:** refused
