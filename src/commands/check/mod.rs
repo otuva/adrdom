@@ -127,11 +127,11 @@ fn build(
 
     // Every refusal each topic file earns on its own (shared with
     // `approve`'s `do_approve_record`), one `Vec` per record in `records`'
-    // order, plus the cross-file "answered id missing from every topic
-    // file" refusal, computed once for the whole repo. `parse`/`tells`/
-    // `plan` pull their failures from these instead of re-deriving the
-    // same shape/tells/depends checks `approve` already refuses on; `ids`
-    // pulls the missing-answered-id lines the same way.
+    // order. `parse`/`tells`/`plan` pull their failures from these instead
+    // of re-deriving the same shape/tells/depends checks `approve` already
+    // refuses on. The cross-file "answered id missing from every topic
+    // file" refusal is computed later, once, after `removed_files`, with
+    // the ids of removed files skipped; `ids` pulls its lines from that.
     let names = crate::view::heading_texts(&records);
     // Which plans are approved comes from `raw_hashes`, taken before the
     // normalize pass; computed once and shared with `check_terms`. The

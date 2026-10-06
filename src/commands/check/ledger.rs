@@ -47,21 +47,13 @@ pub(super) fn check_ledger(
             continue;
         }
         // An id whose approved file is gone, its removal awaiting approval:
-        // the file's own move (`removal_move`), which clears it where
-        // `adr approve <topic file>` would not. An asked or refused id is
-        // already reported with that move by the ids check, so this line
-        // is left out for it (one finding per fault), an answered one too.
-        let removed = led
+        // every state it can be in (asked, refused, answered) is reported
+        // once by the ids check with the file's removal move, so the ledger
+        // check leaves it out (one finding per fault).
+        let in_removed = led
             .latest_for_id("approved", &row.id)
-            .and_then(|a| removed_files.iter().find(|(rel, _)| *rel == a.detail));
-        if let Some((rel, holds)) = removed {
-            if matches!(led.latest_state(&row.id).map(|r| r.event.as_str()), Some("asked" | "refused" | "answered")) {
-                continue;
-            }
-            out.push(Failure {
-                check: "ledger".to_string(),
-                message: msg::ledger_asked_id_in_removed_file(&row.id, Some(row.detail.as_str()), msg::removal_move(rel, holds)),
-            });
+            .is_some_and(|a| removed_files.iter().any(|(rel, _)| *rel == a.detail));
+        if in_removed {
             continue;
         }
         out.push(Failure {

@@ -435,3 +435,24 @@ fn an_uncommitted_approval_of_a_strike_falls_back_to_the_newest_committed_plan()
     let err = stderr(&out);
     assert!(err.contains(&ids[0]) && err.contains(&ids[1]), "{}", err);
 }
+
+#[test]
+fn an_approved_removal_leaves_check_silent_about_the_path_and_a_second_approve_writes_nothing() {
+    // adr: 79da6500-2246-4a80-baf1-0eaf7cad49ee
+    let (dir, record) = setup(ONE, true);
+    let id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
+    assert!(adr_answer(&dir, &id, "refuse").status.success());
+    commit(&dir);
+    std::fs::remove_file(&record).unwrap();
+    assert!(approve_removal(&dir).status.success());
+
+    let out = adr(&dir, &["check"], &[], "");
+    let text = format!("{}{}", stdout(&out), stderr(&out));
+    assert!(out.status.success(), "check: {}", text);
+    assert!(!text.contains(REL), "check names the removed path: {}", text);
+
+    let after = ledger(&dir);
+    let out = approve_removal(&dir);
+    assert!(out.status.success(), "approve: {}", stderr(&out));
+    assert_eq!(ledger(&dir), after);
+}
