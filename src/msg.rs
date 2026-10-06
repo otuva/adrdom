@@ -721,6 +721,11 @@ pub fn not_asked_yet(heading: &str, rel: &str) -> String {
 /// plan has to drop or replace.
 pub enum Waits {
     Unanswered { heading: String, command: Option<String> },
+    /// No decision yet and no question to answer first: the chain it waits
+    /// on ends on `refused`, a refused question.
+    Stuck { heading: String, refused: String },
+    /// No decision yet and no body written: the agent writes it, then asks.
+    Unwritten { heading: String },
     RefusedTarget { heading: String },
     RefusedTier { heading: String },
 }
@@ -735,8 +740,19 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> String {
     let mut ask = false;
     let mut command: Option<String> = None;
     let mut refused = Vec::new();
+    let mut unwritten = Vec::new();
     for w in waits {
         match w {
+            Waits::Stuck { heading: h, refused: r } => {
+                parts.push(format!("\"{}\" has no decision yet and waits on the refused \"{}\"", h, r));
+                if !refused.contains(&r) {
+                    refused.push(r);
+                }
+            }
+            Waits::Unwritten { heading: h } => {
+                parts.push(format!("\"{}\" has no decision yet and no body", h));
+                unwritten.push(h);
+            }
             Waits::Unanswered { heading: h, command: c } => {
                 parts.push(format!("\"{}\" has no decision yet", h));
                 match c {
@@ -757,6 +773,13 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> String {
     // One owner command, last: the plan's approval when a refused question
     // has to go, else the first answer owed.
     let mut moves = Vec::new();
+    if !unwritten.is_empty() {
+        moves.push(Next::agent(format!(
+            "writes the body of {}, then runs adr ask {}",
+            quoted(&unwritten),
+            rel
+        )));
+    }
     if ask {
         moves.push(Next::agent(format!("runs adr ask {}", rel)));
     }
@@ -786,6 +809,19 @@ pub fn next_answer_waits(heading: &str, on: &[String]) -> String {
 pub fn drop_without_id(heading: &str) -> String {
     refuse(
         format!("answering would remove \"{}\", which has no identifier", heading),
+        Next::agent("says so in chat and stops"),
+    )
+}
+
+/// An answer that would remove a question that holds a decision or a
+/// refusal (per "Does a decision change after it is answered?").
+pub fn drop_of_closed(heading: &str, refused: bool) -> String {
+    refuse(
+        format!(
+            "answering would remove \"{}\", which is {}",
+            heading,
+            if refused { "refused" } else { "answered" }
+        ),
         Next::agent("says so in chat and stops"),
     )
 }
@@ -2089,6 +2125,14 @@ pub fn ledger_dropped_without_cause(id: &str, cause: &str) -> String {
 pub fn ledger_dropped_not_approved(id: &str) -> String {
     refuse(
         format!("dropped row for {} matches no approved row of that question", id),
+        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
+    )
+}
+
+/// A `dropped` row of a question with an earlier `answered` or `refused` row.
+pub fn ledger_dropped_closed(id: &str, event: &str) -> String {
+    refuse(
+        format!("dropped row for {} follows its {} row", id, event),
         Next::owner_runs("git diff adrdom/state/ledger.tsv"),
     )
 }

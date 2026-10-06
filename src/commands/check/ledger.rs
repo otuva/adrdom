@@ -9,7 +9,7 @@ use std::path::Path;
 /// The state-row events `check_same_time_competition`'s rule (1) matches
 /// (ce19c883-c61d-477b-a6d4-fee5134c6e9a T): the same set `Ledger::latest_state`
 /// already reads a question's state from.
-const COMPETING_STATE_EVENTS: [&str; 5] = ["asked", "answered", "refused", "superseded", "withdrawn"];
+const COMPETING_STATE_EVENTS: [&str; 6] = ["asked", "answered", "refused", "superseded", "withdrawn", "dropped"];
 
 /// The events rule (3) matches: every event whose `detail` column carries a
 /// file path (src/actions.rs's `approved`, `context`, `terms` and `blame`
@@ -83,7 +83,15 @@ pub(super) fn check_ledger(
 fn check_dropped(led: &Ledger, records: &[RecordFile], root: &Path) -> Vec<Failure> {
     let mut out = Vec::new();
     let fail = |message: String| Failure { check: "ledger".to_string(), message };
-    for row in led.rows.iter().filter(|r| r.event == "dropped") {
+    for (at, row) in led.rows.iter().enumerate().filter(|(_, r)| r.event == "dropped") {
+        // Per "Does a decision change after it is answered?": a question
+        // that was answered or refused is never removed.
+        if let Some(prior) = led.rows[..at]
+            .iter()
+            .find(|r| r.id == row.id && matches!(r.event.as_str(), "answered" | "refused"))
+        {
+            out.push(fail(msg::ledger_dropped_closed(&row.id, &prior.event)));
+        }
         let parts: Vec<&str> = row.detail.split(' ').collect();
         let cause: (&str, Option<char>) = match parts.as_slice() {
             [id] if record::is_uuid(id) => (id, None),

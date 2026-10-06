@@ -1074,8 +1074,8 @@ Standard: s2.\n\n\
         let (open_tier, waits_on) = open_tier_and_waits_on(&rf);
         // Tier one is fully answered; tier two (unanswered) is now the
         // lowest open tier, and its own question is what `waits_on` names
-        // -- the same section `ask` would name if a later tier existed and
-        // tried to jump ahead of it.
+        // -- the same section `answer` would name for a question of a
+        // later tier.
         assert_eq!(open_tier, Some(2));
         assert_eq!(waits_on.as_deref(), Some("2.1 Second question?"));
 

@@ -1,4 +1,4 @@
-// `ask`: the derived tier rule, the cap, the two refused-dependency
+// `ask` and `answer`: the derived tiers, the cap, the two refused-dependency
 // refusals (generic blocker + specific "stands on refused"),
 // the mandatory-set refusals, and the `assumes` rows/tier print
 // that come out of a successful ask.
@@ -299,8 +299,8 @@ fn answer_refuses_a_tier_above_a_refused_question_until_the_plan_changes() {
 
     // Qx (refused) precedes Q1 (left plainly unanswered) in file order.
     // Q2 depends only on Q1, never on Qx, so the generic tier-order
-    // blocker (picked by file order within the open tier) is what must
-    // fire, naming Qx as refused.
+    // blocker (picked by file order within the lowest open tier) is what
+    // `answer` names, as refused.
     let content = r#"# Example
 
 ### 1.0 Is the widget on backorder?
@@ -708,7 +708,7 @@ fn ask_prints_the_tier_and_writes_an_assumes_row_per_dependent() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
     // Q2 is a skeleton (heading + depends only): it must not itself become
-    // a candidate blocked by the tier rule, but it still counts as a
+    // a candidate for ask, but it still counts as a
     // dependent of Q1 for the `assumes` row this ask writes.
     let content = format!("{}{}", Q1, q2_depends_on_q1("=B|A"));
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);

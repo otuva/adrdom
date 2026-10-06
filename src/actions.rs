@@ -223,8 +223,10 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
 /// "Does a refused question hold the tiers above it?"): `state::answer_waits`
 /// is the one test, the `next` lines and the page read it too. Shared by
 /// a letter and a refusal. An unanswered target names the owner's
-/// `adr answer` once it is asked and stands as asked, else the agent's
-/// `adr ask`; a refused question names the plan change and the approval.
+/// `adr answer` of the first question in its chain that `answer` takes, once
+/// that question is asked and stands as asked, else the agent's `adr ask`
+/// (or the writing of a body first); a chain that ends on a refused question
+/// names the plan change and the approval.
 fn answer_gate(rf: &RecordFile, led: &Ledger, idx: usize, rel: &str) -> Option<String> {
     let w = state::answer_waits(rf, idx);
     if w.is_empty() {
@@ -232,14 +234,21 @@ fn answer_gate(rf: &RecordFile, led: &Ledger, idx: usize, rel: &str) -> Option<S
     }
     let mut waits = Vec::new();
     for &t in &w.unanswered {
-        let sec = &rf.sections[t];
-        let command = match &sec.id {
-            Some(id) if !sec.is_skeleton && state::asked_text_stands(led, id, &record::section_hash(&rf.lines, sec)) => {
-                Some(format!("adr answer {}@{} <letter>", id, record::version_of(&rf.lines, sec)))
+        let heading = rf.sections[t].heading_text.clone();
+        waits.push(match answer_leaf(rf, t) {
+            Err(refused) => msg::Waits::Stuck { heading, refused: rf.sections[refused].heading_text.clone() },
+            Ok(leaf) => {
+                let sec = &rf.sections[leaf];
+                match &sec.id {
+                    _ if sec.is_skeleton => msg::Waits::Unwritten { heading },
+                    Some(id) if state::asked_text_stands(led, id, &record::section_hash(&rf.lines, sec)) => {
+                        let command = format!("adr answer {}@{} <letter>", id, record::version_of(&rf.lines, sec));
+                        msg::Waits::Unanswered { heading, command: Some(command) }
+                    }
+                    _ => msg::Waits::Unanswered { heading, command: None },
+                }
             }
-            _ => None,
-        };
-        waits.push(msg::Waits::Unanswered { heading: sec.heading_text.clone(), command });
+        });
     }
     for &t in &w.refused_target {
         waits.push(msg::Waits::RefusedTarget { heading: rf.sections[t].heading_text.clone() });
@@ -248,6 +257,30 @@ fn answer_gate(rf: &RecordFile, led: &Ledger, idx: usize, rel: &str) -> Option<S
         waits.push(msg::Waits::RefusedTier { heading: rf.sections[t].heading_text.clone() });
     }
     Some(msg::answer_waits(&rf.sections[idx].heading_text, rel, waits))
+}
+
+/// The question `answer` would take first when it starts from question `t`
+/// and follows what each waiting question waits on: `Ok` with that question,
+/// or `Err` with the refused question the chain ends on.
+fn answer_leaf(rf: &RecordFile, t: usize) -> Result<usize, usize> {
+    let mut seen = vec![t];
+    let mut cur = t;
+    loop {
+        let w = state::answer_waits(rf, cur);
+        if w.is_empty() {
+            return Ok(cur);
+        }
+        match w.unanswered.iter().find(|n| !seen.contains(n)) {
+            Some(&n) => {
+                seen.push(n);
+                cur = n;
+            }
+            None => match w.refused_target.first().or(w.refused_tier.first()) {
+                Some(&r) => return Err(r),
+                None => return Ok(cur),
+            },
+        }
+    }
 }
 
 /// The write step `do_answer` and `do_refuse` both end with: splice the
@@ -335,7 +368,9 @@ struct Drop {
 /// detail the id of that removed question. Only questions of this file
 /// are searched: an entry on a question of another file names a current
 /// decision and carries no set. A question whose text has no `approved`
-/// row is not removed: the answer refuses.
+/// row is not removed, and neither is one that holds an answer line or has
+/// an `answered` or `refused` row (per "Does a decision change after it is
+/// answered?"): the answer refuses.
 fn collect_drops(rf: &RecordFile, rel: &str, led: &Ledger, idx: usize, id: &str, letter: char) -> Result<Vec<Drop>, String> {
     let mut found: Vec<usize> = Vec::new();
     let mut details: Vec<String> = Vec::new();
@@ -373,6 +408,11 @@ fn collect_drops(rf: &RecordFile, rel: &str, led: &Ledger, idx: usize, id: &str,
         let Some(qid) = sec.id.clone() else {
             return Err(msg::drop_without_id(&sec.heading_text));
         };
+        let closed = sec.answer_value.is_some()
+            || led.rows.iter().any(|r| r.id == qid && matches!(r.event.as_str(), "answered" | "refused"));
+        if closed {
+            return Err(msg::drop_of_closed(&sec.heading_text, sec.is_refused()));
+        }
         let hash = record::question_hash(rf, sec);
         let approved = led
             .rows

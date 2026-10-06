@@ -297,3 +297,129 @@ fn a_drop_before_the_latest_approval_is_not_put_back() {
     assert!(ok, "{}", report);
     assert!(!report.contains("awaiting approval"), "{}", report);
 }
+
+/// Two questions in a file: Two stands on One=A. Both asked and committed.
+fn pair() -> (PathBuf, PathBuf, String, String) {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let plan = format!("# Gate\n\n{}{}", q(ONE, "widget"), q(TWO, &format!("widget, {}=A", ONE)));
+    let path = write_record(&dir, REL, &plan);
+    approve_record(&dir, REL);
+    let out = adr(&dir, &["ask", path.to_str().unwrap()], &[], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    let (one, two) = (id_of(&path, ONE), id_of(&path, TWO));
+    commit(&dir, "feat: ask the pair");
+    (dir, path, one, two)
+}
+
+fn row_hash(dir: &Path, event: &str, id: &str) -> String {
+    ledger_rows(dir, event).into_iter().find(|r| r[2] == id).unwrap()[3].clone()
+}
+
+// adr: dad5273c-afe2-4ab1-a451-e2a5d4d9a26d
+//
+// A second standing answer for One (a merge of two branches) is asked
+// again; answering it with a letter outside Two's answer set would remove
+// Two, which holds an answer: the answer refuses and writes nothing.
+#[test]
+fn an_answer_never_removes_an_answered_question() {
+    let (dir, path, one, two) = pair();
+    assert!(adr_answer(&dir, &one, "A").status.success());
+    assert!(adr_answer(&dir, &two, "A").status.success());
+    let h1 = row_hash(&dir, "answered", &one);
+    append_ledger_row_at(&dir, "answered", &one, &h1, "B", "2099-01-01T00:00:00Z");
+    let asked = adr(&dir, &["ask", path.to_str().unwrap()], &[], "");
+    assert!(asked.status.success(), "{}", stderr(&asked));
+
+    let before = std::fs::read_to_string(&path).unwrap();
+    let ledger_before = std::fs::read_to_string(ledger_path(&dir)).unwrap();
+    let out = adr_answer(&dir, &one, "B");
+    assert!(!out.status.success(), "{}{}", stdout(&out), stderr(&out));
+    let err = stderr(&out);
+    assert!(err.contains(TWO) && err.contains("answered"), "{}", err);
+    assert!(err.contains("agent says so in chat and stops"), "{}", err);
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
+    assert_eq!(std::fs::read_to_string(ledger_path(&dir)).unwrap(), ledger_before);
+}
+
+// adr: dad5273c-afe2-4ab1-a451-e2a5d4d9a26d
+//
+// A `dropped` row of a question with an earlier `answered` row fails check.
+#[test]
+fn check_fails_a_dropped_row_after_an_answered_row_of_the_same_question() {
+    let (dir, _path, one, two) = pair();
+    let h2 = row_hash(&dir, "asked", &two);
+    assert!(adr_answer(&dir, &one, "B").status.success());
+    assert_eq!(ledger_rows(&dir, "dropped").len(), 1);
+    let (ok, report) = check_text(&dir);
+    assert!(ok, "{}", report);
+    append_ledger_row_at(&dir, "answered", &two, &h2, "A", "2020-01-01T00:00:00Z");
+    let (ok, report) = check_text(&dir);
+    assert!(!ok, "{}", report);
+    assert!(report.contains(&format!("dropped row for {} follows its answered row", two)), "{}", report);
+}
+
+// adr: ce19c883-c61d-477b-a6d4-fee5134c6e9a
+//
+// A `dropped` row counts among the state rows that compete: one more state
+// row of the same id at the dropped row's time fails check.
+#[test]
+fn check_fails_a_dropped_row_and_another_state_row_at_one_time() {
+    let (dir, _path, one, two) = pair();
+    assert!(adr_answer(&dir, &one, "B").status.success());
+    let dropped = ledger_rows(&dir, "dropped").into_iter().find(|r| r[2] == two).unwrap();
+    append_ledger_row_at(&dir, "withdrawn", &two, &dropped[3], "", &dropped[0]);
+    let (ok, report) = check_text(&dir);
+    assert!(!ok, "{}", report);
+    assert!(report.contains("compete for"), "{}", report);
+}
+
+fn chain(refuse_first: bool) -> (PathBuf, String, String, String) {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let plan = format!(
+        "# Gate\n\n{}{}{}",
+        q(ONE, "widget"),
+        q(TWO, &format!("widget, {}=*", ONE)),
+        q(THREE, &format!("widget, {}=*", TWO))
+    );
+    let path = write_record(&dir, REL, &plan);
+    approve_record(&dir, REL);
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    let ids = (id_of(&path, ONE), id_of(&path, TWO), id_of(&path, THREE));
+    if refuse_first {
+        assert!(adr_answer(&dir, &ids.0, "refuse").status.success());
+    }
+    (dir, ids.0, ids.1, ids.2)
+}
+
+// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+//
+// Answering Three, which stands on Two, which stands on One, names the
+// owner's command for One: the first question `answer` takes.
+#[test]
+fn a_waiting_chain_names_the_first_question_answer_takes() {
+    let (dir, one, two, three) = chain(false);
+    let out = adr_answer(&dir, &three, "A");
+    assert!(!out.status.success());
+    let err = stderr(&out);
+    let want = format!("owner runs: adr answer {} <letter>", id_at_version(&dir, &one));
+    assert!(err.contains(&want), "{}", err);
+    assert!(!err.contains(&format!("adr answer {}", id_at_version(&dir, &two))), "{}", err);
+}
+
+// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+//
+// When the chain ends on a refused question, the move is the plan change.
+#[test]
+fn a_waiting_chain_ending_on_a_refused_question_names_the_plan_change() {
+    let (dir, _one, _two, three) = chain(true);
+    let out = adr_answer(&dir, &three, "A");
+    assert!(!out.status.success());
+    let err = stderr(&out);
+    assert!(err.contains(&format!("\"{}\"", ONE)) && err.contains("refused"), "{}", err);
+    assert!(err.contains("writes the plan change") && err.contains("adr approve"), "{}", err);
+    assert!(!err.contains("adr answer"), "{}", err);
+}

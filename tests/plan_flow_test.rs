@@ -101,9 +101,9 @@ fn id_for_heading(content: &str, heading_prefix: &str) -> String {
 
 //
 // Walk: approve one plan with every body and answer set written; ask asks
-// tier 1 and freezes the sets; the next ask stops at the open tier; after
+// the whole file and freezes the sets; the next ask has nothing to ask; after
 // the owner answers B, the dependent on =A leaves the file and the =*
-// dependent asks; a frozen set edited after ask fails `check`; a
+// dependent stays; a frozen set edited after ask fails `check`; a
 // plan change drops Q3 and adds Q4, withdrawing the asked Q3.
 #[test]
 fn plan_lifecycle_end_to_end() {
@@ -129,7 +129,7 @@ fn plan_lifecycle_end_to_end() {
     let q3_id = id_for_heading(&state_0_approved, "### 1.3");
     let _ = &q2_id;
 
-    // --- 2. ask asks tier 1 and writes the assumes rows --------------------
+    // --- 2. ask asks the file and writes the assumes rows --------------------
     let check_out = adr(&dir, &["check"], &[], "");
     assert!(
         !stdout(&check_out).contains("awaiting approval"),

@@ -661,9 +661,8 @@ pub fn unresolved_sibling(rf: &RecordFile, i: usize) -> Option<&Section> {
 /// depends lines?") holding an unresolved section (`tier_unresolved`; a
 /// skeleton heading with no answer keeps its tier open exactly as a
 /// refused or still-open question does), or `None` when tier derivation
-/// failed (`rf.tiers` is `None`) or every section is resolved. What `ask`
-/// computes once for its tier rule, and what the page's `waits_on` reads
-/// too.
+/// failed (`rf.tiers` is `None`) or every section is resolved. What the
+/// page's overview names as the open tier, and what its `waits_on` reads.
 pub fn open_tier(rf: &RecordFile) -> Option<usize> {
     rf.sections
         .iter()
