@@ -107,3 +107,45 @@ Standard: a new lint rule runs on changed lines, and old text is left alone.
   Costs: every decision over the limit is superseded before check passes.
 
 **Answer:** A
+
+### Does the word limit hold for an option's Why line?
+depends: option, Does ask refuse an option over a word limit?, What stands under a question's heading?, What is the word limit of an option?
+unrelated: Does an option under a heading that opens with Does hold one word?, What binds in an answered question?, question, Does a reference line hold its list on one line?, answer, Does the reader's word stop a command?, answer set, Does a retired term keep its words?, Does a supersedes line name every current decision standing on its target?, Does a blame file cover its whole origin?, What does a depends line name?, What does the reader say about two current decisions?, Does the word limit hold for an option's Costs line?, Does the word limit read the text of an answered question?
+
+Problem: a Why line that runs on argues for its letter with claims nobody checks.
+Standard: a rationale line in a decision record is one sentence.
+
+- A) Yes.
+  Why: one number for every line, one count in the tool.
+  Costs: a gain with two parts is cut to one.
+- B) No.
+  Why: the Why line binds nothing, and its length harms no one.
+  Costs: the long line comes back under Why.
+
+### Does the word limit hold for an option's Costs line?
+depends: option, Does ask refuse an option over a word limit?, What stands under a question's heading?, What is the word limit of an option?
+unrelated: Does an option under a heading that opens with Does hold one word?, Does a reference line hold its list on one line?, What binds in an answered question?, Does a retired term keep its words?, Does a supersedes line name every current decision standing on its target?, answer, What does the terms brief hold?, retire, Does the agent build what no current decision covers?, depends, What does a depends line name?, Does one decision supersede several?, Does the word limit hold for an option's Why line?, Does the word limit read the text of an answered question?
+
+Problem: a Costs line that states mechanics is a rule by another name, and a builder reads it as one.
+Standard: a consequences line in a decision record is one sentence.
+
+- A) Yes.
+  Why: a second rule has no line left to hide in.
+  Costs: a cost with its consequence is cut to the cost.
+- B) No.
+  Why: the Costs line needs room to say what the code has to keep.
+  Costs: the rule moves from the option to its Costs line.
+
+### Does the word limit read the text of an answered question?
+depends: answer, Does ask refuse an option over a word limit?, What holds the list of loaded phrases?, What is the word limit of an option?, Does check fail an answered question whose text changed?
+unrelated: Does check read the words of an answered question again?, Does the reader's word stop a command?, Does an answer carry the version of the question the owner read?, Does show print the neighbours of a question with the reader's word?, Does a depends entry on a question in its file carry an answer set?, Does a banned word pass when it is only quoted?, Does ask pair the whole question to terms?, Does check fail a question answered with two different options?, Does the owner answer a question with a refusal?, Does ask stop a question outside the plan?, Does ask refuse a question with no term?, Does the owner retire a term that a question names?, Does the word limit hold for an option's Costs line?, Does the word limit hold for an option's Why line?
+
+Problem: a limit that reads answered options fails every decision written before it, and only a supersede of each clears them.
+Standard: a new lint rule runs on changed lines, and old text is left alone.
+
+- A) No.
+  Why: ask reads the limit on the question it asks, and an answered option is frozen with its answer.
+  Costs: long answered options are left alone.
+- B) Yes.
+  Why: one shape for every option in the records.
+  Costs: every decision over the limit is superseded before check passes.
