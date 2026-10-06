@@ -70,6 +70,7 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
     // rendering always resolves against every topic file, not only the one
     // being printed. Cloned rather than loaded a second time off disk.
     let blame_records: Vec<RecordFile> = all_records.clone();
+    let blame_names = view::heading_texts(&blame_records);
 
     let mut records: Vec<RecordFile> = match &record_arg {
         Some(p) => {
@@ -139,7 +140,7 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
         } else {
             print_file_short(rf, &led);
         }
-        let plan_refusals = view::plan_refusal_lines(&root, rf, &blame_records, &terms_list, &led);
+        let plan_refusals = view::plan_refusal_lines(&blame_names, rf, &blame_records, &terms_list, &led);
         let next = view::next_moves(rf, &led, plan_ok, &plan_refusals, &tests, Some(&planning));
         if !next.is_empty() {
             println!("{}", msg::next_heading());

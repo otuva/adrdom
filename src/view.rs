@@ -376,7 +376,7 @@ pub(crate) fn next_moves(
 /// reads for `next_moves`, and what the refusal `answer` makes reads too.
 /// Normalizes a copy of `rf` the way `approve` does before judging it.
 pub(crate) fn plan_refusal_lines(
-    root: &Path,
+    names: &HashMap<String, String>,
     rf: &RecordFile,
     all: &[RecordFile],
     terms_list: &[Term],
@@ -384,7 +384,6 @@ pub(crate) fn plan_refusal_lines(
 ) -> Vec<String> {
     let phrase_lookup = crate::terms::phrase_lookup(terms_list);
     let cross_file_headings = crate::depends::cross_file_heading_index(all, led);
-    let names = all_heading_texts(root);
     let base = crate::depends::replaced_base(all, &crate::depends::approved_plan_rels(all, led), &cross_file_headings, led);
     let mut rf = rf.clone();
     crate::depends::normalize_cross_file_deps(&mut rf, terms_list, &phrase_lookup, &cross_file_headings, led);
@@ -395,7 +394,7 @@ pub(crate) fn plan_refusal_lines(
         terms_list,
         &phrase_lookup,
         &cross_file_headings,
-        &names,
+        names,
         all,
         &replaced,
         led,

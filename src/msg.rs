@@ -746,10 +746,23 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> String {
     // one owner clause last (the lint reads what follows `owner runs: `).
     let mut agent: Vec<String> = Vec::new();
     let mut owner: Option<String> = None;
+    let ask_prefix = next_ask(rel, &[]);
     let add = |moves: Vec<String>, agent: &mut Vec<String>, owner: &mut Option<String>| {
         for m in moves {
             if m.starts_with("owner") {
                 owner.get_or_insert(m);
+            } else if let Some(headings) = m.strip_prefix(&ask_prefix) {
+                // One `adr ask` clause naming every heading, as `show` prints it.
+                match agent.iter_mut().find(|a| a.starts_with(&ask_prefix)) {
+                    Some(a) => {
+                        let have: Vec<String> = a[ask_prefix.len()..].split(", ").map(String::from).collect();
+                        for h in headings.split(", ").filter(|h| !have.iter().any(|x| x == h)) {
+                            a.push_str(", ");
+                            a.push_str(h);
+                        }
+                    }
+                    None => agent.push(m),
+                }
             } else if !agent.contains(&m) {
                 agent.push(m);
             }

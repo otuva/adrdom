@@ -273,7 +273,7 @@ fn answer_gate(root: &Path, rf: &RecordFile, led: &Ledger, tf: &terms::TermsFile
             let all = record::load_all(root);
             (
                 crate::plan::load(root, rf, &all, &tf.terms, led),
-                crate::view::plan_refusal_lines(root, rf, &all, &tf.terms, led),
+                crate::view::plan_refusal_lines(&crate::view::heading_texts(&all), rf, &all, &tf.terms, led),
             )
         });
         crate::view::ask_moves(rf, plan_ok, refusals, Some(planning), &rf.sections[leaf].heading_text, unwritten)

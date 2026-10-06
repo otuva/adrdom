@@ -916,6 +916,39 @@ fn answer_names_the_move_show_names_for_an_edited_target() {
 }
 
 // adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+//
+// Two questions edited since they were asked, and a third standing on both:
+// the refusal of `answer` on the third names one `adr ask` clause listing
+// both headings, as `show` prints it.
+#[test]
+fn answer_names_one_ask_clause_for_every_edited_heading() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let body = "\nProblem: the widget's state is undecided.\n\nStandard: plain words.\n\n- A) Yes.\n  Why: reasons.\n  Costs: costs.\n- B) No.\n  Why: other reasons.\n  Costs: other costs.\n";
+    let content = format!(
+        "# Example\n\n### Is alpha ready?\ndepends: widget\n{body}\n### Is beta ready?\ndepends: widget\n{body}\n### Is delta ready?\ndepends: widget, Is alpha ready?=*, Is beta ready?=*\n{body}"
+    );
+    let rel = "adrdom/decisions/example.md";
+    let record = write_record(&dir, rel, &content);
+    approve_record(&dir, rel);
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let q3_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[2].clone();
+    let version = current_version(&dir, &q3_id);
+
+    let text = std::fs::read_to_string(&record).unwrap();
+    let text = text.replacen("is undecided.", "is undecided, reworded.", 2);
+    std::fs::write(&record, text).unwrap();
+    approve_record(&dir, rel);
+
+    let refused = adr_owner(&dir, &["answer", &format!("{}@{}", q3_id, version), "A"], "");
+    assert!(!refused.status.success());
+    let err = stderr(&refused);
+    assert_eq!(err.matches("agent runs adr ask").count(), 1, "{}", err);
+    assert!(err.contains("# \"Is alpha ready?\", \"Is beta ready?\""), "{}", err);
+}
+
+// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 //
 // A plan `approve` would refuse: `next` names what clears the refusal, and so
