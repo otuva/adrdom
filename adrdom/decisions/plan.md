@@ -344,3 +344,5 @@ Standard: style linters such as Vale run when text is written, with the phrase l
 - B) This repository: a file of its own, read by a test over its records.
   Why: nothing is added to the tool.
   Costs: other repositories get no guard, and a loaded question there is caught only when the owner reads it.
+
+**Answer:** A
