@@ -762,11 +762,15 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> String {
             }
             Waits::RefusedTarget { heading: h } => {
                 parts.push(format!("\"{}\" is refused and the question stands on it", h));
-                refused.push(h);
+                if !refused.contains(&h) {
+                    refused.push(h);
+                }
             }
             Waits::RefusedTier { heading: h } => {
                 parts.push(format!("\"{}\" is refused and holds the tiers above it", h));
-                refused.push(h);
+                if !refused.contains(&h) {
+                    refused.push(h);
+                }
             }
         }
     }

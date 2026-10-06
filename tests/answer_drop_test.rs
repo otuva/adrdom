@@ -422,4 +422,7 @@ fn a_waiting_chain_ending_on_a_refused_question_names_the_plan_change() {
     assert!(err.contains(&format!("\"{}\"", ONE)) && err.contains("refused"), "{}", err);
     assert!(err.contains("writes the plan change") && err.contains("adr approve"), "{}", err);
     assert!(!err.contains("adr answer"), "{}", err);
+    // The refused question is named once in the plan change move, though
+    // Three both waits on it through Two and sits in a tier above it.
+    assert!(err.contains(&format!("drops or replaces \"{}\", owner runs", ONE)), "{}", err);
 }
