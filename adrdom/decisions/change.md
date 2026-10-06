@@ -152,9 +152,11 @@ Standard: a limit on a set is judged on the set as the change leaves it.
 **Answer:** A
 
 ### What may leave a topic file by a plan change?
-depends: supersede, refusal, topic file, Does a decision change after it is answered?, Does a refused question stay in its topic file?, plan
-supersedes: Does a superseded question leave its topic file?
-unrelated: Does a topic file close?, Does check fail a topic file awaiting approval?, Does one question heading stand in two topic files?, depends, Does a planning step run without the record of the step before?, topic, Does a supersedes line name every current decision standing on its target?, Does an origin leave the repository while its blame file has an open row?, Does ban refuse a word that appears in the repository?, Does show print every question?, Does a retired term keep its words?
+depends: 2bae531b-c4df-48a0-89a0-3d52726741ea, 0942e445-0163-423e-8ba7-84dd8ac07045, 08193e75-dd89-4857-8e9f-b19e1a9e75e6, dad5273c-afe2-4ab1-a451-e2a5d4d9a26d, 6b3d8e59-e145-49e1-860d-a79d753d745c, 94677ed8-eaf6-46e2-bc71-7392fa0805bf
+supersedes: 1b181f10-97f4-4bbe-8939-d5842192126c
+unrelated: d981f6b0-df0d-428f-8c0e-e220b1651fa1, 912f4f3b-1213-435a-af0d-7617017fcff4, 23f21671-e34c-44aa-8804-6163d975807f, aef1b384-2b33-47a2-92a8-ec7f8fb258ef, d3be71e4-ce7b-43b0-86a8-e86868521f99, 292a10b8-c287-4d71-b2bd-840da0a6de61, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, 4bb5ef1b-da16-4206-a7d2-c7380c36a4cc, 4f04bae4-98e3-48eb-9403-3257268e2d87, 75075c78-fe3c-4fd8-8a33-29a5913d9d34, 05af74a6-36be-4923-b66f-1467b323816a
+id: 79da6500-2246-4a80-baf1-0eaf7cad49ee
+terms: answered=b36113a1-1384-4e4c-a798-8399f4181366, current=e2533580-1486-4dc9-8697-e6c53605fe72, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, refused=0942e445-0163-423e-8ba7-84dd8ac07045, superseded=2bae531b-c4df-48a0-89a0-3d52726741ea, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6, topic files=08193e75-dd89-4857-8e9f-b19e1a9e75e6
 
 Problem: a decision leaves force only when superseded or refused, but if its section must stay forever, topic files fill with text no current decision needs, and a topic file can never be removed.
 Standard: version control keeps old text; a working document drops what is replaced.
