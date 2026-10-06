@@ -35,6 +35,11 @@ impl Next {
         Next(vec![(Actor::Owner, format!("runs: {}", command.into()))])
     }
 
+    /// The clauses of every `Next` in `parts`, in order, as one.
+    pub fn all(parts: Vec<Next>) -> Next {
+        Next(parts.into_iter().flat_map(|n| n.0).collect())
+    }
+
     pub fn and_owner_runs(mut self, command: impl Into<String>) -> Next {
         self.0.push((Actor::Owner, format!("runs: {}", command.into())));
         self
@@ -710,13 +715,71 @@ pub fn not_asked_yet(heading: &str, rel: &str) -> String {
     )
 }
 
-/// An answer that would remove a question that has already been asked to
-/// the owner (a removed question must never have been asked).
-pub fn drop_of_asked(heading: &str) -> String {
+/// What one question `answer` waits on: `Unanswered` with the owner's
+/// `adr answer` command once the question is asked and stands as asked
+/// (`None` while the agent has to ask it first), or a refused question the
+/// plan has to drop or replace.
+pub enum Waits {
+    Unanswered { heading: String, command: Option<String> },
+    RefusedTarget { heading: String },
+    RefusedTier { heading: String },
+}
+
+/// `answer` (a letter or a refusal) of a question that waits: it stands on a
+/// question of its file with no decision, or a question of a lower tier is
+/// refused (per "Does answer take a question standing on a question with
+/// no decision?" and "Does a refused question hold the tiers above it?").
+/// Every question it waits on is named, each with the move that clears it.
+pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> String {
+    let mut parts = Vec::new();
+    let mut ask = false;
+    let mut command: Option<String> = None;
+    let mut refused = Vec::new();
+    for w in waits {
+        match w {
+            Waits::Unanswered { heading: h, command: c } => {
+                parts.push(format!("\"{}\" has no decision yet", h));
+                match c {
+                    Some(c) => command = command.or(Some(c)),
+                    None => ask = true,
+                }
+            }
+            Waits::RefusedTarget { heading: h } => {
+                parts.push(format!("\"{}\" is refused and the question stands on it", h));
+                refused.push(h);
+            }
+            Waits::RefusedTier { heading: h } => {
+                parts.push(format!("\"{}\" is refused and holds the tiers above it", h));
+                refused.push(h);
+            }
+        }
+    }
+    // One owner command, last: the plan's approval when a refused question
+    // has to go, else the first answer owed.
+    let mut moves = Vec::new();
+    if ask {
+        moves.push(Next::agent(format!("runs adr ask {}", rel)));
+    }
+    if !refused.is_empty() {
+        moves.push(Next::agent(format!(
+            "writes the plan change that drops or replaces {}",
+            quoted(&refused)
+        )));
+        command = Some(format!("adr approve {}", rel));
+    }
+    if let Some(c) = command {
+        moves.push(Next::owner_runs(c));
+    }
     refuse(
-        format!("answering would remove \"{}\", which was asked", heading),
-        Next::agent("says so in chat and stops"),
+        format!("\"{}\" waits: {}", heading, parts.join("; ")),
+        Next::all(moves),
     )
+}
+
+/// The question `answer` would refuse, in the `not yet` line of `next`: the
+/// questions it waits on, by heading.
+pub fn next_answer_waits(heading: &str, on: &[String]) -> String {
+    format!("not yet: \"{}\" is asked and waits for {}", heading, quoted(on))
 }
 
 /// An answer that would remove a question with no identifier.
@@ -1280,10 +1343,6 @@ pub fn next_build_waits_refused(heading: &str, beside: &str) -> String {
         "not yet: \"{}\" is answered and is built once the plan changes, \"{}\" beside it is refused",
         heading, beside
     )
-}
-
-pub fn next_later(headings: &[String]) -> String {
-    format!("not yet, after the questions named above: {}", quoted(headings))
 }
 
 // --- show: the lines of its listing ----------------------------------------
@@ -3034,6 +3093,16 @@ mod tests {
             dep_retired_term_id("x.md", "heading", "id-1", Some("name")),
             dep_no_term("x.md", "heading", "widget"),
             bad_option_letter("x.md", "dependent", "target", 'Z'),
+            answer_waits(
+                "heading",
+                "x.md",
+                vec![
+                    Waits::Unanswered { heading: "target".to_string(), command: Some("adr answer id-1@abcd1234 <letter>".to_string()) },
+                    Waits::RefusedTarget { heading: "refused".to_string() },
+                    Waits::RefusedTier { heading: "other".to_string() },
+                ],
+            ),
+            answer_waits("heading", "x.md", vec![Waits::Unanswered { heading: "target".to_string(), command: None }]),
             tier_cap_exceeded("x.md", &["heading".to_string()], 0, 4),
             tier_cap_exceeded("x.md", &["heading".to_string()], 3, 4),
             derive_error("x.md", &DeriveError::SelfDep("heading".to_string())),

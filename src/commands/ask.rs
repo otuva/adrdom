@@ -54,12 +54,12 @@ pub fn run(record_path: PathBuf) -> i32 {
     // Per "Does check fail a question answered with two different
     // options?" (e3200081-9995-4bbe-983f-2f430dc341e7, rule 5): a question
     // in conflict takes priority over everything else this run -- whatever
-    // tier it is in, whether or not the file has an open tier too. Handled
-    // and reported on its own, ahead of every other gate below (shape,
-    // plan/context approval, tier cap, the open tier itself): none of that
-    // bears on re-asking a question whose text never moved. When the file
-    // also has an open tier, only the conflict is asked this run; a further
-    // `ask` run picks the open tier back up.
+    // tier it is in, whether or not the file has other questions to ask.
+    // Handled and reported on its own, ahead of every other gate below
+    // (shape, plan/context approval, tier cap): none of that bears on
+    // re-asking a question whose text never moved. When the file has other
+    // questions to ask, only the conflict is asked this run; a further
+    // `ask` run asks the rest.
     if let Some((idx, id, a, b)) = find_conflicted_section(&rf, &led) {
         return do_conflict_reask(&root, &record_path, rf, &led, idx, &id, a, b);
     }
@@ -175,7 +175,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     // row. Computed against the file exactly as loaded, before any
     // mutation, so the gates below (and any refusal) see the same file
     // the owner is looking at.
-    let mut candidate: Vec<bool> = rf
+    let candidate: Vec<bool> = rf
         .sections
         .iter()
         .map(|sec| {
@@ -215,28 +215,10 @@ pub fn run(record_path: PathBuf) -> i32 {
         }
     }
 
-    // The open tier (per "Does the tool derive tiers from the depends
-    // lines?"): the lowest tier holding an unresolved section
-    // (`state::open_tier`; a refused question counts as unresolved, and so
-    // does a skeleton heading with no answer -- per "Does the owner answer
-    // a question with a refusal?" and "Does a topic file close?"). Every
-    // candidate has no letter answer by construction, so whenever any
-    // candidate exists, it names a tier in this set and `open_tier` is
-    // never `None`.
-    let open_tier: Option<usize> = state::open_tier(&rf);
-
-    // Per "Does the tool derive tiers from the depends lines?": ask asks
-    // the lowest tier with an unanswered question. A candidate in a later
-    // tier is left for a later run: it is neither refused nor asked, and
-    // when nothing at all is asked, the `next` lines printed at the end
-    // name the blocker and whose move it is.
-    if let Some(open_n) = open_tier {
-        for (i, c) in candidate.iter_mut().enumerate() {
-            if *c && rf.tier_of(i).unwrap_or(1) != open_n {
-                *c = false;
-            }
-        }
-    }
+    // Per "What does ask put to the owner in one run?": every candidate is
+    // asked, whatever its tier. What `answer` takes first is not ask's
+    // to order: `answer` refuses a question that waits (`state::answer_waits`)
+    // and `next` names who moves when.
 
     // From here on every refusal is about one question and reads the same
     // file and ledger as the others, so none of them needs another to have
@@ -246,45 +228,36 @@ pub fn run(record_path: PathBuf) -> i32 {
     let mut refusals: Vec<String> = Vec::new();
 
     // Answer sets (per "Does a depends entry carry the answers it holds
-    // under?"): before asking any candidate in the open tier, every set on
-    // a heading dep pointing at an open-tier section must name only options
-    // the target actually has. Runs
-    // once, ahead of the per-candidate loop, and only when there is
-    // something new to ask in the open tier this run.
-    if let Some(n) = open_tier {
-        let asking_in_open_tier = rf
-            .sections
-            .iter()
-            .enumerate()
-            .any(|(i, _)| candidate[i] && rf.tier_of(i) == Some(n));
-        if asking_in_open_tier {
-            for (ti, target) in rf.sections.iter().enumerate() {
-                // Every open-tier target with no letter answer yet, not
-                // only the ones being newly asked or re-asked this run
-                // (per "Does a depends entry carry the answers it holds
-                // under?": the assumption is declared before the answer
-                // exists, so a target that was asked in an earlier run and
-                // is still open still demands a set on every entry naming
-                // it). A target that already carries a letter answer froze
-                // its dependents' sets when it was itself asked, so it is
-                // skipped here: an answered target's dependents are never
-                // edited on its account.
-                if rf.tier_of(ti) != Some(n) || !state::tier_unresolved(target) {
-                    continue;
-                }
-                for (di, set) in rf.dependents_of(ti) {
-                    let dependent = &rf.sections[di];
-                    let found = match set {
-                        // A missing set is approve's stop (per "Does a depends
-                        // entry on a question in its file carry an answer
-                        // set?"), not ask's.
-                        None | Some(record::AnswerSet::Any) => Vec::new(),
-                        Some(record::AnswerSet::Letters(letters)) => {
-                            depends::bad_letters(&rel, &dependent.heading_text, target, letters)
-                        }
-                    };
-                    refusals.extend(found);
-                }
+    // under?"): before asking anything, every set on a heading dep pointing
+    // at a target with no letter answer must name only options the target
+    // actually has. Runs once, ahead of the per-candidate loop, and only when
+    // there is something new to ask this run.
+    if candidate.iter().any(|c| *c) {
+        for (ti, target) in rf.sections.iter().enumerate() {
+            // Every target with no letter answer yet, not only the ones
+            // being newly asked or re-asked this run (per "Does a depends
+            // entry carry the answers it holds under?": the assumption is
+            // declared before the answer exists, so a target that was asked
+            // in an earlier run and is still open still demands a set on
+            // every entry naming it). A target that already carries a letter
+            // answer froze its dependents' sets when it was itself asked, so
+            // it is skipped here: an answered target's dependents are never
+            // edited on its account.
+            if !state::tier_unresolved(target) {
+                continue;
+            }
+            for (di, set) in rf.dependents_of(ti) {
+                let dependent = &rf.sections[di];
+                let found = match set {
+                    // A missing set is approve's stop (per "Does a depends
+                    // entry on a question in its file carry an answer
+                    // set?"), not ask's.
+                    None | Some(record::AnswerSet::Any) => Vec::new(),
+                    Some(record::AnswerSet::Letters(letters)) => {
+                        depends::bad_letters(&rel, &dependent.heading_text, target, letters)
+                    }
+                };
+                refusals.extend(found);
             }
         }
     }

@@ -60,7 +60,8 @@ struct Gate {
 }
 
 /// One answers B (root); Two stands on One=A; Three stands on Two=*; Four
-/// stands on One=*. Approved, tier 1 asked and committed.
+/// stands on One=*. Approved, every question asked in one run and
+/// committed: what an answer removes was asked.
 fn gate() -> Gate {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
@@ -115,10 +116,40 @@ fn answer_removes_the_question_and_its_dependents_and_the_file_stays_approved() 
     assert!(ok, "{}", report);
     assert!(!report.contains("awaiting approval"), "{}", report);
 
-    // Ask then proceeds to the next tier.
+    // Four was asked with the others in the first run; nothing is left to ask.
     let asked = adr(&g.dir, &["ask", g.path.to_str().unwrap()], &[], "");
     assert!(asked.status.success(), "{}", stderr(&asked));
-    assert!(stdout(&asked).contains(&format!("asked: \"{}\"", FOUR)), "{}", stdout(&asked));
+    assert!(stdout(&asked).contains("nothing to ask"), "{}", stdout(&asked));
+}
+
+// adr: 462e22c6-8b23-4061-9a2a-bbf8691fce60
+// adr: f5c242b6-e2f6-45a3-8c61-c743f3ad794f
+//
+// What an answer removes was asked: each removed question has an `asked`
+// row and, after the answer, a `dropped` row that ends it. `check` passes
+// with the removed ids missing from every file, a later approve of the
+// file writes no `withdrawn` row for them, and the commit passes its hook.
+#[test]
+fn an_asked_question_is_removed_and_check_and_approve_leave_it_gone() {
+    let g = gate();
+    let asked_ids: Vec<String> = ledger_rows(&g.dir, "asked").into_iter().map(|r| r[2].clone()).collect();
+    for id in [&g.two, &g.three] {
+        assert!(asked_ids.contains(id), "{} was asked: {:?}", id, asked_ids);
+    }
+    assert!(adr_answer(&g.dir, &g.one, "B").status.success());
+
+    let text = std::fs::read_to_string(&g.path).unwrap();
+    assert!(!text.contains(&format!("### {}\n", TWO)) && !text.contains(&format!("### {}\n", THREE)), "{}", text);
+    let dropped = ledger_rows(&g.dir, "dropped");
+    assert_eq!(dropped.len(), 2, "{:?}", dropped);
+    let (ok, report) = check_text(&g.dir);
+    assert!(ok, "{}", report);
+
+    approve_record(&g.dir, REL);
+    assert!(ledger_rows(&g.dir, "withdrawn").is_empty(), "a dropped id is not withdrawn");
+    commit(&g.dir, "feat: answer the gate");
+    let (ok, report) = check_text(&g.dir);
+    assert!(ok, "{}", report);
 }
 
 #[test]

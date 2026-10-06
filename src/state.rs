@@ -673,11 +673,11 @@ pub fn open_tier(rf: &RecordFile) -> Option<usize> {
         .min()
 }
 
-/// The section in tier `t` of `rf` a candidate outside the open tier is
-/// blocked on, by file order: the first non-skeleton unresolved section,
+/// The section in tier `t` of `rf` the overview names as what the open tier
+/// waits on, by file order: the first non-skeleton unresolved section,
 /// or, when the tier holds nothing but a skeleton, the first skeleton in
 /// it instead (naming a heading with nothing written yet is still more
-/// informative than naming nothing) -- so `ask`'s tier-blocked refusal
+/// informative than naming nothing) -- so the overview
 /// always has something to name once `open_tier` returns `Some`. `None`
 /// only when tier `t` holds no section at all.
 pub fn tier_blocker(rf: &RecordFile, t: usize) -> Option<&Section> {
@@ -693,6 +693,62 @@ pub fn tier_blocker(rf: &RecordFile, t: usize) -> Option<&Section> {
                 .find(|(i, s)| s.is_skeleton && in_tier(i))
         })
         .map(|(_, s)| s)
+}
+
+/// What holds question `i` of a file back from `answer` (per "Does answer
+/// take a question standing on a question with no decision?" and "Does a
+/// refused question hold the tiers above it?"): the questions of the same
+/// file it names on its depends line that have no letter answer, split into
+/// those still waiting for one (`unanswered`) and refused ones
+/// (`refused_target`), and the refused questions of a lower tier it does not
+/// stand on (`refused_tier`). Read off the file text alone, like
+/// `tier_unresolved`. An unanswered question that is not a target holds
+/// nothing back. A dependency on another file names a current decision and
+/// never waits.
+#[derive(Debug, Default, PartialEq)]
+pub struct AnswerWaits {
+    pub unanswered: Vec<usize>,
+    pub refused_target: Vec<usize>,
+    pub refused_tier: Vec<usize>,
+}
+
+impl AnswerWaits {
+    pub fn is_empty(&self) -> bool {
+        self.unanswered.is_empty() && self.refused_target.is_empty() && self.refused_tier.is_empty()
+    }
+
+    /// The first question it waits on, for the one-line `next`.
+    pub fn first(&self) -> Option<usize> {
+        self.unanswered
+            .first()
+            .or(self.refused_target.first())
+            .or(self.refused_tier.first())
+            .copied()
+    }
+}
+
+/// The one test `answer`, `next` and the page read to tell whether `answer`
+/// takes question `i` now: it is empty exactly when it does.
+pub fn answer_waits(rf: &RecordFile, i: usize) -> AnswerWaits {
+    let mut w = AnswerWaits::default();
+    for d in &rf.sections[i].depends {
+        let Some(t) = rf.dep_target(d) else { continue };
+        if t == i || !tier_unresolved(&rf.sections[t]) {
+            continue;
+        }
+        let list = if rf.sections[t].is_refused() { &mut w.refused_target } else { &mut w.unanswered };
+        if !list.contains(&t) {
+            list.push(t);
+        }
+    }
+    if let Some(mine) = rf.tier_of(i) {
+        for (j, s) in rf.sections.iter().enumerate() {
+            if s.is_refused() && rf.tier_of(j).is_some_and(|t| t < mine) && !w.refused_target.contains(&j) {
+                w.refused_tier.push(j);
+            }
+        }
+    }
+    w
 }
 
 /// What comparing a closed (answered or refused) section's current text

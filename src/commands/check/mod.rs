@@ -263,13 +263,13 @@ pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: 
     exit_code
 }
 
-/// An id whose latest state is `superseded` or `withdrawn` is no longer
-/// demanded in any topic file (4.13/6.1): the topic file it once lived in was
-/// allowed to drop it.
+/// An id whose latest state is `superseded`, `withdrawn` or `dropped` is no
+/// longer demanded in any topic file (4.13/6.1): the topic file it once
+/// lived in was allowed to drop it, or an answer removed it.
 fn dropped_state(led: &Ledger, id: &str) -> bool {
     matches!(
         led.latest_state(id).map(|r| r.event.as_str()),
-        Some("superseded") | Some("withdrawn")
+        Some("superseded") | Some("withdrawn") | Some("dropped")
     )
 }
 

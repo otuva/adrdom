@@ -292,7 +292,7 @@ fn editing_a_heading_requires_reapproval_with_one_new_approved_row() {
 // --- tier rule: a later group waits on an earlier one ------------------
 
 #[test]
-fn ask_leaves_group_two_while_group_one_unanswered_then_asks_it_after_answer() {
+fn ask_asks_group_two_beside_group_one_and_answer_waits_for_group_one() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
@@ -315,29 +315,24 @@ fn ask_leaves_group_two_while_group_one_unanswered_then_asks_it_after_answer() {
         .status
         .success());
 
-    // Group two waits for a later run: ask asks nothing, refuses nothing,
-    // and its `next` lines name the owner's answer to group one.
+    // Per "What does ask put to the owner in one run?": group two is asked
+    // now, beside the open group one.
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "ask failed: {}", stderr(&out));
     assert_eq!(stderr(&out), "");
     let shown = stdout(&out);
-    assert!(shown.contains("nothing to ask"), "{}", shown);
-    assert!(shown.contains("owner runs: adr answer") && shown.contains("First question?"), "{}", shown);
+    assert!(shown.contains("asked: \"2.1 Second question?\" (tier 2)"), "{}", shown);
+    assert_eq!(asked_row_count(&dir), 2);
 
-    // Nothing newly asked: `approve` already gave group two's heading an
-    // id too, so `extract_ids` no longer tells asked apart from
-    // merely approved -- the ledger's `asked` row count does.
-    let ledger_still = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    assert_eq!(asked_row_count(&dir), 1, "{}", ledger_still);
-
-    // Answer group one, then ask succeeds for group two.
+    // `answer` takes group two only after group one has its decision.
+    let second_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[1].clone();
+    let early = adr_answer(&dir, &second_id, "A");
+    assert!(!early.status.success());
+    assert!(stderr(&early).contains("\"First question?\" has no decision yet") || stderr(&early).contains("1.1 First question?\" has no decision yet"), "{}", stderr(&early));
     let answer_out = adr_answer(&dir, &first_id, "A");
     assert!(answer_out.status.success(), "answer failed: {}", stderr(&answer_out));
-
-    let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out2.status.success(), "ask failed: {}", stderr(&out2));
-    let ledger_final = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    assert_eq!(asked_row_count(&dir), 2, "{}", ledger_final);
+    let answer_out = adr_answer(&dir, &second_id, "A");
+    assert!(answer_out.status.success(), "answer failed: {}", stderr(&answer_out));
 }
 
 // --- a struck asked heading is withdrawn on approve ---------------------

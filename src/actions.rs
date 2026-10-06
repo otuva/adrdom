@@ -211,7 +211,43 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
         }
     }
 
+    if let Some(r) = answer_gate(&rf, &led, idx, &rel) {
+        return Err(r);
+    }
+
     Ok(Located { led, rf, idx, rel, tf, cur_hash })
+}
+
+/// The refusal when `answer` does not take question `idx` now (per "Does
+/// answer take a question standing on a question with no decision?" and
+/// "Does a refused question hold the tiers above it?"): `state::answer_waits`
+/// is the one test, the `next` lines and the page read it too. Shared by
+/// a letter and a refusal. An unanswered target names the owner's
+/// `adr answer` once it is asked and stands as asked, else the agent's
+/// `adr ask`; a refused question names the plan change and the approval.
+fn answer_gate(rf: &RecordFile, led: &Ledger, idx: usize, rel: &str) -> Option<String> {
+    let w = state::answer_waits(rf, idx);
+    if w.is_empty() {
+        return None;
+    }
+    let mut waits = Vec::new();
+    for &t in &w.unanswered {
+        let sec = &rf.sections[t];
+        let command = match &sec.id {
+            Some(id) if !sec.is_skeleton && state::asked_text_stands(led, id, &record::section_hash(&rf.lines, sec)) => {
+                Some(format!("adr answer {}@{} <letter>", id, record::version_of(&rf.lines, sec)))
+            }
+            _ => None,
+        };
+        waits.push(msg::Waits::Unanswered { heading: sec.heading_text.clone(), command });
+    }
+    for &t in &w.refused_target {
+        waits.push(msg::Waits::RefusedTarget { heading: rf.sections[t].heading_text.clone() });
+    }
+    for &t in &w.refused_tier {
+        waits.push(msg::Waits::RefusedTier { heading: rf.sections[t].heading_text.clone() });
+    }
+    Some(msg::answer_waits(&rf.sections[idx].heading_text, rel, waits))
 }
 
 /// The write step `do_answer` and `do_refuse` both end with: splice the
@@ -298,8 +334,8 @@ struct Drop {
 /// then, repeatedly, every question with a depends entry on a removed one,
 /// detail the id of that removed question. Only questions of this file
 /// are searched: an entry on a question of another file names a current
-/// decision and carries no set. A question already asked, or one whose
-/// text has no `approved` row, is not removed: the answer refuses.
+/// decision and carries no set. A question whose text has no `approved`
+/// row is not removed: the answer refuses.
 fn collect_drops(rf: &RecordFile, rel: &str, led: &Ledger, idx: usize, id: &str, letter: char) -> Result<Vec<Drop>, String> {
     let mut found: Vec<usize> = Vec::new();
     let mut details: Vec<String> = Vec::new();
@@ -337,9 +373,6 @@ fn collect_drops(rf: &RecordFile, rel: &str, led: &Ledger, idx: usize, id: &str,
         let Some(qid) = sec.id.clone() else {
             return Err(msg::drop_without_id(&sec.heading_text));
         };
-        if led.latest_asked(&qid).is_some() {
-            return Err(msg::drop_of_asked(&sec.heading_text));
-        }
         let hash = record::question_hash(rf, sec);
         let approved = led
             .rows

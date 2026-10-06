@@ -1508,6 +1508,47 @@ fn page_prints_the_tiers_as_the_topic_advances() {
     let _ = child.wait();
 }
 
+// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+//
+// The page offers the next question `answer` would take: with Q1 and Q2
+// (standing on Q1=A) both asked, /next after Q1 offers nothing while Q1 has
+// no decision, a POST for Q2 is refused with the same text the terminal
+// prints, and once Q1 is answered the page offers Q2.
+#[test]
+fn page_offers_only_the_questions_answer_takes() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let q2 = TIER_Q2_APPENDIX.replace("depends: 1.1 What color is the widget?", "depends: 1.1 What color is the widget?=A");
+    let record = write_record(&dir, "adrdom/decisions/example.md", &format!("{}{}", TIER_Q1_RECORD, q2));
+    approve_record(&dir, "adrdom/decisions/example.md");
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
+    let (q1_id, q2_id) = (ids[0].clone(), ids[1].clone());
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let first = get(port, "/next", Some(&cookie));
+    assert!(first.body.contains("Example, tier 1"), "body: {}", first.body);
+    let after_q1 = get(port, &format!("/next?after={}", q1_id), Some(&cookie));
+    assert!(after_q1.body.contains("No question can be answered yet"), "body: {}", after_q1.body);
+
+    let form = format!("id={}&v={}&answer=A&t={}", q2_id, current_version(&dir, &q2_id), token);
+    let resp = post(port, "/answer", Some(&cookie), &form);
+    assert_eq!(resp.status, 302, "body: {}", resp.body);
+    let followed = get(port, header(&resp, "Location").expect("Location header"), Some(&cookie));
+    assert!(followed.body.contains("has no decision yet"), "page did not show the refusal: {}", followed.body);
+
+    assert!(adr_answer(&dir, &q1_id, "A").status.success());
+    let after_q1 = get(port, &format!("/next?after={}", q1_id), Some(&cookie));
+    assert!(after_q1.body.contains("Example, tier 2"), "body: {}", after_q1.body);
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
 // adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
 //
 // "every reference carries the identifier of what it names; the agent

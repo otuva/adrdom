@@ -76,6 +76,10 @@ pub struct QuestionView {
     /// restored — see `format_dep`), in file order.
     pub depends: Vec<String>,
     pub state: QState,
+    /// True when `answer` takes this question now: it is asked, its text
+    /// stands as asked, and `state::answer_waits` is empty. What the page
+    /// offers the owner next.
+    pub answerable: bool,
     pub problem: Option<String>,
     pub standard: Option<String>,
     pub options: Vec<OptionView>,
@@ -242,9 +246,12 @@ pub(crate) fn asked_text_stands(led: &Ledger, rf: &RecordFile, sec: &Section) ->
 /// agent build on a decision before its tier is fully answered?": built
 /// once every question beside it is answered), the bodies to write, the
 /// questions to ask, the approval the file waits
-/// for, the answers the owner owes, a refused question that holds
-/// the rest, the decisions that wait for a question beside them, and the
-/// questions whose turn has not come. Empty when nothing is left to do.
+/// for, the answers the owner owes (the ones `answer` takes now), a refused
+/// question that holds the rest, the decisions that wait for a question
+/// beside them, and the asked questions `answer` would refuse, each naming
+/// what it waits on (`state::answer_waits`). Every question not asked or
+/// edited since is asked in one run, whatever its tier (per "What does ask
+/// put to the owner in one run?"). Empty when nothing is left to do.
 ///
 /// `plan_ok` is read by the caller off the file as loaded, before
 /// `depends::normalize_cross_file_deps` (see `snapshot`). `tests` is
@@ -265,44 +272,48 @@ pub(crate) fn next_moves(
     // What `approve` and `check` refuse in this file's plan
     // (`actions::record_refusals`), each with the move it names.
     let clears: Vec<String> = plan_refusals.iter().map(|r| msg::next_clears(r)).collect();
-    let Some(tiers) = &rf.tiers else {
+    if rf.tiers.is_none() {
         if clears.is_empty() {
             return vec![msg::next_plan_unresolved()];
         }
         return clears;
-    };
-    let open_tier = state::open_tier(rf);
-
+    }
     let mut bare = false;
     let mut to_ask = Vec::new();
     let mut answers = Vec::new();
     let mut held = Vec::new();
     let mut build = Vec::new();
     let mut build_waits = Vec::new();
-    let mut later = Vec::new();
+    let mut waiting = Vec::new();
 
     for (i, sec) in rf.sections.iter().enumerate() {
         let heading = sec.heading_text.as_str();
         match qstate(led, sec) {
-            QState::Skeleton | QState::Unasked if Some(tiers[i]) != open_tier => {
-                later.push(heading.to_string());
-            }
             QState::Skeleton | QState::Unasked if sec.is_skeleton => bare = true,
             QState::Skeleton | QState::Unasked => to_ask.push(heading.to_string()),
             QState::Open => {
                 let Some(id) = &sec.id else { continue };
                 // Edited since it was asked: `answer` takes only the text
-                // the ledger holds, so the agent asks it again first, once
-                // `ask` takes it (it asks the open tier only).
+                // the ledger holds, so the agent asks it again first.
                 if !asked_text_stands(led, rf, sec) {
-                    if Some(tiers[i]) == open_tier {
-                        to_ask.push(heading.to_string());
-                    } else {
-                        later.push(heading.to_string());
-                    }
-                } else {
+                    to_ask.push(heading.to_string());
+                    continue;
+                }
+                // `answer` takes it only once what it waits on is settled
+                // (the one test `answer` itself reads).
+                let w = state::answer_waits(rf, i);
+                if w.is_empty() {
                     let version = record::version_of(&rf.lines, sec);
                     answers.push(msg::next_answer(id, &version, heading));
+                } else {
+                    let on: Vec<String> = w
+                        .unanswered
+                        .iter()
+                        .chain(&w.refused_target)
+                        .chain(&w.refused_tier)
+                        .map(|&j| rf.sections[j].heading_text.clone())
+                        .collect();
+                    waiting.push(msg::next_answer_waits(heading, &on));
                 }
             }
             QState::Refused => held.push(msg::next_refused(heading)),
@@ -352,9 +363,7 @@ pub(crate) fn next_moves(
     out.extend(answers);
     out.extend(held);
     out.extend(build_waits);
-    if plan_ok && !later.is_empty() {
-        out.push(msg::next_later(&later));
-    }
+    out.extend(waiting);
     out
 }
 
@@ -402,7 +411,7 @@ fn body_field(lines: &[String], sec: &Section, prefix: &str) -> Option<String> {
 /// is the "Tier N is open" tier the overview names.
 ///
 /// `waits_on`: the heading `state::tier_blocker` names for `open_tier` --
-/// the same section `ask`'s tier-blocked refusal would name -- or `None`
+/// the section the open tier waits on -- or `None`
 /// when there is no open tier at all.
 fn open_tier_and_waits_on(rf: &RecordFile) -> (Option<usize>, Option<String>) {
     let open_tier = state::open_tier(rf);
@@ -615,6 +624,9 @@ fn build_question_view(
         tier,
         depends,
         state,
+        answerable: state == QState::Open
+            && asked_text_stands(led, rf, sec)
+            && state::answer_waits(rf, idx).is_empty(),
         problem,
         standard,
         options,
