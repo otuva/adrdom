@@ -44,12 +44,36 @@ fn three(dir: &Path, rec: &Path, check_ok: bool) -> (String, String, String) {
 
 #[test]
 fn check_approve_and_plan_find_a_loaded_phrase_in_a_body() {
+    // adr: 149c9a73-16eb-46aa-9806-2950423ee1a2
     let (dir, rec) = unapproved(&question("Does the decision hold?", "the decision currently holds."));
     let (chk, apr, pln) = three(&dir, &rec, true);
     for out in [&chk, &apr, &pln] {
         assert!(out.contains("\"currently\" states what the code does now"), "{}", out);
     }
     assert!(apr.contains("agent rewrites the line"), "{}", apr);
+    // The list is the tool's own (src/tells.rs): the repository carries no
+    // phrase file, and "currently" is in that list.
+    assert!(adr::tells::CODE_STATE.contains(&"currently"));
+    fn files(p: &std::path::Path, out: &mut Vec<String>) {
+        for e in std::fs::read_dir(p).unwrap() {
+            let e = e.unwrap();
+            if e.file_name() == ".git" {
+                continue;
+            }
+            if e.path().is_dir() {
+                files(&e.path(), out);
+            } else {
+                out.push(e.file_name().to_string_lossy().to_lowercase());
+            }
+        }
+    }
+    let mut names = Vec::new();
+    files(&dir, &mut names);
+    assert!(
+        !names.iter().any(|n| n.contains("phrase") || n.contains("tell")),
+        "no phrase file in the repository: {:?}",
+        names
+    );
 }
 
 // adr: 711a7636-9f4d-402d-ae62-265208adf0ac

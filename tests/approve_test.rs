@@ -84,13 +84,16 @@ fn ask_refuses_an_unapproved_file_naming_adr_approve() {
 // --- approve writes approved/context rows, idempotently --------------
 
 //
-// "approve writes one event for the headings ('approved') and one for the
-// prose ('context'), each with its own hash": exactly one of each row for
+// adr: 5b9170f9-a48e-4ddd-a7dc-73c3be1c2fb8
+// (What does approve write for the prose above the first question? One event
+// of its own, over its own hash, apart from the event for the headings.)
+// Exactly one of each row for
 // one approve, and rerunning with nothing changed writes neither again --
 // which only holds if each hash is compared and stored on its own, not
 // folded into the other's.
 #[test]
 fn approve_writes_approved_and_context_rows_then_is_idempotent() {
+    // adr: 5b9170f9-a48e-4ddd-a7dc-73c3be1c2fb8
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
@@ -171,13 +174,14 @@ fn approve_refuses_a_question_with_four_options() {
 // --- editing context prose requires re-approval -----------------------
 
 //
-// "each with its own hash; ask stops a file where either part is
-// unapproved (e.g. the prose edited after approve)": editing only the
+// Editing only the
 // context prose leaves the plan hash (and its `approved` row) untouched
 // while the context hash moves, so `ask` stops on "prose not approved"
 // even though the heading itself is still approved.
 #[test]
 fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
+    // adr: 5b9170f9-a48e-4ddd-a7dc-73c3be1c2fb8
+    // adr: 3ce82f34-a4fc-4918-bb9b-65a0d81a6853
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
@@ -222,9 +226,7 @@ fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
 }
 
 //
-// "approve writes one event for the headings and one for the prose, each
-// with its own hash; ask stops a file where either part is unapproved":
-// the other direction from `editing_context_prose_requires_reapproval...`
+// The other direction from `editing_context_prose_requires_reapproval...`
 // above -- here the context prose is left untouched (so the `context`
 // hash, and its row, never move) while a heading's own text is edited
 // after approval, which moves only the plan hash. `ask` stops the file on
@@ -233,6 +235,7 @@ fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
 // row.
 #[test]
 fn editing_a_heading_requires_reapproval_with_one_new_approved_row() {
+    // adr: 5b9170f9-a48e-4ddd-a7dc-73c3be1c2fb8
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
@@ -1073,8 +1076,9 @@ fn a_heading_line_without_a_question_mark_is_refused_by_check_and_approve() {
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     assert!(stderr(&out).contains(line), "{}", stderr(&out));
+    // The file awaits approval: check prints the finding as a note.
     let check = adr(&dir, &["check"], &[], "");
-    assert!(!check.status.success());
+    assert!(check.status.success(), "{}", stdout(&check));
     assert!(stdout(&check).contains(line), "{}", stdout(&check));
 
     let fixed = format!("# Topic\n\nProse.\n\n### Is it a question?\ndepends: widget\n\n{}", WIDGET_Q);

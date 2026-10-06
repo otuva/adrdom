@@ -33,16 +33,11 @@ pub struct Refusal {
     /// one in an asked or answered question (per "Does check fail a topic
     /// file awaiting approval?").
     pub sections: Vec<usize>,
-    /// A `parse` finding about the plan's body shape (a missing Problem or
-    /// Standard, an option count, a missing Why or Costs), which a file
-    /// awaiting approval shows as a note; any other `parse` finding is the
-    /// topic file's own fixed shape and fails check.
-    pub planning: bool,
 }
 
 impl Refusal {
     pub fn new(category: &'static str, message: String) -> Refusal {
-        Refusal { category, message, sections: Vec::new(), planning: false }
+        Refusal { category, message, sections: Vec::new() }
     }
     pub fn in_section(mut self, index: usize) -> Refusal {
         self.sections.push(index);
@@ -50,10 +45,6 @@ impl Refusal {
     }
     pub fn in_sections(mut self, indexes: Vec<usize>) -> Refusal {
         self.sections = indexes;
-        self
-    }
-    pub fn planning(mut self) -> Refusal {
-        self.planning = true;
         self
     }
 }
@@ -1206,7 +1197,7 @@ fn do_approve_terms(
 /// except the cross-file "answered id missing from every topic file"
 /// check, which needs every topic file, not just this one
 /// (`missing_answered_refusals`, below). Shared with `check` and `ask`
-/// (055d303b A point 1, one function for all three, mirroring
+/// (178a232e A point 1, one function for all three, mirroring
 /// `terms_refusals`): `approve` prefixes each message `approve: `,
 /// `check` prefixes it `<category>: `, `ask` prefixes the "parse" slice
 /// `ask: `, so the same line reads identically wherever it is printed.
@@ -1397,20 +1388,18 @@ pub fn record_refusals(
         out.push(Refusal::new("parse", msg::heading_not_a_question(rel, i + 1)));
     }
     for (si, sec) in rf.sections.iter().enumerate() {
-        for (e, kind) in sec.shape_errors.iter().zip(&sec.shape_kinds) {
-            let r = Refusal::new("parse", msg::section_shape_error(rel, &sec.heading_text, e)).in_section(si);
-            out.push(if *kind == record::ShapeKind::Plan { r.planning() } else { r });
+        for e in &sec.shape_errors {
+            out.push(Refusal::new("parse", msg::section_shape_error(rel, &sec.heading_text, e)).in_section(si));
         }
     }
-    // 055d303b A point 1: an option with no decision sentence (or more than
+    // 178a232e A point 1: an option with no decision sentence (or more than
     // one), a duplicate id line, and an answer naming a missing option were
     // parse errors only `check` read; now every reader of the shared "parse"
     // category (`ask`, `approve`, `check`) refuses on them the same way it
     // already refuses on a shape error.
     for (si, sec) in rf.sections.iter().enumerate() {
-        for (e, kind) in sec.parse_errors.iter().zip(&sec.parse_kinds) {
-            let r = Refusal::new("parse", msg::check_parse_error(rel, &sec.heading_text, e)).in_section(si);
-            out.push(if *kind == record::ShapeKind::Plan { r.planning() } else { r });
+        for e in &sec.parse_errors {
+            out.push(Refusal::new("parse", msg::check_parse_error(rel, &sec.heading_text, e)).in_section(si));
         }
     }
 
@@ -1726,7 +1715,8 @@ fn waiting_on_other_file(
 
 /// Refusals about a topic file's own name and its own headings, one
 /// function for `approve` and `check` so the two print the same lines
-/// (76bd7ef0 A): a name that is not lowercase words joined by hyphens, a
+/// (the file name rule is a detail with no decision of its own): a name
+/// that is not lowercase words joined by hyphens, a
 /// topic no name can carry, a name that is not the topic, and a heading
 /// text used twice in the file. `topic` is the file's `# ` title when it
 /// has one.
@@ -1768,6 +1758,65 @@ pub fn duplicate_heading_refusals(rel: &str, sections: &[record::Section]) -> Ve
     dups.sort();
     for h in dups {
         out.push(msg::duplicate_heading_in_file(h, rel));
+    }
+    out
+}
+
+/// Whether a question has force: its text can no longer change because it
+/// is answered, refused, superseded, or asked and unedited since.
+pub fn has_force(rf: &RecordFile, s: &record::Section, led: &Ledger) -> bool {
+    state::is_frozen(led, s)
+        || s.id
+            .as_deref()
+            .is_some_and(|id| state::asked_text_stands(led, id, &record::section_hash(&rf.lines, s)))
+}
+
+/// The questions of `rf` bearing `heading` that are the copy (05141f49 A):
+/// the ones with no force. A fault of a duplicate heading belongs to them,
+/// for `check` in a file and across files and for `approve` alike.
+pub fn copying_sections<'a>(rf: &'a RecordFile, heading: &str, led: &Ledger) -> Vec<&'a record::Section> {
+    rf.sections
+        .iter()
+        .filter(|s| s.heading_text == heading && !has_force(rf, s, led))
+        .collect()
+}
+
+/// A heading of `rf` that also stands in another topic file of `all`
+/// (23f21671 A), one line per heading with the message `check` prints. Every
+/// section of every other file counts, answered and superseded ones too,
+/// the same set `check` compares. Only a question this approve would newly
+/// approve (no id, or a hash with no `approved` row for the file) and that
+/// has no force is the copy; an unchanged question is not refused for it.
+pub fn cross_file_heading_refusals(rel: &str, rf: &RecordFile, all: &[RecordFile], led: &Ledger) -> Vec<String> {
+    let newly_approved = |s: &record::Section| {
+        let hash = record::question_hash(rf, s);
+        !s.id.as_ref().is_some_and(|id| {
+            led.rows
+                .iter()
+                .rfind(|r| r.event == "approved" && &r.id == id)
+                .is_some_and(|r| r.hash == hash && r.detail == rel)
+        })
+    };
+    let mut heads: Vec<&str> = rf.sections.iter().map(|s| s.heading_text.as_str()).collect();
+    heads.sort();
+    heads.dedup();
+    let mut out = Vec::new();
+    for h in heads {
+        if !copying_sections(rf, h, led).into_iter().any(newly_approved) {
+            continue;
+        }
+        let mut paths: Vec<&str> = all
+            .iter()
+            .filter(|o| o.rel != rel && o.sections.iter().any(|s| s.heading_text == h))
+            .map(|o| o.rel.as_str())
+            .collect();
+        if paths.is_empty() {
+            continue;
+        }
+        paths.push(rel);
+        paths.sort();
+        paths.dedup();
+        out.push(msg::duplicate_heading_across_files(h, paths[0], paths[1]));
     }
     out
 }
@@ -1947,6 +1996,9 @@ fn do_approve_record(
             .collect();
 
     for m in own_name_and_heading_refusals(rel, rf.topic.as_deref(), &rf.sections) {
+        refusals.push(msg::approve_prefixed(m));
+    }
+    for m in cross_file_heading_refusals(rel, &rf, &all_records, led) {
         refusals.push(msg::approve_prefixed(m));
     }
     // Per "Does a depends entry carry the answers it holds under?": a letter
