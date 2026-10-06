@@ -303,15 +303,14 @@ fn is_note(rf: &RecordFile, r: &actions::Refusal, draft: bool, led: &Ledger) -> 
     if !planning {
         return false;
     }
-    match &r.section {
-        None => true,
-        Some(h) => !rf.sections.iter().filter(|s| s.heading_text == *h).any(|s| {
-            state::is_frozen(led, s)
-                || s.id
-                    .as_deref()
-                    .is_some_and(|id| state::asked_text_stands(led, id, &record::section_hash(&rf.lines, s)))
-        }),
-    }
+    // Every question the finding is about must still be able to change; a
+    // finding about none is about the file as a whole.
+    !r.sections.iter().filter_map(|i| rf.sections.get(*i)).any(|s| {
+        state::is_frozen(led, s)
+            || s.id
+                .as_deref()
+                .is_some_and(|id| state::asked_text_stands(led, id, &record::section_hash(&rf.lines, s)))
+    })
 }
 
 /// A file's plan/context approval state: its ledger-relative path, whether

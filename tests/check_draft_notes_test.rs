@@ -36,9 +36,9 @@ fn cases(tid: &str) -> Vec<(&'static str, String, &'static str)> {
         ("no term", format!("# Gate\n\n{}", q("Does the lid hold?", "widget", "the lid breaks.", OPTS)), "uses no term"),
         ("set on a term", format!("# Gate\n\n{}", q("Does the widget hold?", &format!("{}=A", tid), "the widget breaks.", OPTS)), "answer set"),
         ("set missing on a question", format!("# Gate\n\n{}\n{}", good(), q("Does the widget stay?", "Does the widget hold?", "the widget breaks.", OPTS)), "without an answer set"),
-        ("missing depends line", format!("# Gate\n\n### Does the widget hold?\n\nProblem: the widget breaks.\n\nStandard: plain words.\n\n{}", OPTS), "plan:"),
+        ("missing depends line", format!("# Gate\n\n### Does the widget hold?\n\nProblem: the widget breaks.\n\nStandard: plain words.\n\n{}", OPTS), "has no depends line"),
         ("unresolved entry", format!("# Gate\n\n{}", q("Does the widget hold?", "nosuchterm", "the widget breaks.", OPTS)), "which is no term"),
-        ("cycle", format!("# Gate\n\n{}\n{}", q("Does the widget hold?", "Does the widget stay?=A", "the widget breaks.", OPTS), q("Does the widget stay?", "Does the widget hold?=A", "the widget breaks.", OPTS)), "plan:"),
+        ("cycle", format!("# Gate\n\n{}\n{}", q("Does the widget hold?", "Does the widget stay?=A", "the widget breaks.", OPTS), q("Does the widget stay?", "Does the widget hold?=A", "the widget breaks.", OPTS)), "cycle: "),
     ]
 }
 
@@ -303,5 +303,109 @@ fn the_tools_own_lines_and_the_ledger_findings_stay_failures_in_a_draft() {
         write_record(&dir, REL, &format!("# Gate\n\n{}", body));
         let failures = quiet(&dir);
         assert!(failures.contains("parse:"), "{}: {}", name, failures);
+    }
+}
+
+const ASKED: &str = "22222222-2222-2222-2222-222222222222";
+
+/// A complete question section carrying an id and the terms line the tool
+/// writes, with `depends` as its depends line and `extra` (options) as its
+/// options, from its heading to its last line.
+fn stated(heading: &str, depends: &str, id: &str, term: &str, opts: &str) -> String {
+    format!(
+        "### {}\ndepends: {}\n\nid: {}\n\nterms: widget={}\n\nProblem: the widget breaks.\n\nStandard: plain words.\n\n{}",
+        heading,
+        depends,
+        id,
+        term,
+        opts.trim_end_matches('\n')
+    )
+}
+
+fn asked_row(dir: &Path, id: &str, section: &str, heading: &str) {
+    append_ledger_row_at(dir, "asked", id, &mirror_section_hash(section), heading, "2024-01-01T00:00:03Z");
+}
+
+#[test]
+fn a_derive_error_in_an_asked_question_stays_a_failure_in_a_draft_file() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
+    let dir = repo();
+    let term = term_id(&dir);
+    let section = stated("Does the widget stay?", "Does a heading that exists nowhere?", ASKED, &term, OPTS);
+    asked_row(&dir, ASKED, &section, "Does the widget stay?");
+    // The dangling entry sits in the asked question; an unasked one is added.
+    write_record(&dir, REL, &format!("# Gate\n\n{}\n\n{}", section, good()));
+    let failures = quiet(&dir);
+    assert!(failures.contains("exists nowhere"), "{}", failures);
+    // The same error in the unasked question is a note.
+    let dir = repo();
+    write_record(&dir, REL, &format!("# Gate\n\n{}", q("Does the widget stay?", "Does a heading that exists nowhere?", "the widget breaks.", OPTS)));
+    let (ok, text) = check(&dir);
+    assert!(ok && text.contains("exists nowhere"), "{}", text);
+}
+
+#[test]
+fn a_cycle_through_a_question_that_cannot_change_stays_a_failure_in_a_draft_file() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
+    let dir = repo();
+    let term = term_id(&dir);
+    let a = stated("Does the widget stay?", "Does the widget fall?=A", ASKED, &term, OPTS);
+    asked_row(&dir, ASKED, &a, "Does the widget stay?");
+    let b = q("Does the widget fall?", "Does the widget stay?=A", "the widget breaks.", OPTS);
+    write_record(&dir, REL, &format!("# Gate\n\n{}\n\n{}", a, b));
+    let failures = quiet(&dir);
+    assert!(failures.contains("cycle: "), "{}", failures);
+}
+
+#[test]
+fn a_finding_in_a_draft_question_is_a_note_though_an_answered_one_shares_its_heading() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
+    let dir = repo();
+    let term = term_id(&dir);
+    let answered = stated("Does the widget hold?", &term, ASKED, &term, OPTS);
+    let hash = mirror_section_hash(&answered);
+    append_ledger_row_at(&dir, "asked", ASKED, &hash, "Does the widget hold?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", ASKED, &hash, "A", "2024-01-01T00:00:01Z");
+    let draft = q("Does the widget hold?", "nosuchterm", "the widget breaks.", OPTS);
+    write_record(&dir, REL, &format!("# Gate\n\n{}\n\n**Answer:** A\n\n{}", answered, draft));
+    let failures = quiet(&dir);
+    assert!(!failures.contains("nosuchterm"), "{}", failures);
+    let all = stdout(&adr(&dir, &["check"], &[], ""));
+    assert!(all.contains("nosuchterm"), "{}", all);
+}
+
+#[test]
+fn a_finding_in_a_question_edited_since_it_was_asked_is_a_note() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
+    let dir = repo();
+    let term = term_id(&dir);
+    let original = stated("Does the widget stay?", &term, ASKED, &term, OPTS);
+    asked_row(&dir, ASKED, &original, "Does the widget stay?");
+    let edited = stated("Does the widget stay?", "nosuchterm", ASKED, &term, OPTS);
+    write_record(&dir, REL, &format!("# Gate\n\n{}\n", edited));
+    let failures = quiet(&dir);
+    assert!(!failures.contains("nosuchterm"), "{}", failures);
+    let all = stdout(&adr(&dir, &["check"], &[], ""));
+    assert!(all.contains("nosuchterm"), "{}", all);
+}
+
+#[test]
+fn a_body_shape_finding_in_an_asked_or_answered_question_stays_a_failure_in_a_draft_file() {
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
+    let no_costs = "- A) Yes.\n  Why: w.\n- B) No.\n  Why: w.\n  Costs: c.\n";
+    for answered in [false, true] {
+        let dir = repo();
+        let term = term_id(&dir);
+        let section = stated("Does the widget stay?", &term, ASKED, &term, no_costs);
+        asked_row(&dir, ASKED, &section, "Does the widget stay?");
+        let mut text = section.clone();
+        if answered {
+            let hash = mirror_section_hash(&section);
+            append_ledger_row_at(&dir, "answered", ASKED, &hash, "A", "2024-01-01T00:00:04Z");
+            text.push_str("\n\n**Answer:** A");
+        }
+        write_record(&dir, REL, &format!("# Gate\n\n{}\n\n{}", text, good().replace("hold", "fall")));
+        let failures = quiet(&dir);
+        assert!(failures.contains("missing Costs"), "answered={}: {}", answered, failures);
     }
 }

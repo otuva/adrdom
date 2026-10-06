@@ -32,7 +32,7 @@ pub struct Refusal {
     /// `check` reads it to tell a finding in text that can still change from
     /// one in an asked or answered question (per "Does check fail a topic
     /// file awaiting approval?").
-    pub section: Option<String>,
+    pub sections: Vec<usize>,
     /// A `parse` finding about the plan's body shape (a missing Problem or
     /// Standard, an option count, a missing Why or Costs), which a file
     /// awaiting approval shows as a note; any other `parse` finding is the
@@ -42,10 +42,14 @@ pub struct Refusal {
 
 impl Refusal {
     pub fn new(category: &'static str, message: String) -> Refusal {
-        Refusal { category, message, section: None, planning: false }
+        Refusal { category, message, sections: Vec::new(), planning: false }
     }
-    pub fn in_section(mut self, heading: &str) -> Refusal {
-        self.section = Some(heading.to_string());
+    pub fn in_section(mut self, index: usize) -> Refusal {
+        self.sections.push(index);
+        self
+    }
+    pub fn in_sections(mut self, indexes: Vec<usize>) -> Refusal {
+        self.sections = indexes;
         self
     }
     pub fn planning(mut self) -> Refusal {
@@ -1376,9 +1380,9 @@ pub fn record_refusals(
     for i in record::non_question_heading_lines(&rf.lines) {
         out.push(Refusal::new("parse", msg::heading_not_a_question(rel, i + 1)));
     }
-    for sec in &rf.sections {
+    for (si, sec) in rf.sections.iter().enumerate() {
         for (e, kind) in sec.shape_errors.iter().zip(&sec.shape_kinds) {
-            let r = Refusal::new("parse", msg::section_shape_error(rel, &sec.heading_text, e)).in_section(&sec.heading_text);
+            let r = Refusal::new("parse", msg::section_shape_error(rel, &sec.heading_text, e)).in_section(si);
             out.push(if *kind == record::ShapeKind::Plan { r.planning() } else { r });
         }
     }
@@ -1387,9 +1391,9 @@ pub fn record_refusals(
     // parse errors only `check` read; now every reader of the shared "parse"
     // category (`ask`, `approve`, `check`) refuses on them the same way it
     // already refuses on a shape error.
-    for sec in &rf.sections {
+    for (si, sec) in rf.sections.iter().enumerate() {
         for (e, kind) in sec.parse_errors.iter().zip(&sec.parse_kinds) {
-            let r = Refusal::new("parse", msg::check_parse_error(rel, &sec.heading_text, e)).in_section(&sec.heading_text);
+            let r = Refusal::new("parse", msg::check_parse_error(rel, &sec.heading_text, e)).in_section(si);
             out.push(if *kind == record::ShapeKind::Plan { r.planning() } else { r });
         }
     }
@@ -1402,12 +1406,12 @@ pub fn record_refusals(
     // hash, answered text is frozen): it can never be edited, so refusing
     // on it would block this file forever once the list grows to include a
     // word it already carried.
-    for sec in &rf.sections {
+    for (si, sec) in rf.sections.iter().enumerate() {
         if sec.id.as_ref().is_some_and(|id| led.latest_state(id).is_some()) {
             continue;
         }
         for (line, phrase, what) in tells::heading_tells(sec.start, &sec.heading_text) {
-            out.push(Refusal::new("tells", msg::tell(rel, line, &sec.heading_text, &phrase, what)).in_section(&sec.heading_text));
+            out.push(Refusal::new("tells", msg::tell(rel, line, &sec.heading_text, &phrase, what)).in_section(si));
         }
     }
     // Per "Does ask refuse an option over a word limit?" and "Does an option
@@ -1438,9 +1442,9 @@ pub fn record_refusals(
     // Per "What does a depends line name?": every section, skeleton or
     // not, needs at least one `depends:` line naming what the question
     // stands on, before anything about it is resolved or written.
-    for sec in &rf.sections {
+    for (si, sec) in rf.sections.iter().enumerate() {
         if sec.depends.is_empty() {
-            out.push(Refusal::new("plan", msg::no_depends_line(rel, &sec.heading_text)).in_section(&sec.heading_text));
+            out.push(Refusal::new("plan", msg::no_depends_line(rel, &sec.heading_text)).in_section(si));
         }
     }
 
@@ -1458,7 +1462,7 @@ pub fn record_refusals(
     // section is frozen -- its decision is already closed, one way or
     // another -- and an edit there is the agent's to remove, not approve's
     // to carry forward.
-    for sec in &rf.sections {
+    for (si, sec) in rf.sections.iter().enumerate() {
         let frozen = state::is_frozen(led, sec);
         // A frozen section whose text (the depends line included) is no
         // longer what the ledger holds: `check` fails it right after, so
@@ -1479,7 +1483,7 @@ pub fn record_refusals(
         }
         for d in &sec.depends {
             if frozen && matches!(d, record::Dep::Text { .. }) {
-                out.push(Refusal::new("plan_frozen", msg::frozen_depends_edited(rel, &sec.heading_text)).in_section(&sec.heading_text));
+                out.push(Refusal::new("plan_frozen", msg::frozen_depends_edited(rel, &sec.heading_text)).in_section(si));
                 continue;
             }
             if let record::Dep::Text { text, .. } = d {
@@ -1511,7 +1515,7 @@ pub fn record_refusals(
                     _ => None,
                 };
                 out.push(
-                    Refusal::new("plan", depends::dep_refusal_text(rel, &sec.heading_text, &e, name)).in_section(&sec.heading_text),
+                    Refusal::new("plan", depends::dep_refusal_text(rel, &sec.heading_text, &e, name)).in_section(si),
                 );
             }
         }
@@ -1523,7 +1527,25 @@ pub fn record_refusals(
             }
             _ => None,
         };
-        out.push(Refusal::new("plan", waiting.unwrap_or_else(|| msg::derive_error(rel, err))));
+        // The sections the error is about (`check` reads them to tell a
+        // question that can still change from one that cannot): the one
+        // holding the entry, the self-dependent one, or every one in the
+        // cycle.
+        let named: Vec<&str> = match err {
+            record::DeriveError::Dangling { section, .. } | record::DeriveError::AmbiguousHeading { section, .. } => {
+                vec![section.as_str()]
+            }
+            record::DeriveError::SelfDep(h) => vec![h.as_str()],
+            record::DeriveError::Cycle(hs) => hs.iter().map(String::as_str).collect(),
+        };
+        let at: Vec<usize> = rf
+            .sections
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| named.contains(&s.heading_text.as_str()))
+            .map(|(i, _)| i)
+            .collect();
+        out.push(Refusal::new("plan", waiting.unwrap_or_else(|| msg::derive_error(rel, err))).in_sections(at));
     }
 
     // Cap (per "Does the tool cap the questions in a tier?"): no derived tier may hold more than `TIER_CAP` live
@@ -1571,7 +1593,7 @@ pub fn supersedes_refusals(
     led: &Ledger,
     only: Option<usize>,
 ) -> Vec<Refusal> {
-    let refuse = |heading: &str, message: String| Refusal::new("plan", message).in_section(heading);
+    let refuse = |index: usize, message: String| Refusal::new("plan", message).in_section(index);
     let mut out: Vec<Refusal> = Vec::new();
     // (section index, asked, target ids) of each judged section.
     let mut judged: Vec<(usize, bool, Vec<String>)> = Vec::new();
@@ -1592,7 +1614,7 @@ pub fn supersedes_refusals(
             match depends::resolve_supersedes(old, cross_file_headings, led) {
                 Ok(id) => ids.push(id),
                 Err(depends::SupersedesError::Ambiguous(files)) => {
-                    out.push(refuse(&sec.heading_text, msg::ask_supersedes_ambiguous(rel, &sec.heading_text, old, &files)));
+                    out.push(refuse(i, msg::ask_supersedes_ambiguous(rel, &sec.heading_text, old, &files)));
                 }
                 Err(depends::SupersedesError::NotCurrent) => {
                     let split_sibling = asked
@@ -1606,7 +1628,7 @@ pub fn supersedes_refusals(
                     if split_sibling {
                         ids.push(old.trim().to_string());
                     } else {
-                        out.push(refuse(&sec.heading_text, msg::ask_supersedes_not_current(
+                        out.push(refuse(i, msg::ask_supersedes_not_current(
                             rel,
                             &sec.heading_text,
                             old,
@@ -1634,18 +1656,18 @@ pub fn supersedes_refusals(
         let missing = depends::left_out_of_supersedes(all, led, ids);
         if !missing.is_empty() {
             let moment = if *asked { msg::SupersedesMoment::Asked } else { msg::SupersedesMoment::Approve };
-            out.push(refuse(&sec.heading_text, msg::supersedes_leaves_out(rel, &sec.heading_text, &missing, moment)));
+            out.push(refuse(*i, msg::supersedes_leaves_out(rel, &sec.heading_text, &missing, moment)));
         }
         for target in ids {
             let target_name = names.get(target).map(String::as_str).unwrap_or("");
             if sec.depends.iter().any(|d| stands_on(d, target)) {
-                out.push(refuse(&sec.heading_text, msg::stands_on_what_it_supersedes(rel, &sec.heading_text, target_name)));
+                out.push(refuse(*i, msg::stands_on_what_it_supersedes(rel, &sec.heading_text, target_name)));
             }
             for (j, other) in rf.sections.iter().enumerate() {
                 let open = other.id.as_deref().map_or(true, |id| !state::is_current(led, id))
                     && !state::is_dead(led, other);
                 if j != *i && open && other.depends.iter().any(|d| stands_on(d, target)) {
-                    out.push(refuse(&other.heading_text, msg::stands_on_what_the_plan_supersedes(
+                    out.push(refuse(j, msg::stands_on_what_the_plan_supersedes(
                         rel,
                         &other.heading_text,
                         target_name,
