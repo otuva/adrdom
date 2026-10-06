@@ -165,7 +165,7 @@ fn build(
     push_failures(&mut failures, answers::check_answers(&records, &led));
     push_failures(&mut failures, banned::check_banned(root, staged, message, &source));
     push_failures(&mut failures, install::check_install(root, &source));
-    let (plan_failures, awaiting) = plan::check_plan(
+    let (plan_failures, plan_notes, awaiting) = plan::check_plan(
         root,
         &source,
         &records,
@@ -174,6 +174,7 @@ fn build(
         &raw_hashes,
     );
     push_failures(&mut failures, plan_failures);
+    notes.extend(plan_notes);
     let (terms_failures, terms_notes) = terms::check_terms(root, &records, &led, &source, &approved_rels);
     push_failures(&mut failures, terms_failures);
     let (blame_failures, blame_notes) = blame::check_blame(root, &source, &records, &led);
@@ -181,7 +182,9 @@ fn build(
     let (test_failures, tested_count, test_notes) =
         tests::check_tests(root, &records, &led, tests, &source);
     push_failures(&mut failures, test_failures);
-    push_failures(&mut failures, tells::check_tells(&per_record_refusals));
+    let (tells_failures, tells_notes) = tells::check_tells(&records, &per_record_refusals, &awaiting);
+    push_failures(&mut failures, tells_failures);
+    notes.extend(tells_notes);
 
 
     for (rf, replaced) in records.iter().zip(&replaced_per_record) {

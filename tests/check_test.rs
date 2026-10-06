@@ -1375,7 +1375,8 @@ fn check_fails_a_topic_file_name_that_does_not_match_its_topic() {
     write_record(&dir, "adrdom/decisions/other-name.md", body);
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
+    // A draft: the finding is a note (912f4f3b-1213-435a-af0d-7617017fcff4).
+    assert!(out.status.success());
     let text = stdout(&out);
     assert!(
         text.contains(
@@ -1409,7 +1410,8 @@ fn check_fails_a_topic_whose_text_no_file_name_can_carry() {
     write_record(&dir, "adrdom/decisions/rule.md", body);
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
+    // A draft: the finding is a note (912f4f3b-1213-435a-af0d-7617017fcff4).
+    assert!(out.status.success());
     let text = stdout(&out);
     assert!(
         text.contains(

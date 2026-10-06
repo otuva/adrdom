@@ -1,5 +1,6 @@
 use super::Failure;
 use crate::actions::Refusal;
+use crate::record::RecordFile;
 
 /// `tells` (per "Does the tool stop loaded phrases in a question?"): the
 /// same provenance/code-state/date/loaded-heading scan
@@ -12,12 +13,22 @@ use crate::actions::Refusal;
 /// Every line is the `tells` category of `record_refusals` (`refusals`,
 /// computed once in `mod.rs`, shared with `approve`'s `do_approve_record`):
 /// the heading, the context prose, each body below its heading, the length
-/// rules and a question that pairs no term.
-pub(super) fn check_tells(refusals: &[Vec<Refusal>]) -> Vec<Failure> {
+/// rules and a question that pairs no term. On a file awaiting approval each
+/// is a note, not a failure (per "Does check fail a topic file awaiting
+/// approval?"); the notes come back as the second value.
+pub(super) fn check_tells(
+    records: &[RecordFile],
+    refusals: &[Vec<Refusal>],
+    awaiting: &[String],
+) -> (Vec<Failure>, Vec<String>) {
     let mut out = Vec::new();
-    for refs in refusals {
+    let mut notes = Vec::new();
+    for (rf, refs) in records.iter().zip(refusals) {
+        let draft = awaiting.contains(&rf.rel);
         for r in refs {
-            if r.category == "tells" {
+            if r.category == "tells" && draft {
+                notes.push(format!("tells: {}", r.message));
+            } else if r.category == "tells" {
                 out.push(Failure {
                     check: "tells".to_string(),
                     message: r.message.clone(),
@@ -25,5 +36,5 @@ pub(super) fn check_tells(refusals: &[Vec<Refusal>]) -> Vec<Failure> {
             }
         }
     }
-    out
+    (out, notes)
 }

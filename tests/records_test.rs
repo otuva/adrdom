@@ -161,7 +161,8 @@ fn check_reports_a_tell_in_an_unfrozen_heading_and_in_context_prose() {
     // `check` must still report it.
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
+    // A file awaiting approval: the findings are notes, not a failure.
+    assert!(out.status.success(), "{}", stdout(&out));
     let text = stdout(&out);
     assert!(text.contains("\"how many\""), "{}", text);
     assert!(text.contains("opens assuming an answer"), "{}", text);
@@ -306,7 +307,7 @@ fn approve_and_check_report_a_tell_and_a_bad_depends_entry_together() {
     );
 
     let check_out = adr(&dir, &["check"], &[], "");
-    assert!(!check_out.status.success());
+    assert!(check_out.status.success(), "{}", stdout(&check_out));
     let text = stdout(&check_out);
     assert!(
         text.contains("tells:") && text.contains("opens assuming an answer"),

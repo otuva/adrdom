@@ -1477,7 +1477,7 @@ pub fn record_refusals(
         for d in &sec.depends {
             if frozen && matches!(d, record::Dep::Text { .. }) {
                 out.push(Refusal {
-                    category: "plan",
+                    category: "plan_frozen",
                     message: msg::frozen_depends_edited(rel, &sec.heading_text),
                 });
                 continue;

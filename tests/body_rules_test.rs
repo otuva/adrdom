@@ -1,6 +1,7 @@
 // The body rules `ask` refuses, found before approval: a loaded phrase in a
 // question's body, and a question none of whose words pair to a term. Plan
-// and check report them, approve stops them.
+// and check report them (check as a note on a file awaiting approval),
+// approve stops them.
 mod common;
 
 use common::*;
@@ -28,9 +29,12 @@ fn both(o: &std::process::Output) -> String {
 }
 
 /// What check, approve and plan each print on the file.
-fn three(dir: &Path, rec: &Path) -> (String, String, String) {
+fn three(dir: &Path, rec: &Path, check_ok: bool) -> (String, String, String) {
     let chk = adr(dir, &["check"], &[], "");
-    assert!(!chk.status.success(), "{}", both(&chk));
+    // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
+    if check_ok {
+        assert!(chk.status.success(), "a draft finding is a note, never a failure: {}", both(&chk));
+    }
     let apr = adr_owner(dir, &["approve", rec.to_str().unwrap()], "");
     assert!(!apr.status.success(), "{}", both(&apr));
     let pln = both(&adr(dir, &["plan", rec.to_str().unwrap()], &[], ""));
@@ -42,7 +46,7 @@ fn three(dir: &Path, rec: &Path) -> (String, String, String) {
 #[test]
 fn check_approve_and_plan_find_a_loaded_phrase_in_a_body() {
     let (dir, rec) = unapproved(&question("Does the decision hold?", "the decision currently holds."));
-    let (chk, apr, pln) = three(&dir, &rec);
+    let (chk, apr, pln) = three(&dir, &rec, true);
     for out in [&chk, &apr, &pln] {
         assert!(out.contains("\"currently\" states what the code does now"), "{}", out);
     }
@@ -53,7 +57,7 @@ fn check_approve_and_plan_find_a_loaded_phrase_in_a_body() {
 #[test]
 fn check_approve_and_plan_find_a_question_that_pairs_no_term() {
     let (dir, rec) = unapproved(&question("Does the lid hold?", "the lid is unclear."));
-    let (chk, apr, pln) = three(&dir, &rec);
+    let (chk, apr, pln) = three(&dir, &rec, true);
     for out in [&chk, &apr, &pln] {
         assert!(out.contains("\"Does the lid hold?\" uses no term"), "{}", out);
     }
@@ -113,7 +117,7 @@ fn check_approve_and_plan_find_a_set_on_a_term() {
         options()
     );
     let rec = write_record(&dir, REL, &content);
-    let (chk, apr, pln) = three(&dir, &rec);
+    let (chk, apr, pln) = three(&dir, &rec, true);
     for out in [&chk, &apr, &pln] {
         assert!(out.contains("depends on a term under an answer set, and a term has no options"), "{}", out);
     }
@@ -128,7 +132,7 @@ fn check_approve_and_plan_find_an_entry_with_no_set_on_an_unanswered_question() 
         o = options()
     );
     let (dir, rec) = unapproved(&content);
-    let (chk, apr, pln) = three(&dir, &rec);
+    let (chk, apr, pln) = three(&dir, &rec, true);
     for out in [&chk, &apr, &pln] {
         assert!(
             out.contains("\"Does the decision stay?\" depends on \"Does the decision hold?\" without an answer set"),
@@ -159,7 +163,8 @@ fn check_approve_and_plan_find_a_set_on_an_answered_question() {
             options()
         ),
     );
-    let (chk, apr, pln) = three(&dir, &rec);
+    // The fixture's answered file other.md has edited answered text, which fails check on its own; the finding in the draft is still a note.
+    let (chk, apr, pln) = three(&dir, &rec, false);
     for out in [&chk, &apr, &pln] {
         assert!(
             out.contains("\"Does the decision stand?\" depends on \"Does the lid stay?\", which is answered, under an answer set"),

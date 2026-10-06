@@ -326,7 +326,9 @@ or moves it to another file when none does",
     assert_eq!(next(&dir), vec![format!("agent clears: {}", refusal)]);
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
+    // The edited file awaits approval again: check prints the refusal as a
+    // note (912f4f3b-1213-435a-af0d-7617017fcff4).
+    assert!(out.status.success());
     let plan_lines: Vec<String> = stdout(&out)
         .lines()
         .filter(|l| l.starts_with("plan: ") && !l.contains("awaiting approval") && !l.contains("new or changed"))
