@@ -621,9 +621,159 @@ pub fn do_approve(root: &Path, file: &Path) -> Result<Outcome, String> {
         do_approve_terms(root, file, &led, &ledger_path)
     } else if rel.starts_with(&format!("{}/", crate::repo::BLAME_DIR)) {
         do_approve_blame(root, file, &rel, &led, &ledger_path)
+    } else if is_topic_file_path(&rel) && !file.exists() {
+        do_approve_removal(root, &rel, &led, &ledger_path)
     } else {
         do_approve_record(root, file, &rel, &led, &ledger_path)
     }
+}
+
+/// A path of the shape of a topic file: `adrdom/decisions/<name>.md`.
+fn is_topic_file_path(rel: &str) -> bool {
+    rel.strip_prefix(&format!("{}/", repo::DECISIONS_DIR))
+        .is_some_and(|name| !name.contains('/') && name.ends_with(".md"))
+}
+
+/// The plan hash of a file with no question; the same value the context
+/// hash of a file with no prose has. What approving a file's removal writes.
+fn empty_plan_hash() -> String {
+    record::derive_file_hash(&[])
+}
+
+/// Every topic file the ledger holds an approved plan for that is absent
+/// from the content judged (`exists`) and whose latest approved plan is not
+/// the empty one: a file removed, its removal awaiting the owner's approval
+/// (per "What may leave a topic file by a plan change?").
+pub fn removal_awaiting(led: &Ledger, exists: &dyn Fn(&str) -> bool) -> Vec<String> {
+    let rels: BTreeSet<&str> = led
+        .rows
+        .iter()
+        .filter(|r| r.event == "approved" && r.id == "-" && is_topic_file_path(&r.detail))
+        .map(|r| r.detail.as_str())
+        .collect();
+    let empty = empty_plan_hash();
+    rels.into_iter()
+        .filter(|rel| led.latest_for_path("approved", rel).is_some_and(|r| r.hash != empty))
+        .filter(|rel| !exists(rel))
+        .map(|rel| rel.to_string())
+        .collect()
+}
+
+/// `adr approve <path>` for a topic file that is gone from disk: approves
+/// its removal. Refused while the file held a current decision (an answered
+/// question absent from every file, `missing_answered_refusals`) or an open
+/// question (asked and not answered, or a heading of its approved plan not
+/// yet asked). The ids the file held come from its last committed content,
+/// or from the ledger's per-question approved rows when git has none.
+/// Writes the approved and context rows over an empty plan and empty prose,
+/// and a withdrawn row for each refused id left in no file.
+fn do_approve_removal(root: &Path, rel: &str, led: &Ledger, ledger_path: &Path) -> Result<Outcome, String> {
+    let latest = led.latest_for_path("approved", rel);
+    let committed = repo::git(root, &["show", &format!("HEAD:{}", rel)]);
+    if latest.is_none() && committed.is_none() {
+        return Err(msg::approve_prefixed(msg::removal_not_a_topic_file(rel)));
+    }
+    let all_records: Vec<RecordFile> = record::load_all(root);
+    let present_ids: HashSet<String> = all_records
+        .iter()
+        .flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.clone()))
+        .collect();
+
+    // What the file held: ids and headings.
+    let mut held: Vec<(String, String)> = Vec::new();
+    if let Some(text) = &committed {
+        let old = record::build(root.join(rel), rel.to_string(), record::split_lines(text));
+        for sec in &old.sections {
+            if let Some(id) = &sec.id {
+                held.push((id.clone(), sec.heading_text.clone()));
+            }
+        }
+    } else {
+        let mut seen: BTreeSet<&str> = BTreeSet::new();
+        for r in led.rows.iter().filter(|r| r.event == "approved" && r.id != "-" && r.detail == rel) {
+            if seen.insert(r.id.as_str()) && led.latest_for_id("approved", &r.id).is_some_and(|l| l.detail == rel) {
+                let heading = led.latest_asked(&r.id).map(|a| a.detail.clone()).unwrap_or_else(|| r.id.clone());
+                held.push((r.id.clone(), heading));
+            }
+        }
+    }
+    held.retain(|(id, _)| !present_ids.contains(id));
+
+    let mut refusals: Vec<String> = Vec::new();
+    let mut withdrawn_rows: Vec<ledger::Row> = Vec::new();
+    let write_time = ledger::write_time(led);
+    for (id, heading) in &held {
+        match led.latest_state(id).map(|r| r.event.as_str()) {
+            None => refusals.push(msg::approve_prefixed(msg::removal_holds_open(
+                rel,
+                id,
+                heading,
+                "approved and not yet asked",
+            ))),
+            Some("asked") => refusals.push(msg::approve_prefixed(msg::removal_holds_open(
+                rel,
+                id,
+                heading,
+                "asked and not answered",
+            ))),
+            Some("refused") => {
+                let detail = led.latest_state(id).map(|r| r.detail.clone()).unwrap_or_default();
+                withdrawn_rows.push(ledger::Row {
+                    time: write_time.clone(),
+                    event: "withdrawn".to_string(),
+                    id: id.clone(),
+                    hash: "-".to_string(),
+                    detail,
+                    version: crate::version::VERSION.to_string(),
+                });
+            }
+            _ => {}
+        }
+    }
+    // A current decision of the file is named by the same refusal
+    // `approve` of any file and `check` give.
+    for r in missing_answered_refusals(&all_records, led) {
+        refusals.push(msg::approve_prefixed(r.message));
+    }
+    if !refusals.is_empty() {
+        return Err(refusals.join("\n"));
+    }
+
+    let empty = empty_plan_hash();
+    let mut rows: Vec<ledger::Row> = Vec::new();
+    let mut messages: Vec<String> = Vec::new();
+    for (event, done, same) in [
+        ("approved", msg::plan_approved(rel), msg::plan_unchanged(rel)),
+        ("context", msg::context_approved(rel), msg::context_unchanged(rel)),
+    ] {
+        if led.latest_for_path(event, rel).map(|r| r.hash.as_str()) != Some(empty.as_str()) {
+            rows.push(ledger::Row {
+                time: write_time.clone(),
+                event: event.to_string(),
+                id: "-".to_string(),
+                hash: empty.clone(),
+                detail: rel.to_string(),
+                version: crate::version::VERSION.to_string(),
+            });
+            messages.push(done);
+        } else {
+            messages.push(same);
+        }
+    }
+    for r in &withdrawn_rows {
+        messages.push(msg::withdrawn(&r.detail));
+    }
+    rows.extend(withdrawn_rows);
+    ledger::append(ledger_path, &rows).map_err(|e| {
+        msg::approve_prefixed(msg::update_failed(
+            "ledger",
+            e,
+            Next::owner_runs(format!("adr approve {}", rel)),
+        ))
+    })?;
+    Ok(Outcome {
+        summary: messages.join("\n"),
+    })
 }
 
 /// `adrdom/blame/<stem>.md` (per "Does the owner approve a blame file?",

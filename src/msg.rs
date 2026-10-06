@@ -3362,3 +3362,40 @@ mod tests {
         assert_eq!(without, "untested: no tracked file holds \"adr: id-1\"");
     }
 }
+
+/// `adr approve <path>` on a path the ledger never approved and no commit
+/// holds: no topic file was ever there.
+pub fn removal_not_a_topic_file(rel: &str) -> String {
+    refuse(
+        format!("{} is absent and was never approved: not a topic file", rel),
+        Next::agent("names a topic file the ledger holds"),
+    )
+}
+
+/// A removed topic file still held a question that is open.
+pub fn removal_holds_open(rel: &str, id: &str, heading: &str, what: &str) -> String {
+    refuse(
+        format!("{} cannot be removed: {} is {}", rel, named(id, Some(heading)), what),
+        Next::agent("restores the file"),
+    )
+}
+
+/// A topic file gone from the content check judges, its removal not yet
+/// approved: a note.
+pub fn removal_awaiting(rel: &str) -> String {
+    format!(
+        "plan: {} removed, awaiting approval; {}",
+        rel,
+        Next::owner_runs(format!("adr approve {}", rel)).render()
+    )
+}
+
+/// `show`: a topic file removed, its removal not yet approved.
+pub fn show_removal_awaiting(rel: &str) -> String {
+    format!("# {} (removed, awaiting approval)", rel)
+}
+
+/// The next line of a removed topic file: the owner approves the removal.
+pub fn removal_next(rel: &str) -> String {
+    Next::owner_runs(format!("adr approve {}", rel)).render()
+}

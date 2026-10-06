@@ -150,6 +150,15 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
         }
     }
 
+    // A topic file removed, its removal not yet approved: the owner's move.
+    if record_arg.is_none() {
+        for rel in crate::actions::removal_awaiting(&led, &|rel| root.join(rel).exists()) {
+            println!("{}", msg::show_removal_awaiting(&rel));
+            println!("{}", msg::next_heading());
+            println!("{}", msg::next_line(&msg::removal_next(&rel)));
+        }
+    }
+
     // The short listing ends with the next lines of every blame file that
     // has one; the rest of a blame file is in the whole one.
     if !whole {
