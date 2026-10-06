@@ -156,6 +156,8 @@ fn build(
         .collect();
     let missing_answered = actions::missing_answered_refusals(&records, &led);
 
+    let removed_files = actions::removal_awaiting(&led, &|rel| source.exists(root, rel));
+    notes.extend(removed_files.iter().map(|rel| msg::removal_awaiting(rel)));
     let mut failures: Vec<String> = unreadable_failures;
     let awaiting_early: Vec<String> = records
         .iter()
@@ -167,7 +169,7 @@ fn build(
     let (parse_failures, parse_notes) = parse::check_parse(&records, &per_record_refusals, &awaiting_early, &led);
     push_failures(&mut failures, parse_failures);
     notes.extend(parse_notes);
-    push_failures(&mut failures, ids::check_ids(&records, &led, &missing_answered, &raw_hashes));
+    push_failures(&mut failures, ids::check_ids(&records, &led, &missing_answered, &raw_hashes, &removed_files));
     push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_content, since));
     push_failures(&mut failures, reader::check_reader(root, &source, since));
     push_failures(&mut failures, banned::check_banned_ledger(&led, root, &source));

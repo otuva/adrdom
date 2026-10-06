@@ -11,6 +11,7 @@ pub(super) fn check_ids(
     led: &Ledger,
     missing_answered: &[Refusal],
     raw_hashes: &HashMap<String, (Vec<String>, String)>,
+    removed: &[String],
 ) -> Vec<Failure> {
     let mut out = Vec::new();
     let mut seen: HashMap<String, String> = HashMap::new();
@@ -115,6 +116,23 @@ pub(super) fn check_ids(
         // told apart, so nothing is named. A file that was never approved
         // at all names nothing here -- there is no earlier approved plan
         // for this id to have dropped out of.
+        // The file the id was approved in is gone, its removal awaiting
+        // approval: name that file, the same line a struck heading earns.
+        if let Some(rel) = led
+            .latest_for_id("approved", &id)
+            .map(|r| r.detail.as_str())
+            .filter(|rel| removed.iter().any(|d| d == rel))
+        {
+            let heading = led
+                .latest_asked(&id)
+                .map(|r| r.detail.clone())
+                .unwrap_or_else(|| id.clone());
+            out.push(Failure {
+                check: "ids".to_string(),
+                message: msg::removed_from_plan(&id, &heading, event.unwrap_or("unknown"), Some(rel)),
+            });
+            continue;
+        }
         if !stale.is_empty() {
             let heading = led
                 .latest_asked(&id)
