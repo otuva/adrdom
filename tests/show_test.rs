@@ -120,7 +120,6 @@ Standard: s4.\n\n\
 /// the chosen sentence, all via hand-crafted ledger rows and `**Answer:**`
 /// lines (per the wave-2 brief) rather than `adr ask`/`adr answer`, which
 /// are being rebuilt by other agents on this same branch.
-// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
 //
 // "show prints the tiers": the fixture below states no tier anywhere in
 // its text (only `depends:` lines and hand-written ledger rows), yet
@@ -237,7 +236,6 @@ fn override_is_not_a_recognized_command() {
     );
 }
 
-// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
 //
 // "Does the tool derive tiers from the depends lines?": `show` derives
 // tiers the same way `approve`/`check` do, including the cross-file

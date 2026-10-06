@@ -143,7 +143,6 @@ fn ask_names_every_fault_in_one_run() {
 
 // --- tier order: blocked, then allowed once the blocker is answered -------
 
-// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
 //
 // "ask asks the lowest tier with an unanswered question (and stops a
 // higher one)": Q2 (tier 2, derived from its `depends:` line, never
@@ -374,7 +373,6 @@ Standard: plain words.
 
 // --- cap -------------------------------------------------------------------
 
-// adr: 15d82e53-e344-4347-b639-3bf6eb9ef1b4
 //
 // core: "four questions per tier, a value set in the tool; approve and ask
 // stop a plan with a tier over four". Five root questions (one tier) is one
@@ -743,7 +741,6 @@ fn ask_refuses_when_a_refused_section_was_edited_since_refusal() {
 
 // --- ask leaves a later-tier candidate for a later run ----------------------
 
-// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
 // adr: f8d92841-aef7-4cd7-bd94-0e07c03e4cb6
 //
 // core: "ask asks the lowest tier with an unanswered question"; workflow: a

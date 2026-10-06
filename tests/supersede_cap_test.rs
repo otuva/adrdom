@@ -81,7 +81,6 @@ fn full_tier(dir: &Path) -> PathBuf {
     p
 }
 
-// adr: f416062c-211f-4d20-a6bf-23a561b5f59b
 #[test]
 fn a_fifth_heading_superseding_one_of_four_passes_approve_check_and_ask() {
     let dir = init_repo();
@@ -95,7 +94,6 @@ fn a_fifth_heading_superseding_one_of_four_passes_approve_check_and_ask() {
     assert!(out.status.success(), "ask should pass the cap: {}", stderr(&out));
 }
 
-// adr: f416062c-211f-4d20-a6bf-23a561b5f59b
 #[test]
 fn a_fifth_heading_superseding_nothing_still_fails_the_cap() {
     let dir = init_repo();
@@ -106,7 +104,6 @@ fn a_fifth_heading_superseding_nothing_still_fails_the_cap() {
     assert!(cap_refusal(&out), "{}", stderr(&out));
 }
 
-// adr: f416062c-211f-4d20-a6bf-23a561b5f59b
 #[test]
 fn two_replacements_of_one_decision_in_a_full_tier_fail_the_cap() {
     let dir = init_repo();
@@ -118,7 +115,6 @@ fn two_replacements_of_one_decision_in_a_full_tier_fail_the_cap() {
     assert!(cap_refusal(&out), "{}", stderr(&out));
 }
 
-// adr: f416062c-211f-4d20-a6bf-23a561b5f59b
 #[test]
 fn a_refused_replacement_returns_the_old_decision_to_the_count() {
     let dir = init_repo();
@@ -136,7 +132,6 @@ fn a_refused_replacement_returns_the_old_decision_to_the_count() {
     assert!(cap_refusal(&out), "{}", stderr(&out));
 }
 
-// adr: f416062c-211f-4d20-a6bf-23a561b5f59b
 #[test]
 fn an_open_replacement_in_another_file_frees_a_slot_in_the_full_tier() {
     let dir = init_repo();
@@ -148,7 +143,6 @@ fn an_open_replacement_in_another_file_frees_a_slot_in_the_full_tier() {
     assert!(out.status.success(), "a.md counts 3 + 1: {}", stderr(&out));
 }
 
-// adr: f416062c-211f-4d20-a6bf-23a561b5f59b
 #[test]
 fn check_counts_a_tier_as_approve_does_when_the_replacing_file_has_a_cross_file_heading_entry() {
     let dir = init_repo();

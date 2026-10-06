@@ -191,7 +191,6 @@ fn approve_refuses_a_dangling_heading_dependency() {
     );
 }
 
-// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
 //
 // "approve stops a cycle": a tier can only be derived when the depends
 // graph has no cycle, so approve refuses outright rather than print a
@@ -328,7 +327,6 @@ fn approve_accepts_four_root_questions_in_one_tier() {
 
 // --- the tiers print --------------------------------------------------------
 
-// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
 //
 // "the tool derives the tiers from the depends lines and nothing in the
 // topic file states them; a question standing on no other question in its

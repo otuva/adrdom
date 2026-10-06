@@ -1442,7 +1442,6 @@ Standard: plain words.
 /// set -- so its tier (2) is entirely the tool's own derivation.
 const TIER_Q2_APPENDIX: &str = "\n### 1.2 Does the widget's paint match its color?\n\ndepends: 1.1 What color is the widget?\n\nProblem: the paint might not match.\n\nStandard: plain words.\n\n- A) Yes.\n  Why: reasons.\n  Costs: costs.\n- B) No.\n  Why: other reasons.\n  Costs: other costs.\n";
 
-// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
 //
 // "show and the page print the tiers": Q1 is tier 1 (no depends line at
 // all); Q2, appended later and never written with a tier of its own,

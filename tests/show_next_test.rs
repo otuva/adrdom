@@ -249,7 +249,6 @@ fn show_names_the_plan_change_an_answered_decision_waits_for() {
 }
 
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
-// adr: 15d82e53-e344-4347-b639-3bf6eb9ef1b4
 //
 // A heading added to an approved file, beside four answered questions. The
 // refusal is the agent's next move: show prints it whole and names no
@@ -376,7 +375,6 @@ fn show_prints_no_next_when_nothing_is_left() {
     assert!(!stdout(&out).lines().any(|l| l == "next"), "{}", stdout(&out));
 }
 
-// adr: aec860fd-22ad-44a7-99f7-222ea19537e7
 // adr: 75075c78-fe3c-4fd8-8a33-29a5913d9d34
 //
 // With no topic file and no flag show prints the short listing: each

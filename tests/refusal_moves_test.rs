@@ -120,7 +120,6 @@ fn the_ban_scan_reads_a_file_named_outside_ascii() {
 }
 
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
-// adr: 15d82e53-e344-4347-b639-3bf6eb9ef1b4
 //
 // Five questions written as if none stood on another. The fifth asks about
 // the widget "where the widget one holds": it assumes the answer of the
@@ -161,7 +160,6 @@ or splits the file when none does",
 }
 
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
-// adr: 15d82e53-e344-4347-b639-3bf6eb9ef1b4
 //
 // Four answered questions hold their place, and their depends lines are
 // never edited again. A fifth beside them is over the cap: the refusal
