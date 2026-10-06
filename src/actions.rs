@@ -670,7 +670,7 @@ pub struct RemovalHolds {
 
 /// What the topic file `rel`, gone from the content judged, held: the ids
 /// of its last committed content and the ids whose latest approved row
-/// names it, minus the ids in `present_ids`. Shared by `approve`, `check`
+/// names it and that have a ledger state, minus the ids in `present_ids`. Shared by `approve`, `check`
 /// and `show`, so the three agree on whether a removal passes.
 pub fn removal_holds(root: &Path, rel: &str, led: &Ledger, present_ids: &HashSet<String>) -> RemovalHolds {
     let mut held: Vec<(String, String)> = Vec::new();
@@ -686,7 +686,15 @@ pub fn removal_holds(root: &Path, rel: &str, led: &Ledger, present_ids: &HashSet
         }
     }
     for r in led.rows.iter().filter(|r| r.event == "approved" && r.id != "-" && r.detail == rel) {
-        if seen.insert(r.id.clone()) && led.latest_for_id("approved", &r.id).is_some_and(|l| l.detail == rel) {
+        // approve writes a per-question row only when the question's hash
+        // changed, so a heading approved, never asked, then struck keeps a
+        // row the ledger cannot tell from a live one. Only an id with a
+        // ledger state counts from the ledger; an unasked heading counts
+        // from the file's last committed content alone.
+        if led.latest_state(&r.id).is_some()
+            && seen.insert(r.id.clone())
+            && led.latest_for_id("approved", &r.id).is_some_and(|l| l.detail == rel)
+        {
             let heading = led.latest_asked(&r.id).map(|a| a.detail.clone()).unwrap_or_else(|| r.id.clone());
             held.push((r.id.clone(), heading));
         }

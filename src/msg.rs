@@ -3386,12 +3386,16 @@ mod tests {
     }
 }
 
-/// `adr approve <path>` on a path the ledger never approved and no commit
-/// holds: no topic file was ever there.
+/// `adr approve <path>` on a path the ledger never approved: the file was
+/// never approved, so its removal needs no owner act; the agent commits the
+/// deletion.
 pub fn removal_not_a_topic_file(rel: &str) -> String {
     refuse(
-        format!("{} is absent and was never approved: not a topic file", rel),
-        Next::agent("names a topic file the ledger holds"),
+        format!(
+            "{} is absent and was never approved: its removal needs no owner act and there is nothing to approve",
+            rel
+        ),
+        Next::agent("commits the deletion"),
     )
 }
 
@@ -3415,18 +3419,20 @@ pub fn removal_move(rel: &str, holds: &[RemovalHold]) -> Next {
     let steps: Vec<String> = holds
         .iter()
         .map(|h| {
+            let q = named(&h.id, Some(&h.heading));
             if h.what == "a current decision" {
-                format!("supersedes {} with a new question", h.id)
+                format!("supersedes {} with a new question", q)
             } else {
-                format!("strikes {} from the plan", h.id)
+                format!("strikes {} from the plan", q)
             }
         })
         .collect();
     Next::agent(format!(
-        "restores {}, then {}, by a plan change the owner approves",
+        "restores {}, then {}, by a plan change",
         rel,
         steps.join(", ")
     ))
+    .and_owner_runs(format!("adr approve {}", rel))
 }
 
 /// A removed topic file still held a current decision or an open question.
