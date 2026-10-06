@@ -1066,9 +1066,7 @@ Standard: s2.\n\n\
             answer_line: None,
             answer_value: None,
             parse_errors: vec![],
-            parse_kinds: vec![],
             shape_errors: vec![],
-            shape_kinds: vec![],
             is_skeleton: false,
             terms_line: None,
         };
@@ -1099,9 +1097,7 @@ Standard: s2.\n\n\
             answer_line: None,
             answer_value: None,
             parse_errors: vec![],
-            parse_kinds: vec![],
             shape_errors: vec![],
-            shape_kinds: vec![],
             is_skeleton: false,
             terms_line: None,
         };

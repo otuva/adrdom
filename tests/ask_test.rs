@@ -166,7 +166,13 @@ fn ask_refuses_a_heading_added_after_approval_and_a_never_approved_file() {
     approve_minimal_terms(&dir, "widget");
 
     // A file never approved at all.
-    let never_approved = write_record(&dir, "adrdom/decisions/never.md", Q1_ONLY);
+    let never_approved = write_record(
+        &dir,
+        "adrdom/decisions/never.md",
+        // A heading of its own: one heading never stands in two topic files
+        // (23f21671 "Does one question heading stand in two topic files?").
+        &Q1_ONLY.replace("What color is the widget?", "What shape is the widget?"),
+    );
     let out = adr(&dir, &["ask", never_approved.to_str().unwrap()], &[], "");
     assert!(
         !out.status.success(),
@@ -214,10 +220,11 @@ fn ask_refuses_a_heading_added_after_approval_and_a_never_approved_file() {
 }
 
 //
-// Decision A's "two or three lettered options" clause, the refusal path:
+// The decision "What stands under a question's heading?" (178a232e), its "two or three lettered options" clause, the refusal path:
 // one option is too few.
 #[test]
 fn ask_refuses_a_question_with_one_option() {
+    // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
@@ -239,10 +246,11 @@ fn ask_refuses_a_question_with_one_option() {
 }
 
 //
-// Decision A's "two or three lettered options" clause, the other refusal
+// The decision "What stands under a question's heading?" (178a232e), its "two or three lettered options" clause, the other refusal
 // path: four options is too many.
 #[test]
 fn ask_refuses_a_question_with_four_options() {
+    // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");

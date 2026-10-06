@@ -25,6 +25,7 @@ fn refused_words_in_brief() -> Vec<String> {
 // order, agent names left out.
 #[test]
 fn brief_lists_exactly_the_phrases_the_tool_refuses() {
+    // adr: 149c9a73-16eb-46aa-9806-2950423ee1a2
     let mut expected: Vec<String> = CODE_STATE.iter().map(|s| s.to_string()).collect();
     expected.extend(
         PROVENANCE

@@ -8,15 +8,14 @@ use crate::record::RecordFile;
 /// `parse_errors` ("option X has no decision sentence", a duplicate `id:`
 /// line, an answer naming a missing option) -- the `parse` category of
 /// `record_refusals`, computed once in `mod.rs` and shared with `approve`'s
-/// `do_approve_record` and `ask` (055d303b A point 1): both lists now
+/// `do_approve_record` and `ask` (178a232e A point 1): both lists now
 /// live in the shared `Refusal` list, so this is a plain filter over it
 /// rather than its own scan over `records`.
 ///
-/// The findings about the plan's body shape (a missing Problem or Standard,
-/// an option count, a missing Why or Costs) are notes on a file awaiting
-/// approval (per "Does check fail a topic file awaiting approval?"); the
-/// rest is the topic file's own fixed shape (per "What does a topic file
-/// hold?") and fails check.
+/// On a file awaiting approval every one of these is a note, unless it is
+/// about a question with force; on an approved file each is a failure (per
+/// "What does check do with a fault on a file awaiting approval?", 05141f49
+/// A, and "What is the shape of a topic file?", 9913568f A).
 pub(super) fn check_parse(
     records: &[RecordFile],
     refusals: &[Vec<Refusal>],

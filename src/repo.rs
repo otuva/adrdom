@@ -188,8 +188,9 @@ pub fn hook_is_executable(path: &Path) -> bool {
     }
 }
 
-/// The naming half of 76bd7ef0 A ("each file holds one topic and is named
-/// by it in lowercase words joined by hyphens, with no number or prefix"):
+/// The naming half of the file name rule, a detail with no decision of its
+/// own (a topic file is named by its topic in lowercase words joined by
+/// hyphens, with no number or prefix):
 /// whether `name` -- a file's own base name, e.g. from `Path::file_name`,
 /// never a whole path -- is one or more lowercase ASCII letter words joined
 /// by single hyphens, ending in `.md`. Equivalent to the regex
@@ -209,7 +210,8 @@ pub fn valid_topic_file_name(name: &str) -> bool {
         .all(|word| !word.is_empty() && word.chars().all(|c| c.is_ascii_lowercase()))
 }
 
-/// The other half of 76bd7ef0 A's naming rule ("is named by it"): the file
+/// The other half of the file name rule, a detail with no decision of its
+/// own ("is named by it"): the file
 /// stem a topic file with h1 text `topic` must carry -- the text lowercased,
 /// every run of characters that are not ASCII letters or digits turned into
 /// one hyphen, leading and trailing hyphens dropped. "Ban" gives "ban",
@@ -249,7 +251,7 @@ mod topic_name_tests {
     }
 
     // A digit stays in the derived stem, and that stem is then one no
-    // file name can carry (`valid_topic_file_name`, 76bd7ef0 A, accepts no
+    // file name can carry (`valid_topic_file_name`, the file name rule, accepts no
     // digit): check refuses such a topic outright instead of deriving a
     // name the topic text does not give.
     #[test]

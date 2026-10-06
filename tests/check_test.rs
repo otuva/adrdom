@@ -1063,14 +1063,13 @@ fn check_tests_ignores_adr_prefix_that_is_not_a_uuid() {
 
 #[test]
 fn check_parse_reports_a_file_shape_error() {
+    // adr: 9913568f-6b85-4d26-946b-c6e108f9aa51
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    // No h1 at all: a file-level shape error.
-    write_record(
-        &dir,
-        "adrdom/decisions/bad.md",
-        "### 4.1 A question with no h1 above it?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n",
-    );
+    // No h1 at all: a file-level shape error, a failure once the file is
+    // approved (a note while it awaits approval).
+    let content = "### 4.1 A question with no h1 above it?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: y.\n";
+    approve_via_ledger(&dir, "adrdom/decisions/bad.md", content);
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
@@ -1089,6 +1088,8 @@ fn check_parse_reports_a_file_shape_error() {
 // decision describes for text nobody picked.
 #[test]
 fn check_fails_a_note_sitting_between_two_questions() {
+    // adr: 9913568f-6b85-4d26-946b-c6e108f9aa51
+    // The failure is on an approved file; a draft shows a note (05141f49).
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_empty_terms(&dir);
@@ -1104,7 +1105,7 @@ Problem: p2.\n\n\
 Standard: s2.\n\n\
 - A) x.\n  Why: y.\n  Costs: c.\n\
 - B) y.\n  Why: y.\n  Costs: c.\n";
-    write_record(&dir, "adrdom/decisions/example.md", content);
+    approve_via_ledger(&dir, "adrdom/decisions/example.md", content);
 
     let stray_line_no = content
         .lines()
@@ -1248,18 +1249,12 @@ fn check_counts_a_file_awaiting_approval_when_only_its_context_prose_is_stale() 
 // `check_passes_a_good_topic_file_name`, below, tie that half.
 #[test]
 fn check_fails_a_question_heading_duplicated_across_two_files() {
+    // adr: 23f21671-e34c-44aa-8804-6163d975807f
+    // Both files approved: a failure (a note while one awaits approval).
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    write_record(
-        &dir,
-        "adrdom/decisions/a.md",
-        "# File A\n\n### 9.9 Same heading?\n",
-    );
-    write_record(
-        &dir,
-        "adrdom/decisions/b.md",
-        "# File B\n\n### 9.9 Same heading?\n",
-    );
+    approve_via_ledger(&dir, "adrdom/decisions/a.md", "# File A\n\n### 9.9 Same heading?\n");
+    approve_via_ledger(&dir, "adrdom/decisions/b.md", "# File B\n\n### 9.9 Same heading?\n");
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
@@ -1291,6 +1286,9 @@ fn check_notes_a_question_heading_duplicated_within_one_file_in_a_draft_and_fail
     assert!(out.status.success(), "{}", stdout(&out));
     assert!(stdout(&out).contains(want), "{}", stdout(&out));
 
+    // Approved, no question has force to excuse it: a failure. (A draft
+    // question copying an answered heading is a note: see
+    // check_draft_notes_test.)
     approve_via_ledger(&dir, rel, content);
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
