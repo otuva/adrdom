@@ -348,8 +348,8 @@ Standard: style linters such as Vale run when text is written, with the phrase l
 **Answer:** A
 
 ### What names a topic file?
-depends: topic file, topic
-unrelated: plan, Does a topic file close?, Does one question heading stand in two topic files?, What is the shape of a topic file?, depends, Does a reference in a topic file carry the identifier of what it names?, Does check fail a topic file awaiting approval?, tier, Does a superseded question leave its topic file?, Does a supersedes line name every current decision standing on its target?, What does a blame row name?
+depends: topic file, topic, What is the shape of a topic file?=A|C
+unrelated: plan, Does a topic file close?, Does one question heading stand in two topic files?, depends, Does a reference in a topic file carry the identifier of what it names?, Does check fail a topic file awaiting approval?, tier, Does a superseded question leave its topic file?, Does a supersedes line name every current decision standing on its target?, What does a blame row name?
 
 Problem: a file named by a number or a prefix breaks every citation when topics are reordered, and two spellings of one topic make two files.
 Standard: ADR collections name each file by a slug of its subject.
