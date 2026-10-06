@@ -181,7 +181,7 @@ fn build(
     push_failures(&mut failures, parse_failures);
     notes.extend(parse_notes);
     push_failures(&mut failures, ids::check_ids(&records, &led, &missing_answered, &raw_hashes, &removed_files));
-    push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_content, since));
+    push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_content, since, &removed_files));
     push_failures(&mut failures, reader::check_reader(root, &source, since));
     push_failures(&mut failures, banned::check_banned_ledger(&led, root, &source));
     push_failures(&mut failures, answers::check_answers(&records, &led));

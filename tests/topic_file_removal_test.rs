@@ -41,10 +41,9 @@ fn setup(content: &str, ask: bool) -> (PathBuf, PathBuf) {
 /// move, never on its own.
 fn assert_owner_follows_agent(text: &str) {
     let owner = format!("owner runs: adr approve {}", REL);
-    if let Some(at) = text.find(&owner) {
-        let agent = text.find("agent restores").unwrap_or(usize::MAX);
-        assert!(agent < at, "owner's approve before the agent's move: {}", text);
-    }
+    let at = text.find(&owner).unwrap_or_else(|| panic!("no owner command: {}", text));
+    let agent = text.find("agent restores").unwrap_or_else(|| panic!("no agent move: {}", text));
+    assert!(agent < at, "owner's approve before the agent's move: {}", text);
 }
 
 fn approve_removal(dir: &Path) -> std::process::Output {
@@ -346,4 +345,46 @@ fn a_heading_approved_never_asked_and_struck_does_not_hold_the_removal() {
     std::fs::remove_file(&record).unwrap();
     let out = approve_removal(&dir);
     assert!(out.status.success(), "{}", stderr(&out));
+}
+
+#[test]
+fn a_committed_deletion_still_holds_an_approved_unasked_heading() {
+    // adr: 79da6500-2246-4a80-baf1-0eaf7cad49ee
+    let (dir, record) = setup(TWO, false);
+    let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
+    commit(&dir);
+    std::fs::remove_file(&record).unwrap();
+    // The deletion is committed: HEAD has no copy, history does.
+    commit(&dir);
+    let before = ledger(&dir);
+    let out = approve_removal(&dir);
+    assert!(!out.status.success(), "{}", stdout(&out));
+    let err = stderr(&out);
+    assert!(err.contains("First question?") && err.contains("Second question?"), "{}", err);
+    assert!(err.contains(&ids[0]) && err.contains(&ids[1]), "{}", err);
+    assert_eq!(ledger(&dir), before);
+}
+
+#[test]
+fn a_heading_struck_by_a_committed_plan_change_does_not_hold_the_removal() {
+    // adr: 79da6500-2246-4a80-baf1-0eaf7cad49ee
+    let (dir, record) = setup(TWO, false);
+    let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
+    commit(&dir);
+    let text = std::fs::read_to_string(&record).unwrap();
+    let kept = text[..text.find("### 1.2").unwrap()].trim_end().to_string() + "\n";
+    // The entry naming the struck heading goes with it.
+    let kept: String = kept.lines().filter(|l| !l.starts_with("unrelated:")).map(|l| format!("{}\n", l)).collect();
+    std::fs::write(&record, &kept).unwrap();
+    approve_record(&dir, REL);
+    commit(&dir);
+    std::fs::remove_file(&record).unwrap();
+
+    let before = ledger(&dir);
+    let out = approve_removal(&dir);
+    assert!(!out.status.success(), "{}", stdout(&out));
+    let err = stderr(&out);
+    assert!(err.contains(&ids[0]) && err.contains("First question?"), "{}", err);
+    assert!(!err.contains(&ids[1]) && !err.contains("Second question?"), "{}", err);
+    assert_eq!(ledger(&dir), before);
 }

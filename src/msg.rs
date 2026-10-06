@@ -2136,6 +2136,12 @@ pub fn ledger_asked_id_missing(id: &str, heading: Option<&str>) -> String {
     )
 }
 
+/// `ledger_asked_id_missing` for an id held by a removed topic file whose
+/// removal awaits approval: `next` is the move `removal_move` names.
+pub fn ledger_asked_id_in_removed_file(id: &str, heading: Option<&str>, next: Next) -> String {
+    refuse(format!("asked row id {} not found in any topic file", named(id, heading)), next)
+}
+
 pub fn ledger_answered_without_asked(id: &str, heading: Option<&str>) -> String {
     refuse(
         format!(

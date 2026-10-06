@@ -668,15 +668,42 @@ pub struct RemovalHolds {
     pub holds: Vec<msg::RemovalHold>,
 }
 
+/// The committed version of `rel` that holds the file's latest approved
+/// plan: walks the commits that touched the path newest first, skipping
+/// those where it is absent (a deletion), and stops at the first version
+/// whose plan matches the latest file-level `approved` row. When no
+/// committed version matches (the latest approval was never committed), falls
+/// back to the newest committed version that has the file. That fallback can
+/// name a heading already struck by an uncommitted approval; the move stays
+/// executable: restore the file, strike the heading again, approve.
+fn latest_approved_version(root: &Path, rel: &str, led: &Ledger) -> Option<RecordFile> {
+    // A bound on the versions read; the match is almost always the first few.
+    const WALK_LIMIT: usize = 200;
+    let log = repo::git(root, &["log", "--format=%H", "--", rel])?;
+    let mut newest: Option<RecordFile> = None;
+    for commit in log.lines().filter(|l| !l.is_empty()).take(WALK_LIMIT) {
+        let Some(text) = repo::git(root, &["show", &format!("{}:{}", commit, rel)]) else {
+            continue;
+        };
+        let old = record::build(root.join(rel), rel.to_string(), record::split_lines(&text));
+        if state::plan_approved_hashes(led, rel, &record::question_hashes(&old)) {
+            return Some(old);
+        }
+        if newest.is_none() {
+            newest = Some(old);
+        }
+    }
+    newest
+}
+
 /// What the topic file `rel`, gone from the content judged, held: the ids
-/// of its last committed content and the ids whose latest approved row
+/// of its latest approved committed plan (see `latest_approved_version`) and the ids whose latest approved row
 /// names it and that have a ledger state, minus the ids in `present_ids`. Shared by `approve`, `check`
 /// and `show`, so the three agree on whether a removal passes.
 pub fn removal_holds(root: &Path, rel: &str, led: &Ledger, present_ids: &HashSet<String>) -> RemovalHolds {
     let mut held: Vec<(String, String)> = Vec::new();
     let mut seen: BTreeSet<String> = BTreeSet::new();
-    if let Some(text) = repo::git(root, &["show", &format!("HEAD:{}", rel)]) {
-        let old = record::build(root.join(rel), rel.to_string(), record::split_lines(&text));
+    if let Some(old) = latest_approved_version(root, rel, led) {
         for sec in &old.sections {
             if let Some(id) = &sec.id {
                 if seen.insert(id.clone()) {
@@ -690,7 +717,7 @@ pub fn removal_holds(root: &Path, rel: &str, led: &Ledger, present_ids: &HashSet
         // changed, so a heading approved, never asked, then struck keeps a
         // row the ledger cannot tell from a live one. Only an id with a
         // ledger state counts from the ledger; an unasked heading counts
-        // from the file's last committed content alone.
+        // from the file's latest approved committed plan alone.
         if led.latest_state(&r.id).is_some()
             && seen.insert(r.id.clone())
             && led.latest_for_id("approved", &r.id).is_some_and(|l| l.detail == rel)
