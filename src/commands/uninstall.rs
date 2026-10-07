@@ -11,7 +11,7 @@ use std::path::Path;
 /// The move on any I/O failure while uninstalling: the agent fixes what the
 /// error names, then the owner runs uninstall again.
 fn retry() -> Next {
-    Next::agent("fixes what the error names").and_owner_runs("adr uninstall")
+    Next::agent("fixes what the error names").and_owner_runs(crate::moves::Cmd::fixed("adr uninstall"))
 }
 
 /// The event of the file at `rel` edited in place.
@@ -28,14 +28,14 @@ fn removed(rel: &str) -> Event {
 /// leaving `adrdom/` itself untouched.
 pub fn run() -> i32 {
     if !repo::owner_authorized() {
-        out::eprint_stop("uninstall", &msg::owner_refusal("uninstall", ""));
+        out::eprint_stop("uninstall", &msg::owner_refusal("uninstall", &[]));
         return 2;
     }
 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint_stop("uninstall", &msg::not_a_repo("uninstall", "", Actor::Owner));
+            out::eprint_stop("uninstall", &msg::not_a_repo("uninstall", &[], Actor::Owner));
             return 1;
         }
     };
@@ -79,6 +79,13 @@ fn remove_agents_md_section(root: &Path) -> Result<Option<Event>, String> {
     let Some((begin, end)) = install::find_markers(&parts) else {
         return Ok(None);
     };
+    // Each piece leaves only while it still matches what install wrote (per
+    // "Does uninstall belong to the owner?"): a section edited by hand is
+    // left, compared the way check compares it.
+    let brief_lines: Vec<&str> = install::BRIEF.lines().collect();
+    if !crate::text::lines_match_trimmed(&parts[begin + 1..end], &brief_lines) {
+        return Ok(None);
+    }
 
     let remove_from = if begin > 0 && parts[begin - 1].is_empty() {
         begin - 1
@@ -236,7 +243,7 @@ fn remove_settings_deny(root: &Path) -> Result<Vec<Event>, String> {
     }
     let mut value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|e| {
-            msg::parse_failed(REL, e, Next::agent(format!("fixes {} so it parses as JSON", REL)).and_owner_runs("adr uninstall"))
+            msg::parse_failed(REL, e, Next::agent(format!("fixes {} so it parses as JSON", REL)).and_owner_runs(crate::moves::Cmd::fixed("adr uninstall")))
         })?;
 
     let mut any_removed = false;

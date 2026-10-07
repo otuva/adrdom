@@ -91,6 +91,11 @@ pub(super) fn check_tests(
         // note on every run, never a failure, with the move that builds it
         // (per "Does check print a line that names no move?", 3fc35d4f A).
         let Some(&(rf, i)) = place.get(id.as_str()) else { continue };
+        // Two standing answers: nothing stands to build; the conflict's own
+        // finding names the move, as `show` names it.
+        if crate::state::conflicting_rulings(led, id).is_some() {
+            continue;
+        }
         let mv = crate::moves::of_untested(rf, i, id);
         notes.push(
             Finding::new("untested", msg::untested(&rf.rel, &rf.sections[i].heading_text, id, &mv.text()))

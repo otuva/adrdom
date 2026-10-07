@@ -30,6 +30,11 @@ pub enum Subject {
     BlameFile(String),
     /// The records as a whole: a ledger id no file holds, for one.
     Records,
+    /// The topic files as a directory, by the path of the file the finding
+    /// is in: its name, or a heading it holds twice or shares with another
+    /// file. `check` reads these off the directory itself, a file that does
+    /// not parse included.
+    Directory(String),
 }
 
 /// One rule a thing in the records breaks, tagged with the rule's name (the
@@ -92,6 +97,14 @@ fn found(rule: &'static str, rel: &str, messages: Vec<String>) -> Vec<Finding> {
 pub(crate) fn is_topic_file_path(rel: &str) -> bool {
     rel.strip_prefix(&format!("{}/", repo::DECISIONS_DIR))
         .is_some_and(|name| !name.contains('/') && name.ends_with(".md"))
+}
+
+/// Whether `rel` (a path from the repository root) names a file approve
+/// takes: a topic file under adrdom/decisions, adrdom/terms.md, or a blame
+/// file under adrdom/blame.
+pub fn approve_takes(rel: &str) -> bool {
+    let md_under = |dir: &str| rel.strip_prefix(&format!("{}/", dir)).is_some_and(|name| name.ends_with(".md"));
+    rel == repo::TERMS_PATH || md_under(repo::DECISIONS_DIR) || md_under(repo::BLAME_DIR)
 }
 
 /// The plan hash of a file with no question; the same value the context
@@ -367,16 +380,7 @@ pub fn terms_refusals(
     // (skipped for `check`'s call -- see `scan_banned` above -- since
     // `check_banned` already scans this same file as a tracked file).
     if scan_banned {
-        let banned_entries = crate::banned::read_entries_via(root, source);
-        if !banned_entries.is_empty() {
-            let hash_map: std::collections::HashMap<String, Option<String>> =
-                banned_entries.into_iter().collect();
-            let text = tf.lines.join("\n");
-            for hit in crate::banned::hits(&text, &hash_map, &tf.terms) {
-                let suffix = msg::term_suffix(hit.term.as_deref());
-                refusals.push(msg::terms_banned_word(hit.line, &suffix));
-            }
-        }
+        refusals.extend(terms_banned_hits(root, tf, source));
     }
 
     // Every term's own definition is one or two sentences
@@ -392,6 +396,25 @@ pub fn terms_refusals(
     }
 
     (refusals, pairs_per_entry)
+}
+
+/// The banned words `adrdom/terms.md` holds, each by the line the file as
+/// written holds it on: what `approve` refuses the terms file on, and what
+/// `check` reads to know whether `approve` would take it (`check_banned`
+/// names the hit itself, as it does in every tracked file).
+pub fn terms_banned_hits(root: &Path, tf: &terms::TermsFile, source: &repo::Source) -> Vec<String> {
+    let banned_entries = crate::banned::read_entries_via(root, source);
+    if banned_entries.is_empty() {
+        return Vec::new();
+    }
+    let hash_map: std::collections::HashMap<String, Option<String>> = banned_entries.into_iter().collect();
+    // The file as written, not the minted copy: an entry minted an id gains
+    // a line, and a hit names the line the file holds.
+    let text = source.read(root, crate::repo::TERMS_PATH).unwrap_or_else(|| tf.lines.join("\n"));
+    crate::banned::hits(&text, &hash_map, &tf.terms)
+        .into_iter()
+        .map(|hit| msg::terms_banned_word(hit.line, &msg::term_suffix(hit.term.as_deref())))
+        .collect()
 }
 
 /// The length refusals (`tells::length_tells`, the one function `ask` reads
@@ -509,6 +532,51 @@ fn letter_found(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<(usize, String)
     out
 }
 
+/// The rules on what the ledger holds of each question's answer or refusal
+/// against what its topic file holds (per "Does check fail an answered
+/// question whose text changed?", "Does the owner answer a question with a
+/// refusal?" and "Does check fail a question answered with two different
+/// options?"), one judgement `check` fails, `approve` and `ask` refuse on,
+/// and `show` and `plan` print: two standing answers; an answer or refusal
+/// line with no row behind it; a closed question whose text moved since it
+/// was answered or refused; a row whose line the file no longer holds.
+pub fn closed_findings(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<Finding> {
+    let mut out = Vec::new();
+    for (si, sec) in rf.sections.iter().enumerate() {
+        let Some(id) = &sec.id else { continue };
+        let cur = record::section_hash(&rf.lines, sec);
+        let mut push = |m: String| out.push(Finding::new("answers", m).in_section(si));
+        // The file's own `**Answer:**` line shows one side only: two
+        // standing rulings for different options are read off the ledger.
+        if let Some((a, b)) = state::conflicting_rulings(led, id) {
+            push(msg::answer_conflict(rel, &sec.heading_text, id, &a.label(), &b.label()));
+        }
+        let open_again = state::is_open_again(led, id);
+        if sec.answer_line.is_some() && open_again {
+            // Asked again and not ruled on since: no answer stands, so a
+            // line in the file is hand-written.
+            push(msg::answer_without_row(rel, &sec.heading_text));
+        } else if sec.answer_line.is_some() {
+            match state::closed_match(led, &cur, sec, id) {
+                state::ClosedMatch::Current => {}
+                // A genuine row exists: the ruling is real and the
+                // question's text moved since.
+                state::ClosedMatch::Edited if sec.is_refused() => push(msg::refused_text_changed(rel, &sec.heading_text)),
+                state::ClosedMatch::Edited => push(msg::answered_text_changed(rel, &sec.heading_text, id)),
+                state::ClosedMatch::NotClosed if sec.is_refused() => push(msg::refusal_without_row(rel, &sec.heading_text)),
+                state::ClosedMatch::NotClosed => push(msg::answer_without_row(rel, &sec.heading_text)),
+            }
+        } else if !open_again {
+            if led.rows.iter().any(|r| r.event == "answered" && &r.id == id) {
+                push(msg::answered_row_without_line(rel, &sec.heading_text));
+            } else if led.rows.iter().any(|r| r.event == "refused" && &r.id == id) {
+                push(msg::refused_row_without_line(rel, &sec.heading_text));
+            }
+        }
+    }
+    out
+}
+
 /// The three shapes of a `depends:` entry `approve` has stopped, for every
 /// question of `rf` not yet asked and with a body (per "Does a depends entry
 /// on a question in its file carry an answer set?"): a set on an entry that
@@ -530,12 +598,29 @@ pub fn depends_shape_refusals(
         if !status::open_to_ask(led, rf, sec) {
             continue;
         }
+        // Two entries that name one thing (a term and its alias, a name and
+        // its id) would be written as one id twice by approve, a line parse
+        // refuses: the second is a finding here, before approval.
+        let mut seen: Vec<String> = Vec::new();
         for d in &sec.depends {
             let Ok(Some(target)) =
                 depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, cross_file_headings, led)
             else {
                 continue;
             };
+            let key = match &target {
+                DepTarget::Heading(idx) => rf.sections[*idx].id.clone().unwrap_or_else(|| format!("heading {}", idx)),
+                DepTarget::Term(id) | DepTarget::Decision(id) => id.clone(),
+            };
+            if seen.contains(&key) {
+                let written = match d {
+                    record::Dep::Id { id, .. } => id.as_str(),
+                    record::Dep::Text { text, .. } => text.as_str(),
+                };
+                out.push(msg::depends_names_twice(rel, &sec.heading_text, written));
+                continue;
+            }
+            seen.push(key);
             let (target_section, in_file) = match &target {
                 DepTarget::Heading(idx) => (Some(&rf.sections[*idx]), true),
                 DepTarget::Decision(id) => (
@@ -697,23 +782,6 @@ pub fn record_refusals(
     // to carry forward.
     for (si, sec) in rf.sections.iter().enumerate() {
         let frozen = state::is_frozen(led, sec);
-        // A frozen section whose text (the depends line included) is no
-        // longer what the ledger holds: `check` fails it right after, so
-        // approve refuses it before writing anything. A `Text` entry in
-        // it keeps its own refusal below.
-        if frozen
-            && !sec.depends.iter().any(|d| matches!(d, record::Dep::Text { .. }))
-            && state::frozen_text_edited(led, &rf.lines, sec)
-        {
-            // Category "answers": `check` prints this line from
-            // `check_answers` and forwards no `answers` refusal from here,
-            // so it prints once; `approve` refuses on every category.
-            out.push(Finding::new("answers", msg::answered_text_changed(
-                    rel,
-                    &sec.heading_text,
-                    sec.id.as_deref().unwrap_or(""),
-                )));
-        }
         for d in &sec.depends {
             if frozen && matches!(d, record::Dep::Text { .. }) {
                 out.push(Finding::new("plan_frozen", msg::frozen_depends_edited(rel, &sec.heading_text)).in_section(si));
@@ -753,6 +821,10 @@ pub fn record_refusals(
             }
         }
     }
+    // The rules on a question's answer or refusal (`closed_findings`):
+    // category "answers", which `check` prints from `check_answers` and
+    // forwards no line of from here, so it prints once.
+    out.extend(closed_findings(rel, rf, led));
     out.extend(derive_finding(rel, rf, all, led));
     out.extend(cap_finding(rel, rf, replaced, led));
 
@@ -1200,8 +1272,9 @@ pub fn judge_topic_file(j: &TopicFileJudge) -> Vec<Finding> {
         ),
         rel,
     );
-    out.extend(found("plan", rel, own_name_and_heading_refusals(rel, rf.topic.as_deref(), &rf.sections)));
-    out.extend(found("plan", rel, cross_file_heading_refusals(rel, rf, j.all, led)));
+    let directory = |m: String| Finding::new("plan", m).about(Subject::Directory(rel.to_string()));
+    out.extend(own_name_and_heading_refusals(rel, rf.topic.as_deref(), &rf.sections).into_iter().map(directory));
+    out.extend(cross_file_heading_refusals(rel, rf, j.all, led).into_iter().map(directory));
     // Per "Does a depends entry carry the answers it holds under?": a letter
     // the target has no option for is found before `ask`.
     out.extend(about_topic_file(in_sections("plan", letter_found(rel, rf, led)), rel));
@@ -1326,14 +1399,26 @@ pub struct RepoIndex {
     pub planning: crate::plan::Shared,
     base: HashSet<String>,
     stale: Vec<String>,
+    records: Vec<Finding>,
 }
 
 impl RepoIndex {
     pub fn new(root: &Path, all: &[RecordFile], terms_list: &[terms::Term], led: &Ledger) -> RepoIndex {
-        let planning = crate::plan::Shared::new(root, all, terms_list, led);
+        RepoIndex::new_via(root, all, terms_list, led, &repo::Source::WorkingTree)
+    }
+
+    /// `new` with the reader's rows as `source` holds them.
+    pub fn new_via(root: &Path, all: &[RecordFile], terms_list: &[terms::Term], led: &Ledger, source: &repo::Source) -> RepoIndex {
+        let planning = crate::plan::Shared::new_via(root, all, terms_list, led, source);
         let base = depends::replaced_base(all, &depends::approved_plan_rels(all, led), &planning.cross, led);
         let stale = stale_files(all, led).into_iter().map(str::to_string).collect();
-        RepoIndex { planning, base, stale }
+        let records = judge_records(all, led);
+        RepoIndex { planning, base, stale, records }
+    }
+
+    /// The rules on the topic files as a whole (`judge_records`).
+    pub fn records(&self) -> &[Finding] {
+        &self.records
     }
 
     /// The files whose plan differs from an approval (`stale_files`).
@@ -1386,7 +1471,68 @@ pub fn no_body_refusals(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<String>
 /// The rules on the records as a whole: a current decision whose id no
 /// topic file holds (`missing_answered_refusals`).
 pub fn judge_records(records: &[RecordFile], led: &Ledger) -> Vec<Finding> {
-    missing_answered_refusals(records, led)
+    judge_records_except(records, led, &HashSet::new())
+}
+
+/// The terms a topic file is judged against, by every command that judges
+/// one: the terms file with an identifier on every entry
+/// (`terms::minted_copy`), so a word an entry still waiting for its
+/// approval defines pairs to it, and the finding is the terms file's own
+/// approval (`terms_gate`), never a missing term the file already holds.
+pub fn judged_terms(tf: Option<&terms::TermsFile>) -> Vec<terms::Term> {
+    tf.map(|tf| terms::minted_copy(tf).terms).unwrap_or_default()
+}
+
+/// What keeps `approve`, `ask` and `answer` from taking the topic file
+/// `rel` while adrdom/terms.md is missing, unreadable, malformed or waits
+/// for its approval (per "Does the tool stop while the terms file waits for
+/// approval?"): the gate `actions::require_terms` stops them on, as
+/// findings of the file, so `show` and `plan` name the move that clears it
+/// and no move those commands would refuse.
+pub fn terms_gate(root: &Path, led: &Ledger, rel: &str) -> Vec<Finding> {
+    match crate::actions::require_terms(root, led, rel) {
+        Ok(_) => Vec::new(),
+        Err(text) => text.lines().map(|l| Finding::new("terms", l.to_string()).about(Subject::TermsFile)).collect(),
+    }
+}
+
+/// `judge_records` leaving out of the missing-answered rule the ids in
+/// `skip` (`missing_answered_refusals_except`): every rule on the topic
+/// files as a whole, the one judgement `check` fails, `approve` refuses and
+/// `show` and `plan` print with a file's report. An identifier held by two
+/// questions, a withdrawn identifier back in a file (a withdrawn identifier
+/// never returns, per "Does approve withdraw an asked question struck from
+/// the plan?"), and a current decision no topic file holds.
+pub fn judge_records_except(records: &[RecordFile], led: &Ledger, skip: &HashSet<String>) -> Vec<Finding> {
+    let mut out = Vec::new();
+    let mut seen: HashMap<&str, String> = HashMap::new();
+    for rf in records {
+        for sec in rf.sections.iter().filter(|s| !s.is_skeleton) {
+            let Some(id) = sec.id.as_deref() else { continue };
+            match seen.get(id) {
+                Some(prev) => out.push(
+                    Finding::new("ids", msg::duplicate_id(id, prev, &rf.rel, &sec.heading_text))
+                        .about(Subject::TopicFile(rf.rel.clone())),
+                ),
+                None => {
+                    seen.insert(id, format!("{}:{}", rf.rel, sec.heading_text));
+                }
+            }
+        }
+    }
+    for rf in records {
+        for sec in &rf.sections {
+            let Some(id) = &sec.id else { continue };
+            if led.latest_state(id).is_some_and(|row| row.event == "withdrawn") {
+                out.push(
+                    Finding::new("ids", msg::withdrawn_id_present(id, &sec.heading_text, &rf.rel))
+                        .about(Subject::TopicFile(rf.rel.clone())),
+                );
+            }
+        }
+    }
+    out.extend(missing_answered_refusals_except(records, led, skip));
+    out
 }
 
 /// The rules on a removed topic file: each question it held that keeps its

@@ -46,14 +46,7 @@ pub(super) fn overview(root: &Path, last: &[Line], token: &str) -> String {
     body.push_str("<section class=\"listing\">\n");
     let summary = show::summary(&r);
     for line in &summary {
-        if let Some(path) = approve_path(line) {
-            if let Ok(lines) = show::file_form(&r, &path, Views::default()) {
-                let change: Vec<Line> =
-                    lines.into_iter().filter(|l| !matches!(l, Line::Move(_) | Line::Finding(_))).collect();
-                body.push_str(&format!("<div class=\"change\">\n{}</div>\n", plain(&change)));
-            }
-        }
-        body.push_str(&with_form(line, &r, token));
+        body.push_str(&with_form(line, &r, token, true));
     }
     body.push_str("</section>\n");
 
@@ -104,7 +97,7 @@ pub(super) fn questions(root: &Path, last: &[Line], token: &str) -> String {
             let heading = status_subject(&block[0]);
             for (i, m) in moves.iter().enumerate() {
                 if move_heading(m) == Some(heading) {
-                    body.push_str(&with_form(&Line::Move(m.clone()), &r, token));
+                    body.push_str(&with_form(&Line::Move(m.clone()), &r, token, true));
                     placed[i] = true;
                 }
             }
@@ -112,7 +105,7 @@ pub(super) fn questions(root: &Path, last: &[Line], token: &str) -> String {
         }
         body.push_str(&plain(&findings));
         for (m, _) in moves.iter().zip(&placed).filter(|(_, p)| !**p) {
-            body.push_str(&with_form(&Line::Move(m.clone()), &r, token));
+            body.push_str(&with_form(&Line::Move(m.clone()), &r, token, true));
         }
         body.push_str("</article>\n");
     }
@@ -125,8 +118,9 @@ pub(super) fn terms(root: &Path, last: &[Line], token: &str) -> String {
     let mut body = banner(last);
     match show::file_form(&r, repo::TERMS_PATH, Views::default()) {
         Ok(lines) => {
+            // The whole file form is on this page, its change among it.
             for l in &lines {
-                body.push_str(&with_form(l, &r, token));
+                body.push_str(&with_form(l, &r, token, false));
             }
         }
         Err(e) => body.push_str(&plain(&out::stop("show", &e))),
@@ -135,9 +129,21 @@ pub(super) fn terms(root: &Path, last: &[Line], token: &str) -> String {
 }
 
 /// The line, and under an owner's move the form that makes it: approve for
-/// an approve, the letters and refuse for an answer.
-fn with_form(line: &Line, r: &Records, token: &str) -> String {
-    let mut s = format!("{}\n", out::html(line));
+/// an approve, the letters and refuse for an answer. Above an approve form
+/// stands what the approve signs, the file's change beyond its latest
+/// approval as `adr show <file>` prints it, wherever the form appears, so
+/// the page never offers to approve what it does not show (per "Does show
+/// print what a file holds beyond its latest approval?"); `change` is false
+/// only where the page shows the whole file form already.
+fn with_form(line: &Line, r: &Records, token: &str, change: bool) -> String {
+    let mut s = String::new();
+    if let (true, Some(path)) = (change, approve_path(line)) {
+        if let Ok(lines) = show::file_form(r, &path, Views::default()) {
+            let shown: Vec<Line> = lines.into_iter().filter(|l| !matches!(l, Line::Move(_) | Line::Finding(_))).collect();
+            s.push_str(&format!("<div class=\"change\">\n{}</div>\n", plain(&shown)));
+        }
+    }
+    s.push_str(&format!("{}\n", out::html(line)));
     if let Some(path) = approve_path(line) {
         s.push_str(&format!(
             "<form method=\"post\" action=\"/approve\" class=\"act\"><input type=\"hidden\" name=\"file\" value=\"{}\"><input type=\"hidden\" name=\"t\" value=\"{}\"><button type=\"submit\">Approve</button></form>\n",

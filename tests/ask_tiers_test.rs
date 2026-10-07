@@ -785,13 +785,15 @@ fn ask_refuses_when_a_refused_section_was_edited_since_refusal() {
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
+    // The finding check and show print for the same state, with its move.
     assert_eq!(
         stderr(&out).trim_end(),
-        format!(
-            "ask: {}: \"1.1 What color is the widget?\" was edited after being refused; agent reverts the edit or writes a new question",
-            record.display()
-        )
+        "ask: adrdom/decisions/example.md: 1.1 What color is the widget?: text changed since being refused; agent restores its text from git (e.g. git checkout -- adrdom/decisions/example.md)"
     );
+    let checked = stdout(&adr(&dir, &["check"], &[], ""));
+    assert!(checked.contains("answers: adrdom/decisions/example.md: 1.1 What color is the widget?: text changed since being refused;"), "{}", checked);
+    let shown = stdout(&adr(&dir, &["show", "adrdom/decisions/example.md"], &[], ""));
+    assert!(shown.contains("answers: adrdom/decisions/example.md: 1.1 What color is the widget?: text changed since being refused;"), "{}", shown);
 
     // Nothing changed: the file is exactly as edited, no new ledger rows.
     let after = std::fs::read_to_string(&record).unwrap();

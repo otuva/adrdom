@@ -559,6 +559,43 @@ fn uninstall_leaves_an_owner_edited_codex_rules_file_alone() {
     );
 }
 
+// adr: 292359a4-0512-465b-b6a7-79838e66e5a5
+// The brief section of AGENTS.md follows the same rule: edited by hand, it
+// stays, and uninstall prints nothing for it.
+#[test]
+fn uninstall_leaves_a_hand_edited_brief_section_alone() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let path = dir.join("AGENTS.md");
+    let text = std::fs::read_to_string(&path).unwrap();
+    let edited = text.replacen("## What is next", "## What is next, edited by hand", 1);
+    assert_ne!(edited, text);
+    std::fs::write(&path, &edited).unwrap();
+
+    let out = adr_owner(&dir, &["uninstall"], "");
+    assert!(out.status.success(), "uninstall failed: {}", stderr(&out));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), edited);
+    assert!(!stdout(&out).contains("AGENTS.md"), "{}", stdout(&out));
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+// Right after install, a commit that stages none of what install wrote is
+// refused; each file is named not staged, with `git add` as the move that
+// clears it, never `adr install`, which would write nothing.
+#[test]
+fn a_commit_names_the_installed_files_it_lacks_as_not_staged() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    std::fs::write(dir.join("b.txt"), "b\n").unwrap();
+    run_git(&dir, &["add", "b.txt"]);
+    let out = run_git(&dir, &["commit", "-q", "-m", "b"]);
+    assert!(!out.status.success(), "the commit is refused");
+    let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    assert!(text.contains("AGENTS.md not staged; agent runs: git add AGENTS.md"), "{}", text);
+    assert!(text.contains(".githooks/pre-commit not staged; agent runs: git add .githooks/pre-commit"), "{}", text);
+    assert!(!text.contains("agent runs: adr install"), "{}", text);
+}
+
 // --- uninstall -------------------------------------------------------------
 
 // adr: 292359a4-0512-465b-b6a7-79838e66e5a5

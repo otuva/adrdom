@@ -50,6 +50,38 @@ pub fn init_repo() -> PathBuf {
     dir
 }
 
+/// A directory no git repository holds, removed when dropped: the first of
+/// the temp dir, /tmp and /var/tmp with no `.git` above it. A temp dir set
+/// inside a working tree (TMPDIR under a repository) would make a command run
+/// there act on that repository, so it is passed over.
+pub struct OutsideDir(pub PathBuf);
+
+impl OutsideDir {
+    pub fn new(tag: &str) -> OutsideDir {
+        let n = COUNTER.fetch_add(1, Ordering::SeqCst);
+        for base in [std::env::temp_dir(), PathBuf::from("/tmp"), PathBuf::from("/var/tmp")] {
+            if base.ancestors().any(|a| a.join(".git").exists()) {
+                continue;
+            }
+            let dir = base.join(format!("adr-{}-{}-{}", tag, std::process::id(), n));
+            if std::fs::create_dir_all(&dir).is_ok() {
+                return OutsideDir(dir);
+            }
+        }
+        panic!("no directory outside a git repository to run in");
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for OutsideDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 static SWEEP: std::sync::Once = std::sync::Once::new();
 
 /// Removes the `adr-test-<pid>-*` repos `init_repo` made in runs whose

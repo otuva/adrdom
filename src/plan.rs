@@ -419,7 +419,12 @@ pub struct Shared {
 
 impl Shared {
     pub fn new(root: &Path, all: &[RecordFile], terms_list: &[Term], led: &Ledger) -> Shared {
-        let rows = reader::rows(root);
+        Shared::new_via(root, all, terms_list, led, &crate::repo::Source::WorkingTree)
+    }
+
+    /// `new` with the reader's rows as `source` holds them.
+    pub fn new_via(root: &Path, all: &[RecordFile], terms_list: &[Term], led: &Ledger, source: &crate::repo::Source) -> Shared {
+        let rows = reader::rows_via(root, source);
         // A row counts only when it was written with the prompt and the
         // model that would read its pair now; a row from another prompt or
         // model is kept apart, and its kind at that hash is read again.

@@ -70,7 +70,11 @@ impl Records {
     pub(crate) fn load(root: PathBuf) -> Records {
         let led = ledger::read(&root.join(repo::LEDGER_PATH));
         let terms_file = state::load_terms(&root);
-        let terms_list: Vec<Term> = terms_file.as_ref().map(|tf| tf.terms.clone()).unwrap_or_default();
+        // The terms every topic file is judged against, as check judges
+        // them: one minted copy, read by the topic files and the blame rows
+        // alike, so an entry with no id yet carries one identifier.
+        let minted = terms_file.as_ref().map(terms::minted_copy);
+        let terms_list: Vec<Term> = minted.as_ref().map(|tf| tf.terms.clone()).unwrap_or_default();
         let (topic_files, unreadable) = record::load_all_via(&root, &repo::Source::WorkingTree);
         let unreadable_topic_files =
             unreadable.into_iter().map(|(f, e)| (state::rel_path(&root, &f), e.to_string())).collect();
@@ -98,7 +102,7 @@ impl Records {
             names,
             index: std::cell::OnceCell::new(),
             blame_names: std::cell::OnceCell::new(),
-            minted_terms: std::cell::OnceCell::new(),
+            minted_terms: std::cell::OnceCell::from(minted),
         }
     }
 
@@ -129,7 +133,7 @@ impl Records {
 /// The arguments `show` ran with, as the command line names them: what a
 /// refusal's move names to run again (per "Does a refusal name the command
 /// that clears it?").
-fn show_args(record_arg: Option<&std::path::Path>, all: bool, views: &Views) -> String {
+fn show_args(record_arg: Option<&std::path::Path>, all: bool, views: &Views) -> Vec<String> {
     let mut args: Vec<String> = Vec::new();
     if let Some(p) = record_arg {
         args.push(p.display().to_string());
@@ -143,12 +147,13 @@ fn show_args(record_arg: Option<&std::path::Path>, all: bool, views: &Views) -> 
     if views.dependents {
         args.push("--dependents".to_string());
     }
-    args.join(" ")
+    args
 }
 
 pub fn run(record_arg: Option<PathBuf>, all: bool, views: Views) -> i32 {
     let Some(root) = repo::find_root() else {
         let args = show_args(record_arg.as_deref(), all, &views);
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
         out::eprint(&[out::refusal("show", &msg::not_a_repo("show", &args, Actor::Agent))]);
         return 1;
     };
@@ -178,6 +183,21 @@ pub(crate) fn summary(r: &Records) -> Vec<Line> {
     for (rel, e) in &r.unreadable_topic_files {
         lines.push(Line::Finding(Finding::new("parse", msg::topic_file_unreadable(rel, e))));
     }
+    // The terms file first: while it waits for its approval, approve, ask
+    // and answer stop on it in every topic file (per "Does the tool stop
+    // while the terms file waits for approval?"), so its move comes before
+    // theirs, and the topic files below do not name it again.
+    if let Some(tf) = &r.terms_file {
+        let (st, report) = terms_report(r, tf);
+        let report = out::report(&report);
+        if !report.is_empty() {
+            lines.push(file_status(repo::TERMS_PATH, st));
+            lines.extend(report);
+        }
+    }
+    // A finding on the records as a whole is in every topic file's report;
+    // the listing prints it once.
+    let mut printed: Vec<String> = Vec::new();
     for rf in &r.topic_files {
         lines.push(Line::Record { depth: 0, text: msg::show_topic(rf.topic.as_deref().unwrap_or(""), &rf.rel) });
         for sec in rf.sections.iter().filter(|s| status::question_status(&r.led, s) == QuestionStatus::Answered) {
@@ -186,19 +206,20 @@ pub(crate) fn summary(r: &Records) -> Vec<Line> {
                 lines.push(Line::Record { depth: 2, text: s.to_string() });
             }
         }
-        lines.extend(out::report(&topic_file_report(r, rf)));
+        let mut report = topic_file_report(r, rf);
+        report.findings.retain(|f| {
+            let text = f.text();
+            if f.subject == rules::Subject::TermsFile && r.terms_file.is_some() || printed.contains(&text) {
+                return false;
+            }
+            printed.push(text);
+            true
+        });
+        lines.extend(out::report(&report));
     }
     for rel in r.removed_topic_files() {
         lines.push(file_status(&rel, FileStatus::Removed));
         lines.extend(out::report(&removed_report(r, &rel)));
-    }
-    if let Some(tf) = &r.terms_file {
-        let (st, report) = terms_report(r, tf);
-        let report = out::report(&report);
-        if !report.is_empty() {
-            lines.push(file_status(repo::TERMS_PATH, st));
-            lines.extend(report);
-        }
     }
     for bf in &r.blame_files {
         let (st, report) = blame_report(r, bf);
@@ -428,13 +449,25 @@ fn stood_on_lines(r: &Records, rf: &RecordFile, sec: &Section, st: QuestionStatu
     if !dependents.is_empty() {
         lines.push(Line::Record { depth: 1, text: format!("dependents: {}", dependents.join(", ")) });
     }
-    // The ledger's `superseded` row holds the id of the question that
-    // replaced it.
+    // Each `superseded` row holds the id of a question that replaced it; a
+    // decision several questions supersede has one row for each (per "Does
+    // one decision supersede several?"), named in ledger order.
     if st == QuestionStatus::Superseded {
-        let by = sec.id.as_deref().and_then(|id| r.led.latest_state(id)).map(|row| row.detail.trim().to_string());
-        if let Some(by) = by.filter(|b| !b.is_empty()) {
-            let name = r.names.get(&by).cloned().unwrap_or(by);
-            lines.push(Line::Record { depth: 1, text: format!("replaced by: {}", name) });
+        let mut by: Vec<String> = Vec::new();
+        if let Some(id) = sec.id.as_deref() {
+            for row in r.led.rows.iter().filter(|row| row.id == id && row.event == "superseded") {
+                let b = row.detail.trim();
+                if b.is_empty() {
+                    continue;
+                }
+                let name = r.names.get(b).cloned().unwrap_or_else(|| b.to_string());
+                if !by.contains(&name) {
+                    by.push(name);
+                }
+            }
+        }
+        if !by.is_empty() {
+            lines.push(Line::Record { depth: 1, text: format!("replaced by: {}", by.join(", ")) });
         }
     }
     lines

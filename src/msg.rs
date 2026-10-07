@@ -11,7 +11,7 @@
 //! most don't, since the same text is reused under `approve: `, `check`'s
 //! per-category prefix, and so on, exactly as before this module existed.
 
-use crate::moves::MoveKind;
+use crate::moves::{command, Cmd, MoveKind};
 use std::fmt::Display;
 
 #[derive(Clone, Copy)]
@@ -22,18 +22,37 @@ pub enum Actor {
 
 /// One or more next-move clauses, joined with `, `. `Next::agent(..)`
 /// reads as `agent <action>`; `Next::owner_runs(..)` as `owner runs:
-/// <command>` -- the owner's clause always names a command to run, never a
-/// bare instruction, so a refusal never asks the owner to do something the
-/// tool cannot also point at directly.
+/// <command>`. A clause that names a command to run takes it as a
+/// `moves::Cmd`, built by `moves::command` from its words, so every word
+/// taken from the records is quoted as a shell reads it and the command
+/// runs as printed (per "Does a refusal name the command that clears
+/// it?"); a clause with no command to run says what to do in words.
 pub struct Next(Vec<(Actor, String)>);
 
 impl Next {
+    /// `agent <action>`: an action in words, no command line in it.
     pub fn agent(action: impl Into<String>) -> Next {
         Next(vec![(Actor::Agent, action.into())])
     }
 
-    pub fn owner_runs(command: impl Into<String>) -> Next {
-        Next(vec![(Actor::Owner, format!("runs: {}", command.into()))])
+    /// `agent runs: <command>`.
+    pub fn agent_runs(command: Cmd) -> Next {
+        Next(vec![(Actor::Agent, format!("runs: {}", command))])
+    }
+
+    /// `agent <action>, then runs: <command>`: a fix in words, then the
+    /// command to run once it is made.
+    pub fn agent_then_runs(action: impl Into<String>, command: Cmd) -> Next {
+        Next(vec![(Actor::Agent, format!("{}, then runs: {}", action.into(), command))])
+    }
+
+    /// `owner <action>`: what the owner does when no command can be named.
+    pub fn owner(action: impl Into<String>) -> Next {
+        Next(vec![(Actor::Owner, action.into())])
+    }
+
+    pub fn owner_runs(command: Cmd) -> Next {
+        Next(vec![(Actor::Owner, format!("runs: {}", command))])
     }
 
     /// The clauses of every `Next` in `parts`, in order, as one.
@@ -41,8 +60,8 @@ impl Next {
         Next(parts.into_iter().flat_map(|n| n.0).collect())
     }
 
-    pub fn and_owner_runs(mut self, command: impl Into<String>) -> Next {
-        self.0.push((Actor::Owner, format!("runs: {}", command.into())));
+    pub fn and_owner_runs(mut self, command: Cmd) -> Next {
+        self.0.push((Actor::Owner, format!("runs: {}", command)));
         self
     }
 
@@ -123,6 +142,14 @@ pub fn stdout_write_failed(e: impl Display) -> String {
 
 // --- repo.rs ----------------------------------------------------------------
 
+/// `adr <cmd> <args>` as a command a move names, every word quoted as a
+/// shell reads it.
+fn adr_command(cmd: &str, args: &[&str]) -> Cmd {
+    let mut words = vec!["adr", cmd];
+    words.extend_from_slice(args);
+    command(&words)
+}
+
 /// `<cmd>: not inside a git repository; ...` -- printed by every command
 /// before it does anything else. `actor` is who was already confirmed to
 /// be running `cmd` (the owner, for the five owner-only commands, since
@@ -130,12 +157,8 @@ pub fn stdout_write_failed(e: impl Display) -> String {
 /// every other command).
 /// `args` is what the command was given, so the owner's line is the whole
 /// command.
-pub fn not_a_repo(cmd: &str, args: &str, actor: Actor) -> String {
-    let command = if args.is_empty() {
-        format!("adr {}", cmd)
-    } else {
-        format!("adr {} {}", cmd, args)
-    };
+pub fn not_a_repo(cmd: &str, args: &[&str], actor: Actor) -> String {
+    let command = adr_command(cmd, args);
     // What clears it is where the command runs, so the move names that
     // first: the command itself is run again from inside a repository.
     let step = format!("changes into a git repository and runs: {}", command);
@@ -149,12 +172,8 @@ pub fn not_a_repo(cmd: &str, args: &str, actor: Actor) -> String {
 /// The refusal every owner-only command prints when stdin isn't an
 /// interactive terminal: `<cmd>: refusing: this is the owner's command;
 /// owner runs: adr <cmd> <args>`.
-pub fn owner_refusal(cmd: &str, args: &str) -> String {
-    let command = if args.is_empty() {
-        format!("adr {}", cmd)
-    } else {
-        format!("adr {} {}", cmd, args)
-    };
+pub fn owner_refusal(cmd: &str, args: &[&str]) -> String {
+    let command = adr_command(cmd, args);
     refuse(
         format!("{}: refusing: this is the owner's command", cmd),
         Next::owner_runs(command),
@@ -166,7 +185,7 @@ pub fn owner_refusal(cmd: &str, args: &str) -> String {
 pub fn terms_missing() -> String {
     refuse(
         "adrdom/terms.md missing".to_string(),
-        Next::agent("writes it").and_owner_runs("adr approve adrdom/terms.md"),
+        Next::agent("writes it").and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
     )
 }
 
@@ -192,7 +211,7 @@ pub fn terms_shape_error(e: &str) -> String {
 pub fn terms_not_approved(rel: &str, status: FileStatus) -> String {
     refuse(
         format!("{}: adrdom/terms.md is {}", rel, status.name()),
-        Next::owner_runs("adr approve adrdom/terms.md"),
+        Next::owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
     )
 }
 
@@ -204,7 +223,7 @@ pub fn terms_not_approved(rel: &str, status: FileStatus) -> String {
 pub fn terms_file_not_approved(status: FileStatus) -> String {
     refuse(
         format!("adrdom/terms.md is {}", status.name()),
-        Next::owner_runs("adr approve adrdom/terms.md"),
+        Next::owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
     )
 }
 
@@ -215,7 +234,7 @@ pub fn terms_file_not_approved(status: FileStatus) -> String {
 pub fn terms_brief_missing() -> String {
     refuse(
         format!("{} missing", crate::repo::TERMS_BRIEF_PATH),
-        Next::owner_runs("adr approve adrdom/terms.md"),
+        Next::owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
     )
 }
 
@@ -223,7 +242,7 @@ pub fn terms_brief_missing() -> String {
 pub fn terms_brief_differs() -> String {
     refuse(
         format!("{} differs from adrdom/terms.md", crate::repo::TERMS_BRIEF_PATH),
-        Next::owner_runs("adr approve adrdom/terms.md"),
+        Next::owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
     )
 }
 
@@ -232,7 +251,7 @@ pub fn terms_brief_differs() -> String {
 pub fn terms_brief_not_staged() -> String {
     refuse(
         format!("{} not staged", crate::repo::TERMS_BRIEF_PATH),
-        Next::agent(format!("runs: git add {}", crate::repo::TERMS_BRIEF_PATH)),
+        Next::agent_runs(command(&["git", "add", crate::repo::TERMS_BRIEF_PATH])),
     )
 }
 
@@ -274,7 +293,7 @@ pub fn term_removed_but_carried(
             "restores the term in adrdom/terms.md, then supersedes {} (\"{}\") with a new question",
             id, heading
         )),
-        None => Next::agent("restores the term in adrdom/terms.md").and_owner_runs("adr approve adrdom/terms.md"),
+        None => Next::agent("restores the term in adrdom/terms.md").and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
     };
     refuse(
         format!(
@@ -307,7 +326,7 @@ pub fn term_retired_but_carried(name: &str, source: &str, next: Next) -> String 
 /// that still carries the retired word, then the owner re-approving.
 pub fn term_reword_and_approve() -> Next {
     Next::agent("rewords the definition to drop the retired word")
-        .and_owner_runs("adr approve adrdom/terms.md")
+        .and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md"))
 }
 
 /// A dependent's pairing (`word=uuid`) no longer resolves that word to
@@ -460,6 +479,15 @@ pub fn plan_not_a_topic_file(rel: &str) -> String {
     refuse(
         format!("{} is not a topic file", rel),
         Next::agent("names a topic file under adrdom/decisions"),
+    )
+}
+
+/// `adr approve` on a path outside the repository or outside what approve
+/// takes: the owner names one it takes.
+pub fn approve_not_a_file_approve_takes(path: &str) -> String {
+    refuse(
+        format!("{} is not a file approve takes", path),
+        Next::owner("names a topic file under adrdom/decisions, adrdom/terms.md or a blame file under adrdom/blame to adr approve"),
     )
 }
 
@@ -647,7 +675,7 @@ pub fn id_not_found(id: &str) -> String {
             "id {} not found in any topic file; show prints the id of every question that waits for an answer",
             id
         ),
-        Next::owner_runs("adr show"),
+        Next::owner_runs(Cmd::fixed("adr show")),
     )
 }
 
@@ -671,7 +699,7 @@ pub fn already_refused(heading: &str) -> String {
             "\"{}\" is already refused; show prints every question that waits for an answer",
             heading
         ),
-        Next::owner_runs("adr show"),
+        Next::owner_runs(Cmd::fixed("adr show")),
     )
 }
 
@@ -681,7 +709,7 @@ pub fn already_answered(heading: &str) -> String {
             "\"{}\" is already answered; show prints every question that waits for an answer",
             heading
         ),
-        Next::owner_runs("adr show"),
+        Next::owner_runs(Cmd::fixed("adr show")),
     )
 }
 
@@ -714,7 +742,7 @@ pub fn already_withdrawn(heading: &str) -> String {
             "\"{}\" was withdrawn from the plan; show prints every question that waits for an answer",
             heading
         ),
-        Next::owner_runs("adr show"),
+        Next::owner_runs(Cmd::fixed("adr show")),
     )
 }
 
@@ -726,7 +754,7 @@ pub fn already_superseded(heading: &str) -> String {
             "\"{}\" is already superseded; show prints every question that waits for an answer",
             heading
         ),
-        Next::owner_runs("adr show"),
+        Next::owner_runs(Cmd::fixed("adr show")),
     )
 }
 
@@ -738,7 +766,7 @@ pub fn already_dropped(heading: &str) -> String {
             "\"{}\" is already dropped; show prints every question that waits for an answer",
             heading
         ),
-        Next::owner_runs("adr show"),
+        Next::owner_runs(Cmd::fixed("adr show")),
     )
 }
 
@@ -777,7 +805,7 @@ pub fn drop_not_approved(heading: &str, rel: &str) -> String {
             "answering would remove \"{}\", whose text matches no approved row of {}",
             heading, rel
         ),
-        Next::agent("says so in chat and stops").and_owner_runs(format!("adr approve {}", rel)),
+        Next::agent("says so in chat and stops").and_owner_runs(command(&["adr", "approve", rel])),
     )
 }
 
@@ -800,7 +828,7 @@ pub fn answer_missing_version(id: &str, asked: Option<(&str, &str)>) -> String {
         ),
         None => refuse(
             format!("{}: no version given", id),
-            Next::owner_runs("adr show"),
+            Next::owner_runs(Cmd::fixed("adr show")),
         ),
     }
 }
@@ -820,7 +848,7 @@ pub fn stale_version(heading: &str, rel: &str) -> String {
             "\"{}\" has moved since that version was read; show prints it as it is now",
             heading
         ),
-        Next::owner_runs(format!("adr show {}", rel)),
+        Next::owner_runs(command(&["adr", "show", rel])),
     )
 }
 
@@ -835,7 +863,7 @@ pub fn invalid_version_format(version: &str) -> String {
             "\"{}\" is not a valid version; show prints the id and version of every question that waits for an answer",
             version
         ),
-        Next::owner_runs("adr show"),
+        Next::owner_runs(Cmd::fixed("adr show")),
     )
 }
 
@@ -881,7 +909,7 @@ pub fn terms_line_names_retired_term(id: &str, heading: &str, name: &str) -> Str
 pub fn refused_summary(heading: &str, rel: &str) -> String {
     refuse(
         format!("refused \"{}\"", heading),
-        Next::agent("re-plans").and_owner_runs(format!("adr approve {}", rel)),
+        Next::agent("re-plans").and_owner_runs(command(&["adr", "approve", rel])),
     )
 }
 
@@ -896,20 +924,6 @@ pub fn named(id: &str, name: Option<&str>) -> String {
 }
 
 // --- ask.rs -----------------------------------------------------------------
-
-pub fn edited_after_answered(path: &str, heading: &str) -> String {
-    refuse(
-        format!("{}: \"{}\" was edited after being answered", path, heading),
-        Next::agent("reverts the edit or writes a new question that supersedes it"),
-    )
-}
-
-pub fn edited_after_refused(path: &str, heading: &str) -> String {
-    refuse(
-        format!("{}: \"{}\" was edited after being refused", path, heading),
-        Next::agent("reverts the edit or writes a new question"),
-    )
-}
 
 /// A plan that differs from its latest approval, with the moves of its file
 /// (`moves::of_topic_file_in`): the same moves `show` names for the file, so
@@ -931,7 +945,16 @@ pub fn missing_answer_set(rel: &str, dependent: &str, target: &str) -> String {
             rel, dependent, target
         ),
         Next::agent("writes =A, =A|B or =* on that depends line")
-            .and_owner_runs(format!("adr approve {}", rel)),
+            .and_owner_runs(command(&["adr", "approve", rel])),
+    )
+}
+
+/// A `depends:` entry that names what an earlier entry of the same line
+/// already names, written another way.
+pub fn depends_names_twice(rel: &str, dependent: &str, entry: &str) -> String {
+    refuse(
+        format!("{}: \"{}\": depends entry \"{}\" names what an earlier entry of the line names", rel, dependent, entry),
+        Next::agent("removes the second entry from the depends line"),
     )
 }
 
@@ -942,7 +965,7 @@ pub fn set_on_term(rel: &str, dependent: &str) -> String {
             rel, dependent
         ),
         Next::agent("removes the answer set from that depends entry")
-            .and_owner_runs(format!("adr approve {}", rel)),
+            .and_owner_runs(command(&["adr", "approve", rel])),
     )
 }
 
@@ -953,7 +976,7 @@ pub fn set_on_answered_question(rel: &str, dependent: &str, target: &str) -> Str
             rel, dependent, target
         ),
         Next::agent("removes the answer set from that depends entry")
-            .and_owner_runs(format!("adr approve {}", rel)),
+            .and_owner_runs(command(&["adr", "approve", rel])),
     )
 }
 
@@ -1152,7 +1175,7 @@ pub fn pairs_no_term(rel: &str, heading: &str) -> String {
 pub fn pairs_no_term_at_write(rel: &str, heading: &str) -> String {
     refuse(
         format!("{}: \"{}\": uses no term", rel, heading),
-        Next::agent("runs: adr ask"),
+        Next::agent_runs(Cmd::fixed("adr ask")),
     )
 }
 
@@ -1162,7 +1185,7 @@ pub fn no_id_line(rel: &str, heading: &str) -> String {
             "{}: \"{}\": no id line found to write the terms line after",
             rel, heading
         ),
-        Next::owner_runs(format!("adr approve {}", rel)),
+        Next::owner_runs(command(&["adr", "approve", rel])),
     )
 }
 
@@ -1222,7 +1245,7 @@ pub fn invalid_letter(letter: &str, id_arg: &str) -> String {
             "invalid letter {}; an answer is one uppercase letter, or the word refuse",
             letter
         ),
-        Next::owner_runs(format!("adr answer {} <letter>", id_arg)),
+        Next::owner_runs(command(&["adr", "answer", id_arg]).then("<letter>")),
     )
 }
 
@@ -1253,23 +1276,24 @@ pub fn already_in_use() -> String {
 /// The move on a failure of an owner command the owner cannot clear by
 /// running it again (a file it cannot read or write): the agent fixes what
 /// the error names, then the owner runs `command`.
-pub fn after_fix_owner_runs(command: impl Into<String>) -> Next {
+pub fn after_fix_owner_runs(command: Cmd) -> Next {
     Next::agent("fixes what the error names").and_owner_runs(command)
 }
 
 /// The agent's move after a command of its own failed to read or write what
 /// the error names: fix that, then run `command` again.
-pub fn after_fix_agent_runs(command: impl Into<String>) -> Next {
-    Next::agent(format!("fixes what the error names, then runs: {}", command.into()))
+pub fn after_fix_agent_runs(command: Cmd) -> Next {
+    Next::agent_then_runs("fixes what the error names", command)
 }
 
 /// The agent's move on a topic file `cmd` could not read at `rel`: a path
 /// that does not exist is named again, any other failure is fixed first.
 pub fn topic_file_unread(cmd: &str, rel: &str, e: &std::io::Error) -> Next {
     if e.kind() == std::io::ErrorKind::NotFound {
-        Next::agent(format!("names a topic file under adrdom/decisions that exists, then runs: adr {} with it", cmd))
+        // The file meant is not known, so the command is said in words.
+        Next::agent(format!("gives adr {} a topic file under adrdom/decisions that exists", cmd))
     } else {
-        after_fix_agent_runs(format!("adr {} {}", cmd, rel))
+        after_fix_agent_runs(command(&["adr", cmd, rel]))
     }
 }
 
@@ -1282,8 +1306,8 @@ pub fn fix_then_same_command(what: &str) -> Next {
 
 /// The agent's move on a file a command cannot take as it stands: fix the
 /// file at `path` so `so` holds, then run `command` again.
-pub fn fix_then(path: &str, so: &str, command: &str) -> Next {
-    Next::agent(format!("fixes {} so {}, then runs: {}", path, so, command))
+pub fn fix_then(path: &str, so: &str, command: Cmd) -> Next {
+    Next::agent_then_runs(format!("fixes {} so {}", path, so), command)
 }
 
 pub fn settings_not_json_object(path: &str, next: Next) -> String {
@@ -1320,7 +1344,7 @@ pub fn duplicate_id(id: &str, prev: &str, rel: &str, heading: &str) -> String {
 pub fn removed_from_plan(id: &str, heading: &str, event: &str, rel: &str) -> String {
     refuse(
         format!("{} (\"{}\", {}) was removed from the plan", id, heading, event),
-        Next::owner_runs(format!("adr approve {}", rel)),
+        Next::owner_runs(command(&["adr", "approve", rel])),
     )
 }
 
@@ -1342,8 +1366,13 @@ pub fn ledger_id_not_found(id: &str, heading: Option<&str>) -> String {
 pub fn withdrawn_id_present(id: &str, heading: &str, rel: &str) -> String {
     refuse(
         format!("withdrawn id {} still present in {}", named(id, Some(heading)), rel),
-        Next::agent("removes the heading, or leaves it when it is to come back")
-            .and_owner_runs(format!("adr approve {}", rel)),
+        // A withdrawn identifier never returns (per "Does approve withdraw
+        // an asked question struck from the plan?"): the section goes, and a
+        // question to ask again is a new one under a heading of its own.
+        Next::agent(format!(
+            "removes the section from {}; a question to ask again is written as a new question",
+            rel
+        )),
     )
 }
 
@@ -1386,6 +1415,17 @@ pub fn answered_text_changed(rel: &str, heading: &str, id: &str) -> String {
     )
 }
 
+/// A refused section (a genuine `refused` row exists for its id) whose
+/// text no longer hashes to that row: the refusal stands, the question's
+/// text moved since. The refused question leaves at the next plan change,
+/// so its text goes back to what was refused.
+pub fn refused_text_changed(rel: &str, heading: &str) -> String {
+    refuse(
+        format!("{}: {}: text changed since being refused", rel, heading),
+        Next::agent(format!("restores its text from git (e.g. git checkout -- {})", rel)),
+    )
+}
+
 pub fn answered_row_without_line(rel: &str, heading: &str) -> String {
     refuse(
         format!("{}: {}: answered row without answer line", rel, heading),
@@ -1405,7 +1445,7 @@ pub fn refused_row_without_line(rel: &str, heading: &str) -> String {
 /// `show` names for it (per "Does a command compute a move of its own?",
 /// aac5c313 A).
 pub fn edited_after_asking(rel: &str, heading: &str, report: &crate::moves::Report) -> String {
-    format!("{}: {}: edited after asking; {}", rel, heading, report.tail())
+    format!("{}: {}: edited after asking; {}", rel, heading, report.moves_tail())
 }
 
 pub fn answer_set_changed(rel: &str, dep_heading: &str, heading: &str) -> String {
@@ -1429,8 +1469,8 @@ pub fn answer_set_changed(rel: &str, dep_heading: &str, heading: &str) -> String
 pub fn answer_conflict(rel: &str, heading: &str, id: &str, a: &str, b: &str) -> String {
     refuse(
         format!("{}: {}: two standing answers, {} and {}", rel, heading, a, b),
-        Next::agent(format!("runs: adr ask {}", rel))
-            .and_owner_runs(format!("adr answer {}@<version> <letter>", id)),
+        Next::agent_runs(command(&["adr", "ask", rel]))
+            .and_owner_runs(command(&["adr", "answer", &format!("{}@", id)]).then("<version> <letter>")),
     )
 }
 
@@ -1458,14 +1498,14 @@ pub fn banned_missing_from_file(hash_prefix: &str) -> String {
             "{} in ledger, missing from adrdom/state/banned.sha256",
             hash_prefix
         ),
-        Next::agent("runs: adr ban --rebuild"),
+        Next::agent_runs(Cmd::fixed("adr ban --rebuild")),
     )
 }
 
 pub fn banned_missing_from_ledger(hash_prefix: &str) -> String {
     refuse(
         format!("{} in file, no ledger row", hash_prefix),
-        Next::agent("runs: adr ban --rebuild"),
+        Next::agent_runs(Cmd::fixed("adr ban --rebuild")),
     )
 }
 
@@ -1478,7 +1518,7 @@ pub fn banned_missing_from_ledger(hash_prefix: &str) -> String {
 pub fn banned_unbanned_but_in_file(hash_prefix: &str) -> String {
     refuse(
         format!("{} in file, ledger says unbanned", hash_prefix),
-        Next::agent("runs: adr ban --rebuild"),
+        Next::agent_runs(Cmd::fixed("adr ban --rebuild")),
     )
 }
 
@@ -1601,40 +1641,46 @@ pub fn term_definition_term_retired(name: &str, retired_name: &str) -> String {
 pub fn term_definition_terms_line_malformed(name: &str) -> String {
     refuse(
         format!("adrdom/terms.md: \"{}\": malformed terms line", name),
-        Next::owner_runs("adr approve adrdom/terms.md"),
+        Next::owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
     )
+}
+
+/// `check` at a commit: the working tree holds `path` as install writes it
+/// and the staged files do not; staging it is the move.
+pub fn install_file_not_staged(path: &str) -> String {
+    refuse(format!("{} not staged", path), Next::agent_runs(command(&["git", "add", path])))
 }
 
 pub fn agents_md_stale() -> String {
     refuse(
         "AGENTS.md brief differs from this binary's".to_string(),
-        Next::agent("runs: adr install"),
+        Next::agent_runs(Cmd::fixed("adr install")),
     )
 }
 
 pub fn agents_md_missing_brief() -> String {
     refuse(
         "AGENTS.md lacks the adrdom brief".to_string(),
-        Next::agent("runs: adr install"),
+        Next::agent_runs(Cmd::fixed("adr install")),
     )
 }
 
 pub fn claude_md_missing_import() -> String {
     refuse(
         "CLAUDE.md does not import AGENTS.md".to_string(),
-        Next::agent("runs: adr install --claude"),
+        Next::agent_runs(Cmd::fixed("adr install --claude")),
     )
 }
 
 pub fn missing_deny_entry(entry: &str) -> String {
     refuse(
         format!(".claude/settings.json lacks deny entry {}", entry),
-        Next::agent("runs: adr install --claude"),
+        Next::agent_runs(Cmd::fixed("adr install --claude")),
     )
 }
 
 pub fn settings_unparseable(path: &str) -> String {
-    refuse(format!("{} cannot be parsed", path), fix_then(".claude/settings.json", "it parses as JSON", "adr install --claude"))
+    refuse(format!("{} cannot be parsed", path), fix_then(".claude/settings.json", "it parses as JSON", Cmd::fixed("adr install --claude")))
 }
 
 /// `check`'s `install` check on a git hook (`.githooks/pre-commit` or
@@ -1643,7 +1689,7 @@ pub fn settings_unparseable(path: &str) -> String {
 pub fn hook_differs(path: &str) -> String {
     refuse(
         format!("{} differs from what install writes", path),
-        Next::agent("runs: adr install"),
+        Next::agent_runs(Cmd::fixed("adr install")),
     )
 }
 
@@ -1653,7 +1699,7 @@ pub fn hook_differs(path: &str) -> String {
 pub fn hook_not_executable(path: &str) -> String {
     refuse(
         format!("{} is not executable, git skips it", path),
-        Next::agent("runs: adr install"),
+        Next::agent_runs(Cmd::fixed("adr install")),
     )
 }
 
@@ -1661,21 +1707,21 @@ pub fn hook_not_executable(path: &str) -> String {
 pub fn hook_missing(path: &str) -> String {
     refuse(
         format!("{} is missing", path),
-        Next::agent("runs: adr install"),
+        Next::agent_runs(Cmd::fixed("adr install")),
     )
 }
 
 pub fn codex_rules_stale() -> String {
     refuse(
         ".codex/rules/adrdom.rules differs from this binary's".to_string(),
-        Next::agent("runs: adr install --codex"),
+        Next::agent_runs(Cmd::fixed("adr install --codex")),
     )
 }
 
 pub fn codex_rules_missing() -> String {
     refuse(
         ".codex/rules/adrdom.rules missing".to_string(),
-        Next::agent("runs: adr install --codex"),
+        Next::agent_runs(Cmd::fixed("adr install --codex")),
     )
 }
 
@@ -1684,7 +1730,7 @@ pub fn codex_rules_missing() -> String {
 pub fn gitattributes_differs() -> String {
     refuse(
         "adrdom/.gitattributes differs from what install writes".to_string(),
-        Next::agent("runs: adr install"),
+        Next::agent_runs(Cmd::fixed("adr install")),
     )
 }
 
@@ -1693,7 +1739,7 @@ pub fn gitattributes_differs() -> String {
 pub fn gitattributes_missing() -> String {
     refuse(
         "adrdom/.gitattributes is missing".to_string(),
-        Next::agent("runs: adr install"),
+        Next::agent_runs(Cmd::fixed("adr install")),
     )
 }
 
@@ -1703,7 +1749,7 @@ pub fn malformed_ledger_row(lineno: usize, raw: &str) -> String {
             "line {}: malformed row: {}; the owner decides which rows are real before anything is committed",
             lineno, raw
         ),
-        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
+        Next::owner_runs(Cmd::fixed("git diff adrdom/state/ledger.tsv")),
     )
 }
 
@@ -1714,7 +1760,7 @@ pub fn malformed_ledger_row(lineno: usize, raw: &str) -> String {
 pub fn ledger_not_append_only() -> String {
     refuse(
         "a row from HEAD's ledger is missing or changed in the working copy; a row may move, none may be dropped or edited, and what is missing or changed is restored by hand".to_string(),
-        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
+        Next::owner_runs(Cmd::fixed("git diff adrdom/state/ledger.tsv")),
     )
 }
 
@@ -1726,9 +1772,7 @@ pub fn ledger_not_append_only() -> String {
 pub fn ledger_merge_drops_rows() -> String {
     refuse(
         "merge drops a branch's ledger rows".to_string(),
-        Next::owner_runs(
-            "the rows of the merged branch are restored from that branch, by hand, only by adding them back",
-        ),
+        Next::owner("adds the rows of the merged branch back from that branch by hand"),
     )
 }
 
@@ -1743,7 +1787,7 @@ pub fn ledger_merge_drops_rows() -> String {
 pub fn ledger_merge_parents_unreadable() -> String {
     refuse(
         "this merge commit's parents cannot be read; the clone is too shallow".to_string(),
-        Next::agent("runs: git fetch --deepen=1"),
+        Next::agent_runs(Cmd::fixed("git fetch --deepen=1")),
     )
 }
 
@@ -1753,7 +1797,7 @@ pub fn ledger_answered_without_asked(id: &str, heading: Option<&str>) -> String 
             "answered row for {} matches no asked row; an answered row needs the asked row it answers",
             named(id, heading)
         ),
-        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
+        Next::owner_runs(Cmd::fixed("git diff adrdom/state/ledger.tsv")),
     )
 }
 
@@ -1761,7 +1805,7 @@ pub fn ledger_answered_without_asked(id: &str, heading: Option<&str>) -> String 
 pub fn ledger_dropped_malformed(id: &str, detail: &str) -> String {
     refuse(
         format!("dropped row for {} has the detail \"{}\"; it holds an identifier and a letter, or an identifier", id, detail),
-        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
+        Next::owner_runs(Cmd::fixed("git diff adrdom/state/ledger.tsv")),
     )
 }
 
@@ -1769,7 +1813,7 @@ pub fn ledger_dropped_malformed(id: &str, detail: &str) -> String {
 pub fn ledger_dropped_without_cause(id: &str, cause: &str) -> String {
     refuse(
         format!("dropped row for {} has no cause: {}", id, cause),
-        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
+        Next::owner_runs(Cmd::fixed("git diff adrdom/state/ledger.tsv")),
     )
 }
 
@@ -1777,7 +1821,7 @@ pub fn ledger_dropped_without_cause(id: &str, cause: &str) -> String {
 pub fn ledger_dropped_not_approved(id: &str) -> String {
     refuse(
         format!("dropped row for {} matches no approved row of that question", id),
-        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
+        Next::owner_runs(Cmd::fixed("git diff adrdom/state/ledger.tsv")),
     )
 }
 
@@ -1785,7 +1829,7 @@ pub fn ledger_dropped_not_approved(id: &str) -> String {
 pub fn ledger_dropped_closed(id: &str, event: &str) -> String {
     refuse(
         format!("dropped row for {} follows its {} row", id, event),
-        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
+        Next::owner_runs(Cmd::fixed("git diff adrdom/state/ledger.tsv")),
     )
 }
 
@@ -1801,7 +1845,7 @@ pub fn ledger_dropped_still_in_file(id: &str, rel: &str) -> String {
 pub fn ledger_dropped_text_differs(id: &str) -> String {
     refuse(
         format!("dropped row for {} holds a hash that is not the hash of the text HEAD holds", id),
-        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
+        Next::owner_runs(Cmd::fixed("git diff adrdom/state/ledger.tsv")),
     )
 }
 
@@ -1809,7 +1853,7 @@ pub fn ledger_dropped_text_differs(id: &str) -> String {
 pub fn ledger_dropped_set_holds_letter(id: &str, letter: &str) -> String {
     refuse(
         format!("dropped row for {} names the answer {}, which the question's set at HEAD holds", id, letter),
-        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
+        Next::owner_runs(Cmd::fixed("git diff adrdom/state/ledger.tsv")),
     )
 }
 
@@ -1817,7 +1861,7 @@ pub fn ledger_dropped_set_holds_letter(id: &str, letter: &str) -> String {
 pub fn ledger_dropped_not_standing_on(id: &str, on: &str) -> String {
     refuse(
         format!("dropped row for {} says it stood on {}, which the question at HEAD does not", id, on),
-        Next::owner_runs("git diff adrdom/state/ledger.tsv"),
+        Next::owner_runs(Cmd::fixed("git diff adrdom/state/ledger.tsv")),
     )
 }
 
@@ -1834,7 +1878,7 @@ pub fn ledger_push_drops_rows(local_ref: &str, remote_ref: &str) -> String {
             "push of {} would drop ledger rows the remote's {} already holds",
             local_ref, remote_ref
         ),
-        Next::owner_runs("the rows already on the remote branch are restored, by hand, only by adding them back, then the push runs again"),
+        Next::owner("adds the rows the remote branch holds back by hand, then pushes again"),
     )
 }
 
@@ -1857,7 +1901,7 @@ pub fn ledger_push_remote_unreadable(remote_ref: &str) -> String {
 pub fn ledger_since_drops_rows(commit: &str) -> String {
     refuse(
         format!("ledger drops a row {} already holds", commit),
-        Next::owner_runs("the rows already at that commit are restored, by hand, only by adding them back"),
+        Next::owner("adds the rows that commit holds back by hand"),
     )
 }
 
@@ -1979,25 +2023,6 @@ pub fn topic_unnameable(rel: &str, topic: &str) -> String {
 
 pub fn blame_shape_error(rel: &str, e: &str) -> String {
     refuse(format!("{}: {}", rel, e), Next::agent("fixes the blame file"))
-}
-
-pub fn blame_blob_not_found(rel: &str, blob: &str) -> String {
-    refuse(
-        format!("{}: origin is missing and blob {} is not in git", rel, blob),
-        Next::agent("restores the origin at its path, or fixes the blob identifier"),
-    )
-}
-
-/// The origin sits at its path but its content hashes to a different blob
-/// than the blame file names (per "What does a blame file hold?").
-pub fn blame_blob_differs(rel: &str, origin: &str) -> String {
-    refuse(
-        format!("{}: blob does not match the content of {}", rel, origin),
-        Next::agent(&format!(
-            "fixes the blob identifier to the hash of {}, or restores {} to the content the rows map",
-            origin, origin
-        )),
-    )
 }
 
 fn range_text(start: usize, end: usize) -> String {
@@ -2155,7 +2180,7 @@ pub fn blame_blob_mismatch(rel: &str, origin: &str) -> String {
     refuse(
         format!("{}: blob no longer matches {}", rel, origin),
         Next::agent(format!("updates the rows for {}'s current content", origin))
-            .and_owner_runs(format!("adr approve {}", rel)),
+            .and_owner_runs(command(&["adr", "approve", rel])),
     )
 }
 
@@ -2217,7 +2242,7 @@ pub fn blame_origin_unreadable(rel: &str, origin: &str) -> String {
 pub fn bind_failed(port: u16, e: impl Display) -> String {
     refuse(
         format!("failed to bind 127.0.0.1:{}: {}", port, e),
-        Next::owner_runs("adr serve --port <port>"),
+        Next::owner_runs(Cmd::fixed("adr serve --port").then("<port>")),
     )
 }
 
@@ -2275,7 +2300,7 @@ pub fn context_approved(rel: &str) -> String {
 pub fn unban_not_banned(n: usize) -> String {
     refuse(
         format!("unban: {} of the words given were not banned", n),
-        Next::owner_runs("adr unban"),
+        Next::owner_runs(Cmd::fixed("adr unban")),
     )
 }
 
@@ -2309,13 +2334,15 @@ pub fn term_retired_decision_next(term: &str, id: &str, heading: &str) -> Next {
 /// asked question: reword it so it no longer names the term and ask it
 /// again, or strike it from the plan.
 pub fn term_retired_asked_next(heading: &str, term: &str, rel: &str) -> Next {
-    Next::agent(format!(
-        "{}, then rewords \"{}\" so it does not name \"{}\" and runs: adr ask {}, or strikes it from the plan",
-        unretire(term),
-        heading,
-        term,
-        rel
-    ))
+    Next::agent_then_runs(
+        format!(
+            "{}, then rewords \"{}\" so it does not name \"{}\", or strikes it from the plan",
+            unretire(term),
+            heading,
+            term
+        ),
+        command(&["adr", "ask", rel]),
+    )
 }
 
 /// The `Next` for `term_retired_but_carried` when the dependent is a
@@ -2323,7 +2350,7 @@ pub fn term_retired_asked_next(heading: &str, term: &str, rel: &str) -> Next {
 /// heading, then the owner approves the changed plan.
 pub fn term_retired_heading_next(term: &str, rel: &str) -> Next {
     Next::agent(format!("{}, then rewords the heading or strikes it from the plan", unretire(term)))
-        .and_owner_runs(format!("adr approve {}", rel))
+        .and_owner_runs(command(&["adr", "approve", rel]))
 }
 
 // --- the embedding model and the install of adrdom/.gitignore -----------------
@@ -2331,14 +2358,14 @@ pub fn term_retired_heading_next(term: &str, rel: &str) -> Next {
 pub fn gitignore_differs() -> String {
     refuse(
         "adrdom/.gitignore differs from what install writes".to_string(),
-        Next::agent("runs: adr install"),
+        Next::agent_runs(Cmd::fixed("adr install")),
     )
 }
 
 pub fn gitignore_missing() -> String {
     refuse(
         "adrdom/.gitignore is missing".to_string(),
-        Next::agent("runs: adr install"),
+        Next::agent_runs(Cmd::fixed("adr install")),
     )
 }
 
@@ -2394,7 +2421,7 @@ pub fn malformed_reader_row(lineno: usize, raw: &str) -> String {
             "line {}: malformed row in the reader file: {}; the owner decides which rows are real before anything is committed",
             lineno, raw
         ),
-        Next::owner_runs("git diff adrdom/state/reader.tsv"),
+        Next::owner_runs(Cmd::fixed("git diff adrdom/state/reader.tsv")),
     )
 }
 
@@ -2402,16 +2429,14 @@ pub fn malformed_reader_row(lineno: usize, raw: &str) -> String {
 pub fn reader_not_append_only() -> String {
     refuse(
         "a row from HEAD's reader file is missing or changed in the working copy; a row may move, none may be dropped or edited, and what is missing or changed is restored by hand".to_string(),
-        Next::owner_runs("git diff adrdom/state/reader.tsv"),
+        Next::owner_runs(Cmd::fixed("git diff adrdom/state/reader.tsv")),
     )
 }
 
 pub fn reader_merge_drops_rows() -> String {
     refuse(
         "merge drops a branch's reader rows".to_string(),
-        Next::owner_runs(
-            "the rows of the merged branch are restored from that branch, by hand, only by adding them back",
-        ),
+        Next::owner("adds the rows of the merged branch back from that branch by hand"),
     )
 }
 
@@ -2421,14 +2446,14 @@ pub fn reader_push_drops_rows(local_ref: &str, remote_ref: &str) -> String {
             "push of {} would drop reader rows the remote's {} already holds",
             local_ref, remote_ref
         ),
-        Next::owner_runs("the rows already on the remote branch are restored, by hand, only by adding them back, then the push runs again"),
+        Next::owner("adds the rows the remote branch holds back by hand, then pushes again"),
     )
 }
 
 pub fn reader_since_drops_rows(commit: &str) -> String {
     refuse(
         format!("reader file drops a row {} already holds", commit),
-        Next::owner_runs("the rows already at that commit are restored, by hand, only by adding them back"),
+        Next::owner("adds the rows that commit holds back by hand"),
     )
 }
 
@@ -2465,10 +2490,10 @@ mod tests {
             create_failed("x", e, Next::agent("retries")),
             parse_failed("x", e, Next::agent("retries")),
             stdin_read_failed(Next::agent("retries")),
-            not_a_repo("ask", "", Actor::Agent),
-            not_a_repo("approve", "adrdom/decisions/x.md", Actor::Owner),
-            owner_refusal("approve", "adrdom/decisions/x.md"),
-            owner_refusal("unban", ""),
+            not_a_repo("ask", &[], Actor::Agent),
+            not_a_repo("approve", &["adrdom/decisions/x.md"], Actor::Owner),
+            owner_refusal("approve", &["adrdom/decisions/x.md"]),
+            owner_refusal("unban", &[]),
             terms_missing(),
             terms_load_error(e, Next::agent("retries")),
             terms_shape_error(e),
@@ -2560,8 +2585,6 @@ mod tests {
             malformed_terms_line("id-1", "heading"),
             terms_line_names_gone_term("id-1", "heading", "uuid-1", "word"),
             terms_line_names_retired_term("id-1", "heading", "term"),
-            edited_after_answered("x.md", "heading"),
-            edited_after_refused("x.md", "heading"),
             plan_not_approved("x.md", FileStatus::New, &approve_x),
             context_not_approved("x.md", FileStatus::New, &approve_x),
             missing_answer_set("x.md", "dependent", "target"),
@@ -2655,8 +2678,6 @@ mod tests {
             bind_failed(7357, e),
             missing_answer_selection("id-1", "abcd1234"),
             blame_shape_error("adrdom/blame/x.md", "line 1: missing \"origin: <path>\""),
-            blame_blob_not_found("adrdom/blame/x.md", "abc123"),
-            blame_blob_differs("adrdom/blame/x.md", "docs/x.md"),
             blame_coverage_gap("adrdom/blame/x.md", 3, 5),
             blame_range_beyond("adrdom/blame/x.md", 1, 10, 5),
             blame_row_unknown_heading("adrdom/blame/x.md", "Does X?"),
@@ -2675,15 +2696,16 @@ mod tests {
         ];
         for o in &outputs {
             assert!(
-                o.contains("; agent ") || o.contains("owner runs: ") || o.contains("; owner changes into"),
+                o.contains("; agent ") || o.contains("; owner "),
                 "no next move: {}",
                 o
             );
         }
         // What follows `owner runs: ` is what the agent posts to the owner
-        // and the owner pastes: a command and nothing after it. The three
-        // refusals about ledger rows a push, a merge or a commit dropped
-        // name no command, since no command restores a row.
+        // and the owner pastes: a command and nothing after it. A move with
+        // no command to name (a ledger row a push, a merge or a commit
+        // dropped: no command restores a row) says it in words, without
+        // `runs:`.
         for o in &outputs {
             let Some((_, command)) = o.split_once("owner runs: ") else {
                 continue;
@@ -2691,9 +2713,6 @@ mod tests {
             // A shell comment after the command names the heading and is
             // not part of the command.
             let command = command.split(" #").next().unwrap_or(command);
-            if command.starts_with("the rows ") {
-                continue;
-            }
             assert!(
                 command.starts_with("adr ") || command.starts_with("git "),
                 "not a command: {}",
@@ -2737,13 +2756,13 @@ mod tests {
     fn ban_and_unban_moves_name_a_command_that_runs_as_printed() {
         let e = "boom";
         for (line, command) in [
-            (owner_refusal("unban", ""), "owner runs: adr unban"),
-            (not_a_repo("unban", "", Actor::Owner), "owner changes into a git repository and runs: adr unban"),
-            (stdin_read_failed(after_fix_owner_runs("adr unban")), "owner runs: adr unban"),
-            (stdin_read_failed(after_fix_agent_runs("adr ban")), "then runs: adr ban"),
-            (update_failed("banned list", e, after_fix_agent_runs("adr ban")), "then runs: adr ban"),
-            (update_failed("ledger", e, after_fix_agent_runs("adr ban")), "then runs: adr ban"),
-            (update_failed("banned list", e, after_fix_agent_runs("adr ban --rebuild")), "then runs: adr ban --rebuild"),
+            (owner_refusal("unban", &[]), "owner runs: adr unban"),
+            (not_a_repo("unban", &[], Actor::Owner), "owner changes into a git repository and runs: adr unban"),
+            (stdin_read_failed(after_fix_owner_runs(Cmd::fixed("adr unban"))), "owner runs: adr unban"),
+            (stdin_read_failed(after_fix_agent_runs(Cmd::fixed("adr ban"))), "then runs: adr ban"),
+            (update_failed("banned list", e, after_fix_agent_runs(Cmd::fixed("adr ban"))), "then runs: adr ban"),
+            (update_failed("ledger", e, after_fix_agent_runs(Cmd::fixed("adr ban"))), "then runs: adr ban"),
+            (update_failed("banned list", e, after_fix_agent_runs(Cmd::fixed("adr ban --rebuild"))), "then runs: adr ban --rebuild"),
         ] {
             assert!(line.ends_with(command), "{} should end with {}", line, command);
         }

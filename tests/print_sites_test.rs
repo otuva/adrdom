@@ -249,6 +249,32 @@ fn every_move_that_names_a_command_reads_runs_colon() {
 
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 //
+// A command a move names is built from its words by `moves::command`, which
+// quotes each as a shell reads it, so it runs as printed: no string in the
+// tool writes `runs: ` with a command after it, and no string formats an
+// `adr` command line with a word slotted in, but the one place in msg.rs
+// that renders a typed command after `runs: `.
+#[test]
+fn every_command_a_move_names_is_built_from_its_words() {
+    let renderers = ["runs: {}", "{}, then runs: {}", "changes into a git repository and runs: {}"];
+    let mut found = Vec::new();
+    for (rel, text) in source_files() {
+        for (n, line) in code_lines(&text) {
+            for literal in string_literals(line) {
+                let typed = rel == "src/msg.rs" && renderers.contains(&literal.as_str());
+                let runs = literal.contains("runs: ") && !typed;
+                let slotted = literal.starts_with("adr ") && literal.contains("{}");
+                if runs || slotted {
+                    found.push(format!("{}:{}: {}", rel, n, line.trim()));
+                }
+            }
+        }
+    }
+    assert!(found.is_empty(), "a command written as text, not built from its words:\n{}", found.join("\n"));
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
 // Every refusal names the command that clears it: no move in the tool tells
 // the agent to look at the error and try again without naming what to run.
 #[test]
@@ -343,4 +369,68 @@ fn every_planning_stage_prints_one_report_in_every_command() {
     assert_eq!(findings.len(), 1, "one finding for the struck question: {:?}", findings);
     assert!(findings[0].starts_with("ids: ") && findings[0].contains(h2) && findings[0].contains("was removed from the plan"), "{:?}", findings);
     assert!(findings[0].ends_with(&format!("; owner runs: adr approve {}", REL)), "{:?}", findings);
+}
+
+// adr: aac5c313-dedd-466b-a0c3-ead5e99ce913
+// adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
+//
+// The states a review found the commands disagreeing on, each one report
+// in every command: a depends line naming one term twice on a draft, a
+// refused question edited since, and two standing answers.
+#[test]
+fn every_judged_state_prints_one_report_in_every_command() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_terms_with(&dir, &["widget"]);
+    let path = write_record(
+        &dir,
+        REL,
+        &format!("# Gate\n\n### Does the widget hold?\ndepends: widget, Widget\n\nProblem: the widget holds.\n\nStandard: plain words.\n\n{}", GATE_OPTIONS),
+    );
+    let plan = |dir: &Path| stdout(&adr(dir, &["plan", path.to_str().unwrap()], &[], ""));
+    let mut out = plan(&dir);
+    for _ in 0..4 {
+        let wanted = lines_wanted(&out);
+        if wanted.is_empty() {
+            break;
+        }
+        std::fs::write(&path, add_unrelated(&std::fs::read_to_string(&path).unwrap(), &wanted)).unwrap();
+        out = plan(&dir);
+    }
+    let findings = assert_one_report(&dir, Some(&out), "a depends line naming one term twice");
+    assert!(findings.iter().any(|f| f.contains("names what an earlier entry of the line names")), "{:?}", findings);
+
+    // Approved, asked and refused; then its Problem line edited.
+    std::fs::write(&path, std::fs::read_to_string(&path).unwrap().replace("depends: widget, Widget", "depends: widget")).unwrap();
+    approve_record(&dir, REL);
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    let id = extract_ids(&std::fs::read_to_string(&path).unwrap()).remove(0);
+    assert!(adr_answer(&dir, &id, "refuse").status.success());
+    let text = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(&path, text.replace("Problem: the widget holds.", "Problem: the widget holds, reworded.")).unwrap();
+    let findings = assert_one_report(&dir, Some(&plan(&dir)), "a refused question edited");
+    assert!(findings.iter().any(|f| f.contains("text changed since being refused")), "{:?}", findings);
+    std::fs::write(&path, text).unwrap();
+
+    // Asked again, answered A, and a second standing answer B kept by a
+    // merge.
+    let gate = write_record(
+        &dir,
+        "adrdom/decisions/gate-two.md",
+        &format!("# Gate Two\n\n### Does the widget stay?\ndepends: widget\n\nProblem: the widget stays.\n\nStandard: plain words.\n\n{}", GATE_OPTIONS),
+    );
+    approve_record(&dir, "adrdom/decisions/gate-two.md");
+    assert!(adr(&dir, &["ask", gate.to_str().unwrap()], &[], "").status.success());
+    let id = extract_ids(&std::fs::read_to_string(&gate).unwrap()).remove(0);
+    assert!(adr_answer(&dir, &id, "A").status.success());
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    let hash = ledger.lines().rfind(|l| l.contains("\tanswered\t")).unwrap().split('\t').nth(3).unwrap().to_string();
+    append_ledger_row_at(&dir, "answered", &id, &hash, "B", "2099-01-01T00:00:00Z");
+    let show = report_of(&stdout(&adr(&dir, &["show", "adrdom/decisions/gate-two.md"], &[], "")));
+    let plan_two = report_of(&stdout(&adr(&dir, &["plan", gate.to_str().unwrap()], &[], "")));
+    assert_eq!(show, plan_two, "two standing answers: plan and show print another report");
+    let check = stdout(&adr(&dir, &["check"], &[], ""));
+    let conflict = show.iter().find(|l| l.contains("two standing answers")).unwrap_or_else(|| panic!("{:?}", show));
+    assert!(check.lines().any(|l| l == conflict), "check names another line:\n{}\n{}", conflict, check);
+    assert!(!show.iter().any(|l| l.starts_with("agent builds")), "{:?}", show);
 }

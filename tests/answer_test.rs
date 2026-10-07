@@ -968,16 +968,18 @@ fn answer_refuses_when_terms_md_holds_an_unapproved_added_term_with_a_shape_erro
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
 
-    // Add a brand-new term with no `id:` line at all -- `terms::parse`
-    // reports this as a "missing id" shape error, and the file no longer
-    // matches its latest approval either way.
+    // Add a brand-new term with no `id:` line at all: only approve writes
+    // ids, so the entry waits for the owner's approval of the terms file,
+    // the one move named, as check and show name it (no agent fix).
     let mut terms = std::fs::read_to_string(&terms_path).unwrap();
     terms.push_str("\n## widget\ndefinition: An unrelated fixture term.\naliases: \n");
     std::fs::write(&terms_path, &terms).unwrap();
 
     let out = adr_answer(&dir, &id, "A");
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
-    assert!(stderr(&out).contains("missing id"), "{}", stderr(&out));
+    let err = stderr(&out);
+    assert!(err.contains("adrdom/terms.md is changed; owner runs: adr approve adrdom/terms.md"), "{}", err);
+    assert!(!err.contains("agent fixes"), "{}", err);
 }
 
 // adr: aa475aa3-05b2-429a-b33a-46b1dcb52049

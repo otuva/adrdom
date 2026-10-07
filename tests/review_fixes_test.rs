@@ -90,11 +90,8 @@ fn unban_removes_a_word_once_when_the_ban_list_holds_it_twice() {
 // git repository, then the command as it was given.
 #[test]
 fn outside_a_repository_the_owners_line_is_the_whole_command() {
-    let outside = std::env::temp_dir().join(format!("adr-outside-{}", std::process::id()));
-    std::fs::create_dir_all(&outside).unwrap();
-
-    let out = adr_owner(&outside, &["approve", "adrdom/decisions/x.md"], "");
-    std::fs::remove_dir_all(&outside).unwrap();
+    let outside = OutsideDir::new("outside");
+    let out = adr_owner(outside.path(), &["approve", "adrdom/decisions/x.md"], "");
 
     assert!(!out.status.success());
     assert_eq!(

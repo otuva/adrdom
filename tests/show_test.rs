@@ -92,7 +92,7 @@ fn show_lists_every_question_with_its_state_and_tier() {
 
 const TIERED_RECORD: &str = "# Tiered Topic\n\n\
 ### 1.1 Root?\n\n\
-id: id-root\n\n\
+id: aaaaaaaa-0000-4000-8000-000000000001\n\n\
 Problem: p.\n\n\
 Standard: s.\n\n\
 - A) First choice.\n  Why: w.\n  Costs: c.\n\
@@ -106,14 +106,14 @@ Standard: s2.\n\n\
 ### 1.3 Skeleton?\n\n\
 ### 2.1 Depends on root?\n\
 depends: 1.1 Root?=A\n\n\
-id: id-open\n\n\
+id: aaaaaaaa-0000-4000-8000-000000000002\n\n\
 Problem: p3.\n\n\
 Standard: s3.\n\n\
 - A) x.\n  Why: w.\n  Costs: c.\n\
 - B) y.\n  Why: w.\n  Costs: c.\n\n\
 ### 2.2 Also depends?\n\
 depends: 1.1 Root?=A\n\n\
-id: id-refused\n\n\
+id: aaaaaaaa-0000-4000-8000-000000000003\n\n\
 Problem: p4.\n\n\
 Standard: s4.\n\n\
 - A) x.\n  Why: w.\n  Costs: c.\n\
@@ -125,7 +125,7 @@ Standard: s4.\n\n\
 /// plan and prose equal their latest approval: nothing is beyond it, so no
 /// line is marked.
 //
-// "show prints no decision" for a refused question: `id-refused` carries
+// "show prints no decision" for a refused question: the refused one carries
 // `**Answer:** refused`, and the expected output below lists it as
 // `[refused] 2.2 Also depends?` with its depends line and nothing else.
 //
@@ -143,21 +143,25 @@ fn show_prints_each_status_and_the_lines_each_question_carries() {
     // stand-in hash reads as "edited since", for the answered root as for
     // the open question (show prints no version and no owner command then).
     let rf = adr::record::load(&record).unwrap();
-    let root = rf.sections.iter().find(|s| s.id.as_deref() == Some("id-root")).unwrap();
+    let root = rf.sections.iter().find(|s| s.id.as_deref() == Some("aaaaaaaa-0000-4000-8000-000000000001")).unwrap();
     let root_hash = adr::record::section_hash(&rf.lines, root);
-    append_ledger_row_at(&dir, "asked", "id-root", &root_hash, "1.1 Root?", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "answered", "id-root", &root_hash, "A", "2024-01-01T00:00:01Z");
-    let open = rf.sections.iter().find(|s| s.id.as_deref() == Some("id-open")).unwrap();
+    append_ledger_row_at(&dir, "asked", "aaaaaaaa-0000-4000-8000-000000000001", &root_hash, "1.1 Root?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", "aaaaaaaa-0000-4000-8000-000000000001", &root_hash, "A", "2024-01-01T00:00:01Z");
+    let open = rf.sections.iter().find(|s| s.id.as_deref() == Some("aaaaaaaa-0000-4000-8000-000000000002")).unwrap();
     let open_hash = adr::record::section_hash(&rf.lines, open);
-    append_ledger_row(&dir, "asked", "id-open", &open_hash, "2.1 Depends on root?");
-    append_ledger_row(&dir, "asked", "id-refused", "h-refused", "2.2 Also depends?");
-    append_ledger_row(&dir, "refused", "id-refused", "h-refused", "2.2 Also depends?");
+    append_ledger_row(&dir, "asked", "aaaaaaaa-0000-4000-8000-000000000002", &open_hash, "2.1 Depends on root?");
+    // The refused rows carry the section's real hash, as answer writes it.
+    let refused = rf.sections.iter().find(|s| s.id.as_deref() == Some("aaaaaaaa-0000-4000-8000-000000000003")).unwrap();
+    let refused_hash = adr::record::section_hash(&rf.lines, refused);
+    append_ledger_row_at(&dir, "asked", "aaaaaaaa-0000-4000-8000-000000000003", &refused_hash, "2.2 Also depends?", "2024-01-01T00:00:02Z");
+    append_ledger_row_at(&dir, "refused", "aaaaaaaa-0000-4000-8000-000000000003", &refused_hash, "2.2 Also depends?", "2024-01-01T00:00:03Z");
+    let version = adr::record::version_of(&rf.lines, open);
 
     let out = adr(&dir, &["show", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "stderr: {}", stderr(&out));
     let shown = stdout(&out);
 
-    // "id-open"'s version is the current section hash's own prefix (per
+    // The asked question's version is the current section hash's own prefix (per
     // "Does an answer carry the version of the question the owner read?").
     // No tier heading and no "dependents:" line: what is computed from the
     // records comes under a flag. The body is printed for the asked
@@ -167,7 +171,7 @@ fn show_prints_each_status_and_the_lines_each_question_carries() {
 [answered A] 1.1 Root?
 [not asked] 1.2 Unasked root?
 [no body] 1.3 Skeleton?
-[asked @11024127] 2.1 Depends on root?
+[asked @{V}] 2.1 Depends on root?
   depends: 1.1 Root?=A
   Problem: p3.
   Standard: s3.
@@ -185,10 +189,11 @@ plan: adrdom/decisions/tiered-topic.md: \"1.3 Skeleton?\" has no depends line; a
 plan_frozen: adrdom/decisions/tiered-topic.md: \"2.2 Also depends?\": answered; agent removes the edit
 agent runs: adr plan adrdom/decisions/tiered-topic.md
 agent runs: adr ask adrdom/decisions/tiered-topic.md  # \"1.2 Unasked root?\"
-owner runs: adr answer id-open@11024127 <letter>  # \"2.1 Depends on root?\"
+owner runs: adr answer aaaaaaaa-0000-4000-8000-000000000002@{V} <letter>  # \"2.1 Depends on root?\"
 agent changes the plan: \"2.2 Also depends?\" is refused and holds the questions that come after it
 not yet: \"1.1 Root?\" is answered and is built once \"1.2 Unasked root?\" is answered
 ";
+    let expected = expected.replace("{V}", &version);
     assert_eq!(shown, expected, "full output: {}", shown);
 }
 

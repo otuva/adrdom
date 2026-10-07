@@ -5,14 +5,14 @@ use crate::repo;
 
 pub fn run(id_arg: String, letter: String) -> i32 {
     if !repo::owner_authorized() {
-        out::eprint_stop("answer", &msg::owner_refusal("answer", &format!("{} {}", id_arg, letter)));
+        out::eprint_stop("answer", &msg::owner_refusal("answer", &[id_arg.as_str(), letter.as_str()]));
         return 2;
     }
 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint_stop("answer", &msg::not_a_repo("answer", &format!("{} {}", id_arg, letter), Actor::Owner));
+            out::eprint_stop("answer", &msg::not_a_repo("answer", &[id_arg.as_str(), letter.as_str()], Actor::Owner));
             return 1;
         }
     };

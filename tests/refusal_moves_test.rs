@@ -379,8 +379,8 @@ fn a_settings_file_that_does_not_parse_names_its_fix_once() {
 // changing into one, ahead of the command, and nothing twice.
 #[test]
 fn outside_a_repository_every_command_names_the_step_that_clears_it() {
-    let outside = std::env::temp_dir().join(format!("adr-outside-moves-{}", std::process::id()));
-    std::fs::create_dir_all(&outside).unwrap();
+    let outside = OutsideDir::new("outside-moves");
+    let outside = outside.path();
     // Every command, with the arguments and flags it was run with: the move
     // names that same command line to run again, the command's name leads
     // the line once.
@@ -409,7 +409,7 @@ fn outside_a_repository_every_command_names_the_step_that_clears_it() {
         (vec!["ban", "--term", "answer set"], false),
         (vec!["ban", "--rebuild"], false),
     ] {
-        let out = if owner { adr_owner(&outside, &args, "") } else { adr(&outside, &args, &[], "") };
+        let out = if owner { adr_owner(outside, &args, "") } else { adr(outside, &args, &[], "") };
         assert!(!out.status.success(), "{:?}", args);
         let err = stderr(&out);
         let line = err.trim_end();
@@ -423,7 +423,6 @@ fn outside_a_repository_every_command_names_the_step_that_clears_it() {
         assert!(line.starts_with(&format!("{}: not inside", args[0])), "{:?}: {}", args, err);
         assert_one_clearing_move(line, &command);
     }
-    std::fs::remove_dir_all(&outside).unwrap();
 }
 
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
@@ -451,8 +450,9 @@ fn an_owner_refusal_names_the_command_as_it_can_be_run() {
 
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 //
-// ask and plan on a topic file that does not exist name the file to give
-// and the command to run with it, once.
+// ask and plan on a topic file that does not exist say, in words, what to
+// give the command (the file meant is not known, so no command line is
+// printed that would not run as printed), once.
 #[test]
 fn ask_and_plan_on_a_missing_topic_file_name_the_command_that_clears_it() {
     let dir = init_repo();
@@ -465,7 +465,7 @@ fn ask_and_plan_on_a_missing_topic_file_name_the_command_that_clears_it() {
         let err = stderr(&out);
         let line = err.lines().next().unwrap_or_default();
         assert!(
-            line.ends_with(&format!("agent names a topic file under adrdom/decisions that exists, then runs: adr {} with it", cmd)),
+            line.ends_with(&format!("agent gives adr {} a topic file under adrdom/decisions that exists", cmd)),
             "{}: {}",
             cmd,
             err

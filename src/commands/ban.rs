@@ -32,19 +32,22 @@ fn resolve_term_uuid(tf: &crate::terms::TermsFile, name: &str) -> Option<String>
 
 /// The arguments `ban` ran with, as a move names them: a term name of
 /// several words is quoted, so the move runs as printed.
-fn ban_args(term: &Option<String>, rebuild: bool) -> String {
+fn ban_args(term: &Option<String>, rebuild: bool) -> Vec<String> {
     match (term, rebuild) {
-        (_, true) => "--rebuild".to_string(),
-        (Some(t), false) if t.contains(char::is_whitespace) => format!("--term '{}'", t),
-        (Some(t), false) => format!("--term {}", t),
-        (None, false) => String::new(),
+        (_, true) => vec!["--rebuild".to_string()],
+        (Some(t), false) => vec!["--term".to_string(), t.clone()],
+        (None, false) => Vec::new(),
     }
 }
 
 pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     let args = ban_args(&term, rebuild);
-    // The command line every move of this run names to run again.
-    let again = if args.is_empty() { "adr ban".to_string() } else { format!("adr ban {}", args) };
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    // The command line every move of this run names to run again, each
+    // word quoted as a shell reads it.
+    let mut words = vec!["adr", "ban"];
+    words.extend_from_slice(&args);
+    let again = crate::moves::command(&words);
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
@@ -78,7 +81,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
 
     let mut input = String::new();
     if std::io::stdin().read_to_string(&mut input).is_err() {
-        out::eprint_stop("ban", &msg::stdin_read_failed(msg::after_fix_agent_runs(&again)));
+        out::eprint_stop("ban", &msg::stdin_read_failed(msg::after_fix_agent_runs(again.clone())));
         return 1;
     }
 
@@ -118,7 +121,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
         let expected = banned::sorted_content(&banned_now);
         if std::fs::read_to_string(&banned_path).unwrap_or_default() != expected {
             if let Err(e) = banned::write_sorted(&banned_path, banned_now) {
-                out::eprint_stop("ban", &msg::update_failed("banned list", e, msg::after_fix_agent_runs(&again)));
+                out::eprint_stop("ban", &msg::update_failed("banned list", e, msg::after_fix_agent_runs(again.clone())));
                 return 1;
             }
             out::print_events(&[Event::FileWritten { path: banned::BAN_LIST.to_string() }]);
@@ -162,7 +165,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     entries.extend(new_hashes.iter().map(|h| (h.clone(), uuid.clone())));
 
     if let Err(e) = banned::write_sorted(&banned_path, entries) {
-        out::eprint_stop("ban", &msg::update_failed("banned list", e, msg::after_fix_agent_runs(&again)));
+        out::eprint_stop("ban", &msg::update_failed("banned list", e, msg::after_fix_agent_runs(again.clone())));
         return 1;
     }
 
@@ -184,7 +187,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
         })
         .collect();
     if let Err(e) = ledger::append(&ledger_path, &rows) {
-        out::eprint_stop("ban", &msg::update_failed("ledger", e, msg::after_fix_agent_runs(&again)));
+        out::eprint_stop("ban", &msg::update_failed("ledger", e, msg::after_fix_agent_runs(again.clone())));
         return 1;
     }
 
@@ -210,7 +213,7 @@ fn run_rebuild(banned_path: &std::path::Path, ledger_path: &std::path::Path) -> 
         return 0;
     }
     if let Err(e) = banned::write_sorted(banned_path, entries) {
-        out::eprint_stop("ban", &msg::update_failed("banned list", e, msg::after_fix_agent_runs("adr ban --rebuild")));
+        out::eprint_stop("ban", &msg::update_failed("banned list", e, msg::after_fix_agent_runs(crate::moves::Cmd::fixed("adr ban --rebuild"))));
         return 1;
     }
     out::print_events(&[Event::FileWritten { path: banned::BAN_LIST.to_string() }]);
@@ -228,9 +231,17 @@ mod tests {
     // several words quoted.
     #[test]
     fn the_arguments_a_move_names_run_as_printed() {
-        assert_eq!(ban_args(&None, false), "");
-        assert_eq!(ban_args(&None, true), "--rebuild");
-        assert_eq!(ban_args(&Some("widget".to_string()), false), "--term widget");
-        assert_eq!(ban_args(&Some("answer set".to_string()), false), "--term 'answer set'");
+        let line = |term: Option<&str>, rebuild: bool| {
+            let args = ban_args(&term.map(str::to_string), rebuild);
+            let mut words = vec!["adr", "ban"];
+            words.extend(args.iter().map(String::as_str));
+            crate::moves::command(&words).to_string()
+        };
+        assert_eq!(line(None, false), "adr ban");
+        assert_eq!(line(None, true), "adr ban --rebuild");
+        assert_eq!(line(Some("widget"), false), "adr ban --term widget");
+        assert_eq!(line(Some("answer set"), false), "adr ban --term 'answer set'");
+        assert_eq!(line(Some("owner's act"), false), "adr ban --term 'owner'\\''s act'");
+        assert_eq!(line(Some("a;b"), false), "adr ban --term 'a;b'");
     }
 }

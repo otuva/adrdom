@@ -262,13 +262,11 @@ fn check_prints_every_finding_on_standard_output_whatever_its_exit() {
     assert!(!out.is_empty(), "the failure is printed");
     assert_eq!(err, "", "a failure goes to standard output");
     // A stop of check itself (no repository) goes to standard error.
-    let outside = std::env::temp_dir().join(format!("adr-not-a-repo-{}", std::process::id()));
-    std::fs::create_dir_all(&outside).unwrap();
-    let stop = adr(&outside, &["check"], &[], "");
-    let _ = std::fs::remove_dir_all(&outside);
-    if !stop.status.success() && stdout(&stop).is_empty() {
-        assert!(!stderr(&stop).is_empty(), "the stop is on standard error");
-    }
+    let outside = OutsideDir::new("not-a-repo");
+    let stop = adr(outside.path(), &["check"], &[], "");
+    assert!(!stop.status.success(), "check outside a repository stops");
+    assert_eq!(stdout(&stop), "", "nothing on standard output");
+    assert!(!stderr(&stop).is_empty(), "the stop is on standard error");
 }
 
 #[test]

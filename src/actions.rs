@@ -335,9 +335,12 @@ fn answer_leaf(rf: &RecordFile, t: usize) -> Result<usize, usize> {
 /// The write step `do_answer` and `do_refuse` both end with: splice the
 /// `**Answer:** <answer_text>` line in at the end of the section's hash
 /// range, save the topic file, then append `rows` to the ledger -- with the
-/// same error handling and the same "try again" command shape either way,
-/// `retry_words` filling in the part that differs (`"A again"` for the
-/// letter, `"refuse again"` for a refusal). Eight plain, once-each
+/// same error handling and the same command to run again either way,
+/// `given` being what the owner gave after the version (`"A"` for the
+/// letter, `"refuse"` for a refusal). When the ledger cannot take the rows
+/// the topic file is put back as it was, so the answer is all written or
+/// not at all and the command the refusal names runs as printed (per "Does
+/// a refusal name the command that clears it?"). Eight plain, once-each
 /// arguments over a params struct: the same shape `check_plan` accepts
 /// this same lint for.
 #[allow(clippy::too_many_arguments)]
@@ -345,7 +348,7 @@ fn finish_answer(
     root: &Path,
     id: &str,
     version: &str,
-    retry_words: &str,
+    given: &str,
     mut rf: RecordFile,
     idx: usize,
     answer_text: &str,
@@ -353,6 +356,11 @@ fn finish_answer(
     drop_ids: &[String],
 ) -> Result<(), String> {
     let ledger_path = root.join(crate::repo::LEDGER_PATH);
+    let before = record::join_lines(&rf.lines);
+    let path = rf.path.clone();
+    let again = || {
+        msg::after_fix_owner_runs(crate::moves::command(&["adr", "answer", &format!("{}@{}", id, version), given]))
+    };
 
     let hash_end = {
         let sec = &rf.sections[idx];
@@ -381,21 +389,21 @@ fn finish_answer(
         rf = record::build(rebuilt.path.clone(), rebuilt.rel.clone(), rebuilt.lines);
     }
 
-    record::save(&rf).map_err(|e| {
-        msg::write_failed(
-            "topic file",
-            e,
-            msg::after_fix_owner_runs(format!("adr answer {}@{} {}", id, version, retry_words)),
-        )
-    })?;
+    record::save(&rf).map_err(|e| msg::write_failed("topic file", e, again()))?;
 
-    ledger::append(&ledger_path, &rows).map_err(|e| {
-        msg::update_failed(
-            "ledger",
-            e,
-            msg::after_fix_owner_runs(format!("adr answer {}@{} {}", id, version, retry_words)),
-        )
-    })?;
+    if let Err(e) = ledger::append(&ledger_path, &rows) {
+        // The answer line and the removed questions go back out, so the
+        // file waits for the same answer it waited for before.
+        if let Err(back) = std::fs::write(&path, &before) {
+            return Err(msg::update_failed(
+                "ledger",
+                format!("{}; {} holds the answer line and could not be put back: {}", e, rf.rel, back),
+                Next::agent(format!("fixes what the error names and removes the answer line from {}", rf.rel))
+                    .and_owner_runs(crate::moves::command(&["adr", "answer", &format!("{}@{}", id, version), given])),
+            ));
+        }
+        return Err(msg::update_failed("ledger", e, again()));
+    }
 
     Ok(())
 }
@@ -581,7 +589,7 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
     }
 
     let letter_str = letter.to_string();
-    finish_answer(root, id, version, &format!("{} again", letter_str), rf, idx, &letter_str, rows, &drop_ids)?;
+    finish_answer(root, id, version, &letter_str, rf, idx, &letter_str, rows, &drop_ids)?;
 
     Ok(outcome)
 }
@@ -615,7 +623,7 @@ pub fn do_refuse(root: &Path, id: &str, version: &str) -> Result<Outcome, String
     };
 
     let outcome = Outcome::of_rows(std::slice::from_ref(&row), &HashMap::new());
-    finish_answer(root, id, version, "refuse again", rf, idx, "refused", vec![row], &[])?;
+    finish_answer(root, id, version, "refuse", rf, idx, "refused", vec![row], &[])?;
 
     Ok(outcome)
 }
@@ -623,7 +631,14 @@ pub fn do_refuse(root: &Path, id: &str, version: &str) -> Result<Outcome, String
 pub fn do_approve(root: &Path, file: &Path) -> Result<Outcome, String> {
     let ledger_path = root.join(crate::repo::LEDGER_PATH);
     let led = ledger::read(&ledger_path);
-    let rel = state::rel_path(root, file);
+    // The path as the repository names it, read from where it was given
+    // (relative to the directory the command ran in): approve takes the
+    // files `show` takes and no other, so it never writes a ledger row for
+    // a path no other command reads (per "Does show print what a file holds
+    // beyond its latest approval?", which has show take every file approve
+    // takes).
+    let rel = approved_rel(root, file).map_err(msg::approve_prefixed)?;
+    let file = &root.join(&rel);
 
     if rel == crate::repo::TERMS_PATH {
         do_approve_terms(root, file, &led, &ledger_path)
@@ -636,6 +651,43 @@ pub fn do_approve(root: &Path, file: &Path) -> Result<Outcome, String> {
     }
 }
 
+
+/// `file` as a path from the repository root, read the way the shell that
+/// ran the command reads it (relative to the current directory unless
+/// absolute, `.` and `..` resolved), or the refusal when it is outside the
+/// repository or no file approve takes: a topic file under
+/// adrdom/decisions, adrdom/terms.md, or a blame file under adrdom/blame.
+fn approved_rel(root: &Path, file: &Path) -> Result<String, String> {
+    let given = file.display().to_string();
+    let abs = if file.is_absolute() {
+        file.to_path_buf()
+    } else {
+        std::env::current_dir().map(|d| d.join(file)).unwrap_or_else(|_| root.join(file))
+    };
+    let mut parts: Vec<std::ffi::OsString> = Vec::new();
+    for comp in abs.components() {
+        match comp {
+            std::path::Component::ParentDir => {
+                parts.pop();
+            }
+            std::path::Component::CurDir => {}
+            std::path::Component::Normal(p) => parts.push(p.to_os_string()),
+            std::path::Component::RootDir | std::path::Component::Prefix(_) => parts.clear(),
+        }
+    }
+    let mut normal = std::path::PathBuf::from(std::path::MAIN_SEPARATOR_STR);
+    normal.extend(parts);
+    let root_abs = std::path::Path::new(std::path::MAIN_SEPARATOR_STR).join(root);
+    let Ok(inside) = normal.strip_prefix(&root_abs) else {
+        return Err(msg::approve_not_a_file_approve_takes(&given));
+    };
+    let rel = state::rel_path(Path::new(""), inside);
+    if rules::approve_takes(&rel) {
+        Ok(rel)
+    } else {
+        Err(msg::approve_not_a_file_approve_takes(&rel))
+    }
+}
 
 /// `adr approve <path>` for a topic file that is gone from disk: approves
 /// its removal. Refused while the file held a current decision or an open
@@ -696,7 +748,7 @@ fn do_approve_removal(root: &Path, rel: &str, led: &Ledger, ledger_path: &Path) 
         msg::approve_prefixed(msg::update_failed(
             "ledger",
             e,
-            msg::after_fix_owner_runs(format!("adr approve {}", rel)),
+            msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
         ))
     })?;
     Ok(Outcome::of_rows(&rows, &HashMap::new()))
@@ -718,81 +770,47 @@ fn do_approve_blame(
     led: &Ledger,
     ledger_path: &Path,
 ) -> Result<Outcome, String> {
-    let bf = blame::load(file, rel).map_err(|e| {
+    let content = std::fs::read_to_string(file).map_err(|e| {
         msg::approve_prefixed(msg::read_failed(
-            &file.display().to_string(),
+            rel,
             e,
-            msg::after_fix_owner_runs(format!("adr approve {}", rel)),
+            msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
         ))
     })?;
+    let bf = blame::parse(file.to_path_buf(), rel.to_string(), record::split_lines(&content));
 
-    let mut refusals: Vec<String> = bf
-        .shape_errors
-        .iter()
-        .map(|e| msg::approve_prefixed(msg::blame_shape_error(rel, e)))
-        .collect();
+    // A row that names a term resolves it against the approved terms file,
+    // and approve writes that term's identifier into the row: the same
+    // gate topic-file approve applies (`require_terms`), so no identifier
+    // is written that the terms file has not been given yet.
+    let names_a_term = bf.rows.iter().any(|r| r.dest.trim_start().starts_with("term:"));
+    if names_a_term {
+        require_terms(root, led, rel).map_err(msg::approve_prefixed)?;
+    }
+
+    // One judgement of the file against its origin, the one `check` and
+    // `show` read (`blame::file_state`, `rules::judge_blame_file`): approve
+    // refuses on what they report, with the same moves (per "Does a command
+    // refuse what check passes?", fe14991d A).
+    let source = repo::Source::WorkingTree;
+    let (records, _) = record::load_all_via(root, &source);
+    let (any_headings, known_ids) = blame::heading_ids(&records);
+    let st = blame::file_state(root, &source, &bf, &content, &records, led, &any_headings, &known_ids);
+    let terms_list: Vec<terms::Term> =
+        state::load_terms(root).map(|tf| terms::minted_copy(&tf).terms).unwrap_or_default();
+    let names = rules::BlameNames::of(root, &source, &records, terms_list);
+    let refusals: Vec<String> =
+        rules::judge_blame_file(root, &st, &bf, &names).into_iter().map(|f| msg::approve_prefixed(f.message)).collect();
     if !refusals.is_empty() {
         return Err(refusals.join("\n"));
     }
-
-    // Shape is clean, so both header fields are present (`blame::parse`
-    // only leaves either `None` alongside the shape error that reports it).
-    let blob = bf.blob.clone().expect("no shape error means blob is set");
-
-    // The origin's content comes from the file at its path when it is
-    // there, checked against the blob line by `git hash-object`; only a
-    // gone origin falls back to the object store. A blob reaches the store
-    // only through a stage or a commit, and a fresh repository's first
-    // blame file is approved before either.
-    let origin_rel = bf.origin.clone().expect("no shape error means origin is set");
-    if !blame::valid_origin_path(root, &repo::Source::WorkingTree, &origin_rel) {
-        return Err(msg::approve_prefixed(msg::blame_bad_origin_path(rel, &origin_rel)));
-    }
-    let origin_path = root.join(&origin_rel);
-    let content = if origin_path.exists() {
-        // Present: must read as text, or this refuses outright (fail
-        // closed, never a silent fall-through to the object store, which
-        // would let a present-but-corrupt origin sail through unnoticed).
-        match std::fs::read_to_string(&origin_path) {
-            Ok(text) => {
-                let actual = repo::git_hash_object_stdin(root, &text).unwrap_or_default();
-                if actual != blob {
-                    return Err(msg::approve_prefixed(msg::blame_blob_differs(rel, &origin_rel)));
-                }
-                text
-            }
-            Err(e) => {
-                return Err(msg::approve_prefixed(msg::read_failed(
-                    &origin_rel,
-                    e,
-                    Next::agent("fixes the origin file so it reads as text (e.g. its encoding)"),
-                )))
-            }
-        }
-    } else {
-        // Gone: fall back to the object store -- only reached when the
-        // path truly has nothing at all, never for a present file this
-        // just failed to read.
-        match repo::git(root, &["cat-file", "-p", &blob]) {
-            Some(text) => text,
-            None => return Err(msg::approve_prefixed(msg::blame_blob_not_found(rel, &blob))),
-        }
+    // The origin is gone and nothing holds it (`file_state` names an open
+    // row or the file's own approval otherwise): the file stands at its
+    // approval, and there is nothing to approve.
+    let Some(origin) = st.origin_content.as_ref().and(bf.origin.as_deref()) else {
+        return Ok(Outcome::of_rows(&[], &HashMap::new()));
     };
-    let n = content.lines().count();
-
-    // The coverage and destination rules (`rules::judge_blame_coverage`,
-    // `rules::judge_blame_destinations`), the judgement `show` reads too.
-    let (dest_findings, resolved) = rules::judge_blame_destinations(root, &crate::repo::Source::WorkingTree, &bf, &origin_rel);
-    refusals.extend(
-        rules::judge_blame_coverage(&bf, n)
-            .into_iter()
-            .chain(dest_findings)
-            .map(|f| msg::approve_prefixed(f.message)),
-    );
-
-    if !refusals.is_empty() {
-        return Err(refusals.join("\n"));
-    }
+    let (_, resolved) = rules::judge_blame_destinations_in(root, &bf, origin, &names);
 
     let mut work_lines = bf.lines.clone();
     for (row, r) in bf.rows.iter().zip(resolved.iter()) {
@@ -807,7 +825,7 @@ fn do_approve_blame(
             msg::approve_prefixed(msg::write_failed(
                 &file.display().to_string(),
                 e,
-                msg::after_fix_owner_runs(format!("adr approve {}", rel)),
+                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
             ))
         })?;
     }
@@ -831,7 +849,7 @@ fn do_approve_blame(
             msg::approve_prefixed(msg::update_failed(
                 "ledger",
                 e,
-                msg::after_fix_owner_runs(format!("adr approve {}", rel)),
+                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
             ))
         })?;
         rows.push(row);
@@ -865,7 +883,7 @@ fn do_approve_terms(
         msg::approve_prefixed(msg::read_failed(
             &file.display().to_string(),
             e,
-            msg::after_fix_owner_runs("adr approve adrdom/terms.md"),
+            msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr approve adrdom/terms.md")),
         ))
     })?;
 
@@ -924,7 +942,7 @@ fn do_approve_terms(
         msg::approve_prefixed(msg::write_failed(
             &file.display().to_string(),
             e,
-            msg::after_fix_owner_runs("adr approve adrdom/terms.md"),
+            msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr approve adrdom/terms.md")),
         ))
     })?;
 
@@ -943,7 +961,7 @@ fn do_approve_terms(
         msg::approve_prefixed(msg::write_failed(
             crate::repo::TERMS_BRIEF_PATH,
             e,
-            msg::after_fix_owner_runs("adr approve adrdom/terms.md"),
+            msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr approve adrdom/terms.md")),
         ))
     })?;
 
@@ -963,7 +981,7 @@ fn do_approve_terms(
         msg::approve_prefixed(msg::update_failed(
             "ledger",
             e,
-            msg::after_fix_owner_runs("adr approve adrdom/terms.md"),
+            msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr approve adrdom/terms.md")),
         ))
     };
 
@@ -1064,11 +1082,15 @@ fn do_approve_record(
 ) -> Result<Outcome, String> {
     let mut rf = record::load(file).map_err(|e| {
         msg::approve_prefixed(msg::read_failed(
-            &file.display().to_string(),
+            rel,
             e,
-            msg::after_fix_owner_runs(format!("adr approve {}", rel)),
+            msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
         ))
     })?;
+    // The file as the repository names it, whatever path it was loaded by:
+    // every rule that compares a ledger row's path with `rf.rel` reads the
+    // same path for it whichever spelling the command was given.
+    rf.rel = rel.to_string();
 
     // Refuse up front, before a single `depends:` entry is resolved, when
     // adrdom/terms.md is missing, shape-broken, or not yet approved: the
@@ -1312,7 +1334,7 @@ fn do_approve_record(
         msg::approve_prefixed(msg::write_failed(
             &file.display().to_string(),
             e,
-            msg::after_fix_owner_runs(format!("adr approve {}", rel)),
+            msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
         ))
     })?;
 
@@ -1402,7 +1424,7 @@ fn do_approve_record(
         msg::approve_prefixed(msg::update_failed(
             "ledger",
             e,
-            msg::after_fix_owner_runs(format!("adr approve {}", rel)),
+            msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
         ))
     })?;
 
@@ -1413,7 +1435,7 @@ fn do_approve_record(
             msg::approve_prefixed(msg::update_failed(
                 "ledger",
                 e,
-                msg::after_fix_owner_runs(format!("adr approve {}", rel)),
+                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
             ))
         })?;
     }
@@ -1509,7 +1531,7 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
         .filter(|(h, _)| !to_remove.contains(h))
         .collect();
     crate::banned::write_sorted(&banned_path, remaining).map_err(|e| {
-        msg::update_failed("banned list", e, msg::after_fix_owner_runs("adr unban"))
+        msg::update_failed("banned list", e, msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr unban")))
     })?;
 
     // One time for every row this run writes (per "Does a command write a
@@ -1529,7 +1551,7 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
         })
         .collect();
     ledger::append(&ledger_path, &rows)
-        .map_err(|e| msg::update_failed("ledger", e, msg::after_fix_owner_runs("adr unban")))?;
+        .map_err(|e| msg::update_failed("ledger", e, msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr unban"))))?;
 
     let mut outcome = Outcome::of_rows(&rows, &HashMap::new());
     outcome.input_findings = input_findings;

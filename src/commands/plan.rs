@@ -44,7 +44,7 @@ pub fn run(file: PathBuf) -> i32 {
         None => {
             out::eprint(&[out::refusal(
                 "plan",
-                &msg::not_a_repo("plan", &file.display().to_string(), msg::Actor::Agent),
+                &msg::not_a_repo("plan", &[&file.display().to_string()], msg::Actor::Agent),
             )]);
             return 1;
         }
@@ -105,7 +105,7 @@ struct Env {
 fn env(root: &Path) -> Env {
     Env {
         all: record::load_all(root),
-        terms: state::load_terms(root).map(|t| t.terms).unwrap_or_default(),
+        terms: crate::rules::judged_terms(state::load_terms(root).as_ref()),
     }
 }
 

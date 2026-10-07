@@ -14,36 +14,9 @@ pub(super) fn check_ids(
     removed: &[(String, Vec<crate::moves::RemovalHold>)],
 ) -> Vec<Failure> {
     let mut out = Vec::new();
-    let mut seen: HashMap<String, String> = HashMap::new();
-    for rf in records {
-        for sec in &rf.sections {
-            // Skeleton headings never fail anything, including ids.
-            if sec.is_skeleton {
-                continue;
-            }
-            match &sec.id {
-                // A heading with no id is a question of a file awaiting
-                // approval (per "Does check fail a topic file awaiting
-                // approval?"): approve gives it one, and the file is counted
-                // as awaiting, never failed.
-                None => {}
-                Some(id) => {
-                    if let Some(prev) = seen.get(id) {
-                        out.push(Failure {
-                            check: "ids",
-                            message: msg::duplicate_id(id, prev, &rf.rel, &sec.heading_text),
-                        });
-                    } else {
-                        seen.insert(
-                            id.clone(),
-                            format!("{}:{}", rf.rel, sec.heading_text),
-                        );
-                    }
-                }
-            }
-        }
-    }
-
+    // Every identifier a topic file holds.
+    let held: HashSet<&str> =
+        records.iter().flat_map(|rf| rf.sections.iter().filter(|s| !s.is_skeleton).filter_map(|s| s.id.as_deref())).collect();
     let mut ledger_ids: HashSet<String> = HashSet::new();
     for row in &led.rows {
         if (row.event == "asked" || row.event == "answered") && row.id != "-" {
@@ -87,7 +60,7 @@ pub(super) fn check_ids(
     }
 
     for id in ledger_ids {
-        if seen.contains_key(&id) {
+        if held.contains(id.as_str()) {
             continue;
         }
         let event = led.latest_state(&id).map(|r| r.event.as_str());
@@ -157,20 +130,6 @@ pub(super) fn check_ids(
             check: "ids",
             message: r.message.clone(),
         });
-    }
-
-    for rf in records {
-        for sec in &rf.sections {
-            let Some(id) = &sec.id else { continue };
-            if let Some(row) = led.latest_state(id) {
-                if row.event == "withdrawn" {
-                    out.push(Failure {
-                        check: "ids",
-                        message: msg::withdrawn_id_present(id, &sec.heading_text, &rf.rel),
-                    });
-                }
-            }
-        }
     }
 
     out

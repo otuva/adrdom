@@ -18,7 +18,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint_stop("ask", &msg::not_a_repo("ask", &record_path.display().to_string(), Actor::Agent));
+            out::eprint_stop("ask", &msg::not_a_repo("ask", &[&record_path.display().to_string()], Actor::Agent));
             return 1;
         }
     };
@@ -124,28 +124,14 @@ pub fn run(record_path: PathBuf) -> i32 {
         return 1;
     }
 
-    // Refuse (and change nothing) if any answered or refused section was
-    // edited since it was answered/refused: the same comparison check's
-    // `answers.rs` makes (every ledger row for the id at that event, not
-    // only the latest, since a genuine re-answer at the same letter after a
-    // harmless edit adds a second row rather than rewriting the first),
-    // shared through `state::closed_match`.
-    for sec in &rf.sections {
-        let Some(id) = &sec.id else { continue };
-        if sec.answer_line.is_none() {
-            continue;
-        }
-        let cur = record::section_hash(&rf.lines, sec);
-        if let state::ClosedMatch::Edited = state::closed_match(&led, &cur, sec, id) {
-            let path = record_path.display().to_string();
-            let stop = if sec.is_refused() {
-                msg::edited_after_refused(&path, &sec.heading_text)
-            } else {
-                msg::edited_after_answered(&path, &sec.heading_text)
-            };
-            out::eprint_stop("ask", &stop);
-            return 1;
-        }
+    // Refuse (and change nothing) on the rules on each question's answer or
+    // refusal (`rules::closed_findings`, in the judgement above): a closed
+    // question edited since, a line no row backs, two standing answers. The
+    // findings and moves `check` fails the file on, named the same way.
+    let closed: Vec<String> = findings.iter().filter(|f| f.rule == "answers").map(|f| f.message.clone()).collect();
+    if !closed.is_empty() {
+        out::eprint_stop("ask", &closed.join("\n"));
+        return 1;
     }
 
     // Refusal 4: plan / context must be approved before ask will touch the
@@ -238,14 +224,17 @@ pub fn run(record_path: PathBuf) -> i32 {
                 .map(|r| r.message),
         );
 
-        // The rules on text not yet asked (`rules::record_refusals`): a
-        // loaded phrase in the heading or the body, a line over its word
-        // limit, a question that pairs no term (per "Does the tool stop
-        // loaded phrases in a question?", "Does ask refuse an option over a
-        // word limit?", "Does ask refuse a question with no term?").
-        refusals.extend(
-            findings.iter().filter(|f| f.rule == "tells" && f.sections.contains(&i)).map(|f| f.message.clone()),
-        );
+        // Every rule the question breaks (`rules::record_refusals`, the
+        // judgement `approve` and `check` read): a loaded phrase, a line
+        // over its word limit, a question that pairs no term (per "Does the
+        // tool stop loaded phrases in a question?", "Does ask refuse an
+        // option over a word limit?", "Does ask refuse a question with no
+        // term?"), and what its depends line stands on.
+        for f in findings.iter().filter(|f| f.sections.contains(&i)) {
+            if !refusals.contains(&f.message) {
+                refusals.push(f.message.clone());
+            }
+        }
 
         let text = state::section_text_excluding_terms_line(&rf.lines, sec);
 
@@ -394,13 +383,13 @@ pub fn run(record_path: PathBuf) -> i32 {
             &msg::write_failed(
                 &record_path.display().to_string(),
                 e,
-                msg::after_fix_agent_runs(format!("adr ask {}", rel)),
+                msg::after_fix_agent_runs(crate::moves::command(&["adr", "ask", &*rel])),
             ),
         );
         return 1;
     }
     if let Err(e) = ledger::append(&ledger_path, &new_rows) {
-        out::eprint_stop("ask", &msg::update_failed("ledger", e, msg::after_fix_agent_runs(format!("adr ask {}", rel))));
+        out::eprint_stop("ask", &msg::update_failed("ledger", e, msg::after_fix_agent_runs(crate::moves::command(&["adr", "ask", &*rel]))));
         return 1;
     }
 
@@ -486,7 +475,7 @@ fn do_conflict_reask(
             &msg::write_failed(
                 &record_path.display().to_string(),
                 e,
-                msg::after_fix_agent_runs(format!("adr ask {}", state::rel_path(root, record_path))),
+                msg::after_fix_agent_runs(crate::moves::command(&["adr", "ask", &state::rel_path(root, record_path)])),
             ),
         );
         return 1;
@@ -524,7 +513,7 @@ fn do_conflict_reask(
 
     let ledger_path = root.join(crate::repo::LEDGER_PATH);
     if let Err(e) = ledger::append(&ledger_path, &new_rows) {
-        out::eprint_stop("ask", &msg::update_failed("ledger", e, msg::after_fix_agent_runs(format!("adr ask {}", state::rel_path(root, record_path)))));
+        out::eprint_stop("ask", &msg::update_failed("ledger", e, msg::after_fix_agent_runs(crate::moves::command(&["adr", "ask", &state::rel_path(root, record_path)]))));
         return 1;
     }
 

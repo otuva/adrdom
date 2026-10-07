@@ -148,6 +148,34 @@ fn a_merge_keeping_both_branches_rows_passes_staged_and_committed() {
 
 // adr: 1c27f2d6-ab62-4c5a-91b2-1488722f3c48
 //
+// Git runs no pre-commit hook for a merge it commits itself, only
+// commit-msg: at a merge the commit-msg hook's `check --message` judges the
+// staged files too, so a merge that keeps only its own ledger rows
+// (`-s ours`) is refused there, through the installed hooks.
+#[test]
+fn a_merge_dropping_a_branchs_row_is_refused_by_the_message_hook() {
+    let dir = new_repo();
+    setup_two_branches_each_appending_a_row(&dir);
+    let ours_row = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap().trim().to_string();
+
+    run_git(&dir, &["merge", "--no-ff", "--no-commit", "b"]);
+    force_ledger_lines(&dir, &[&ours_row]);
+    let msg = dir.join(".git/MERGE_MSG");
+    let hook = adr(&dir, &["check", "--message", msg.to_str().unwrap()], &[], "");
+    assert!(!hook.status.success(), "the message hook refuses the merge: {}", stdout(&hook));
+    assert!(stdout(&hook).contains(MERGE_DROPS_ROWS_TEXT), "{}", stdout(&hook));
+    run_git(&dir, &["merge", "--abort"]);
+
+    // Through git itself, with the hooks install wrote.
+    git_ok(&dir, &["config", "core.hooksPath", ".githooks"]);
+    let merged = run_git(&dir, &["merge", "-s", "ours", "--no-ff", "-m", "merge b", "b"]);
+    assert!(!merged.status.success(), "git merge -s ours lands: {}", stdout(&merged));
+    let text = format!("{}{}", stdout(&merged), stderr(&merged));
+    assert!(text.contains(MERGE_DROPS_ROWS_TEXT), "{}", text);
+}
+
+// adr: 1c27f2d6-ab62-4c5a-91b2-1488722f3c48
+//
 // The same merge, resolved by dropping the merged-in branch's row
 // instead: `adr check --staged` fails with the new message while the
 // merge is still pending.

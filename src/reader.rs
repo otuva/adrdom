@@ -250,6 +250,17 @@ pub fn rows(root: &Path) -> std::sync::Arc<Vec<Row>> {
     rows
 }
 
+/// The rows of the reader file as `source` holds it: the working tree's
+/// through `rows`, the staged copy at a commit (per "Does check at a commit
+/// read the staged files?"), so the planning records judged at a commit are
+/// the ones the commit carries.
+pub fn rows_via(root: &Path, source: &repo::Source) -> std::sync::Arc<Vec<Row>> {
+    match source {
+        repo::Source::WorkingTree => rows(root),
+        repo::Source::Index => std::sync::Arc::new(parse(&source.read(root, repo::READER_PATH).unwrap_or_default()).rows),
+    }
+}
+
 /// Appends `rows` to the reader file.
 pub fn append(root: &Path, rows: &[Row]) -> Result<(), String> {
     use std::io::Write;

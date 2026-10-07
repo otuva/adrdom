@@ -38,7 +38,7 @@ pub fn run() -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint(&[out::refusal("read", &msg::not_a_repo("read", "", Actor::Agent))]);
+            out::eprint(&[out::refusal("read", &msg::not_a_repo("read", &[], Actor::Agent))]);
             return 1;
         }
     };

@@ -637,8 +637,10 @@ fn check_staged_refuses_an_unstaged_agents_md_from_install() {
     let out = adr(&dir, &["check", "--staged"], &[], "");
     let text = stdout(&out);
     assert!(!out.status.success(), "{}", text);
+    // The working tree holds what install wrote: staging it is the move,
+    // never install again (which would write nothing).
     assert!(
-        text.contains("install: AGENTS.md lacks the adrdom brief; agent runs: adr install"),
+        text.contains("install: AGENTS.md not staged; agent runs: git add AGENTS.md"),
         "an unstaged AGENTS.md from install must not satisfy a staged check: {}",
         text
     );
@@ -1543,6 +1545,12 @@ fn check_fails_a_withdrawn_id_still_present_in_a_record() {
         "{}",
         text
     );
+    // The move removes the section: the identifier never comes back, so no
+    // approve clears it. show names the same finding.
+    let line = text.lines().find(|l| l.contains("still present in")).unwrap();
+    assert!(line.ends_with("agent removes the section from adrdom/decisions/example.md; a question to ask again is written as a new question"), "{}", line);
+    let shown = stdout(&adr(&dir, &["show", "adrdom/decisions/example.md"], &[], ""));
+    assert!(shown.contains(line), "{}", shown);
 }
 
 // A topic file whose every question is answered and tested is no line of

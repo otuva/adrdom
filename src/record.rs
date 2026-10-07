@@ -858,6 +858,12 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
     if scan.id_count > 1 {
         parse_errors.push("duplicate id line".to_string());
     }
+    // An identifier is a value the tool assigns (a uuid, per the term
+    // "identifier"): an `id:` line holding anything else was written by
+    // hand, and nothing reads it as the question's identifier.
+    if let Some(id) = scan.id.as_deref().filter(|id| !is_uuid(id.trim())) {
+        parse_errors.push(format!("id line holds {:?}, which is no identifier the tool assigns", id));
+    }
     if let Some(v) = &scan.answer_value {
         let v = v.trim();
         let valid = v == "refused"

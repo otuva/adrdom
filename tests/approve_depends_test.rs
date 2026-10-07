@@ -279,22 +279,27 @@ fn approve_accepts_two_new_headings_when_two_in_the_tier_are_dead() {
         term = term_id,
         a = old_a
     );
+    let dead_b = format!(
+        "### 1.2 Dead B?\ndepends: {term}\n\nid: {b}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        term = term_id,
+        b = old_b
+    );
     let content = format!(
-        "# Example\n\n{dead_a}\n\
-### 1.2 Dead B?\ndepends: {term}\n\nid: {b}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n\n\
+        "# Example\n\n{dead_a}\n{dead_b}\n\
 ### 1.3 Live C?\ndepends: decision\n\nid: {c}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
 ### 1.4 Live D?\ndepends: decision\n\nid: {d}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
 ### 1.5 New E?\ndepends: decision\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
 ### 1.6 New F?\ndepends: decision\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
         dead_a = dead_a,
-        term = term_id,
-        b = old_b,
+        dead_b = dead_b,
         c = old_c,
         d = old_d
     );
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
-    // The refused row carries the section's real hash, as `answer` writes it.
+    // The refused and answered rows carry the sections' real hashes, as
+    // `answer` writes them.
     append_ledger_row(&dir, "refused", old_a, &mirror_section_hash(&dead_a), "1.1 Dead A?");
+    append_ledger_row(&dir, "answered", old_b, &mirror_section_hash(&dead_b), "A");
     append_ledger_row(&dir, "superseded", old_b, "-", "some-other-id");
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");

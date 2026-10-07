@@ -75,7 +75,10 @@ pub(super) fn check_terms(
     let minted = terms::minted_copy(&tf);
     let (refusals, _pairs) =
         rules::terms_refusals(root, records, &minted, led, source, false, approved_plans);
-    let refused = !refusals.is_empty();
+    // A banned word in the file is printed by `check_banned`; approve
+    // refuses on it all the same, so the owner's approve is not named
+    // beside it.
+    let refused = !refusals.is_empty() || !rules::terms_banned_hits(root, &minted, source).is_empty();
     for r in refusals {
         out.push(Failure {
             check: "terms",

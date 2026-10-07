@@ -15,136 +15,35 @@ pub(super) fn check_answers(
     as_loaded: &[RecordFile],
     terms_list: &[Term],
     led: &Ledger,
+    source: &crate::repo::Source,
 ) -> Vec<Failure> {
     let mut out = Vec::new();
     // Read once, and only when a question edited after asking needs its
     // file's moves.
     let index = std::cell::OnceCell::new();
     for rf in records {
+        // The rules on each question's answer or refusal, the judgement
+        // approve, ask, show and plan read (`rules::closed_findings`).
+        for f in crate::rules::closed_findings(&rf.rel, rf, led) {
+            out.push(Failure { check: "answers", message: f.message });
+        }
         for (ti, sec) in rf.sections.iter().enumerate() {
             let Some(id) = &sec.id else { continue };
             let cur = record::section_hash(&rf.lines, sec);
-
-            // Per "Does check fail a question answered with two different
-            // options?" (e3200081-9995-4bbe-983f-2f430dc341e7): a question
-            // whose standing ledger rulings (`state::conflicting_rulings`)
-            // name two or more different options fails here, straight from
-            // the ledger -- the file's own `**Answer:**` line only shows
-            // one side and can never catch this on its own (`closed_match`
-            // below only compares that one line against the ledger, so it
-            // stays silent about a second, equally genuine row for a
-            // different option).
-            if let Some((a, b)) = state::conflicting_rulings(led, id) {
-                out.push(Failure {
-                    check: "answers",
-                    message: msg::answer_conflict(&rf.rel, &sec.heading_text, id, &a.label(), &b.label()),
-                });
-            }
-
-            if sec.answer_line.is_some() && state::is_open_again(led, id) {
-                // Asked again after an answer or a refusal and not ruled
-                // on since: no answer stands, so a line in the file, a
-                // letter or `refused`, is hand-written, whatever the rows
-                // of the earlier rulings say.
-                out.push(Failure {
-                    check: "answers",
-                    message: msg::answer_without_row(&rf.rel, &sec.heading_text),
-                });
-            } else if sec.is_refused() {
-                // Per "Does the owner answer a question with a refusal?":
-                // a `**Answer:** refused` line needs a matching `refused`
-                // row (same id, hash = the section hash before the insert
-                // -- the same `cur` a letter answer is checked against),
-                // shared with `ask`'s own edited-after-closed gate through
-                // `state::closed_match`.
-                if !matches!(
-                    state::closed_match(led, &cur, sec, id),
-                    state::ClosedMatch::Current
-                ) {
-                    out.push(Failure {
-                        check: "answers",
-                        message: msg::refusal_without_row(&rf.rel, &sec.heading_text),
-                    });
-                }
-            } else if sec.answer_line.is_some() {
-                // `state::closed_match` mirrors this exactly: every
-                // `answered` row for this id at all, so an edit that moves
-                // the letter the file's `**Answer:**` line names out from
-                // under `answer_letter()` (e.g. renaming the answered
-                // option) still finds a row -- the letter going `None`
-                // there is itself evidence the options changed, not
-                // evidence the answer was never genuine -- and, among rows
-                // at the letter the line currently names, there may be
-                // more than one (a text edit followed by a genuine
-                // re-answer would add a second), so any of them matching
-                // the current hash is enough to call the line genuine.
-                match state::closed_match(led, &cur, sec, id) {
-                    state::ClosedMatch::Current => {
-                        // Genuine and current: nothing to report.
-                    }
-                    state::ClosedMatch::Edited => {
-                        // A genuine `answered` row exists for this id -- at
-                        // the line's letter but a different hash, at a
-                        // different letter entirely (a hand-changed answer
-                        // line), or the line's letter no longer parses at
-                        // all (the answered option was renamed) -- so the
-                        // answer itself is real; the question's text moved
-                        // since (per "Does check fail an answered question
-                        // whose text changed?"). Never `answer_without_row`,
-                        // whose fix would remove a real answer.
-                        out.push(Failure {
-                            check: "answers",
-                            message: msg::answered_text_changed(&rf.rel, &sec.heading_text, id),
-                        });
-                    }
-                    state::ClosedMatch::NotClosed => {
-                        // No genuine `answered` row for this id at all (at
-                        // any letter): a hand-written answer line with
-                        // nothing backing it.
-                        out.push(Failure {
-                            check: "answers",
-                            message: msg::answer_without_row(&rf.rel, &sec.heading_text),
-                        });
-                    }
-                }
-            } else {
-                // A question asked again after two answers met (per "Does
-                // check fail a question answered with two different
-                // options?") is open: the owner's next answer settles it,
-                // while the rows of the two earlier answers stay in the
-                // ledger. No line is missing from the file.
-                let open_again = state::is_open_again(led, id);
-                let has_answered_row = !open_again
-                    && led
-                        .rows
-                        .iter()
-                        .any(|r| r.event == "answered" && &r.id == id);
-                let has_refused_row =
-                    !open_again && led.rows.iter().any(|r| r.event == "refused" && &r.id == id);
-                if has_answered_row {
-                    out.push(Failure {
-                        check: "answers",
-                        message: msg::answered_row_without_line(&rf.rel, &sec.heading_text),
-                    });
-                } else if has_refused_row {
-                    // Per "Does the owner answer a question with a
-                    // refusal?", the reverse of the refusal-line check: a
-                    // `refused` row exists but the file no longer shows the
-                    // `**Answer:** refused` line.
-                    out.push(Failure {
-                        check: "answers",
-                        message: msg::refused_row_without_line(&rf.rel, &sec.heading_text),
-                    });
-                } else if let Some(latest_asked_hash) = led.latest_asked(id).map(|r| r.hash.clone()) {
-                    // Per "Does a reference in a topic file carry the
-                    // identifier of what it names?": `approve` now gives every heading an id,
-                    // including one never asked at all (a skeleton, or a
-                    // real question still waiting on an earlier tier) --
-                    // only a section that genuinely was asked before, and
-                    // no longer hashes the same, is "edited after asking".
+            // An asked question with no answer line whose text no longer
+            // hashes as asked: edited after asking. Per "Does a reference
+            // in a topic file carry the identifier of what it names?",
+            // approve gives every heading an id, a question never asked
+            // included: only one asked before is edited after asking. The
+            // move is the one `show` names for its file.
+            let asked_open = sec.answer_line.is_none()
+                && (state::is_open_again(led, id)
+                    || !led.rows.iter().any(|r| (r.event == "answered" || r.event == "refused") && &r.id == id));
+            if asked_open {
+                if let Some(latest_asked_hash) = led.latest_asked(id).map(|r| r.hash.clone()) {
                     if latest_asked_hash != cur {
                         let loaded = as_loaded.iter().find(|f| f.rel == rf.rel).unwrap_or(rf);
-                        let index = index.get_or_init(|| crate::rules::RepoIndex::new(root, as_loaded, terms_list, led));
+                        let index = index.get_or_init(|| crate::rules::RepoIndex::new_via(root, as_loaded, terms_list, led, source));
                         let j = crate::moves::Judging { root, all: as_loaded, terms_list, led, index };
                         let moves = crate::moves::of_unasked_question_in(&j, loaded, &sec.heading_text, false);
                         out.push(Failure {

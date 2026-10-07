@@ -295,7 +295,11 @@ fn a_drop_before_the_latest_approval_is_not_put_back() {
 
     let (ok, report) = check_text(&dir);
     assert!(ok, "{}", report);
-    assert!(!report.contains("awaiting approval"), "{}", report);
+    // The file stands at its latest approval: show names it approved, with
+    // no owner approve move.
+    let shown = stdout(&adr(&dir, &["show", REL], &[], ""));
+    assert!(shown.starts_with("[approved] "), "{}", shown);
+    assert!(!shown.contains("owner runs: adr approve"), "{}", shown);
 }
 
 /// Two questions in a file: Two stands on One=A. Both asked and committed.

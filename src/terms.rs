@@ -221,13 +221,9 @@ pub fn parse(lines: &[String]) -> TermsFile {
             }
         }
 
-        if id.is_none() {
-            errors.push(format!(
-                "line {}: missing id; {}",
-                start + 1,
-                crate::moves::clause(crate::moves::MoveKind::Approve { path: crate::repo::TERMS_PATH.to_string() }).render()
-            ));
-        }
+        // An entry with no id is no shape fault: only approve writes ids,
+        // so such a file is one that waits for its approval
+        // (`missing_ids`), the owner's move alone.
         if definition.is_none() {
             errors.push(format!("line {}: missing field \"definition\"", start + 1));
         }
@@ -943,13 +939,11 @@ aliases: \n"
     }
 
     #[test]
-    fn missing_id_gets_the_owner_wording() {
+    fn missing_id_is_an_entry_awaiting_approval_not_a_shape_error() {
         let s = well_formed().replacen("id: 11111111-1111-1111-1111-111111111111\n", "", 1);
         let tf = parse(&lines_of(&s));
-        assert!(tf
-            .errors
-            .iter()
-            .any(|e| e.contains("missing id; owner runs: adr approve adrdom/terms.md")));
+        assert!(tf.errors.is_empty(), "{:?}", tf.errors);
+        assert_eq!(tf.missing_ids().len(), 1);
     }
 
     #[test]

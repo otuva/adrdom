@@ -467,6 +467,31 @@ fn get_next_with_cookie_shows_question_heading() {
     let _ = child.wait();
 }
 
+// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+//
+// Wherever the page offers the owner's approve, what the approve signs
+// stands above the form: on `/next`, a file with an asked question and a
+// question added since its approval shows the new question, marked, above
+// its Approve button.
+#[test]
+fn next_shows_the_change_an_approve_form_signs() {
+    let dir = setup_repo_with_open_question();
+    let path = dir.join("adrdom/decisions/example.md");
+    let mut text = std::fs::read_to_string(&path).unwrap();
+    text.push_str("\n### 1.9 Is the example kept?\ndepends: example\n\nProblem: the example decision is open.\n\nStandard: decisions are plain.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n");
+    std::fs::write(&path, text).unwrap();
+    plan_record(&dir, "adrdom/decisions/example.md");
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let resp = get(port, "/next", Some(&format!("adr_t={}", token)));
+    let _ = child.kill();
+    let _ = child.wait();
+    assert_eq!(resp.status, 200, "body: {}", resp.body);
+    let form = resp.body.find("action=\"/approve\"").unwrap_or_else(|| panic!("no approve form: {}", resp.body));
+    let added = resp.body.find("1.9 Is the example kept?").unwrap_or_else(|| panic!("the change is not shown: {}", resp.body));
+    assert!(added < form, "the change stands above the form: {}", resp.body);
+}
+
 // --- terms fixtures (7.9: words, no-term, entries, before/after) -------
 
 const WORDS_TERMS_MD: &str = "# Terms\n\n\

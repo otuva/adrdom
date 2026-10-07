@@ -316,8 +316,14 @@ fn a_blob_that_differs_from_the_origin_at_its_path_refuses() {
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("blob does not match the content of docs/drift.md"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("blob no longer matches docs/drift.md"), "{}", stderr(&out));
     assert_eq!(blame_row_count(&dir), 0);
+    // One judgement: check names the same finding with the same move.
+    let refused = stderr(&out).lines().map(|l| l.trim_start_matches("approve: ").to_string()).collect::<Vec<_>>();
+    let checked = stdout(&adr(&dir, &["check"], &[], ""));
+    for r in &refused {
+        assert!(checked.contains(r.as_str()), "check lacks {:?}:\n{}", r, checked);
+    }
 }
 
 // --- origin term: a path must be a regular file outside adrdom ----------
@@ -600,7 +606,7 @@ fn a_present_non_utf8_origin_refuses_and_writes_nothing() {
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("cannot read"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("cannot be read as text"), "{}", stderr(&out));
     assert_eq!(blame_row_count(&dir), 0);
     assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
 }

@@ -23,14 +23,14 @@ pub fn run() -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint(&[stopped(msg::not_a_repo("check", "--push", Actor::Agent))]);
+            out::eprint(&[stopped(msg::not_a_repo("check", &["--push"], Actor::Agent))]);
             return 1;
         }
     };
 
     let mut input = String::new();
     if std::io::stdin().read_to_string(&mut input).is_err() {
-        out::eprint(&[stopped(msg::stdin_read_failed(msg::after_fix_agent_runs("git push")))]);
+        out::eprint(&[stopped(msg::stdin_read_failed(msg::after_fix_agent_runs(crate::moves::Cmd::fixed("git push"))))]);
         return 1;
     }
 

@@ -1,5 +1,6 @@
 use crate::banned;
 use crate::commands::{deny_entries, OWNER_COMMANDS};
+use crate::moves::{command, Cmd};
 use crate::msg::{self, Actor, Next};
 use crate::out::{self, Event};
 use crate::repo;
@@ -8,20 +9,25 @@ use std::path::Path;
 
 /// The agent's next move on any I/O failure while installing: fix what the
 /// error names, then run `command`, the install that failed, again.
-fn retry(command: &str) -> Next {
-    Next::agent(format!("fixes what the error names, then runs: {}", command))
+fn retry(command: &Cmd) -> Next {
+    msg::after_fix_agent_runs(command.clone())
 }
 
 /// The install command as it was given, flags and all.
-fn install_command(claude: bool, codex: bool) -> String {
-    let mut c = String::from("adr install");
+fn install_command(claude: bool, codex: bool) -> Cmd {
+    command(&install_words(claude, codex))
+}
+
+/// The words of the install command as it was given, flags and all.
+fn install_words(claude: bool, codex: bool) -> Vec<&'static str> {
+    let mut w = vec!["adr", "install"];
     if claude {
-        c.push_str(" --claude");
+        w.push("--claude");
     }
     if codex {
-        c.push_str(" --codex");
+        w.push("--codex");
     }
-    c
+    w
 }
 
 /// The agent brief, final at `assets/brief.md`. `adr install` writes it
@@ -84,9 +90,8 @@ pub fn run(claude: bool, codex: bool) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            let command = install_command(claude, codex);
-            let args = command.strip_prefix("adr install").unwrap_or("").trim();
-            out::eprint_stop("install", &msg::not_a_repo("install", args, Actor::Agent));
+            let words = install_words(claude, codex);
+            out::eprint_stop("install", &msg::not_a_repo("install", &words[2..], Actor::Agent));
             return 1;
         }
     };
@@ -364,10 +369,10 @@ fn install_claude_md(root: &Path, create: bool) -> Result<Option<Event>, String>
 /// entry is missing from it. A failure is the whole refusal, its move once:
 /// a file the agent fixes so it holds what install merges into, or the
 /// error to fix, then `cmd` again.
-fn merge_settings(root: &Path, cmd: &str) -> Result<Option<Event>, String> {
+fn merge_settings(root: &Path, cmd: &Cmd) -> Result<Option<Event>, String> {
     const REL: &str = ".claude/settings.json";
     let failed = |e: String| msg::update_failed(REL, e, retry(cmd));
-    let fix = |so: &str| msg::fix_then(REL, so, cmd);
+    let fix = |so: &str| msg::fix_then(REL, so, cmd.clone());
     let dir = root.join(".claude");
     fs::create_dir_all(&dir).map_err(|e| failed(e.to_string()))?;
     let path = dir.join("settings.json");

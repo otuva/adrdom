@@ -161,7 +161,7 @@ fn build(
     // reader's rows, the heading indexes), read once for the run.
     // Built only when a file awaits approval: the planning rules judge no
     // other file (`rules::planning_rules_apply`).
-    let shared = (!awaiting.is_empty()).then(|| crate::plan::Shared::new(root, &records, &terms_list, &led));
+    let shared = (!awaiting.is_empty()).then(|| crate::plan::Shared::new_via(root, &records, &terms_list, &led, &source));
     let per_record_findings: Vec<Vec<rules::Finding>> = records
         .iter()
         .zip(&replaced_per_record)
@@ -212,7 +212,8 @@ fn build(
         })
         .map(|r| r.id.clone())
         .collect();
-    let missing_answered = rules::missing_answered_refusals_except(&records, &led, &in_removed_file);
+    // The rules on the topic files as a whole (`rules::judge_records`).
+    let missing_answered = rules::judge_records_except(&records, &led, &in_removed_file);
     let mut failures: Vec<rules::Finding> = unreadable_failures;
     let (parse_failures, parse_notes) = parse::check_parse(&records, &per_record_findings, &awaiting, &led);
     push_failures(&mut failures, parse_failures);
@@ -221,7 +222,7 @@ fn build(
     push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_content, since));
     push_failures(&mut failures, reader::check_reader(root, &source, since));
     push_failures(&mut failures, banned::check_banned_ledger(&led, root, &source));
-    push_failures(&mut failures, answers::check_answers(root, &records, &as_loaded, &terms_list, &led));
+    push_failures(&mut failures, answers::check_answers(root, &records, &as_loaded, &terms_list, &led, &source));
     push_failures(&mut failures, banned::check_banned(root, staged, message, &source));
     push_failures(&mut failures, install::check_install(root, &source));
     let (plan_failures, plan_notes) =
@@ -250,27 +251,26 @@ fn build(
 /// directory itself (a name, a heading twice in one file, a heading in two
 /// files, each a note or a failure by which question copies).
 fn topic_file_findings(j: &rules::TopicFileJudge) -> Vec<rules::Finding> {
-    let mut own: std::collections::HashSet<String> =
-        rules::own_name_and_heading_refusals(j.rel, j.rf.topic.as_deref(), &j.rf.sections).into_iter().collect();
-    own.extend(rules::cross_file_heading_refusals(j.rel, j.rf, j.all, j.led));
-    rules::judge_topic_file(j).into_iter().filter(|f| !own.contains(&f.message)).collect()
+    rules::judge_topic_file(j).into_iter().filter(|f| !matches!(f.subject, rules::Subject::Directory(_))).collect()
 }
 
 /// The arguments `check` ran with, as the command line names them: what a
 /// refusal's move names to run again (per "Does a refusal name the command
 /// that clears it?").
-fn check_args(staged: bool, message: Option<&Path>, since: Option<&str>) -> String {
+fn check_args(staged: bool, message: Option<&Path>, since: Option<&str>) -> Vec<String> {
     let mut args: Vec<String> = Vec::new();
     if staged {
         args.push("--staged".to_string());
     }
     if let Some(m) = message {
-        args.push(format!("--message {}", m.display()));
+        args.push("--message".to_string());
+        args.push(m.display().to_string());
     }
     if let Some(s) = since {
-        args.push(format!("--since {}", s));
+        args.push("--since".to_string());
+        args.push(s.to_string());
     }
-    args.join(" ")
+    args
 }
 
 /// `push` (`--push`) short-circuits to `push::run`, which reads git's
@@ -292,6 +292,7 @@ pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: 
         Some(r) => r,
         None => {
             let args = check_args(staged, message.as_deref(), since.as_deref());
+            let args: Vec<&str> = args.iter().map(String::as_str).collect();
             out::eprint(&[stopped(msg::not_a_repo("check", &args, Actor::Agent))]);
             return 1;
         }
@@ -301,7 +302,13 @@ pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: 
     // hook of the same commit, so only the message is read, for banned
     // words (per "What does the ban scan read?": the staged files and the
     // commit message before every commit). Each finding prints once a commit.
-    if let Some(m) = message.as_deref() {
+    // A merge is the exception: git runs no pre-commit hook for a merge it
+    // commits itself, so at a merge (`MERGE_HEAD` set) the commit-msg hook
+    // judges the staged files too, the ledger rows of both branches among
+    // them (per "Does check at a merge look for the ledger rows of both
+    // branches?").
+    let merging = repo::git(&root, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_some();
+    if let Some(m) = message.as_deref().filter(|_| !merging) {
         let findings: Vec<Line> = banned::check_banned(&root, false, Some(m), &Source::for_check(false, true))
             .into_iter()
             .map(|f| Line::Finding(f.finding()))
@@ -309,7 +316,7 @@ pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: 
         out::print(&findings);
         return if findings.is_empty() { 0 } else { 1 };
     }
-    let report = build(&root, staged, None, since.as_deref(), None);
+    let report = build(&root, staged, message.as_deref(), since.as_deref(), None);
     let exit_code = if report.failures.is_empty() { 0 } else { 1 };
     let lines: Vec<Line> = report.failures.into_iter().chain(report.notes).map(Line::Finding).collect();
     out::print(&lines);

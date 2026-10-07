@@ -88,13 +88,17 @@ impl Move {
     /// a move nobody takes yet.
     pub fn next(&self) -> Option<Next> {
         Some(match &self.kind {
-            MoveKind::PlanUnresolved => Next::agent("runs: adr check, then clears what it names in the plan"),
-            MoveKind::Plan { rel } => Next::agent(format!("runs: adr plan {}", rel)),
+            MoveKind::PlanUnresolved => {
+                Next::all(vec![Next::agent_runs(Cmd::fixed("adr check")), Next::agent("clears what it names in the plan")])
+            }
+            MoveKind::Plan { rel } => Next::agent_runs(command(&["adr", "plan", rel])),
             MoveKind::WriteLines { headings } => Next::agent(format!("writes lines for {}", quoted(headings))),
             MoveKind::WriteBodies { headings } => Next::agent(format!("writes the body of {}", quoted(headings))),
-            MoveKind::Approve { path } => Next::owner_runs(format!("adr approve {}", path)),
-            MoveKind::Ask { rel, .. } => Next::agent(format!("runs: adr ask {}", rel)),
-            MoveKind::Answer { id, version, .. } => Next::owner_runs(format!("adr answer {}@{} <letter>", id, version)),
+            MoveKind::Approve { path } => Next::owner_runs(command(&["adr", "approve", path])),
+            MoveKind::Ask { rel, .. } => Next::agent_runs(command(&["adr", "ask", rel])),
+            MoveKind::Answer { id, version, .. } => {
+                Next::owner_runs(command(&["adr", "answer", &format!("{}@{}", id, version)]).then("<letter>"))
+            }
             MoveKind::Refused { heading } => Next::agent(format!(
                 "changes the plan: \"{}\" is refused and holds the questions that come after it",
                 heading
@@ -156,11 +160,29 @@ pub struct Report {
 }
 
 impl Report {
-    /// The report as the tail of a refusal: each finding whole, then each
-    /// move, joined with `, `. A refusal names at least one of them.
+    /// The report as the tail of a refusal: the moves on the refusal's own
+    /// line, joined with `, `, then each finding whole on a line of its own,
+    /// as `show` and `check` print them, so no finding runs into another
+    /// and a command printing the refusal names its command on every line.
     pub fn tail(&self) -> String {
-        debug_assert!(!(self.findings.is_empty() && self.moves.is_empty()), "a refusal names at least one move");
-        self.findings.iter().map(Finding::text).chain(self.moves.iter().map(Move::clause_text)).collect::<Vec<_>>().join(", ")
+        let mut s = self.moves_tail();
+        for f in &self.findings {
+            s.push('\n');
+            s.push_str(&f.text());
+        }
+        s
+    }
+
+    /// The moves alone, joined with `, `: for a refusal whose command prints
+    /// the findings apart (`check` prints every finding of the file on its
+    /// own line). With no move, each finding carries its own: the clause
+    /// says so.
+    pub fn moves_tail(&self) -> String {
+        if self.moves.is_empty() {
+            debug_assert!(!self.findings.is_empty(), "a refusal names at least one move");
+            return Next::agent("makes the move each finding of the file names").render();
+        }
+        self.moves.iter().map(Move::clause_text).collect::<Vec<_>>().join(", ")
     }
 }
 
@@ -174,6 +196,78 @@ pub const WAIT_TAIL: &str = "; not yet, after it is answered";
 /// own?", aac5c313 A).
 pub fn clause(kind: MoveKind) -> Next {
     Move::new(kind).next().expect("a move with a mover")
+}
+
+/// A command line a move names, as the one who runs it pastes it into a
+/// shell. Built from its words by `command`, which quotes every word that a
+/// shell would read otherwise, so a path, an identifier or a term name
+/// taken from the records runs as the word it is, whatever it holds (per
+/// "Does a refusal name the command that clears it?", b0e865b4 A).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Cmd(String);
+
+impl Cmd {
+    /// A command none of whose words come from the records: written once,
+    /// in the code, as the shell reads it.
+    pub fn fixed(line: &'static str) -> Cmd {
+        Cmd(line.to_string())
+    }
+
+    /// The command with `placeholder` after it, a word the one who runs it
+    /// writes in (`<letter>`), printed as it stands.
+    pub fn then(mut self, placeholder: &'static str) -> Cmd {
+        self.0.push(' ');
+        self.0.push_str(placeholder);
+        self
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for Cmd {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// The command line of `words`, each quoted as `shell_word` quotes it.
+pub fn command(words: &[&str]) -> Cmd {
+    Cmd(words.iter().map(|w| shell_word(w)).collect::<Vec<_>>().join(" "))
+}
+
+/// `word` as a POSIX shell reads it back: unchanged when it holds only
+/// letters, digits and `_ . / @ : = , + -` (and is not empty), otherwise in
+/// single quotes, a quote inside written `'\''`. Nothing inside single
+/// quotes is expanded, so `$(..)`, a backtick, a space or a newline stay
+/// part of the one word.
+pub fn shell_word(word: &str) -> String {
+    let plain = !word.is_empty()
+        && word.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '/' | '@' | ':' | '=' | ',' | '+' | '-'));
+    if plain {
+        return word.to_string();
+    }
+    // A control character (a newline, an escape) would end or redraw the
+    // printed line inside plain quotes: such a word is written `$'..'`,
+    // every control character and quote escaped, so the move stays one line.
+    if word.chars().any(char::is_control) {
+        let mut s = String::from("$'");
+        for c in word.chars() {
+            match c {
+                '\\' => s.push_str("\\\\"),
+                '\'' => s.push_str("\\'"),
+                '\n' => s.push_str("\\n"),
+                '\t' => s.push_str("\\t"),
+                '\r' => s.push_str("\\r"),
+                c if c.is_control() => s.push_str(&format!("\\x{:02x}", c as u32 & 0xff)),
+                c => s.push(c),
+            }
+        }
+        s.push('\'');
+        return s;
+    }
+    format!("'{}'", word.replace('\'', "'\\''"))
 }
 
 fn quoted(headings: &[String]) -> String {
@@ -198,7 +292,7 @@ pub fn removal_next(rel: &str, holds: &[RemovalHold]) -> Next {
     // Nothing holds the removal (check's ids rule names a removed file whose
     // questions are refused, say): the owner approves it away.
     if holds.is_empty() {
-        return Next::owner_runs(format!("adr approve {}", rel));
+        return Next::owner_runs(command(&["adr", "approve", rel]));
     }
     let steps: Vec<String> = holds
         .iter()
@@ -212,7 +306,7 @@ pub fn removal_next(rel: &str, holds: &[RemovalHold]) -> Next {
         })
         .collect();
     Next::agent(format!("restores {}, then {}, by a plan change", rel, steps.join(", ")))
-        .and_owner_runs(format!("adr approve {}", rel))
+        .and_owner_runs(command(&["adr", "approve", rel]))
 }
 
 /// The report of a removed topic file: each hold that keeps its removal
@@ -303,6 +397,12 @@ pub fn of_topic_file(
                 if tests.get(id).is_some_and(|locations| !locations.is_empty()) {
                     continue;
                 }
+                // Two standing answers for different options: no decision
+                // stands to build until the owner answers it again, the
+                // move its finding names (`rules::closed_findings`).
+                if state::conflicting_rulings(led, id).is_some() {
+                    continue;
+                }
                 let m = of_untested(rf, i, id);
                 match m.kind {
                     MoveKind::Build { .. } => build.push(m),
@@ -359,8 +459,15 @@ pub struct Judging<'a> {
 pub fn of_unasked_question_in(j: &Judging, rf: &RecordFile, heading: &str, unwritten: bool) -> Report {
     let plan_ok = state::plan_approved(j.led, rf, &rf.rel) && state::context_approved(j.led, rf, &rf.rel);
     let planning = crate::plan::load_with(rf, j.terms_list, j.led, &j.index.planning);
-    let findings = crate::rules::judge_topic_file_in(j.root, rf, j.all, j.terms_list, j.led, j.index);
-    let moves = of_unasked_question(rf, plan_ok, &findings, Some(&planning), heading, unwritten);
+    let mut findings = crate::rules::judge_topic_file_in(j.root, rf, j.all, j.terms_list, j.led, j.index);
+    findings.extend(j.index.records().iter().cloned());
+    let mut moves = of_unasked_question(rf, plan_ok, &findings, Some(&planning), heading, unwritten);
+    // The terms file's gate, as `of_topic_file_with` reads it.
+    let gate = crate::rules::terms_gate(j.root, j.led, &rf.rel);
+    if !gate.is_empty() {
+        moves.retain(|m| !matches!(m.kind, MoveKind::Approve { .. } | MoveKind::Ask { .. } | MoveKind::Answer { .. }));
+        findings.splice(0..0, gate);
+    }
     Report { findings, moves }
 }
 
@@ -401,11 +508,23 @@ pub fn of_topic_file_with(
     let original = rf;
     let mut rf = rf.clone();
     crate::depends::normalize_cross_file_deps(&mut rf, terms_list, &shared.phrase_lookup, &shared.cross, led);
-    let moves = of_topic_file(&rf, led, plan_ok, &findings, tests, Some(&planning));
+    // The rules on the topic files as a whole (an identifier twice, a
+    // withdrawn one back, a current decision no file holds): approve
+    // refuses any file on them, so the file's report carries them and its
+    // planning moves wait on them.
+    let mut findings = findings;
+    findings.extend(index.records().iter().cloned());
+    let mut moves = of_topic_file(&rf, led, plan_ok, &findings, tests, Some(&planning));
+    // While adrdom/terms.md is not approved, approve, ask and answer stop on
+    // it: its gate is the file's finding, and their moves wait on it.
+    let gate = crate::rules::terms_gate(root, led, &rf.rel);
+    if !gate.is_empty() {
+        moves.retain(|m| !matches!(m.kind, MoveKind::Approve { .. } | MoveKind::Ask { .. } | MoveKind::Answer { .. }));
+        findings.splice(0..0, gate);
+    }
     // A question asked and struck from the plan is cleared by the owner's
     // approve the moves above already name, so it joins the findings only
     // after the moves are computed from them.
-    let mut findings = findings;
     let sole = index.stale().len() == 1;
     findings.extend(crate::rules::struck_asked(&rf.rel, !state::plan_approved(led, original, &rf.rel), sole, all, led));
     Report { findings, moves }
@@ -607,7 +726,7 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> String {
     }
     // One owner move, last: the plan's approval when a refused question has
     // to go or the plan waits for it, else the first answer owed.
-    let mut clauses: Vec<String> = found;
+    let mut clauses: Vec<String> = Vec::new();
     clauses.extend(agent.iter().map(Move::clause_text));
     if !refused.is_empty() {
         clauses.push(
@@ -619,7 +738,17 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> String {
         owner = answer;
     }
     clauses.extend(owner.map(|m| m.clause_text()));
-    format!("\"{}\" waits: {}; {}", heading, parts.join("; "), clauses.join(", "))
+    if clauses.is_empty() {
+        clauses.push(Next::agent("makes the move each finding of the file names").render());
+    }
+    // What the rules find in the files it waits on, each whole on a line of
+    // its own after the refusal's line.
+    let mut s = format!("\"{}\" waits: {}; {}", heading, parts.join("; "), clauses.join(", "));
+    for f in found {
+        s.push('\n');
+        s.push_str(&f);
+    }
+    s
 }
 
 #[cfg(test)]
@@ -632,6 +761,26 @@ mod tests {
         assert_eq!(Move::new(MoveKind::Plan { rel: "x.md".into() }).actor, Mover::Agent);
         assert_eq!(Move::new(MoveKind::BuildWaits { heading: "h".into(), beside: "b".into() }).actor, Mover::NotYet);
         assert_eq!(removal("x.md", &[]).actor, Mover::Owner);
+    }
+
+    // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+    //
+    // A word taken from the records runs as the one word it is: nothing in
+    // it is expanded by the shell the move is pasted into, and the move
+    // stays one line.
+    #[test]
+    fn a_command_quotes_every_word_a_shell_would_read_otherwise() {
+        assert_eq!(command(&["adr", "approve", "adrdom/decisions/x-y.md"]).to_string(), "adr approve adrdom/decisions/x-y.md");
+        assert_eq!(
+            command(&["adr", "approve", "adrdom/blame/a$(touch PWNED).md"]).to_string(),
+            "adr approve 'adrdom/blame/a$(touch PWNED).md'"
+        );
+        assert_eq!(shell_word("it's"), "'it'\\''s'");
+        assert_eq!(shell_word(""), "''");
+        assert_eq!(shell_word("a\nowner runs: x"), "$'a\\nowner runs: x'");
+        assert_eq!(shell_word("`id`"), "'`id`'");
+        let m = Move::new(MoveKind::Answer { id: "x$(touch P)".into(), version: "abcd".into(), heading: "H?".into() });
+        assert_eq!(m.clause_text(), "owner runs: adr answer 'x$(touch P)@abcd' <letter>");
     }
 
     #[test]

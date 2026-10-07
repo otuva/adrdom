@@ -100,7 +100,9 @@ runtime dependencies beyond `git` on `PATH`.
   `.githooks/commit-msg`. Prints only findings, each with the move that
   clears it (an untested current decision is one), and nothing when it
   finds none. A finding on a file awaiting approval is a note and fails
-  nothing.
+  nothing. `--message` reads the commit message for banned words alone,
+  the staged files being judged by the pre-commit hook; at a merge, which
+  git commits with no pre-commit hook, it judges the staged files too.
 
 A command that writes prints one line per ledger row it appends, and one
 per file it writes that no such row covers, or on standard error the
