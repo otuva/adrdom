@@ -30,7 +30,7 @@ pub(super) fn check_ids(
                 Some(id) => {
                     if let Some(prev) = seen.get(id) {
                         out.push(Failure {
-                            check: "ids".to_string(),
+                            check: "ids",
                             message: msg::duplicate_id(id, prev, &rf.rel, &sec.heading_text),
                         });
                     } else {
@@ -133,7 +133,7 @@ pub(super) fn check_ids(
                 .map(|r| r.detail.clone())
                 .unwrap_or_else(|| id.clone());
             out.push(Failure {
-                check: "ids".to_string(),
+                check: "ids",
                 message: msg::removed_with_file(&id, &heading, event.unwrap_or("unknown"), crate::moves::removal_next(rel, holds)),
             });
             continue;
@@ -148,20 +148,20 @@ pub(super) fn check_ids(
                 _ => None,
             };
             out.push(Failure {
-                check: "ids".to_string(),
+                check: "ids",
                 message: msg::removed_from_plan(&id, &heading, event.unwrap_or("unknown"), removed_file),
             });
             continue;
         }
         out.push(Failure {
-            check: "ids".to_string(),
+            check: "ids",
             message: msg::ledger_id_not_found(&id, led.latest_asked(&id).map(|r| r.detail.as_str())),
         });
     }
 
     for r in missing_answered {
         out.push(Failure {
-            check: "ids".to_string(),
+            check: "ids",
             message: r.message.clone(),
         });
     }
@@ -172,7 +172,7 @@ pub(super) fn check_ids(
             if let Some(row) = led.latest_state(id) {
                 if row.event == "withdrawn" {
                     out.push(Failure {
-                        check: "ids".to_string(),
+                        check: "ids",
                         message: msg::withdrawn_id_present(id, &sec.heading_text, &rf.rel),
                     });
                 }

@@ -1,6 +1,6 @@
 // The `## ` tier-heading shape error, the "no depends line" rule, entry
-// resolution (term/decision/dangling/cycle), the tier cap, and the
-// per-file `tiers:` note. Fixtures are hand-written and approved via
+// resolution (term/decision/dangling/cycle), and the tier cap; the tiers
+// are no line of check's (3fc35d4f). Fixtures are hand-written and approved via
 // hand-written ledger rows (`approve_via_ledger`, `approve_minimal_terms`),
 // never through a real `adr ask`/`adr approve`.
 
@@ -470,13 +470,7 @@ fn check_fails_a_tier_over_the_cap() {
         "{}",
         text
     );
-    // Derivation still succeeds (the cap is a separate failure, not a
-    // derive error), so the tiers note is still printed.
-    assert!(
-        text.contains("tiers: adrdom/decisions/cap.md: 1 (5)"),
-        "{}",
-        text
-    );
+    assert!(!text.contains("tiers:"), "{}", text);
 }
 
 #[test]
@@ -495,15 +489,11 @@ fn check_passes_a_tier_at_the_cap() {
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
     assert!(!text.contains("holds"), "{}", text);
-    assert!(
-        text.contains("tiers: adrdom/decisions/atcap.md: 1 (4)"),
-        "{}",
-        text
-    );
+    assert!(!text.contains("tiers:"), "{}", text);
 }
 
 #[test]
-fn check_tier_cap_and_tiers_note_ignore_a_refused_question() {
+fn check_tier_cap_ignores_a_refused_question() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -532,20 +522,15 @@ fn check_tier_cap_and_tiers_note_ignore_a_refused_question() {
     append_ledger_row(&dir, "refused", refused_id, &hash, "1.1 Dead?");
 
     // Five raw questions in tier 1, one of them refused: the cap (4) reads
-    // only the four live ones, so this passes, and the tiers note counts
-    // the same way.
+    // only the four live ones, so this passes.
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
     assert!(!text.contains("holds"), "{}", text);
-    assert!(
-        text.contains("tiers: adrdom/decisions/deadcap.md: 1 (4)"),
-        "{}",
-        text
-    );
 }
 
 #[test]
-fn check_prints_tiers_note_for_a_chain() {
+fn check_prints_no_tiers_line_for_a_chain() {
+    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -557,9 +542,5 @@ fn check_prints_tiers_note_for_a_chain() {
 
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
-    assert!(
-        text.contains("tiers: adrdom/decisions/chain.md: 1 (1) 2 (1)"),
-        "{}",
-        text
-    );
+    assert!(!text.contains("tiers:"), "{}", text);
 }

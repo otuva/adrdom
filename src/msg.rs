@@ -2368,13 +2368,6 @@ pub fn blame_origin_missing(rel: &str, origin: &str, open: &[String]) -> String 
     )
 }
 
-/// `count` blame files awaiting approval (9c3cc17e A: a draft passes, it
-/// only ever earns a count line, the same shape `plan_awaiting` already
-/// gives an unapproved topic file).
-pub fn blame_awaiting(count: usize, list: &str) -> String {
-    format!("blame: {} file(s) awaiting approval: {}", count, list)
-}
-
 /// A blame file itself (`rel`) could not be read as text at all (per "Does
 /// check hold a blame file to its origin?", 5fddeeb5 A: fail-open here
 /// means never silently skipping the file). Distinct from `blame_shape_error`
@@ -2423,62 +2416,24 @@ pub fn missing_answer_selection(id: &str, version: &str) -> String {
     )
 }
 
-// --- plain notes (no Next: nothing is refused) -----------------------------
+// --- check notes ------------------------------------------------------------
 
-/// A note, never a failure (per "What does check do with an untested
-/// current decision?"): printed on every run until a test names the id.
-pub fn untested_note(at: Option<(&str, &str)>, id: &str) -> String {
-    match at {
-        Some((rel, heading)) => format!(
-            "untested: {}: \"{}\"; no tracked file holds \"adr: {}\"",
-            rel, heading, id
-        ),
-        None => format!("untested: no tracked file holds \"adr: {}\"", id),
-    }
-}
-
-pub fn tested_count(n: usize) -> String {
-    format!("tested: {}", n)
-}
-
-pub fn plan_awaiting(count: usize, list: &str) -> String {
-    format!("plan: {} file(s) awaiting approval: {}", count, list)
-}
-
-/// The questions of `rel` that differ from its last approval (per "Does
-/// approve hash each question on its own?"): a note, never a failure.
-pub fn plan_changed(rel: &str, changed: &[String], struck: &[String]) -> String {
-    let mut parts = Vec::new();
-    if !changed.is_empty() {
-        let list: Vec<String> = changed.iter().map(|h| format!("\"{}\"", h)).collect();
-        parts.push(format!("new or changed: {}", list.join(", ")));
-    }
-    if !struck.is_empty() {
-        parts.push(format!("struck: {}", struck.join(", ")));
-    }
-    format!("plan: {}: {}", rel, parts.join("; "))
-}
-
-pub fn done(rel: &str) -> String {
-    format!("done: {}", rel)
-}
-
-pub fn tiers_note_check(rel: &str, sizes: &str) -> String {
-    format!("tiers: {}: {}", rel, sizes)
+/// An untested current decision, a note and never a failure (per "What does
+/// check do with an untested current decision?"), with its move (per "Does
+/// check print a line that names no move?", 3fc35d4f A): `mv` is the move's
+/// text, `moves::of_untested`.
+pub fn untested(rel: &str, heading: &str, id: &str, mv: &str) -> String {
+    format!("{}: \"{}\" is answered and no tracked file holds \"adr: {}\"; {}", rel, heading, id, mv)
 }
 
 pub fn tiers_note_approve(sizes: &str) -> String {
     format!("approve: tiers: {}", sizes)
 }
 
-pub fn terms_unpaired(count: usize, list: &str) -> String {
-    format!("terms: {} terms paired by nothing: {}", count, list)
-}
-
-/// A failure of `check`, with its category in front as every failure has.
+/// A topic file `check` cannot read: a `parse` finding.
 pub fn topic_file_unreadable(path: &str, e: impl Display) -> String {
     refuse(
-        format!("parse: {}: cannot be read: {}", path, e),
+        format!("{}: cannot be read: {}", path, e),
         Next::agent("fixes the file so it can be read as text (e.g. its encoding)"),
     )
 }
@@ -3174,14 +3129,10 @@ mod tests {
         );
     }
 
-    // A note is not a refusal: it names what is missing and carries no
-    // next move, so it is exercised apart from the refusal list above.
     #[test]
-    fn untested_note_names_the_decision_with_or_without_its_place() {
-        let with = untested_note(Some(("x.md", "heading")), "id-1");
-        assert_eq!(with, "untested: x.md: \"heading\"; no tracked file holds \"adr: id-1\"");
-        let without = untested_note(None, "id-1");
-        assert_eq!(without, "untested: no tracked file holds \"adr: id-1\"");
+    fn untested_names_the_decision_its_place_and_its_move() {
+        let line = untested("x.md", "heading", "id-1", "agent builds it");
+        assert_eq!(line, "x.md: \"heading\" is answered and no tracked file holds \"adr: id-1\"; agent builds it");
     }
 }
 
@@ -3209,12 +3160,6 @@ pub fn removal_holds_open(rel: &str, hold: &crate::moves::RemovalHold) -> String
         ),
         crate::moves::removal_next(rel, std::slice::from_ref(hold)),
     )
-}
-
-/// A topic file gone from the content check judges, its removal not yet
-/// approved: a note naming the move that clears it.
-pub fn removal_awaiting(rel: &str, holds: &[crate::moves::RemovalHold]) -> String {
-    format!("plan: {} removed, awaiting approval; {}", rel, crate::moves::removal(rel, holds).text())
 }
 
 /// `show`: a topic file removed, its removal not yet approved.

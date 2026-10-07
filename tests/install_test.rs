@@ -245,7 +245,7 @@ fn install_rewrites_a_stale_hook_and_leaves_a_current_one_untouched() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let commit_msg = std::fs::read_to_string(dir.join(".githooks/commit-msg")).unwrap();
-    assert!(commit_msg.contains("--quiet"), "{}", commit_msg);
+    assert_eq!(commit_msg, "#!/bin/sh\nadr check --message \"$1\"\nexit $?\n");
     let first = std::fs::read(dir.join(".githooks/pre-commit")).unwrap();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let second = std::fs::read(dir.join(".githooks/pre-commit")).unwrap();
@@ -258,7 +258,7 @@ fn install_rewrites_a_stale_hook_and_leaves_a_current_one_untouched() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     assert_eq!(
         std::fs::read_to_string(dir.join(".githooks/pre-commit")).unwrap(),
-        "#!/bin/sh\nadr check --staged --quiet\nexit $?\n",
+        "#!/bin/sh\nadr check --staged\nexit $?\n",
         "install must rewrite a hook whose content differs from what it writes"
     );
 }
@@ -274,7 +274,7 @@ fn install_and_check_agree_a_hook_with_trailing_whitespace_is_current() {
 
     std::fs::write(
         dir.join(".githooks/pre-commit"),
-        "#!/bin/sh \nadr check --staged --quiet\nexit $?\n",
+        "#!/bin/sh \nadr check --staged\nexit $?\n",
     )
     .unwrap();
 

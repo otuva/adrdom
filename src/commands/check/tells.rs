@@ -22,17 +22,17 @@ pub(super) fn check_tells(
     refusals: &[Vec<Finding>],
     awaiting: &[String],
     led: &Ledger,
-) -> (Vec<Failure>, Vec<String>) {
+) -> (Vec<Failure>, Vec<Failure>) {
     let mut out = Vec::new();
     let mut notes = Vec::new();
     for (rf, refs) in records.iter().zip(refusals) {
         let draft = awaiting.contains(&rf.rel);
         for r in refs {
             if r.rule == "tells" && is_note(rf, r, draft, led) {
-                notes.push(format!("tells: {}", r.message));
+                notes.push(Failure { check: "tells", message: r.message.clone() });
             } else if r.rule == "tells" {
                 out.push(Failure {
-                    check: "tells".to_string(),
+                    check: "tells",
                     message: r.message.clone(),
                 });
             }

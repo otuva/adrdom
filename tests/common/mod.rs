@@ -694,3 +694,19 @@ pub fn mirror_section_hash(section_text: &str) -> String {
         .unwrap_or_else(|| panic!("mirror_section_hash: no section parsed from: {}", section_text));
     record::section_hash(&lines, sec)
 }
+
+/// The lines `adr check` prints that fail it, as check words them: the
+/// report of the working tree read through the library, its failures alone.
+/// The printed report mixes failures and notes, each a finding with its
+/// move, and only the exit code tells them apart.
+#[allow(dead_code)]
+pub fn check_failures(dir: &Path) -> String {
+    use adr::commands::check;
+    let tests = check::test_index(dir, &adr::repo::Source::WorkingTree);
+    check::collect_with_tests(dir, &tests)
+        .failures
+        .into_iter()
+        .map(|f| adr::out::text(&adr::out::Line::Finding(f)))
+        .collect::<Vec<_>>()
+        .join("\n")
+}

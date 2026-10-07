@@ -1,5 +1,6 @@
 use super::Failure;
 use crate::ledger::Ledger;
+use crate::rules::{Finding, Subject};
 use crate::msg;
 use crate::record::RecordFile;
 use crate::repo::{self, Source};
@@ -50,7 +51,7 @@ pub(super) fn check_tests(
     led: &Ledger,
     tests: Option<&HashMap<String, Vec<String>>>,
     source: &Source,
-) -> (Vec<Failure>, usize, Vec<String>) {
+) -> (Vec<Failure>, Vec<Finding>) {
     let mut out = Vec::new();
     let mut notes = Vec::new();
 
@@ -69,15 +70,15 @@ pub(super) fn check_tests(
         }
     };
 
-    let mut tested_count = 0;
-
     // Where each question sits: a line that names an identifier names the
     // question beside it, whatever its state.
     let mut at: HashMap<&str, (&str, &str)> = HashMap::new();
+    let mut place: HashMap<&str, (&RecordFile, usize)> = HashMap::new();
     for rf in records {
-        for s in &rf.sections {
+        for (i, s) in rf.sections.iter().enumerate() {
             if let Some(id) = &s.id {
                 at.insert(id.as_str(), (rf.rel.as_str(), s.heading_text.as_str()));
+                place.insert(id.as_str(), (rf, i));
             }
         }
     }
@@ -85,11 +86,17 @@ pub(super) fn check_tests(
     // In the order of the identifiers, so two runs print the same lines.
     let mut untested: Vec<&String> = current.iter().filter(|id| !test_ids.contains_key(*id)).collect();
     untested.sort();
-    tested_count += current.len() - untested.len();
     for id in untested {
         // Per "What does check do with an untested current decision?": a
-        // note on every run, never a failure.
-        notes.push(msg::untested_note(at.get(id.as_str()).copied(), id));
+        // note on every run, never a failure, with the move that builds it
+        // (per "Does check print a line that names no move?", 3fc35d4f A).
+        let Some(&(rf, i)) = place.get(id.as_str()) else { continue };
+        let mv = crate::moves::of_untested(rf, i, id);
+        notes.push(
+            Finding::new("untested", msg::untested(&rf.rel, &rf.sections[i].heading_text, id, &mv.text()))
+                .about(Subject::TopicFile(rf.rel.clone()))
+                .in_section(i),
+        );
     }
 
     let mut stale: Vec<(&String, &Vec<String>)> =
@@ -97,11 +104,11 @@ pub(super) fn check_tests(
     stale.sort();
     for (id, locations) in stale {
         out.push(Failure {
-            check: "tested".to_string(),
+            check: "tested",
             message: msg::stale_test(id, at.get(id.as_str()).map(|(_, h)| *h), locations),
         });
     }
 
-    (out, tested_count, notes)
+    (out, notes)
 }
 

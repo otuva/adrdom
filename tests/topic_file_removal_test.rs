@@ -86,7 +86,7 @@ fn a_removed_file_holding_only_a_refused_question_is_approved_away() {
     write_record(&dir, REL, ONE);
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
-    assert!(stdout(&out).contains(REL), "draft is awaiting approval: {}", stdout(&out));
+    assert!(!stdout(&out).contains("awaiting approval"), "a draft's status is no line of check's: {}", stdout(&out));
 }
 
 #[test]
@@ -108,9 +108,13 @@ fn a_removed_file_holding_only_superseded_sections_is_approved_away() {
     commit(&dir);
     std::fs::remove_file(&record).unwrap();
 
+    // Nothing holds the removal: it is a status, no line of check's
+    // (3fc35d4f); the file stands removed until the owner approves.
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
-    assert!(stdout(&out).contains(&format!("adr approve {}", REL)), "{}", stdout(&out));
+    assert!(!stdout(&out).contains(REL), "{}", stdout(&out));
+    let led = adr::ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+    assert_eq!(adr::status::removed_topic_file_status(&led, REL), Some(adr::status::FileStatus::Removed));
 
     let out = approve_removal(&dir);
     assert!(out.status.success(), "approve: {}", stderr(&out));

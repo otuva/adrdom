@@ -760,7 +760,7 @@ fn do_approve_blame(
 
     // The coverage and destination rules (`rules::judge_blame_coverage`,
     // `rules::judge_blame_destinations`), the judgement `show` reads too.
-    let (dest_findings, resolved) = rules::judge_blame_destinations(root, &bf, &origin_rel);
+    let (dest_findings, resolved) = rules::judge_blame_destinations(root, &crate::repo::Source::WorkingTree, &bf, &origin_rel);
     refusals.extend(
         rules::judge_blame_coverage(&bf, n)
             .into_iter()
@@ -1084,6 +1084,8 @@ fn do_approve_record(
     // naming it refuses "which is no term" instead of the one clear "terms
     // not approved" line.
     let tf = require_terms(root, led, rel).map_err(msg::approve_prefixed)?;
+    // Read off the file as written, before the normalize pass below.
+    let planning = rules::planning_rules_apply(led, &rf, rel);
     let terms_list: &[terms::Term] = &tf.terms;
     // Built once per command run (not per depends entry): `resolve_dep`
     // used to call `terms::resolve_word`, which rebuilt this same map from
@@ -1153,6 +1155,7 @@ fn do_approve_record(
         names: &names,
         replaced: &replaced,
         led,
+        planning,
     };
     let refusals: Vec<String> = rules::judge_topic_file(&judge)
         .into_iter()

@@ -1983,9 +1983,10 @@ fn a_supersedes_line_added_after_approval_waits_for_approval() {
     assert_ne!(edited, approved);
     std::fs::write(&record, &edited).unwrap();
 
+    // A plan awaiting approval is a status, not a finding: check passes it
+    // and prints no line for it (3fc35d4f); ask waits for the approval.
     let checked = adr(&dir, &["check"], &[], "");
-    let text = format!("{}{}", stdout(&checked), stderr(&checked));
-    assert!(text.contains("awaiting approval"), "{}", text);
+    assert!(checked.status.success(), "{}", stdout(&checked));
     let asked = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(stderr(&asked).contains("plan not approved"), "{}", stderr(&asked));
 

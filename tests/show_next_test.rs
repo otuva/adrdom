@@ -327,14 +327,16 @@ or moves it to another file when none does",
 
     let out = adr(&dir, &["check"], &[], "");
     // The edited file awaits approval again: check prints the refusal as a
-    // note (912f4f3b-1213-435a-af0d-7617017fcff4).
+    // note (912f4f3b-1213-435a-af0d-7617017fcff4), beside what else approve
+    // refuses in it (fe14991d): the heading with no body is one more note.
     assert!(out.status.success());
     let plan_lines: Vec<String> = stdout(&out)
         .lines()
-        .filter(|l| l.starts_with("plan: ") && !l.contains("awaiting approval") && !l.contains("new or changed"))
+        .filter(|l| l.starts_with("plan: "))
         .map(|l| l.to_string())
         .collect();
-    assert_eq!(plan_lines, vec![format!("plan: {}", refusal)]);
+    assert_eq!(plan_lines.first(), Some(&format!("plan: {}", refusal)), "{:?}", plan_lines);
+    assert!(plan_lines.iter().any(|l| l.contains("is a heading with no body")), "{:?}", plan_lines);
 }
 
 // adr: f4f667ad-8714-4e65-897b-c7002e423c28

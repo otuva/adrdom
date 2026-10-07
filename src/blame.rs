@@ -286,6 +286,9 @@ pub struct ResolveCtx<'a> {
     pub known_heading_ids: HashSet<String>,
     pub terms_list: &'a [Term],
     pub phrase_lookup: &'a HashMap<String, String>,
+    /// The tree the rows are judged in: a copy target's path is looked up
+    /// there (`check --staged` judges the staged files).
+    pub source: repo::Source,
     /// Every topic file's stem (its file name without `.md`): what
     /// `prose: <stem>` is checked against.
     pub decision_stems: HashSet<String>,
@@ -327,23 +330,22 @@ pub fn heading_ids(records: &[RecordFile]) -> (HashMap<String, Vec<(String, Stri
     (any_headings, known_ids)
 }
 
-/// Every blame file's own `origin:` line, read straight off disk under
-/// `repo::BLAME_DIR` (working tree only -- tier 2 decides what, if
-/// anything, `check` does with a staged blame file). A file that fails to
-/// parse is skipped here: its own shape errors are its problem, not this
-/// index's.
+/// Every blame file's own `origin:` line under `repo::BLAME_DIR`, in the
+/// working tree. A file that fails to parse is skipped here: its own shape
+/// errors are its problem, not this index's.
 pub fn known_origins(root: &Path) -> HashSet<String> {
+    known_origins_via(root, &repo::Source::WorkingTree)
+}
+
+/// Like `known_origins`, read through `source`: `check --staged` reads the
+/// blame files as staged.
+pub fn known_origins_via(root: &Path, source: &repo::Source) -> HashSet<String> {
     let mut out = HashSet::new();
-    let dir = root.join(repo::BLAME_DIR);
-    let Ok(entries) = std::fs::read_dir(&dir) else {
-        return out;
-    };
-    for entry in entries.flatten() {
-        let p = entry.path();
-        if p.extension().and_then(|e| e.to_str()) != Some("md") {
+    for rel in source.list_under(root, repo::BLAME_DIR) {
+        if !rel.ends_with(".md") {
             continue;
         }
-        let Ok(content) = std::fs::read_to_string(&p) else { continue };
+        let Some(content) = source.read(root, &rel) else { continue };
         let lines = record::split_lines(&content);
         if let Some(origin) = lines.first().and_then(|l| l.strip_prefix("origin: ")) {
             let origin = origin.trim();
@@ -448,7 +450,7 @@ fn resolve_copy_target(value: &str, ctx: &ResolveCtx) -> Result<Resolved, DestEr
     // blame file (38216d39 A) -- itself held to the same rule an origin's
     // own path is (`valid_origin_path`): not under adrdom, not a
     // directory.
-    if !valid_origin_path(&ctx.root, &repo::Source::WorkingTree, value) {
+    if !valid_origin_path(&ctx.root, &ctx.source, value) {
         return Err(DestError::BadPath(value.to_string()));
     }
     // 38216d39 A: "copy of ... another origin" -- never the origin this
@@ -456,7 +458,7 @@ fn resolve_copy_target(value: &str, ctx: &ResolveCtx) -> Result<Resolved, DestEr
     if plain_path(value) == plain_path(&ctx.own_origin) {
         return Err(DestError::CopyOfOwnOrigin(value.to_string()));
     }
-    if ctx.root.join(value).exists() || ctx.known_origins.contains(value) {
+    if ctx.source.exists(&ctx.root, value) || ctx.known_origins.contains(value) {
         Ok(Resolved::DroppedCopyOrigin(value.to_string()))
     } else {
         Err(DestError::CopyPathMissing(value.to_string()))
@@ -782,6 +784,13 @@ pub fn origins_for_decision(
 /// whether it awaits approval, and the origin's content when it could be
 /// read. A draft never fails on its own (9c3cc17e A): `awaiting` is a flag.
 pub struct FileState {
+    /// The shape errors of the file itself: a note while the file awaits
+    /// approval, a failure once approved (per "What does check do with a
+    /// fault on a file awaiting approval?").
+    pub shape: Vec<String>,
+    /// What fails whatever the file's approval: the origin against the file
+    /// (per "Does check hold a blame file to its origin?" and "Does an
+    /// origin leave the repository while its blame file has an open row?").
     pub failures: Vec<String>,
     pub awaiting: bool,
     pub origin_content: Option<String>,
@@ -798,9 +807,10 @@ pub fn file_state(
     known_ids: &HashSet<String>,
 ) -> FileState {
     let rel = &bf.rel;
-    let mut st = FileState { failures: Vec::new(), awaiting: false, origin_content: None };
+    let approved = crate::state::blame_approved(led, rel, content);
+    let mut st = FileState { shape: Vec::new(), failures: Vec::new(), awaiting: !approved, origin_content: None };
     if !bf.shape_errors.is_empty() {
-        st.failures = bf.shape_errors.iter().map(|e| msg::blame_shape_error(rel, e)).collect();
+        st.shape = bf.shape_errors.iter().map(|e| msg::blame_shape_error(rel, e)).collect();
         return st;
     }
     let origin = bf.origin.clone().expect("no shape error means origin is set");
@@ -809,7 +819,6 @@ pub fn file_state(
         st.failures.push(msg::blame_bad_origin_path(rel, &origin));
         return st;
     }
-    let approved = crate::state::blame_approved(led, rel, content);
     if !source.exists(root, &origin) {
         let mut open = open_decision_rows(bf, records, led, any_headings, known_ids);
         if !approved {
@@ -829,7 +838,6 @@ pub fn file_state(
                 Some(_) => {}
                 None => st.failures.push(msg::blame_hash_failed(rel, &origin)),
             }
-            st.awaiting = !approved;
             st.origin_content = Some(origin_content);
         }
     }

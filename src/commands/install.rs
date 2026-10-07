@@ -23,8 +23,11 @@ pub(crate) const CLAUDE_MD_MARKER: &str =
     "<!-- adrdom: the next line imports the agent brief; adr uninstall removes both lines -->";
 pub(crate) const CLAUDE_MD_IMPORT: &str = "@AGENTS.md";
 
-pub(crate) const PRE_COMMIT_HOOK: &str = "#!/bin/sh\nadr check --staged --quiet\nexit $?\n";
-pub(crate) const COMMIT_MSG_HOOK: &str = "#!/bin/sh\nadr check --message \"$1\" --quiet\nexit $?\n";
+/// The commit hooks run check as it is by hand: a pass prints nothing, and
+/// every line is a finding with its move (per "Does check print a line that
+/// names no move?", 3fc35d4f A).
+pub(crate) const PRE_COMMIT_HOOK: &str = "#!/bin/sh\nadr check --staged\nexit $?\n";
+pub(crate) const COMMIT_MSG_HOOK: &str = "#!/bin/sh\nadr check --message \"$1\"\nexit $?\n";
 /// Decision P (19e1c023-a678-4842-a414-bb0e45c41601): a plain `sh` script,
 /// same shape as the other two hooks, that hands `adr check --push` git's
 /// own pre-push input -- the script never redirects its own stdin, so the

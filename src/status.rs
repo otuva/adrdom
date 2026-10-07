@@ -162,10 +162,16 @@ pub type TermsFileStatus = FileStatus;
 pub type BlameFileStatus = FileStatus;
 
 pub fn topic_file_status(led: &Ledger, rf: &RecordFile) -> TopicFileStatus {
-    if crate::state::plan_approved(led, rf, &rf.rel) && crate::state::context_approved(led, rf, &rf.rel) {
+    topic_file_status_at(led, rf, &rf.rel)
+}
+
+/// `topic_file_status` of `rf` at `rel`, its path from the root as the
+/// ledger names it (a file loaded by its path carries that path in `rel`).
+pub fn topic_file_status_at(led: &Ledger, rf: &RecordFile, rel: &str) -> TopicFileStatus {
+    if crate::state::plan_approved(led, rf, rel) && crate::state::context_approved(led, rf, rel) {
         return FileStatus::Approved;
     }
-    if led.latest_for_path("approved", &rf.rel).is_some() || led.latest_for_path("context", &rf.rel).is_some() {
+    if led.latest_for_path("approved", rel).is_some() || led.latest_for_path("context", rel).is_some() {
         FileStatus::Changed
     } else {
         FileStatus::New

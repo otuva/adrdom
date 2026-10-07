@@ -22,7 +22,7 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
             // different option).
             if let Some((a, b)) = state::conflicting_rulings(led, id) {
                 out.push(Failure {
-                    check: "answers".to_string(),
+                    check: "answers",
                     message: msg::answer_conflict(&rf.rel, &sec.heading_text, id, &a.label(), &b.label()),
                 });
             }
@@ -33,7 +33,7 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                 // letter or `refused`, is hand-written, whatever the rows
                 // of the earlier rulings say.
                 out.push(Failure {
-                    check: "answers".to_string(),
+                    check: "answers",
                     message: msg::answer_without_row(&rf.rel, &sec.heading_text),
                 });
             } else if sec.is_refused() {
@@ -48,7 +48,7 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                     state::ClosedMatch::Current
                 ) {
                     out.push(Failure {
-                        check: "answers".to_string(),
+                        check: "answers",
                         message: msg::refusal_without_row(&rf.rel, &sec.heading_text),
                     });
                 }
@@ -79,7 +79,7 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                         // whose text changed?"). Never `answer_without_row`,
                         // whose fix would remove a real answer.
                         out.push(Failure {
-                            check: "answers".to_string(),
+                            check: "answers",
                             message: msg::answered_text_changed(&rf.rel, &sec.heading_text, id),
                         });
                     }
@@ -88,7 +88,7 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                         // any letter): a hand-written answer line with
                         // nothing backing it.
                         out.push(Failure {
-                            check: "answers".to_string(),
+                            check: "answers",
                             message: msg::answer_without_row(&rf.rel, &sec.heading_text),
                         });
                     }
@@ -109,7 +109,7 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                     !open_again && led.rows.iter().any(|r| r.event == "refused" && &r.id == id);
                 if has_answered_row {
                     out.push(Failure {
-                        check: "answers".to_string(),
+                        check: "answers",
                         message: msg::answered_row_without_line(&rf.rel, &sec.heading_text),
                     });
                 } else if has_refused_row {
@@ -118,7 +118,7 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                     // `refused` row exists but the file no longer shows the
                     // `**Answer:** refused` line.
                     out.push(Failure {
-                        check: "answers".to_string(),
+                        check: "answers",
                         message: msg::refused_row_without_line(&rf.rel, &sec.heading_text),
                     });
                 } else if let Some(latest_asked_hash) = led.latest_asked(id).map(|r| r.hash.clone()) {
@@ -130,7 +130,7 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                     // no longer hashes the same, is "edited after asking".
                     if latest_asked_hash != cur {
                         out.push(Failure {
-                            check: "answers".to_string(),
+                            check: "answers",
                             message: msg::edited_after_asking(&rf.rel, &sec.heading_text),
                         });
                     }
@@ -191,7 +191,7 @@ fn check_frozen_sets(
         };
         if expected != row.hash {
             out.push(Failure {
-                check: "answers".to_string(),
+                check: "answers",
                 message: msg::answer_set_changed(&rf.rel, &dep_heading, &sec.heading_text),
             });
         }
