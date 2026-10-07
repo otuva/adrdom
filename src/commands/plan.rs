@@ -8,15 +8,15 @@
 //! 1. Every heading not yet asked with no reader rows at its heading hash
 //!    gets the ten nearest neighbours of the pool, read with the heading
 //!    prompt, whatever state the rest of the file is in.
-//! 2. A neighbour on no line is listed, and the command stops.
-//! 3. Headings with a body next to headings with none are refused.
+//! 2. A neighbour on no line is a finding, and no body is read.
+//! 3. While a heading has no body, no body is read.
 //! 4. When every heading has a body, each question with no rows at its body
 //!    hash gets the ten nearest neighbours of the pool, read with the body
 //!    prompt, and the ten nearest other questions of the file, read with
 //!    the plan prompt ("Does the tool bring the plan's own questions as
 //!    neighbours of each other?", 4838baa4-a5df-49e7-929c-ed63b5adaf4e A).
-//! 5. A neighbour on no line is listed; with none, the file is ready and
-//!    the owner approves.
+//! 5. What it prints is the file's status, what it read, the findings on the
+//!    file and the file's moves, the one computation `show` reads too.
 //!
 //! The model and the reader are loaded only when there is something to read.
 //! Planning stops without them ("Does planning stop without the embedding
@@ -25,19 +25,28 @@
 //! loads them too.
 use crate::index;
 use crate::ledger;
-use crate::msg::{self, Actor, Next};
-use crate::plan::{self, NextMove, Planning, Step};
+use crate::msg::{self, Next};
+use crate::out::{self, Line};
+use crate::plan::{self, Planning, Step};
 use crate::reader;
 use crate::record::{self, RecordFile};
 use crate::repo;
 use crate::state;
+use crate::status;
 use std::path::{Path, PathBuf};
 
+/// Per "What does a command that writes nothing print?" (848e1b76 A): the
+/// file's status, the neighbours it read with the reader's word and whether
+/// a line carries each, the findings on the file, and its moves, and
+/// nothing else.
 pub fn run(file: PathBuf) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("plan", &file.display().to_string(), Actor::Agent));
+            out::eprint(&[out::refusal(
+                "plan",
+                &msg::not_a_repo("plan", &file.display().to_string(), msg::Actor::Agent),
+            )]);
             return 1;
         }
     };
@@ -45,21 +54,21 @@ pub fn run(file: PathBuf) -> i32 {
     let mut rf = match record::load(&file) {
         Ok(rf) => rf,
         Err(e) => {
-            eprintln!(
-                "plan: {}",
-                msg::read_failed(&file.display().to_string(), e, Next::agent("checks the path and retries"))
-            );
+            out::eprint(&[out::refusal(
+                "plan",
+                &msg::read_failed(&file.display().to_string(), e, Next::agent("checks the path and retries")),
+            )]);
             return 1;
         }
     };
-    rf.rel = rel.clone();
+    rf.rel = rel;
     match plan_file(&root, &rf) {
-        Ok((out, code)) => {
-            print!("{}", out);
-            code
+        Ok(lines) => {
+            out::print(&lines);
+            0
         }
-        Err(e) => {
-            eprintln!("{}", e);
+        Err(lines) => {
+            out::eprint(&lines);
             1
         }
     }
@@ -100,96 +109,56 @@ fn planning(root: &Path, rf: &RecordFile) -> Planning {
     plan::load(root, rf, &e.all, &e.terms, &led)
 }
 
-/// The lines of what the questions in `idxs` read at `step`.
-fn did(pl: &Planning, idxs: &[usize], step: Step, out: &mut String) {
+/// What the questions in `idxs` read at `step`: each question, then each of
+/// its neighbours with the reader's word, whether a line carries it, and the
+/// reader's sentence of reason, which the move on its lines needs.
+fn did(pl: &Planning, idxs: &[usize], step: Step, out: &mut Vec<Line>) {
     for q in pl.questions.iter().filter(|q| idxs.contains(&q.idx)) {
         let (what, ns) = match step {
             Step::Heading => ("heading", &q.heading_neighbours),
             Step::Body => ("heading with its body", &q.body_neighbours),
         };
-        out.push_str(&msg::plan_read(&q.heading, what, ns.len()));
-        out.push('\n');
+        out.push(Line::Record { depth: 0, text: msg::plan_question_read(&q.heading, what) });
         for n in ns {
-            out.push_str(&msg::plan_neighbour(n.kind.label(), &n.name, &n.word, n.on_line));
-            out.push('\n');
+            let reason = reader::flatten(&n.reason);
+            out.push(Line::Record {
+                depth: 1,
+                text: msg::plan_neighbour(n.kind.label(), &n.name, &n.word, n.on_line, &reason),
+            });
         }
     }
 }
 
-fn wanted(pl: &Planning, step: Step, out: &mut String) {
-    for (q, n) in pl.lines_missing(step) {
-        out.push_str(&msg::plan_line_wanted(&q.heading, n.kind.label(), &n.name));
-        out.push('\n');
-    }
-}
-
-/// What the run prints, and its exit code, or the refusal that stopped it.
-fn plan_file(root: &Path, rf: &RecordFile) -> Result<(String, i32), String> {
+/// What the run prints, or the refusal that stopped it. The run reads what
+/// the step the file is at needs, then prints the file's status, what it
+/// read, the findings on the file that are not already a move, and the
+/// file's moves: the one computation `show` reads too (per "Does a command
+/// compute a move of its own?", aac5c313 A).
+fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
     let shape = shape_refusals(rf);
     if !shape.is_empty() {
-        return Err(shape.iter().map(|m| format!("plan: {}", m)).collect::<Vec<_>>().join("\n"));
+        return Err(shape.iter().map(|m| out::refusal("plan", m)).collect());
     }
-    let rel = rf.rel.clone();
-    let mut out = msg::plan_head(&rel);
-    out.push('\n');
+    let mut read = Vec::new();
 
-    // Step 2: the neighbours of each heading with no rows.
+    // The neighbours of each heading with no rows.
     let mut pl = planning(root, rf);
     let todo: Vec<usize> = pl.missing_heading().iter().map(|q| q.idx).collect();
     if !todo.is_empty() {
         let led = ledger::read(&root.join(repo::LEDGER_PATH));
         let queries: Vec<String> = todo.iter().map(|&i| plan::heading_text(&rf.sections[i])).collect();
-        let near = index::nearest(root, &led, &queries, index::NEIGHBOURS)?;
+        let near = index::nearest(root, &led, &queries, index::NEIGHBOURS).map_err(stop)?;
         for (&i, n) in todo.iter().zip(&near) {
-            reader::read(root, &plan::heading_pairs(&rf.sections[i], n))?;
+            reader::read(root, &plan::heading_pairs(&rf.sections[i], n)).map_err(stop)?;
         }
         pl = planning(root, rf);
-        did(&pl, &todo, Step::Heading, &mut out);
-    }
-    // The length hits in every body written so far, whatever step the file
-    // is at: shown, never a stop.
-    let led_now = ledger::read(&root.join(repo::LEDGER_PATH));
-    let mut hits = crate::rules::length_refusals(&rel, rf, &led_now);
-    // A loaded phrase in a body and a question that pairs no term: shown
-    // the same way.
-    hits.extend(crate::rules::body_tell_refusals(&rel, rf, &led_now));
-    hits.extend(crate::rules::no_term_refusals(&rel, rf, &env(root).terms, &led_now));
-    // A set letter its same-file target has no option for: shown the same way.
-    hits.extend(crate::rules::letter_refusals(&rel, rf, &led_now));
-    // The three shapes of a depends entry approve stops: shown the same way.
-    {
-        let e = env(root);
-        let lookup = crate::terms::phrase_lookup(&e.terms);
-        let headings = crate::depends::cross_file_heading_index(&e.all, &led_now);
-        hits.extend(crate::rules::depends_shape_refusals(&rel, rf, &e.terms, &lookup, &headings, &e.all, &led_now));
-    }
-    for h in &hits {
-        out.push_str(h);
-        out.push('\n');
-    }
-    if !pl.lines_missing(Step::Heading).is_empty() {
-        wanted(&pl, Step::Heading, &mut out);
-        out.push_str(&msg::plan_next_lines(&rel));
-        out.push('\n');
-        return Ok((out, 0));
-    }
-    let bare = pl.without_body();
-    if !bare.is_empty() {
-        // Bodies under some headings only is refused; headings none of which
-        // has a body yet wait for the agent to write them.
-        if bare.len() < pl.questions.len() {
-            print!("{}", out);
-            let heads: Vec<String> = bare.iter().map(|q| q.heading.clone()).collect();
-            return Err(msg::plan_bodies_missing(&rel, &heads));
-        }
-        out.push_str(&msg::plan_next_bodies(&rel));
-        out.push('\n');
-        return Ok((out, 0));
+        did(&pl, &todo, Step::Heading, &mut read);
     }
 
-    // Step 5: the neighbours of each question with its body.
+    // Once every heading's neighbours are on a line and every heading has
+    // its body, the neighbours of each question with its body.
     let todo: Vec<usize> = pl.missing_body().iter().map(|q| q.idx).collect();
-    if !todo.is_empty() {
+    if pl.lines_missing(Step::Heading).is_empty() && pl.without_body().is_empty() && !todo.is_empty() {
         let led = ledger::read(&root.join(repo::LEDGER_PATH));
         // The other questions not yet asked are ranked by their own text. One
         // call embeds the texts of the questions to read and of every
@@ -197,7 +166,7 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<(String, i32), String> {
         let planned: Vec<usize> = pl.questions.iter().filter(|q| q.has_body).map(|q| q.idx).collect();
         let mut queries: Vec<String> = todo.iter().map(|&i| record::body_text(rf, &rf.sections[i])).collect();
         queries.extend(planned.iter().map(|&i| record::body_text(rf, &rf.sections[i])));
-        let (near, qv) = index::nearest_with_vectors(root, &led, &queries, index::NEIGHBOURS)?;
+        let (near, qv) = index::nearest_with_vectors(root, &led, &queries, index::NEIGHBOURS).map_err(stop)?;
         let vecs = &qv[todo.len()..];
         for (&i, n) in todo.iter().zip(&near) {
             let own: Vec<usize> = match planned.iter().position(|&p| p == i) {
@@ -206,32 +175,40 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<(String, i32), String> {
                 }
                 _ => Vec::new(),
             };
-            reader::read(root, &plan::body_pairs(rf, i, n, &own))?;
+            reader::read(root, &plan::body_pairs(rf, i, n, &own)).map_err(stop)?;
         }
         pl = planning(root, rf);
-        did(&pl, &todo, Step::Body, &mut out);
+        did(&pl, &todo, Step::Body, &mut read);
     }
-    if !pl.lines_missing(Step::Body).is_empty() {
-        wanted(&pl, Step::Body, &mut out);
-        out.push_str(&msg::plan_next_lines(&rel));
-        out.push('\n');
-        return Ok((out, 0));
-    }
-    match pl.next() {
-        NextMove::Ready if !hits.is_empty() => {
-            out.push_str(&msg::plan_next_length(&rel));
-            out.push('\n');
-        }
-        NextMove::Ready => {
-            out.push_str(&msg::plan_ready(&rel));
-            out.push('\n');
-            out.push_str(&msg::plan_next_approve(&rel));
-            out.push('\n');
-        }
-        _ => {
-            out.push_str(&msg::plan_next_plan(&rel));
-            out.push('\n');
-        }
-    }
-    Ok((out, 0))
+
+    // What the run prints is read after the rows it wrote: the status, the
+    // findings and the moves of the file as it stands now.
+    let led = ledger::read(&root.join(repo::LEDGER_PATH));
+    let e = env(root);
+    let tests = crate::commands::check::test_index(root, &repo::Source::WorkingTree);
+    let moves = crate::moves::of_topic_file_in(root, rf, &e.all, &e.terms, &led, &tests);
+    // Every finding `approve` refuses on is printed once: a finding with a
+    // move of its own as that move, a finding of the planning steps here,
+    // its move being the planning move. Missing rows are what this command
+    // writes: rows still missing after the run wait on the step before,
+    // whose move is printed, so they are not printed as findings too.
+    let (_, steps) = crate::rules::judge_topic_file_split_at(root, rf, &e.all, &e.terms, &led);
+    let mut pl = planning(root, rf);
+    pl.rel = rf.rel.clone();
+    let rows_missing = pl.rows_missing();
+    let steps = steps.into_iter().filter(|f| !rows_missing.contains(&f.message));
+
+    let mut lines = vec![Line::Status {
+        subject: rf.rel.clone(),
+        status: out::Status::File(status::topic_file_status(&led, rf)),
+    }];
+    lines.extend(read);
+    lines.extend(steps.map(Line::Finding));
+    lines.extend(moves.into_iter().map(Line::Move));
+    Ok(lines)
+}
+
+/// A stop of the model or the reader: the error, which names its move.
+fn stop(e: String) -> Vec<Line> {
+    vec![out::refusal("plan", &e)]
 }

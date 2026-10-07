@@ -115,17 +115,16 @@ fn ordered<'a>(a: &'a Dec, b: &'a Dec) -> (&'a Dec, &'a Dec) {
 }
 
 fn line_of(word: &str, first: &Dec, second: &Dec) -> String {
-    format!("{}: \"{}\" and \"{}\": {}", word, first.heading, second.heading, REASON)
+    format!("read: {}: \"{}\" and \"{}\": {}", word, first.heading, second.heading, REASON)
 }
+
+/// The move a same or inconsistent pair calls for, as `adr read` prints it.
+const SUPERSEDE_MOVE: &str = "agent writes a question that supersedes one decision of each same or inconsistent pair";
 
 /// The word the fake reader gives a pair: the marker of its first decision.
 fn word_of(a: &Dec, b: &Dec) -> String {
     let (first, _) = ordered(a, b);
     if first.marker.is_empty() { "unrelated".into() } else { first.marker.clone() }
-}
-
-fn summary(out: &str) -> String {
-    out.lines().last().unwrap_or("").to_string()
 }
 
 // adr: 1ab6d6c3-7e44-42de-bc2f-2e5849114aef
@@ -136,7 +135,8 @@ fn every_pair_of_current_decisions_is_read_once() {
     let out = read_ok(&dir);
     let n = pairs(&decs);
     assert_eq!(n, 6);
-    assert_eq!(summary(&out), format!("read {} pairs now, 0 read before, 0 marked", n), "{}", out);
+    // Nothing marked: nothing printed, no count (848e1b76 A).
+    assert_eq!(out, "", "a reading that marks nothing prints nothing");
     let all = rows(&dir);
     assert_eq!(all.len(), before + n);
     let set = set_rows(&dir);
@@ -156,7 +156,7 @@ fn every_pair_of_current_decisions_is_read_once() {
     }
     let len = rows(&dir).len();
     let again = read_ok(&dir);
-    assert_eq!(summary(&again), format!("read 0 pairs now, {} read before, 0 marked", n), "{}", again);
+    assert_eq!(again, "", "{}", again);
     assert_eq!(rows(&dir).len(), len, "a second run adds no row");
 }
 
@@ -268,7 +268,7 @@ fn marked_pairs_print_their_lines_in_the_order_of_the_words() {
     for w in ["same", "inconsistent", "depends"] {
         let mut g: Vec<String> = expected.iter().filter(|(x, _)| x == w).map(|(_, l)| l.clone()).collect();
         g.sort();
-        let mut got: Vec<String> = lines.iter().filter(|l| l.starts_with(&format!("{}: ", w))).map(|l| l.to_string()).collect();
+        let mut got: Vec<String> = lines.iter().filter(|l| l.starts_with(&format!("read: {}: ", w))).map(|l| l.to_string()).collect();
         got.sort();
         assert_eq!(got, g, "{}", out);
         want.extend(g);
@@ -276,24 +276,17 @@ fn marked_pairs_print_their_lines_in_the_order_of_the_words() {
     let printed: Vec<&str> = lines
         .iter()
         .copied()
-        .filter(|l| ["same: ", "inconsistent: ", "depends: "].iter().any(|p| l.starts_with(p)))
+        .filter(|l| ["read: same: ", "read: inconsistent: ", "read: depends: "].iter().any(|p| l.starts_with(p)))
         .collect();
     assert_eq!(printed.len(), want.len());
-    let rank = |l: &str| ["same", "inconsistent", "depends"].iter().position(|w| l.starts_with(&format!("{}: ", w))).unwrap();
+    let rank = |l: &str| ["same", "inconsistent", "depends"].iter().position(|w| l.starts_with(&format!("read: {}: ", w))).unwrap();
     assert!(printed.windows(2).all(|w| rank(w[0]) <= rank(w[1])), "{}", out);
 
-    assert!(
-        lines.contains(&"next"),
-        "the next move is missing: {}",
-        out
-    );
-    let at = lines.iter().position(|l| *l == "next").unwrap();
-    assert_eq!(
-        lines[at + 1],
-        "  agent writes a question that supersedes one decision of each same or inconsistent pair"
-    );
-    assert_eq!(lines.last().unwrap(), &format!("read {} pairs now, 0 read before, {} marked", pairs(&decs), marked));
-    // The pairs of a decision with every other: the summary counts them all.
+    // The pairs, then the move they call for, and nothing else: no count
+    // (848e1b76 A).
+    assert_eq!(lines.last().unwrap(), &SUPERSEDE_MOVE, "{}", out);
+    assert_eq!(lines.len(), marked + 1, "{}", out);
+    // Every pair of a decision with every other is read and kept as a row.
     assert_eq!(set_rows(&dir).len(), pairs(&decs));
 }
 
@@ -303,10 +296,8 @@ fn depends_alone_prints_no_next_move() {
     let (dir, decs) = repo_with(&["depends", "depends"]);
     let out = read_ok(&dir);
     let (f, s) = ordered(&decs[0], &decs[1]);
-    assert!(out.lines().any(|l| l == line_of("depends", f, s)), "{}", out);
-    assert!(!out.lines().any(|l| l == "next"), "{}", out);
-    assert!(!out.contains("supersedes one decision"), "{}", out);
-    assert_eq!(summary(&out), "read 1 pair now, 0 read before, 1 marked");
+    assert_eq!(out, format!("{}\n", line_of("depends", f, s)), "the pair and nothing else");
+    assert!(!out.contains(SUPERSEDE_MOVE), "{}", out);
 }
 
 #[test]
@@ -353,7 +344,8 @@ fn a_superseded_decision_drops_out_of_the_reading() {
     let (dir, decs) = repo_with(&["same", "same", "same"]);
     let first = read_ok(&dir);
     assert!(first.contains(&decs[0].heading), "{}", first);
-    assert_eq!(summary(&first), "read 3 pairs now, 0 read before, 3 marked");
+    assert_eq!(set_rows(&dir).len(), 3);
+    assert_eq!(first.lines().filter(|l| l.starts_with("read: same: ")).count(), 3, "{}", first);
 
     // A new answered question supersedes the first decision.
     let rel = "adrdom/decisions/topic-d.md";
@@ -373,8 +365,8 @@ fn a_superseded_decision_drops_out_of_the_reading() {
     let before = set_rows(&dir).len();
     let out = read_ok(&dir);
     assert!(!out.contains(&decs[0].heading), "the superseded decision is printed: {}", out);
-    // The new decision is paired with the two decisions that remain.
-    assert!(summary(&out).starts_with("read 2 pairs now, 1 read before"), "{}", out);
+    // The new decision is paired with the two decisions that remain; the
+    // pair of those two was read before and is not read again.
     assert_eq!(set_rows(&dir).len(), before + 2);
     assert!(set_rows(&dir).iter().any(|r| r.neighbour == id || r.text_hash == record::sha256_hex(&format!("{}\nYes.", h))));
 }
@@ -393,20 +385,19 @@ fn a_decision_is_read_against_ten_neighbours_not_every_other() {
     }
 }
 
+// adr: 848e1b76-9cfe-483b-94dd-094eb9b2f995
 #[test]
-fn a_stopped_reading_says_how_many_pairs_are_unread() {
+fn a_stopped_reading_prints_the_stop_and_its_move_and_no_count() {
     let (dir, decs) = repo_with(&["maybe", "maybe", "maybe", "", "", ""]);
     let out = read_with(&dir, &[]);
     assert!(!out.status.success(), "{}", stdout(&out));
+    assert_eq!(stdout(&out), "", "nothing on standard output");
     let err = stderr(&out);
     assert_eq!(err.matches("agent ").count(), 1, "one move: {}", err);
-    let line = err.lines().find(|l| l.starts_with("read: ") && l.ends_with(" unread")).unwrap_or_else(|| panic!("{}", err));
-    let n: usize = line
-        .strip_prefix("read: ")
-        .and_then(|r| r.strip_suffix(" pairs unread"))
-        .unwrap_or_else(|| panic!("{}", line))
-        .parse()
-        .unwrap();
-    // Six decisions each read against five others: every pair is a neighbour pair.
-    assert_eq!(n, pairs(&decs) - set_rows(&dir).len());
+    assert!(err.lines().all(|l| l.starts_with("read: ")), "{}", err);
+    assert!(!err.contains(" unread"), "no count of unread pairs: {}", err);
+    // The rows of the chunks read before the stop are kept, and the next run
+    // reads only what is left. Six decisions each read against five others:
+    // every pair is a neighbour pair.
+    assert!(set_rows(&dir).len() < pairs(&decs), "{}", err);
 }

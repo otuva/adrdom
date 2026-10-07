@@ -179,6 +179,15 @@ fn esc(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
+/// The refusal a command `cmd` stopped on, whole, as a finding of the rule
+/// named after the command: the command's own name leads the line once,
+/// whether or not `text` already starts with it.
+pub fn refusal(cmd: &'static str, text: &str) -> Line {
+    let prefix = format!("{}: ", cmd);
+    let message = text.strip_prefix(&prefix).unwrap_or(text);
+    Line::Finding(Finding::new(cmd, message.to_string()))
+}
+
 /// Prints `lines` to standard output, one terminal line each.
 pub fn print(lines: &[Line]) {
     let mut out = std::io::stdout().lock();
