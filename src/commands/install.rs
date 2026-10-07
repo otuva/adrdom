@@ -2,7 +2,7 @@ use crate::rules::Rule;
 use crate::banned;
 use crate::commands::{deny_entries, OWNER_COMMANDS};
 use crate::moves::{command, Cmd};
-use crate::msg::{self, Actor, Next};
+use crate::msg::{self, Actor};
 use crate::out::{self, Event};
 use crate::repo;
 use std::fs;
@@ -10,10 +10,6 @@ use std::path::Path;
 
 /// The agent's next move on any I/O failure while installing: fix what the
 /// error names, then run `command`, the install that failed, again.
-fn retry(command: &Cmd) -> Next {
-    msg::after_fix_agent_runs(command.clone())
-}
-
 /// The install command as it was given, flags and all.
 fn install_command(claude: bool, codex: bool) -> Cmd {
     command(&install_words(claude, codex))
@@ -118,27 +114,27 @@ fn install_all(root: &Path, claude: bool, codex: bool, events: &mut Vec<Event>) 
     let cmd = &install_command(claude, codex);
     for dir in [repo::DECISIONS_DIR, repo::STATE_DIR] {
         let path = root.join(dir);
-        fs::create_dir_all(&path).map_err(|e| msg::create_failed(&path.display().to_string(), e, retry(cmd)))?;
+        fs::create_dir_all(&path).map_err(|e| msg::create_failed(&path.display().to_string(), e, msg::after_fix_agent_runs(cmd.clone())))?;
     }
 
     for rel in [repo::LEDGER_PATH, repo::READER_PATH, banned::BAN_LIST] {
         let path = root.join(rel);
         events.extend(
-            create_if_missing(root, rel).map_err(|e| msg::write_failed(&path.display().to_string(), e, retry(cmd)))?,
+            create_if_missing(root, rel).map_err(|e| msg::write_failed(&path.display().to_string(), e, msg::after_fix_agent_runs(cmd.clone())))?,
         );
     }
 
-    events.extend(install_gitattributes(root).map_err(|e| msg::write_failed(repo::GITATTRIBUTES_PATH, e, retry(cmd)))?);
-    events.extend(install_gitignore(root).map_err(|e| msg::write_failed(repo::GITIGNORE_PATH, e, retry(cmd)))?);
+    events.extend(install_gitattributes(root).map_err(|e| msg::write_failed(repo::GITATTRIBUTES_PATH, e, msg::after_fix_agent_runs(cmd.clone())))?);
+    events.extend(install_gitignore(root).map_err(|e| msg::write_failed(repo::GITIGNORE_PATH, e, msg::after_fix_agent_runs(cmd.clone())))?);
 
     let hooks = root.join(".githooks");
-    fs::create_dir_all(&hooks).map_err(|e| msg::create_failed(&hooks.display().to_string(), e, retry(cmd)))?;
+    fs::create_dir_all(&hooks).map_err(|e| msg::create_failed(&hooks.display().to_string(), e, msg::after_fix_agent_runs(cmd.clone())))?;
     for (rel, content) in [
         (repo::PRE_COMMIT_HOOK_PATH, PRE_COMMIT_HOOK),
         (repo::COMMIT_MSG_HOOK_PATH, COMMIT_MSG_HOOK),
         (repo::PRE_PUSH_HOOK_PATH, PRE_PUSH_HOOK),
     ] {
-        events.extend(create_hook(root, rel, content).map_err(|e| msg::write_failed(rel, e, retry(cmd)))?);
+        events.extend(create_hook(root, rel, content).map_err(|e| msg::write_failed(rel, e, msg::after_fix_agent_runs(cmd.clone())))?);
     }
 
     // Without this git runs none of the hooks written above. A change of
@@ -146,13 +142,13 @@ fn install_all(root: &Path, claude: bool, codex: bool, events: &mut Vec<Event>) 
     let hooks_path = repo::git(root, &["config", "core.hooksPath"]).map(|v| v.trim().to_string());
     if hooks_path.as_deref() != Some(".githooks") {
         if repo::git(root, &["config", "core.hooksPath", ".githooks"]).is_none() {
-            return Err(msg::hooks_path_failed("set", retry(cmd)));
+            return Err(msg::hooks_path_failed("set", msg::after_fix_agent_runs(cmd.clone())));
         }
         events.push(Event::ConfigSet { key: "core.hooksPath".to_string(), value: ".githooks".to_string() });
     }
 
-    events.extend(install_agents_md(root).map_err(|e| msg::update_failed("AGENTS.md", e, retry(cmd)))?);
-    events.extend(install_claude_md(root, claude).map_err(|e| msg::update_failed("CLAUDE.md", e, retry(cmd)))?);
+    events.extend(install_agents_md(root).map_err(|e| msg::update_failed("AGENTS.md", e, msg::after_fix_agent_runs(cmd.clone())))?);
+    events.extend(install_claude_md(root, claude).map_err(|e| msg::update_failed("CLAUDE.md", e, msg::after_fix_agent_runs(cmd.clone())))?);
 
     if claude {
         events.extend(merge_settings(root, cmd)?);
@@ -160,7 +156,7 @@ fn install_all(root: &Path, claude: bool, codex: bool, events: &mut Vec<Event>) 
 
     if codex {
         events.extend(
-            install_codex_rules(root).map_err(|e| msg::write_failed(".codex/rules/adrdom.rules", e, retry(cmd)))?,
+            install_codex_rules(root).map_err(|e| msg::write_failed(".codex/rules/adrdom.rules", e, msg::after_fix_agent_runs(cmd.clone())))?,
         );
     }
     Ok(())
@@ -388,7 +384,7 @@ fn install_claude_md(root: &Path, create: bool) -> Result<Option<Event>, String>
 /// error to fix, then `cmd` again.
 fn merge_settings(root: &Path, cmd: &Cmd) -> Result<Option<Event>, String> {
     const REL: &str = ".claude/settings.json";
-    let failed = |e: String| msg::update_failed(REL, e, retry(cmd));
+    let failed = |e: String| msg::update_failed(REL, e, msg::after_fix_agent_runs(cmd.clone()));
     let fix = |so: &str| msg::fix_then(REL, so, cmd.clone());
     let dir = root.join(".claude");
     fs::create_dir_all(&dir).map_err(|e| failed(e.to_string()))?;

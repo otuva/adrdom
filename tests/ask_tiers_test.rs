@@ -69,9 +69,15 @@ fn nothing_to_ask_and_show(dir: &std::path::Path, record: &std::path::Path) -> S
     stdout(&adr(dir, &["show"], &[], ""))
 }
 
-// True when `shown` holds `mv` as one of its lines, indentation aside.
-fn names_move(shown: &str, mv: &str) -> bool {
-    shown.lines().any(|l| l.trim() == mv.trim())
+// Every move line `shown` holds, in the order printed: the whole list a
+// test compares, so an extra, repeated or reordered move fails it.
+fn moves_of(shown: &str) -> Vec<String> {
+    shown
+        .lines()
+        .map(str::trim)
+        .filter(|l| l.starts_with("agent ") || l.starts_with("owner runs:") || l.starts_with("not yet"))
+        .map(str::to_string)
+        .collect()
 }
 
 // The plan change the `next` line asks for when Q2 stands on a refused
@@ -273,12 +279,15 @@ fn ask_asks_a_candidate_standing_on_a_refused_question_and_the_plan_change_works
     // What the owner would read next: the refused question, the plan
     // change, and Q2 under `not yet`.
     let shown = nothing_to_ask_and_show(&dir, &record);
-    for mv in [
-        "agent changes the plan: \"1.1 What color is the widget?\" is refused and holds the questions that come after it",
-        "not yet: \"1.2 Does the widget's paint match its color?\" is asked and waits for \"1.1 What color is the widget?\"",
-    ] {
-        assert!(names_move(&shown, mv), "{}\n{}", mv, shown);
-    }
+    assert_eq!(
+        moves_of(&shown),
+        vec![
+            "agent changes the plan: \"1.1 What color is the widget?\" is refused and holds the questions that come after it".to_string(),
+            "not yet: \"1.2 Does the widget's paint match its color?\" is asked and waits for \"1.1 What color is the widget?\"".to_string(),
+        ],
+        "{}",
+        shown
+    );
 
     // The move it names works: Q2 no longer stands on Q1, the plan is
     // approved again, and Q2 asked at tier 1 is taken after the next ask.
@@ -521,7 +530,7 @@ Standard: plain words.
     assert!(out.status.success(), "{}", stderr(&out));
     assert_eq!(asked_row_count(&dir), 3, "Q2 is asked");
     let shown = nothing_to_ask_and_show(&dir, &record);
-    for mv in [
+    let expected = vec![
         format!(
             "owner runs: adr answer {}@{} <letter>  # \"1.0 Is the widget in stock?\"",
             qx_id,
@@ -529,9 +538,8 @@ Standard: plain words.
         ),
         "agent changes the plan: \"1.1 What color is the widget?\" is refused and holds the questions that come after it".to_string(),
         "not yet: \"1.2 Does the widget's paint match its color?\" is asked and waits for \"1.1 What color is the widget?\"".to_string(),
-    ] {
-        assert!(names_move(&shown, &mv), "{}\n{}", mv, shown);
-    }
+    ];
+    assert_eq!(moves_of(&shown), expected, "{}", shown);
 
     // The move it names works: Q2 no longer stands on Q1, the plan is
     // approved again, and ask asks Q2 again (in tier 1, beside the open Qx).

@@ -170,6 +170,7 @@ fn build(
                 led: &led,
                 planning: awaiting.contains(&rf.rel),
                 shared: shared.as_ref(),
+                directory: false,
             };
             topic_file_findings(&judge)
         })
@@ -215,7 +216,7 @@ fn build(
     push_failures(&mut failures, banned::check_banned(root, staged, message, &source));
     push_failures(&mut failures, install::check_install(root, &source));
     let (plan_failures, plan_notes) =
-        plan::check_plan(root, &source, &records, &led, &per_record_findings, &raw_hashes, &awaiting);
+        plan::check_plan(root, &source, &records, &led, &per_record_findings, &awaiting);
     push_failures(&mut failures, plan_failures);
     push_failures(&mut notes, plan_notes);
     push_failures(&mut failures, terms::check_terms(root, &records, &led, &source, &approved_rels));
@@ -240,7 +241,7 @@ fn build(
 /// directory itself (a name, a heading twice in one file, a heading in two
 /// files, each a note or a failure by which question copies).
 fn topic_file_findings(j: &rules::TopicFileJudge) -> Vec<rules::Finding> {
-    rules::judge_topic_file(j).into_iter().filter(|f| !matches!(f.subject, rules::Subject::Directory(_))).collect()
+    rules::judge_topic_file(j)
 }
 
 /// The arguments `check` ran with, as the command line names them: what a
@@ -316,8 +317,7 @@ pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: 
 /// repository, unreadable input), filed under `check`; `message` may carry
 /// that name in front already.
 pub(super) fn stopped(message: String) -> Line {
-    let message = message.strip_prefix("check: ").map(str::to_string).unwrap_or(message);
-    Line::Finding(rules::Finding::new(Rule::Check, message))
+    out::refusal(Rule::Check, &message)
 }
 
 /// Whether a finding `r` on `rf` is a note rather than a failure (per
@@ -337,36 +337,4 @@ fn is_note(rf: &RecordFile, r: &rules::Finding, draft: bool, led: &Ledger) -> bo
     // Every question the finding is about must still be able to change; a
     // finding about none is about the file as a whole.
     !r.sections.iter().filter_map(|i| rf.sections.get(*i)).any(|s| rules::has_force(rf, s, led))
-}
-
-/// A file's plan/context approval state: its ledger-relative path, whether
-/// its current plan hash matches the latest `approved` row for that path,
-/// and likewise for context/`context`. `raw_hashes` is `rel -> (plan_hash,
-/// context_hash)`, computed by `build` before its normalize pass mutates
-/// `rf`'s parsed `depends:` entries in memory -- approval state must
-/// always be read off the file exactly as it sits on disk (per "..."), so
-/// this reads that precomputed hash rather than recomputing one from `rf`,
-/// which by the time any caller here runs has already been normalized.
-/// Keyed and looked up by `rf.rel` on both sides (the same field
-/// `raw_hashes` itself was built from, in `build`, off the very same
-/// `records` list every caller here still shares) -- never `rel_path(root,
-/// &rf.path)` recomputed afresh, which risks the two disagreeing. A miss
-/// is a bug in that shared construction, not a case to paper over with a
-/// silent recompute from the (by-then-normalized) `rf`, so it panics
-/// instead of guessing.
-fn file_approval(
-    rf: &RecordFile,
-    raw_hashes: &HashMap<String, (Vec<String>, String)>,
-    led: &Ledger,
-) -> (String, bool, bool) {
-    let rel = rf.rel.clone();
-    let (plan_h, ctx_h) = raw_hashes.get(&rel).unwrap_or_else(|| {
-        panic!(
-            "file_approval: {} missing from raw_hashes, though raw_hashes is built from the same records list this is called on",
-            rel
-        )
-    });
-    let plan_ok = state::plan_approved_hashes(led, &rel, plan_h);
-    let ctx_ok = state::context_approved_hash(led, &rel, ctx_h);
-    (rel, plan_ok, ctx_ok)
 }

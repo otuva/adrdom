@@ -100,10 +100,22 @@ fn sweep_dead_test_repos() {
         let Some(rest) = name.to_str().and_then(|n| n.strip_prefix("adr-test-")) else {
             continue;
         };
+        // The bare remotes and shallow clones some tests make carry a word
+        // before the pid.
+        let rest = rest.strip_prefix("bare-").or_else(|| rest.strip_prefix("shallow-")).unwrap_or(rest);
         let Some(pid) = rest.split('-').next().filter(|p| p.parse::<u32>().is_ok()) else {
             continue;
         };
-        if !Path::new("/proc").join(pid).exists() {
+        // A run in another pid namespace that shares the temp dir has no
+        // entry in this /proc: a repo is taken for dead only when its pid is
+        // gone here and nothing in it changed for an hour.
+        let idle = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age > std::time::Duration::from_secs(3600));
+        if idle && !Path::new("/proc").join(pid).exists() {
             let _ = std::fs::remove_dir_all(entry.path());
         }
     }
@@ -135,6 +147,10 @@ pub fn adr(dir: &Path, args: &[&str], envs: &[(&str, &str)], stdin: &str) -> Out
     cmd.current_dir(dir)
         .args(args)
         .env_remove("CLAUDECODE")
+        // An owner bypass exported in the shell that runs the tests must not
+        // turn a test of an agent's run into the owner's: only `adr_owner`
+        // (through `envs`) sets it.
+        .env_remove("ADR_OWNER_BYPASS")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -846,12 +862,30 @@ pub fn source_files() -> Vec<(String, String)> {
 /// The lines of `text` that are code: comment lines left out, and the unit
 /// tests at the end of a file (`#[cfg(test)]` onward) left out.
 pub fn code_lines(text: &str) -> Vec<(usize, &str)> {
-    text.lines()
-        .enumerate()
-        .take_while(|(_, l)| l.trim() != "#[cfg(test)]")
-        .filter(|(_, l)| !l.trim_start().starts_with("//"))
-        .map(|(i, l)| (i + 1, l))
-        .collect()
+    let mut out = Vec::new();
+    // Inside a `#[cfg(test)]` item: the depth of its braces and whether its
+    // opening brace has come.
+    let mut skipping: Option<(i64, bool)> = None;
+    for (i, l) in text.lines().enumerate() {
+        if let Some((depth, opened)) = skipping {
+            let opens = l.matches('{').count() as i64;
+            let depth = depth + opens - l.matches('}').count() as i64;
+            let opened = opened || opens > 0;
+            // An item with no braces (a `use` or a `fn` on one line) ends at
+            // its `;`.
+            let ended = (opened && depth <= 0) || (!opened && l.trim_end().ends_with(';'));
+            skipping = if ended { None } else { Some((depth, opened)) };
+            continue;
+        }
+        if l.trim() == "#[cfg(test)]" {
+            skipping = Some((0, false));
+            continue;
+        }
+        if !l.trim_start().starts_with("//") {
+            out.push((i + 1, l));
+        }
+    }
+    out
 }
 
 /// The text inside each double-quoted string literal on `line`, escapes

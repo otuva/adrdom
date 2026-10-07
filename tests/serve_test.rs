@@ -7,20 +7,46 @@ use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
+/// A running `adr serve`, killed when it goes out of scope, so a test that
+/// fails before its own kill leaves no server behind.
+struct Served(Child);
+
+impl std::ops::Deref for Served {
+    type Target = Child;
+    fn deref(&self) -> &Child {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for Served {
+    fn deref_mut(&mut self) -> &mut Child {
+        &mut self.0
+    }
+}
+
+impl Drop for Served {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
 /// Mirrors `common::adr_owner`'s env, but spawns the process (rather than
 /// running it to completion) since `adr serve` never exits on its own; the
-/// caller reads its `open:` line off stdout and kills it when done.
-fn spawn_owner(dir: &Path, args: &[&str]) -> Child {
-    Command::new(adr_bin())
-        .current_dir(dir)
-        .args(args)
-        .env_remove("CLAUDECODE")
-        .env("ADR_OWNER_BYPASS", "1")
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("adr serve should spawn")
+/// caller reads its `open:` line off stdout.
+fn spawn_owner(dir: &Path, args: &[&str]) -> Served {
+    Served(
+        Command::new(adr_bin())
+            .current_dir(dir)
+            .args(args)
+            .env_remove("CLAUDECODE")
+            .env("ADR_OWNER_BYPASS", "1")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("adr serve should spawn"),
+    )
 }
 
 /// Reads the single `open: http://127.0.0.1:<port>/?t=<token>` line off the
@@ -651,6 +677,7 @@ fn serve_refuses_without_an_interactive_terminal() {
         .current_dir(&dir)
         .args(["serve", "--port", "0"])
         .env_remove("CLAUDECODE")
+        .env_remove("ADR_OWNER_BYPASS")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

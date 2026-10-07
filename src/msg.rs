@@ -1,7 +1,6 @@
 //! Every user-facing message the tool prints lives here: one place for
 //! wording, and a type (`Next`) that makes a refusal without a next move a
-//! compile error. A note (`tested: 3`, `tiers: ...`) carries no `Next` and
-//! is a plain function; a refusal or failure always takes one, either
+//! compile error. A refusal or failure always takes one, either
 //! built by the caller (when the next move differs by call site) or fixed
 //! inside the function (when every caller wants the same one).
 //!
@@ -871,15 +870,6 @@ pub fn terms_line_names_retired_term(rel: &str, id: &str, heading: &str, name: &
     )
 }
 
-/// Printed after `adr answer <id> refuse` succeeds: the heading is closed,
-/// the plan around it likely needs another pass.
-pub fn refused_summary(heading: &str, rel: &str) -> String {
-    refuse(
-        format!("refused \"{}\"", heading),
-        Next::agent("re-plans").and_owner_runs(command(&["adr", "approve", rel])),
-    )
-}
-
 /// An identifier with the name the tool can put to it (a heading, a term)
 /// right beside it, `<id> ("<name>")`, or the identifier alone when the
 /// tool holds no name for it.
@@ -1164,7 +1154,7 @@ pub fn no_id_line(rel: &str, heading: &str) -> String {
     )
 }
 
-// --- what is next in a topic file (`view::next_moves`) ---------------------
+// --- what is next in a topic file (`moves::of_topic_file`) ----------------
 // One line per move, each opening with who makes it, in the words a
 // refusal uses. `show` prints them under the file, `ask` when it has
 // nothing to ask.
@@ -1345,7 +1335,7 @@ pub fn removed_from_plan(id: &str, heading: &str, event: &str, rel: &str) -> Str
 }
 
 /// An asked/refused id whose file is removed, its removal awaiting approval:
-/// `next` is the move `removal_move` names for that file.
+/// `next` is the move `moves::removal_next` names for that file.
 pub fn removed_with_file(id: &str, heading: &str, event: &str, next: Next) -> String {
     refuse(format!("{} (\"{}\", {}) was removed from the plan", id, heading, event), next)
 }
@@ -2161,15 +2151,10 @@ pub fn blame_row_unknown_destination(rel: &str, start: usize, end: usize, text: 
     )
 }
 
-pub fn blame_approved(rel: &str) -> String {
-    format!("approve: {}: blame approved", rel)
-}
-
 // --- commands/check/blame.rs -----------------------------------------------
 // Shared by `check`'s `blame` category (per "Does check hold a blame file
 // to its origin?", 5fddeeb5 A; "Does an origin leave the repository while
-// its blame file has an open row?", 4bb5ef1b A; "Does the tool stop while
-// a blame file waits for approval?", 9c3cc17e A).
+// its blame file has an open row?", 4bb5ef1b A).
 
 /// `git hash-object`'s own blob sha for `origin`'s current content no
 /// longer matches the blame file's `blob:` line (5fddeeb5 A). A missing
@@ -2288,14 +2273,6 @@ pub fn terms_edit_too_wide(names: &[String], approved_before: bool) -> String {
         format!("adrdom/terms.md: {}: {}; the most is 1", what, list),
         Next::agent("keeps one of these edits in the file and leaves the rest for a later approve"),
     )
-}
-
-pub fn plan_approved(rel: &str) -> String {
-    format!("approve: {}: plan approved", rel)
-}
-
-pub fn context_approved(rel: &str) -> String {
-    format!("approve: {}: prose approved", rel)
 }
 
 /// The finding on unban's input when `n` (never 0) of the words given were
@@ -2530,7 +2507,6 @@ mod tests {
             tell("x.md", 3, "context", "claude", "says who said it"),
             no_depends_line("x.md", "heading"),
             no_depends_line_bare("heading"),
-            refused_summary("heading", "x.md"),
             section_no_terms_line("x.md", "heading", "id-1", false),
             section_no_terms_line("x.md", "heading", "id-1", true),
             section_terms_line_malformed("x.md", "heading", "id-1", false),

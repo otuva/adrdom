@@ -85,8 +85,6 @@ impl LineKind {
 #[derive(Debug, Clone)]
 pub struct Neighbour {
     pub kind: NKind,
-    /// The reader file's neighbour column: an identifier, or `text:<sha>`.
-    pub key: String,
     /// The decision's heading, the term's name, or the question's heading.
     pub name: String,
     pub word: String,
@@ -373,40 +371,14 @@ pub fn load(
 /// `load` with what every file of a run shares already read (`Shared`):
 /// what a command that plans or judges many files calls once per file.
 pub fn load_with(rf: &RecordFile, terms_list: &[Term], led: &Ledger, shared: &Shared) -> Planning {
-    load_inner(rf, terms_list, led, shared, false).0
+    load_inner(rf, terms_list, led, shared, false)
 }
 
-/// `load` with the questions that are asked and wait for their answer too:
-/// what show and the page print their neighbours from ("Does show print the
-/// neighbours of a question with the reader's word?",
-/// 97c679f6-e8e6-4970-b547-940477753d7d A). Never used for the next move.
-pub fn load_shown(
-    root: &Path,
-    rf: &RecordFile,
-    all: &[RecordFile],
-    terms_list: &[Term],
-    led: &Ledger,
-) -> Planning {
-    load_inner(rf, terms_list, led, &Shared::new(root, all, terms_list, led), true).1
-}
-
-/// `load` and `load_shown` together, from one read of the reader file and
-/// one pass over the records: what show prints and the next move it reads
-/// off the same file.
-pub fn load_both(
-    root: &Path,
-    rf: &RecordFile,
-    all: &[RecordFile],
-    terms_list: &[Term],
-    led: &Ledger,
-) -> (Planning, Planning) {
-    load_inner(rf, terms_list, led, &Shared::new(root, all, terms_list, led), true)
-}
-
-/// `load_shown` with what the run shares already read (`Shared`): what
-/// `show --neighbours` reads once per file.
+/// The planning state shown under `show --neighbours`: `load_with`, the
+/// questions that wait for the owner's answer included, with what the run
+/// shares already read (`Shared`).
 pub fn load_shown_with(rf: &RecordFile, terms_list: &[Term], led: &Ledger, shared: &Shared) -> Planning {
-    load_inner(rf, terms_list, led, shared, true).1
+    load_inner(rf, terms_list, led, shared, true)
 }
 
 fn is_waiting(led: &Ledger, sec: &Section) -> bool {
@@ -474,8 +446,8 @@ fn load_inner(
     terms_list: &[Term],
     led: &Ledger,
     shared: &Shared,
-    both: bool,
-) -> (Planning, Planning) {
+    with_asked: bool,
+) -> Planning {
     let Shared { phrase_lookup, cross, headings, rows, by_hash, stale, current, pool_empty } = shared;
     let pool_empty = *pool_empty;
     // Borrowed from the shared index: no copy per lookup.
@@ -513,7 +485,6 @@ fn load_inner(
             };
             out.push(Neighbour {
                 kind,
-                key: key.to_string(),
                 name,
                 word: r.word.clone(),
                 reason: r.reason.clone(),
@@ -553,9 +524,7 @@ fn load_inner(
     }
     Planning { rel: rf.rel.clone(), questions }
     };
-    let plain = build(false);
-    let shown = if both { build(true) } else { Planning { rel: rf.rel.clone(), questions: Vec::new() } };
-    (plain, shown)
+    build(with_asked)
 }
 
 impl Planning {

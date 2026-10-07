@@ -847,9 +847,14 @@ fn install_prints_one_line_per_file_written_and_nothing_else() {
         assert!(dir.join(path).is_file(), "{} is not a file: {}", path, text);
     }
     assert!(text.lines().any(|l| l == "set: core.hooksPath .githooks"), "{}", text);
-    let mut paths: Vec<&str> = text.lines().collect();
-    paths.dedup();
+    let paths: std::collections::HashSet<&str> = text.lines().collect();
     assert_eq!(paths.len(), text.lines().count(), "a file printed twice: {}", text);
+    // And every file install left in the repository has its line.
+    let status = run_git(&dir, &["status", "--porcelain", "-uall"]);
+    for line in String::from_utf8_lossy(&status.stdout).lines() {
+        let path = line[3..].trim();
+        assert!(paths.contains(format!("written: {}", path).as_str()), "{} was written with no line: {}", path, text);
+    }
 
     let again = adr(&dir, &["install", "--claude", "--codex"], &[], "");
     assert!(again.status.success(), "{}", stderr(&again));

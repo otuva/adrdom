@@ -245,8 +245,14 @@ pub fn rows(root: &Path) -> std::sync::Arc<Vec<Row>> {
             return Arc::clone(rows);
         }
     }
-    let rows = Arc::new(read_file(root).rows);
-    *held = Some((key, Arc::clone(&rows)));
+    // A file that exists and cannot be read is no file of zero rows: what
+    // it read is not kept, so the next call reads it again.
+    let text = std::fs::read_to_string(&path);
+    let failed = text.is_err() && path.exists();
+    let rows = Arc::new(parse(&text.unwrap_or_default()).rows);
+    if !failed {
+        *held = Some((key, Arc::clone(&rows)));
+    }
     rows
 }
 

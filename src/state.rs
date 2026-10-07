@@ -622,28 +622,6 @@ fn is_replaced(sec: &Section, replaced: &std::collections::HashSet<String>) -> b
     sec.id.as_ref().is_some_and(|id| replaced.contains(id))
 }
 
-/// `tiers` (index-aligned with `rf.sections`, as `rf.tiers` is) with every
-/// dead section's entry (`is_dead`) left out: the tier cap (per "Does the
-/// tool cap the questions in a tier?") counts
-/// only live questions, while everything else a tier holds -- derivation,
-/// a refused question holding its tier until the plan changes -- still
-/// reads `rf.tiers` whole. The one place that filters before counting, so
-/// `record::over_cap`/`record::tier_sizes` (which take a plain tier list
-/// and have no ledger access) stay ignorant of ledger state.
-pub fn live_tiers(
-    led: &Ledger,
-    rf: &RecordFile,
-    tiers: &[usize],
-    replaced: &std::collections::HashSet<String>,
-) -> Vec<usize> {
-    rf.sections
-        .iter()
-        .zip(tiers)
-        .filter(|(sec, _)| !is_dead(led, sec) && !is_replaced(sec, replaced))
-        .map(|(_, &t)| t)
-        .collect()
-}
-
 /// True when the latest ledger state of `id` is `asked` and that row holds
 /// `cur_hash`, the hash of the section's text now: the text stands as it was
 /// asked. `answer` takes a question only then, `show` prints its version
@@ -700,15 +678,6 @@ pub fn over_cap_headings(
     Some((open, answered))
 }
 
-/// `done` (per "Does a topic file close?"): a file is done once its plan
-/// and context are approved and every section carries a letter answer.
-/// `plan_ok`/`ctx_ok` are supplied by the caller (`check`'s `file_approval`
-/// reads them off a hash captured before any in-memory normalize pass,
-/// `view`'s off the working tree the same way) rather than recomputed here.
-pub fn file_done(rf: &RecordFile, plan_ok: bool, ctx_ok: bool) -> bool {
-    plan_ok && ctx_ok && rf.sections.iter().all(|s| s.answer_letter().is_some())
-}
-
 /// True when `sec` has no letter answer yet: no `**Answer:** <letter>`
 /// line at all (per "Does a topic file close?" and "Does the owner answer
 /// a question with a refusal?") -- a skeleton with nothing written, an
@@ -737,43 +706,6 @@ pub fn unresolved_sibling(rf: &RecordFile, i: usize) -> Option<&Section> {
             .map(|(_, s)| s)
     };
     find(false).or_else(|| find(true))
-}
-
-/// The lowest derived tier (per "Does the tool derive tiers from the
-/// depends lines?") holding an unresolved section (`tier_unresolved`; a
-/// skeleton heading with no answer keeps its tier open exactly as a
-/// refused or still-open question does), or `None` when tier derivation
-/// failed (`rf.tiers` is `None`) or every section is resolved. What the
-/// page's overview names as the open tier, and what its `waits_on` reads.
-pub fn open_tier(rf: &RecordFile) -> Option<usize> {
-    rf.sections
-        .iter()
-        .enumerate()
-        .filter(|(_, s)| tier_unresolved(s))
-        .filter_map(|(i, _)| rf.tier_of(i))
-        .min()
-}
-
-/// The section in tier `t` of `rf` the overview names as what the open tier
-/// waits on, by file order: the first non-skeleton unresolved section,
-/// or, when the tier holds nothing but a skeleton, the first skeleton in
-/// it instead (naming a heading with nothing written yet is still more
-/// informative than naming nothing) -- so the overview
-/// always has something to name once `open_tier` returns `Some`. `None`
-/// only when tier `t` holds no section at all.
-pub fn tier_blocker(rf: &RecordFile, t: usize) -> Option<&Section> {
-    let in_tier = |i: &usize| rf.tier_of(*i) == Some(t);
-    rf.sections
-        .iter()
-        .enumerate()
-        .find(|(i, s)| !s.is_skeleton && tier_unresolved(s) && in_tier(i))
-        .or_else(|| {
-            rf.sections
-                .iter()
-                .enumerate()
-                .find(|(i, s)| s.is_skeleton && in_tier(i))
-        })
-        .map(|(_, s)| s)
 }
 
 /// What holds question `i` of a file back from `answer` (per "Does answer

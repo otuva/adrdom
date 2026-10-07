@@ -83,24 +83,16 @@ pub fn run(file: PathBuf) -> i32 {
     }
 }
 
-/// The shape and parse errors of the file, a `###` line that is no question
-/// (9913568f A), and a heading used twice: the
-/// planning keys its rows by heading text.
-/// Each is filed under the rule it is a finding of, as `show` and `check`
-/// file it: `parse` for the file's shape, `plan` for a heading twice.
+/// The `parse` findings of the file (`rules::parse_findings`, the list
+/// `show` and `check` print) and a heading used twice, filed under `plan`:
+/// the planning keys its rows by heading text.
 fn shape_refusals(rf: &RecordFile) -> Vec<crate::rules::Finding> {
-    use crate::rules::Finding;
-    let rel = &rf.rel;
-    let mut parse: Vec<String> = rf.shape_errors.iter().map(|e| msg::shape_error(rel, e)).collect();
-    for sec in &rf.sections {
-        parse.extend(sec.shape_errors.iter().map(|e| msg::section_shape_error(rel, &sec.heading_text, e)));
-        parse.extend(sec.parse_errors.iter().map(|e| msg::check_parse_error(rel, &sec.heading_text, e)));
-    }
-    for i in record::non_question_heading_lines(&rf.lines) {
-        parse.push(msg::heading_not_a_question(rel, i + 1));
-    }
-    let mut out: Vec<Finding> = parse.into_iter().map(|m| Finding::new(Rule::Parse, m)).collect();
-    out.extend(crate::rules::duplicate_heading_refusals(rel, &rf.sections).into_iter().map(|m| Finding::new(Rule::Plan, m)));
+    let mut out = crate::rules::parse_findings(&rf.rel, rf);
+    out.extend(
+        crate::rules::duplicate_heading_refusals(&rf.rel, &rf.sections)
+            .into_iter()
+            .map(|m| crate::rules::Finding::new(Rule::Plan, m)),
+    );
     out
 }
 

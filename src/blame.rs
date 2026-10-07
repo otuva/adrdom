@@ -5,14 +5,11 @@
 //! dispatches a path under `repo::BLAME_DIR` to `do_approve_blame` below,
 //! the same way it dispatches `repo::TERMS_PATH` to `do_approve_terms`.
 //!
-//! Tier 2 answers: `check` holds a blame file to its origin's blob and to
-//! the open decision rows an about-to-vanish origin still carries
-//! (5fddeeb5 A, 4bb5ef1b A -- `commands::check::blame`); a blame file
-//! awaiting approval is a count, never a stop (9c3cc17e A); `show` prints
-//! one section per blame file plus a `from:` line under every decision a
-//! blame row names (7b05f8df A -- `commands::show`). The rendering and
-//! classification helpers both readers share live below, after
-//! `resolve_destination`.
+//! `check` holds a blame file to its origin's blob and to the open
+//! decision rows an about-to-vanish origin still carries (5fddeeb5 A,
+//! 4bb5ef1b A -- `commands::check::blame`); `show` prints a blame file in
+//! the form every file approve takes is printed (6addc2f4 A, bceceda8 A --
+//! `commands::show`).
 use crate::ledger::Ledger;
 use crate::msg;
 use crate::record::{self, RecordFile};
@@ -192,10 +189,8 @@ pub fn coverage_errors(rows: &[Row], n: usize) -> (Vec<BeyondError>, Vec<GapErro
 // --- destination resolution -------------------------------------------------
 
 // The closed set's own prefixes (per "What does a blame row name?",
-// 38216d39 A): the one table both `resolve_destination` (parsing a row)
-// and `classify`/`Kind` (a row's coarse count, run over text that may
-// still be a draft) read from, so the two never drift into naming the
-// closed set differently.
+// 38216d39 A): the one table `resolve_destination` and the row readers
+// (`decision_target`, `copy_target`) read from.
 const DECISION_PREFIX: &str = "decision: ";
 const TERM_PREFIX: &str = "term: ";
 const PROSE_PREFIX: &str = "prose: ";
@@ -228,21 +223,6 @@ impl Resolved {
             Resolved::DroppedDetail => format!("{}{}", DROPPED_PREFIX, DROPPED_DETAIL),
             Resolved::DroppedCopyDecision(id) => format!("{}{}{}", DROPPED_PREFIX, COPY_OF_PREFIX, id),
             Resolved::DroppedCopyOrigin(path) => format!("{}{}{}", DROPPED_PREFIX, COPY_OF_PREFIX, path),
-        }
-    }
-
-    /// The `Kind` a resolved row counts as -- `classify` reaches the same
-    /// answer from raw text, since a row may still be a draft (unresolved
-    /// words) when `show` counts it, but the two share one meaning of
-    /// "what kind is this" through the prefixes above.
-    pub fn kind(&self) -> Kind {
-        match self {
-            Resolved::Decision(_) => Kind::Decision,
-            Resolved::Term(_) => Kind::Term,
-            Resolved::Prose(_) => Kind::Prose,
-            Resolved::DroppedDead => Kind::DroppedDead,
-            Resolved::DroppedDetail => Kind::DroppedDetail,
-            Resolved::DroppedCopyDecision(_) | Resolved::DroppedCopyOrigin(_) => Kind::DroppedCopy,
         }
     }
 }
@@ -328,13 +308,6 @@ pub fn heading_ids(records: &[RecordFile]) -> (HashMap<String, Vec<(String, Stri
     let any_headings = any_headings_with_id(records);
     let known_ids = known_heading_ids(&any_headings);
     (any_headings, known_ids)
-}
-
-/// Every blame file's own `origin:` line under `repo::BLAME_DIR`, in the
-/// working tree. A file that fails to parse is skipped here: its own shape
-/// errors are its problem, not this index's.
-pub fn known_origins(root: &Path) -> HashSet<String> {
-    known_origins_via(root, &repo::Source::WorkingTree)
 }
 
 /// Like `known_origins`, read through `source`: `check --staged` reads the
@@ -524,9 +497,8 @@ pub fn dest_refusal_text(rel: &str, row: &Row, err: &DestError) -> String {
 
 // --- shared by `check`'s `blame` category and `show` -----------------------
 
-/// Every `*.md` file under `repo::BLAME_DIR`, parsed, off the working tree
-/// (per "Does show print a blame file?", 7b05f8df A: `show` never reads a
-/// commit, so it has no `Source` to thread through). `check`'s own listing
+/// Every `*.md` file under `repo::BLAME_DIR`, parsed, off the working tree:
+/// `show` never reads a commit, so it has no `Source` to thread through. `check`'s own listing
 /// goes through `Source` instead (a staged blame file must be judged too,
 /// per "Does check at a commit read the staged files?"), so it is built in
 /// `commands::check::blame` rather than here.
@@ -560,75 +532,6 @@ pub fn load_all_with_errors(root: &Path) -> (Vec<BlameFile>, Vec<(String, String
 /// Kept for a caller that has no use for the error list.
 pub fn load_all(root: &Path) -> Vec<BlameFile> {
     load_all_with_errors(root).0
-}
-
-/// The kind of destination a row names, coarse enough for a count (per
-/// "Does show print a blame file?", 7b05f8df A: "the row count per
-/// destination kind"): the two `dropped: copy of` forms (a decision, an
-/// origin path) count as one kind here, `classify` reads either a draft
-/// row (still words) or a canonical one (rewritten to ids) the same way,
-/// since only the prefix before the value ever carries the kind.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Kind {
-    Decision,
-    Term,
-    Prose,
-    DroppedDead,
-    DroppedDetail,
-    DroppedCopy,
-}
-
-impl Kind {
-    pub fn label(&self) -> &'static str {
-        match self {
-            Kind::Decision => "decision",
-            Kind::Term => "term",
-            Kind::Prose => "prose",
-            Kind::DroppedDead => "dropped: dead",
-            Kind::DroppedDetail => "dropped: detail",
-            Kind::DroppedCopy => "dropped: copy",
-        }
-    }
-
-    pub const ALL: [Kind; 6] = [
-        Kind::Decision,
-        Kind::Term,
-        Kind::Prose,
-        Kind::DroppedDead,
-        Kind::DroppedDetail,
-        Kind::DroppedCopy,
-    ];
-}
-
-/// `dest`'s `Kind`, read straight off its text (never a full resolve: a
-/// row `show` counts may still be a draft, unresolved words rather than an
-/// id) -- through the same prefix constants `Resolved::kind` reads via
-/// `resolve_destination`, so the two can never name the closed set
-/// differently.
-pub fn classify(dest: &str) -> Option<Kind> {
-    let t = dest.trim();
-    if t.starts_with(DECISION_PREFIX) {
-        Some(Kind::Decision)
-    } else if t.starts_with(TERM_PREFIX) {
-        Some(Kind::Term)
-    } else if t.starts_with(PROSE_PREFIX) {
-        Some(Kind::Prose)
-    } else if let Some(rest) = t.strip_prefix(DROPPED_PREFIX) {
-        // Trimmed the way `resolve_destination` trims it, so a draft row
-        // `approve` would accept is counted as the kind it will become.
-        let rest = rest.trim();
-        if rest == DROPPED_DEAD {
-            Some(Kind::DroppedDead)
-        } else if rest == DROPPED_DETAIL {
-            Some(Kind::DroppedDetail)
-        } else if rest.starts_with(COPY_OF_PREFIX) {
-            Some(Kind::DroppedCopy)
-        } else {
-            None
-        }
-    } else {
-        None
-    }
 }
 
 /// The value after `decision: `, from either a draft row (still the
@@ -727,7 +630,7 @@ pub fn open_decision_rows(
 /// the refusals `check` prints for it (shape, origin path, origin missing
 /// while a row is open, origin unreadable, blob mismatch, hash failure),
 /// whether it awaits approval, and the origin's content when it could be
-/// read. A draft never fails on its own (9c3cc17e A): `awaiting` is a flag.
+/// read. `awaiting` is a flag: a draft's shape faults are notes.
 pub struct FileState {
     /// The shape errors of the file itself: a note while the file awaits
     /// approval, a failure once approved (per "What does check do with a

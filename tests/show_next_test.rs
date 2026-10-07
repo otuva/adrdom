@@ -438,7 +438,7 @@ fn show_names_what_replaced_a_superseded_question() {
 
 // adr: f8d92841-aef7-4cd7-bd94-0e07c03e4cb6
 //
-// Every question answered and tied to a test: show prints no "next" at all.
+// Every question answered and tied to a test: show prints no move at all.
 #[test]
 fn show_prints_no_next_when_nothing_is_left() {
     let dir = init_repo();
@@ -452,7 +452,12 @@ fn show_prints_no_next_when_nothing_is_left() {
     write_test_comment(&dir, &one);
 
     let out = adr(&dir, &["show"], &[], "");
-    assert!(!stdout(&out).lines().any(|l| l == "next"), "{}", stdout(&out));
+    let moves: Vec<&str> = stdout(&out)
+        .lines()
+        .filter(|l| l.starts_with("agent ") || l.starts_with("owner runs:") || l.starts_with("not yet"))
+        .map(|_| "")
+        .collect();
+    assert!(moves.is_empty(), "no move is left: {}", stdout(&out));
 }
 
 //

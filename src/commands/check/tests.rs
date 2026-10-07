@@ -10,8 +10,7 @@ use std::path::Path;
 
 /// Every id that appears after `adr: ` in a tracked, non-`adrdom/` file, as
 /// a full uuid token, mapped to every `path:line` location it was found at
-/// (4.10-adjacent bookkeeping used by both `check`'s `tested` check and the
-/// page's decision view for a tested count per id). Which files are
+/// (what `check`'s untested findings and the build moves read). Which files are
 /// tracked always comes from `git ls-files` (the index), in both `source`s
 /// alike -- a tracked-only scan, per "What ties a test to a decision?"
 /// ("every tracked file outside adrdom"), so this never walks a

@@ -198,9 +198,9 @@ with no decision behind it is a finding.
 ## Changing a plan
 
 To add, strike or reword a heading, or change a line or a body: edit the
-file, run `adr plan <file>` until it says the file is ready, say in chat what
-changed and why, and stop. The owner approves a plan
-as a whole, and every change costs them a full re-read: when one heading
+file, run `adr plan <file>` until the move it prints is the owner's
+`adr approve`, say in chat what changed and why, and stop. The owner
+approves a plan as a whole, and every change costs them a full re-read: when one heading
 turns out wrong, check every heading in the file for the same flaw and
 propose all the changes together, once.
 

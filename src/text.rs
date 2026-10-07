@@ -1,11 +1,7 @@
 //! One shared notion of "a word": a maximal run of alphanumeric
 //! characters, no apostrophe or other exception. `banned::tokenize`,
-//! `tells::words`, `terms::resolve`'s boundary check, and the page's
-//! `mark_terms` all used to draw this boundary themselves, each slightly
-//! differently (`serve`'s own version let an apostrophe join two words
-//! into one, so "api's" paired "api" in `terms::resolve` but was not
-//! marked as a term inside `mark_terms`); they all go through this module
-//! now, so a word is the same thing everywhere.
+//! `tells::words` and `terms::resolve`'s boundary check all go through
+//! this module, so a word is the same thing everywhere.
 
 /// Whether `c` is part of a word: plain alphanumeric, nothing else.
 pub fn is_word_char(c: char) -> bool {

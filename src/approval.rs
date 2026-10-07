@@ -278,6 +278,11 @@ fn prose_lines(rf: &RecordFile) -> Vec<String> {
     inner_lines(&rf.lines[s.min(e)..e])
 }
 
+/// Whether a question of `rf` carries the identifier `id`.
+fn holds(rf: &RecordFile, id: &str) -> bool {
+    rf.sections.iter().any(|s| s.id.as_deref() == Some(id))
+}
+
 /// `lines`, each trimmed at its end, less the blank lines at either end.
 fn inner_lines(lines: &[String]) -> Vec<String> {
     let lines: Vec<String> = lines.iter().map(|l| l.trim_end().to_string()).collect();
@@ -378,7 +383,7 @@ pub fn topic_file(root: &Path, rf: &RecordFile, led: &Ledger) -> TopicChanges {
             }
         })
         .collect();
-    let in_file = |id: &str| rf.sections.iter().any(|s| s.id.as_deref() == Some(id));
+    let in_file = |id: &str| holds(rf, id);
     let (struck, struck_unsure) = match &plan {
         Some(old) => (
             old.sections
@@ -411,7 +416,7 @@ const STRUCK_CANDIDATES: usize = 12;
 /// named, not sure: a struck question is never silent.
 fn struck_ids(rf: &RecordFile, led: &Ledger) -> (Vec<String>, bool) {
     let rel = rf.rel.as_str();
-    let in_file = |id: &str| rf.sections.iter().any(|s| s.id.as_deref() == Some(id));
+    let in_file = |id: &str| holds(rf, id);
     let kept: Vec<String> = rf
         .sections
         .iter()

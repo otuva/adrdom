@@ -37,28 +37,24 @@ pub(super) fn check_ids(
     // recompute the plan hash from the by-then-normalized `rf`: approval
     // state must always be read off the file exactly as it sits on disk
     // (per "...").
-    let stale: Vec<(usize, &str)> = records
+    let stale: Vec<&str> = records
         .iter()
         .filter(|rf| {
             let plan_h: &[String] = raw_hashes.get(&rf.rel).map(|(p, _)| p.as_slice()).unwrap_or_default();
             !state::plan_approved_hashes(led, &rf.rel, plan_h)
         })
-        .filter_map(|rf| {
-            led.rows
-                .iter()
-                .rposition(|r| r.event == "approved" && r.detail == rf.rel)
-                .map(|pos| (pos, rf.rel.as_str()))
-        })
+        .filter(|rf| led.latest_for_path("approved", &rf.rel).is_some())
+        .map(|rf| rf.rel.as_str())
         .collect();
 
     // A question asked in a file awaiting approval and struck from its
     // plan: the one judgement show and plan print too (`rules::struck_asked`).
     let mut struck: HashSet<String> = HashSet::new();
     let sole = stale.len() == 1;
-    for (_, rel) in &stale {
-        struck.extend(crate::rules::struck_asked_ids(rel, sole, records, led).into_iter().map(|(id, _, _)| id));
-        for f in crate::rules::struck_asked(rel, true, sole, records, led) {
-            out.push(Failure::new(f.rule, f.message));
+    for rel in &stale {
+        for (id, heading, event) in crate::rules::struck_asked_ids(rel, sole, records, led) {
+            out.push(Failure::new(Rule::Ids, msg::removed_from_plan(&id, &heading, event, rel)));
+            struck.insert(id);
         }
     }
 

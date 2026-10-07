@@ -1,5 +1,5 @@
 use crate::rules::Rule;
-use super::{file_approval, is_note, Failure};
+use super::{is_note, Failure};
 use crate::rules::{self, Finding};
 use crate::ledger::Ledger;
 use crate::msg;
@@ -25,14 +25,12 @@ use std::path::Path;
 /// the whole directory, so none of them is a `record_refusals` category
 /// (`approve` refuses the same lines through `rules`). Returns the failures
 /// and the notes (the findings above on a file in `awaiting`).
-#[allow(clippy::too_many_arguments)]
 pub(super) fn check_plan(
     root: &Path,
     source: &Source,
     records: &[RecordFile],
     led: &Ledger,
     refusals: &[Vec<Finding>],
-    raw_hashes: &HashMap<String, (Vec<String>, String)>,
     awaiting: &[String],
 ) -> (Vec<Failure>, Vec<Failure>) {
     let mut out = Vec::new();
@@ -52,10 +50,7 @@ pub(super) fn check_plan(
         // A file awaiting approval earns a note, an approved one a failure
         // (per "Does check fail a topic file awaiting approval?"); a file
         // that did not parse has no approval state read, so it fails.
-        let draft = records_by_rel.get(rel.as_str()).is_some_and(|rf| {
-            let (_, plan_ok, ctx_ok) = file_approval(rf, raw_hashes, led);
-            !plan_ok || !ctx_ok
-        });
+        let draft = records_by_rel.contains_key(rel.as_str()) && awaiting.contains(&rel);
         for m in rules::own_name_refusals(&rel, topic) {
             push_plan(&mut out, &mut notes, draft, m);
         }

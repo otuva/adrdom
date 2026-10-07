@@ -28,7 +28,9 @@ runtime dependencies beyond `git` on `PATH`.
   import to an existing CLAUDE.md), and merges a set of deny entries into
   `.claude/settings.json`'s `permissions.deny`. `adr install --codex`
   additionally writes `.codex/rules/adrdom.rules`, forbidding the owner's
-  commands under Codex's project rules. Not owner-only.
+  commands under Codex's project rules; Codex enforces project rules only
+  for a project the owner has marked trusted, so the guard holds only
+  there. Not owner-only.
 - `adr uninstall` — owner-only. Removes everything `adr install` wrote
   outside `adrdom/`: the marked brief section from AGENTS.md (deleting the
   file if nothing else is in it), the AGENTS.md import it added to

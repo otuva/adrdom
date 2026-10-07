@@ -253,10 +253,12 @@ fn plan_lifecycle_end_to_end() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "check should pass: {}", stderr(&out).to_string() + &stdout(&out));
+    // The file is not finished while Q2 is open: show still names a move.
+    let shown = stdout(&adr(&dir, &["show"], &[], ""));
     assert!(
-        !stdout(&out).contains(&format!("done: {}", REL)),
-        "file must not be done while Q2 is unanswered: {}",
-        stdout(&out)
+        shown.lines().any(|l| l.starts_with("agent ") || l.starts_with("owner runs:") || l.starts_with("not yet")),
+        "a move is left while Q2 is open: {}",
+        shown
     );
 
     let out = adr(&dir, &["show", "--all"], &[], "");

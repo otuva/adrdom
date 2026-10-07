@@ -12,11 +12,39 @@ const REL: &str = "adrdom/decisions/gate.md";
 
 // adr: f53ac3b9-efde-427c-8027-19988aa8fda7
 //
+/// The variants of `enum <name>` as src/status.rs declares them.
+fn declared_variants(name: &str) -> Vec<String> {
+    let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/status.rs")).unwrap();
+    let start = text.find(&format!("pub enum {} {{", name)).unwrap();
+    let body = &text[start..start + text[start..].find("\n}").unwrap()];
+    body.lines()
+        .skip(1)
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with("//"))
+        .map(|l| l.trim_end_matches(',').split(['(', ' ', '{']).next().unwrap().to_string())
+        .collect()
+}
+
 // Each closed list names each of its statuses once, and its `ALL` holds
-// every variant: a match on the variants with no wildcard arm fails to
-// compile the day a status is added and `ALL` is not.
+// every variant the enum declares: a status added to the enum and left out
+// of `ALL` fails here, and a match with no wildcard arm fails to compile.
 #[test]
 fn every_closed_list_is_whole_and_names_each_status_once() {
+    assert_eq!(
+        QuestionStatus::ALL.iter().map(|s| format!("{:?}", s)).collect::<Vec<_>>(),
+        declared_variants("QuestionStatus"),
+        "QuestionStatus::ALL is not every variant"
+    );
+    assert_eq!(
+        FileStatus::ALL.iter().map(|s| format!("{:?}", s)).collect::<Vec<_>>(),
+        declared_variants("FileStatus"),
+        "FileStatus::ALL is not every variant"
+    );
+    assert_eq!(
+        TermStatus::ALL.iter().map(|s| format!("{:?}", s)).collect::<Vec<_>>(),
+        declared_variants("TermStatus"),
+        "TermStatus::ALL is not every variant"
+    );
     for s in QuestionStatus::ALL {
         match s {
             QuestionStatus::NoBody
@@ -40,9 +68,6 @@ fn every_closed_list_is_whole_and_names_each_status_once() {
             TermStatus::New | TermStatus::Changed | TermStatus::Approved | TermStatus::Retired | TermStatus::Removed => {}
         }
     }
-    assert_eq!(QuestionStatus::ALL.len(), 9);
-    assert_eq!(FileStatus::ALL.len(), 4);
-    assert_eq!(TermStatus::ALL.len(), 5);
     let q: HashSet<&str> = QuestionStatus::ALL.iter().map(|s| s.name()).collect();
     let f: HashSet<&str> = FileStatus::ALL.iter().map(|s| s.name()).collect();
     let t: HashSet<&str> = TermStatus::ALL.iter().map(|s| s.name()).collect();
@@ -156,6 +181,27 @@ fn show_prints_every_status_by_its_name() {
     seen.extend(bracketed(&show(&dir, &[REL])));
     seen.extend(bracketed(&show(&dir, &["--all"])));
 
+    // A term retired, a term removed: the terms file after its approval.
+    let terms_path = dir.join("adrdom/terms.md");
+    let terms = std::fs::read_to_string(&terms_path).unwrap();
+    std::fs::write(&terms_path, format!("{}\n## lever\ndefinition: A bar that turns.\naliases:\n", terms.trim_end())).unwrap();
+    assert!(adr_owner(&dir, &["approve", "adrdom/terms.md"], "").status.success());
+    let terms = std::fs::read_to_string(&terms_path).unwrap();
+    let lever = terms.find("## lever").unwrap();
+    std::fs::write(&terms_path, format!("{}retired: yes\n", &terms)).unwrap();
+    let out = adr_owner(&dir, &["approve", "adrdom/terms.md"], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    let shown = show(&dir, &["adrdom/terms.md"]);
+    assert!(shown.contains("[retired] lever"), "{}", shown);
+    seen.extend(bracketed(&shown));
+    std::fs::write(&terms_path, &terms[..lever]).unwrap();
+    seen.extend(bracketed(&show(&dir, &["adrdom/terms.md"])));
+    std::fs::write(&terms_path, &terms).unwrap();
+
+    // The topic file removed, its removal not approved.
+    std::fs::remove_file(&path).unwrap();
+    seen.extend(bracketed(&show(&dir, &[])));
+
     let names = names();
     for s in &seen {
         assert!(names.contains(s.as_str()), "a status printed by no name of status.rs: [{}]", s);
@@ -163,8 +209,11 @@ fn show_prints_every_status_by_its_name() {
     for q in QuestionStatus::ALL {
         assert!(seen.iter().any(|s| s == q.name()), "[{}] was never printed: {:?}", q.name(), seen);
     }
-    for f in [FileStatus::New, FileStatus::Approved, FileStatus::Changed] {
+    for f in FileStatus::ALL {
         assert!(seen.iter().any(|s| s == f.name()), "[{}] was never printed: {:?}", f.name(), seen);
+    }
+    for t in TermStatus::ALL {
+        assert!(seen.iter().any(|s| s == t.name()), "[{}] was never printed: {:?}", t.name(), seen);
     }
 }
 

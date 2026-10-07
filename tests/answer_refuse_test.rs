@@ -151,7 +151,7 @@ fn answer_refuse_twice_gives_the_already_refused_message() {
 }
 
 #[test]
-fn answer_refuse_ignores_supersedes_with_a_printed_note_and_writes_no_superseded_row() {
+fn answer_refuse_prints_only_the_refused_line_and_writes_no_superseded_row() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");

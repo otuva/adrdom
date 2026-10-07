@@ -378,12 +378,11 @@ fn ask_and_answer_ignore_an_unapproved_blame_file() {
     assert!(out.status.success(), "answer should ignore blame files: {}", stderr(&out));
 }
 
-// A blame file's own shape error is always a failure, draft or not.
+// A blame file's shape error on a file awaiting approval: approve refuses
+// it, and check reports the same line, as a note (05141f49).
 #[test]
 fn check_notes_a_shape_error_in_a_blame_file_awaiting_approval() {
     // adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
-    // approve refuses the shape fault; check reports it with the same move,
-    // as a note, since the file awaits approval (05141f49).
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     // The origin is there: the shape fault is the file's only finding.
@@ -393,6 +392,12 @@ fn check_notes_a_shape_error_in_a_blame_file_awaiting_approval() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
     assert!(stdout(&out).contains("blame:"), "{}", stdout(&out));
+    let approve = adr_owner(&dir, &["approve", "adrdom/blame/bad.md"], "");
+    assert!(!approve.status.success(), "approve takes a blame file with a shape fault");
+    for line in stderr(&approve).lines() {
+        let finding = line.strip_prefix("approve: ").unwrap_or(line);
+        assert!(stdout(&out).contains(finding), "approve refuses with {:?}, check prints:\n{}", finding, stdout(&out));
+    }
 }
 
 // adr: 34f0202a-0be4-4049-94de-d3886f4f8ffc
@@ -521,4 +526,8 @@ fn check_and_show_resolve_a_blame_row_alike() {
     );
     assert!(!from_check.iter().any(|l| l.contains("Is this pass?")), "{}", stdout(&check));
     assert_eq!(from_check, from_show, "check:\n{}\nshow:\n{}", stdout(&check), stdout(&show));
+    // approve refuses the file on that same finding.
+    let approve = adr_owner(&dir, &["approve", "adrdom/blame/x.md"], "");
+    assert!(!approve.status.success(), "approve takes a row naming no question");
+    assert!(stderr(&approve).contains("Is nothing here at all?"), "{}", stderr(&approve));
 }

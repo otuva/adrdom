@@ -124,6 +124,8 @@ not yet: \"{one}\" is answered and is built once \"{two}\" is answered\n",
     );
 }
 
+// adr: 6addc2f4-ff23-4fc6-851e-7cd67063b9f8
+//
 // adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
 //
 // Before approve the owner reads, in show, what approve would sign: a new
@@ -302,10 +304,12 @@ fn show_refuses_a_file_and_all_together() {
     assert!(stdout(&out).is_empty(), "{}", stdout(&out));
 }
 
-// adr: 848e1b76-9cfe-483b-94dd-094eb9b2f995
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 //
 // Lines that cannot reach standard output (a full device) leave the output
-// incomplete: the command ends with 1 and says so, never a pass.
+// incomplete: the command stops with 1, and its refusal names what failed
+// and the command to run again ("Does a refusal name the command that
+// clears it?").
 #[cfg(target_os = "linux")]
 #[test]
 fn show_into_a_full_device_does_not_pass() {
@@ -320,7 +324,9 @@ fn show_into_a_full_device_does_not_pass() {
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&out.stderr).contains("standard output cannot be written"));
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("standard output cannot be written"), "{}", err);
+    assert!(err.contains("runs: adr show --all"), "{}", err);
 }
 
 // adr: bceceda8-133a-4c9b-b439-b5c1a4414a02

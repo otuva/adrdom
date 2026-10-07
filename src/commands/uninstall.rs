@@ -9,12 +9,6 @@ use crate::repo;
 use std::fs;
 use std::path::Path;
 
-/// The move on any I/O failure while uninstalling: the agent fixes what the
-/// error names, then the owner runs uninstall again.
-fn retry() -> Next {
-    Next::agent("fixes what the error names").and_owner_runs(crate::moves::Cmd::fixed("adr uninstall"))
-}
-
 /// The event of the file at `rel` edited in place.
 fn written(rel: &str) -> Event {
     Event::FileWritten { path: rel.to_string() }
@@ -60,8 +54,8 @@ pub fn run() -> i32 {
 /// Every removal in order, stopping at the first that fails; `events`
 /// holds one event for each file removed or edited up to that point.
 fn remove_all(root: &Path, events: &mut Vec<Event>) -> Result<(), String> {
-    events.extend(remove_agents_md_section(root).map_err(|e| msg::update_failed("AGENTS.md", e, retry()))?);
-    events.extend(remove_claude_md_import(root).map_err(|e| msg::update_failed("CLAUDE.md", e, retry()))?);
+    events.extend(remove_agents_md_section(root).map_err(|e| msg::update_failed("AGENTS.md", e, msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr uninstall"))))?);
+    events.extend(remove_claude_md_import(root).map_err(|e| msg::update_failed("CLAUDE.md", e, msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr uninstall"))))?);
     remove_hooks(root, events)?;
     remove_settings_deny(root, events)?;
     remove_codex_rules(root, events)
@@ -189,7 +183,7 @@ fn remove_hooks(root: &Path, events: &mut Vec<Event>) -> Result<(), String> {
     if let Some(val) = repo::git(root, &["config", "core.hooksPath"]) {
         if val.trim() == ".githooks" && !hooks.exists() {
             if repo::git(root, &["config", "--unset", "core.hooksPath"]).is_none() {
-                return Err(msg::hooks_path_failed("unset", retry()));
+                return Err(msg::hooks_path_failed("unset", msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr uninstall"))));
             }
             events.push(Event::ConfigUnset { key: "core.hooksPath".to_string() });
         }
@@ -200,7 +194,7 @@ fn remove_hooks(root: &Path, events: &mut Vec<Event>) -> Result<(), String> {
 
 /// The refusal for a removal that failed, naming what was not removed.
 fn remove<T>(path: &Path, done: std::io::Result<T>) -> Result<T, String> {
-    done.map_err(|e| msg::remove_failed(&path.display().to_string(), e, retry()))
+    done.map_err(|e| msg::remove_failed(&path.display().to_string(), e, msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr uninstall"))))
 }
 
 /// Removes `dir` when it holds nothing; true when it was removed. A
@@ -247,7 +241,7 @@ fn remove_codex_rules(root: &Path, events: &mut Vec<Event>) -> Result<(), String
 /// failure is the whole refusal, its move named once.
 fn remove_settings_deny(root: &Path, events: &mut Vec<Event>) -> Result<(), String> {
     const REL: &str = ".claude/settings.json";
-    let failed = |e: String| msg::update_failed(REL, e, retry());
+    let failed = |e: String| msg::update_failed(REL, e, msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr uninstall")));
     let dir = root.join(".claude");
     let path = dir.join("settings.json");
     if !path.exists() {
@@ -283,7 +277,7 @@ fn remove_settings_deny(root: &Path, events: &mut Vec<Event>) -> Result<(), Stri
         fs::remove_file(&path).map_err(|e| failed(e.to_string()))?;
         // Printed whatever follows: the file is gone.
         events.push(removed(REL));
-        if remove_dir_when_empty(&dir).map_err(|e| msg::remove_failed(".claude", e, retry()))? {
+        if remove_dir_when_empty(&dir).map_err(|e| msg::remove_failed(".claude", e, msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr uninstall"))))? {
             events.push(removed(".claude"));
         }
         return Ok(());

@@ -1166,6 +1166,7 @@ fn do_approve_record(
         led,
         planning,
         shared: None,
+        directory: true,
     };
     let refusals: Vec<String> = rules::judge_topic_file(&judge)
         .into_iter()

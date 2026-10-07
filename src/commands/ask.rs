@@ -329,12 +329,12 @@ pub fn run(given: PathBuf) -> i32 {
             continue;
         }
         let Some(id) = sec.id.clone() else { continue };
-        let cur = record::section_hash(&rf.lines, sec);
-        match led.latest_state(&id) {
-            None => {}
-            Some(row) if row.event == "asked" && row.hash != cur => {}
-            _ => continue,
+        // Read again on the text as rewritten (its terms line may be new):
+        // the one test of a question open to ask.
+        if !status::open_to_ask(&led, &rf, sec) {
+            continue;
         }
+        let cur = record::section_hash(&rf.lines, sec);
         new_rows.push(ledger::Row {
             time: write_time.clone(),
             event: "asked".to_string(),

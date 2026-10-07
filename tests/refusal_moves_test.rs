@@ -314,17 +314,17 @@ fn show_ends_without_a_word_when_its_reader_goes_away() {
     }
     write_record(&dir, A, &plan);
 
-    let mut child = Command::new(adr_bin())
+    // The reading end is closed before the tool starts, so its first print
+    // meets the closed pipe whatever the timing.
+    let (reader, writer) = std::io::pipe().unwrap();
+    drop(reader);
+    let out = Command::new(adr_bin())
         .current_dir(&dir)
         .arg("show")
-        .stdout(Stdio::piped())
+        .stdout(writer)
         .stderr(Stdio::piped())
-        .spawn()
+        .output()
         .unwrap();
-    // The reading end is closed before the tool has read a file, so its
-    // first print meets the closed pipe.
-    drop(child.stdout.take());
-    let out = child.wait_with_output().unwrap();
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(err.is_empty(), "{}", err);
     assert_eq!(out.status.code(), Some(141), "{:?}", out.status);
@@ -334,7 +334,10 @@ fn show_ends_without_a_word_when_its_reader_goes_away() {
 /// come twice, and none may be the command that just failed by itself.
 fn assert_one_clearing_move(line: &str, failed: &str) {
     let (_, mv) = line.split_once("; ").unwrap_or_else(|| panic!("a refusal with no move: {}", line));
-    let clauses: Vec<&str> = mv.split(['\n']).flat_map(|l| l.split("; ")).collect();
+    // Clauses are joined by "; " and, as `Next` renders them, by ", " before
+    // the next actor's clause.
+    let joined = mv.replace(", agent ", "\u{0}agent ").replace(", owner ", "\u{0}owner ").replace(", not yet", "\u{0}not yet");
+    let clauses: Vec<&str> = joined.split(['\n', '\u{0}']).flat_map(|l| l.split("; ")).collect();
     for (i, c) in clauses.iter().enumerate() {
         assert!(!clauses[..i].contains(c), "a clause named twice: {}", line);
     }

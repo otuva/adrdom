@@ -32,7 +32,7 @@ enum Command {
         /// The topic file, adrdom/decisions/<topic>.md.
         topic_file: PathBuf,
     },
-    /// Plan a topic file: bring the neighbours of its headings and of its questions with their bodies, name the lines still to write, or say it is ready for approval.
+    /// Plan a topic file: bring the neighbours of its headings and of its questions with their bodies, name the lines still to write, and print the move that follows: the owner's approve once the plan is ready.
     Plan {
         /// The topic file, adrdom/decisions/<topic>.md.
         topic_file: PathBuf,

@@ -496,14 +496,6 @@ pub fn terms_banned_hits(root: &Path, tf: &terms::TermsFile, source: &repo::Sour
         .collect()
 }
 
-/// The length refusals (`tells::length_tells`, the one function `ask` reads
-/// too) of every question of `rf` open to ask (`status::open_to_ask_text`:
-/// no state, or asked and edited since). Answered text is never read (per
-/// "Does the word limit read the text of an answered question?").
-pub fn length_refusals(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<String> {
-    messages(length_found(rel, rf, led))
-}
-
 fn length_found(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<(usize, String)> {
     let mut out = Vec::new();
     for (i, sec) in rf.sections.iter().enumerate() {
@@ -528,16 +520,6 @@ fn in_sections(rule: Rule, found: Vec<(usize, String)>) -> Vec<Finding> {
     found.into_iter().map(|(i, m)| Finding::new(rule, m).in_section(i)).collect()
 }
 
-/// The loaded phrases (`tells::prose_tells_in`, the scan `ask` reads too)
-/// in the body of every question of `rf` open to ask, below its heading,
-/// judged as its heading is (per "Does the tool stop loaded phrases in a
-/// question?"): the
-/// one function `check`, `approve` and `plan`
-/// read, found before approval what `ask` refuses.
-pub fn body_tell_refusals(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<String> {
-    messages(body_tell_found(rel, rf, led))
-}
-
 fn body_tell_found(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<(usize, String)> {
     let mut out = Vec::new();
     for (i, sec) in rf.sections.iter().enumerate() {
@@ -550,15 +532,6 @@ fn body_tell_found(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<(usize, Stri
         }
     }
     out
-}
-
-/// One `pairs_no_term` message per question of `rf` not yet asked, with its
-/// options, whose text pairs no term (`terms::resolve`, the pairing `ask`
-/// writes): the one function `check`, `approve` and `plan` read, found
-/// before approval what `ask` refuses. A heading with no body is no question
-/// yet.
-pub fn no_term_refusals(rel: &str, rf: &RecordFile, terms_list: &[terms::Term], led: &Ledger) -> Vec<String> {
-    messages(no_term_found(rel, rf, terms_list, led))
 }
 
 fn no_term_found(rel: &str, rf: &RecordFile, terms_list: &[terms::Term], led: &Ledger) -> Vec<(usize, String)> {
@@ -760,11 +733,34 @@ pub fn depends_shape_refusals(
 /// into `resolve_dep`.
 ///
 /// `names` is every heading by its id, of any state and any topic file
-/// (`view::all_heading_texts`), built once per command run by the caller:
+/// (`view::heading_texts`), built once per command run by the caller:
 /// a refusal that names an identifier names the question beside it.
 /// `all` is every topic file loaded: a heading-shaped entry that names no
 /// current decision but a question of another topic file that is not
 /// answered (or is refused) is refused with the state the tool holds.
+/// The `parse` findings of a topic file: its shape, a `###` line that is no
+/// question, a section's shape, and what its parse found (178a232e A point
+/// 1: an option with no decision sentence or more than one, a duplicate id
+/// line, an answer naming a missing option). The one list every reader of
+/// the `parse` rule prints, in this order.
+pub fn parse_findings(rel: &str, rf: &RecordFile) -> Vec<Finding> {
+    let mut out: Vec<Finding> = rf.shape_errors.iter().map(|e| Finding::new(Rule::Parse, msg::shape_error(rel, e))).collect();
+    for i in record::non_question_heading_lines(&rf.lines) {
+        out.push(Finding::new(Rule::Parse, msg::heading_not_a_question(rel, i + 1)));
+    }
+    for (si, sec) in rf.sections.iter().enumerate() {
+        for e in &sec.shape_errors {
+            out.push(Finding::new(Rule::Parse, msg::section_shape_error(rel, &sec.heading_text, e)).in_section(si));
+        }
+    }
+    for (si, sec) in rf.sections.iter().enumerate() {
+        for e in &sec.parse_errors {
+            out.push(Finding::new(Rule::Parse, msg::check_parse_error(rel, &sec.heading_text, e)).in_section(si));
+        }
+    }
+    out
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn record_refusals(
     rel: &str,
@@ -777,29 +773,7 @@ pub fn record_refusals(
     replaced: &std::collections::HashSet<String>,
     led: &Ledger,
 ) -> Vec<Finding> {
-    let mut out: Vec<Finding> = Vec::new();
-
-    for e in &rf.shape_errors {
-        out.push(Finding::new(Rule::Parse, msg::shape_error(rel, e)));
-    }
-    for i in record::non_question_heading_lines(&rf.lines) {
-        out.push(Finding::new(Rule::Parse, msg::heading_not_a_question(rel, i + 1)));
-    }
-    for (si, sec) in rf.sections.iter().enumerate() {
-        for e in &sec.shape_errors {
-            out.push(Finding::new(Rule::Parse, msg::section_shape_error(rel, &sec.heading_text, e)).in_section(si));
-        }
-    }
-    // 178a232e A point 1: an option with no decision sentence (or more than
-    // one), a duplicate id line, and an answer naming a missing option were
-    // parse errors only `check` read; now every reader of the shared "parse"
-    // category (`ask`, `approve`, `check`) refuses on them the same way it
-    // already refuses on a shape error.
-    for (si, sec) in rf.sections.iter().enumerate() {
-        for e in &sec.parse_errors {
-            out.push(Finding::new(Rule::Parse, msg::check_parse_error(rel, &sec.heading_text, e)).in_section(si));
-        }
-    }
+    let mut out: Vec<Finding> = parse_findings(rel, rf);
 
     // Per "Does the tool stop loaded phrases in a question?": a loaded
     // phrase refuses before any write -- a heading with any
@@ -1261,30 +1235,6 @@ pub fn cap_finding(rel: &str, rf: &RecordFile, replaced: &HashSet<String>, led: 
 
 // --- the judgements every command reads --------------------------------------
 
-/// What the rules find in the plan of the topic file `rf` (the file as
-/// loaded; `all` is every topic file), with `names` every heading by its id:
-/// a copy of `rf` is normalized the way `approve` normalizes it, then judged
-/// by `record_refusals`. What `show` and the refusal `answer` makes read for
-/// the moves of a plan.
-pub fn judge_record(
-    names: &HashMap<String, String>,
-    rf: &RecordFile,
-    all: &[RecordFile],
-    terms_list: &[terms::Term],
-    led: &Ledger,
-) -> Vec<Finding> {
-    let phrase_lookup = terms::phrase_lookup(terms_list);
-    let cross_file_headings = depends::cross_file_heading_index(all, led);
-    let base = depends::replaced_base(all, &depends::approved_plan_rels(all, led), &cross_file_headings, led);
-    let mut rf = rf.clone();
-    depends::normalize_cross_file_deps(&mut rf, terms_list, &phrase_lookup, &cross_file_headings, led);
-    let replaced = depends::replaced_ids(&base, &rf, &cross_file_headings, led);
-    about_topic_file(
-        record_refusals(&rf.rel, &rf, terms_list, &phrase_lookup, &cross_file_headings, names, all, &replaced, led),
-        &rf.rel,
-    )
-}
-
 /// What one topic file is judged against: the file normalized
 /// (`depends::normalize_cross_file_deps`), every topic file as loaded, the
 /// terms, and what the caller built once from them.
@@ -1305,6 +1255,10 @@ pub struct TopicFileJudge<'a> {
     /// What the planning of every file of the run reads, when the caller
     /// judges many files and has read it once; `None` reads it here.
     pub shared: Option<&'a crate::plan::Shared>,
+    /// Whether the rules on the directory (the file's own name, a heading
+    /// twice in it, a heading in another file) judge it too: `false` for a
+    /// caller that judges the whole directory once on its own (`check`).
+    pub directory: bool,
 }
 
 /// Whether the rules of the planning steps (a question with no body, the
@@ -1344,8 +1298,10 @@ pub fn judge_topic_file(j: &TopicFileJudge) -> Vec<Finding> {
         rel,
     );
     let directory = |m: String| Finding::new(Rule::Plan, m).about(Subject::Directory(rel.to_string()));
-    out.extend(own_name_and_heading_refusals(rel, rf.topic.as_deref(), &rf.sections).into_iter().map(directory));
-    out.extend(cross_file_heading_refusals(rel, rf, j.all, led).into_iter().map(directory));
+    if j.directory {
+        out.extend(own_name_and_heading_refusals(rel, rf.topic.as_deref(), &rf.sections).into_iter().map(directory));
+        out.extend(cross_file_heading_refusals(rel, rf, j.all, led).into_iter().map(directory));
+    }
     // Per "Does a depends entry carry the answers it holds under?": a letter
     // the target has no option for is found before `ask`.
     out.extend(about_topic_file(in_sections(Rule::Plan, letter_found(rel, rf, led)), rel));
@@ -1478,21 +1434,6 @@ fn planning_steps(
 }
 
 
-/// `judge_topic_file` of the topic file `rf` as loaded from disk, with what
-/// it is judged against built the way `approve` builds it: the file
-/// normalized (`depends::normalize_cross_file_deps`), every heading's text,
-/// and what the plan's supersedes lines replace. What `adr plan` prints as
-/// the findings on its file: the judgement `approve` refuses on.
-pub fn judge_topic_file_at(
-    root: &Path,
-    rf: &RecordFile,
-    all: &[RecordFile],
-    terms_list: &[terms::Term],
-    led: &Ledger,
-) -> Vec<Finding> {
-    judge_topic_file_in(root, rf, all, terms_list, led, &RepoIndex::new(root, all, terms_list, led))
-}
-
 /// What the judgement of every topic file of a run reads of the whole
 /// repository, read once per run rather than once per file: the planning
 /// records (`plan::Shared`, with the term phrases and the heading indexes),
@@ -1556,6 +1497,7 @@ pub fn judge_topic_file_in(
         led,
         planning: planning_rules_apply(led, &rf, &rf.rel),
         shared: Some(shared),
+        directory: true,
     })
 }
 
