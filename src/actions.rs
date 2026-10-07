@@ -71,7 +71,7 @@ fn load_terms_or_refuse(root: &Path) -> Result<terms::TermsFile, String> {
         TermsLoad::Missing => Err(msg::terms_missing()),
         TermsLoad::LoadError(e) => Err(msg::terms_load_error(
             &e,
-            Next::agent("fixes adrdom/terms.md and retries"),
+            msg::fix_then_same_command("adrdom/terms.md so it can be read"),
         )),
         TermsLoad::Ok(tf) => Ok(tf),
     }

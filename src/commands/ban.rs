@@ -1,7 +1,7 @@
 use crate::banned;
 use crate::commands::check::collect_targets;
 use crate::ledger;
-use crate::msg::{self, Actor, Next};
+use crate::msg::{self, Actor};
 use crate::out::{self, Event};
 use crate::record;
 use crate::repo;
@@ -66,7 +66,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     if std::io::stdin().read_to_string(&mut input).is_err() {
         out::eprint_stop(&format!(
             "ban: {}",
-            msg::stdin_read_failed(Next::agent("checks stdin and retries"))
+            msg::stdin_read_failed(msg::after_fix_agent_runs("adr ban with the words on its input"))
         ));
         return 1;
     }
@@ -109,7 +109,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
             if let Err(e) = banned::write_sorted(&banned_path, banned_now) {
                 out::eprint_stop(&format!(
                     "ban: {}",
-                    msg::update_failed("banned list", e, Next::agent("checks the error and retries"))
+                    msg::update_failed("banned list", e, msg::after_fix_agent_runs("adr ban with the words on its input"))
                 ));
                 return 1;
             }
@@ -156,7 +156,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     if let Err(e) = banned::write_sorted(&banned_path, entries) {
         out::eprint_stop(&format!(
             "ban: {}",
-            msg::update_failed("banned list", e, Next::agent("checks the error and retries"))
+            msg::update_failed("banned list", e, msg::after_fix_agent_runs("adr ban with the words on its input"))
         ));
         return 1;
     }
@@ -181,7 +181,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     if let Err(e) = ledger::append(&ledger_path, &rows) {
         out::eprint_stop(&format!(
             "ban: {}",
-            msg::update_failed("ledger", e, Next::agent("checks the error and retries"))
+            msg::update_failed("ledger", e, msg::after_fix_agent_runs("adr ban with the words on its input"))
         ));
         return 1;
     }
@@ -210,7 +210,7 @@ fn run_rebuild(banned_path: &std::path::Path, ledger_path: &std::path::Path) -> 
     if let Err(e) = banned::write_sorted(banned_path, entries) {
         out::eprint_stop(&format!(
             "ban: {}",
-            msg::update_failed("banned list", e, Next::agent("checks the error and retries"))
+            msg::update_failed("banned list", e, msg::after_fix_agent_runs("adr ban --rebuild"))
         ));
         return 1;
     }

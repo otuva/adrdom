@@ -3,7 +3,7 @@ use crate::banned;
 use crate::depends;
 use crate::ledger;
 use crate::rules;
-use crate::msg::{self, Actor, Next};
+use crate::msg::{self, Actor};
 use crate::out;
 use crate::view;
 use crate::record;
@@ -44,11 +44,7 @@ pub fn run(record_path: PathBuf) -> i32 {
         Err(e) => {
             out::eprint_stop(&format!(
                 "ask: {}",
-                msg::read_failed(
-                    &record_path.display().to_string(),
-                    e,
-                    Next::agent("checks the error and retries"),
-                )
+                msg::read_failed(&record_path.display().to_string(), &e, msg::topic_file_unread("ask", &rel, &e))
             ));
             return 1;
         }
@@ -402,7 +398,7 @@ pub fn run(record_path: PathBuf) -> i32 {
             msg::write_failed(
                 &record_path.display().to_string(),
                 e,
-                Next::agent("checks the error and retries"),
+                msg::after_fix_agent_runs(format!("adr ask {}", rel)),
             )
         ));
         return 1;
@@ -410,7 +406,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     if let Err(e) = ledger::append(&ledger_path, &new_rows) {
         out::eprint_stop(&format!(
             "ask: {}",
-            msg::update_failed("ledger", e, Next::agent("checks the error and retries"))
+            msg::update_failed("ledger", e, msg::after_fix_agent_runs(format!("adr ask {}", rel)))
         ));
         return 1;
     }
@@ -497,7 +493,7 @@ fn do_conflict_reask(
             msg::write_failed(
                 &record_path.display().to_string(),
                 e,
-                Next::agent("checks the error and retries"),
+                msg::after_fix_agent_runs(format!("adr ask {}", state::rel_path(root, record_path))),
             )
         ));
         return 1;
@@ -537,7 +533,7 @@ fn do_conflict_reask(
     if let Err(e) = ledger::append(&ledger_path, &new_rows) {
         out::eprint_stop(&format!(
             "ask: {}",
-            msg::update_failed("ledger", e, Next::agent("checks the error and retries"))
+            msg::update_failed("ledger", e, msg::after_fix_agent_runs(format!("adr ask {}", state::rel_path(root, record_path))))
         ));
         return 1;
     }

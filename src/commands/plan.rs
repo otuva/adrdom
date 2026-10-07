@@ -25,7 +25,7 @@
 //! loads them too.
 use crate::index;
 use crate::ledger;
-use crate::msg::{self, Next};
+use crate::msg;
 use crate::out::{self, Line};
 use crate::plan::{self, Planning, Step};
 use crate::reader;
@@ -62,7 +62,7 @@ pub fn run(file: PathBuf) -> i32 {
         Err(e) => {
             out::eprint(&[out::refusal(
                 "plan",
-                &msg::read_failed(&file.display().to_string(), e, Next::agent("checks the path and retries")),
+                &msg::read_failed(&file.display().to_string(), &e, msg::topic_file_unread("plan", &rel, &e)),
             )]);
             return 1;
         }

@@ -1257,6 +1257,29 @@ pub fn after_fix_owner_runs(command: impl Into<String>) -> Next {
     Next::agent("fixes what the error names").and_owner_runs(command)
 }
 
+/// The agent's move after a command of its own failed to read or write what
+/// the error names: fix that, then run `command` again.
+pub fn after_fix_agent_runs(command: impl Into<String>) -> Next {
+    Next::agent(format!("fixes what the error names, then runs: {}", command.into()))
+}
+
+/// The agent's move on a topic file `cmd` could not read at `rel`: a path
+/// that does not exist is named again, any other failure is fixed first.
+pub fn topic_file_unread(cmd: &str, rel: &str, e: &std::io::Error) -> Next {
+    if e.kind() == std::io::ErrorKind::NotFound {
+        Next::agent(format!("names a topic file under adrdom/decisions that exists, then runs: adr {} with it", cmd))
+    } else {
+        after_fix_agent_runs(format!("adr {} {}", cmd, rel))
+    }
+}
+
+/// The move of a failure inside a step several commands share (the
+/// embedding cache, the reader's file, the terms file as loaded): fix `what`,
+/// then run the command that stopped, named at the head of its line, again.
+pub fn fix_then_same_command(what: &str) -> Next {
+    Next::agent(format!("fixes {}, then runs the same adr command again", what))
+}
+
 /// The agent's move on a file a command cannot take as it stands: fix the
 /// file at `path` so `so` holds, then run `command` again.
 pub fn fix_then(path: &str, so: &str, command: &str) -> Next {
@@ -2340,7 +2363,7 @@ pub fn model_load_failed(cache: &str, e: impl Display) -> String {
 pub fn embed_failed(e: impl Display) -> String {
     refuse(
         format!("model: cannot embed the texts: {}", e),
-        Next::agent("retries; if it persists, deletes adrdom/cache and retries"),
+        Next::agent("runs the same adr command again; if the error stays, deletes adrdom/cache first"),
     )
 }
 
@@ -2362,7 +2385,7 @@ pub fn reader_failed(neighbour: &str, e: impl Display) -> String {
 }
 
 pub fn reader_write_failed(e: impl Display) -> String {
-    write_failed(crate::repo::READER_PATH, e, Next::agent("fixes the reader file and retries"))
+    write_failed(crate::repo::READER_PATH, e, fix_then_same_command("the reader file"))
 }
 
 pub fn malformed_reader_row(lineno: usize, raw: &str) -> String {

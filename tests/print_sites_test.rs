@@ -247,6 +247,25 @@ fn every_move_that_names_a_command_reads_runs_colon() {
     assert!(found.is_empty(), "a move naming a command without `runs:`:\n{}", found.join("\n"));
 }
 
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// Every refusal names the command that clears it: no move in the tool tells
+// the agent to look at the error and try again without naming what to run.
+#[test]
+fn no_move_says_retry_without_naming_the_command() {
+    let mut found = Vec::new();
+    for (rel, text) in source_files() {
+        for (n, line) in code_lines(&text) {
+            for literal in string_literals(line) {
+                if ["checks the error", "checks the path", "and retries"].iter().any(|w| literal.contains(w)) {
+                    found.push(format!("{}:{}: {}", rel, n, line.trim()));
+                }
+            }
+        }
+    }
+    assert!(found.is_empty(), "a move that names no command:\n{}", found.join("\n"));
+}
+
 /// The findings and moves a command printed: every line at the left edge
 /// that is no status line, no topic line and no question `plan` read.
 fn report_of(out: &str) -> Vec<String> {

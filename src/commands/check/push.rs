@@ -8,7 +8,7 @@
 // against).
 
 use super::{stopped, Failure};
-use crate::msg::{self, Actor, Next};
+use crate::msg::{self, Actor};
 use crate::out::{self, Line};
 use crate::repo;
 use std::io::Read;
@@ -30,7 +30,7 @@ pub fn run() -> i32 {
 
     let mut input = String::new();
     if std::io::stdin().read_to_string(&mut input).is_err() {
-        out::eprint(&[stopped(msg::stdin_read_failed(Next::agent("checks stdin and retries")))]);
+        out::eprint(&[stopped(msg::stdin_read_failed(msg::after_fix_agent_runs("git push")))]);
         return 1;
     }
 

@@ -399,3 +399,28 @@ fn outside_a_repository_every_command_names_the_step_that_clears_it() {
     }
     std::fs::remove_dir_all(&outside).unwrap();
 }
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// ask and plan on a topic file that does not exist name the file to give
+// and the command to run with it, once.
+#[test]
+fn ask_and_plan_on_a_missing_topic_file_name_the_command_that_clears_it() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let missing = dir.join("adrdom/decisions/nofile.md");
+    for cmd in ["ask", "plan"] {
+        let out = adr(&dir, &[cmd, missing.to_str().unwrap()], &[], "");
+        assert!(!out.status.success(), "{}: refused", cmd);
+        let err = stderr(&out);
+        let line = err.lines().next().unwrap_or_default();
+        assert!(
+            line.ends_with(&format!("agent names a topic file under adrdom/decisions that exists, then runs: adr {} with it", cmd)),
+            "{}: {}",
+            cmd,
+            err
+        );
+        assert_one_clearing_move(line, &format!("adr {}", cmd));
+    }
+}
