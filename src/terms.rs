@@ -223,8 +223,9 @@ pub fn parse(lines: &[String]) -> TermsFile {
 
         if id.is_none() {
             errors.push(format!(
-                "line {}: missing id; owner runs adr approve adrdom/terms.md",
-                start + 1
+                "line {}: missing id; {}",
+                start + 1,
+                crate::moves::clause(crate::moves::MoveKind::Approve { path: crate::repo::TERMS_PATH.to_string() }).render()
             ));
         }
         if definition.is_none() {
@@ -948,7 +949,7 @@ aliases: \n"
         assert!(tf
             .errors
             .iter()
-            .any(|e| e.contains("missing id; owner runs adr approve adrdom/terms.md")));
+            .any(|e| e.contains("missing id; owner runs: adr approve adrdom/terms.md")));
     }
 
     #[test]

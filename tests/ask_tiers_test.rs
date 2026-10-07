@@ -831,7 +831,7 @@ fn ask_asks_every_tier_show_named_and_the_owners_answers_come_in_order() {
 
     let shown = stdout(&adr(&dir, &["show", rel], &[], ""));
     assert!(
-        shown.lines().any(|l| l.contains("agent runs adr ask") && l.contains("Is alpha ready?") && l.contains("Is delta ready?")),
+        shown.lines().any(|l| l.contains("agent runs: adr ask") && l.contains("Is alpha ready?") && l.contains("Is delta ready?")),
         "{}",
         shown
     );
@@ -911,9 +911,9 @@ fn answer_names_the_move_show_names_for_an_edited_target() {
     approve_record(&dir, rel);
     let refused = adr_answer(&dir, &q2_id, "A");
     assert!(!refused.status.success());
-    assert!(stderr(&refused).contains(&format!("agent runs adr ask {}", rel)), "{}", stderr(&refused));
+    assert!(stderr(&refused).contains(&format!("agent runs: adr ask {}", rel)), "{}", stderr(&refused));
     let shown = stdout(&adr(&dir, &["show", rel], &[], ""));
-    assert!(shown.contains(&format!("agent runs adr ask {}", rel)), "{}", shown);
+    assert!(shown.contains(&format!("agent runs: adr ask {}", rel)), "{}", shown);
 }
 
 // adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
@@ -945,7 +945,7 @@ fn answer_names_one_ask_clause_for_every_edited_heading() {
     let refused = adr_owner(&dir, &["answer", &format!("{}@{}", q3_id, version), "A"], "");
     assert!(!refused.status.success());
     let err = stderr(&refused);
-    assert_eq!(err.matches("agent runs adr ask").count(), 1, "{}", err);
+    assert_eq!(err.matches("agent runs: adr ask").count(), 1, "{}", err);
     assert!(err.contains("# \"Is alpha ready?\", \"Is beta ready?\""), "{}", err);
 }
 

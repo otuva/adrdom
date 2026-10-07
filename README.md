@@ -94,9 +94,10 @@ runtime dependencies beyond `git` on `PATH`.
 - `adr check [--staged] [--message <path>]` — run every governance check,
   including failing outright while `adrdom/terms.md` differs from its
   latest approval; used by `.githooks/pre-commit` and
-  `.githooks/commit-msg`. Prints each finding with the move that clears it
-  and nothing else: a pass prints nothing. A finding on a file awaiting
-  approval is a note and fails nothing.
+  `.githooks/commit-msg`. Prints only findings, each with the move that
+  clears it (an untested current decision is one), and nothing when it
+  finds none. A finding on a file awaiting approval is a note and fails
+  nothing.
 
 A command that writes prints one line per ledger row it appends, and one
 per file it writes that no such row covers, or on standard error the

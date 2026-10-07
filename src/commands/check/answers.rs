@@ -3,8 +3,19 @@ use crate::ledger::Ledger;
 use crate::msg;
 use crate::record::{self, RecordFile};
 use crate::state;
+use crate::terms::Term;
+use std::path::Path;
 
-pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure> {
+/// `as_loaded`: every topic file as written, before the normalize pass, so
+/// the move an edited asked question names is the one `show` computes for
+/// its file (`moves::of_unasked_question_in`).
+pub(super) fn check_answers(
+    root: &Path,
+    records: &[RecordFile],
+    as_loaded: &[RecordFile],
+    terms_list: &[Term],
+    led: &Ledger,
+) -> Vec<Failure> {
     let mut out = Vec::new();
     for rf in records {
         for (ti, sec) in rf.sections.iter().enumerate() {
@@ -129,9 +140,19 @@ pub(super) fn check_answers(records: &[RecordFile], led: &Ledger) -> Vec<Failure
                     // only a section that genuinely was asked before, and
                     // no longer hashes the same, is "edited after asking".
                     if latest_asked_hash != cur {
+                        let loaded = as_loaded.iter().find(|f| f.rel == rf.rel).unwrap_or(rf);
+                        let moves = crate::moves::of_unasked_question_in(
+                            root,
+                            loaded,
+                            as_loaded,
+                            terms_list,
+                            led,
+                            &sec.heading_text,
+                            false,
+                        );
                         out.push(Failure {
                             check: "answers",
-                            message: msg::edited_after_asking(&rf.rel, &sec.heading_text),
+                            message: msg::edited_after_asking(&rf.rel, &sec.heading_text, &moves),
                         });
                     }
                 }

@@ -112,6 +112,15 @@ pub fn stdin_read_failed(next: Next) -> String {
     refuse("failed to read stdin".to_string(), next)
 }
 
+/// Standard output refused a line for a cause other than its reader going
+/// away (a full disk, a closed descriptor): what was printed is incomplete.
+pub fn stdout_write_failed(e: impl Display) -> String {
+    refuse(
+        format!("output: standard output cannot be written: {}", e),
+        Next::agent("frees the place standard output goes to and runs the command again"),
+    )
+}
+
 // --- repo.rs ----------------------------------------------------------------
 
 /// `<cmd>: not inside a git repository; ...` -- printed by every command
@@ -446,6 +455,14 @@ pub fn dep_no_term(rel: &str, heading: &str, text: &str) -> String {
 /// `show` names a path approve does not take (per "Does show print what a
 /// file holds beyond its latest approval?": show takes every file approve
 /// takes).
+/// `plan` names a path that is no topic file: it plans topic files alone.
+pub fn plan_not_a_topic_file(rel: &str) -> String {
+    refuse(
+        format!("{} is not a topic file", rel),
+        Next::agent("names a topic file under adrdom/decisions"),
+    )
+}
+
 pub fn show_not_a_file_approve_takes(rel: &str) -> String {
     refuse(
         format!("{} is not a file approve takes", rel),
@@ -1127,7 +1144,7 @@ pub fn pairs_no_term(rel: &str, heading: &str) -> String {
 pub fn pairs_no_term_at_write(rel: &str, heading: &str) -> String {
     refuse(
         format!("{}: \"{}\": uses no term", rel, heading),
-        Next::agent("re-runs adr ask"),
+        Next::agent("runs: adr ask"),
     )
 }
 
@@ -1349,11 +1366,12 @@ pub fn refused_row_without_line(rel: &str, heading: &str) -> String {
     )
 }
 
-pub fn edited_after_asking(rel: &str, heading: &str) -> String {
-    refuse(
-        format!("{}: {}: edited after asking", rel, heading),
-        Next::agent("runs adr ask"),
-    )
+/// An asked question whose text no longer hashes as asked. `moves`: the
+/// moves of the question's file (`moves::of_unasked_question_in`), the ones
+/// `show` names for it (per "Does a command compute a move of its own?",
+/// aac5c313 A).
+pub fn edited_after_asking(rel: &str, heading: &str, moves: &[crate::moves::Move]) -> String {
+    format!("{}: {}: edited after asking; {}", rel, heading, crate::moves::tail(moves))
 }
 
 pub fn answer_set_changed(rel: &str, dep_heading: &str, heading: &str) -> String {
@@ -1377,7 +1395,7 @@ pub fn answer_set_changed(rel: &str, dep_heading: &str, heading: &str) -> String
 pub fn answer_conflict(rel: &str, heading: &str, id: &str, a: &str, b: &str) -> String {
     refuse(
         format!("{}: {}: two standing answers, {} and {}", rel, heading, a, b),
-        Next::agent(format!("runs adr ask {}", rel))
+        Next::agent(format!("runs: adr ask {}", rel))
             .and_owner_runs(format!("adr answer {}@<version> <letter>", id)),
     )
 }
@@ -2269,7 +2287,7 @@ pub fn term_retired_decision_next(term: &str, id: &str, heading: &str) -> Next {
 /// again, or strike it from the plan.
 pub fn term_retired_asked_next(heading: &str, term: &str, rel: &str) -> Next {
     Next::agent(format!(
-        "{}, then rewords \"{}\" so it does not name \"{}\" and runs adr ask {}, or strikes it from the plan",
+        "{}, then rewords \"{}\" so it does not name \"{}\" and runs: adr ask {}, or strikes it from the plan",
         unretire(term),
         heading,
         term,
@@ -2549,7 +2567,7 @@ mod tests {
             answered_text_changed("x.md", "heading", "id-1"),
             answered_row_without_line("x.md", "heading"),
             refused_row_without_line("x.md", "heading"),
-            edited_after_asking("x.md", "heading"),
+            edited_after_asking("x.md", "heading", &[crate::moves::Move::new(crate::moves::MoveKind::Ask { rel: "x.md".into(), headings: vec!["heading".into()] })]),
             answer_set_changed("x.md", "dependent", "heading"),
             answer_conflict("x.md", "heading", "id-1", "A", "B"),
             banned_word_at("x.md:3", ""),

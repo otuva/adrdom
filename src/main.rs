@@ -57,7 +57,7 @@ enum Command {
         /// A topic file, adrdom/terms.md, or a blame file under adrdom/blame: every question, entry or row with its status, what is beyond its latest approval marked, and its moves.
         topic_file: Option<PathBuf>,
         /// Print every file approve takes, each as with a file named.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "topic_file")]
         all: bool,
         /// With a file or --all: each neighbour of a question not yet answered, with the reader's word and the agent's line.
         #[arg(long, requires = "whole")]

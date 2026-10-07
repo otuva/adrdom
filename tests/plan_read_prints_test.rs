@@ -217,3 +217,23 @@ fn read_prints_the_marked_pairs_and_the_move_and_nothing_else() {
     assert!(lines[0].starts_with("read: same: \""), "{}", out);
     assert_eq!(lines[1], "agent writes a question that supersedes one decision of each same or inconsistent pair");
 }
+
+// adr: aac5c313-dedd-466b-a0c3-ead5e99ce913
+//
+// plan plans topic files alone: the terms file, a blame file or any other
+// path is refused with the move, never misread as a topic file.
+#[test]
+fn plan_refuses_a_path_that_is_no_topic_file() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    for path in ["adrdom/terms.md", "README.md"] {
+        let out = adr(&dir, &["plan", dir.join(path).to_str().unwrap()], &[], "");
+        assert!(!out.status.success(), "{}", path);
+        assert!(stdout(&out).is_empty(), "{}: {}", path, stdout(&out));
+        assert_eq!(
+            stderr(&out).trim_end(),
+            format!("plan: {} is not a topic file; agent names a topic file under adrdom/decisions", path)
+        );
+    }
+}

@@ -35,9 +35,8 @@ lines it carries, and the body of a question that waits for the owner's
 answer; what the file holds beyond its latest approval is printed marked,
 `+` for a line added and `-` for a line gone; then the moves of the file.
 `adr show --stood-on <file>` also prints what stands on each question and
-what took the place of one that was replaced. Read it before you write a
-question into that file. Each question opens with where it stands, in
-brackets:
+what took the place of one that was replaced. Each question opens with
+where it stands, in brackets:
 
 - `[no body]`: a heading of the plan, its body not written.
 - `[not asked]`: the body is written, `adr ask` has not run on it.
@@ -168,9 +167,10 @@ ids.
 for each question it asked, or prints in one run everything that stops it,
 each line with the move that clears it. Make every move before you run it
 again. Commit, post your lean for each question in chat, post the
-`owner runs: adr answer ...` lines `adr show` prints, and stop. The owner puts a letter, or the word `refuse`, in place of `<letter>`.
-When the answer is not in a question's answer set, the answer removes that
-question and every question standing on it from the file.
+`owner runs: adr answer ...` lines `adr show` prints, and stop. The owner
+puts a letter, or the word `refuse`, in place of `<letter>`. When the
+answer is not in a question's answer set, the answer removes that question
+and every question standing on it from the file.
 
 **After the answer.** If you wrote the question, stop: another agent builds
 its decision from the record alone. Build the decisions the moves name. Tie

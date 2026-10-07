@@ -192,3 +192,57 @@ fn every_command_names_the_move_for_a_blame_row_naming_no_question() {
     let out = approve_unplanned(&dir, &blame);
     assert_every_command_names(&dir, &blame, &refusal_lines(&out, "approve: "), "blame row naming no question", false);
 }
+
+// adr: aac5c313-dedd-466b-a0c3-ead5e99ce913
+//
+// An asked question edited since it was asked, its file awaiting approval:
+// check's finding names the move show, plan, ask and answer name for it.
+#[test]
+fn every_command_names_the_move_for_an_asked_question_edited_since_asked() {
+    let dir = widget_repo();
+    let rec = write_record(&dir, REL, &format!("# Gate\n\n{}", gate_question("Does the widget hold?", "the widget breaks.")));
+    approve_record(&dir, REL);
+    assert!(adr(&dir, &["ask", rec.to_str().unwrap()], &[], "").status.success());
+    let id = extract_ids(&std::fs::read_to_string(&rec).unwrap()).remove(0);
+    let version = current_version(&dir, &id);
+    let text = std::fs::read_to_string(&rec).unwrap().replace("the widget breaks.", "the widget snaps.");
+    std::fs::write(&rec, text).unwrap();
+
+    let check = all_of(&dir, &["check"]);
+    let edited = check
+        .lines()
+        .find(|l| l.contains("edited after asking"))
+        .unwrap_or_else(|| panic!("check names the edit:\n{}", check))
+        .to_string();
+    let mv = move_of(&edited).to_string();
+    for (who, out) in [
+        ("show", all_of(&dir, &["show"])),
+        ("show <path>", all_of(&dir, &["show", REL])),
+        ("plan", all_of(&dir, &["plan", rec.to_str().unwrap()])),
+        ("ask", all_of(&dir, &["ask", rec.to_str().unwrap()])),
+    ] {
+        assert!(out.contains(&mv), "{} names another move than check:\n{}\n--- {}:\n{}", who, mv, who, out);
+    }
+    let answered = adr_owner(&dir, &["answer", &format!("{}@{}", id, version), "A"], "");
+    assert!(!answered.status.success());
+    assert!(stderr(&answered).contains(&mv), "answer names another move:\n{}\n--- answer:\n{}", mv, stderr(&answered));
+}
+
+// adr: aac5c313-dedd-466b-a0c3-ead5e99ce913
+//
+// Every move that names a command reads `<actor> runs: <command>`: no
+// string in the tool words it another way.
+#[test]
+fn every_move_that_names_a_command_reads_runs_colon() {
+    let mut found = Vec::new();
+    for (rel, text) in source_files() {
+        for (n, line) in code_lines(&text) {
+            for literal in string_literals(line) {
+                if literal.contains("runs adr ") || literal.contains("runs `adr") {
+                    found.push(format!("{}:{}: {}", rel, n, line.trim()));
+                }
+            }
+        }
+    }
+    assert!(found.is_empty(), "a move naming a command without `runs:`:\n{}", found.join("\n"));
+}

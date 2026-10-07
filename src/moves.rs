@@ -95,12 +95,12 @@ impl Move {
     pub fn next(&self) -> Option<Next> {
         Some(match &self.kind {
             MoveKind::Clear { finding } => Next::agent(format!("clears: {}", finding)),
-            MoveKind::PlanUnresolved => Next::agent("runs adr check and clears what it names in the plan"),
+            MoveKind::PlanUnresolved => Next::agent("runs: adr check, then clears what it names in the plan"),
             MoveKind::Plan { rel } => Next::agent(format!("runs: adr plan {}", rel)),
             MoveKind::WriteLines { headings } => Next::agent(format!("writes lines for {}", quoted(headings))),
             MoveKind::WriteBodies { headings } => Next::agent(format!("writes the body of {}", quoted(headings))),
             MoveKind::Approve { path } => Next::owner_runs(format!("adr approve {}", path)),
-            MoveKind::Ask { rel, headings } => Next::agent(format!("runs adr ask {}  # {}", rel, quoted(headings))),
+            MoveKind::Ask { rel, headings } => Next::agent(format!("runs: adr ask {}  # {}", rel, quoted(headings))),
             MoveKind::Answer { id, version, .. } => Next::owner_runs(format!("adr answer {}@{} <letter>", id, version)),
             MoveKind::Refused { heading } => Next::agent(format!(
                 "changes the plan: \"{}\" is refused and holds the questions that come after it",
@@ -604,7 +604,7 @@ mod tests {
         let m = Move::new(MoveKind::Answer { id: "id-1".into(), version: "abcd".into(), heading: "Does it?".into() });
         assert_eq!(m.text(), "owner runs: adr answer id-1@abcd <letter>  # \"Does it?\"");
         let m = Move::new(MoveKind::Ask { rel: "x.md".into(), headings: vec!["A?".into(), "B?".into()] });
-        assert_eq!(m.text(), "agent runs adr ask x.md  # \"A?\", \"B?\"");
+        assert_eq!(m.text(), "agent runs: adr ask x.md  # \"A?\", \"B?\"");
         assert_eq!(Move::new(MoveKind::WaitFor { what: "w".into() }).text(), "not yet: w");
         assert_eq!(Move::new(MoveKind::Approve { path: "x.md".into() }).text(), "owner runs: adr approve x.md");
     }
@@ -625,7 +625,7 @@ mod tests {
         );
         assert_eq!(
             line,
-            "\"heading\" waits: \"a\" has no decision yet; \"b\" has no decision yet; agent runs adr ask x.md  # \"a\", \"b\", owner runs: adr approve x.md"
+            "\"heading\" waits: \"a\" has no decision yet; \"b\" has no decision yet; agent runs: adr ask x.md  # \"a\", \"b\", owner runs: adr approve x.md"
         );
     }
 

@@ -401,12 +401,20 @@ fn stood_on_by(rf: &RecordFile, sec: &Section, all: &[RecordFile], led: &Ledger)
 }
 
 /// A topic file gone from disk whose removal the owner has not approved:
-/// its status, each question of its approved plan, struck, and its move.
+/// its status, each question of its approved plan with the question's own
+/// status (per "Does a command name a status of its own?", f53ac3b9 A), and
+/// its move.
 fn removed_topic_file(r: &Records, rel: &str) -> Vec<Line> {
     let mut lines = vec![file_status(rel, FileStatus::Removed)];
     if let Some(old) = rules::latest_approved_version(&r.root, rel, &r.led) {
         for sec in &old.sections {
-            lines.push(file_status(&sec.heading_text, FileStatus::Removed));
+            let st = status::question_status(&r.led, sec);
+            let version = (st == QuestionStatus::Asked && view::asked_text_stands(&r.led, &old, sec))
+                .then(|| record::version_of(&old.lines, sec));
+            lines.push(Line::Status {
+                subject: sec.heading_text.clone(),
+                status: Status::Question { status: st, letter: sec.answer_letter(), version },
+            });
         }
     }
     lines.extend(removed_moves(r, rel).into_iter().map(Line::Move));

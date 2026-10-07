@@ -151,3 +151,20 @@ fn a_writing_command_prints_no_tier_and_no_move() {
         }
     }
 }
+
+// adr: 069a6b4a-de35-45f3-8c6c-8e254bf40565
+//
+// A ban after commits, with a line of two words one of which is banned
+// already: one line per row it appends, however many rows that is.
+#[test]
+fn a_ban_after_commits_prints_one_line_per_row_it_appends() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    run_git(&dir, &["add", "-A"]);
+    assert!(run_git(&dir, &["commit", "-q", "-m", "install"]).status.success());
+    prints_one_line_per_row(&dir, || adr(&dir, &["ban"], &[], "zorblax\n"));
+    run_git(&dir, &["add", "-A"]);
+    assert!(run_git(&dir, &["commit", "-q", "-m", "ban"]).status.success());
+    let out = prints_one_line_per_row(&dir, || adr(&dir, &["ban"], &[], "zorblax quxworth\n"));
+    assert!(!stdout(&out).is_empty(), "a ban that appends rows prints them");
+}

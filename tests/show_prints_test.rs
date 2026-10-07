@@ -252,3 +252,71 @@ fn show_prints_no_count_tier_or_hint_line() {
         assert!(!shown.contains("dropped: dead 1") && !shown.contains("from: "), "{}", shown);
     }
 }
+
+// adr: f53ac3b9-efde-427c-8027-19988aa8fda7
+//
+// A removed topic file is `[removed]`; each question of its approved plan
+// keeps the status of its own list.
+#[test]
+fn a_removed_topic_file_shows_each_question_with_its_own_status() {
+    let (dir, path) = asked();
+    let two = id_of(&path, TWO);
+    let version = current_version(&dir, &two);
+    std::fs::remove_file(&path).unwrap();
+    let shown = show(&dir, &[REL]);
+    assert!(shown.starts_with(&format!("[removed] {}\n", REL)), "{}", shown);
+    assert!(shown.contains(&format!("[answered A] {}\n", ONE)), "{}", shown);
+    assert!(shown.contains(&format!("[asked @{}] {}\n", version, TWO)), "{}", shown);
+    assert!(!shown.contains(&format!("[removed] {}", ONE)), "{}", shown);
+}
+
+// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+//
+// Approved and not yet committed, then a question struck: no committed text
+// holds the approved plan, and the struck question still shows, by its
+// identifier.
+#[test]
+fn a_question_struck_from_an_uncommitted_approval_still_shows() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let path = write_record(&dir, REL, &format!("# Gate\n\n{}{}", q(ONE), q(TWO)));
+    approve_record(&dir, REL);
+    let two = id_of(&path, TWO);
+    let text = std::fs::read_to_string(&path).unwrap();
+    let at = text.find(&format!("### {}\n", TWO)).unwrap();
+    std::fs::write(&path, &text[..at]).unwrap();
+    let shown = show(&dir, &[REL]);
+    assert!(shown.contains(&format!("[removed] {}\n", two)), "{}", shown);
+}
+
+// `show <file> --all` names two forms at once: clap refuses it rather than
+// print one of them.
+#[test]
+fn show_refuses_a_file_and_all_together() {
+    let (dir, _) = asked();
+    let out = adr(&dir, &["show", REL, "--all"], &[], "");
+    assert!(!out.status.success());
+    assert!(stdout(&out).is_empty(), "{}", stdout(&out));
+}
+
+// adr: 848e1b76-9cfe-483b-94dd-094eb9b2f995
+//
+// Lines that cannot reach standard output (a full device) leave the output
+// incomplete: the command ends with 1 and says so, never a pass.
+#[cfg(target_os = "linux")]
+#[test]
+fn show_into_a_full_device_does_not_pass() {
+    let (dir, _) = asked();
+    let full = std::fs::OpenOptions::new().write(true).open("/dev/full").unwrap();
+    let out = std::process::Command::new(adr_bin())
+        .args(["show", "--all"])
+        .current_dir(&dir)
+        .env("ADR_FAKE_MODEL", "1")
+        .stdin(std::process::Stdio::null())
+        .stdout(full)
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("standard output cannot be written"));
+}

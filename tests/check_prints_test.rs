@@ -236,3 +236,37 @@ fn an_approved_file_is_not_judged_by_the_planning_rules_by_approve_or_check() {
         stderr(&out)
     );
 }
+
+#[test]
+fn check_prints_every_finding_on_standard_output_whatever_its_exit() {
+    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
+    // One kind, one routing: a finding goes to standard output whether
+    // check passes with notes or fails; standard error is for a stop of
+    // check itself.
+    let dir = repo();
+    // A note on a draft: check passes and prints the finding.
+    write_record(&dir, REL, &format!("# Gate\n\n{}", q("Does the widget hold?", "the widget currently breaks.")));
+    plan_record(&dir, REL);
+    let (ok, out, err) = check(&dir);
+    assert!(ok, "{}{}", out, err);
+    assert!(!out.is_empty(), "the note is printed");
+    assert_eq!(err, "", "a note goes to standard output");
+    // A failure: a ledger row edited fails check, its finding on stdout too.
+    let ledger = dir.join("adrdom/state/ledger.tsv");
+    run_git(&dir, &["add", "-A"]);
+    assert!(run_git(&dir, &["commit", "-q", "-m", "x"]).status.success());
+    let text = std::fs::read_to_string(&ledger).unwrap();
+    std::fs::write(&ledger, text.replacen("\t", "\t ", 1)).unwrap();
+    let (ok, out, err) = check(&dir);
+    assert!(!ok, "an edited ledger row fails check");
+    assert!(!out.is_empty(), "the failure is printed");
+    assert_eq!(err, "", "a failure goes to standard output");
+    // A stop of check itself (no repository) goes to standard error.
+    let outside = std::env::temp_dir().join(format!("adr-not-a-repo-{}", std::process::id()));
+    std::fs::create_dir_all(&outside).unwrap();
+    let stop = adr(&outside, &["check"], &[], "");
+    let _ = std::fs::remove_dir_all(&outside);
+    if !stop.status.success() && stdout(&stop).is_empty() {
+        assert!(!stderr(&stop).is_empty(), "the stop is on standard error");
+    }
+}

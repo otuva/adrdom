@@ -51,6 +51,13 @@ pub fn run(file: PathBuf) -> i32 {
         }
     };
     let rel = state::rel_path(&root, &file);
+    // Planning is the planning of a topic file ("What does the agent do to
+    // plan a topic file?"): the terms file, a blame file or any other path
+    // is refused with the move, never read as a topic file.
+    if !crate::rules::is_topic_file_path(&rel) {
+        out::eprint(&[out::refusal("plan", &msg::plan_not_a_topic_file(&rel))]);
+        return 1;
+    }
     let mut rf = match record::load(&file) {
         Ok(rf) => rf,
         Err(e) => {

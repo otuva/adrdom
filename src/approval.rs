@@ -14,10 +14,6 @@ use crate::status::FileStatus;
 use crate::terms::{self, TermsFile};
 use std::path::Path;
 
-/// A bound on the committed versions read; the match is almost always among
-/// the first few.
-const WALK_LIMIT: usize = 50;
-
 /// The side of one line of a change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Side {
@@ -104,12 +100,12 @@ fn changed(old: Option<Vec<String>>, new: &[String]) -> Vec<DiffLine> {
 }
 
 /// The committed texts of `rel`, newest first, read one at a time: one for
-/// each of the last `WALK_LIMIT` commits that touched the path. The one walk
+/// each commit that touched the path. The one walk
 /// of git history every reader of an approved text goes through; a reader
 /// that stops at its match reads no older version.
 pub fn committed_texts<'a>(root: &'a Path, rel: &'a str) -> impl Iterator<Item = String> + 'a {
     let commits: Vec<String> = repo::git(root, &["log", "--format=%H", "--", rel])
-        .map(|log| log.lines().filter(|l| !l.is_empty()).take(WALK_LIMIT).map(str::to_string).collect())
+        .map(|log| log.lines().filter(|l| !l.is_empty()).map(str::to_string).collect())
         .unwrap_or_default();
     commits.into_iter().filter_map(move |commit| repo::git(root, &["show", &format!("{}:{}", commit, rel)]))
 }
@@ -226,13 +222,64 @@ pub fn topic_file(root: &Path, rf: &RecordFile, led: &Ledger) -> TopicChanges {
         .collect();
     let in_file = |id: &str| rf.sections.iter().any(|s| s.id.as_deref() == Some(id));
     let dropped = |id: &str| led.rows.iter().any(|r| r.event == "dropped" && r.id == id);
-    let struck = plan
-        .iter()
-        .flat_map(|old| old.sections.iter().map(move |s| (old, s)))
-        .filter(|(_, s)| s.id.as_deref().is_some_and(|id| !in_file(id) && !dropped(id)))
-        .map(|(old, s)| (s.heading_text.clone(), Change { status: FileStatus::Removed, lines: removed(&question_lines(old, s)) }))
-        .collect();
+    let struck = match &plan {
+        Some(old) => old
+            .sections
+            .iter()
+            .filter(|s| s.id.as_deref().is_some_and(|id| !in_file(id) && !dropped(id)))
+            .map(|s| (s.heading_text.clone(), Change { status: FileStatus::Removed, lines: removed(&question_lines(old, s)) }))
+            .collect(),
+        // No committed text holds the approved plan (approved and not yet
+        // committed): a struck question is still never silent. Its
+        // identifier stands for its heading, which only that text held.
+        None => struck_ids(rf, led)
+            .into_iter()
+            .map(|id| (id, Change { status: FileStatus::Removed, lines: Vec::new() }))
+            .collect(),
+    };
     TopicChanges { prose, questions, struck }
+}
+
+/// The most identifiers `struck_ids` tries in every combination.
+const STRUCK_CANDIDATES: usize = 12;
+
+/// The identifiers of the latest approved plan of `rf` that the file no
+/// longer holds, read off the ledger alone: the questions still in the file
+/// at their approved hashes, plus the set of identifiers approved for this
+/// file and gone from it whose approved hashes complete the file's approved
+/// hash. Empty when no set does, or when too many identifiers are gone to
+/// try every set.
+fn struck_ids(rf: &RecordFile, led: &Ledger) -> Vec<String> {
+    let rel = rf.rel.as_str();
+    let in_file = |id: &str| rf.sections.iter().any(|s| s.id.as_deref() == Some(id));
+    let dropped = |id: &str| led.rows.iter().any(|r| r.event == "dropped" && r.id == id);
+    let kept: Vec<String> = rf
+        .sections
+        .iter()
+        .filter_map(|s| s.id.as_deref().and_then(|id| approved_hash(led, rel, id)).map(str::to_string))
+        .collect();
+    let mut gone: Vec<(String, String)> = Vec::new();
+    for r in led.rows.iter().filter(|r| r.event == "approved" && r.detail == rel && r.id != "-") {
+        if !in_file(&r.id) && !dropped(&r.id) && !gone.iter().any(|(id, _)| *id == r.id) {
+            if let Some(h) = approved_hash(led, rel, &r.id) {
+                gone.push((r.id.clone(), h.to_string()));
+            }
+        }
+    }
+    if gone.is_empty() || gone.len() > STRUCK_CANDIDATES {
+        return Vec::new();
+    }
+    // The largest set first: a plan that held them all is the likelier one.
+    let mut sets: Vec<u32> = (1..(1u32 << gone.len())).collect();
+    sets.sort_by_key(|m| std::cmp::Reverse(m.count_ones()));
+    for mask in sets {
+        let mut hashes = kept.clone();
+        hashes.extend(gone.iter().enumerate().filter(|(i, _)| mask & (1 << i) != 0).map(|(_, (_, h))| h.clone()));
+        if state::plan_approved_hashes(led, rel, &hashes) {
+            return gone.iter().enumerate().filter(|(i, _)| mask & (1 << i) != 0).map(|(_, (id, _))| id.clone()).collect();
+        }
+    }
+    Vec::new()
 }
 
 /// The newest committed version of `rel` whose plan is exactly the latest

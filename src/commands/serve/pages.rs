@@ -14,13 +14,14 @@ use crate::repo;
 use crate::status::QuestionStatus;
 use std::path::Path;
 
-/// What the last act printed (its events, or the findings that stopped
-/// it), shown once above the page it leads to.
+/// What the last act printed (its events, and the findings on its input or
+/// that stopped it), shown once above the page it leads to. Each line keeps
+/// its own kind; the banner reads as a stop only when the act wrote nothing.
 pub(super) fn banner(lines: &[Line]) -> String {
     if lines.is_empty() {
         return String::new();
     }
-    let stopped = lines.iter().any(|l| matches!(l, Line::Finding(_)));
+    let stopped = !lines.iter().any(|l| matches!(l, Line::Event(_)));
     format!(
         "<div class=\"banner{}\">\n{}</div>\n",
         if stopped { " refused" } else { "" },

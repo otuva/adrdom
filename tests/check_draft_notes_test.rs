@@ -469,8 +469,11 @@ fn a_finding_in_a_question_edited_since_it_was_asked_is_a_note() {
     asked_row(&dir, ASKED, &original, "Does the widget stay?");
     let edited = stated("Does the widget stay?", "nosuchterm", ASKED, &term, OPTS);
     write_record(&dir, REL, &format!("# Gate\n\n{}\n", edited));
+    // The finding itself is a note; a failure may name it only inside its
+    // move (the edit after asking clears by the file's moves).
     let failed = failures(&dir);
-    assert!(!failed.contains("nosuchterm"), "{}", failed);
+    let finding_of = |l: &str| l.split_once("; ").map_or(l, |(f, _)| f).to_string();
+    assert!(!failed.lines().any(|l| finding_of(l).contains("nosuchterm")), "{}", failed);
     let all = stdout(&adr(&dir, &["check"], &[], ""));
     assert!(all.contains("nosuchterm"), "{}", all);
 }

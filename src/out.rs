@@ -213,18 +213,29 @@ const READER_GONE: i32 = 141;
 /// gone (`adr show | head`) is no fault of the tool: the process ends
 /// without a word, with `READER_GONE`, so a pipeline that watches exit codes
 /// never reads it as a pass.
+///
+/// Any other write error leaves the output incomplete: the command says so
+/// on standard error, once, and ends with 1, so a run whose lines did not
+/// all reach their reader never passes.
 pub fn print(lines: &[Line]) {
     let mut out = std::io::stdout().lock();
     for l in lines {
         if let Err(e) = writeln!(out, "{}", text(l)) {
-            if e.kind() == std::io::ErrorKind::BrokenPipe {
-                std::process::exit(READER_GONE);
-            }
+            unwritable(e);
         }
     }
-    if out.flush().is_err_and(|e| e.kind() == std::io::ErrorKind::BrokenPipe) {
+    if let Err(e) = out.flush() {
+        unwritable(e);
+    }
+}
+
+/// Ends the process on a failed write to standard output.
+fn unwritable(e: std::io::Error) -> ! {
+    if e.kind() == std::io::ErrorKind::BrokenPipe {
         std::process::exit(READER_GONE);
     }
+    let _ = writeln!(std::io::stderr().lock(), "{}", crate::msg::stdout_write_failed(&e));
+    std::process::exit(1);
 }
 
 /// Prints `lines` to standard error: the findings that stopped a command.

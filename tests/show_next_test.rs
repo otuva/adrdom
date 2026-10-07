@@ -69,7 +69,7 @@ fn id_of(path: &Path, heading: &str) -> String {
 
 fn ask_for(headings: &[&str]) -> String {
     let names: Vec<String> = headings.iter().map(|h| format!("\"{}\"", h)).collect();
-    format!("agent runs adr ask {}  # {}", REL, names.join(", "))
+    format!("agent runs: adr ask {}  # {}", REL, names.join(", "))
 }
 
 fn plan_for() -> String {

@@ -133,6 +133,7 @@ fn build(
     // is approving, so `check` never reports a legitimate cross-file
     // reference as the file-wide `derive_error` a plain, unresolved `Text`
     // heading dep always earns.
+    let as_loaded = records.clone();
     for rf in &mut records {
         depends::normalize_cross_file_deps(rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
     }
@@ -214,7 +215,7 @@ fn build(
     push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_content, since, &removed_files));
     push_failures(&mut failures, reader::check_reader(root, &source, since));
     push_failures(&mut failures, banned::check_banned_ledger(&led, root, &source));
-    push_failures(&mut failures, answers::check_answers(&records, &led));
+    push_failures(&mut failures, answers::check_answers(root, &records, &as_loaded, &terms_list, &led));
     push_failures(&mut failures, banned::check_banned(root, staged, message, &source));
     push_failures(&mut failures, install::check_install(root, &source));
     let (plan_failures, plan_notes) =

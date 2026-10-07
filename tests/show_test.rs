@@ -184,7 +184,7 @@ agent clears: adrdom/decisions/tiered-topic.md: \"1.2 Unasked root?\" has no dep
 agent clears: adrdom/decisions/tiered-topic.md: \"1.3 Skeleton?\" has no depends line; agent writes what the question stands on
 agent clears: adrdom/decisions/tiered-topic.md: \"2.2 Also depends?\": answered; agent removes the edit
 agent runs: adr plan adrdom/decisions/tiered-topic.md
-agent runs adr ask adrdom/decisions/tiered-topic.md  # \"1.2 Unasked root?\"
+agent runs: adr ask adrdom/decisions/tiered-topic.md  # \"1.2 Unasked root?\"
 owner runs: adr answer id-open@11024127 <letter>  # \"2.1 Depends on root?\"
 agent changes the plan: \"2.2 Also depends?\" is refused and holds the questions that come after it
 not yet: \"1.1 Root?\" is answered and is built once \"1.2 Unasked root?\" is answered

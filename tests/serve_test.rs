@@ -1388,7 +1388,7 @@ fn page_shows_no_form_for_an_edited_question() {
     let lines = page_lines(&shown.body);
     assert!(lines.contains(&"[asked] 1.1 What color is the widget?".to_string()), "{:#?}", lines);
     let file = cli_lines(&dir, &["show", "adrdom/decisions/example.md"]);
-    let ask_move = file.iter().find(|l| l.starts_with("agent runs adr ask ")).expect("the ask move");
+    let ask_move = file.iter().find(|l| l.starts_with("agent runs: adr ask ")).expect("the ask move");
     assert!(lines.contains(ask_move), "{:#?}", lines);
 
     let _ = child.kill();
@@ -1589,4 +1589,33 @@ fn page_shows_a_reverted_cross_file_depends_line_as_not_approved() {
 
     let _ = child.kill();
     let _ = child.wait();
+}
+
+// adr: 7857d633-2055-47eb-857f-cb70da9fa7ba
+//
+// An act that wrote events and has findings on its input (an unban with one
+// word banned and one not): the banner shows both, each as its own kind,
+// and reads as no stop, since the act wrote.
+#[test]
+fn a_banner_with_events_and_input_findings_shows_both_and_is_no_stop() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    assert!(adr(&dir, &["ban"], &[], "forbiddenword\n").status.success());
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+    let form = format!("lines=forbiddenword%0Anothingbanned&t={}", token);
+    let resp = post(port, "/unban", Some(&cookie), &form);
+    assert_eq!(resp.status, 302, "body: {}", resp.body);
+    let followed = follow(port, &resp, &cookie);
+    let _ = child.kill();
+    let _ = child.wait();
+
+    let banner_at = followed.body.find("<div class=\"banner").expect("a banner");
+    let banner = &followed.body[banner_at..followed.body[banner_at..].find("</div>").map(|e| banner_at + e).unwrap()];
+    assert!(banner.starts_with("<div class=\"banner\">"), "an act that wrote is no stop: {}", banner);
+    let lines = page_lines(banner);
+    assert!(lines.contains(&"unbanned: a word".to_string()), "{:?}", lines);
+    assert!(lines.iter().any(|l| l.starts_with("unban: ")), "the input finding shows too: {:?}", lines);
 }
