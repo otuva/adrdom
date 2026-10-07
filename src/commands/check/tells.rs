@@ -1,6 +1,6 @@
 use super::{is_note, Failure};
 use crate::ledger::Ledger;
-use crate::actions::Refusal;
+use crate::rules::Finding;
 use crate::record::RecordFile;
 
 /// `tells` (per "Does the tool stop loaded phrases in a question?"): the
@@ -19,20 +19,20 @@ use crate::record::RecordFile;
 /// approval?"); the notes come back as the second value.
 pub(super) fn check_tells(
     records: &[RecordFile],
-    refusals: &[Vec<Refusal>],
+    refusals: &[Vec<Finding>],
     awaiting: &[String],
     led: &Ledger,
-) -> (Vec<Failure>, Vec<String>) {
+) -> (Vec<Failure>, Vec<Failure>) {
     let mut out = Vec::new();
     let mut notes = Vec::new();
     for (rf, refs) in records.iter().zip(refusals) {
         let draft = awaiting.contains(&rf.rel);
         for r in refs {
-            if r.category == "tells" && is_note(rf, r, draft, led) {
-                notes.push(format!("tells: {}", r.message));
-            } else if r.category == "tells" {
+            if r.rule == "tells" && is_note(rf, r, draft, led) {
+                notes.push(Failure { check: "tells", message: r.message.clone() });
+            } else if r.rule == "tells" {
                 out.push(Failure {
-                    check: "tells".to_string(),
+                    check: "tells",
                     message: r.message.clone(),
                 });
             }

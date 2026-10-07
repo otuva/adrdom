@@ -26,8 +26,8 @@ fn repo() -> std::path::PathBuf {
     dir
 }
 
-fn quiet(dir: &Path) -> String {
-    stdout(&adr(dir, &["check", "--quiet"], &[], ""))
+fn failures(dir: &Path) -> String {
+    check_failures(dir)
 }
 
 fn ledger(dir: &Path) -> String {
@@ -79,7 +79,7 @@ fn a_copied_heading_never_reaches_ask_because_approve_refuses_it() {
     // Ask on the unapproved copy refuses on the approval, not on the heading.
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
-    assert!(stderr(&out).contains("not approved"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("plan is new"), "{}", stderr(&out));
     assert_eq!(asked_row_count(&dir), 0);
 }
 
@@ -108,7 +108,7 @@ fn check_notes_a_heading_in_two_files_while_one_awaits_approval() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
     assert!(stdout(&out).contains(LINE), "{}", stdout(&out));
-    assert!(quiet(&dir).is_empty());
+    assert!(failures(&dir).is_empty());
 
     let dir = repo();
     write_record(&dir, A, &file("A"));
@@ -125,8 +125,8 @@ fn check_fails_a_heading_in_two_files_once_both_are_approved() {
     let dir = repo();
     approve_via_ledger(&dir, A, &file("A"));
     approve_via_ledger(&dir, B, &file("B"));
-    let failures = quiet(&dir);
-    assert!(failures.contains(LINE), "{}", failures);
+    let failed = failures(&dir);
+    assert!(failed.contains(LINE), "{}", failed);
 }
 
 const ID1: &str = "11111111-1111-1111-1111-111111111111";
@@ -161,8 +161,8 @@ fn a_draft_question_copying_an_answered_heading_is_a_note_and_two_answered_ones_
     let a = format!("# A\n\n{}", answered(&dir, ID1));
     approve_via_ledger(&dir, A, &a);
     write_record(&dir, B, &file("B"));
-    let failures = quiet(&dir);
-    assert!(!failures.contains("duplicate heading"), "{}", failures);
+    let failed = failures(&dir);
+    assert!(!failed.contains("duplicate heading"), "{}", failed);
     let all = stdout(&adr(&dir, &["check"], &[], ""));
     assert!(all.contains(LINE), "{}", all);
 
@@ -170,8 +170,8 @@ fn a_draft_question_copying_an_answered_heading_is_a_note_and_two_answered_ones_
     // the second file awaits approval.
     let b = format!("# B\n\n{}", answered(&dir, ID2));
     write_record(&dir, B, &b);
-    let failures = quiet(&dir);
-    assert!(failures.contains(LINE), "{}", failures);
+    let failed = failures(&dir);
+    assert!(failed.contains(LINE), "{}", failed);
 }
 
 /// `file(title)` with an id on its question, approved by ledger rows the way
@@ -196,8 +196,8 @@ fn check_fails_a_heading_in_two_files_when_the_draft_holds_it_unchanged() {
     approved_with_id(&dir, B, "B", ID2);
     // A prose edit makes A a draft; its question is unchanged, so it is no copy.
     write_record(&dir, A, &a.replacen("# A\n\n", "# A\n\nA line of prose.\n\n", 1));
-    let failures = quiet(&dir);
-    assert!(failures.contains(LINE), "{}", failures);
+    let failed = failures(&dir);
+    assert!(failed.contains(LINE), "{}", failed);
 }
 
 #[test]
@@ -210,8 +210,8 @@ fn check_notes_a_new_heading_in_a_draft_that_copies_an_approved_one() {
     approve_via_ledger(&dir, B, &b);
     // B gains a question copying A's heading: new, forceless, in a draft.
     write_record(&dir, B, &format!("{}\n{}", b, file("B").split_once("\n\n").unwrap().1));
-    let failures = quiet(&dir);
-    assert!(!failures.contains(LINE), "{}", failures);
+    let failed = failures(&dir);
+    assert!(!failed.contains(LINE), "{}", failed);
     let all = stdout(&adr(&dir, &["check"], &[], ""));
     assert!(all.contains(LINE), "{}", all);
 }

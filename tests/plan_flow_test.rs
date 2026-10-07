@@ -105,21 +105,24 @@ fn id_for_heading(content: &str, heading_prefix: &str) -> String {
 // the owner answers B, the dependent on =A leaves the file and the =*
 // dependent stays; a frozen set edited after ask fails `check`; a
 // plan change drops Q3 and adds Q4, withdrawing the asked Q3.
+// The tier the tool derives for each question of the topic file at `path`,
+// in file order.
+fn tiers_of(path: &std::path::Path) -> Vec<usize> {
+    let rf = adr::record::load(path).unwrap();
+    (0..rf.sections.len()).map(|i| rf.tier_of(i).unwrap()).collect()
+}
+
 #[test]
 fn plan_lifecycle_end_to_end() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_terms_with(&dir, &["widget", "paint"]);
 
-    // --- 1. approve derives and caps the tiers -----------------------------
+    // --- 1. the tool derives the tiers from the depends lines ---------------
     let record = write_record(&dir, REL, STATE_0);
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out.status.success(), "approve failed: {}", stderr(&out));
-    assert!(
-        stdout(&out).contains("approve: tiers: 1 (1) 2 (2)"),
-        "{}",
-        stdout(&out)
-    );
+    assert_eq!(tiers_of(&record), vec![1, 2, 2]);
 
     // approve gave every heading (all three) an id.
     let state_0_approved = std::fs::read_to_string(&record).unwrap();
@@ -140,28 +143,22 @@ fn plan_lifecycle_end_to_end() {
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "ask should succeed: {}", stderr(&out));
     let printed = stdout(&out);
-    assert!(
-        printed.contains("asked: \"1.1 What color is the widget?\" (tier 1)"),
-        "{}",
-        printed
-    );
-    assert!(
-        printed.contains("  stood on by: \"1.2 Does the paint match the widget's color?\" under A"),
-        "{}",
-        printed
-    );
-    assert!(
-        printed.contains("  stood on by: \"1.3 Does the paint need a second coat?\" under *"),
-        "{}",
-        printed
-    );
+    // One line per row written: three asked rows and two assumes rows.
+    for line in [
+        "asked: \"1.1 What color is the widget?\"",
+        "assumes: \"1.2 Does the paint match the widget's color?\" stands on \"1.1 What color is the widget?\" under its answer set",
+        "assumes: \"1.3 Does the paint need a second coat?\" stands on \"1.1 What color is the widget?\" under its answer set",
+    ] {
+        assert!(printed.lines().any(|l| l == line), "{}\n{}", line, printed);
+    }
+    assert_eq!(printed.lines().count(), 5, "{}", printed);
 
     let state_3 = std::fs::read_to_string(&record).unwrap();
     assert_eq!(id_for_heading(&state_3, "### 1.1"), q1_id);
     let ledger_after_ask1 = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(
-        printed.contains("asked: \"1.2 Does the paint match the widget's color?\" (tier 2)")
-            && printed.contains("asked: \"1.3 Does the paint need a second coat?\" (tier 2)"),
+        printed.lines().any(|l| l == "asked: \"1.2 Does the paint match the widget's color?\"")
+            && printed.lines().any(|l| l == "asked: \"1.3 Does the paint need a second coat?\""),
         "one run asks every tier: {}",
         printed
     );
@@ -174,23 +171,24 @@ fn plan_lifecycle_end_to_end() {
     );
 
     // --- 3. what is left names the owner's answer and what waits for it ----
+    // ask with nothing to ask writes nothing and prints nothing; show names
+    // the moves.
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask should print nothing to ask: {}", stderr(&out));
+    assert!(out.status.success(), "ask should have nothing to ask: {}", stderr(&out));
     assert!(stderr(&out).is_empty(), "{}", stderr(&out));
-    let printed = stdout(&out);
-    assert!(
-        printed.starts_with("ask: nothing to ask in ") && printed.lines().next().unwrap().ends_with("widget.md"),
-        "{}",
-        printed
-    );
-    assert_eq!(
-        printed.lines().skip(1).collect::<Vec<_>>().join("\n"),
+    assert_eq!(stdout(&out), "", "{}", stdout(&out));
+    let shown = stdout(&adr(&dir, &["show"], &[], ""));
+    for mv in [
         format!(
-            "  owner runs: adr answer {}@{} <letter>  # \"1.1 What color is the widget?\"\n  not yet: \"1.2 Does the paint match the widget's color?\" is asked and waits for \"1.1 What color is the widget?\"\n  not yet: \"1.3 Does the paint need a second coat?\" is asked and waits for \"1.1 What color is the widget?\"",
+            "owner runs: adr answer {}@{} <letter>  # \"1.1 What color is the widget?\"",
             q1_id,
             current_version(&dir, &q1_id)
-        )
-    );
+        ),
+        "not yet: \"1.2 Does the paint match the widget's color?\" is asked and waits for \"1.1 What color is the widget?\"".to_string(),
+        "not yet: \"1.3 Does the paint need a second coat?\" is asked and waits for \"1.1 What color is the widget?\"".to_string(),
+    ] {
+        assert!(shown.lines().any(|l| l.trim() == mv), "{}\n{}", mv, shown);
+    }
     assert_eq!(asked_row_count(&dir), 3, "nothing new is asked");
 
 
@@ -232,7 +230,7 @@ fn plan_lifecycle_end_to_end() {
     // Q3 was asked in the first run: nothing is left to ask.
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "ask should have nothing to ask: {}", stderr(&out));
-    assert!(stdout(&out).contains("nothing to ask"), "{}", stdout(&out));
+    assert_eq!(stdout(&out), "", "{}", stdout(&out));
 
     let state_7 = std::fs::read_to_string(&record).unwrap();
     assert_eq!(extract_ids(&state_7).len(), 2, "{}", state_7);
@@ -279,7 +277,7 @@ fn plan_lifecycle_end_to_end() {
     assert!(out.status.success(), "approve failed: {}", stderr(&out));
     let printed = stdout(&out);
     assert!(
-        printed.contains("approve: withdrawn: 1.3 Does the paint need a second coat?"),
+        printed.lines().any(|l| l == "withdrawn: \"1.3 Does the paint need a second coat?\""),
         "{}",
         printed
     );
@@ -288,12 +286,12 @@ fn plan_lifecycle_end_to_end() {
         "Q2 was removed by an answer, nothing to withdraw: {}",
         printed
     );
-    assert!(printed.contains("approve: tiers: 1 (1) 2 (1)"), "{}", printed);
+    assert_eq!(tiers_of(&record), vec![1, 2]);
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "ask should succeed on Q4: {}", stderr(&out));
     assert!(
-        stdout(&out).contains("asked: \"1.4 Does the paint have a glossy finish?\" (tier 2)"),
+        stdout(&out).lines().any(|l| l == "asked: \"1.4 Does the paint have a glossy finish?\""),
         "{}",
         stdout(&out)
     );
@@ -314,9 +312,6 @@ fn plan_lifecycle_end_to_end() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "check should pass: {}", stdout(&out));
-    assert!(
-        stdout(&out).contains(&format!("done: {}", REL)),
-        "{}",
-        stdout(&out)
-    );
+    // Every question answered and tested: a pass prints nothing (3fc35d4f).
+    assert_eq!(stdout(&out), "", "{}", stdout(&out));
 }

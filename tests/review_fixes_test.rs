@@ -68,10 +68,10 @@ fn a_supersedes_line_takes_a_heading_that_holds_a_comma() {
     assert!(asked.contains(&format!("supersedes: {}\n", alpha)), "{}", asked);
 }
 
-// One hash on two lines of the ban list is one word: it is removed once
-// and the count of words that were not banned stays a count.
+// One hash on two lines of the ban list is one word: it is removed once,
+// with one unbanned row and one line.
 #[test]
-fn unban_counts_a_word_once_when_the_ban_list_holds_it_twice() {
+fn unban_removes_a_word_once_when_the_ban_list_holds_it_twice() {
     let dir = setup();
     assert!(adr(&dir, &["ban"], &[], "zebra\n").status.success());
     let list = dir.join("adrdom/state/banned.sha256");
@@ -80,17 +80,14 @@ fn unban_counts_a_word_once_when_the_ban_list_holds_it_twice() {
 
     let out = adr_owner(&dir, &["unban"], "zebra\nquagga\n");
     assert!(out.status.success(), "{}", stderr(&out));
-    assert!(
-        stdout(&out)
-            .trim_end()
-            .ends_with("removed 1 entries; 1 of the words given were not banned"),
-        "{}",
-        stdout(&out)
-    );
+    assert_eq!(stdout(&out), "unbanned: a word\n", "{}", stdout(&out));
     assert_eq!(std::fs::read_to_string(&list).unwrap(), "");
 }
 
-// The owner's line outside a repository is the command as it was given.
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// Outside a repository the move names what clears it, once: changing into a
+// git repository, then the command as it was given.
 #[test]
 fn outside_a_repository_the_owners_line_is_the_whole_command() {
     let outside = std::env::temp_dir().join(format!("adr-outside-{}", std::process::id()));
@@ -102,13 +99,15 @@ fn outside_a_repository_the_owners_line_is_the_whole_command() {
     assert!(!out.status.success());
     assert_eq!(
         stderr(&out).trim_end(),
-        "approve: not inside a git repository; it runs inside one; owner runs: adr approve adrdom/decisions/x.md"
+        "approve: not inside a git repository; owner changes into a git repository and runs: adr approve adrdom/decisions/x.md"
     );
 }
 
-// A hook that is not what install writes is left, and uninstall says so.
+// A hook that is not what install writes is left; uninstall prints only
+// what it removed or edited (per "What does a command that writes print?",
+// 069a6b4a A), so the hook it left is named nowhere in its output.
 #[test]
-fn uninstall_says_which_hook_it_left() {
+fn uninstall_leaves_a_hook_it_did_not_write_and_prints_only_what_it_removed() {
     let dir = setup();
     let hook = dir.join(".githooks/pre-commit");
     let written = std::fs::read_to_string(&hook).unwrap();
@@ -117,11 +116,11 @@ fn uninstall_says_which_hook_it_left() {
     let out = adr_owner(&dir, &["uninstall"], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
-    assert!(
-        text.contains("uninstall: left .githooks/pre-commit: it differs from what install writes"),
-        "{}",
-        text
-    );
+    assert!(!text.contains(".githooks/pre-commit"), "{}", text);
+    assert!(text.lines().any(|l| l == "removed: .githooks/commit-msg"), "{}", text);
+    for line in text.lines() {
+        assert!(line.starts_with("removed: ") || line.starts_with("written: "), "{}", text);
+    }
     assert!(hook.exists());
     assert!(!dir.join(".githooks/commit-msg").exists());
 }
@@ -142,5 +141,7 @@ fn uninstall_prints_what_it_removed_before_it_failed() {
     assert!(stderr(&out).starts_with("uninstall: failed to remove "), "{}", stderr(&out));
     let text = stdout(&out);
     assert!(text.contains("AGENTS.md"), "{}", text);
-    assert!(!text.contains("adrdom uninstalled at"), "{}", text);
+    for line in text.lines() {
+        assert!(line.starts_with("removed: ") || line.starts_with("written: "), "{}", text);
+    }
 }

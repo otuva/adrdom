@@ -82,7 +82,10 @@ fn approve_writes_the_terms_brief_when_the_terms_file_did_not_change() {
     let terms = dir.join("adrdom/terms.md");
     let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
-    assert!(stdout(&out).contains("already approved"), "{}", stdout(&out));
+    // No ledger row; the terms brief is a file written that no row covers,
+    // so it is the one line (per "What does a command that writes print?",
+    // 069a6b4a A).
+    assert_eq!(stdout(&out), format!("written: {}\n", BRIEF_PATH), "{}", stdout(&out));
 
     assert_eq!(std::fs::read_to_string(dir.join(BRIEF_PATH)).unwrap(), WANT);
     assert_eq!(terms_rows(&dir), rows);

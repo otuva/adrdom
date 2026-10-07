@@ -33,7 +33,7 @@ fn show_names_a_topic_file_it_cannot_read() {
     let out = adr(&dir, &["show"], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     assert!(
-        stdout(&out).contains("# adrdom/decisions/bad.md (cannot be read: "),
+        stdout(&out).contains("parse: adrdom/decisions/bad.md: cannot be read: "),
         "{}",
         stdout(&out)
     );
@@ -100,29 +100,20 @@ fn ban_with_a_term_says_the_terms_file_is_missing() {
 }
 
 #[test]
-fn unban_counts_the_words_that_were_not_banned() {
+fn unban_prints_one_line_for_the_word_it_unbanned() {
     let dir = installed_repo();
     assert!(adr(&dir, &["ban"], &[], "zebra\n").status.success());
 
     let out = adr_owner(&dir, &["unban"], "zebra\nquagga\n");
     assert!(out.status.success(), "{}", stderr(&out));
-    assert!(
-        stdout(&out)
-            .trim_end()
-            .ends_with("removed 1 entries; 1 of the words given were not banned"),
-        "{}",
-        stdout(&out)
-    );
+    // One line for the one unbanned row; a word that was not banned writes
+    // no row and prints nothing (per "What does a command that writes
+    // print?", 069a6b4a A).
+    assert_eq!(stdout(&out), "unbanned: a word\n", "{}", stdout(&out));
 
     let out = adr_owner(&dir, &["unban"], "quagga\n");
     assert!(out.status.success(), "{}", stderr(&out));
-    assert!(
-        stdout(&out)
-            .trim_end()
-            .ends_with("nothing to remove; 1 of the words given were not banned"),
-        "{}",
-        stdout(&out)
-    );
+    assert_eq!(stdout(&out), "", "{}", stdout(&out));
 }
 
 #[cfg(unix)]

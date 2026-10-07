@@ -227,6 +227,29 @@ pub fn read_file(root: &Path) -> File {
     parse(&std::fs::read_to_string(root.join(repo::READER_PATH)).unwrap_or_default())
 }
 
+/// The rows of the reader file, parsed once for as long as the file stands
+/// as it was read: every planning record of every topic file is read off
+/// the one file, and a command reads it for each file it judges. Keyed by
+/// the file's path, length and time of change, so a row appended is read.
+pub fn rows(root: &Path) -> std::sync::Arc<Vec<Row>> {
+    use std::sync::{Arc, Mutex, OnceLock};
+    type Key = (std::path::PathBuf, u64, Option<std::time::SystemTime>);
+    static CACHE: OnceLock<Mutex<Option<(Key, Arc<Vec<Row>>)>>> = OnceLock::new();
+    let path = root.join(repo::READER_PATH);
+    let meta = std::fs::metadata(&path).ok();
+    let key: Key = (path.clone(), meta.as_ref().map_or(0, |m| m.len()), meta.and_then(|m| m.modified().ok()));
+    let cache = CACHE.get_or_init(|| Mutex::new(None));
+    let mut held = cache.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((k, rows)) = held.as_ref() {
+        if *k == key {
+            return Arc::clone(rows);
+        }
+    }
+    let rows = Arc::new(read_file(root).rows);
+    *held = Some((key, Arc::clone(&rows)));
+    rows
+}
+
 /// Appends `rows` to the reader file.
 pub fn append(root: &Path, rows: &[Row]) -> Result<(), String> {
     use std::io::Write;

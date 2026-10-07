@@ -67,18 +67,21 @@ const HEADING_REMOVED: &str = "# Example\n\nContext prose.\n";
 fn ask_refuses_an_unapproved_file_naming_adr_approve() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "question");
+    approve_terms_with(&dir, &["question", "decision"]);
     let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP_RECORD);
+    plan_record(&dir, "adrdom/decisions/example.md");
+    let planned = std::fs::read_to_string(&record).unwrap();
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("adr approve"), "{}", err);
+    // A plan approve would take: the owner's approve is the file's move.
+    assert!(err.contains("owner runs: adr approve adrdom/decisions/example.md"), "{}", err);
     assert!(err.contains("adrdom/decisions/example.md"), "{}", err);
 
     // Nothing written.
     let content = std::fs::read_to_string(&record).unwrap();
-    assert_eq!(content, TWO_GROUP_RECORD);
+    assert_eq!(content, planned);
 }
 
 // --- approve writes approved/context rows, idempotently --------------
@@ -113,8 +116,9 @@ fn approve_writes_approved_and_context_rows_then_is_idempotent() {
     assert!(out2.status.success());
     let ledger2 = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert_eq!(ledger, ledger2, "rerunning approve with nothing changed must be a no-op");
-    assert!(stdout(&out2).contains("plan unchanged"), "{}", stdout(&out2));
-    assert!(stdout(&out2).contains("prose unchanged"), "{}", stdout(&out2));
+    // No row written, so nothing printed (per "What does a command that
+    // writes print?", 069a6b4a A).
+    assert_eq!(stdout(&out2), "", "{}", stdout(&out2));
 }
 
 // --- approve refuses on an option-count shape error --------------------
@@ -203,7 +207,7 @@ fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("prose not approved"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("prose is changed"), "{}", stderr(&out));
 
     let ledger_before = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let approved_before = ledger_before.lines().filter(|l| l.contains("\tapproved\t-\t")).count();
@@ -257,7 +261,7 @@ fn editing_a_heading_requires_reapproval_with_one_new_approved_row() {
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("plan not approved"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("plan is changed"), "{}", stderr(&out));
 
     let ledger_before = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let approved_before = ledger_before.lines().filter(|l| l.contains("\tapproved\t-\t")).count();
@@ -265,8 +269,10 @@ fn editing_a_heading_requires_reapproval_with_one_new_approved_row() {
 
     let out2 = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out2.status.success(), "approve failed: {}", stderr(&out2));
-    assert!(
-        stdout(&out2).contains("prose unchanged"),
+    // The renamed question's row and the file row; no prose row.
+    assert_eq!(
+        stdout(&out2),
+        "approved: \"1.1 First question, renamed?\"\napproved: plan of adrdom/decisions/example.md\n",
         "{}",
         stdout(&out2)
     );
@@ -321,7 +327,7 @@ fn ask_asks_group_two_beside_group_one_and_answer_waits_for_group_one() {
     assert!(out.status.success(), "ask failed: {}", stderr(&out));
     assert_eq!(stderr(&out), "");
     let shown = stdout(&out);
-    assert!(shown.contains("asked: \"2.1 Second question?\" (tier 2)"), "{}", shown);
+    assert_eq!(shown, "asked: \"2.1 Second question?\"\n", "{}", shown);
     assert_eq!(asked_row_count(&dir), 2);
 
     // `answer` takes group two only after group one has its decision.
@@ -781,7 +787,7 @@ fn ask_refuses_while_terms_unapproved() {
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("terms not approved"), "{}", err);
+    assert!(err.contains("adrdom/terms.md is new"), "{}", err);
     assert!(err.contains("adr approve adrdom/terms.md"), "{}", err);
 }
 
@@ -1240,7 +1246,7 @@ fn approve_terms_reruns_as_already_approved_with_no_new_row() {
 
     let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
     assert!(out.status.success(), "approve failed: {}", stderr(&out));
-    assert!(stdout(&out).contains("already approved"), "{}", stdout(&out));
+    assert_eq!(stdout(&out), "", "{}", stdout(&out));
 
     let ledger_after = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert_eq!(
@@ -1983,16 +1989,17 @@ fn a_supersedes_line_added_after_approval_waits_for_approval() {
     assert_ne!(edited, approved);
     std::fs::write(&record, &edited).unwrap();
 
+    // A plan awaiting approval is a status, not a finding: check passes it
+    // and prints no line for it (3fc35d4f); ask waits for the approval.
     let checked = adr(&dir, &["check"], &[], "");
-    let text = format!("{}{}", stdout(&checked), stderr(&checked));
-    assert!(text.contains("awaiting approval"), "{}", text);
+    assert!(checked.status.success(), "{}", stdout(&checked));
     let asked = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(stderr(&asked).contains("plan not approved"), "{}", stderr(&asked));
+    assert!(stderr(&asked).contains("plan is changed"), "{}", stderr(&asked));
 
     approve_record(&dir, rel);
     let checked = adr(&dir, &["check"], &[], "");
     let text = format!("{}{}", stdout(&checked), stderr(&checked));
-    assert!(!text.contains("plan not approved"), "{}", text);
+    assert!(!text.contains("plan is changed") && !text.contains("plan is new"), "{}", text);
 }
 
 // --- approve leaves the supersedes line of an asked section ---------------

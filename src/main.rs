@@ -51,13 +51,20 @@ enum Command {
         /// The letter of the option picked, or the word refuse.
         letter: String,
     },
-    /// Print the current decisions and what is next; with a topic file or --all, every question.
+    /// Print every current decision and every move; with a file approve takes or --all, every question, entry or row.
+    #[command(group(clap::ArgGroup::new("whole").args(["topic_file", "all"]).multiple(true)))]
     Show {
-        /// Print every question of this topic file, with its state and what it stands on.
+        /// A topic file, adrdom/terms.md, or a blame file under adrdom/blame: every question, entry or row with its status, what is beyond its latest approval marked, and its moves.
         topic_file: Option<PathBuf>,
-        /// Print every question of every topic file, and the blame files.
-        #[arg(long)]
+        /// Print every file approve takes, each as with a file named.
+        #[arg(long, conflicts_with = "topic_file")]
         all: bool,
+        /// With a file or --all: each neighbour of a question not yet answered, with the reader's word and the agent's line.
+        #[arg(long, requires = "whole")]
+        neighbours: bool,
+        /// With a file or --all: what depends on each question or term entry, and what replaced a superseded question.
+        #[arg(long, requires = "whole")]
+        dependents: bool,
     },
     /// Read lines from stdin and ban them (and their tokens) from the repo.
     Ban {
@@ -87,9 +94,6 @@ enum Command {
         /// Judge the staged files and look for banned words in this commit message file.
         #[arg(long, conflicts_with = "push")]
         message: Option<PathBuf>,
-        /// Print what failed and nothing else.
-        #[arg(long)]
-        quiet: bool,
         /// Also fail when a line of the ledger as it was at <commit> is missing from the ledger now.
         #[arg(long, conflicts_with = "push")]
         since: Option<String>,
@@ -138,13 +142,13 @@ fn main() {
         Command::Read => commands::read::run(),
         Command::Approve { file } => commands::approve::run(file),
         Command::Answer { id, letter } => commands::answer::run(id, letter),
-        Command::Show { topic_file, all } => commands::show::run(topic_file, all),
+        Command::Show { topic_file, all, neighbours, dependents } => {
+            commands::show::run(topic_file, all, commands::show::Views { neighbours, dependents })
+        }
         Command::Ban { term, rebuild } => commands::ban::run(term, rebuild),
         Command::Unban => commands::unban::run(),
         Command::Serve { port } => commands::serve::run(port),
-        Command::Check { staged, message, quiet, since, push } => {
-            commands::check::run(staged, message, since, push, quiet)
-        }
+        Command::Check { staged, message, since, push } => commands::check::run(staged, message, since, push),
     };
     std::process::exit(code);
 }

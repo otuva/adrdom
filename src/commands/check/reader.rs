@@ -16,7 +16,7 @@ pub(super) fn check_reader(root: &Path, source: &Source, since: Option<&str>) ->
         .malformed
         .iter()
         .map(|(lineno, raw)| Failure {
-            check: "reader".to_string(),
+            check: "reader",
             message: msg::malformed_reader_row(*lineno, raw),
         })
         .collect();

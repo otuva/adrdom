@@ -10,7 +10,9 @@
 //! both directions?", 4b407ee1); no commit runs it ("Does a commit run the
 //! reading of the set?", bc4291c8); every pair marked same, inconsistent or
 //! depends is printed ("Does the tool print every pair the reader marks?",
-//! 2db33118).
+//! 2db33118). Per "What does a command that writes nothing print?"
+//! (848e1b76 A), those pairs and the move they call for are all it prints:
+//! a reading that marks nothing prints nothing.
 //!
 //! The pool is the current decisions only, no term. The reader is asked in
 //! chunks as large as it reads at once, so a failure keeps what earlier
@@ -20,11 +22,13 @@ use crate::embed;
 use crate::index::{self, Rec};
 use crate::ledger;
 use crate::msg::{self, Actor};
+use crate::out::{self, Line};
 use crate::reader::{self, Kind, Pair};
-use crate::record::{self, sha256_hex};
+use crate::record;
 use crate::repo;
+use crate::rules::Finding;
 use crate::state;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::BTreeSet;
 
 /// How many pairs go to the reader in one call: the reader's concurrency,
 /// so a failed call loses at most one wave of reads.
@@ -34,17 +38,17 @@ pub fn run() -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("read", "", Actor::Agent));
+            out::eprint(&[out::refusal("read", &msg::not_a_repo("read", "", Actor::Agent))]);
             return 1;
         }
     };
     match read_all(&root) {
-        Ok(out) => {
-            print!("{}", out);
+        Ok(lines) => {
+            out::print(&lines);
             0
         }
         Err(e) => {
-            eprintln!("{}", e);
+            out::eprint(&[out::refusal("read", &e)]);
             1
         }
     }
@@ -55,21 +59,16 @@ fn heading_of(text: &str) -> &str {
     text.split('\n').next().unwrap_or(text)
 }
 
-fn row_key(p: &Pair) -> (String, String, String, String) {
-    (sha256_hex(&p.new_text), p.neighbour.clone(), p.kind.prompt_hash(), reader::MODEL.to_string())
-}
-
-fn read_all(root: &std::path::Path) -> Result<String, String> {
+/// Every marked pair as a finding, sorted same, inconsistent, depends, and
+/// the move when a pair is same or inconsistent; or the stop that ended it.
+fn read_all(root: &std::path::Path) -> Result<Vec<Line>, String> {
     let led = ledger::read(&root.join(repo::LEDGER_PATH));
     let files = record::load_all(root);
     let terms = state::load_terms(root).map(|t| t.terms).unwrap_or_default();
     let recs = index::pool(&files, &led, &terms);
     let decisions: Vec<&Rec> = recs.iter().filter(|r| r.kind == "decision").collect();
-    let mut out = String::new();
     if decisions.len() < 2 {
-        out.push_str(&msg::read_summary(0, 0, 0));
-        out.push('\n');
-        return Ok(out);
+        return Ok(Vec::new());
     }
     reader::load()?;
     let emb = embed::load(root)?;
@@ -94,21 +93,12 @@ fn read_all(root: &std::path::Path) -> Result<String, String> {
             neighbour_text: decisions[b].text.clone(),
         })
         .collect();
-    let before = |have: &HashSet<(String, String, String, String)>| pairs.iter().filter(|p| have.contains(&row_key(p))).count();
-    let have_keys = || -> HashSet<_> {
-        reader::read_file(root).rows.iter().filter(|r| r.model == reader::MODEL).map(|r| {
-            (r.text_hash.clone(), r.neighbour.clone(), r.prompt_hash.clone(), r.model.clone())
-        }).collect()
-    };
-    let read_before = before(&have_keys());
     let mut rows = Vec::new();
     for chunk in pairs.chunks(CHUNK) {
         match reader::read(root, chunk) {
             Ok(r) => rows.extend(r),
-            Err(e) => {
-                let unread = pairs.len() - before(&have_keys());
-                return Err(msg::read_stopped(&e, unread));
-            }
+            // The rows of earlier chunks are kept; the error names the move.
+            Err(e) => return Err(e),
         }
     }
     // Marked pairs by (group, first id, second id, line).
@@ -124,15 +114,9 @@ fn read_all(root: &std::path::Path) -> Result<String, String> {
         marked.push((group, &decisions[a].id, &decisions[b].id, line));
     }
     marked.sort();
-    for m in &marked {
-        out.push_str(&m.3);
-        out.push('\n');
-    }
+    let mut out: Vec<Line> = marked.iter().map(|m| Line::Finding(Finding::new("read", m.3.clone()))).collect();
     if marked.iter().any(|m| m.0 < 2) {
-        out.push_str(&msg::read_next());
-        out.push('\n');
+        out.push(Line::Move(crate::moves::of_marked_pairs()));
     }
-    out.push_str(&msg::read_summary(pairs.len() - read_before, read_before, marked.len()));
-    out.push('\n');
     Ok(out)
 }

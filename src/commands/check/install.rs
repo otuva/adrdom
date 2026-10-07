@@ -50,13 +50,13 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
         Some(content) => {
             if content != crate::commands::install::GITATTRIBUTES_CONTENT {
                 out.push(Failure {
-                    check: "install".to_string(),
+                    check: "install",
                     message: msg::gitattributes_differs(),
                 });
             }
         }
         None => out.push(Failure {
-            check: "install".to_string(),
+            check: "install",
             message: msg::gitattributes_missing(),
         }),
     }
@@ -66,13 +66,13 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
         Some(content) => {
             if content != crate::commands::install::GITIGNORE_CONTENT {
                 out.push(Failure {
-                    check: "install".to_string(),
+                    check: "install",
                     message: msg::gitignore_differs(),
                 });
             }
         }
         None => out.push(Failure {
-            check: "install".to_string(),
+            check: "install",
             message: msg::gitignore_missing(),
         }),
     }
@@ -92,19 +92,19 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
                     let matches = crate::text::lines_match_trimmed(section, &brief_lines);
                     if !matches {
                         out.push(Failure {
-                            check: "install".to_string(),
+                            check: "install",
                             message: msg::agents_md_stale(),
                         });
                     }
                 }
                 None => out.push(Failure {
-                    check: "install".to_string(),
+                    check: "install",
                     message: msg::agents_md_missing_brief(),
                 }),
             }
         }
         None => out.push(Failure {
-            check: "install".to_string(),
+            check: "install",
             message: msg::agents_md_missing_brief(),
         }),
     }
@@ -116,7 +116,7 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
                 .any(|l| l == crate::commands::install::CLAUDE_MD_IMPORT)
             {
                 out.push(Failure {
-                    check: "install".to_string(),
+                    check: "install",
                     message: msg::claude_md_missing_import(),
                 });
             }
@@ -143,7 +143,7 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
                     }
                 }
                 Err(_) => out.push(Failure {
-                    check: "install".to_string(),
+                    check: "install",
                     message: msg::settings_unparseable(&root.join(".claude/settings.json").display().to_string()),
                 }),
             }
@@ -158,13 +158,13 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
             Some(content) => {
                 if content != crate::commands::install::codex_rules_content() {
                     out.push(Failure {
-                        check: "install".to_string(),
+                        check: "install",
                         message: msg::codex_rules_stale(),
                     });
                 }
             }
             None => out.push(Failure {
-                check: "install".to_string(),
+                check: "install",
                 message: msg::codex_rules_missing(),
             }),
         }
@@ -187,20 +187,20 @@ fn check_hook(out: &mut Vec<Failure>, root: &Path, source: &Source, path: &str, 
             let matches = crate::text::lines_match_trimmed(&existing_lines, &want_lines);
             if !matches {
                 out.push(Failure {
-                    check: "install".to_string(),
+                    check: "install",
                     message: msg::hook_differs(path),
                 });
             } else if !crate::repo::hook_is_executable(&root.join(path)) {
                 // Git runs the working-tree file, and only when it is
                 // executable: a current hook it would skip is no hook.
                 out.push(Failure {
-                    check: "install".to_string(),
+                    check: "install",
                     message: msg::hook_not_executable(path),
                 });
             }
         }
         None => out.push(Failure {
-            check: "install".to_string(),
+            check: "install",
             message: msg::hook_missing(path),
         }),
     }
@@ -208,7 +208,7 @@ fn check_hook(out: &mut Vec<Failure>, root: &Path, source: &Source, path: &str, 
 
 fn missing_deny_entry(entry: &str) -> Failure {
     Failure {
-        check: "install".to_string(),
+        check: "install",
         message: msg::missing_deny_entry(entry),
     }
 }

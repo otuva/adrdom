@@ -71,9 +71,8 @@ fn a_draft_finding_is_a_note_not_a_failure() {
         let (ok, text) = check(&dir);
         assert!(ok, "{}: a draft finding must not fail check: {}", name, text);
         assert!(text.contains(want), "{}: the finding is printed as a note: {}", name, text);
-        assert!(text.contains("awaiting approval"), "{}: {}", name, text);
-        let quiet = adr(&dir, &["check", "--quiet"], &[], "");
-        assert!(quiet.status.success() && stdout(&quiet).is_empty(), "{}: {}", name, stdout(&quiet));
+        assert!(!text.contains("awaiting approval"), "{}: {}", name, text);
+        assert!(failures(&dir).is_empty(), "{}: {}", name, failures(&dir));
     }
 }
 
@@ -153,11 +152,11 @@ fn a_note_between_questions_is_a_note_in_a_draft_and_a_failure_when_approved() {
     write_record(&dir, REL, &content);
     let (ok, text) = check(&dir);
     assert!(ok, "{}", text);
-    assert!(text.contains("parse:") && text.contains("awaiting approval"), "{}", text);
-    assert!(quiet(&dir).is_empty());
+    assert!(text.contains("parse:"), "{}", text);
+    assert!(failures(&dir).is_empty());
     let dir = repo();
     approve_via_ledger(&dir, REL, &content);
-    assert!(quiet(&dir).contains("parse:"), "{}", quiet(&dir));
+    assert!(failures(&dir).contains("parse:"), "{}", failures(&dir));
 }
 
 #[test]
@@ -171,7 +170,7 @@ fn a_heading_in_two_files_is_a_note_while_one_is_a_draft_and_a_failure_when_both
     let (ok, text) = check(&dir);
     assert!(ok, "{}", text);
     assert!(text.contains("duplicate heading"), "{}", text);
-    assert!(quiet(&dir).is_empty());
+    assert!(failures(&dir).is_empty());
     // One approved, one a draft: the draft can still be renamed.
     let dir = repo();
     approve_via_ledger(&dir, "adrdom/decisions/a.md", &a);
@@ -182,11 +181,11 @@ fn a_heading_in_two_files_is_a_note_while_one_is_a_draft_and_a_failure_when_both
     let dir = repo();
     approve_via_ledger(&dir, "adrdom/decisions/a.md", &a);
     approve_via_ledger(&dir, "adrdom/decisions/b.md", &b);
-    assert!(quiet(&dir).contains("duplicate heading"), "{}", quiet(&dir));
+    assert!(failures(&dir).contains("duplicate heading"), "{}", failures(&dir));
 }
 
-fn quiet(dir: &Path) -> String {
-    stdout(&adr(dir, &["check", "--quiet"], &[], ""))
+fn failures(dir: &Path) -> String {
+    check_failures(dir)
 }
 
 #[test]
@@ -208,15 +207,15 @@ fn a_finding_in_an_asked_question_stays_a_failure_in_a_draft_file() {
     let gamma = q("Does the widget fall?", &alpha.to_string(), "the widget breaks.", OPTS);
     // The file holds only the asked question: its finding fails check.
     write_record(&dir, REL, &format!("# Gate\n\n{}\n", beta_section));
-    let before = quiet(&dir);
+    let before = failures(&dir);
     assert!(before.contains("which is not a current decision"), "{}", before);
     // One unasked question added: the file now awaits approval, but the
     // finding about the asked question still fails; the same finding about
     // the new one is a note.
     write_record(&dir, REL, &format!("# Gate\n\n{}\n{}", beta_section, gamma));
-    let failures = quiet(&dir);
-    assert!(failures.contains("\"Does the widget stay?\" depends on"), "{}", failures);
-    assert!(!failures.contains("\"Does the widget fall?\" depends on"), "{}", failures);
+    let failed = failures(&dir);
+    assert!(failed.contains("\"Does the widget stay?\" depends on"), "{}", failed);
+    assert!(!failed.contains("\"Does the widget fall?\" depends on"), "{}", failed);
     let all = stdout(&adr(&dir, &["check"], &[], ""));
     assert!(all.contains("\"Does the widget fall?\" depends on"), "{}", all);
 }
@@ -232,8 +231,8 @@ fn a_prose_finding_is_a_note_when_only_the_prose_awaits_approval() {
     write_record(&dir, REL, &format!("# Gate\n\nAs decided in chat.\n\n{}", good()));
     let (ok, text) = check(&dir);
     assert!(ok, "{}", text);
-    assert!(text.contains("tells:") && text.contains("awaiting approval"), "{}", text);
-    assert!(quiet(&dir).is_empty());
+    assert!(text.contains("tells:"), "{}", text);
+    assert!(failures(&dir).is_empty());
 }
 
 #[test]
@@ -256,7 +255,7 @@ fn a_body_shape_finding_is_a_note_in_a_draft_and_a_failure_when_approved() {
         assert!(text.contains("parse:"), "{}", text);
         let dir = repo();
         approve_via_ledger(&dir, REL, &content);
-        assert!(quiet(&dir).contains("parse:"), "{}", content);
+        assert!(failures(&dir).contains("parse:"), "{}", content);
     }
 }
 
@@ -268,10 +267,10 @@ fn a_stray_line_is_a_note_in_a_draft_and_a_failure_when_approved() {
     write_record(&dir, REL, &content);
     let (ok, text) = check(&dir);
     assert!(ok && text.contains("parse:") && text.contains("stray line"), "{}", text);
-    assert!(quiet(&dir).is_empty());
+    assert!(failures(&dir).is_empty());
     let dir = repo();
     approve_via_ledger(&dir, REL, &content);
-    assert!(quiet(&dir).contains("stray line"), "{}", quiet(&dir));
+    assert!(failures(&dir).contains("stray line"), "{}", failures(&dir));
 }
 
 #[test]
@@ -288,10 +287,8 @@ fn a_supersedes_finding_in_an_asked_question_stays_a_failure_in_a_draft_file() {
     );
     append_ledger_row_at(&dir, "asked", beta, &mirror_section_hash(&beta_section), "Does the widget stay?", "2024-01-01T00:00:03Z");
     write_record(&dir, REL, &format!("# Gate\n\n{}\n\n{}", beta_section, good().replace("hold", "fall")));
-    let failures = quiet(&dir);
-    assert!(failures.contains("Does the widget stay?") && failures.contains("which is not a current decision"), "{}", failures);
-    let all = stdout(&adr(&dir, &["check"], &[], ""));
-    assert!(all.contains("awaiting approval"), "{}", all);
+    let failed = failures(&dir);
+    assert!(failed.contains("Does the widget stay?") && failed.contains("which is not a current decision"), "{}", failed);
 }
 
 #[test]
@@ -311,11 +308,11 @@ fn plan_text_shape_findings_are_notes_in_a_draft_and_failures_when_approved() {
         write_record(&dir, REL, &content);
         let (ok, text) = check(&dir);
         assert!(ok, "{}: {}", name, text);
-        assert!(text.contains("awaiting approval") && text.contains("parse:"), "{}: {}", name, text);
-        assert!(quiet(&dir).is_empty(), "{}: {}", name, quiet(&dir));
+        assert!(text.contains("parse:"), "{}: {}", name, text);
+        assert!(failures(&dir).is_empty(), "{}: {}", name, failures(&dir));
         let dir = repo();
         approve_via_ledger(&dir, REL, &content);
-        assert!(quiet(&dir).contains("parse:"), "{}: {}", name, quiet(&dir));
+        assert!(failures(&dir).contains("parse:"), "{}: {}", name, failures(&dir));
     }
 }
 
@@ -340,12 +337,12 @@ fn the_tools_own_lines_and_a_file_shape_fault_are_notes_in_a_draft_and_failures_
         write_record(&dir, REL, &content);
         let (ok, text) = check(&dir);
         assert!(ok, "{}: a draft fault is a note: {}", name, text);
-        assert!(text.contains("parse:") && text.contains("awaiting approval"), "{}: {}", name, text);
-        assert!(quiet(&dir).is_empty(), "{}: {}", name, quiet(&dir));
+        assert!(text.contains("parse:"), "{}: {}", name, text);
+        assert!(failures(&dir).is_empty(), "{}: {}", name, failures(&dir));
         let dir = repo();
         approve_via_ledger(&dir, REL, &content);
-        let failures = quiet(&dir);
-        assert!(failures.contains("parse:"), "{}: an approved file fails: {}", name, failures);
+        let failed = failures(&dir);
+        assert!(failed.contains("parse:"), "{}: an approved file fails: {}", name, failed);
     }
 }
 
@@ -362,15 +359,15 @@ fn a_fault_in_a_question_with_force_and_the_ledger_findings_stay_failures_in_a_d
     append_ledger_row_at(&dir, "answered", ASKED, &hash, "A", "2024-01-01T00:00:04Z");
     let edited = section.replace("the widget breaks.", "the widget fails.");
     write_record(&dir, REL, &format!("# Gate\n\n{}\n\n**Answer:** A\n\n{}", edited, good().replace("hold", "fall")));
-    let failures = quiet(&dir);
-    assert!(failures.contains("text changed since being answered"), "{}", failures);
+    let failed = failures(&dir);
+    assert!(failed.contains("text changed since being answered"), "{}", failed);
     // An id with an answer row and no topic file heading: a ledger finding.
     let dir = repo();
     append_ledger_row_at(&dir, "asked", ASKED, "h", "Does the widget stay?", "2024-01-01T00:00:03Z");
     append_ledger_row_at(&dir, "answered", ASKED, "h", "A", "2024-01-01T00:00:04Z");
     write_record(&dir, REL, &format!("# Gate\n\n{}", good()));
-    let failures = quiet(&dir);
-    assert!(failures.contains("ids:") || failures.contains(ASKED), "{}", failures);
+    let failed = failures(&dir);
+    assert!(failed.contains("ids:") || failed.contains(ASKED), "{}", failed);
 }
 
 const ASKED: &str = "22222222-2222-2222-2222-222222222222";
@@ -402,8 +399,8 @@ fn a_derive_error_in_an_asked_question_stays_a_failure_in_a_draft_file() {
     asked_row(&dir, ASKED, &section, "Does the widget stay?");
     // The dangling entry sits in the asked question; an unasked one is added.
     write_record(&dir, REL, &format!("# Gate\n\n{}\n\n{}", section, good()));
-    let failures = quiet(&dir);
-    assert!(failures.contains("exists nowhere"), "{}", failures);
+    let failed = failures(&dir);
+    assert!(failed.contains("exists nowhere"), "{}", failed);
     // The same error in the unasked question is a note.
     let dir = repo();
     write_record(&dir, REL, &format!("# Gate\n\n{}", q("Does the widget stay?", "Does a heading that exists nowhere?", "the widget breaks.", OPTS)));
@@ -420,8 +417,8 @@ fn a_cycle_through_a_question_that_cannot_change_stays_a_failure_in_a_draft_file
     asked_row(&dir, ASKED, &a, "Does the widget stay?");
     let b = q("Does the widget fall?", "Does the widget stay?=A", "the widget breaks.", OPTS);
     write_record(&dir, REL, &format!("# Gate\n\n{}\n\n{}", a, b));
-    let failures = quiet(&dir);
-    assert!(failures.contains("cycle: "), "{}", failures);
+    let failed = failures(&dir);
+    assert!(failed.contains("cycle: "), "{}", failed);
 }
 
 #[test]
@@ -435,11 +432,11 @@ fn a_finding_in_a_draft_question_is_a_note_though_an_answered_one_shares_its_hea
     append_ledger_row_at(&dir, "answered", ASKED, &hash, "A", "2024-01-01T00:00:01Z");
     let draft = q("Does the widget hold?", "nosuchterm", "the widget breaks.", OPTS);
     write_record(&dir, REL, &format!("# Gate\n\n{}\n\n**Answer:** A\n\n{}", answered, draft));
-    let failures = quiet(&dir);
-    assert!(!failures.contains("nosuchterm"), "{}", failures);
+    let failed = failures(&dir);
+    assert!(!failed.contains("nosuchterm"), "{}", failed);
     // The duplicate heading is the draft question's fault, the one that
     // copies the heading of a decision: a note.
-    assert!(!failures.contains("duplicate heading"), "{}", failures);
+    assert!(!failed.contains("duplicate heading"), "{}", failed);
     let all = stdout(&adr(&dir, &["check"], &[], ""));
     assert!(all.contains("nosuchterm") && all.contains("duplicate heading"), "{}", all);
 }
@@ -459,8 +456,8 @@ fn a_duplicate_heading_between_two_questions_with_force_fails_even_in_a_draft_fi
         texts.push(format!("{}\n\n**Answer:** A", section));
     }
     write_record(&dir, REL, &format!("# Gate\n\n{}\n\n{}\n\n{}", texts[0], texts[1], q("Does the widget fall?", "widget", "the widget breaks.", OPTS)));
-    let failures = quiet(&dir);
-    assert!(failures.contains("duplicate heading"), "{}", failures);
+    let failed = failures(&dir);
+    assert!(failed.contains("duplicate heading"), "{}", failed);
 }
 
 #[test]
@@ -472,8 +469,11 @@ fn a_finding_in_a_question_edited_since_it_was_asked_is_a_note() {
     asked_row(&dir, ASKED, &original, "Does the widget stay?");
     let edited = stated("Does the widget stay?", "nosuchterm", ASKED, &term, OPTS);
     write_record(&dir, REL, &format!("# Gate\n\n{}\n", edited));
-    let failures = quiet(&dir);
-    assert!(!failures.contains("nosuchterm"), "{}", failures);
+    // The finding itself is a note; a failure may name it only inside its
+    // move (the edit after asking clears by the file's moves).
+    let failed = failures(&dir);
+    let finding_of = |l: &str| l.split_once("; ").map_or(l, |(f, _)| f).to_string();
+    assert!(!failed.lines().any(|l| finding_of(l).contains("nosuchterm")), "{}", failed);
     let all = stdout(&adr(&dir, &["check"], &[], ""));
     assert!(all.contains("nosuchterm"), "{}", all);
 }
@@ -494,7 +494,7 @@ fn a_body_shape_finding_in_an_asked_or_answered_question_stays_a_failure_in_a_dr
             text.push_str("\n\n**Answer:** A");
         }
         write_record(&dir, REL, &format!("# Gate\n\n{}\n\n{}", text, good().replace("hold", "fall")));
-        let failures = quiet(&dir);
-        assert!(failures.contains("missing Costs"), "answered={}: {}", answered, failures);
+        let failed = failures(&dir);
+        assert!(failed.contains("missing Costs"), "answered={}: {}", answered, failed);
     }
 }

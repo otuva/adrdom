@@ -1,14 +1,27 @@
 use crate::banned;
 use crate::commands::{deny_entries, OWNER_COMMANDS};
 use crate::msg::{self, Actor, Next};
+use crate::out::{self, Event};
 use crate::repo;
 use std::fs;
 use std::path::Path;
 
-/// The agent's next move on any I/O failure while installing: fix the
-/// underlying problem, then run install again.
-fn retry() -> Next {
-    Next::agent("checks the error and retries")
+/// The agent's next move on any I/O failure while installing: fix what the
+/// error names, then run `command`, the install that failed, again.
+fn retry(command: &str) -> Next {
+    Next::agent(format!("fixes what the error names, then runs: {}", command))
+}
+
+/// The install command as it was given, flags and all.
+fn install_command(claude: bool, codex: bool) -> String {
+    let mut c = String::from("adr install");
+    if claude {
+        c.push_str(" --claude");
+    }
+    if codex {
+        c.push_str(" --codex");
+    }
+    c
 }
 
 /// The agent brief, final at `assets/brief.md`. `adr install` writes it
@@ -23,8 +36,11 @@ pub(crate) const CLAUDE_MD_MARKER: &str =
     "<!-- adrdom: the next line imports the agent brief; adr uninstall removes both lines -->";
 pub(crate) const CLAUDE_MD_IMPORT: &str = "@AGENTS.md";
 
-pub(crate) const PRE_COMMIT_HOOK: &str = "#!/bin/sh\nadr check --staged --quiet\nexit $?\n";
-pub(crate) const COMMIT_MSG_HOOK: &str = "#!/bin/sh\nadr check --message \"$1\" --quiet\nexit $?\n";
+/// The commit hooks run check as it is by hand: a pass prints nothing, and
+/// every line is a finding with its move (per "Does check print a line that
+/// names no move?", 3fc35d4f A).
+pub(crate) const PRE_COMMIT_HOOK: &str = "#!/bin/sh\nadr check --staged\nexit $?\n";
+pub(crate) const COMMIT_MSG_HOOK: &str = "#!/bin/sh\nadr check --message \"$1\"\nexit $?\n";
 /// Decision P (19e1c023-a678-4842-a414-bb0e45c41601): a plain `sh` script,
 /// same shape as the other two hooks, that hands `adr check --push` git's
 /// own pre-push input -- the script never redirects its own stdin, so the
@@ -68,177 +84,99 @@ pub fn run(claude: bool, codex: bool) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("install", "", Actor::Agent));
+            out::eprint_stop(&msg::not_a_repo("install", "", Actor::Agent));
             return 1;
         }
     };
 
-    let decisions = root.join(repo::DECISIONS_DIR);
-    let state = root.join(repo::STATE_DIR);
-    if let Err(e) = fs::create_dir_all(&decisions) {
-        eprintln!(
-            "install: {}",
-            msg::create_failed(&decisions.display().to_string(), e, retry())
+    // One line per file written, or the failure that stopped it (per "What
+    // does a command that writes print?", 069a6b4a A). The files written
+    // before a failure are printed too: they are on disk.
+    let mut events: Vec<Event> = Vec::new();
+    let result = install_all(&root, claude, codex, &mut events);
+    out::print_events(&events);
+    match result {
+        Ok(()) => 0,
+        Err(stop) => {
+            out::eprint_stop(&format!("install: {}", stop));
+            1
+        }
+    }
+}
+
+/// Every piece install writes, in order, each file it writes pushed onto
+/// `events`; the first failure stops it, as its message.
+fn install_all(root: &Path, claude: bool, codex: bool, events: &mut Vec<Event>) -> Result<(), String> {
+    let cmd = &install_command(claude, codex);
+    for dir in [repo::DECISIONS_DIR, repo::STATE_DIR] {
+        let path = root.join(dir);
+        fs::create_dir_all(&path).map_err(|e| msg::create_failed(&path.display().to_string(), e, retry(cmd)))?;
+    }
+
+    for rel in [repo::LEDGER_PATH, repo::READER_PATH, banned::BAN_LIST] {
+        let path = root.join(rel);
+        events.extend(
+            create_if_missing(root, rel).map_err(|e| msg::write_failed(&path.display().to_string(), e, retry(cmd)))?,
         );
-        return 1;
-    }
-    if let Err(e) = fs::create_dir_all(&state) {
-        eprintln!(
-            "install: {}",
-            msg::create_failed(&state.display().to_string(), e, retry())
-        );
-        return 1;
     }
 
-    for path in [
-        root.join(repo::LEDGER_PATH),
-        root.join(repo::READER_PATH),
-        root.join(banned::BAN_LIST),
-    ] {
-        if let Err(e) = create_if_missing(&path, "") {
-            eprintln!(
-                "install: {}",
-                msg::write_failed(&path.display().to_string(), e, retry())
-            );
-            return 1;
-        }
-    }
-
-    let mut messages = Vec::new();
-
-    match install_gitattributes(&root) {
-        Ok(m) => messages.push(m),
-        Err(e) => {
-            eprintln!(
-                "install: {}",
-                msg::write_failed(repo::GITATTRIBUTES_PATH, e, retry())
-            );
-            return 1;
-        }
-    }
-
-    match install_gitignore(&root) {
-        Ok(m) => messages.push(m),
-        Err(e) => {
-            eprintln!(
-                "install: {}",
-                msg::write_failed(repo::GITIGNORE_PATH, e, retry())
-            );
-            return 1;
-        }
-    }
+    events.extend(install_gitattributes(root).map_err(|e| msg::write_failed(repo::GITATTRIBUTES_PATH, e, retry(cmd)))?);
+    events.extend(install_gitignore(root).map_err(|e| msg::write_failed(repo::GITIGNORE_PATH, e, retry(cmd)))?);
 
     let hooks = root.join(".githooks");
-    if let Err(e) = fs::create_dir_all(&hooks) {
-        eprintln!(
-            "install: {}",
-            msg::create_failed(&hooks.display().to_string(), e, retry())
-        );
-        return 1;
-    }
-    match create_hook(&root, repo::PRE_COMMIT_HOOK_PATH, PRE_COMMIT_HOOK) {
-        Ok(m) => messages.push(m),
-        Err(e) => {
-            eprintln!(
-                "install: {}",
-                msg::write_failed(repo::PRE_COMMIT_HOOK_PATH, e, retry())
-            );
-            return 1;
-        }
-    }
-    match create_hook(&root, repo::COMMIT_MSG_HOOK_PATH, COMMIT_MSG_HOOK) {
-        Ok(m) => messages.push(m),
-        Err(e) => {
-            eprintln!(
-                "install: {}",
-                msg::write_failed(repo::COMMIT_MSG_HOOK_PATH, e, retry())
-            );
-            return 1;
-        }
-    }
-    match create_hook(&root, repo::PRE_PUSH_HOOK_PATH, PRE_PUSH_HOOK) {
-        Ok(m) => messages.push(m),
-        Err(e) => {
-            eprintln!(
-                "install: {}",
-                msg::write_failed(repo::PRE_PUSH_HOOK_PATH, e, retry())
-            );
-            return 1;
-        }
+    fs::create_dir_all(&hooks).map_err(|e| msg::create_failed(&hooks.display().to_string(), e, retry(cmd)))?;
+    for (rel, content) in [
+        (repo::PRE_COMMIT_HOOK_PATH, PRE_COMMIT_HOOK),
+        (repo::COMMIT_MSG_HOOK_PATH, COMMIT_MSG_HOOK),
+        (repo::PRE_PUSH_HOOK_PATH, PRE_PUSH_HOOK),
+    ] {
+        events.extend(create_hook(root, rel, content).map_err(|e| msg::write_failed(rel, e, retry(cmd)))?);
     }
 
     // Without this git runs none of the hooks written above.
-    if repo::git(&root, &["config", "core.hooksPath", ".githooks"]).is_none() {
-        eprintln!("install: {}", msg::hooks_path_failed("set", retry()));
-        return 1;
+    if repo::git(root, &["config", "core.hooksPath", ".githooks"]).is_none() {
+        return Err(msg::hooks_path_failed("set", retry(cmd)));
     }
 
-    match install_agents_md(&root) {
-        Ok(m) => messages.push(m),
-        Err(e) => {
-            eprintln!("install: {}", msg::update_failed("AGENTS.md", e, retry()));
-            return 1;
-        }
-    }
-
-    match install_claude_md(&root, claude) {
-        Ok(Some(m)) => messages.push(m),
-        Ok(None) => {}
-        Err(e) => {
-            eprintln!("install: {}", msg::update_failed("CLAUDE.md", e, retry()));
-            return 1;
-        }
-    }
+    events.extend(install_agents_md(root).map_err(|e| msg::update_failed("AGENTS.md", e, retry(cmd)))?);
+    events.extend(install_claude_md(root, claude).map_err(|e| msg::update_failed("CLAUDE.md", e, retry(cmd)))?);
 
     if claude {
-        match merge_settings(&root) {
-            Ok(mut msgs) => messages.append(&mut msgs),
-            Err(e) => {
-                eprintln!(
-                    "install: {}",
-                    msg::update_failed(".claude/settings.json", e, retry())
-                );
-                return 1;
-            }
-        }
+        events.extend(merge_settings(root, cmd)?);
     }
 
     if codex {
-        match install_codex_rules(&root) {
-            Ok(mut msgs) => messages.append(&mut msgs),
-            Err(e) => {
-                eprintln!(
-                    "install: {}",
-                    msg::write_failed(".codex/rules/adrdom.rules", e, retry())
-                );
-                return 1;
-            }
-        }
+        events.extend(
+            install_codex_rules(root).map_err(|e| msg::write_failed(".codex/rules/adrdom.rules", e, retry(cmd)))?,
+        );
     }
-
-    println!("{}", msg::installed_at(root.display()));
-    for m in &messages {
-        println!("{}", m);
-    }
-    0
+    Ok(())
 }
 
-fn create_if_missing(path: &Path, content: &str) -> Result<(), String> {
+/// The event of a file written at `rel`.
+fn written(rel: &str) -> Option<Event> {
+    Some(Event::FileWritten { path: rel.to_string() })
+}
+
+/// Creates the empty file at `rel` when it is missing.
+fn create_if_missing(root: &Path, rel: &str) -> Result<Option<Event>, String> {
+    let path = root.join(rel);
     if path.exists() {
-        return Ok(());
+        return Ok(None);
     }
-    fs::write(path, content).map_err(|e| e.to_string())
+    fs::write(&path, "").map_err(|e| e.to_string())?;
+    Ok(written(rel))
 }
 
 /// Writes/refreshes `rel` (a hook path relative to `root`, e.g.
 /// `repo::PRE_COMMIT_HOOK_PATH`) with `content`: writes it when missing,
 /// rewrites it when the content on disk differs, and leaves it untouched
-/// (reporting "up to date") when it already matches -- the same
-/// missing/stale/current shape as `install_agents_md`. "Matches" is
-/// `text::lines_match_trimmed`, the same comparison `check`'s `check_hook`
-/// judges this same file with, so this call and `adr check` can never
-/// disagree about whether the file on disk is already current.
-fn create_hook(root: &Path, rel: &str, content: &str) -> Result<String, String> {
+/// (no event) when it already matches -- the same missing/stale/current
+/// shape as `install_agents_md`. "Matches" is `text::lines_match_trimmed`,
+/// the same comparison `check`'s `check_hook` judges this same file with,
+/// so this call and `adr check` can never disagree about whether the file
+/// on disk is already current.
+fn create_hook(root: &Path, rel: &str, content: &str) -> Result<Option<Event>, String> {
     let path = root.join(rel);
     if let Ok(existing) = fs::read_to_string(&path) {
         let existing_lines: Vec<&str> = existing.split('\n').collect();
@@ -246,18 +184,18 @@ fn create_hook(root: &Path, rel: &str, content: &str) -> Result<String, String> 
         if crate::text::lines_match_trimmed(&existing_lines, &want_lines) {
             // Content current, but git runs a hook only when it is
             // executable (`repo::hook_is_executable`, the same test
-            // `check` applies): repair the mode rather than report a hook
-            // git would silently skip as up to date.
+            // `check` applies): repair the mode rather than leave a hook
+            // git would silently skip.
             if repo::hook_is_executable(&path) {
-                return Ok(msg::hook_up_to_date(rel));
+                return Ok(None);
             }
             make_executable(&path)?;
-            return Ok(msg::hook_written(rel));
+            return Ok(written(rel));
         }
     }
     fs::write(&path, content).map_err(|e| e.to_string())?;
     make_executable(&path)?;
-    Ok(msg::hook_written(rel))
+    Ok(written(rel))
 }
 
 /// Sets the mode git requires to run a hook (0o755 on unix; a no-op
@@ -280,33 +218,28 @@ fn make_executable(path: &Path) -> Result<(), String> {
 
 /// Writes/refreshes `adrdom/.gitattributes`: written when missing or when
 /// its content differs from `GITATTRIBUTES_CONTENT`, left untouched
-/// (reporting "up to date") when it already holds exactly that text -- the
-/// same missing/stale/current shape `install_codex_rules` already uses for
-/// its own whole, tool-owned file (there is no marked section inside this
-/// one to preserve, unlike AGENTS.md/CLAUDE.md).
-fn install_gitattributes(root: &Path) -> Result<String, String> {
-    let path = root.join(repo::GITATTRIBUTES_PATH);
-    let already = fs::read_to_string(&path)
-        .map(|c| c == GITATTRIBUTES_CONTENT)
-        .unwrap_or(false);
-    if already {
-        return Ok(msg::gitattributes_up_to_date());
-    }
-    fs::write(&path, GITATTRIBUTES_CONTENT).map_err(|e| e.to_string())?;
-    Ok(msg::gitattributes_written())
+/// (no event) when it already holds exactly that text -- the same
+/// missing/stale/current shape `install_codex_rules` already uses for its
+/// own whole, tool-owned file (there is no marked section inside this one
+/// to preserve, unlike AGENTS.md/CLAUDE.md).
+fn install_gitattributes(root: &Path) -> Result<Option<Event>, String> {
+    write_whole(root, repo::GITATTRIBUTES_PATH, GITATTRIBUTES_CONTENT)
 }
 
 /// Writes/refreshes `adrdom/.gitignore`, the same way as `install_gitattributes`.
-fn install_gitignore(root: &Path) -> Result<String, String> {
-    let path = root.join(repo::GITIGNORE_PATH);
-    let already = fs::read_to_string(&path)
-        .map(|c| c == GITIGNORE_CONTENT)
-        .unwrap_or(false);
-    if already {
-        return Ok(msg::gitignore_up_to_date());
+fn install_gitignore(root: &Path) -> Result<Option<Event>, String> {
+    write_whole(root, repo::GITIGNORE_PATH, GITIGNORE_CONTENT)
+}
+
+/// Writes `content` as the whole file at `rel` unless it already holds
+/// exactly that text.
+fn write_whole(root: &Path, rel: &str, content: &str) -> Result<Option<Event>, String> {
+    let path = root.join(rel);
+    if fs::read_to_string(&path).is_ok_and(|c| c == content) {
+        return Ok(None);
     }
-    fs::write(&path, GITIGNORE_CONTENT).map_err(|e| e.to_string())?;
-    Ok(msg::gitignore_written())
+    fs::write(&path, content).map_err(|e| e.to_string())?;
+    Ok(written(rel))
 }
 
 /// Locates the marker lines in `lines` (as produced by `content.split('\n')`,
@@ -338,13 +271,13 @@ fn section_lines() -> Vec<&'static str> {
 /// replaces the marked span in place when it already has one. Never
 /// touches text outside the markers, and a no-op leaves the file
 /// byte-identical.
-fn install_agents_md(root: &Path) -> Result<String, String> {
+fn install_agents_md(root: &Path) -> Result<Option<Event>, String> {
     let path = root.join("AGENTS.md");
 
     if !path.exists() {
         let content = section_lines().join("\n") + "\n";
         fs::write(&path, &content).map_err(|e| e.to_string())?;
-        return Ok(msg::agents_md_created());
+        return Ok(written("AGENTS.md"));
     }
 
     let existing = fs::read_to_string(&path).map_err(|e| e.to_string())?;
@@ -359,10 +292,10 @@ fn install_agents_md(root: &Path) -> Result<String, String> {
             let new_content = new_parts.join("\n");
 
             if new_content == existing {
-                return Ok(msg::agents_md_up_to_date());
+                return Ok(None);
             }
             fs::write(&path, &new_content).map_err(|e| e.to_string())?;
-            Ok(msg::agents_md_replaced())
+            Ok(written("AGENTS.md"))
         }
         None => {
             let mut new_content = existing;
@@ -377,7 +310,7 @@ fn install_agents_md(root: &Path) -> Result<String, String> {
             new_content.push_str(&section_lines().join("\n"));
             new_content.push('\n');
             fs::write(&path, &new_content).map_err(|e| e.to_string())?;
-            Ok(msg::agents_md_appended())
+            Ok(written("AGENTS.md"))
         }
     }
 }
@@ -389,7 +322,7 @@ fn install_agents_md(root: &Path) -> Result<String, String> {
 /// `--claude`, a missing CLAUDE.md is created holding only the marker and
 /// the import; an existing one gets the import appended unless it already
 /// has a line equal to `@AGENTS.md`.
-fn install_claude_md(root: &Path, create: bool) -> Result<Option<String>, String> {
+fn install_claude_md(root: &Path, create: bool) -> Result<Option<Event>, String> {
     if !create {
         return Ok(None);
     }
@@ -420,35 +353,37 @@ fn install_claude_md(root: &Path, create: bool) -> Result<Option<String>, String
     new_content.push('\n');
 
     fs::write(&path, &new_content).map_err(|e| e.to_string())?;
-    Ok(Some(if created {
-        msg::claude_md_created()
-    } else {
-        msg::claude_md_import_added()
-    }))
+    Ok(written("CLAUDE.md"))
 }
 
 /// Merges `deny_entries()` into `.claude/settings.json`'s
 /// `permissions.deny` array, preserving every other key and array entry.
-/// Creates the directory/file if missing. Returns one message per entry.
-fn merge_settings(root: &Path) -> Result<Vec<String>, String> {
+/// Creates the directory/file if missing; writes the file only when an
+/// entry is missing from it. A failure is the whole refusal, its move once:
+/// a file the agent fixes so it holds what install merges into, or the
+/// error to fix, then `cmd` again.
+fn merge_settings(root: &Path, cmd: &str) -> Result<Option<Event>, String> {
+    const REL: &str = ".claude/settings.json";
+    let failed = |e: String| msg::update_failed(REL, e, retry(cmd));
+    let fix = |so: &str| msg::fix_then(REL, so, cmd);
     let dir = root.join(".claude");
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    fs::create_dir_all(&dir).map_err(|e| failed(e.to_string()))?;
     let path = dir.join("settings.json");
 
     let mut value: serde_json::Value = if path.exists() {
-        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        let content = fs::read_to_string(&path).map_err(|e| failed(e.to_string()))?;
         if content.trim().is_empty() {
             serde_json::json!({})
         } else {
             serde_json::from_str(&content)
-                .map_err(|e| msg::parse_failed(&path.display().to_string(), e, retry()))?
+                .map_err(|e| msg::parse_failed(REL, e, fix("it parses as JSON")))?
         }
     } else {
         serde_json::json!({})
     };
 
     if !value.is_object() {
-        return Err(msg::settings_not_json_object(&path.display().to_string(), retry()));
+        return Err(msg::settings_not_json_object(REL, fix("it holds a JSON object")));
     }
     let obj = value.as_object_mut().unwrap();
 
@@ -456,10 +391,7 @@ fn merge_settings(root: &Path) -> Result<Vec<String>, String> {
         .entry("permissions")
         .or_insert_with(|| serde_json::json!({}));
     if !permissions.is_object() {
-        return Err(msg::settings_permissions_not_object(
-            &path.display().to_string(),
-            retry(),
-        ));
+        return Err(msg::settings_permissions_not_object(REL, fix("permissions is an object")));
     }
     let permissions_obj = permissions.as_object_mut().unwrap();
 
@@ -467,47 +399,32 @@ fn merge_settings(root: &Path) -> Result<Vec<String>, String> {
         .entry("deny")
         .or_insert_with(|| serde_json::json!([]));
     if !deny.is_array() {
-        return Err(msg::settings_deny_not_array(&path.display().to_string(), retry()));
+        return Err(msg::settings_deny_not_array(REL, fix("permissions.deny is an array")));
     }
     let deny_arr = deny.as_array_mut().unwrap();
 
-    let mut messages = Vec::new();
+    let mut added = false;
     for entry in deny_entries() {
-        let already = deny_arr.iter().any(|v| v.as_str() == Some(entry.as_str()));
-        if already {
-            messages.push(msg::deny_entry_present(&entry));
-        } else {
+        if !deny_arr.iter().any(|v| v.as_str() == Some(entry.as_str())) {
             deny_arr.push(serde_json::Value::String(entry.clone()));
-            messages.push(msg::deny_entry_added(&entry));
+            added = true;
         }
     }
+    if !added && path.exists() {
+        return Ok(None);
+    }
 
-    let mut pretty = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
+    let mut pretty = serde_json::to_string_pretty(&value).map_err(|e| failed(e.to_string()))?;
     pretty.push('\n');
-    fs::write(&path, pretty).map_err(|e| e.to_string())?;
+    fs::write(&path, pretty).map_err(|e| failed(e.to_string()))?;
 
-    Ok(messages)
+    Ok(written(REL))
 }
 
-/// Writes `.codex/rules/adrdom.rules` (creating `.codex/rules/`), then adds
-/// the note that Codex only enforces project rules for a project the owner
-/// has marked trusted in their own Codex config (tested fact; adrdom never
-/// touches that config, which lives outside the repo, under the owner's
-/// home directory).
-fn install_codex_rules(root: &Path) -> Result<Vec<String>, String> {
-    let dir = root.join(".codex/rules");
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let path = dir.join("adrdom.rules");
-    let content = codex_rules_content();
-
-    let mut messages = Vec::new();
-    let already = fs::read_to_string(&path).map(|c| c == content).unwrap_or(false);
-    if already {
-        messages.push(msg::codex_rules_up_to_date());
-    } else {
-        fs::write(&path, &content).map_err(|e| e.to_string())?;
-        messages.push(msg::codex_rules_written());
-    }
-    messages.push(msg::codex_trust_note());
-    Ok(messages)
+/// Writes `.codex/rules/adrdom.rules` (creating `.codex/rules/`). Codex
+/// only enforces project rules for a project the owner has marked trusted
+/// in their own Codex config, which adrdom never touches.
+fn install_codex_rules(root: &Path) -> Result<Option<Event>, String> {
+    fs::create_dir_all(root.join(".codex/rules")).map_err(|e| e.to_string())?;
+    write_whole(root, ".codex/rules/adrdom.rules", &codex_rules_content())
 }

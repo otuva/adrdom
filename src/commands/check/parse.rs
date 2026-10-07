@@ -1,5 +1,5 @@
 use super::{is_note, Failure};
-use crate::actions::Refusal;
+use crate::rules::Finding;
 use crate::ledger::Ledger;
 use crate::record::RecordFile;
 
@@ -9,7 +9,7 @@ use crate::record::RecordFile;
 /// line, an answer naming a missing option) -- the `parse` category of
 /// `record_refusals`, computed once in `mod.rs` and shared with `approve`'s
 /// `do_approve_record` and `ask` (178a232e A point 1): both lists now
-/// live in the shared `Refusal` list, so this is a plain filter over it
+/// live in the shared `Finding` list, so this is a plain filter over it
 /// rather than its own scan over `records`.
 ///
 /// On a file awaiting approval every one of these is a note, unless it is
@@ -18,20 +18,20 @@ use crate::record::RecordFile;
 /// A, and "What is the shape of a topic file?", 9913568f A).
 pub(super) fn check_parse(
     records: &[RecordFile],
-    refusals: &[Vec<Refusal>],
+    refusals: &[Vec<Finding>],
     awaiting: &[String],
     led: &Ledger,
-) -> (Vec<Failure>, Vec<String>) {
+) -> (Vec<Failure>, Vec<Failure>) {
     let mut out = Vec::new();
     let mut notes = Vec::new();
     for (rf, refs) in records.iter().zip(refusals) {
         let draft = awaiting.contains(&rf.rel);
-        for r in refs.iter().filter(|r| r.category == "parse") {
+        for r in refs.iter().filter(|r| r.rule == "parse") {
             if is_note(rf, r, draft, led) {
-                notes.push(format!("parse: {}", r.message));
+                notes.push(Failure { check: "parse", message: r.message.clone() });
             } else {
                 out.push(Failure {
-                    check: "parse".to_string(),
+                    check: "parse",
                     message: r.message.clone(),
                 });
             }

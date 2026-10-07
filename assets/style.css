@@ -215,3 +215,19 @@ input.filter:focus-visible { outline: 2px solid var(--hold); outline-offset: 1px
   .focus { grid-template-columns: minmax(0, 42rem) 18rem; }
   .focus .tq { grid-column: 2; grid-row: 1 / span 6; align-self: start; position: sticky; top: 1rem; margin-top: 4.6rem; }
 }
+
+/* One element per line a command prints (out::html): the same words as the
+   terminal, each kind in its own class. */
+.record, .status, .finding, .move, .event { margin: 0.15rem 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.record.depth-0 { font-weight: 700; margin-top: 1.2rem; }
+.record.depth-1 { padding-left: 1.2rem; }
+.record.depth-2 { padding-left: 2.4rem; color: var(--muted); }
+.status .status-name { color: var(--muted); }
+.finding { color: var(--refuse); }
+.move.owner { color: var(--hold); font-weight: 700; }
+.move.agent, .move.not-yet { color: var(--muted); }
+.change { border-left: 3px solid var(--rule); padding-left: 0.8rem; margin: 0.6rem 0; }
+.question { border-top: 1px solid var(--rule); padding: 0.8rem 0; }
+form.act { flex-wrap: wrap; gap: 0.8rem; margin: 0.4rem 0 1rem; }
+.letter { cursor: pointer; }
+section.findings, section.files { border-top: 1px solid var(--rule); margin-top: 1.4rem; padding-top: 0.8rem; }

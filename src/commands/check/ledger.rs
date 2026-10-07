@@ -1,4 +1,4 @@
-use super::{dropped_state, Failure};
+use super::Failure;
 use crate::ledger::{Ledger, Row};
 use crate::msg;
 use crate::record::{self, RecordFile};
@@ -22,12 +22,11 @@ pub(super) fn check_ledger(
     root: &Path,
     ledger_content: &str,
     since: Option<&str>,
-    removed_files: &[(String, Vec<msg::RemovalHold>)],
 ) -> Vec<Failure> {
     let mut out = Vec::new();
     for (lineno, raw) in &led.malformed {
         out.push(Failure {
-            check: "ledger".to_string(),
+            check: "ledger",
             message: msg::malformed_ledger_row(*lineno, raw),
         });
     }
@@ -37,31 +36,6 @@ pub(super) fn check_ledger(
     out.extend(check_same_time_competition(led));
     out.extend(check_dropped(led, records, root));
 
-    let all_ids: HashSet<String> = records
-        .iter()
-        .flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.clone()))
-        .collect();
-
-    for row in &led.rows {
-        if row.event != "asked" || all_ids.contains(&row.id) || dropped_state(led, &row.id) {
-            continue;
-        }
-        // An id whose approved file is gone, its removal awaiting approval:
-        // every state it can be in (asked, refused, answered) is reported
-        // once by the ids check with the file's removal move, so the ledger
-        // check leaves it out (one finding per fault).
-        let in_removed = led
-            .latest_for_id("approved", &row.id)
-            .is_some_and(|a| removed_files.iter().any(|(rel, _)| *rel == a.detail));
-        if in_removed {
-            continue;
-        }
-        out.push(Failure {
-            check: "ledger".to_string(),
-            message: msg::ledger_asked_id_missing(&row.id, Some(row.detail.as_str())),
-        });
-    }
-
     for row in &led.rows {
         if row.event == "answered" {
             let has_match = led
@@ -70,7 +44,7 @@ pub(super) fn check_ledger(
                 .any(|r| r.event == "asked" && r.id == row.id && r.hash == row.hash);
             if !has_match {
                 out.push(Failure {
-                    check: "ledger".to_string(),
+                    check: "ledger",
                     message: msg::ledger_answered_without_asked(
                         &row.id,
                         led.latest_asked(&row.id).map(|r| r.detail.as_str()),
@@ -94,7 +68,7 @@ pub(super) fn check_ledger(
 /// or the entry on the dropped question (dependent).
 fn check_dropped(led: &Ledger, records: &[RecordFile], root: &Path) -> Vec<Failure> {
     let mut out = Vec::new();
-    let fail = |message: String| Failure { check: "ledger".to_string(), message };
+    let fail = |message: String| Failure { check: "ledger", message };
     for (at, row) in led.rows.iter().enumerate().filter(|(_, r)| r.event == "dropped") {
         // Per "Does a decision change after it is answered?": a question
         // that was answered or refused is never removed. `led.rows` is
@@ -214,7 +188,7 @@ pub(super) fn check_held(
     path: &str,
     content: &str,
     since: Option<&str>,
-    check: &str,
+    check: &'static str,
     msgs: &HeldMsgs,
 ) -> Vec<Failure> {
     let ledger_content = content;
@@ -240,7 +214,7 @@ pub(super) fn check_held(
     if let Some(head_content) = repo::git(root, &["show", &format!("HEAD:{}", path)]) {
         if lines_missing(&head_content, &present) {
             out.push(Failure {
-                check: check.to_string(),
+                check,
                 message: (msgs.not_append_only)(),
             });
         }
@@ -271,7 +245,7 @@ pub(super) fn check_held(
     if repo::git(root, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_some() {
         if ref_ledger_has_rows_missing(root, path, "MERGE_HEAD", &present) {
             out.push(Failure {
-                check: check.to_string(),
+                check,
                 message: (msgs.merge_drops_rows)(),
             });
         }
@@ -292,12 +266,12 @@ pub(super) fn check_held(
             if unreadable && !msgs.report_unreadable {
             } else if unreadable {
                 out.push(Failure {
-                    check: check.to_string(),
+                    check,
                     message: msg::ledger_merge_parents_unreadable(),
                 });
             } else if drops {
                 out.push(Failure {
-                    check: check.to_string(),
+                    check,
                     message: (msgs.merge_drops_rows)(),
                 });
             }
@@ -319,13 +293,13 @@ pub(super) fn check_held(
             if !parent_object_present(root, commit) {
                 if msgs.report_unreadable {
                     out.push(Failure {
-                        check: check.to_string(),
+                        check,
                         message: msg::ledger_since_unreadable(commit),
                     });
                 }
             } else if ref_ledger_has_rows_missing(root, path, commit, &present) {
                 out.push(Failure {
-                    check: check.to_string(),
+                    check,
                     message: (msgs.since_drops_rows)(commit),
                 });
             }
@@ -464,7 +438,7 @@ fn check_same_time_competition(led: &Ledger) -> Vec<Failure> {
     subjects
         .into_iter()
         .map(|(time, subject)| Failure {
-            check: "ledger".to_string(),
+            check: "ledger",
             message: msg::ledger_same_time_competition(&time, &subject),
         })
         .collect()

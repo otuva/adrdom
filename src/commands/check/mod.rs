@@ -1,7 +1,6 @@
 mod answers;
 mod banned;
 mod blame;
-mod done;
 mod ids;
 mod install;
 mod ledger;
@@ -16,10 +15,11 @@ mod tests;
 pub(crate) use banned::collect_targets;
 pub use tests::test_index;
 
-use crate::actions;
 use crate::depends;
 use crate::ledger::Ledger;
+use crate::rules;
 use crate::msg::{self, Actor};
+use crate::out::{self, Line};
 use crate::record::{self, RecordFile};
 use crate::repo::{self, Source};
 use crate::state;
@@ -28,15 +28,22 @@ use crate::view;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+/// One finding of a category of `check` that is not a rule `approve` or
+/// `ask` judge (the ledger, the install, the ban list, the tests): its
+/// category and its message, the move that clears it inside.
 struct Failure {
-    check: String,
+    check: &'static str,
     message: String,
 }
 
-fn push_failures(out: &mut Vec<String>, fs: Vec<Failure>) {
-    for f in fs {
-        out.push(format!("{}: {}", f.check, f.message));
+impl Failure {
+    pub(super) fn finding(self) -> rules::Finding {
+        rules::Finding::new(self.check, self.message)
     }
+}
+
+fn push_failures(out: &mut Vec<rules::Finding>, fs: Vec<Failure>) {
+    out.extend(fs.into_iter().map(Failure::finding));
 }
 
 /// The full check report for the owner's page, reusing a test index the
@@ -75,11 +82,11 @@ fn build(
     // A topic file that cannot be read is a failure: nothing in it is
     // judged, and a pass would let it through with its decisions unread.
     let (mut records, unreadable) = record::load_all_via(root, &source);
-    let unreadable_failures: Vec<String> = unreadable
+    let unreadable_failures: Vec<rules::Finding> = unreadable
         .into_iter()
-        .map(|(f, e)| msg::topic_file_unreadable(&state::rel_path(root, &f), e))
+        .map(|(f, e)| rules::Finding::new("parse", msg::topic_file_unreadable(&state::rel_path(root, &f), e)))
         .collect();
-    let mut notes: Vec<String> = Vec::new();
+    let mut notes: Vec<rules::Finding> = Vec::new();
 
     // Terms minted in memory: a terms file that has never been
     // approved carries no ids on disk yet, and `phrase_lookup` only
@@ -100,38 +107,37 @@ fn build(
 
     // Plan/context approval state must be read off each file exactly as it
     // sits on disk, before the normalize pass below mutates its parsed
-    // `depends:` entries in memory (per "..."): captured here, ahead of
-    // that mutation, keyed by `rel` and threaded down to every check that
-    // compares against the ledger (`file_approval`, `ids::check_ids`'s
-    // stale-plan filter) instead of letting them recompute the hash from
-    // the (by-then-normalized) `RecordFile`.
+    // `depends:` entries in memory: captured here, ahead of that mutation,
+    // keyed by `rel` and threaded down to every check that compares against
+    // the ledger (`file_approval`, `ids::check_ids`'s stale-plan filter)
+    // instead of letting them recompute the hash from the (by-then-
+    // normalized) `RecordFile`.
     let raw_hashes: HashMap<String, (Vec<String>, String)> = records
         .iter()
         .map(|rf| (rf.rel.clone(), (record::question_hashes(rf), record::context_hash(rf))))
         .collect();
+    // The files awaiting approval: a finding on one of them is a note (per
+    // "What does check do with a fault on a file awaiting approval?").
+    // Read off each file as written, before the normalize pass below: the
+    // same scope `approve` reads for the planning rules.
+    let awaiting: Vec<String> = records
+        .iter()
+        .filter(|rf| rules::planning_rules_apply(&led, rf, &rf.rel))
+        .map(|rf| rf.rel.clone())
+        .collect();
 
     // Heading-shaped `depends:` entries that name no heading in their own
     // file but resolve to exactly one current decision elsewhere are
-    // rewritten to `Id` entries in memory here, before any refusal is
-    // computed below -- the same normalization `approve` runs on the file
-    // it is approving, so `check` never reports a legitimate cross-file
+    // rewritten to `Id` entries in memory here, before any finding is
+    // judged below -- the same normalization `approve` runs on the file it
+    // is approving, so `check` never reports a legitimate cross-file
     // reference as the file-wide `derive_error` a plain, unresolved `Text`
-    // heading dep always earns. An entry matching more than one current
-    // decision elsewhere becomes that file's `derive_error`
-    // (`DeriveError::AmbiguousHeading`) instead, which `record_refusals`
-    // below already turns into a "plan" category failure -- no side list
-    // to fold in here any more.
+    // heading dep always earns.
+    let as_loaded = records.clone();
     for rf in &mut records {
         depends::normalize_cross_file_deps(rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
     }
 
-    // Every refusal each topic file earns on its own (shared with
-    // `approve`'s `do_approve_record`), one `Vec` per record in `records`'
-    // order. `parse`/`tells`/`plan` pull their failures from these instead
-    // of re-deriving the same shape/tells/depends checks `approve` already
-    // refuses on. The cross-file "answered id missing from every topic
-    // file" refusal is computed later, once, after `removed_files`, with
-    // the ids of removed files skipped; `ids` pulls its lines from that.
     let names = crate::view::heading_texts(&records);
     // Which plans are approved comes from `raw_hashes`, taken before the
     // normalize pass; computed once and shared with `check_terms`. The
@@ -147,28 +153,49 @@ fn build(
         .iter()
         .map(|rf| depends::replaced_ids(&replaced_base, rf, &cross_file_headings, &led))
         .collect();
-    let per_record_refusals: Vec<Vec<actions::Refusal>> = records
+    // Every finding each topic file earns on its own: the one judgement
+    // `approve` refuses on (`rules::judge_topic_file`, per "Does a command
+    // refuse what check passes?", fe14991d A), one `Vec` per record in
+    // `records`' order. `parse`/`tells`/`plan` below file them by rule.
+    let per_record_findings: Vec<Vec<rules::Finding>> = records
         .iter()
         .zip(&replaced_per_record)
         .map(|(rf, replaced)| {
-            actions::record_refusals(&rf.rel, rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &records, replaced, &led)
+            let judge = rules::TopicFileJudge {
+                root,
+                rel: &rf.rel,
+                rf,
+                all: &records,
+                terms_list: &terms_list,
+                phrase_lookup: &phrase_lookup,
+                cross_file_headings: &cross_file_headings,
+                names: &names,
+                replaced,
+                led: &led,
+                planning: awaiting.contains(&rf.rel),
+            };
+            topic_file_findings(&judge)
         })
         .collect();
     let present_ids: std::collections::HashSet<String> = records
         .iter()
         .flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.clone()))
         .collect();
-    let removed_files: Vec<(String, Vec<msg::RemovalHold>)> =
-        actions::removal_awaiting(&led, &|rel| source.exists(root, rel))
+    let removed_files: Vec<(String, Vec<crate::moves::RemovalHold>)> =
+        rules::removal_awaiting(&led, &|rel| source.exists(root, rel))
             .into_iter()
             .map(|rel| {
-                let holds = actions::removal_holds(root, &rel, &led, &present_ids).holds;
+                let holds = rules::removal_holds(root, &rel, &led, &present_ids).holds;
                 (rel, holds)
             })
             .collect();
-    notes.extend(removed_files.iter().map(|(rel, holds)| msg::removal_awaiting(rel, holds)));
+    // A removed file differs from its approval: what keeps `approve` from
+    // taking its removal is a note, with the move that clears it.
+    for (rel, _) in &removed_files {
+        notes.extend(rules::judge_removed_topic_file(root, rel, &led, &present_ids));
+    }
     // An answered id of a removed file is named by the ids category with the
-    // file's removal move, so the missing-answered refusal leaves it out.
+    // file's removal move, so the missing-answered finding leaves it out.
     let in_removed_file: std::collections::HashSet<String> = led
         .rows
         .iter()
@@ -179,86 +206,48 @@ fn build(
         })
         .map(|r| r.id.clone())
         .collect();
-    let missing_answered = actions::missing_answered_refusals_except(&records, &led, &in_removed_file);
-    let mut failures: Vec<String> = unreadable_failures;
-    let awaiting_early: Vec<String> = records
-        .iter()
-        .filter_map(|rf| {
-            let (rel, plan_ok, ctx_ok) = file_approval(rf, &raw_hashes, &led);
-            (!plan_ok || !ctx_ok).then_some(rel)
-        })
-        .collect();
-    let (parse_failures, parse_notes) = parse::check_parse(&records, &per_record_refusals, &awaiting_early, &led);
+    let missing_answered = rules::missing_answered_refusals_except(&records, &led, &in_removed_file);
+    let mut failures: Vec<rules::Finding> = unreadable_failures;
+    let (parse_failures, parse_notes) = parse::check_parse(&records, &per_record_findings, &awaiting, &led);
     push_failures(&mut failures, parse_failures);
-    notes.extend(parse_notes);
+    push_failures(&mut notes, parse_notes);
     push_failures(&mut failures, ids::check_ids(&records, &led, &missing_answered, &raw_hashes, &removed_files));
-    push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_content, since, &removed_files));
+    push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_content, since));
     push_failures(&mut failures, reader::check_reader(root, &source, since));
     push_failures(&mut failures, banned::check_banned_ledger(&led, root, &source));
-    push_failures(&mut failures, answers::check_answers(&records, &led));
+    push_failures(&mut failures, answers::check_answers(root, &records, &as_loaded, &terms_list, &led));
     push_failures(&mut failures, banned::check_banned(root, staged, message, &source));
     push_failures(&mut failures, install::check_install(root, &source));
-    let (plan_failures, plan_notes, awaiting) = plan::check_plan(
-        root,
-        &source,
-        &records,
-        &led,
-        &per_record_refusals,
-        &raw_hashes,
-    );
+    let (plan_failures, plan_notes) =
+        plan::check_plan(root, &source, &records, &led, &per_record_findings, &raw_hashes, &awaiting);
     push_failures(&mut failures, plan_failures);
-    notes.extend(plan_notes);
-    let (terms_failures, terms_notes) = terms::check_terms(root, &records, &led, &source, &approved_rels);
-    push_failures(&mut failures, terms_failures);
+    push_failures(&mut notes, plan_notes);
+    push_failures(&mut failures, terms::check_terms(root, &records, &led, &source, &approved_rels));
     let (blame_failures, blame_notes) = blame::check_blame(root, &source, &records, &led);
     push_failures(&mut failures, blame_failures);
-    let (test_failures, tested_count, test_notes) =
-        tests::check_tests(root, &records, &led, tests, &source);
-    push_failures(&mut failures, test_failures);
-    let (tells_failures, tells_notes) = tells::check_tells(&records, &per_record_refusals, &awaiting, &led);
-    push_failures(&mut failures, tells_failures);
-    notes.extend(tells_notes);
-
-
-    for (rf, replaced) in records.iter().zip(&replaced_per_record) {
-        if let Some(tiers) = &rf.tiers {
-            // Live counts only (per "Does the tool cap the questions in a
-            // tier?"): a dead (refused/superseded/
-            // withdrawn) question no longer holds its tier for the cap,
-            // and this note is read against that same cap.
-            let live = state::live_tiers(&led, rf, tiers, replaced);
-            if live.is_empty() {
-                continue;
-            }
-            let sizes = record::tier_sizes(&live)
-                .into_iter()
-                .map(|(t, n)| format!("{} ({})", t, n))
-                .collect::<Vec<_>>()
-                .join(" ");
-            notes.push(msg::tiers_note_check(&rf.rel, &sizes));
-        }
-    }
-
-    if !awaiting.is_empty() {
-        notes.push(msg::plan_awaiting(awaiting.len(), &awaiting.join(", ")));
-        for rf in records.iter().filter(|rf| awaiting.contains(&rf.rel)) {
-            if let Some((hashes, _)) = raw_hashes.get(&rf.rel) {
-                let (changed, struck) = plan::changed_questions(rf, hashes, &led);
-                if !changed.is_empty() || !struck.is_empty() {
-                    notes.push(msg::plan_changed(&rf.rel, &changed, &struck));
-                }
-            }
-        }
-    }
-    notes.extend(test_notes);
-    notes.extend(terms_notes);
     notes.extend(blame_notes);
-    for d in done::check_done(&records, &led, &raw_hashes) {
-        notes.push(msg::done(&d));
-    }
-    notes.push(msg::tested_count(tested_count));
+    let (test_failures, untested) = tests::check_tests(root, &records, &led, tests, &source);
+    push_failures(&mut failures, test_failures);
+    let (tells_failures, tells_notes) = tells::check_tells(&records, &per_record_findings, &awaiting, &led);
+    push_failures(&mut failures, tells_failures);
+    push_failures(&mut notes, tells_notes);
+    // Per "What does check do with an untested current decision?": reported
+    // on every run, never a failure, each with the move that builds it.
+    notes.extend(untested);
 
     view::CheckReport { failures, notes }
+}
+
+/// What `check` reports of one topic file of the records: the judgement
+/// `approve` refuses on (`rules::judge_topic_file`), less the naming and
+/// heading rules `plan::check_plan` reports for every file of the
+/// directory itself (a name, a heading twice in one file, a heading in two
+/// files, each a note or a failure by which question copies).
+fn topic_file_findings(j: &rules::TopicFileJudge) -> Vec<rules::Finding> {
+    let mut own: std::collections::HashSet<String> =
+        rules::own_name_and_heading_refusals(j.rel, j.rf.topic.as_deref(), &j.rf.sections).into_iter().collect();
+    own.extend(rules::cross_file_heading_refusals(j.rel, j.rf, j.all, j.led));
+    rules::judge_topic_file(j).into_iter().filter(|f| !own.contains(&f.message)).collect()
 }
 
 /// `push` (`--push`) short-circuits to `push::run`, which reads git's
@@ -268,10 +257,10 @@ fn build(
 /// other combination runs the plain report, `since` (`--since <commit>`)
 /// adding its one extra ledger comparison on top.
 ///
-/// `quiet` (`--quiet`) prints the failures and leaves out the notes: what
-/// the commit hooks run, so a commit that passes prints nothing and one
-/// that fails prints only what failed.
-pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: bool, quiet: bool) -> i32 {
+/// Every line is a finding with its move, the failures first, then the
+/// notes; a pass prints nothing, by hand or in a hook (per "Does check
+/// print a line that names no move?", 3fc35d4f A).
+pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: bool) -> i32 {
     if push {
         return push::run();
     }
@@ -279,34 +268,36 @@ pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("check", "", Actor::Agent));
+            out::eprint(&[stopped(msg::not_a_repo("check", "", Actor::Agent))]);
             return 1;
         }
     };
 
-    let report = build(&root, staged, message.as_deref(), since.as_deref(), None);
+    // The commit-msg hook: the staged files were judged by the pre-commit
+    // hook of the same commit, so only the message is read, for banned
+    // words (per "What does the ban scan read?": the staged files and the
+    // commit message before every commit). Each finding prints once a commit.
+    if let Some(m) = message.as_deref() {
+        let findings: Vec<Line> = banned::check_banned(&root, false, Some(m), &Source::for_check(false, true))
+            .into_iter()
+            .map(|f| Line::Finding(f.finding()))
+            .collect();
+        out::print(&findings);
+        return if findings.is_empty() { 0 } else { 1 };
+    }
+    let report = build(&root, staged, None, since.as_deref(), None);
     let exit_code = if report.failures.is_empty() { 0 } else { 1 };
-
-    for f in &report.failures {
-        println!("{}", f);
-    }
-    if !quiet {
-        for n in &report.notes {
-            println!("{}", n);
-        }
-    }
-
+    let lines: Vec<Line> = report.failures.into_iter().chain(report.notes).map(Line::Finding).collect();
+    out::print(&lines);
     exit_code
 }
 
-/// An id whose latest state is `superseded`, `withdrawn` or `dropped` is no
-/// longer demanded in any topic file (4.13/6.1): the topic file it once
-/// lived in was allowed to drop it, or an answer removed it.
-fn dropped_state(led: &Ledger, id: &str) -> bool {
-    matches!(
-        led.latest_state(id).map(|r| r.event.as_str()),
-        Some("superseded") | Some("withdrawn") | Some("dropped")
-    )
+/// A finding on what `check` was given rather than on the records (no
+/// repository, unreadable input), filed under `check`; `message` may carry
+/// that name in front already.
+pub(super) fn stopped(message: String) -> Line {
+    let message = message.strip_prefix("check: ").map(str::to_string).unwrap_or(message);
+    Line::Finding(rules::Finding::new("check", message))
 }
 
 /// Whether a finding `r` on `rf` is a note rather than a failure (per
@@ -316,16 +307,16 @@ fn dropped_state(led: &Ledger, id: &str) -> bool {
 /// shape, a stray line, a line the tool writes), and it is not about a
 /// question with force. Anything else fails check; so does every finding
 /// on an approved file.
-fn is_note(rf: &RecordFile, r: &actions::Refusal, draft: bool, led: &Ledger) -> bool {
+fn is_note(rf: &RecordFile, r: &rules::Finding, draft: bool, led: &Ledger) -> bool {
     if !draft {
         return false;
     }
-    if !matches!(r.category, "tells" | "plan" | "parse") {
+    if !matches!(r.rule, "tells" | "plan" | "parse") {
         return false;
     }
     // Every question the finding is about must still be able to change; a
     // finding about none is about the file as a whole.
-    !r.sections.iter().filter_map(|i| rf.sections.get(*i)).any(|s| actions::has_force(rf, s, led))
+    !r.sections.iter().filter_map(|i| rf.sections.get(*i)).any(|s| rules::has_force(rf, s, led))
 }
 
 /// A file's plan/context approval state: its ledger-relative path, whether

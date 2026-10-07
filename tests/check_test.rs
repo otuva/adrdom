@@ -46,6 +46,7 @@ fn answer_one_question(dir: &std::path::Path) -> (std::path::PathBuf, String) {
 
 #[test]
 fn check_passes_on_a_clean_repo() {
+    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let (_record, id) = answer_one_question(&dir);
@@ -53,7 +54,7 @@ fn check_passes_on_a_clean_repo() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "check should pass: {}", stdout(&out));
-    assert!(stdout(&out).contains("tested: 1"));
+    assert_eq!(stdout(&out), "", "a pass prints nothing");
 }
 
 #[test]
@@ -79,7 +80,7 @@ fn check_parse_failure() {
 #[test]
 fn check_ids_failure_missing_id() {
     // a missing id means the plan was never approved; an unapproved file
-    // is only a count note, never a failure.
+    // is no failure, and its status is no line of check's (3fc35d4f).
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
@@ -87,11 +88,7 @@ fn check_ids_failure_missing_id() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!stdout(&out).contains("ids:"), "{}", stdout(&out));
-    assert!(
-        stdout(&out).contains("awaiting approval: adrdom/decisions/example.md"),
-        "{}",
-        stdout(&out)
-    );
+    assert!(!stdout(&out).contains("awaiting approval"), "{}", stdout(&out));
 }
 
 #[test]
@@ -387,7 +384,6 @@ fn check_tests_note_when_untested() {
     assert!(out.status.success(), "{}", out_text);
     let untested_line = |t: &str| t.lines().any(|l| l.starts_with("untested:") && l.contains(&format!("adr: {}", id)));
     assert!(untested_line(&out_text), "check must name the untested decision by id: {}", out_text);
-    assert!(out_text.contains("tested: 0"), "{}", out_text);
 
     write_test_comment(&dir, &id);
 
@@ -397,7 +393,6 @@ fn check_tests_note_when_untested() {
         "check should pass once the decision is tied to a test: {}",
         stdout(&out)
     );
-    assert!(stdout(&out).contains("tested: 1"), "{}", stdout(&out));
     assert!(!untested_line(&stdout(&out)), "{}", stdout(&out));
 }
 
@@ -555,7 +550,7 @@ fn check_tests_ignores_a_tie_under_adrdom_and_an_untracked_tie() {
     run_git(&dir, &["add", "outside.txt"]);
     let out3 = adr(&dir, &["check"], &[], "");
     assert!(out3.status.success(), "{}", stdout(&out3));
-    assert!(stdout(&out3).contains("tested: 1"), "{}", stdout(&out3));
+    assert!(!stdout(&out3).contains("untested:"), "{}", stdout(&out3));
 }
 
 // adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
@@ -741,7 +736,7 @@ fn check_install_fails_when_pre_commit_hook_differs_and_passes_after_reinstall()
     assert!(adr(&dir, &["install"], &[], "").status.success());
     assert_eq!(
         std::fs::read_to_string(dir.join(".githooks/pre-commit")).unwrap(),
-        "#!/bin/sh\nadr check --staged --quiet\nexit $?\n",
+        "#!/bin/sh\nadr check --staged\nexit $?\n",
         "reinstall should restore the hook"
     );
 
@@ -873,7 +868,7 @@ fn installed_brief_tells_the_agent_to_build_only_a_fully_answered_tier() {
     let agents = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
     assert!(
         agents.contains(
-            "Build a decision when `next`\n   names it, and not before."
+            "Build a decision when a move\n   names it, and not before."
         ),
         "{}",
         agents
@@ -1058,7 +1053,7 @@ fn check_tests_ignores_adr_prefix_that_is_not_a_uuid() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "check should pass: {}", stdout(&out));
-    assert!(stdout(&out).contains("tested: 1"));
+    assert!(!stdout(&out).contains("untested:"), "{}", stdout(&out));
 }
 
 #[test]
@@ -1147,8 +1142,8 @@ fn check_passes_a_skeleton_heading_with_no_id_or_body() {
 }
 
 //
-// A question body under an unapproved heading no longer fails check: the
-// file is only counted as awaiting approval.
+// A question body under an unapproved heading no longer fails check: what
+// the draft owes are notes, and no count of files awaiting approval.
 #[test]
 fn check_passes_a_body_under_an_unapproved_heading() {
     let dir = init_repo();
@@ -1162,15 +1157,16 @@ fn check_passes_a_body_under_an_unapproved_heading() {
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
     assert!(!text.contains("body under unapproved heading"), "{}", text);
-    assert!(text.contains("awaiting approval"), "{}", text);
+    assert!(!text.contains("awaiting approval"), "{}", text);
 }
 
 //
-// "check reports a file awaiting approval as a count ... and passes
-// (exit 0)": a plan with no body under any heading (a bare skeleton) is
-// unapproved, so it lands in the count, but nothing in it fails check.
+// A plan with no body under any heading (a bare skeleton) awaits approval:
+// nothing in it fails check, approve refuses the heading with no body, and
+// check names that with its move, as a note (fe14991d, 3fc35d4f); no count
+// of files awaiting approval.
 #[test]
-fn check_prints_awaiting_approval_line() {
+fn check_notes_a_heading_with_no_body_in_a_draft() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     // A depends line and approved terms, so the only thing outstanding is
@@ -1183,6 +1179,9 @@ fn check_prints_awaiting_approval_line() {
         "adrdom/decisions/skeleton.md",
         "# Skeleton\n\n### 1.1 Not written yet?\ndepends: widget\n",
     );
+    // The planning steps run in order: the heading is read first, and the
+    // missing body is the finding of the step after it.
+    plan_record(&dir, "adrdom/decisions/skeleton.md");
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(
@@ -1191,21 +1190,17 @@ fn check_prints_awaiting_approval_line() {
         stdout(&out)
     );
     let text = stdout(&out);
-    assert!(
-        text.contains("plan: 1 file(s) awaiting approval: adrdom/decisions/skeleton.md"),
-        "{}",
-        text
-    );
+    assert!(text.contains("\"1.1 Not written yet?\"") && text.contains("no body"), "{}", text);
+    assert!(!text.contains("awaiting approval"), "{}", text);
 }
 
 //
-// "check reports it as awaiting approval" for the case the option names:
-// the prose edited after approve, with the heading (and its `approved`
-// row) untouched. `check` still passes -- the heading itself is approved,
-// so no body lives under an unapproved heading -- but the file is counted
-// as awaiting approval because its `context` row is stale.
+// The prose edited after approve, with the heading (and its `approved`
+// row) untouched: `check` still passes -- the heading itself is approved,
+// so no body lives under an unapproved heading -- and prints no line for
+// the file awaiting approval (3fc35d4f).
 #[test]
-fn check_counts_a_file_awaiting_approval_when_only_its_context_prose_is_stale() {
+fn check_passes_a_file_whose_context_prose_alone_is_stale() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
@@ -1229,11 +1224,7 @@ fn check_counts_a_file_awaiting_approval_when_only_its_context_prose_is_stale() 
         stdout(&out)
     );
     let text = stdout(&out);
-    assert!(
-        text.contains("plan: 1 file(s) awaiting approval: adrdom/decisions/example.md"),
-        "{}",
-        text
-    );
+    assert!(!text.contains("awaiting approval"), "{}", text);
     assert!(
         !text.contains("body under unapproved heading"),
         "the heading itself is approved, so its body must not fail: {}",
@@ -1554,8 +1545,11 @@ fn check_fails_a_withdrawn_id_still_present_in_a_record() {
     );
 }
 
+// A topic file whose every question is answered and tested is no line of
+// check's: "done" names no move (3fc35d4f supersedes d981f6b0).
 #[test]
-fn check_prints_done_for_a_fully_answered_approved_file() {
+fn check_prints_no_done_line_for_a_fully_answered_file() {
+    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let (_record, id) = answer_one_question(&dir);
@@ -1563,81 +1557,7 @@ fn check_prints_done_for_a_fully_answered_approved_file() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
-    assert!(
-        stdout(&out).contains("done: adrdom/decisions/example.md"),
-        "{}",
-        stdout(&out)
-    );
-}
-
-//
-// "no close: a topic file is done when every question in its plan is
-// answered, check reports it as done, and a heading added later is a plan
-// change like any other (after approve, the file is no longer reported
-// done until the new question is answered)". No owner command ever closes
-// or reopens the file -- done is recomputed by `check` from scratch every
-// time, so a plain plan change (a new heading, approved like any other)
-// is enough to undo it, and answering that heading is enough to redo it.
-#[test]
-fn adding_a_heading_undoes_done_until_it_too_is_answered() {
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    let (record, id) = answer_one_question(&dir);
-    write_test_comment(&dir, &id);
-
-    let out = adr(&dir, &["check"], &[], "");
-    assert!(out.status.success(), "{}", stdout(&out));
-    assert!(
-        stdout(&out).contains("done: adrdom/decisions/example.md"),
-        "file should be done once its only question is answered: {}",
-        stdout(&out)
-    );
-
-    // A plan change on the already-done file: one more heading, added and
-    // approved exactly like any other plan change.
-    let approved = std::fs::read_to_string(&record).unwrap();
-    let mut extended = approved.clone();
-    extended.push_str(
-        "\n### 3.2 Does the second thing also pass?\n\
-depends: pass\n\n\
-Problem: a second thing to decide.\n\n\
-Standard: clear yes or no.\n\n\
-- A) Yes.\n  Why: reasons.\n  Costs: costs.\n\
-- B) No.\n  Why: other reasons.\n  Costs: other costs.\n",
-    );
-    std::fs::write(&record, &extended).unwrap();
-    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(out.status.success(), "approve failed: {}", stderr(&out));
-
-    let out = adr(&dir, &["check"], &[], "");
-    assert!(
-        !stdout(&out).contains("done: adrdom/decisions/example.md"),
-        "adding an unanswered heading must undo done: {}",
-        stdout(&out)
-    );
-
-    // Ask and answer the new question: done again, with no close/reopen
-    // command ever invoked.
-    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask failed: {}", stderr(&out));
-    let content2 = std::fs::read_to_string(&record).unwrap();
-    let new_id = extract_ids(&content2)
-        .into_iter()
-        .find(|i| i != &id)
-        .expect("a second id should now exist");
-
-    let new_id_arg = id_at_version(&dir, &new_id);
-    let out = adr_owner(&dir, &["answer", &new_id_arg, "A"], "");
-    assert!(out.status.success(), "answer failed: {}", stderr(&out));
-    write_test_comment(&dir, &new_id);
-
-    let out = adr(&dir, &["check"], &[], "");
-    assert!(out.status.success(), "{}", stdout(&out));
-    assert!(
-        stdout(&out).contains("done: adrdom/decisions/example.md"),
-        "file should be done again once the added question is answered: {}",
-        stdout(&out)
-    );
+    assert_eq!(stdout(&out), "", "{}", stdout(&out));
 }
 
 // ---------------------------------------------------------------------
@@ -1730,7 +1650,7 @@ fn check_fails_outright_when_terms_is_unapproved_even_if_nothing_pairs_it() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     assert!(
-        stdout(&out).contains("terms: adrdom/terms.md not approved"),
+        stdout(&out).contains("terms: adrdom/terms.md is new"),
         "{}",
         stdout(&out)
     );
@@ -1765,7 +1685,7 @@ fn check_and_ask_fail_when_terms_is_edited_after_its_latest_approval() {
     let check_out = adr(&dir, &["check"], &[], "");
     assert!(!check_out.status.success());
     assert!(
-        stdout(&check_out).contains("terms: adrdom/terms.md not approved"),
+        stdout(&check_out).contains("terms: adrdom/terms.md is changed"),
         "{}",
         stdout(&check_out)
     );
@@ -1778,7 +1698,7 @@ fn check_and_ask_fail_when_terms_is_edited_after_its_latest_approval() {
     let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!ask_out.status.success());
     let err = stderr(&ask_out);
-    assert!(err.contains("terms not approved"), "{}", err);
+    assert!(err.contains("adrdom/terms.md is changed"), "{}", err);
     assert!(err.contains("adr approve adrdom/terms.md"), "{}", err);
 }
 
@@ -2027,7 +1947,9 @@ fn check_passes_when_a_new_term_would_now_match_words_already_answered_in_text()
 }
 
 #[test]
-fn check_notes_a_term_paired_by_nothing() {
+fn check_prints_no_line_for_a_term_paired_by_nothing() {
+    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
+    // A term no question pairs names no move: check prints nothing of it.
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
@@ -2041,11 +1963,7 @@ fn check_notes_a_term_paired_by_nothing() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
-    assert!(
-        stdout(&out).contains("terms: 1 terms paired by nothing: orphan"),
-        "{}",
-        stdout(&out)
-    );
+    assert!(!stdout(&out).contains("paired by nothing"), "{}", stdout(&out));
 }
 
 const GOOD_TERMS: &str = "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice.\naliases: \n";
@@ -2102,7 +2020,7 @@ fn check_staged_reads_terms_from_the_index() {
 
         let out = adr(&dir, &["check", "--staged"], &[], "");
         assert!(
-            !stdout(&out).contains("terms: adrdom/terms.md not approved"),
+            !stdout(&out).contains("terms: adrdom/terms.md is "),
             "{}",
             stdout(&out)
         );
@@ -2256,7 +2174,7 @@ fn check_staged_reads_a_newly_staged_test_files_tie_from_the_index() {
 
     let out = adr(&dir, &["check", "--staged"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
-    assert!(stdout(&out).contains("tested: 1"), "{}", stdout(&out));
+    assert!(!stdout(&out).contains("untested:"), "{}", stdout(&out));
 
     // Outside a commit, the working tree is read instead: the tie is gone
     // there, so plain `adr check` notes it untested.
@@ -2451,13 +2369,12 @@ agent fixes the file so it can be read as text (e.g. its encoding)"
     );
 }
 
-// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+// adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
 //
-// The commit hooks run check with --quiet. A commit that passes prints
-// nothing; one that fails prints what failed and no note. check run by hand
-// prints its notes as before.
+// The commit hooks run check with no flag: a pass prints nothing, by hand
+// or in a hook, and a failure prints the failing line with its move.
 #[test]
-fn check_quiet_prints_what_failed_and_nothing_else() {
+fn check_prints_what_failed_and_nothing_on_a_pass() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_empty_terms(&dir);
@@ -2465,30 +2382,21 @@ fn check_quiet_prints_what_failed_and_nothing_else() {
 
     let pre_commit = std::fs::read_to_string(dir.join(".githooks/pre-commit")).unwrap();
     let commit_msg = std::fs::read_to_string(dir.join(".githooks/commit-msg")).unwrap();
-    assert!(pre_commit.contains("adr check --staged --quiet"), "{}", pre_commit);
-    assert!(commit_msg.contains("adr check --message \"$1\" --quiet"), "{}", commit_msg);
+    assert!(pre_commit.contains("adr check --staged\n"), "{}", pre_commit);
+    assert!(commit_msg.contains("adr check --message \"$1\"\n"), "{}", commit_msg);
 
-    let by_hand = adr(&dir, &["check", "--staged"], &[], "");
-    assert!(by_hand.status.success(), "{}", stdout(&by_hand));
-    assert!(stdout(&by_hand).contains("tested: 0"), "{}", stdout(&by_hand));
-
-    let quiet = adr(&dir, &["check", "--staged", "--quiet"], &[], "");
-    assert!(quiet.status.success(), "{}", stdout(&quiet));
-    assert_eq!(stdout(&quiet), "");
+    for args in [&["check", "--staged"][..], &["check"][..]] {
+        let pass = adr(&dir, args, &[], "");
+        assert!(pass.status.success(), "{}", stdout(&pass));
+        assert_eq!(stdout(&pass), "", "{:?}", args);
+    }
 
     std::fs::write(dir.join("adrdom/decisions/broken.md"), [0x23u8, 0x20, 0xff, 0xfe, 0x0a]).unwrap();
-    let quiet = adr(&dir, &["check", "--quiet"], &[], "");
-    assert!(!quiet.status.success());
-    let lines: Vec<String> = stdout(&quiet).lines().map(|l| l.to_string()).collect();
+    let failed = adr(&dir, &["check"], &[], "");
+    assert!(!failed.status.success());
+    let lines: Vec<String> = stdout(&failed).lines().map(|l| l.to_string()).collect();
     assert_eq!(lines.len(), 1, "{:?}", lines);
     assert!(lines[0].starts_with("parse: adrdom/decisions/broken.md: cannot be read"), "{:?}", lines);
-    assert!(!stdout(&quiet).contains("tested:"), "{}", stdout(&quiet));
-
-    // By hand, without the flag, the same failing repo still prints its notes.
-    let by_hand = adr(&dir, &["check"], &[], "");
-    assert!(!by_hand.status.success());
-    assert!(stdout(&by_hand).contains("tested: 0"), "{}", stdout(&by_hand));
-    assert!(stdout(&by_hand).lines().count() > 1, "{}", stdout(&by_hand));
 }
 
 const TWO_QUESTIONS: &str = r#"# Example
@@ -2553,20 +2461,17 @@ fn check_an_untested_decision_is_a_note_whether_or_not_its_tier_is_open() {
     assert!(out.status.success(), "{}", text);
     assert!(
         text.contains(&format!(
-            "untested: adrdom/decisions/example.md: \"Is this pass?\"; no tracked file holds \"adr: {}\"",
+            "untested: adrdom/decisions/example.md: \"Is this pass?\" is answered and no tracked file holds \"adr: {}\"; not yet: \"Is this pass?\" is answered and is built once \"Is that pass?\" is answered",
             first
         )),
         "{}",
         text
     );
     assert_eq!(text.lines().filter(|l| l.starts_with("untested:")).count(), 1, "{}", text);
-    let quiet = adr(&dir, &["check", "--quiet"], &[], "");
-    assert!(quiet.status.success(), "{}", stdout(&quiet));
-    assert_eq!(stdout(&quiet), "");
     run_git(&dir, &["add", "-A"]);
-    let staged = adr(&dir, &["check", "--staged", "--quiet"], &[], "");
+    let staged = adr(&dir, &["check", "--staged"], &[], "");
     assert!(staged.status.success(), "{}", stdout(&staged));
-    assert_eq!(stdout(&staged), "");
+    assert_eq!(stdout(&staged), text, "the hook's check prints the same lines");
 
     assert!(adr_answer(&dir, &second, "A").status.success());
     let out = adr(&dir, &["check"], &[], "");

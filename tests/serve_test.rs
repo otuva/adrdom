@@ -111,6 +111,63 @@ fn post(port: u16, path: &str, cookie: Option<&str>, form: &str) -> HttpResponse
     raw_request(port, &req)
 }
 
+/// Follows the redirect the page answered an act with: the page it leads
+/// to, the act's lines in its banner.
+fn follow(port: u16, resp: &HttpResponse, cookie: &str) -> HttpResponse {
+    let location = header(resp, "Location").expect("Location header");
+    get(port, location, Some(cookie))
+}
+
+/// The text of every line the page renders (one `<p class=...>` per line,
+/// `out::html`), tags dropped, entities read back, without its indent.
+fn page_lines(body: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut rest = body;
+    while let Some(i) = rest.find("<p class=\"") {
+        let after = &rest[i..];
+        let end = after.find("</p>").unwrap_or(after.len());
+        out.push(unhtml(&after[..end]).trim_start().to_string());
+        rest = &after[end..];
+    }
+    out
+}
+
+fn unhtml(s: &str) -> String {
+    let mut text = String::new();
+    let mut in_tag = false;
+    for c in s.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            c if !in_tag => text.push(c),
+            _ => {}
+        }
+    }
+    text.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&amp;", "&")
+}
+
+/// The lines `adr <args>` prints on standard output, each without its
+/// indent.
+fn cli_lines(dir: &Path, args: &[&str]) -> Vec<String> {
+    stdout(&adr(dir, args, &[], ""))
+        .lines()
+        .map(|l| l.trim_start().to_string())
+        .filter(|l| !l.is_empty())
+        .collect()
+}
+
+/// Every line `lines` holds is a line of the page.
+fn assert_on_page(lines: &[String], body: &str) {
+    let page = page_lines(body);
+    for l in lines {
+        assert!(page.contains(l), "the page lacks the line {:?}: {:#?}", l, page);
+    }
+}
+
 /// Sets up a repo with `adr install`, the fixture record approved, one
 /// `ask` run (so 1.1 is Open), and returns the repo dir.
 fn setup_repo_with_open_question() -> std::path::PathBuf {
@@ -195,11 +252,7 @@ fn nav_has_terms_link() {
 
     let resp = get(port, "/", Some(&cookie));
     assert_eq!(resp.status, 200, "body: {}", resp.body);
-    assert!(
-        resp.body.contains("<a href=\"/terms\">Terms</a>"),
-        "body: {}",
-        resp.body
-    );
+    assert!(resp.body.contains("<a href=\"/terms\">adrdom/terms.md</a>"), "body: {}", resp.body);
 
     let _ = child.kill();
     let _ = child.wait();
@@ -208,8 +261,9 @@ fn nav_has_terms_link() {
 // adr: 11be073c-ce91-44d8-833a-ef0b5e0b1672
 //
 // "answer takes that version from the terminal and the page alike": the
-// page's POST with the current version -- the same hidden `v` field
-// `render_next` writes -- answers, same as the terminal.
+// page's POST with the current version -- the hidden `v` field of the form
+// under the owner's answer move -- answers, same as the terminal, and the
+// page it leads to shows the event the terminal prints.
 #[test]
 fn post_answer_with_cookie_and_token_answers_and_redirects() {
     let dir = setup_repo_with_open_question();
@@ -222,15 +276,13 @@ fn post_answer_with_cookie_and_token_answers_and_redirects() {
     let cookie = format!("adr_t={}", token);
 
     let version = current_version(&dir, &question_id);
+    let next = get(port, "/next", Some(&cookie));
+    assert!(next.body.contains(&format!("name=\"v\" value=\"{}\"", version)), "body: {}", next.body);
+
     let form = format!("id={}&v={}&answer=A&t={}", question_id, version, token);
     let resp = post(port, "/answer", Some(&cookie), &form);
     assert_eq!(resp.status, 302, "body: {}", resp.body);
-    let location = header(&resp, "Location").expect("Location header");
-    assert!(
-        location.starts_with(&format!("/next?after={}", question_id)),
-        "{}",
-        location
-    );
+    assert_eq!(header(&resp, "Location"), Some("/next"));
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(
@@ -239,6 +291,14 @@ fn post_answer_with_cookie_and_token_answers_and_redirects() {
             .any(|l| l.contains("\tanswered\t") && l.contains(question_id.as_str())),
         "ledger missing answered row: {}",
         ledger
+    );
+    let followed = follow(port, &resp, &cookie);
+    assert!(
+        page_lines(&followed.body)
+            .iter()
+            .any(|l| l.starts_with("answered: \"1.1 What is the unit of authority called?\" A: ")),
+        "body: {}",
+        followed.body
     );
 
     let _ = child.kill();
@@ -312,11 +372,11 @@ fn post_answer_with_a_stale_version_is_refused_and_writes_nothing() {
 // adr: 11be073c-ce91-44d8-833a-ef0b5e0b1672
 //
 // The page runs the same letter parsing the CLI does (`actions::parse_letter`),
-// so a lowercase `answer=a` refuses with `invalid_letter`, the redirect
-// itself carrying the message in its `m` query param -- and, followed, the
-// page shows it. Nothing is written to the topic file or the ledger.
+// so a lowercase `answer=a` refuses with `invalid_letter`, and the page the
+// act leads to shows the stop as the terminal prints it. Nothing is written
+// to the topic file or the ledger.
 #[test]
-fn post_answer_with_an_invalid_letter_redirects_with_invalid_letter_text() {
+fn post_answer_with_an_invalid_letter_shows_the_invalid_letter_stop() {
     let dir = setup_repo_with_open_question();
     let record_path = dir.join("adrdom/decisions/example.md");
     let content = std::fs::read_to_string(&record_path).unwrap();
@@ -334,20 +394,18 @@ fn post_answer_with_an_invalid_letter_redirects_with_invalid_letter_text() {
     let form = format!("id={}&v={}&answer=a&t={}", question_id, version, token);
     let resp = post(port, "/answer", Some(&cookie), &form);
     assert_eq!(resp.status, 302, "body: {}", resp.body);
-    let location = header(&resp, "Location").expect("Location header");
-    assert!(
-        location.contains("invalid%20letter%20a"),
-        "redirect location does not carry the invalid_letter text: {}",
-        location
-    );
 
-    let followed = get(port, location, Some(&cookie));
+    let followed = follow(port, &resp, &cookie);
     assert_eq!(followed.status, 200, "body: {}", followed.body);
-    assert!(
-        followed.body.contains("invalid letter a"),
-        "page did not surface the invalid_letter stop: {}",
-        followed.body
+    let cli = adr(
+        &dir,
+        &["answer", &format!("{}@{}", question_id, version), "a"],
+        &[("ADR_OWNER_BYPASS", "1")],
+        "",
     );
+    let stop: Vec<String> = stderr(&cli).lines().map(str::to_string).collect();
+    assert!(stop.iter().any(|l| l.contains("invalid letter a")), "{:?}", stop);
+    assert_on_page(&stop, &followed.body);
 
     let after_record = std::fs::read_to_string(&record_path).unwrap();
     let after_ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
@@ -437,232 +495,7 @@ Standard: decisions must be recorded plainly.
 "#;
 
 #[test]
-fn get_next_shows_question_words_and_no_entry() {
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    let record = write_record(&dir, "adrdom/decisions/example.md", WORDS_RECORD);
-    let terms = write_record(&dir, "adrdom/terms.md", WORDS_TERMS_MD);
-    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
-        .status
-        .success());
-    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
-        .status
-        .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
-
-    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
-    let (port, token) = read_open_line(&mut child);
-    let cookie = format!("adr_t={}", token);
-
-    let resp = get(port, "/next", Some(&cookie));
-    assert_eq!(resp.status, 200, "body: {}", resp.body);
-
-    // The aside groups the word under its term name, with the definition.
-    assert!(
-        resp.body.contains("Terms in this question"),
-        "body: {}",
-        resp.body
-    );
-    assert!(resp.body.contains("<dt>decision"), "body: {}", resp.body);
-    assert!(
-        resp.body.contains("A choice answered by the owner."),
-        "body: {}",
-        resp.body
-    );
-
-    // A coined word with no term shows up in the "No term" line.
-    assert!(resp.body.contains("frobnicate"), "body: {}", resp.body);
-    // A common word never does.
-    let no_entry_start = resp.body.find("No term:").expect("No term line present");
-    let no_entry_line = &resp.body[no_entry_start..];
-    let no_entry_line = &no_entry_line[..no_entry_line.find("</p>").unwrap_or(no_entry_line.len())];
-    assert!(
-        !no_entry_line.contains("the"),
-        "no-term line: {}",
-        no_entry_line
-    );
-    // "decisions" also never shows here, but only because "decision" is
-    // itself a shipped common word (assets/common_words.txt) whose "s"
-    // strips clean -- see get_next_no_entry_list_shows_an_unaliased_plural
-    // for the actual term-plural rule.
-    assert!(
-        !no_entry_line.contains("decisions"),
-        "no-term line: {}",
-        no_entry_line
-    );
-
-    let _ = child.kill();
-    let _ = child.wait();
-}
-
-const PLURAL_TERMS_MD: &str = "# Terms\n\n\
-## widget\n\
-id: 22222222-2222-2222-2222-222222222222\n\
-definition: A fixture term with no alias.\n\
-aliases: \n";
-
-const PLURAL_RECORD: &str = r#"# Example
-
-Context prose.
-
-### 1.1 What counts as a widget?
-depends: widget
-
-Problem: the count of widgets is unclear.
-
-Standard: widgets must be counted plainly.
-
-- A) A widget is one unit.
-  Why: reasons.
-  Costs: costs.
-- B) A widget is a batch.
-  Why: other reasons.
-  Costs: other costs.
-"#;
-
-#[test]
-fn get_next_no_entry_list_shows_an_unaliased_plural() {
-    // adr: 521e6211-344a-4b56-a1aa-07be956b3b29 -- a word pairs to a term
-    // only by its name or an explicit alias (src/terms.rs); the "No term"
-    // list (src/view.rs no_entry_words) follows the same rule, so an
-    // un-aliased plural of a term name ("widgets" next to the term
-    // "widget", whose alias list is empty) still shows up as no-term.
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    let record = write_record(&dir, "adrdom/decisions/example.md", PLURAL_RECORD);
-    let terms = write_record(&dir, "adrdom/terms.md", PLURAL_TERMS_MD);
-    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
-        .status
-        .success());
-    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
-        .status
-        .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
-
-    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
-    let (port, token) = read_open_line(&mut child);
-    let cookie = format!("adr_t={}", token);
-
-    let resp = get(port, "/next", Some(&cookie));
-    assert_eq!(resp.status, 200, "body: {}", resp.body);
-
-    // The singular pairs to the term and shows under "Terms in this question".
-    assert!(resp.body.contains("<dt>widget"), "body: {}", resp.body);
-
-    let no_entry_start = resp.body.find("No term:").expect("No term line present");
-    let no_entry_line = &resp.body[no_entry_start..];
-    let no_entry_line = &no_entry_line[..no_entry_line.find("</p>").unwrap_or(no_entry_line.len())];
-    assert!(
-        no_entry_line.contains("widgets"),
-        "no-term line: {}",
-        no_entry_line
-    );
-
-    let _ = child.kill();
-    let _ = child.wait();
-}
-
-#[test]
-fn get_next_marks_term_words_in_text() {
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    let record = write_record(&dir, "adrdom/decisions/example.md", WORDS_RECORD);
-    let terms = write_record(&dir, "adrdom/terms.md", WORDS_TERMS_MD);
-    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
-        .status
-        .success());
-    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
-        .status
-        .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
-
-    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
-    let (port, token) = read_open_line(&mut child);
-    let cookie = format!("adr_t={}", token);
-
-    let resp = get(port, "/next", Some(&cookie));
-    assert_eq!(resp.status, 200, "body: {}", resp.body);
-
-    // "decision" pairs a term everywhere it appears (heading and Problem),
-    // wrapped as a titled span rather than plain text.
-    assert!(
-        resp.body.contains("<span class=\"t\" title=\"decision:"),
-        "body: {}",
-        resp.body
-    );
-
-    let _ = child.kill();
-    let _ = child.wait();
-}
-
-const UUID_INLINE_RECORD: &str = r#"# Example
-
-Context prose.
-
-### 1.1 What counts as a decision?
-depends: decision
-
-Problem: the decision about a frobnicate is unclear.
-
-Standard: decisions must be recorded plainly.
-
-- A) A decision naming a1b2c3d4-e5f6-4a1b-9c3d-112233445566 is one commitment.
-  Why: reasons.
-  Costs: costs.
-- B) A decision is a block.
-  Why: other reasons.
-  Costs: other costs.
-"#;
-
-/// A dashed uuid inline in option text must not leak hex fragments (split
-/// at the hyphens by tokenizing) into the "No term" line.
-#[test]
-fn get_next_no_entry_line_has_no_uuid_fragments() {
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    let record = write_record(&dir, "adrdom/decisions/example.md", UUID_INLINE_RECORD);
-    let terms = write_record(&dir, "adrdom/terms.md", WORDS_TERMS_MD);
-    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
-        .status
-        .success());
-    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
-        .status
-        .success());
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
-        .status
-        .success());
-
-    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
-    let (port, token) = read_open_line(&mut child);
-    let cookie = format!("adr_t={}", token);
-
-    let resp = get(port, "/next", Some(&cookie));
-    assert_eq!(resp.status, 200, "body: {}", resp.body);
-
-    let no_entry_start = resp.body.find("No term:").expect("No term line present");
-    let no_entry_line = &resp.body[no_entry_start..];
-    let no_entry_line = &no_entry_line[..no_entry_line.find("</p>").unwrap_or(no_entry_line.len())];
-    for fragment in ["a1b2c3d4", "e5f6", "4a1b", "9c3d", "112233445566"] {
-        assert!(
-            !no_entry_line.contains(fragment),
-            "no-term line leaked uuid fragment \"{}\": {}",
-            fragment,
-            no_entry_line
-        );
-    }
-
-    let _ = child.kill();
-    let _ = child.wait();
-}
-
-#[test]
-fn terms_article_lists_entries_with_dependents_count() {
+fn terms_page_shows_what_show_prints_of_the_terms_file() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", WORDS_RECORD);
@@ -686,37 +519,12 @@ fn terms_article_lists_entries_with_dependents_count() {
     let (port, token) = read_open_line(&mut child);
     let cookie = format!("adr_t={}", token);
 
-    // The overview shows only the summary card, with a link to /terms.
-    let overview = get(port, "/", Some(&cookie));
-    assert_eq!(overview.status, 200, "body: {}", overview.body);
-    assert!(
-        overview
-            .body
-            .contains("<span class=\"count\">1 term</span>"),
-        "body: {}",
-        overview.body
-    );
-    assert!(
-        overview.body.contains("Open the terms"),
-        "body: {}",
-        overview.body
-    );
-
-    // /terms lists the full entry: name, definition, and dependents.
+    // /terms is what `adr show adrdom/terms.md` prints, line for line.
     let resp = get(port, "/terms", Some(&cookie));
     assert_eq!(resp.status, 200, "body: {}", resp.body);
-    assert!(resp.body.contains("decision"), "body: {}", resp.body);
-    assert!(
-        resp.body.contains("A choice answered by the owner."),
-        "body: {}",
-        resp.body
-    );
-    assert!(
-        resp.body
-            .contains("Paired by <a href=\"/decisions\">1 decision</a>"),
-        "body: {}",
-        resp.body
-    );
+    let shown = cli_lines(&dir, &["show", "adrdom/terms.md"]);
+    assert!(shown.iter().any(|l| l.contains("A choice answered by the owner.")), "{:?}", shown);
+    assert_eq!(page_lines(&resp.body), shown);
 
     let _ = child.kill();
     let _ = child.wait();
@@ -728,12 +536,13 @@ id: 11111111-1111-1111-1111-111111111111\n\
 definition: A choice the owner answers in, once, in writing.\n\
 aliases: \n";
 
-// Per "Does the tool stop while the terms file waits for approval?"
-// (aa475aa3 A): the page shows the file's own current text plus a "waiting
-// for approval" note and the approve button, never a before/after diff --
-// there is no more approved snapshot on disk for it to diff against.
+// Per "Does show print what a file holds beyond its latest approval?"
+// (bceceda8 A) and "Does the ui show what the terminal prints?" (7857d633
+// A): a terms edit not yet approved shows on the page as `adr show
+// adrdom/terms.md` prints it -- the file changed, the entry's change marked
+// -- with the owner's approve move and the form that makes it.
 #[test]
-fn terms_article_shows_waiting_for_approval_when_unapproved() {
+fn terms_page_shows_an_unapproved_edit_marked_with_the_approve_form() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let terms = write_record(&dir, "adrdom/terms.md", WORDS_TERMS_MD);
@@ -768,43 +577,31 @@ fn terms_article_shows_waiting_for_approval_when_unapproved() {
     let (port, token) = read_open_line(&mut child);
     let cookie = format!("adr_t={}", token);
 
-    // The overview shows the terms as not approved.
+    // The overview names the terms file by its status.
     let overview = get(port, "/", Some(&cookie));
     assert_eq!(overview.status, 200, "body: {}", overview.body);
     assert!(
-        overview.body.contains("not approved"),
+        page_lines(&overview.body).contains(&"[changed] adrdom/terms.md".to_string()),
         "body: {}",
         overview.body
     );
 
+    // /terms is `adr show adrdom/terms.md`, the change marked, then the
+    // owner's approve move with its form.
     let resp = get(port, "/terms", Some(&cookie));
     assert_eq!(resp.status, 200, "body: {}", resp.body);
+    let shown = cli_lines(&dir, &["show", "adrdom/terms.md"]);
+    assert_eq!(page_lines(&resp.body), shown);
+    assert!(shown.contains(&"owner runs: adr approve adrdom/terms.md".to_string()), "{:?}", shown);
     assert!(
-        !resp.body.contains("class=\"changed-box\""),
-        "changed-box should be gone: {}",
-        resp.body
+        shown.iter().any(|l| l.contains("A choice the owner answers in, once, in writing.")),
+        "{:?}",
+        shown
     );
     assert!(
-        resp.body.contains("waiting for approval"),
-        "waiting note missing: {}",
-        resp.body
-    );
-    assert!(
-        resp.body.contains("Approve the terms"),
-        "approve button missing: {}",
-        resp.body
-    );
-    // The page shows the file's own (unapproved, working-tree) text, not
-    // the last approved text.
-    assert!(
-        !resp.body.contains("A choice answered by the owner."),
-        "should not show the old approved text: {}",
-        resp.body
-    );
-    assert!(
-        resp.body
-            .contains("A choice the owner answers in, once, in writing."),
-        "current text missing: {}",
+        resp.body.contains("action=\"/approve\"")
+            && resp.body.contains("name=\"file\" value=\"adrdom/terms.md\""),
+        "approve form missing: {}",
         resp.body
     );
 
@@ -848,7 +645,7 @@ fn serve_refuses_without_an_interactive_terminal() {
 // --- tiers, "stands on", refuse, refused, moot ----------------------------
 
 #[test]
-fn get_next_shows_tier_and_stands_on_and_a_refuse_button() {
+fn get_next_shows_the_lines_a_question_carries_and_a_refuse_button() {
     let dir = setup_repo_with_open_question();
     let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
     let (port, token) = read_open_line(&mut child);
@@ -857,31 +654,21 @@ fn get_next_shows_tier_and_stands_on_and_a_refuse_button() {
     let resp = get(port, "/next", Some(&cookie));
     assert_eq!(resp.status, 200, "body: {}", resp.body);
 
-    // "<topic>, tier N. Question p of n open." — EXAMPLE_RECORD's only
-    // question has no heading dep, so it is tier 1.
-    assert!(resp.body.contains("Example, tier 1"), "body: {}", resp.body);
+    // The question as `adr show <file>` prints it: its status with its
+    // version, and the depends line it carries (a term entry here).
+    let lines = page_lines(&resp.body);
     assert!(
-        resp.body.contains("Question 1 of 1 open"),
-        "body: {}",
-        resp.body
+        lines
+            .iter()
+            .any(|l| l.starts_with("[asked @") && l.ends_with("1.1 What is the unit of authority called?")),
+        "{:#?}",
+        lines
     );
-
-    // "Stands on:" lists the entries as written: EXAMPLE_RECORD's question
-    // carries `depends: example` (a term entry).
-    assert!(
-        resp.body.contains("Stands on: example"),
-        "body: {}",
-        resp.body
-    );
+    assert!(lines.contains(&"depends: example".to_string()), "{:#?}", lines);
 
     // A Refuse button beside the Answer button, posting `answer=refuse` to
     // the same route.
-    assert!(
-        resp.body
-            .contains("name=\"answer\" value=\"refuse\" class=\"refuse\""),
-        "body: {}",
-        resp.body
-    );
+    assert!(resp.body.contains("name=\"answer\" value=\"refuse\""), "body: {}", resp.body);
     assert!(resp.body.contains(">Refuse<"), "body: {}", resp.body);
 
     let _ = child.kill();
@@ -889,7 +676,7 @@ fn get_next_shows_tier_and_stands_on_and_a_refuse_button() {
 }
 
 #[test]
-fn overview_shows_tier_n_is_open() {
+fn overview_shows_what_show_prints() {
     let dir = setup_repo_with_open_question();
     let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
     let (port, token) = read_open_line(&mut child);
@@ -897,7 +684,9 @@ fn overview_shows_tier_n_is_open() {
 
     let resp = get(port, "/", Some(&cookie));
     assert_eq!(resp.status, 200, "body: {}", resp.body);
-    assert!(resp.body.contains("Tier 1 is open"), "body: {}", resp.body);
+    let shown = cli_lines(&dir, &["show"]);
+    assert!(shown.iter().any(|l| l.starts_with("owner runs: adr answer ")), "{:?}", shown);
+    assert_on_page(&shown, &resp.body);
 
     let _ = child.kill();
     let _ = child.wait();
@@ -912,12 +701,10 @@ Standard: s.\n\n\
 - B) y.\n  Why: w.\n  Costs: c.\n\n\
 **Answer:** refused\n";
 
-/// The refused state is set by hand — a ledger row plus the `**Answer:**
-/// refused` line — rather than through `adr answer <id> refuse`, which is
-/// being built on this same branch by another agent (see the wave-2
-/// report).
+/// The refused state is set by hand: a ledger row plus the `**Answer:**
+/// refused` line. The page shows the move `adr show` prints for it.
 #[test]
-fn overview_lists_a_refused_question_with_the_label() {
+fn overview_shows_the_move_of_a_refused_question() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(&dir, "adrdom/decisions/refused.md", REFUSED_RECORD);
@@ -942,12 +729,9 @@ fn overview_lists_a_refused_question_with_the_label() {
 
     let resp = get(port, "/", Some(&cookie));
     assert_eq!(resp.status, 200, "body: {}", resp.body);
-    assert!(
-        resp.body.contains("<span class=\"label refused\">refused</span>"),
-        "body: {}",
-        resp.body
-    );
-    assert!(resp.body.contains("1.1 Root?"), "body: {}", resp.body);
+    let shown = cli_lines(&dir, &["show"]);
+    assert!(shown.iter().any(|l| l.contains("\"1.1 Root?\" is refused")), "{:?}", shown);
+    assert_on_page(&shown, &resp.body);
 
     let _ = child.kill();
     let _ = child.wait();
@@ -1240,8 +1024,7 @@ fn post_approve_with_cookie_and_token_approves_terms_from_the_page() {
     let form = format!("file=adrdom/terms.md&t={}", token);
     let resp = post(port, "/approve", Some(&cookie), &form);
     assert_eq!(resp.status, 302, "body: {}", resp.body);
-    let location = header(&resp, "Location").expect("Location header");
-    assert!(location.starts_with("/?m="), "{}", location);
+    assert_eq!(header(&resp, "Location"), Some("/"));
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(
@@ -1250,18 +1033,16 @@ fn post_approve_with_cookie_and_token_approves_terms_from_the_page() {
         ledger
     );
 
-    // The overview no longer offers an "Approve terms" button, and marks
-    // the terms as approved -- proof the approve the page just ran is the
-    // real thing, not a no-op.
-    let overview = get(port, "/", Some(&cookie));
+    // The page the act leads to shows its event, and marks the terms as
+    // approved with no approve form left for them -- proof the approve the
+    // page just ran is the real thing, not a no-op.
+    let overview = follow(port, &resp, &cookie);
     assert_eq!(overview.status, 200, "body: {}", overview.body);
+    let lines = page_lines(&overview.body);
+    assert!(lines.contains(&"approved: adrdom/terms.md".to_string()), "{:#?}", lines);
+    assert!(lines.contains(&"[approved] adrdom/terms.md".to_string()), "{:#?}", lines);
     assert!(
-        overview.body.contains("approved"),
-        "body: {}",
-        overview.body
-    );
-    assert!(
-        !overview.body.contains("Approve terms"),
+        !overview.body.contains("name=\"file\" value=\"adrdom/terms.md\""),
         "terms should no longer need approving: {}",
         overview.body
     );
@@ -1293,8 +1074,13 @@ fn post_unban_with_cookie_and_token_removes_a_banned_phrase_from_the_page() {
     let form = format!("lines=forbiddenword&t={}", token);
     let resp = post(port, "/unban", Some(&cookie), &form);
     assert_eq!(resp.status, 302, "body: {}", resp.body);
-    let location = header(&resp, "Location").expect("Location header");
-    assert!(location.starts_with("/?m="), "{}", location);
+    assert_eq!(header(&resp, "Location"), Some("/"));
+    let followed = follow(port, &resp, &cookie);
+    assert!(
+        page_lines(&followed.body).contains(&"unbanned: a word".to_string()),
+        "body: {}",
+        followed.body
+    );
 
     let banned_after =
         std::fs::read_to_string(dir.join("adrdom/state/banned.sha256")).unwrap();
@@ -1318,12 +1104,10 @@ fn post_unban_with_cookie_and_token_removes_a_banned_phrase_from_the_page() {
 // adr: 644b43ce-be10-4e9a-a7d5-71b27c51e365
 //
 // "the page shows every topic file's state, open questions with their
-// options, current decisions and check results": exercises the pieces
-// the tests above don't already cover -- an open question's own options
-// (on `/next`), and the answered-decision list (on `/decisions`, unhit
-// by any other test in this file). Topic-file state, and check's own
-// report, are covered by `get_root_with_cookie_shows_fixture_topic`,
-// `overview_shows_tier_n_is_open` and the moot/refused-state tests above.
+// options, current decisions and check results": every topic file's
+// status line, an open question's own options (on `/next`), and the
+// current decisions with the option picked (on `/`, as `adr show` prints
+// them).
 #[test]
 fn page_shows_question_options_and_the_decisions_list() {
     let dir = setup_repo_with_open_question();
@@ -1332,55 +1116,45 @@ fn page_shows_question_options_and_the_decisions_list() {
     let (port, token) = read_open_line(&mut child);
     let cookie = format!("adr_t={}", token);
 
-    // The open question's own options, from EXAMPLE_RECORD, are on /next.
-    // "decision" is a paired term here (approve_terms_with above), so
-    // option A's sentence is split around the word the page wraps in a
-    // term span rather than matched as one literal run.
-    let next = get(port, "/next", Some(&cookie));
-    assert_eq!(next.status, 200, "body: {}", next.body);
+    let overview = get(port, "/", Some(&cookie));
     assert!(
-        next.body.contains("The authoritative sentence is a"),
-        "option A's opening missing from the page: {}",
-        next.body
-    );
-    assert!(
-        next.body
-            .contains(", and the question that produced it is a question."),
-        "option A's close missing from the page: {}",
-        next.body
-    );
-    assert!(
-        next.body.contains("The whole unit is a block."),
-        "option B missing from the page: {}",
-        next.body
+        page_lines(&overview.body).contains(&"[approved] Example (adrdom/decisions/example.md)".to_string()),
+        "body: {}",
+        overview.body
     );
 
-    // Answer it for real, then /decisions shows it as a current decision
-    // with the sentence the owner picked.
+    // The open question's own options, from EXAMPLE_RECORD, are on /next.
+    let next = get(port, "/next", Some(&cookie));
+    assert_eq!(next.status, 200, "body: {}", next.body);
+    let lines = page_lines(&next.body);
+    assert!(
+        lines.contains(
+            &"- A) The authoritative sentence is a decision, and the question that produced it is a question."
+                .to_string()
+        ),
+        "option A missing from the page: {:#?}",
+        lines
+    );
+    assert!(lines.contains(&"- B) The whole unit is a block.".to_string()), "{:#?}", lines);
+
+    // Answer it for real, then / shows it as a current decision with the
+    // sentence the owner picked.
     let content = std::fs::read_to_string(dir.join("adrdom/decisions/example.md")).unwrap();
     let question_id = extract_ids(&content)[0].clone();
     assert!(adr_answer(&dir, &question_id, "A")
         .status
         .success());
 
-    let decisions = get(port, "/decisions", Some(&cookie));
+    let decisions = get(port, "/", Some(&cookie));
     assert_eq!(decisions.status, 200, "body: {}", decisions.body);
+    let lines = page_lines(&decisions.body);
+    assert!(lines.contains(&"1.1 What is the unit of authority called?".to_string()), "{:#?}", lines);
     assert!(
-        decisions.body.contains("Current decisions"),
-        "body: {}",
-        decisions.body
-    );
-    assert!(
-        decisions.body.contains("What is the unit of authority called?"),
-        "answered heading missing from /decisions: {}",
-        decisions.body
-    );
-    assert!(
-        decisions.body.contains(
+        lines.iter().any(|l| l.contains(
             "The authoritative sentence is a decision, and the question that produced it is a question."
-        ),
-        "chosen sentence missing from /decisions: {}",
-        decisions.body
+        )),
+        "chosen sentence missing from /: {:#?}",
+        lines
     );
 
     // adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
@@ -1394,22 +1168,15 @@ fn page_shows_question_options_and_the_decisions_list() {
     approve_record(&dir, "adrdom/decisions/second.md");
     let ask_out = adr(&dir, &["ask", second.to_str().unwrap()], &[], "");
     assert!(ask_out.status.success(), "ask failed: {}", stderr(&ask_out));
-    let second_content = std::fs::read_to_string(&second).unwrap();
-    let second_id = extract_ids(&second_content)[0].clone();
-    assert!(adr_answer(&dir, &second_id, "A").status.success());
 
-    let decisions = get(port, "/decisions", Some(&cookie));
-    assert_eq!(decisions.status, 200, "body: {}", decisions.body);
+    let next = get(port, "/next", Some(&cookie));
+    assert_eq!(next.status, 200, "body: {}", next.body);
     assert!(
-        decisions.body.contains("supersedes 1.1 What is the unit of authority called?"),
-        "superseded heading missing from /decisions: {}",
-        decisions.body
+        page_lines(&next.body).contains(&"supersedes: 1.1 What is the unit of authority called?".to_string()),
+        "superseded heading missing from /next: {}",
+        next.body
     );
-    assert!(
-        !decisions.body.contains(&question_id),
-        "bare id printed on /decisions: {}",
-        decisions.body
-    );
+    assert!(!next.body.contains(&question_id), "bare id printed on /next: {}", next.body);
 
     let _ = child.kill();
     let _ = child.wait();
@@ -1442,16 +1209,12 @@ Standard: plain words.
 /// set -- so its tier (2) is entirely the tool's own derivation.
 const TIER_Q2_APPENDIX: &str = "\n### 1.2 Does the widget's paint match its color?\n\ndepends: 1.1 What color is the widget?\n\nProblem: the paint might not match.\n\nStandard: plain words.\n\n- A) Yes.\n  Why: reasons.\n  Costs: costs.\n- B) No.\n  Why: other reasons.\n  Costs: other costs.\n";
 
-//
-// "show and the page print the tiers": Q1 is tier 1 (no depends line at
-// all); Q2, appended later and never written with a tier of its own,
-// stands on Q1's heading and so is tier 2, purely derived. As the topic
-// advances from Q1 open to Q2 open, the page's own tier line moves with
-// it on both routes it appears on -- "<topic>, tier N" on /next and
-// "Tier N is open" on the overview -- proof the page computes the tier
-// itself rather than reading one written in the file.
+// As the topic advances from Q1 asked to Q2 asked, the page re-reads the
+// records on every request and shows what `adr show` prints at each step:
+// the owner's answer move for the question asked, with its form, and the
+// decision once it is answered.
 #[test]
-fn page_prints_the_tiers_as_the_topic_advances() {
+fn page_follows_the_topic_as_it_advances() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -1465,19 +1228,16 @@ fn page_prints_the_tiers_as_the_topic_advances() {
     let (port, token) = read_open_line(&mut child);
     let cookie = format!("adr_t={}", token);
 
-    let next1 = get(port, "/next", Some(&cookie));
-    assert_eq!(next1.status, 200, "body: {}", next1.body);
-    assert!(next1.body.contains("Example, tier 1"), "body: {}", next1.body);
-    let overview1 = get(port, "/", Some(&cookie));
-    assert_eq!(overview1.status, 200, "body: {}", overview1.body);
-    assert!(
-        overview1.body.contains("Tier 1 is open"),
-        "body: {}",
-        overview1.body
-    );
-
     let content = std::fs::read_to_string(&record).unwrap();
     let q1_id = extract_ids(&content)[0].clone();
+    let form_of = |id: &str| format!("name=\"id\" value=\"{}\"", id);
+
+    let next1 = get(port, "/next", Some(&cookie));
+    assert_eq!(next1.status, 200, "body: {}", next1.body);
+    assert!(next1.body.contains(&form_of(&q1_id)), "body: {}", next1.body);
+    let overview1 = get(port, "/", Some(&cookie));
+    assert_eq!(overview1.status, 200, "body: {}", overview1.body);
+    assert_on_page(&cli_lines(&dir, &["show"]), &overview1.body);
     assert!(adr_answer(&dir, &q1_id, "A")
         .status
         .success());
@@ -1490,19 +1250,17 @@ fn page_prints_the_tiers_as_the_topic_advances() {
         .status
         .success());
 
-    // Same routes, no restart: the page re-reads the file/ledger fresh on
-    // every request, so it now reports tier 2 with nothing written in the
-    // topic file naming a tier at all.
+    // Same routes, no restart: Q2 is offered, Q1 is a decision.
+    let q2_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[1].clone();
     let next2 = get(port, "/next", Some(&cookie));
     assert_eq!(next2.status, 200, "body: {}", next2.body);
-    assert!(next2.body.contains("Example, tier 2"), "body: {}", next2.body);
+    assert!(next2.body.contains(&form_of(&q2_id)), "body: {}", next2.body);
+    assert!(!next2.body.contains(&form_of(&q1_id)), "body: {}", next2.body);
     let overview2 = get(port, "/", Some(&cookie));
     assert_eq!(overview2.status, 200, "body: {}", overview2.body);
-    assert!(
-        overview2.body.contains("Tier 2 is open"),
-        "body: {}",
-        overview2.body
-    );
+    let shown = cli_lines(&dir, &["show"]);
+    assert!(shown.contains(&"1.1 What color is the widget?".to_string()), "{:?}", shown);
+    assert_on_page(&shown, &overview2.body);
 
     let _ = child.kill();
     let _ = child.wait();
@@ -1510,10 +1268,10 @@ fn page_prints_the_tiers_as_the_topic_advances() {
 
 // adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
 //
-// The page offers the next question `answer` would take: with Q1 and Q2
-// (standing on Q1=A) both asked, /next after Q1 offers nothing while Q1 has
-// no decision, a POST for Q2 is refused with the same text the terminal
-// prints, and once Q1 is answered the page offers Q2.
+// The page offers a form only for a question `answer` takes: with Q1 and Q2
+// (standing on Q1=A) both asked, /next offers Q1 and shows Q2 with the
+// move that says what it waits for, a POST for Q2 is refused with the
+// same text the terminal prints, and once Q1 is answered the page offers Q2.
 #[test]
 fn page_offers_only_the_questions_answer_takes() {
     let dir = init_repo();
@@ -1530,22 +1288,26 @@ fn page_offers_only_the_questions_answer_takes() {
     let (port, token) = read_open_line(&mut child);
     let cookie = format!("adr_t={}", token);
 
+    let form_of = |id: &str| format!("name=\"id\" value=\"{}\"", id);
     let first = get(port, "/next", Some(&cookie));
-    assert!(first.body.contains("Example, tier 1"), "body: {}", first.body);
-    // Q2 is not offered; the skipped Q1 is the only question left.
-    let after_q1 = get(port, &format!("/next?after={}", q1_id), Some(&cookie));
-    assert!(after_q1.body.contains("only question left to answer"), "body: {}", after_q1.body);
-    assert!(!after_q1.body.contains("Example, tier 2"), "body: {}", after_q1.body);
+    assert!(first.body.contains(&form_of(&q1_id)), "body: {}", first.body);
+    assert!(!first.body.contains(&form_of(&q2_id)), "body: {}", first.body);
+    let lines = page_lines(&first.body);
+    assert!(
+        lines.iter().any(|l| l.starts_with("not yet: \"1.2 Does the widget's paint match its color?\" is asked and waits for")),
+        "{:#?}",
+        lines
+    );
 
     let form = format!("id={}&v={}&answer=A&t={}", q2_id, current_version(&dir, &q2_id), token);
     let resp = post(port, "/answer", Some(&cookie), &form);
     assert_eq!(resp.status, 302, "body: {}", resp.body);
-    let followed = get(port, header(&resp, "Location").expect("Location header"), Some(&cookie));
+    let followed = follow(port, &resp, &cookie);
     assert!(followed.body.contains("has no decision yet"), "page did not show the refusal: {}", followed.body);
 
     assert!(adr_answer(&dir, &q1_id, "A").status.success());
-    let after_q1 = get(port, &format!("/next?after={}", q1_id), Some(&cookie));
-    assert!(after_q1.body.contains("Example, tier 2"), "body: {}", after_q1.body);
+    let next = get(port, "/next", Some(&cookie));
+    assert!(next.body.contains(&form_of(&q2_id)), "body: {}", next.body);
 
     let _ = child.kill();
     let _ = child.wait();
@@ -1554,13 +1316,12 @@ fn page_offers_only_the_questions_answer_takes() {
 // adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
 //
 // The page keeps to what `answer` takes. The question standing on another
-// sits first in the file: the overview lists it as waiting, with what it
-// waits for and no link; its own page shows what it waits for and no answer
-// form; "Question p of N open" counts the questions the owner can answer
-// now (one of the two asked). After the later question is answered,
-// /next?after= wraps around to the earlier one it unlocked.
+// sits first in the file: the overview shows the moves `adr show` prints,
+// the owner's answer for the later question and what the earlier one
+// waits for; /next shows the earlier one with no form. After the later
+// question is answered, /next offers the earlier one it unlocked.
 #[test]
-fn page_shows_a_waiting_question_without_a_form_and_wraps_to_an_unlocked_one() {
+fn page_shows_a_waiting_question_without_a_form_and_offers_it_once_unlocked() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -1575,23 +1336,21 @@ fn page_shows_a_waiting_question_without_a_form_and_wraps_to_an_unlocked_one() {
     let (port, token) = read_open_line(&mut child);
     let cookie = format!("adr_t={}", token);
 
+    let form_of = |id: &str| format!("name=\"id\" value=\"{}\"", id);
     let overview = get(port, "/", Some(&cookie));
-    assert!(overview.body.contains("waits for"), "body: {}", overview.body);
-    assert!(!overview.body.contains(&format!("/next?show={}", q2_id)), "body: {}", overview.body);
-    assert!(overview.body.contains(&format!("/next?show={}", q1_id)), "body: {}", overview.body);
+    let shown = cli_lines(&dir, &["show"]);
+    assert!(shown.iter().any(|l| l.contains("waits for")), "{:?}", shown);
+    assert_on_page(&shown, &overview.body);
+    assert!(overview.body.contains(&form_of(&q1_id)), "body: {}", overview.body);
+    assert!(!overview.body.contains(&form_of(&q2_id)), "body: {}", overview.body);
 
     let first = get(port, "/next", Some(&cookie));
-    assert!(first.body.contains("Example, tier 1"), "body: {}", first.body);
-    assert!(first.body.contains("Question 1 of 1 open"), "body: {}", first.body);
-
-    let shown = get(port, &format!("/next?show={}", q2_id), Some(&cookie));
-    assert!(shown.body.contains("Not yet: this question waits for"), "body: {}", shown.body);
-    assert!(!shown.body.contains("id=\"answer-form\""), "body: {}", shown.body);
+    assert!(first.body.contains(&form_of(&q1_id)), "body: {}", first.body);
+    assert!(!first.body.contains(&form_of(&q2_id)), "body: {}", first.body);
 
     assert!(adr_answer(&dir, &q1_id, "A").status.success());
-    let after_q1 = get(port, &format!("/next?after={}", q1_id), Some(&cookie));
-    assert!(after_q1.body.contains("Example, tier 2"), "body: {}", after_q1.body);
-    assert!(after_q1.body.contains("id=\"answer-form\""), "body: {}", after_q1.body);
+    let after_q1 = get(port, "/next", Some(&cookie));
+    assert!(after_q1.body.contains(&form_of(&q2_id)), "body: {}", after_q1.body);
 
     let _ = child.kill();
     let _ = child.wait();
@@ -1599,11 +1358,11 @@ fn page_shows_a_waiting_question_without_a_form_and_wraps_to_an_unlocked_one() {
 
 // adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
 //
-// A question edited since it was asked has no answer form on its own page
-// (`answer` refuses it); the page says what the overview says. Skipping the
-// only answerable question offers it again and says it is the only one.
+// A question edited since it was asked has no answer form (`answer`
+// refuses it); the page shows its status and the move `adr show <file>`
+// prints for it, the agent asking it again.
 #[test]
-fn page_shows_no_form_for_an_edited_question_and_offers_the_only_one_again() {
+fn page_shows_no_form_for_an_edited_question() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -1616,18 +1375,21 @@ fn page_shows_no_form_for_an_edited_question_and_offers_the_only_one_again() {
     let (port, token) = read_open_line(&mut child);
     let cookie = format!("adr_t={}", token);
 
-    let skipped = get(port, &format!("/next?after={}", q1_id), Some(&cookie));
-    assert!(skipped.body.contains("only question left to answer"), "body: {}", skipped.body);
-    assert!(skipped.body.contains("id=\"answer-form\""), "body: {}", skipped.body);
-    assert!(!skipped.body.contains("No question can be answered yet"), "body: {}", skipped.body);
+    let form = format!("name=\"id\" value=\"{}\"", q1_id);
+    let before = get(port, "/next", Some(&cookie));
+    assert!(before.body.contains(&form), "body: {}", before.body);
 
     let text = std::fs::read_to_string(&record).unwrap();
     std::fs::write(&record, text.replacen("is undecided.", "is undecided, reworded.", 1)).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
 
-    let shown = get(port, &format!("/next?show={}", q1_id), Some(&cookie));
-    assert!(shown.body.contains("edited since it was asked"), "body: {}", shown.body);
-    assert!(!shown.body.contains("id=\"answer-form\""), "body: {}", shown.body);
+    let shown = get(port, "/next", Some(&cookie));
+    assert!(!shown.body.contains(&form), "body: {}", shown.body);
+    let lines = page_lines(&shown.body);
+    assert!(lines.contains(&"[asked] 1.1 What color is the widget?".to_string()), "{:#?}", lines);
+    let file = cli_lines(&dir, &["show", "adrdom/decisions/example.md"]);
+    let ask_move = file.iter().find(|l| l.starts_with("agent runs: adr ask ")).expect("the ask move");
+    assert!(lines.contains(ask_move), "{:#?}", lines);
 
     let _ = child.kill();
     let _ = child.wait();
@@ -1640,8 +1402,8 @@ fn page_shows_no_form_for_an_edited_question_and_offers_the_only_one_again() {
 // page turn it back into the name": Q2's depends line is written by hand
 // naming Q1's heading text; approve rewrites it on disk to Q1's freshly
 // minted uuid (asserted below, so the id-vs-name distinction is real, not
-// assumed). The page's "Stands on:" line for Q2 still prints the heading
-// words with the set restored -- never the raw uuid the file
+// assumed). The page's depends line for Q2, as `adr show <file>` prints
+// it, still prints the heading words -- never the raw uuid the file
 // actually carries.
 #[test]
 fn page_shows_a_heading_depends_entry_by_name_not_id() {
@@ -1683,14 +1445,13 @@ fn page_shows_a_heading_depends_entry_by_name_not_id() {
     let next = get(port, "/next", Some(&cookie));
     assert_eq!(next.status, 200, "body: {}", next.body);
     assert!(
-        next.body
-            .contains("Stands on: 1.1 What color is the widget?"),
+        page_lines(&next.body).contains(&"depends: 1.1 What color is the widget?".to_string()),
         "expected the page to turn the id back into the heading name: {}",
         next.body
     );
     assert!(
-        !next.body.contains(&q1_id),
-        "the page must never leak the raw id: {}",
+        !page_lines(&next.body).iter().any(|l| l.starts_with("depends:") && l.contains(&q1_id)),
+        "the depends line must never print the raw id: {}",
         next.body
     );
 
@@ -1814,30 +1575,47 @@ fn page_shows_a_reverted_cross_file_depends_line_as_not_approved() {
     let resp = get(port, "/", Some(&cookie));
     assert_eq!(resp.status, 200, "body: {}", resp.body);
 
-    let b_start = resp.body.find("Topic B").expect("topic B on the page");
-    let b_end = resp.body[b_start..]
-        .find("</article>")
-        .map(|i| b_start + i)
-        .unwrap_or(resp.body.len());
-    let b_block = &resp.body[b_start..b_end];
+    let lines = page_lines(&resp.body);
     assert!(
-        b_block.contains("not approved"),
-        "a hand-reverted depends line must still show as not approved on the page: {}",
-        b_block
+        lines.contains(&"[changed] Topic B (adrdom/decisions/topic-b.md)".to_string()),
+        "a hand-reverted depends line must still show as changed on the page: {:#?}",
+        lines
     );
-
-    let a_start = resp.body.find("Topic A").expect("topic A on the page");
-    let a_end = resp.body[a_start..]
-        .find("</article>")
-        .map(|i| a_start + i)
-        .unwrap_or(resp.body.len());
-    let a_block = &resp.body[a_start..a_end];
     assert!(
-        !a_block.contains("not approved"),
-        "A is genuinely approved and must not show as waiting: {}",
-        a_block
+        lines.contains(&"[approved] Topic A (adrdom/decisions/topic-a.md)".to_string()),
+        "A is genuinely approved and must show so: {:#?}",
+        lines
     );
 
     let _ = child.kill();
     let _ = child.wait();
+}
+
+// adr: 7857d633-2055-47eb-857f-cb70da9fa7ba
+//
+// An act that wrote events and has findings on its input (an unban with one
+// word banned and one not): the banner shows both, each as its own kind,
+// and reads as no stop, since the act wrote.
+#[test]
+fn a_banner_with_events_and_input_findings_shows_both_and_is_no_stop() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    assert!(adr(&dir, &["ban"], &[], "forbiddenword\n").status.success());
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+    let form = format!("lines=forbiddenword%0Anothingbanned&t={}", token);
+    let resp = post(port, "/unban", Some(&cookie), &form);
+    assert_eq!(resp.status, 302, "body: {}", resp.body);
+    let followed = follow(port, &resp, &cookie);
+    let _ = child.kill();
+    let _ = child.wait();
+
+    let banner_at = followed.body.find("<div class=\"banner").expect("a banner");
+    let banner = &followed.body[banner_at..followed.body[banner_at..].find("</div>").map(|e| banner_at + e).unwrap()];
+    assert!(banner.starts_with("<div class=\"banner\">"), "an act that wrote is no stop: {}", banner);
+    let lines = page_lines(banner);
+    assert!(lines.contains(&"unbanned: a word".to_string()), "{:?}", lines);
+    assert!(lines.iter().any(|l| l.starts_with("unban: ")), "the input finding shows too: {:?}", lines);
 }

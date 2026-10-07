@@ -245,7 +245,7 @@ fn install_rewrites_a_stale_hook_and_leaves_a_current_one_untouched() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let commit_msg = std::fs::read_to_string(dir.join(".githooks/commit-msg")).unwrap();
-    assert!(commit_msg.contains("--quiet"), "{}", commit_msg);
+    assert_eq!(commit_msg, "#!/bin/sh\nadr check --message \"$1\"\nexit $?\n");
     let first = std::fs::read(dir.join(".githooks/pre-commit")).unwrap();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let second = std::fs::read(dir.join(".githooks/pre-commit")).unwrap();
@@ -258,7 +258,7 @@ fn install_rewrites_a_stale_hook_and_leaves_a_current_one_untouched() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     assert_eq!(
         std::fs::read_to_string(dir.join(".githooks/pre-commit")).unwrap(),
-        "#!/bin/sh\nadr check --staged --quiet\nexit $?\n",
+        "#!/bin/sh\nadr check --staged\nexit $?\n",
         "install must rewrite a hook whose content differs from what it writes"
     );
 }
@@ -274,14 +274,14 @@ fn install_and_check_agree_a_hook_with_trailing_whitespace_is_current() {
 
     std::fs::write(
         dir.join(".githooks/pre-commit"),
-        "#!/bin/sh \nadr check --staged --quiet\nexit $?\n",
+        "#!/bin/sh \nadr check --staged\nexit $?\n",
     )
     .unwrap();
 
     let out = adr(&dir, &["install"], &[], "");
     assert!(out.status.success());
     assert!(
-        stdout(&out).contains("install: .githooks/pre-commit: already up to date"),
+        !stdout(&out).contains(".githooks/pre-commit"),
         "install must not rewrite a hook that differs only by trailing whitespace: {}",
         stdout(&out)
     );
@@ -488,7 +488,7 @@ fn install_codex_writes_rules_file_and_is_idempotent() {
     let out = adr(&dir, &["install", "--codex"], &[], "");
     assert!(out.status.success(), "install failed: {}", stderr(&out));
     assert!(
-        stdout(&out).contains("Codex enforces project rules only for a project marked trusted"),
+        stdout(&out).lines().any(|l| l == "written: .codex/rules/adrdom.rules"),
         "{}",
         stdout(&out)
     );
@@ -506,6 +506,7 @@ fn install_codex_writes_rules_file_and_is_idempotent() {
 
     let out2 = adr(&dir, &["install", "--codex"], &[], "");
     assert!(out2.status.success(), "second install failed: {}", stderr(&out2));
+    assert_eq!(stdout(&out2), "", "a second install writes nothing: {}", stdout(&out2));
     let rules_after = std::fs::read_to_string(dir.join(".codex/rules/adrdom.rules")).unwrap();
     assert_eq!(rules, rules_after, "second install --codex must not change the file");
 }
@@ -783,4 +784,32 @@ fn uninstall_is_idempotent() {
 
     assert!(dir.join("adrdom/decisions").is_dir());
     assert!(dir.join("adrdom/state/ledger.tsv").is_file());
+}
+
+// adr: 069a6b4a-de35-45f3-8c6c-8e254bf40565
+//
+// "What does a command that writes print?" A: the event it wrote, one line
+// each, and nothing else. install writes files and no ledger row, so it
+// prints one line per file it writes; a second run writes nothing and
+// prints nothing.
+#[test]
+fn install_prints_one_line_per_file_written_and_nothing_else() {
+    let dir = init_repo();
+    let out = adr(&dir, &["install", "--claude", "--codex"], &[], "");
+    assert!(out.status.success(), "install failed: {}", stderr(&out));
+    let text = stdout(&out);
+    assert!(!text.is_empty());
+    for line in text.lines() {
+        let path = line
+            .strip_prefix("written: ")
+            .unwrap_or_else(|| panic!("a line that names no file written: {:?} in {}", line, text));
+        assert!(dir.join(path).is_file(), "{} is not a file: {}", path, text);
+    }
+    let mut paths: Vec<&str> = text.lines().collect();
+    paths.dedup();
+    assert_eq!(paths.len(), text.lines().count(), "a file printed twice: {}", text);
+
+    let again = adr(&dir, &["install", "--claude", "--codex"], &[], "");
+    assert!(again.status.success(), "{}", stderr(&again));
+    assert_eq!(stdout(&again), "", "{}", stdout(&again));
 }

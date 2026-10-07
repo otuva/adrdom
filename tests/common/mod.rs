@@ -26,6 +26,7 @@ pub fn asked_row_count(dir: &Path) -> usize {
 /// and makes an initial commit so `git show HEAD:...` has something to
 /// compare against later.
 pub fn init_repo() -> PathBuf {
+    SWEEP.call_once(sweep_dead_test_repos);
     let n = COUNTER.fetch_add(1, Ordering::SeqCst);
     let dir = std::env::temp_dir().join(format!(
         "adr-test-{}-{}-{}",
@@ -47,6 +48,33 @@ pub fn init_repo() -> PathBuf {
     run_git(&dir, &["commit", "-q", "-m", "initial"]);
 
     dir
+}
+
+static SWEEP: std::sync::Once = std::sync::Once::new();
+
+/// Removes the `adr-test-<pid>-*` repos `init_repo` made in runs whose
+/// process is gone. A test binary has no hook at exit to remove its own
+/// repos, so each run clears the ones its predecessors left; a run still
+/// going keeps its repos, since its pid is still in /proc.
+fn sweep_dead_test_repos() {
+    if !Path::new("/proc/self").exists() {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(rest) = name.to_str().and_then(|n| n.strip_prefix("adr-test-")) else {
+            continue;
+        };
+        let Some(pid) = rest.split('-').next().filter(|p| p.parse::<u32>().is_ok()) else {
+            continue;
+        };
+        if !Path::new("/proc").join(pid).exists() {
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
+    }
 }
 
 /// Runs git with the directory holding our freshly built `adr` binary
@@ -321,6 +349,49 @@ pub fn write_record(dir: &Path, rel: &str, content: &str) -> PathBuf {
     path
 }
 
+/// The two options every gate fixture question carries.
+pub const GATE_OPTIONS: &str = "- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n";
+
+/// A question that stands on the term `widget`, with `problem` as its
+/// Problem line: what a case puts a loaded word into.
+pub fn gate_question(heading: &str, problem: &str) -> String {
+    format!("### {}\ndepends: widget\n\nProblem: {}\n\nStandard: plain words.\n\n{}", heading, problem, GATE_OPTIONS)
+}
+
+/// An installed repository with the term `widget` approved.
+pub fn widget_repo() -> PathBuf {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_terms_with(&dir, &["widget"]);
+    dir
+}
+
+/// The owner's approve with nothing planned on the way: `adr_owner` plans
+/// a topic file first, which would write the very lines a case leaves out.
+pub fn approve_unplanned(dir: &Path, path: &Path) -> Output {
+    adr(dir, &["approve", path.to_str().unwrap()], &[("ADR_OWNER_BYPASS", "1")], "")
+}
+
+/// The refusal lines a command printed, each with the command's own prefix
+/// taken off: the words every other command names the same finding with.
+pub fn refusal_lines(out: &Output, prefix: &str) -> Vec<String> {
+    stderr(out)
+        .lines()
+        .map(|l| l.strip_prefix(prefix).unwrap_or(l).to_string())
+        .filter(|l| !l.is_empty())
+        .collect()
+}
+
+/// The finding and move lines `adr show <rel>` prints for the file, each
+/// finding whole with its move: the one computation every command that names
+/// a move for the file reads (per "Does a command compute a move of its
+/// own?", aac5c313 A). Every line at the left edge that is no status line,
+/// marked or not.
+pub fn file_moves(dir: &Path, rel: &str) -> Vec<String> {
+    let out = adr(dir, &["show", rel], &[], "");
+    stdout(&out).lines().filter(|l| !l.starts_with([' ', '[', '#', '+', '-'])).map(str::to_string).collect()
+}
+
 /// Returns every `id: <value>` found in a record, in file order.
 pub fn extract_ids(content: &str) -> Vec<String> {
     content
@@ -516,15 +587,22 @@ pub fn plan_record(dir: &Path, rel: &str) {
     }
 }
 
-/// The (heading, name) of each `line missing: <kind> "<name>" under
-/// "<heading>"` line `adr plan` printed.
+/// The (heading, name) of each finding `adr plan` printed of a neighbour on
+/// no line: `plan: <rel>: the <kind> "<name>" is a neighbour of
+/// "<heading>" and is on no line; ...`.
 pub fn lines_wanted(plan_stdout: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
     for l in plan_stdout.lines() {
-        let Some(rest) = l.strip_prefix("line missing: ") else { continue };
-        let Some((_, rest)) = rest.split_once(" \"") else { continue };
-        let Some((name, heading)) = rest.split_once("\" under \"") else { continue };
-        out.push((heading.trim_end_matches('"').to_string(), name.to_string()));
+        if !l.starts_with("plan: ") {
+            continue;
+        }
+        let Some((left, right)) = l.split_once("\" is a neighbour of \"") else { continue };
+        let Some((_, name)) = left.rsplit_once(" \"") else { continue };
+        let Some((heading, _)) = right.split_once("\" and is on no line") else { continue };
+        let pair = (heading.to_string(), name.to_string());
+        if !out.contains(&pair) {
+            out.push(pair);
+        }
     }
     out
 }
@@ -693,4 +771,83 @@ pub fn mirror_section_hash(section_text: &str) -> String {
         .first()
         .unwrap_or_else(|| panic!("mirror_section_hash: no section parsed from: {}", section_text));
     record::section_hash(&lines, sec)
+}
+
+/// The lines `adr check` prints that fail it, as check words them: the
+/// report of the working tree read through the library, its failures alone.
+/// The printed report mixes failures and notes, each a finding with its
+/// move, and only the exit code tells them apart.
+#[allow(dead_code)]
+pub fn check_failures(dir: &Path) -> String {
+    use adr::commands::check;
+    let tests = check::test_index(dir, &adr::repo::Source::WorkingTree);
+    check::collect_with_tests(dir, &tests)
+        .failures
+        .into_iter()
+        .map(|f| adr::out::text(&adr::out::Line::Finding(f)))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+// --- the source of the tool, for the tests that guard its shape ----------
+
+/// Every `.rs` file under `src/` of this repository, with its path from the repository root.
+pub fn source_files() -> Vec<(String, String)> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut out = Vec::new();
+    let mut dirs = vec![root.join("src")];
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                dirs.push(path);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                let rel = path.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/");
+                out.push((rel, std::fs::read_to_string(&path).unwrap()));
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// The lines of `text` that are code: comment lines left out, and the unit
+/// tests at the end of a file (`#[cfg(test)]` onward) left out.
+pub fn code_lines(text: &str) -> Vec<(usize, &str)> {
+    text.lines()
+        .enumerate()
+        .take_while(|(_, l)| l.trim() != "#[cfg(test)]")
+        .filter(|(_, l)| !l.trim_start().starts_with("//"))
+        .map(|(i, l)| (i + 1, l))
+        .collect()
+}
+
+/// The text inside each double-quoted string literal on `line`, escapes
+/// kept as written.
+pub fn string_literals(line: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur: Option<String> = None;
+    let mut chars = line.chars();
+    while let Some(c) = chars.next() {
+        match (&mut cur, c) {
+            (None, '"') => cur = Some(String::new()),
+            (None, '\'') => {
+                // A char literal such as '"': skip it whole.
+                let rest: String = chars.clone().take(3).collect();
+                if rest.starts_with("\"'") || rest.starts_with("\\\"'") {
+                    chars.nth(if rest.starts_with("\"'") { 1 } else { 2 });
+                }
+            }
+            (Some(s), '\\') => {
+                s.push('\\');
+                if let Some(n) = chars.next() {
+                    s.push(n);
+                }
+            }
+            (Some(_), '"') => out.push(cur.take().unwrap()),
+            (Some(s), c) => s.push(c),
+            (None, _) => {}
+        }
+    }
+    out
 }
