@@ -159,12 +159,26 @@ pub fn run(record_path: PathBuf) -> i32 {
     // Refusal 4: plan / context must be approved before ask will touch the
     // file at all -- checked against the hashes captured before the
     // normalize pass above, never the normalized `rf`.
+    // The refusal names the moves of the file, the ones `show` names for it.
+    let file_moves = || -> Vec<crate::moves::Move> {
+        let tests = crate::commands::check::test_index(&root, &repo::Source::WorkingTree);
+        let moves = match all_records.iter().find(|f| f.rel == rel) {
+            Some(loaded) => crate::moves::of_topic_file_in(&root, loaded, &all_records, &terms_list, &led, &tests),
+            None => Vec::new(),
+        };
+        if moves.is_empty() {
+            return vec![crate::moves::Move::new(crate::moves::MoveKind::Approve { path: rel.clone() })];
+        }
+        moves
+    };
     if !state::plan_approved_hashes(&led, &rel, &raw_question_hashes) {
-        out::eprint_stop(&format!("ask: {}", msg::plan_not_approved(&rel, crate::status::plan_status(&led, &rel, false))));
+        let status = crate::status::plan_status(&led, &rel, false);
+        out::eprint_stop(&format!("ask: {}", msg::plan_not_approved(&rel, status, &file_moves())));
         return 1;
     }
     if !state::context_approved_hash(&led, &rel, &raw_context_hash) {
-        out::eprint_stop(&format!("ask: {}", msg::context_not_approved(&rel, crate::status::prose_status(&led, &rel, false))));
+        let status = crate::status::prose_status(&led, &rel, false);
+        out::eprint_stop(&format!("ask: {}", msg::context_not_approved(&rel, status, &file_moves())));
         return 1;
     }
 

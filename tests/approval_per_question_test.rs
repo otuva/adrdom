@@ -135,7 +135,7 @@ fn approve_refuses_a_heading_with_no_body_and_writes_nothing() {
     assert!(!out.status.success());
     let err = stderr(&out);
     assert!(err.contains("1.2 Second question?") && err.contains("no body"), "{}", err);
-    assert!(err.contains("agent writes") && err.contains("owner runs: adr approve"), "{}", err);
+    assert!(err.contains("agent writes the body of \"1.2 Second question?\""), "{}", err);
     assert_eq!(before, ledger_text(&dir));
 
     write_record(&dir, REL, &file_of(&[Q1, Q2]));

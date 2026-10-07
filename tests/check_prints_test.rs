@@ -6,28 +6,10 @@
 mod common;
 
 use common::*;
-use std::path::{Path, PathBuf};
+use common::{approve_unplanned as approve, gate_question as q, refusal_lines as refusals, widget_repo as repo, GATE_OPTIONS as OPTS};
+use std::path::Path;
 
 const REL: &str = "adrdom/decisions/gate.md";
-
-const OPTS: &str = "- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n";
-
-fn q(heading: &str, problem: &str) -> String {
-    format!("### {}\ndepends: widget\n\nProblem: {}\n\nStandard: plain words.\n\n{}", heading, problem, OPTS)
-}
-
-fn repo() -> PathBuf {
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_terms_with(&dir, &["widget"]);
-    dir
-}
-
-/// The owner's approve with nothing planned on the way: `adr_owner` plans
-/// the file first, which would write the very lines a case leaves out.
-fn approve(dir: &Path, path: &Path) -> std::process::Output {
-    adr(dir, &["approve", path.to_str().unwrap()], &[("ADR_OWNER_BYPASS", "1")], "")
-}
 
 fn check(dir: &Path) -> (bool, String, String) {
     let out = adr(dir, &["check"], &[], "");
@@ -40,15 +22,6 @@ fn names_a_move(line: &str) -> bool {
     line.contains("; agent ") || line.contains("; owner runs: ") || line.contains("; not yet: ")
 }
 
-/// The refusals of an owner or agent command, each as check words it: the
-/// command's own prefix taken off.
-fn refusals(out: &std::process::Output, prefix: &str) -> Vec<String> {
-    stderr(out)
-        .lines()
-        .map(|l| l.strip_prefix(prefix).unwrap_or(l).to_string())
-        .filter(|l| !l.is_empty())
-        .collect()
-}
 
 fn assert_check_reports(dir: &Path, refused: &[String], case: &str) {
     assert!(!refused.is_empty(), "{}: the command must refuse", case);

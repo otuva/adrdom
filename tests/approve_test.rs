@@ -67,18 +67,21 @@ const HEADING_REMOVED: &str = "# Example\n\nContext prose.\n";
 fn ask_refuses_an_unapproved_file_naming_adr_approve() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "question");
+    approve_terms_with(&dir, &["question", "decision"]);
     let record = write_record(&dir, "adrdom/decisions/example.md", TWO_GROUP_RECORD);
+    plan_record(&dir, "adrdom/decisions/example.md");
+    let planned = std::fs::read_to_string(&record).unwrap();
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("adr approve"), "{}", err);
+    // A plan approve would take: the owner's approve is the file's move.
+    assert!(err.contains("owner runs: adr approve adrdom/decisions/example.md"), "{}", err);
     assert!(err.contains("adrdom/decisions/example.md"), "{}", err);
 
     // Nothing written.
     let content = std::fs::read_to_string(&record).unwrap();
-    assert_eq!(content, TWO_GROUP_RECORD);
+    assert_eq!(content, planned);
 }
 
 // --- approve writes approved/context rows, idempotently --------------

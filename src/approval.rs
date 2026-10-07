@@ -103,15 +103,20 @@ fn changed(old: Option<Vec<String>>, new: &[String]) -> Vec<DiffLine> {
     }
 }
 
-/// The newest committed text of `rel` that `matches` takes, walking the
-/// commits that touched the path newest first.
+/// The committed texts of `rel`, newest first, read one at a time: one for
+/// each of the last `WALK_LIMIT` commits that touched the path. The one walk
+/// of git history every reader of an approved text goes through; a reader
+/// that stops at its match reads no older version.
+pub fn committed_texts<'a>(root: &'a Path, rel: &'a str) -> impl Iterator<Item = String> + 'a {
+    let commits: Vec<String> = repo::git(root, &["log", "--format=%H", "--", rel])
+        .map(|log| log.lines().filter(|l| !l.is_empty()).take(WALK_LIMIT).map(str::to_string).collect())
+        .unwrap_or_default();
+    commits.into_iter().filter_map(move |commit| repo::git(root, &["show", &format!("{}:{}", commit, rel)]))
+}
+
+/// The newest committed text of `rel` that `matches` takes.
 pub fn approved_text(root: &Path, rel: &str, matches: &dyn Fn(&str) -> bool) -> Option<String> {
-    let log = repo::git(root, &["log", "--format=%H", "--", rel])?;
-    log.lines()
-        .filter(|l| !l.is_empty())
-        .take(WALK_LIMIT)
-        .filter_map(|commit| repo::git(root, &["show", &format!("{}:{}", commit, rel)]))
-        .find(|text| matches(text))
+    committed_texts(root, rel).find(|text| matches(text))
 }
 
 fn parse_topic(root: &Path, rel: &str, text: &str) -> RecordFile {

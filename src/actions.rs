@@ -224,10 +224,15 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
         // the agent's `ask` is the move and the owner has nothing to run).
         let stands = crate::state::asked_text_stands(&led, id, &cur_hash);
         if !stands {
+            // The move is the one `show` names for the question's file.
+            let moves = || {
+                let all = record::load_all(root);
+                crate::moves::of_unasked_question_in(root, &rf, &all, &tf.terms, &led, &sec.heading_text, sec.is_skeleton)
+            };
             return Err(if sec.is_skeleton {
-                msg::not_written(&sec.heading_text)
+                msg::not_written(&sec.heading_text, &moves())
             } else if led.latest_asked(id).is_none() {
-                msg::not_asked_yet(&sec.heading_text, &rel)
+                msg::not_asked_yet(&sec.heading_text, &moves())
             } else {
                 use crate::status::QuestionStatus;
                 match crate::status::question_status(&led, sec) {
@@ -237,7 +242,7 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
                     QuestionStatus::Superseded => msg::already_superseded(&sec.heading_text),
                     QuestionStatus::Dropped => msg::already_dropped(&sec.heading_text),
                     QuestionStatus::NoBody | QuestionStatus::NotAsked | QuestionStatus::Asked => {
-                        msg::not_in_asked_state(&sec.heading_text, &rel)
+                        msg::not_in_asked_state(&sec.heading_text, &moves())
                     }
                 }
             });
@@ -274,17 +279,10 @@ fn answer_gate(root: &Path, rf: &RecordFile, led: &Ledger, tf: &terms::TermsFile
     // reads it: the move to ask a leaf is the agent's `adr ask` only when
     // ask would take it (`moves::of_unasked_question`, the pieces
     // `moves::of_topic_file` uses).
-    let plan_ok = state::plan_approved(led, rf, &rf.rel) && state::context_approved(led, rf, &rf.rel);
-    let loaded = std::cell::OnceCell::new();
+    let all = std::cell::OnceCell::new();
     let moves_for = |leaf: usize, unwritten: bool| {
-        let (planning, findings) = loaded.get_or_init(|| {
-            let all = record::load_all(root);
-            (
-                crate::plan::load(root, rf, &all, &tf.terms, led),
-                rules::judge_record(&crate::view::heading_texts(&all), rf, &all, &tf.terms, led),
-            )
-        });
-        crate::moves::of_unasked_question(rf, plan_ok, findings, Some(planning), &rf.sections[leaf].heading_text, unwritten)
+        let all = all.get_or_init(|| record::load_all(root));
+        crate::moves::of_unasked_question_in(root, rf, all, &tf.terms, led, &rf.sections[leaf].heading_text, unwritten)
     };
     for &t in &w.unanswered {
         let heading = rf.sections[t].heading_text.clone();
@@ -845,7 +843,14 @@ fn do_approve_blame(
         rows.push(row);
     }
 
-    Ok(Outcome::of_rows(&rows, &HashMap::new()))
+    let mut outcome = Outcome::of_rows(&rows, &HashMap::new());
+    // A file written that no row of this run covers is an event of its own:
+    // the rows rewritten into the form approve writes, over a hash the
+    // ledger already holds.
+    if rewritten && rows.is_empty() {
+        outcome.events.push(crate::out::Event::FileWritten { path: rel.to_string() });
+    }
+    Ok(outcome)
 }
 
 
@@ -920,6 +925,7 @@ fn do_approve_terms(
     terms::write_terms_lines(&mut new_lines, &tf, &pairs_per_entry);
     tf.lines = new_lines;
 
+    let terms_changed = std::fs::read_to_string(&tf.path).ok().as_deref() != Some(tf.lines.join("\n").as_str());
     terms::save(&tf).map_err(|e| {
         msg::approve_prefixed(msg::write_failed(
             &file.display().to_string(),
@@ -932,6 +938,7 @@ fn do_approve_terms(
     // every run, whether or not the terms file changed, so a repository
     // whose terms file is approved gets its terms brief from one run.
     let brief_path = root.join(crate::repo::TERMS_BRIEF_PATH);
+    let brief_changed = std::fs::read_to_string(&brief_path).ok().as_deref() != Some(terms::brief_text(&tf).as_str());
     let write_brief = || -> std::io::Result<()> {
         if let Some(dir) = brief_path.parent() {
             std::fs::create_dir_all(dir)?;
@@ -995,7 +1002,17 @@ fn do_approve_terms(
         written = rows;
     }
 
-    Ok(Outcome::of_rows(&written, &HashMap::new()))
+    // The terms brief is a file of its own that no row covers: written
+    // whenever its text changed (per "What does a command that writes
+    // print?", 069a6b4a A, one line per event it wrote).
+    let mut outcome = Outcome::of_rows(&written, &HashMap::new());
+    if terms_changed && written.is_empty() {
+        outcome.events.push(crate::out::Event::FileWritten { path: crate::repo::TERMS_PATH.to_string() });
+    }
+    if brief_changed {
+        outcome.events.push(crate::out::Event::FileWritten { path: crate::repo::TERMS_BRIEF_PATH.to_string() });
+    }
+    Ok(outcome)
 }
 
 

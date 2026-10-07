@@ -109,11 +109,13 @@ fn edited_definition_writes_one_row_and_names_the_live_questions() {
     std::fs::write(&terms, TERMS_DECISION_EDITED).unwrap();
     let out = approve_terms(&dir, &terms);
     assert!(out.status.success(), "{}", stderr(&out));
-    // One line per row written: the edited term's row and the terms row
-    // (per "What does a command that writes print?", 069a6b4a A).
+    // One line per row written, the edited term's row and the terms row,
+    // and one for the terms brief its edit rewrote (per "What does a
+    // command that writes print?", 069a6b4a A).
     let text = stdout(&out);
     let lines: Vec<&str> = text.lines().collect();
-    assert_eq!(lines.len(), 2, "{}", text);
+    assert_eq!(lines.len(), 3, "{}", text);
+    assert!(lines.contains(&"written: adrdom/state/terms-brief.md"), "{}", text);
     assert!(lines.contains(&"approved: term \"decision\""), "{}", text);
     assert!(lines.contains(&"approved: adrdom/terms.md"), "{}", text);
     assert_eq!(rows_of(&dir, "term").len(), before + 1);

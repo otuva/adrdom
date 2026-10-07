@@ -153,7 +153,7 @@ fn the_steps_in_order_from_headings_to_approval() {
 
     // Approve refuses what is still missing, and names the move.
     let err = refused(&approve(&dir));
-    assert!(err.contains(&format!("agent writes a depends, supersedes or unrelated line for \"paint\" under \"{}\"", H1)), "{}", err);
+    assert!(err.contains(&format!("is on no line; agent writes lines for \"{}\"", H1)), "{}", err);
 
     // Step 3: the lines. Step 4 has not come: no heading has a body.
     assert_eq!(write_lines(&dir, &out), 4);
@@ -165,7 +165,7 @@ fn the_steps_in_order_from_headings_to_approval() {
     rewrite(&dir, &[(H1, body("one")), (H2, String::new())]);
     let out = ok(&plan(&dir));
     assert!(has_line(&out, &format!("agent writes the body of \"{}\"", H2)), "{}", out);
-    assert!(out.contains(&format!("\"{}\" is a heading with no body", H2)), "{}", out);
+    assert!(out.contains(&format!("\"{}\" is [no body]", H2)), "{}", out);
     assert!(!out.contains("heading with its body"), "{}", out);
 
     // Step 4: the other body. Step 5: heading and body against the pool and
@@ -388,7 +388,7 @@ fn approve_refuses_a_neighbour_on_no_line_and_turns_the_names_into_identifiers()
     assert_eq!(wanted.len(), 2);
     write(&dir, &add_unrelated(&read(&dir), &wanted[1..]));
     let err = refused(&approve(&dir));
-    assert!(err.contains(&format!("agent writes a depends, supersedes or unrelated line for \"{}\" under \"{}\"", wanted[0].1, wanted[0].0)), "{}", err);
+    assert!(err.contains(&format!("\"{}\" is a neighbour of \"{}\" and is on no line; agent writes lines for \"{}\"", wanted[0].1, wanted[0].0, wanted[0].0)), "{}", err);
     assert!(!err.contains("no reader rows"), "{}", err);
     // The refusal changed nothing.
     let held = read(&dir);

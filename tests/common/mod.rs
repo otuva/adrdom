@@ -349,6 +349,51 @@ pub fn write_record(dir: &Path, rel: &str, content: &str) -> PathBuf {
     path
 }
 
+/// The two options every gate fixture question carries.
+pub const GATE_OPTIONS: &str = "- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n";
+
+/// A question that stands on the term `widget`, with `problem` as its
+/// Problem line: what a case puts a loaded word into.
+pub fn gate_question(heading: &str, problem: &str) -> String {
+    format!("### {}\ndepends: widget\n\nProblem: {}\n\nStandard: plain words.\n\n{}", heading, problem, GATE_OPTIONS)
+}
+
+/// An installed repository with the term `widget` approved.
+pub fn widget_repo() -> PathBuf {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_terms_with(&dir, &["widget"]);
+    dir
+}
+
+/// The owner's approve with nothing planned on the way: `adr_owner` plans
+/// a topic file first, which would write the very lines a case leaves out.
+pub fn approve_unplanned(dir: &Path, path: &Path) -> Output {
+    adr(dir, &["approve", path.to_str().unwrap()], &[("ADR_OWNER_BYPASS", "1")], "")
+}
+
+/// The refusal lines a command printed, each with the command's own prefix
+/// taken off: the words every other command names the same finding with.
+pub fn refusal_lines(out: &Output, prefix: &str) -> Vec<String> {
+    stderr(out)
+        .lines()
+        .map(|l| l.strip_prefix(prefix).unwrap_or(l).to_string())
+        .filter(|l| !l.is_empty())
+        .collect()
+}
+
+/// The move lines `adr show <rel>` prints for the file: the one computation
+/// every command that names a move for the file reads (per "Does a command
+/// compute a move of its own?", aac5c313 A).
+pub fn file_moves(dir: &Path, rel: &str) -> Vec<String> {
+    let out = adr(dir, &["show", rel], &[], "");
+    stdout(&out)
+        .lines()
+        .filter(|l| l.starts_with("agent ") || l.starts_with("owner runs: ") || l.starts_with("not yet: "))
+        .map(str::to_string)
+        .collect()
+}
+
 /// Returns every `id: <value>` found in a record, in file order.
 pub fn extract_ids(content: &str) -> Vec<String> {
     content
@@ -744,4 +789,67 @@ pub fn check_failures(dir: &Path) -> String {
         .map(|f| adr::out::text(&adr::out::Line::Finding(f)))
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+// --- the source of the tool, for the tests that guard its shape ----------
+
+/// Every `.rs` file under `src/` of this repository, with its path from the repository root.
+pub fn source_files() -> Vec<(String, String)> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut out = Vec::new();
+    let mut dirs = vec![root.join("src")];
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                dirs.push(path);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                let rel = path.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/");
+                out.push((rel, std::fs::read_to_string(&path).unwrap()));
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// The lines of `text` that are code: comment lines left out, and the unit
+/// tests at the end of a file (`#[cfg(test)]` onward) left out.
+pub fn code_lines(text: &str) -> Vec<(usize, &str)> {
+    text.lines()
+        .enumerate()
+        .take_while(|(_, l)| l.trim() != "#[cfg(test)]")
+        .filter(|(_, l)| !l.trim_start().starts_with("//"))
+        .map(|(i, l)| (i + 1, l))
+        .collect()
+}
+
+/// The text inside each double-quoted string literal on `line`, escapes
+/// kept as written.
+pub fn string_literals(line: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur: Option<String> = None;
+    let mut chars = line.chars();
+    while let Some(c) = chars.next() {
+        match (&mut cur, c) {
+            (None, '"') => cur = Some(String::new()),
+            (None, '\'') => {
+                // A char literal such as '"': skip it whole.
+                let rest: String = chars.clone().take(3).collect();
+                if rest.starts_with("\"'") || rest.starts_with("\\\"'") {
+                    chars.nth(if rest.starts_with("\"'") { 1 } else { 2 });
+                }
+            }
+            (Some(s), '\\') => {
+                s.push('\\');
+                if let Some(n) = chars.next() {
+                    s.push(n);
+                }
+            }
+            (Some(_), '"') => out.push(cur.take().unwrap()),
+            (Some(s), c) => s.push(c),
+            (None, _) => {}
+        }
+    }
+    out
 }

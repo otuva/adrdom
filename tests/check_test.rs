@@ -868,7 +868,7 @@ fn installed_brief_tells_the_agent_to_build_only_a_fully_answered_tier() {
     let agents = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
     assert!(
         agents.contains(
-            "Build a decision when `next`\n   names it, and not before."
+            "Build a decision when a move\n   names it, and not before."
         ),
         "{}",
         agents
@@ -1179,6 +1179,9 @@ fn check_notes_a_heading_with_no_body_in_a_draft() {
         "adrdom/decisions/skeleton.md",
         "# Skeleton\n\n### 1.1 Not written yet?\ndepends: widget\n",
     );
+    // The planning steps run in order: the heading is read first, and the
+    // missing body is the finding of the step after it.
+    plan_record(&dir, "adrdom/decisions/skeleton.md");
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(

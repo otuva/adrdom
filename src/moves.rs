@@ -141,10 +141,25 @@ impl Move {
         }
     }
 
-    /// The move as the last line of a command: `next: <text>`.
-    pub fn text_line(&self) -> String {
-        format!("next: {}", self.text())
-    }
+}
+
+/// Moves as the tail of a refusal, joined with `, `, each as `text` gives
+/// it. The caller passes at least one: a refusal names its move.
+pub fn tail(moves: &[Move]) -> String {
+    debug_assert!(!moves.is_empty(), "a refusal names at least one move");
+    moves.iter().map(|m| m.text()).collect::<Vec<_>>().join(", ")
+}
+
+/// The tail of a finding whose only move is to wait for an answer
+/// elsewhere: nobody moves on it yet.
+pub const WAIT_TAIL: &str = "; not yet, after it is answered";
+
+/// The clauses of the move `kind` names, for a refusal that stops in a state
+/// whose move this module computes: the refusal names the same move every
+/// command names for that state (per "Does a command compute a move of its
+/// own?", aac5c313 A).
+pub fn clause(kind: MoveKind) -> Next {
+    Move::new(kind).next().expect("a move with a mover")
 }
 
 fn quoted(headings: &[String]) -> String {
@@ -273,18 +288,10 @@ pub fn of_topic_file(
                 if tests.get(id).is_some_and(|locations| !locations.is_empty()) {
                     continue;
                 }
-                // A question beside it that still waits for an answer is
-                // named ahead of a refused one: the refused one has its own
-                // line, and the answer is what the build waits for longest.
-                let beside = |s: &record::Section| s.heading_text.clone();
-                match state::unresolved_sibling(rf, i) {
-                    Some(s) if s.is_refused() => build_waits.push(Move::new(MoveKind::BuildWaitsRefused {
-                        heading: heading.to_string(),
-                        beside: beside(s),
-                    })),
-                    Some(s) => build_waits
-                        .push(Move::new(MoveKind::BuildWaits { heading: heading.to_string(), beside: beside(s) })),
-                    None => build.push(Move::new(MoveKind::Build { heading: heading.to_string(), id: id.clone() })),
+                let m = of_untested(rf, i, id);
+                match m.kind {
+                    MoveKind::Build { .. } => build.push(m),
+                    _ => build_waits.push(m),
                 }
             }
             QuestionStatus::Superseded | QuestionStatus::Withdrawn | QuestionStatus::Dropped => {}
@@ -328,6 +335,25 @@ pub fn of_topic_file(
 /// topic file as loaded and `tests` is `check::test_index`. The one move a
 /// command that names one file prints (per "Does a command compute a move
 /// of its own?", aac5c313 A).
+/// `of_unasked_question` of the question `heading` of the topic file `rf`
+/// as loaded from disk, with the findings and planning records read the
+/// way `of_topic_file_in` reads them: the move `answer` names for a
+/// question it cannot take yet is the one `show` names for its file.
+pub fn of_unasked_question_in(
+    root: &std::path::Path,
+    rf: &RecordFile,
+    all: &[RecordFile],
+    terms_list: &[crate::terms::Term],
+    led: &Ledger,
+    heading: &str,
+    unwritten: bool,
+) -> Vec<Move> {
+    let plan_ok = state::plan_approved(led, rf, &rf.rel) && state::context_approved(led, rf, &rf.rel);
+    let planning = crate::plan::load(root, rf, all, terms_list, led);
+    let (findings, _) = crate::rules::judge_topic_file_split_at(root, rf, all, terms_list, led);
+    of_unasked_question(rf, plan_ok, &findings, Some(&planning), heading, unwritten)
+}
+
 pub fn of_topic_file_in(
     root: &std::path::Path,
     rf: &RecordFile,
@@ -354,6 +380,9 @@ pub fn of_topic_file_in(
 /// decision.
 pub fn of_untested(rf: &RecordFile, i: usize, id: &str) -> Move {
     let heading = rf.sections[i].heading_text.clone();
+    // A question beside it that still waits for an answer is named ahead of
+    // a refused one: the refused one has its own line, and the answer is
+    // what the build waits for longest.
     match state::unresolved_sibling(rf, i) {
         Some(s) if s.is_refused() => {
             Move::new(MoveKind::BuildWaitsRefused { heading, beside: s.heading_text.clone() })
@@ -510,7 +539,7 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> String {
                 refuse_on(r, &mut refused);
             }
             Waits::Unwritten { heading: h, moves } => {
-                parts.push(format!("\"{}\" has no decision yet and no body", h));
+                parts.push(format!("\"{}\" has no decision yet and is [{}]", h, QuestionStatus::NoBody.name()));
                 add(moves, &mut agent, &mut owner);
             }
             Waits::Asking { heading: h, moves } => {
@@ -577,7 +606,7 @@ mod tests {
         let m = Move::new(MoveKind::Ask { rel: "x.md".into(), headings: vec!["A?".into(), "B?".into()] });
         assert_eq!(m.text(), "agent runs adr ask x.md  # \"A?\", \"B?\"");
         assert_eq!(Move::new(MoveKind::WaitFor { what: "w".into() }).text(), "not yet: w");
-        assert_eq!(Move::new(MoveKind::Approve { path: "x.md".into() }).text_line(), "next: owner runs: adr approve x.md");
+        assert_eq!(Move::new(MoveKind::Approve { path: "x.md".into() }).text(), "owner runs: adr approve x.md");
     }
 
     #[test]

@@ -151,21 +151,13 @@ pub(crate) fn latest_approved_version(root: &Path, rel: &str, led: &Ledger) -> O
     if led.latest_for_path("approved", rel).is_some_and(|r| r.hash == empty_plan_hash()) {
         return None;
     }
-    // A bound on the versions read; the match is almost always the first few.
-    const WALK_LIMIT: usize = 50;
-    let log = repo::git(root, &["log", "--format=%H", "--", rel])?;
     let mut newest: Option<RecordFile> = None;
-    for commit in log.lines().filter(|l| !l.is_empty()).take(WALK_LIMIT) {
-        let Some(text) = repo::git(root, &["show", &format!("{}:{}", commit, rel)]) else {
-            continue;
-        };
+    for text in crate::approval::committed_texts(root, rel) {
         let old = record::build(root.join(rel), rel.to_string(), record::split_lines(&text));
         if state::plan_approved_hashes(led, rel, &record::question_hashes(&old)) {
             return Some(old);
         }
-        if newest.is_none() {
-            newest = Some(old);
-        }
+        newest.get_or_insert(old);
     }
     newest
 }
@@ -1267,7 +1259,16 @@ fn planning_steps(
 ) -> Vec<String> {
     let mut planning = crate::plan::load(root, rf, all, terms_list, led);
     planning.rel = rel.to_string();
-    no_body_refusals(rel, rf, led).into_iter().chain(planning.approve_refusals()).collect()
+    // The planning steps run in order, and the findings are those of the
+    // step the plan is at, the one `moves::of_planning` names: a later
+    // step's records are missing only because this one is not done (per
+    // "Does a command compute a move of its own?", aac5c313 A).
+    match planning.next() {
+        crate::plan::NextMove::Plan => planning.rows_missing(),
+        crate::plan::NextMove::WriteLines => planning.line_refusals(),
+        crate::plan::NextMove::WriteBodies(_) => no_body_refusals(rel, rf, led),
+        crate::plan::NextMove::Ready => Vec::new(),
+    }
 }
 
 

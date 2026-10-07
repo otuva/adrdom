@@ -93,8 +93,8 @@ fn approving_again_with_no_change_writes_no_new_row() {
 
 // A row put back to the heading after the approval is written to its
 // identifier again; the approval stands, and no ledger row is written, so
-// approve prints nothing (per "What does a command that writes print?",
-// 069a6b4a A).
+// the file it rewrote is the one line approve prints (per "What does a
+// command that writes print?", 069a6b4a A).
 #[test]
 fn approving_again_rewrites_the_rows_and_writes_no_row() {
     let (dir, id1, _id2) = setup();
@@ -109,7 +109,7 @@ fn approving_again_rewrites_the_rows_and_writes_no_row() {
     std::fs::write(&path, &as_written).unwrap();
     let out2 = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out2.status.success(), "{}", stderr(&out2));
-    assert_eq!(stdout(&out2), "", "{}", stdout(&out2));
+    assert_eq!(stdout(&out2), "written: adrdom/blame/x.md\n", "{}", stdout(&out2));
     assert_eq!(blame_row_count(&dir), 1, "no second row should be written");
     let saved = std::fs::read_to_string(&path).unwrap();
     assert!(saved.contains(&format!("decision: {}", id1)), "{}", saved);

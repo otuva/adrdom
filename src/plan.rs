@@ -556,23 +556,22 @@ impl Planning {
         NextMove::Ready
     }
 
-    /// What approve refuses: a question with no rows at its heading hash or
-    /// its body hash, and each neighbour on no line. A question with no
-    /// body is refused for that elsewhere. Needs neither the model nor the
-    /// reader.
-    pub fn approve_refusals(&self) -> Vec<String> {
-        let rel = &self.rel;
-        let mut out = Vec::new();
-        for q in &self.questions {
-            out.extend(self.rows_missing_of(q));
-            for n in q.heading_neighbours.iter().chain(&q.body_neighbours).filter(|n| !n.on_line) {
-                out.push(msg::plan_line_missing(rel, &q.heading, n.kind.label(), &n.name));
-            }
-        }
-        out
+    /// What approve refuses at the step of writing lines: each neighbour on
+    /// no line. Needs neither the model nor the reader.
+    pub fn line_refusals(&self) -> Vec<String> {
+        self.questions.iter().flat_map(|q| self.lines_missing_of(q)).collect()
     }
 
-    /// The part of `approve_refusals` on missing rows: a question with no
+    fn lines_missing_of(&self, q: &Question) -> Vec<String> {
+        q.heading_neighbours
+            .iter()
+            .chain(&q.body_neighbours)
+            .filter(|n| !n.on_line)
+            .map(|n| msg::plan_line_missing(&self.rel, &q.heading, n.kind.label(), &n.name))
+            .collect()
+    }
+
+    /// What approve refuses at the step of `adr plan`: a question with no
     /// rows at its heading hash or its body hash.
     pub fn rows_missing(&self) -> Vec<String> {
         self.questions.iter().flat_map(|q| self.rows_missing_of(q)).collect()

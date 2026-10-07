@@ -329,7 +329,8 @@ or moves it to another file when none does",
     let out = adr(&dir, &["check"], &[], "");
     // The edited file awaits approval again: check prints the refusal as a
     // note (912f4f3b-1213-435a-af0d-7617017fcff4), beside what else approve
-    // refuses in it (fe14991d): the heading with no body is one more note.
+    // refuses in it (fe14991d): the planning step the file is at, its new
+    // heading not yet read, is one more note.
     assert!(out.status.success());
     let plan_lines: Vec<String> = stdout(&out)
         .lines()
@@ -337,7 +338,7 @@ or moves it to another file when none does",
         .map(|l| l.to_string())
         .collect();
     assert_eq!(plan_lines.first(), Some(&format!("plan: {}", refusal)), "{:?}", plan_lines);
-    assert!(plan_lines.iter().any(|l| l.contains("is a heading with no body")), "{:?}", plan_lines);
+    assert!(plan_lines.iter().any(|l| l.contains("has no reader rows for its heading")), "{:?}", plan_lines);
 }
 
 // adr: f4f667ad-8714-4e65-897b-c7002e423c28
@@ -523,7 +524,7 @@ fn show_and_answer_agree_on_whether_the_asked_text_stands() {
     // gives the owner nothing to run.
     assert_eq!(
         stderr(&refused).trim_end(),
-        format!("answer: \"{}\" is edited since it was asked; agent runs adr ask {}", TWO, REL)
+        format!("answer: \"{}\" is edited since it was asked; {}", TWO, ask_for(&[TWO]))
     );
 
     // The unedited question is still answerable.
@@ -545,7 +546,7 @@ fn answer_on_a_question_never_asked_names_the_ask() {
     assert!(!out.status.success());
     assert_eq!(
         stderr(&out).trim_end(),
-        format!("answer: \"{}\" is not asked yet; agent runs adr ask {}", ONE, REL)
+        format!("answer: \"{}\" is not asked; {}", ONE, ask_for(&[ONE]))
     );
 
     // Asked, edited and asked again: the version read is old, the tool holds
