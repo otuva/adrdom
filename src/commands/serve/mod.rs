@@ -182,7 +182,7 @@ fn header(name: &str, value: &str) -> Header {
 fn handle_approve(root: &Path, form: &HashMap<String, String>) -> Reply {
     let file = form.get("file").cloned().unwrap_or_default();
     let banner = match actions::do_approve(root, &root.join(&file)) {
-        Ok(o) => o.summary,
+        Ok(o) => o.summary(),
         Err(e) => e,
     };
     Reply::Redirect(format!("/?m={}", percent_encode(&banner)), None)
@@ -207,7 +207,7 @@ fn handle_answer(root: &Path, form: &HashMap<String, String>) -> Reply {
     if let Some(result) = outcome {
         return match result {
             Ok(o) => Reply::Redirect(
-                format!("/next?after={}&m={}", percent_encode(&id), percent_encode(&o.summary)),
+                format!("/next?after={}&m={}", percent_encode(&id), percent_encode(&o.summary())),
                 None,
             ),
             Err(e) => Reply::Redirect(
@@ -243,7 +243,7 @@ fn handle_answer(root: &Path, form: &HashMap<String, String>) -> Reply {
             format!(
                 "/next?after={}&m={}",
                 percent_encode(&id),
-                percent_encode(&o.summary)
+                percent_encode(&o.summary())
             ),
             None,
         ),
@@ -261,7 +261,7 @@ fn handle_answer(root: &Path, form: &HashMap<String, String>) -> Reply {
 fn handle_unban(root: &Path, form: &HashMap<String, String>) -> Reply {
     let lines = form.get("lines").cloned().unwrap_or_default();
     let banner = match actions::do_unban(root, &lines) {
-        Ok(o) => o.summary,
+        Ok(o) => o.summary(),
         Err(e) => e,
     };
     Reply::Redirect(format!("/?m={}", percent_encode(&banner)), None)

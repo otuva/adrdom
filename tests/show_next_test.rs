@@ -132,14 +132,12 @@ fn show_names_the_next_move_at_every_step() {
     ];
     assert_eq!(next(&dir), waiting);
 
-    // `ask` with nothing to ask names the same moves.
+    // `ask` with nothing to ask writes nothing and prints nothing (per
+    // "What does a command that writes print?", 069a6b4a A): the moves are
+    // show's.
     let again = adr(&dir, &["ask", p], &[], "");
     assert!(again.status.success());
-    let said = stdout(&again);
-    assert!(said.contains("nothing to ask in"), "{}", said);
-    for line in &waiting {
-        assert!(said.contains(&format!("  {}", line)), "{}", said);
-    }
+    assert_eq!(stdout(&again), "", "{}", stdout(&again));
 
     // A body edited after it was asked: the owner approves the edit, then
     // the move is the agent's, to ask it again.

@@ -60,7 +60,7 @@ fn ask_reasks_on_edit() {
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "ask failed: {}", stderr(&out));
     assert!(
-        stdout(&out).contains("re-asked"),
+        stdout(&out).starts_with("asked: \""),
         "expected a re-ask in output: {}",
         stdout(&out)
     );

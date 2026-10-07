@@ -2,6 +2,7 @@ use crate::banned;
 use crate::commands::check::collect_targets;
 use crate::ledger;
 use crate::msg::{self, Actor, Next};
+use crate::out::{self, Event};
 use crate::record;
 use crate::repo;
 use crate::state;
@@ -33,7 +34,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("ban", "", Actor::Agent));
+            out::eprint_stop(&msg::not_a_repo("ban", "", Actor::Agent));
             return 1;
         }
     };
@@ -47,13 +48,13 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     let uuid: Option<String> = match &term {
         Some(name) => {
             let Some(tf) = state::load_terms(&root) else {
-                eprintln!("ban: {}", msg::no_terms_file_for_term(name));
+                out::eprint_stop(&format!("ban: {}", msg::no_terms_file_for_term(name)));
                 return 1;
             };
             match resolve_term_uuid(&tf, name) {
                 Some(u) => Some(u),
                 None => {
-                    eprintln!("ban: {}", msg::no_such_term(name));
+                    out::eprint_stop(&format!("ban: {}", msg::no_such_term(name)));
                     return 1;
                 }
             }
@@ -63,10 +64,10 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
 
     let mut input = String::new();
     if std::io::stdin().read_to_string(&mut input).is_err() {
-        eprintln!(
+        out::eprint_stop(&format!(
             "ban: {}",
             msg::stdin_read_failed(Next::agent("checks stdin and retries"))
-        );
+        ));
         return 1;
     }
 
@@ -101,22 +102,19 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
         // or a same-time `banned`/`unbanned` tie the ledger has since
         // settled with a later row the file never picked up. Bring it back
         // to exactly the ledger's banned set when it doesn't already match,
-        // same as `--rebuild` would write it, and said in the printed line;
-        // left untouched (no write at all) when it already does.
+        // same as `--rebuild` would write it, and printed as the file it
+        // wrote; left untouched (no write, no line) when it already does.
         let expected = banned::sorted_content(&banned_now);
         if std::fs::read_to_string(&banned_path).unwrap_or_default() != expected {
-            let n = banned_now.len();
             if let Err(e) = banned::write_sorted(&banned_path, banned_now) {
-                eprintln!(
+                out::eprint_stop(&format!(
                     "ban: {}",
                     msg::update_failed("banned list", e, Next::agent("checks the error and retries"))
-                );
+                ));
                 return 1;
             }
-            println!("ban: {}", msg::no_new_entries_list_rewritten(n));
-            return 0;
+            out::print_events(&[Event::FileWritten { path: banned::BAN_LIST.to_string() }]);
         }
-        println!("ban: {}", msg::no_new_entries());
         return 0;
     }
 
@@ -140,10 +138,9 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     }
 
     if !hits.is_empty() {
-        eprintln!("ban: {}", msg::already_in_use());
-        for h in &hits {
-            eprintln!("{}", h);
-        }
+        let mut stop = vec![format!("ban: {}", msg::already_in_use())];
+        stop.extend(hits);
+        out::eprint_stop(&stop.join("\n"));
         return 1;
     }
 
@@ -157,10 +154,10 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     entries.extend(new_hashes.iter().map(|h| (h.clone(), uuid.clone())));
 
     if let Err(e) = banned::write_sorted(&banned_path, entries) {
-        eprintln!(
+        out::eprint_stop(&format!(
             "ban: {}",
             msg::update_failed("banned list", e, Next::agent("checks the error and retries"))
-        );
+        ));
         return 1;
     }
 
@@ -182,14 +179,14 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
         })
         .collect();
     if let Err(e) = ledger::append(&ledger_path, &rows) {
-        eprintln!(
+        out::eprint_stop(&format!(
             "ban: {}",
             msg::update_failed("ledger", e, Next::agent("checks the error and retries"))
-        );
+        ));
         return 1;
     }
 
-    println!("ban: {}", msg::banned_added(new_hashes.len()));
+    out::print_events(&crate::actions::Outcome::of_rows(&rows, &crate::actions::event_names(&root)).events);
     0
 }
 
@@ -204,14 +201,19 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
 fn run_rebuild(banned_path: &std::path::Path, ledger_path: &std::path::Path) -> i32 {
     let led = ledger::read(ledger_path);
     let entries = banned::currently_banned(&led);
-    let n = entries.len();
+    // A list already equal to what the ledger says is not written again,
+    // and prints nothing (per "What does a command that writes print?",
+    // 069a6b4a A: one line per file written).
+    if std::fs::read_to_string(banned_path).ok() == Some(banned::sorted_content(&entries)) {
+        return 0;
+    }
     if let Err(e) = banned::write_sorted(banned_path, entries) {
-        eprintln!(
+        out::eprint_stop(&format!(
             "ban: {}",
             msg::update_failed("banned list", e, Next::agent("checks the error and retries"))
-        );
+        ));
         return 1;
     }
-    println!("ban: {}", msg::banned_rebuilt(n));
+    out::print_events(&[Event::FileWritten { path: banned::BAN_LIST.to_string() }]);
     0
 }

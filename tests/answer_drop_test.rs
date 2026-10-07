@@ -119,7 +119,7 @@ fn answer_removes_the_question_and_its_dependents_and_the_file_stays_approved() 
     // Four was asked with the others in the first run; nothing is left to ask.
     let asked = adr(&g.dir, &["ask", g.path.to_str().unwrap()], &[], "");
     assert!(asked.status.success(), "{}", stderr(&asked));
-    assert!(stdout(&asked).contains("nothing to ask"), "{}", stdout(&asked));
+    assert!(stdout(&asked).is_empty(), "{}", stdout(&asked));
 }
 
 // adr: 462e22c6-8b23-4061-9a2a-bbf8691fce60

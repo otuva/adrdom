@@ -13,8 +13,51 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::Path;
 use uuid::Uuid;
 
+/// What an owner act wrote: one event per ledger row it appended, in the
+/// order written (per "What does a command that writes print?", 069a6b4a
+/// A). The terminal prints each as one line; the page renders the same
+/// events.
 pub struct Outcome {
-    pub summary: String,
+    pub events: Vec<crate::out::Event>,
+    /// Findings on what the owner gave the act that stopped none of it
+    /// (a word given to unban that was not banned), each with its move:
+    /// printed apart from the events, on standard error.
+    pub input_findings: Vec<String>,
+}
+
+impl Outcome {
+    /// The events of `rows`, each named in words by `names` (`event_names`).
+    pub fn of_rows(rows: &[ledger::Row], names: &HashMap<String, String>) -> Outcome {
+        Outcome {
+            events: rows.iter().filter_map(|r| crate::out::Event::from_row(r, names)).collect(),
+            input_findings: Vec::new(),
+        }
+    }
+
+    /// The events as the terminal prints them, one line each, then the
+    /// findings on the input.
+    pub fn summary(&self) -> String {
+        self.events
+            .iter()
+            .map(|e| e.text())
+            .chain(self.input_findings.iter().cloned())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+}
+
+/// Every question heading and term name by identifier: what turns the
+/// identifiers of the rows an act wrote into words.
+pub fn event_names(root: &Path) -> HashMap<String, String> {
+    let mut names = crate::view::heading_texts(&record::load_all(root));
+    if let Some(tf) = state::load_terms(root) {
+        for t in tf.terms {
+            if let Some(id) = t.id.clone() {
+                names.insert(id, t.name.clone());
+            }
+        }
+    }
+    names
 }
 
 /// The missing/unreadable half of the terms.md gate, shared by every
@@ -531,12 +574,20 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
         });
     }
 
+    // Named before the write: a dropped question leaves the file with it.
+    let names = event_names(root);
+    let mut outcome = Outcome::of_rows(&rows, &names);
+    for e in &mut outcome.events {
+        if let crate::out::Event::Answered { heading, sentence, .. } = e {
+            *heading = heading_for_print.clone();
+            *sentence = sentence_for_print.clone();
+        }
+    }
+
     let letter_str = letter.to_string();
     finish_answer(root, id, version, &format!("{} again", letter_str), rf, idx, &letter_str, rows, &drop_ids)?;
 
-    Ok(Outcome {
-        summary: msg::answered_summary(&heading_for_print, &sentence_for_print),
-    })
+    Ok(outcome)
 }
 
 /// `adr answer <id>@<version> refuse` (per "Does the owner answer a
@@ -548,23 +599,15 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
 /// hash range, and a `refused` row is written (hash = the section hash
 /// before the insert, detail = heading). A `supersedes:` line on a refused
 /// question is never acted on (no target is checked, no `superseded` row
-/// is written); its presence only earns a printed note.
+/// is written).
 pub fn do_refuse(root: &Path, id: &str, version: &str) -> Result<Outcome, String> {
     // Same lookup, terms gate, already-refused/already-answered, hash,
     // version, and ledger-state checks as the letter path (`locate_asked`).
     // The section's own terms-line/pairing checks are not shared (5), so
     // the returned terms file has no further use here.
-    let Located { led, rf, idx, rel, cur_hash, .. } = locate_asked(root, id, version, None)?;
+    let Located { led, rf, idx, cur_hash, .. } = locate_asked(root, id, version, None)?;
 
-    let supersedes_val = rf.sections[idx].supersedes.clone();
     let heading_for_print = rf.sections[idx].heading_text.clone();
-    let mut note: Option<String> = None;
-    if !supersedes_val.is_empty() {
-        note = Some(format!(
-            "answer: {}",
-            msg::supersedes_ignored_on_refusal(&heading_for_print)
-        ));
-    }
 
     let row = ledger::Row {
         time: ledger::write_time(&led),
@@ -575,15 +618,10 @@ pub fn do_refuse(root: &Path, id: &str, version: &str) -> Result<Outcome, String
         version: crate::version::VERSION.to_string(),
     };
 
+    let outcome = Outcome::of_rows(std::slice::from_ref(&row), &HashMap::new());
     finish_answer(root, id, version, "refuse again", rf, idx, "refused", vec![row], &[])?;
 
-    let mut summary = format!("answer: {}", msg::refused_summary(&heading_for_print, &rel));
-    if let Some(n) = note {
-        summary.push('\n');
-        summary.push_str(&n);
-    }
-
-    Ok(Outcome { summary })
+    Ok(outcome)
 }
 
 pub fn do_approve(root: &Path, file: &Path) -> Result<Outcome, String> {
@@ -645,11 +683,7 @@ fn do_approve_removal(root: &Path, rel: &str, led: &Ledger, ledger_path: &Path) 
 
     let empty = empty_plan_hash();
     let mut rows: Vec<ledger::Row> = Vec::new();
-    let mut messages: Vec<String> = Vec::new();
-    for (event, done, same) in [
-        ("approved", msg::plan_approved(rel), msg::plan_unchanged(rel)),
-        ("context", msg::context_approved(rel), msg::context_unchanged(rel)),
-    ] {
+    for event in ["approved", "context"] {
         if led.latest_for_path(event, rel).map(|r| r.hash.as_str()) != Some(empty.as_str()) {
             rows.push(ledger::Row {
                 time: write_time.clone(),
@@ -659,13 +693,7 @@ fn do_approve_removal(root: &Path, rel: &str, led: &Ledger, ledger_path: &Path) 
                 detail: rel.to_string(),
                 version: crate::version::VERSION.to_string(),
             });
-            messages.push(done);
-        } else {
-            messages.push(same);
         }
-    }
-    for r in &withdrawn_rows {
-        messages.push(msg::withdrawn(&r.detail));
     }
     rows.extend(withdrawn_rows);
     ledger::append(ledger_path, &rows).map_err(|e| {
@@ -675,9 +703,7 @@ fn do_approve_removal(root: &Path, rel: &str, led: &Ledger, ledger_path: &Path) 
             Next::owner_runs(format!("adr approve {}", rel)),
         ))
     })?;
-    Ok(Outcome {
-        summary: messages.join("\n"),
-    })
+    Ok(Outcome::of_rows(&rows, &HashMap::new()))
 }
 
 /// `adrdom/blame/<stem>.md` (per "Does the owner approve a blame file?",
@@ -793,11 +819,10 @@ fn do_approve_blame(
     let new_hash = blame::file_hash(&work_lines);
     let unchanged = led.latest_for_path("blame", rel).map(|r| r.hash.as_str()) == Some(new_hash.as_str());
 
-    let summary = if unchanged && rewritten {
-        msg::blame_rows_rewritten(rel)
-    } else if unchanged {
-        msg::blame_unchanged(rel)
-    } else {
+    // No row, no line: a rewrite of the rows into the form approve writes
+    // over a hash the ledger already holds is no event.
+    let mut rows: Vec<ledger::Row> = Vec::new();
+    if !unchanged {
         let row = ledger::Row {
             time: ledger::write_time(led),
             event: "blame".to_string(),
@@ -806,17 +831,17 @@ fn do_approve_blame(
             detail: rel.to_string(),
             version: crate::version::VERSION.to_string(),
         };
-        ledger::append(ledger_path, &[row]).map_err(|e| {
+        ledger::append(ledger_path, std::slice::from_ref(&row)).map_err(|e| {
             msg::approve_prefixed(msg::update_failed(
                 "ledger",
                 e,
                 Next::owner_runs(format!("adr approve {}", rel)),
             ))
         })?;
-        msg::blame_approved(rel)
-    };
+        rows.push(row);
+    }
 
-    Ok(Outcome { summary })
+    Ok(Outcome::of_rows(&rows, &HashMap::new()))
 }
 
 
@@ -853,7 +878,7 @@ fn do_approve_terms(
         .collect();
 
     // Step 2: mint ids in memory only; nothing is written to disk yet.
-    let inserted = terms::mint_ids(&mut tf);
+    terms::mint_ids(&mut tf);
 
     // Steps 1 (shape, post-mint), 3 (cycles), 4 (dependents), 5 (banned):
     // every refusal, all at once.
@@ -876,51 +901,14 @@ fn do_approve_terms(
         return Err(msg);
     }
 
-    // Which terms changed since their latest `term` row (information only),
-    // and which need a new row. A term with no `term` row yet is new: it
-    // gets a row and prints nothing.
-    let term_hashes: Vec<(String, String, String)> = tf
+    // Which terms need a new `term` row: new ones, and those changed since
+    // their latest row.
+    let term_rows_due: Vec<(String, String, String)> = tf
         .terms
         .iter()
         .filter_map(|t| t.id.clone().map(|id| (id, t.name.clone(), terms::term_hash(t))))
+        .filter(|(id, _, hash)| led.latest_for_id("term", id).is_none_or(|r| r.hash != *hash))
         .collect();
-    let mut term_rows_due: Vec<(String, String, String)> = Vec::new();
-    let mut changed: Vec<(String, String)> = Vec::new();
-    for (id, name, hash) in &term_hashes {
-        match led.latest_for_id("term", id) {
-            Some(r) if r.hash == *hash => {}
-            Some(_) => {
-                changed.push((id.clone(), name.clone()));
-                term_rows_due.push((id.clone(), name.clone(), hash.clone()));
-            }
-            None => term_rows_due.push((id.clone(), name.clone(), hash.clone())),
-        }
-    }
-    // Computed here, before the file is rewritten, and printed only in the
-    // branch below that writes the `term` rows.
-    let changed_lines = {
-        let mut lines: Vec<String> = Vec::new();
-        if !changed.is_empty() {
-            let mut entries = state::dependent_entries(&records, led, &tf, true, false);
-            entries.extend(state::unsettled_entries(&records, led, &tf, &approved_plans));
-            for (id, name) in &changed {
-                let mut named_by: Vec<String> = Vec::new();
-                for e in &entries {
-                    if matches!(e.source, state::DependentSource::Term { .. }) {
-                        continue;
-                    }
-                    if e.pairs.iter().any(|(_, u)| u == id) {
-                        let label = e.source.label();
-                        if !named_by.contains(&label) {
-                            named_by.push(label);
-                        }
-                    }
-                }
-                lines.push(msg::term_definition_changed(name, &named_by));
-            }
-        }
-        lines
-    };
 
     // Step 6: write the file. `terms:` lines use the fresh pairs computed
     // above, one term at a time, in the same order as `tf.terms`.
@@ -954,10 +942,6 @@ fn do_approve_terms(
         ))
     })?;
 
-    let mut out: Vec<String> = Vec::new();
-    if inserted > 0 {
-        out.push(msg::terms_ids_filled(inserted));
-    }
     let write_time = ledger::write_time(led);
     let term_rows: Vec<ledger::Row> = term_rows_due
         .iter()
@@ -978,13 +962,11 @@ fn do_approve_terms(
         ))
     };
 
-    if state::terms_approved(led, &tf) {
-        // The file already matches the ledger's latest `terms` row:
-        // nothing is written. A ledger from before `term` rows existed
-        // gets them at its next real approval, with no change listed
-        // for that one edit (no migration code in the tool).
-        out.push(msg::terms_already_approved());
-    } else {
+    // The file already matching the ledger's latest `terms` row writes
+    // nothing. A ledger from before `term` rows existed gets them at its
+    // next real approval (no migration code in the tool).
+    let mut written: Vec<ledger::Row> = Vec::new();
+    if !state::terms_approved(led, &tf) {
         let row = ledger::Row {
             time: write_time.clone(),
             event: "terms".to_string(),
@@ -1006,13 +988,10 @@ fn do_approve_terms(
             });
         }
         ledger::append(ledger_path, &rows).map_err(append_failed)?;
-        out.extend(changed_lines);
-        out.push(msg::terms_approved_now());
+        written = rows;
     }
 
-    Ok(Outcome {
-        summary: out.join("\n"),
-    })
+    Ok(Outcome::of_rows(&written, &HashMap::new()))
 }
 
 
@@ -1319,7 +1298,6 @@ fn do_approve_record(
     })?;
 
     let mut rows: Vec<ledger::Row> = Vec::new();
-    let mut messages: Vec<String> = Vec::new();
 
     // One row per question (per "Does approve hash each question on its
     // own?"): its id and its own hash, written when that differs from the
@@ -1384,9 +1362,6 @@ fn do_approve_record(
             detail: rel.to_string(),
             version: crate::version::VERSION.to_string(),
         });
-        messages.push(msg::plan_approved(rel));
-    } else {
-        messages.push(msg::plan_unchanged(rel));
     }
 
     let context_changed = led
@@ -1402,9 +1377,6 @@ fn do_approve_record(
             detail: rel.to_string(),
             version: crate::version::VERSION.to_string(),
         });
-        messages.push(msg::context_approved(rel));
-    } else {
-        messages.push(msg::context_unchanged(rel));
     }
 
     ledger::append(ledger_path, &rows).map_err(|e| {
@@ -1425,34 +1397,10 @@ fn do_approve_record(
                 Next::owner_runs(format!("adr approve {}", rel)),
             ))
         })?;
-        for r in &withdrawn_rows {
-            messages.push(msg::withdrawn(&r.detail));
-        }
     }
+    rows.extend(withdrawn_rows);
 
-    // Printed last, after a successful record approval: the tiers this
-    // file now derives to, one `N (count)` per non-empty tier, live counts
-    // only (per "Does the tool cap the questions in a tier?"; matches
-    // `check`'s own "tiers: ..." note, computed the same way via
-    // `state::live_tiers`). `work_rf.tiers`
-    // is guaranteed `Some` here: a `derive_error` would already be among
-    // `refusals`, and the early return above would have fired.
-    let tiers: &Vec<usize> = work_rf
-        .tiers
-        .as_ref()
-        .expect("derive_error refuses above whenever tiers is None");
-    let replaced = depends::replaced_ids(&replaced_base, &work_rf, &cross_file_headings, led);
-    let live = state::live_tiers(led, &work_rf, tiers, &replaced);
-    let tiers_str = record::tier_sizes(&live)
-        .into_iter()
-        .map(|(t, c)| format!("{} ({})", t, c))
-        .collect::<Vec<_>>()
-        .join(" ");
-    messages.push(msg::tiers_note_approve(&tiers_str).trim_end().to_string());
-
-    Ok(Outcome {
-        summary: messages.join("\n"),
-    })
+    Ok(Outcome::of_rows(&rows, &crate::view::heading_texts(std::slice::from_ref(&work_rf))))
 }
 
 /// The final text one `depends:` entry rewrites to when `approve` rewrites
@@ -1524,19 +1472,17 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
     // A ban list may hold one hash on two lines (a merge, an edit by
     // hand): it is one word, removed once.
     removed.dedup();
-    // The words given that were not banned: said as a count beside what
-    // was removed, never dropped without a word.
+    // The words given that were not banned: a finding on the input, as a
+    // count, never dropped without a word.
     let not_banned = to_remove.len() - removed.len();
-    let not_banned_suffix = if not_banned == 0 {
-        String::new()
+    let input_findings: Vec<String> = if not_banned == 0 {
+        Vec::new()
     } else {
-        msg::not_banned_suffix(not_banned)
+        vec![msg::unban_not_banned(not_banned)]
     };
 
     if removed.is_empty() {
-        return Ok(Outcome {
-            summary: format!("{}{}", msg::nothing_to_remove(), not_banned_suffix),
-        });
+        return Ok(Outcome { events: Vec::new(), input_findings });
     }
 
     let remaining: Vec<(String, Option<String>)> = existing
@@ -1566,7 +1512,7 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
     ledger::append(&ledger_path, &rows)
         .map_err(|e| msg::update_failed("ledger", e, Next::owner_runs("adr unban")))?;
 
-    Ok(Outcome {
-        summary: format!("{}{}", msg::removed_entries(removed.len()), not_banned_suffix),
-    })
+    let mut outcome = Outcome::of_rows(&rows, &HashMap::new());
+    outcome.input_findings = input_findings;
+    Ok(outcome)
 }

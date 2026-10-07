@@ -227,8 +227,8 @@ fn a_second_install_leaves_the_gitattributes_file_unchanged() {
         "a second install must leave an already-current adrdom/.gitattributes byte-identical"
     );
     assert!(
-        stdout(&out2).contains("install: adrdom/.gitattributes: already up to date"),
-        "second install must report the file already up to date: {}",
+        !stdout(&out2).contains("adrdom/.gitattributes"),
+        "a second install writes no line for a file it did not write: {}",
         stdout(&out2)
     );
 }

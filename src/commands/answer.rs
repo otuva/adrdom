@@ -1,20 +1,18 @@
 use crate::actions;
 use crate::msg::{self, Actor};
+use crate::out;
 use crate::repo;
 
 pub fn run(id_arg: String, letter: String) -> i32 {
     if !repo::owner_authorized() {
-        eprintln!(
-            "{}",
-            msg::owner_refusal("answer", &format!("{} {}", id_arg, letter))
-        );
+        out::eprint_stop(&msg::owner_refusal("answer", &format!("{} {}", id_arg, letter)));
         return 2;
     }
 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("answer", &format!("{} {}", id_arg, letter), Actor::Owner));
+            out::eprint_stop(&msg::not_a_repo("answer", &format!("{} {}", id_arg, letter), Actor::Owner));
             return 1;
         }
     };
@@ -40,7 +38,7 @@ pub fn run(id_arg: String, letter: String) -> i32 {
                     .map(|s| (s.heading_text.clone(), crate::record::version_of(&rf.lines, s)))
             });
             let asked = found.as_ref().map(|(h, v)| (h.as_str(), v.as_str()));
-            eprintln!("answer: {}", msg::answer_missing_version(&id_arg, asked));
+            out::eprint_stop(&format!("answer: {}", msg::answer_missing_version(&id_arg, asked)));
             return 1;
         }
     };
@@ -55,21 +53,22 @@ pub fn run(id_arg: String, letter: String) -> i32 {
         match actions::parse_letter(&letter) {
             Some(c) => actions::do_answer(&root, id, version, c),
             None => {
-                eprintln!("answer: {}", msg::invalid_letter(&letter, &id_arg));
+                out::eprint_stop(&format!("answer: {}", msg::invalid_letter(&letter, &id_arg)));
                 return 1;
             }
         }
     };
 
+    // One line per ledger row written, or the findings that stopped it (per
+    // "What does a command that writes print?", 069a6b4a A).
     match outcome {
         Ok(outcome) => {
-            println!("{}", outcome.summary);
+            out::print_events(&outcome.events);
             0
         }
         Err(e) => {
-            for line in e.lines() {
-                eprintln!("answer: {}", line);
-            }
+            let stop: Vec<String> = e.lines().map(|l| format!("answer: {}", l)).collect();
+            out::eprint_stop(&stop.join("\n"));
             1
         }
     }

@@ -855,13 +855,6 @@ pub fn terms_line_names_retired_term(id: &str, heading: &str, name: &str) -> Str
     )
 }
 
-/// Printed after `adr answer <id>@<version> <letter>` succeeds: the heading
-/// and the decision sentence the owner picked. Not a refusal, so it never
-/// goes through `refuse()` -- there is no next move to name.
-pub fn answered_summary(heading: &str, sentence: &str) -> String {
-    format!("answered: {}\n  {}", heading, sentence)
-}
-
 /// Printed after `adr answer <id> refuse` succeeds: the heading is closed,
 /// the plan around it likely needs another pass.
 pub fn refused_summary(heading: &str, rel: &str) -> String {
@@ -1202,11 +1195,6 @@ pub fn no_id_line(rel: &str, heading: &str) -> String {
     )
 }
 
-/// `ask` prints the file's next moves (`view::next_moves`) under this line.
-pub fn nothing_to_ask(path: &str) -> String {
-    format!("nothing to ask in {}", path)
-}
-
 // --- what is next in a topic file (`view::next_moves`) ---------------------
 // One line per move, each opening with who makes it, in the words a
 // refusal uses. `show` prints them under the file, `ask` when it has
@@ -1371,22 +1359,6 @@ pub fn show_blame_copy_of(target: &str, state: Option<&str>) -> String {
 
 // --- ask: the lines of its summary ------------------------------------------
 
-pub fn ask_asked(heading: &str, tier: usize) -> String {
-    format!("asked: \"{}\" (tier {})", heading, tier)
-}
-
-pub fn ask_reasked(heading: &str, tier: usize) -> String {
-    format!("re-asked: \"{}\" (tier {})", heading, tier)
-}
-
-pub fn ask_conflict(heading: &str, a: &str, b: &str) -> String {
-    format!("conflict: \"{}\" answered {} and {}, both stood", heading, a, b)
-}
-
-pub fn ask_assumes(dependent: &str, set: &str) -> String {
-    format!("  stood on by: \"{}\" under {}", dependent, set)
-}
-
 // --- adr --version -----------------------------------------------------------
 
 /// What `adr --version` prints after the name. A build with the test-only
@@ -1402,14 +1374,6 @@ pub fn version_shown(version: &str, takes_owner_bypass: bool) -> String {
 }
 
 // --- install / uninstall: the closing line ---------------------------------
-
-pub fn installed_at(root: impl Display) -> String {
-    format!("adrdom installed at {}", root)
-}
-
-pub fn uninstalled_at(root: impl Display) -> String {
-    format!("adrdom uninstalled at {}", root)
-}
 
 // --- answer.rs / ban.rs / unban.rs / install.rs / uninstall.rs -------------
 
@@ -2317,19 +2281,6 @@ pub fn blame_approved(rel: &str) -> String {
     format!("approve: {}: blame approved", rel)
 }
 
-pub fn blame_unchanged(rel: &str) -> String {
-    format!("approve: {}: blame unchanged", rel)
-}
-
-/// The approval stands as it was, and the file on disk was written again:
-/// its rows were not in the form approve writes them in.
-pub fn blame_rows_rewritten(rel: &str) -> String {
-    format!(
-        "approve: {}: rows rewritten in the form approve writes; blame unchanged",
-        rel
-    )
-}
-
 // --- commands/check/blame.rs -----------------------------------------------
 // Shared by `check`'s `blame` category (per "Does check hold a blame file
 // to its origin?", 5fddeeb5 A; "Does an origin leave the repository while
@@ -2467,10 +2418,6 @@ pub fn tiers_note_check(rel: &str, sizes: &str) -> String {
     format!("tiers: {}: {}", rel, sizes)
 }
 
-pub fn tiers_note_approve(sizes: &str) -> String {
-    format!("approve: tiers: {}", sizes)
-}
-
 pub fn terms_unpaired(count: usize, list: &str) -> String {
     format!("terms: {} terms paired by nothing: {}", count, list)
 }
@@ -2481,10 +2428,6 @@ pub fn topic_file_unreadable(path: &str, e: impl Display) -> String {
         format!("parse: {}: cannot be read: {}", path, e),
         Next::agent("fixes the file so it can be read as text (e.g. its encoding)"),
     )
-}
-
-pub fn terms_ids_filled(n: usize) -> String {
-    format!("approve: adrdom/terms.md: {} missing id(s) filled", n)
 }
 
 /// A terms edit that adds, changes or removes more than one entry (per
@@ -2502,78 +2445,21 @@ pub fn terms_edit_too_wide(names: &[String], approved_before: bool) -> String {
     )
 }
 
-pub fn terms_already_approved() -> String {
-    "approve: adrdom/terms.md: already approved".to_string()
-}
-
-pub fn terms_approved_now() -> String {
-    "approve: adrdom/terms.md: approved".to_string()
-}
-
-/// One line per term whose entry changed at approve (its name, definition,
-/// aliases or retired flag: what the ledger row hashes): the live
-/// questions (`named_by`, already labelled) that name it.
-pub fn term_definition_changed(name: &str, named_by: &[String]) -> String {
-    if named_by.is_empty() {
-        format!("approve: term \"{}\" changed; named by no question", name)
-    } else {
-        format!(
-            "approve: term \"{}\" changed; named by {}",
-            name,
-            named_by.join(", ")
-        )
-    }
-}
-
 pub fn plan_approved(rel: &str) -> String {
     format!("approve: {}: plan approved", rel)
-}
-
-pub fn plan_unchanged(rel: &str) -> String {
-    format!("approve: {}: plan unchanged", rel)
 }
 
 pub fn context_approved(rel: &str) -> String {
     format!("approve: {}: prose approved", rel)
 }
 
-pub fn context_unchanged(rel: &str) -> String {
-    format!("approve: {}: prose unchanged", rel)
-}
-
-pub fn withdrawn(detail: &str) -> String {
-    format!("approve: withdrawn: {}", detail)
-}
-
-pub fn supersedes_ignored_on_refusal(heading: &str) -> String {
-    format!("{}: supersedes ignored on a refused question", heading)
-}
-
-pub fn nothing_to_remove() -> String {
-    "nothing to remove".to_string()
-}
-
-pub fn removed_entries(n: usize) -> String {
-    format!("removed {} entries", n)
-}
-
-/// Added to unban's line when `n` (never 0) of the words given were not
-/// banned. A count and never the words: a word given here may be a
+/// The finding on unban's input when `n` (never 0) of the words given were
+/// not banned. A count and never the words: a word given here may be a
 /// misspelling of a banned one.
-pub fn not_banned_suffix(n: usize) -> String {
-    format!("; {} of the words given were not banned", n)
-}
-
-pub fn no_new_entries() -> String {
-    "no new entries".to_string()
-}
-
-/// `ban` found nothing new to add and found the ban list different from
-/// what the ledger says is banned, so it wrote the list again.
-pub fn no_new_entries_list_rewritten(n: usize) -> String {
-    format!(
-        "no new entries; the ban list did not match the ledger and was written again with {} entries",
-        n
+pub fn unban_not_banned(n: usize) -> String {
+    refuse(
+        format!("unban: {} of the words given were not banned", n),
+        Next::owner_runs("adr unban"),
     )
 }
 
@@ -2583,155 +2469,6 @@ pub fn message_file_unreadable(path: &str, e: impl Display) -> String {
         format!("cannot read the commit message file {}: {}", path, e),
         Next::agent("passes a commit message file that can be read as text"),
     )
-}
-
-pub fn banned_added(n: usize) -> String {
-    format!("added {} entries", n)
-}
-
-/// Printed after `adr ban --rebuild` writes the ban list straight from the
-/// ledger (per "Does the tool rewrite the ban list from the ledger?"): `n`
-/// is the number of lines it wrote, in the same style `banned_added` and
-/// `removed_entries` already use for the plain `ban`/`unban` counts.
-pub fn banned_rebuilt(n: usize) -> String {
-    format!("rebuilt {} entries", n)
-}
-
-pub fn agents_md_created() -> String {
-    "install: AGENTS.md: created with the brief".to_string()
-}
-
-pub fn agents_md_up_to_date() -> String {
-    "install: AGENTS.md: brief already up to date".to_string()
-}
-
-pub fn agents_md_replaced() -> String {
-    "install: AGENTS.md: replaced the stale brief section".to_string()
-}
-
-pub fn agents_md_appended() -> String {
-    "install: AGENTS.md: appended the brief".to_string()
-}
-
-pub fn claude_md_created() -> String {
-    "install: CLAUDE.md: created with the AGENTS.md import".to_string()
-}
-
-pub fn claude_md_import_added() -> String {
-    "install: CLAUDE.md: added the AGENTS.md import".to_string()
-}
-
-/// `adr install` wrote a hook (`path`, e.g. `.githooks/pre-commit`) that
-/// was either missing or held stale content.
-pub fn hook_written(path: &str) -> String {
-    format!("install: {}: written", path)
-}
-
-/// `adr install` found a hook (`path`) already holding exactly what it
-/// writes, and left it untouched.
-pub fn hook_up_to_date(path: &str) -> String {
-    format!("install: {}: already up to date", path)
-}
-
-pub fn agents_md_removed_whole() -> String {
-    "uninstall: AGENTS.md: removed (held only the brief)".to_string()
-}
-
-pub fn agents_md_section_removed() -> String {
-    "uninstall: AGENTS.md: removed the brief section".to_string()
-}
-
-pub fn claude_md_deleted() -> String {
-    "uninstall: CLAUDE.md: deleted (held only the AGENTS.md import)".to_string()
-}
-
-pub fn claude_md_import_removed() -> String {
-    "uninstall: CLAUDE.md: removed the AGENTS.md import".to_string()
-}
-
-/// A hook that is there and is not what this build of install writes.
-pub fn hook_left(name: &str) -> String {
-    format!(
-        "uninstall: left .githooks/{}: it differs from what install writes",
-        name
-    )
-}
-
-pub fn hook_removed(name: &str) -> String {
-    format!("uninstall: removed .githooks/{}", name)
-}
-
-pub fn githooks_dir_removed() -> String {
-    "uninstall: removed empty .githooks".to_string()
-}
-
-pub fn hooks_path_unset() -> String {
-    "uninstall: unset core.hooksPath".to_string()
-}
-
-pub fn codex_rules_removed() -> String {
-    "uninstall: removed .codex/rules/adrdom.rules".to_string()
-}
-
-pub fn codex_rules_dir_removed() -> String {
-    "uninstall: removed empty .codex/rules".to_string()
-}
-
-pub fn codex_dir_removed() -> String {
-    "uninstall: removed empty .codex".to_string()
-}
-
-pub fn deny_entry_present(entry: &str) -> String {
-    format!(
-        "install: .claude/settings.json: deny entry {} already present",
-        entry
-    )
-}
-
-pub fn deny_entry_added(entry: &str) -> String {
-    format!("install: .claude/settings.json: added deny entry {}", entry)
-}
-
-pub fn deny_entry_removed(entry: &str) -> String {
-    format!(
-        "uninstall: .claude/settings.json: removed deny entry {}",
-        entry
-    )
-}
-
-pub fn settings_json_deleted() -> String {
-    "uninstall: .claude/settings.json: deleted (held only the deny entries install added)"
-        .to_string()
-}
-
-pub fn claude_dir_removed() -> String {
-    "uninstall: removed empty .claude".to_string()
-}
-
-pub fn codex_rules_up_to_date() -> String {
-    "install: .codex/rules/adrdom.rules: already up to date".to_string()
-}
-
-pub fn codex_rules_written() -> String {
-    "install: .codex/rules/adrdom.rules: written".to_string()
-}
-
-pub fn codex_trust_note() -> String {
-    "install: Codex enforces project rules only for a project marked trusted in the owner's Codex config."
-        .to_string()
-}
-
-/// `adr install` wrote `adrdom/.gitattributes` (Decision 7,
-/// db56a285-946f-48b1-b073-bb1e90192185) because it was either missing or
-/// held stale content.
-pub fn gitattributes_written() -> String {
-    "install: adrdom/.gitattributes: written".to_string()
-}
-
-/// `adr install` found `adrdom/.gitattributes` already holding exactly
-/// what it writes, and left it untouched.
-pub fn gitattributes_up_to_date() -> String {
-    "install: adrdom/.gitattributes: already up to date".to_string()
 }
 
 /// The first part of every retired-term move: the agent takes the flag off
@@ -2787,14 +2524,6 @@ pub fn gitignore_missing() -> String {
         "adrdom/.gitignore is missing".to_string(),
         Next::agent("runs: adr install"),
     )
-}
-
-pub fn gitignore_written() -> String {
-    "install: adrdom/.gitignore: written".to_string()
-}
-
-pub fn gitignore_up_to_date() -> String {
-    "install: adrdom/.gitignore: already up to date".to_string()
 }
 
 /// The embedding model is not on this machine and this build cannot fetch it.

@@ -58,10 +58,20 @@ Standard: plain words.
     )
 }
 
-// What `ask` prints after its first line ("ask: nothing to ask in <file>"):
-// the `next` lines, one per move.
-fn after_first_line(printed: &str) -> String {
-    printed.lines().skip(1).collect::<Vec<_>>().join("\n")
+// A second `ask` with nothing left to ask writes nothing and prints
+// nothing (per "What does a command that writes print?", 069a6b4a A); the
+// moves that remain are the ones `show` prints. Asserts both, and returns
+// what `show` printed for the file.
+fn nothing_to_ask_and_show(dir: &std::path::Path, record: &std::path::Path) -> String {
+    let again = adr(dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(again.status.success(), "{}", stderr(&again));
+    assert_eq!(stdout(&again), "", "{}", stdout(&again));
+    stdout(&adr(dir, &["show"], &[], ""))
+}
+
+// True when `shown` holds `mv` as one of its lines, indentation aside.
+fn names_move(shown: &str, mv: &str) -> bool {
+    shown.lines().any(|l| l.trim() == mv.trim())
 }
 
 // The plan change the `next` line asks for when Q2 stands on a refused
@@ -174,18 +184,15 @@ fn ask_asks_a_later_tier_candidate_while_the_lower_tier_is_open() {
     assert!(out.status.success(), "{}", stderr(&out));
     assert!(stderr(&out).is_empty(), "{}", stderr(&out));
     assert!(
-        stdout(&out).contains("asked: \"1.2 Does the widget's paint match its color?\" (tier 2)"),
+        stdout(&out).lines().any(|l| l == "asked: \"1.2 Does the widget's paint match its color?\""),
         "{}",
         stdout(&out)
     );
     assert_eq!(asked_row_count(&dir), 2, "Q1 and Q2 are both asked");
 
-    // A run with nothing left to ask names the owner's answer to Q1 and
+    // Nothing is left to ask; show names the owner's answer to Q1 and
     // leaves Q2 under `not yet`: `answer` takes Q1 first.
-    let again = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(again.status.success(), "{}", stderr(&again));
-    let printed = stdout(&again);
-    assert!(printed.starts_with("ask: nothing to ask in "), "{}", printed);
+    let printed = nothing_to_ask_and_show(&dir, &record);
     assert!(
         printed.contains(&format!(
             "owner runs: adr answer {}@{} <letter>  # \"1.1 What color is the widget?\"",
@@ -208,8 +215,7 @@ fn ask_asks_a_later_tier_candidate_while_the_lower_tier_is_open() {
 // adr: 7d47885f-3a45-45f9-a092-4314301f0d7b
 //
 // One run of ask on a file that holds three tiers asks all of its
-// questions: an `asked` row for each, and the tier of each in what it
-// prints.
+// questions: an `asked` row for each, and one line for each row.
 #[test]
 fn one_ask_run_asks_every_question_of_a_multi_tier_file() {
     let dir = init_repo();
@@ -226,8 +232,8 @@ fn one_ask_run_asks_every_question_of_a_multi_tier_file() {
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let printed = stdout(&out);
-    for (heading, tier) in [("Is alpha ready?", 1), ("Is beta ready?", 2), ("Is gamma ready?", 3)] {
-        assert!(printed.contains(&format!("asked: \"{}\" (tier {})", heading, tier)), "{}", printed);
+    for heading in ["Is alpha ready?", "Is beta ready?", "Is gamma ready?"] {
+        assert!(printed.lines().any(|l| l == format!("asked: \"{}\"", heading)), "{}", printed);
     }
     assert_eq!(asked_row_count(&dir), 3, "every question is asked in one run");
     let text = std::fs::read_to_string(&record).unwrap();
@@ -261,23 +267,25 @@ fn ask_asks_a_candidate_standing_on_a_refused_question_and_the_plan_change_works
     // tier), and `answer` refuses it until the plan changes.
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
-    assert!(stdout(&out).contains("asked: \"1.2 Does the widget's paint match its color?\" (tier 2)"), "{}", stdout(&out));
+    assert!(stdout(&out).lines().any(|l| l == "asked: \"1.2 Does the widget's paint match its color?\""), "{}", stdout(&out));
     assert_eq!(asked_row_count(&dir), 2);
 
     // What the owner would read next: the refused question, the plan
     // change, and Q2 under `not yet`.
-    let again = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert_eq!(
-        after_first_line(&stdout(&again)),
-        "  agent changes the plan: \"1.1 What color is the widget?\" is refused and holds the questions that come after it\n  not yet: \"1.2 Does the widget's paint match its color?\" is asked and waits for \"1.1 What color is the widget?\""
-    );
+    let shown = nothing_to_ask_and_show(&dir, &record);
+    for mv in [
+        "agent changes the plan: \"1.1 What color is the widget?\" is refused and holds the questions that come after it",
+        "not yet: \"1.2 Does the widget's paint match its color?\" is asked and waits for \"1.1 What color is the widget?\"",
+    ] {
+        assert!(names_move(&shown, mv), "{}\n{}", mv, shown);
+    }
 
     // The move it names works: Q2 no longer stands on Q1, the plan is
     // approved again, and Q2 asked at tier 1 is taken after the next ask.
     unhook_q2_from_the_refused_question(&dir, &record);
     let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out2.status.success(), "{}", stderr(&out2));
-    assert!(stdout(&out2).contains("re-asked: \"1.2 Does the widget's paint match its color?\" (tier 1)"), "{}", stdout(&out2));
+    assert!(stdout(&out2).lines().any(|l| l == "asked: \"1.2 Does the widget's paint match its color?\""), "{}", stdout(&out2));
     let q2_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[1].clone();
     assert!(adr_answer(&dir, &q2_id, "A").status.success());
 }
@@ -375,8 +383,7 @@ Standard: plain words.
         "{}",
         err
     );
-    let again = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    let next = after_first_line(&stdout(&again));
+    let next = nothing_to_ask_and_show(&dir, &record);
     assert!(next.contains("agent changes the plan: \"1.0 Is the widget on backorder?\" is refused"), "{}", next);
     assert!(
         next.contains("not yet: \"1.2 Does the widget's paint match its color?\" is asked and waits for \"1.0 Is the widget on backorder?\""),
@@ -507,29 +514,31 @@ Standard: plain words.
     std::fs::write(&record, &content2).unwrap();
     approve_record(&dir, "adrdom/decisions/example.md");
 
-    // Ask asks Q2 beside the others; a second run has nothing to ask and
-    // prints every open move: the owner's answer to Qx, the plan change for
-    // refused Q1, and Q2 under `not yet`.
+    // Ask asks Q2 beside the others; a second run has nothing to ask, and
+    // show names every open move: the owner's answer to Qx, the plan change
+    // for refused Q1, and Q2 under `not yet`.
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     assert_eq!(asked_row_count(&dir), 3, "Q2 is asked");
-    let again = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(again.status.success(), "{}", stderr(&again));
-    assert_eq!(
-        after_first_line(&stdout(&again)),
+    let shown = nothing_to_ask_and_show(&dir, &record);
+    for mv in [
         format!(
-            "  owner runs: adr answer {}@{} <letter>  # \"1.0 Is the widget in stock?\"\n  agent changes the plan: \"1.1 What color is the widget?\" is refused and holds the questions that come after it\n  not yet: \"1.2 Does the widget's paint match its color?\" is asked and waits for \"1.1 What color is the widget?\"",
+            "owner runs: adr answer {}@{} <letter>  # \"1.0 Is the widget in stock?\"",
             qx_id,
             current_version(&dir, &qx_id)
-        )
-    );
+        ),
+        "agent changes the plan: \"1.1 What color is the widget?\" is refused and holds the questions that come after it".to_string(),
+        "not yet: \"1.2 Does the widget's paint match its color?\" is asked and waits for \"1.1 What color is the widget?\"".to_string(),
+    ] {
+        assert!(names_move(&shown, &mv), "{}\n{}", mv, shown);
+    }
 
     // The move it names works: Q2 no longer stands on Q1, the plan is
     // approved again, and ask asks Q2 again (in tier 1, beside the open Qx).
     unhook_q2_from_the_refused_question(&dir, &record);
     let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out2.status.success(), "{}", stderr(&out2));
-    assert!(stdout(&out2).contains("re-asked: \"1.2 Does the widget's paint match its color?\" (tier 1)"), "{}", stdout(&out2));
+    assert!(stdout(&out2).lines().any(|l| l == "asked: \"1.2 Does the widget's paint match its color?\""), "{}", stdout(&out2));
     assert_eq!(asked_row_count(&dir), 4);
 }
 
@@ -556,7 +565,7 @@ fn answer_takes_a_question_in_the_order_it_stands_on() {
     assert!(stderr(&out).is_empty(), "{}", stderr(&out));
     assert_eq!(
         stdout(&out),
-        "asked: \"1.1 What color is the widget?\" (tier 1)\n  stood on by: \"1.2 Does the widget's paint match its color?\" under A\nasked: \"1.2 Does the widget's paint match its color?\" (tier 2)\n"
+        "asked: \"1.1 What color is the widget?\"\nassumes: \"1.2 Does the widget's paint match its color?\" stands on \"1.1 What color is the widget?\" under its answer set\nasked: \"1.2 Does the widget's paint match its color?\"\n"
     );
     assert_eq!(asked_row_count(&dir), 2, "both are asked in one run");
 
@@ -689,7 +698,7 @@ fn approve_refuses_a_set_naming_an_option_the_target_does_not_have() {
 // --- assumes rows and the tier print --------------------------------------
 
 #[test]
-fn ask_prints_the_tier_and_writes_an_assumes_row_per_dependent() {
+fn ask_prints_a_line_per_row_and_writes_an_assumes_row_per_dependent() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -703,16 +712,10 @@ fn ask_prints_the_tier_and_writes_an_assumes_row_per_dependent() {
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let printed = stdout(&out);
-    assert!(
-        printed.contains("asked: \"1.1 What color is the widget?\" (tier 1)"),
-        "{}",
-        printed
-    );
-    // The set is printed sorted, regardless of how it was written (=B|A).
-    assert!(
-        printed.contains("  stood on by: \"1.2 Does the widget's paint match its color?\" under A|B"),
-        "{}",
-        printed
+    // One line per row: each asked row and the assumes row.
+    assert_eq!(
+        printed,
+        "asked: \"1.1 What color is the widget?\"\nassumes: \"1.2 Does the widget's paint match its color?\" stands on \"1.1 What color is the widget?\" under its answer set\nasked: \"1.2 Does the widget's paint match its color?\"\n"
     );
 
     let after = std::fs::read_to_string(&record).unwrap();
@@ -836,8 +839,8 @@ fn ask_asks_every_tier_show_named_and_the_owners_answers_come_in_order() {
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "ask must take the move show named: {}", stderr(&out));
-    assert!(stdout(&out).contains("asked: \"Is alpha ready?\" (tier 1)"), "{}", stdout(&out));
-    assert!(stdout(&out).contains("asked: \"Is delta ready?\" (tier 2)"), "{}", stdout(&out));
+    assert!(stdout(&out).lines().any(|l| l == "asked: \"Is alpha ready?\""), "{}", stdout(&out));
+    assert!(stdout(&out).lines().any(|l| l == "asked: \"Is delta ready?\""), "{}", stdout(&out));
     assert_eq!(asked_row_count(&dir), 2, "alpha and delta are asked");
     assert!(stderr(&out).is_empty(), "{}", stderr(&out));
 
@@ -863,11 +866,9 @@ fn ask_asks_every_tier_show_named_and_the_owners_answers_come_in_order() {
         shown
     );
 
-    // A run with nothing to ask says so and names the same next lines.
-    let again = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(again.status.success(), "{}", stderr(&again));
-    assert!(stdout(&again).contains("nothing to ask in"), "{}", stdout(&again));
-    assert!(stdout(&again).contains("owner runs: adr answer"), "{}", stdout(&again));
+    // A run with nothing to ask prints nothing; show names the same moves.
+    let shown_again = nothing_to_ask_and_show(&dir, &record);
+    assert!(shown_again.contains("owner runs: adr answer"), "{}", shown_again);
     assert_eq!(asked_row_count(&dir), 2);
 
     // The owner's move; then show names the answer to delta.
