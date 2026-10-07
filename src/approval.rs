@@ -111,9 +111,13 @@ fn changed(old: Option<Vec<String>>, new: &[String]) -> Vec<DiffLine> {
 struct History {
     /// The repository and the `HEAD` everything below was read at.
     at: Option<(PathBuf, String)>,
-    commits: HashMap<String, Arc<Vec<String>>>,
-    texts: HashMap<(String, String), Arc<String>>,
-    topics: HashMap<(String, String), Arc<RecordFile>>,
+    /// Keyed by repository, `HEAD` and path, so a list read while another
+    /// thread moved the cache on can never stand for another repository.
+    commits: HashMap<(PathBuf, String, String), Arc<Vec<String>>>,
+    /// Keyed by repository, commit and path: what a commit holds never
+    /// changes, whatever `HEAD` is.
+    texts: HashMap<(PathBuf, String, String), Arc<String>>,
+    topics: HashMap<(PathBuf, String, String), Arc<RecordFile>>,
 }
 
 fn history() -> std::sync::MutexGuard<'static, History> {
@@ -125,13 +129,14 @@ fn history() -> std::sync::MutexGuard<'static, History> {
 /// drops what was kept of another repository or another `HEAD`.
 fn commits_of(root: &Path, rel: &str) -> Arc<Vec<String>> {
     let head = repo::git(root, &["rev-parse", "HEAD"]).unwrap_or_default().trim().to_string();
+    let key = (root.to_path_buf(), head.clone(), rel.to_string());
     let at = Some((root.to_path_buf(), head));
     {
         let mut h = history();
         if h.at != at {
             *h = History { at, ..Default::default() };
         }
-        if let Some(found) = h.commits.get(rel) {
+        if let Some(found) = h.commits.get(&key) {
             return found.clone();
         }
     }
@@ -139,14 +144,14 @@ fn commits_of(root: &Path, rel: &str) -> Arc<Vec<String>> {
         .map(|log| log.lines().filter(|l| !l.is_empty()).map(str::to_string).collect())
         .unwrap_or_default();
     let commits = Arc::new(commits);
-    history().commits.insert(rel.to_string(), commits.clone());
+    history().commits.insert(key, commits.clone());
     commits
 }
 
 /// The text of `rel` at `commit`, `None` where the commit deleted it or git
 /// could not read it.
 fn text_at(root: &Path, commit: &str, rel: &str) -> Option<Arc<String>> {
-    let key = (commit.to_string(), rel.to_string());
+    let key = (root.to_path_buf(), commit.to_string(), rel.to_string());
     if let Some(found) = history().texts.get(&key) {
         return Some(found.clone());
     }
@@ -157,7 +162,7 @@ fn text_at(root: &Path, commit: &str, rel: &str) -> Option<Arc<String>> {
 
 /// The text of `rel` at `commit` parsed as a topic file.
 fn topic_at(root: &Path, commit: &str, rel: &str) -> Option<Arc<RecordFile>> {
-    let key = (commit.to_string(), rel.to_string());
+    let key = (root.to_path_buf(), commit.to_string(), rel.to_string());
     if let Some(found) = history().topics.get(&key) {
         return Some(found.clone());
     }

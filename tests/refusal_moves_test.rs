@@ -413,14 +413,8 @@ fn outside_a_repository_every_command_names_the_step_that_clears_it() {
         let err = stderr(&out);
         let line = err.trim_end();
         assert!(line.contains("not inside a git repository; "), "{:?}: {}", args, err);
-        // ban and unban read their words on standard input: the move names
-        // that, so it can be run as printed.
-        let reads_words = (args[0] == "ban" && !args.contains(&"--rebuild")) || args[0] == "unban";
-        let command = if reads_words {
-            format!("adr {} with the words on its input", args.join(" "))
-        } else {
-            format!("adr {}", args.join(" "))
-        };
+        // The move is the command line as given, so it runs as printed.
+        let command = format!("adr {}", args.join(" "));
         assert!(line.ends_with(&format!("changes into a git repository and runs: {}", command)), "{:?}: {}", args, err);
         assert!(line.starts_with(&format!("{}: not inside", args[0])), "{:?}: {}", args, err);
         assert_one_clearing_move(line, &command);
@@ -431,15 +425,14 @@ fn outside_a_repository_every_command_names_the_step_that_clears_it() {
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 //
 // An owner command refused to an agent names the command line the owner
-// runs, as it can be run: serve with its port, unban with its words on its
-// input.
+// runs, as it can be run: serve with its port.
 #[test]
 fn an_owner_refusal_names_the_command_as_it_can_be_run() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     for (args, command) in [
         (vec!["serve", "--port", "8123"], "adr serve --port 8123"),
-        (vec!["unban"], "adr unban with the words on its input"),
+        (vec!["unban"], "adr unban"),
     ] {
         let out = adr(&dir, &args, &[], "");
         assert_eq!(out.status.code(), Some(2), "{:?}", args);
