@@ -62,7 +62,7 @@ pub fn run(file: PathBuf) -> i32 {
         Err(e) => {
             out::eprint(&[out::refusal(
                 "plan",
-                &msg::read_failed(&file.display().to_string(), &e, msg::topic_file_unread("plan", &rel, &e)),
+                &msg::read_failed(&rel, &e, msg::topic_file_unread("plan", &rel, &e)),
             )]);
             return 1;
         }
