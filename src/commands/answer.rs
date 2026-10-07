@@ -67,8 +67,7 @@ pub fn run(id_arg: String, letter: String) -> i32 {
             0
         }
         Err(e) => {
-            let stop: Vec<String> = e.lines().map(|l| format!("answer: {}", l)).collect();
-            out::eprint_stop(&stop.join("\n"));
+            out::eprint(&out::stop("answer", &e));
             1
         }
     }

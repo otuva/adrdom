@@ -154,20 +154,20 @@ pub fn text(line: &Line) -> String {
     }
 }
 
-/// The line for the page: the same words as `text`, each kind in an element
-/// of its own class.
+/// The line for the page: the words of `text`, the indent left to the page,
+/// each kind in an element of its own class.
 pub fn html(line: &Line) -> String {
     match line {
         Line::Record { depth, text } => {
             format!("<p class=\"record depth-{}\">{}</p>", depth, esc(text))
         }
         Line::Status { subject, status } => format!(
-            "<p class=\"status\"><span class=\"status-name\">{}</span> {}</p>",
+            "<p class=\"status\"><span class=\"status-name\">[{}]</span> {}</p>",
             esc(&status.name()),
             esc(subject)
         ),
         Line::Finding(f) => format!(
-            "<p class=\"finding\"><span class=\"rule\">{}</span> {}</p>",
+            "<p class=\"finding\"><span class=\"rule\">{}:</span> {}</p>",
             esc(f.rule),
             esc(&f.message)
         ),
@@ -195,6 +195,14 @@ pub fn refusal(cmd: &'static str, text: &str) -> Line {
     let prefix = format!("{}: ", cmd);
     let message = text.strip_prefix(&prefix).unwrap_or(text);
     Line::Finding(Finding::new(cmd, message.to_string()))
+}
+
+/// What stopped the command `cmd`, one finding per line of `stop`, the
+/// command's name leading each once: what the terminal prints on standard
+/// error and the page shows in its banner, the same lines (per "Does the ui
+/// show what the terminal prints?", 7857d633 A).
+pub fn stop(cmd: &'static str, stop: &str) -> Vec<Line> {
+    stop.lines().filter(|l| !l.trim().is_empty()).map(|l| refusal(cmd, l)).collect()
 }
 
 /// The exit code of a command whose reader went away, as a shell reports a
@@ -294,5 +302,25 @@ mod tests {
             }
         }
         assert_eq!(text(&lines[1]), "[asked @ab12] Does it?");
+        // The page's text of each line is the terminal's line, its indent
+        // left to the page.
+        for l in &lines {
+            assert_eq!(page_text(&html(l)), text(l).trim_start(), "{:?}", l);
+        }
+    }
+
+    /// The text of a rendered line: tags dropped, entities read back.
+    fn page_text(html: &str) -> String {
+        let mut out = String::new();
+        let mut in_tag = false;
+        for c in html.chars() {
+            match c {
+                '<' => in_tag = true,
+                '>' => in_tag = false,
+                c if !in_tag => out.push(c),
+                _ => {}
+            }
+        }
+        out.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&amp;", "&")
     }
 }
