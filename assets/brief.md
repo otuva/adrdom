@@ -18,7 +18,9 @@ path, and some agents load the file from it at the start of a session:
 
 Run `adr show`. It prints every current decision, its heading and under it
 the answer the owner picked, and after the decisions of each topic file its
-moves: one line for each move, opening with who makes it.
+findings and its moves. A finding opens with the rule it breaks and ends
+with the move that clears it; a move is one line, opening with who makes
+it.
 
 - A line that opens with `agent` is yours. A line with `builds` in it is for
   an agent that did not write the question. Make these moves in the order
@@ -33,10 +35,11 @@ moves: one line for each move, opening with who makes it.
 terms file, a blame file. For a topic file it prints every question, the
 lines it carries, and the body of a question that waits for the owner's
 answer; what the file holds beyond its latest approval is printed marked,
-`+` for a line added and `-` for a line gone; then the moves of the file.
-`adr show --stood-on <file>` also prints what stands on each question and
-what took the place of one that was replaced. Each question opens with
-where it stands, in brackets:
+`+` for a line added and `-` for a line gone, and a question new or struck
+as a whole carries the mark on its own line too; then the findings and the
+moves of the file. `adr show --dependents <file>` also prints what stands
+on each question or term entry and what took the place of a question that
+was replaced. Each question opens with where it stands, in brackets:
 
 - `[no body]`: a heading of the plan, its body not written.
 - `[not asked]`: the body is written, `adr ask` has not run on it.

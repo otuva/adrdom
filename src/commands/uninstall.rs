@@ -8,10 +8,10 @@ use crate::repo;
 use std::fs;
 use std::path::Path;
 
-/// The owner's next move on any I/O failure while uninstalling: fix the
-/// underlying problem, then run uninstall again.
+/// The move on any I/O failure while uninstalling: the agent fixes what the
+/// error names, then the owner runs uninstall again.
 fn retry() -> Next {
-    Next::owner_runs("adr uninstall")
+    Next::agent("fixes what the error names").and_owner_runs("adr uninstall")
 }
 
 /// The event of the file at `rel` edited in place.
@@ -62,9 +62,7 @@ fn remove_all(root: &Path, events: &mut Vec<Event>) -> Result<(), String> {
     events.extend(remove_agents_md_section(root).map_err(|e| msg::update_failed("AGENTS.md", e, retry()))?);
     events.extend(remove_claude_md_import(root).map_err(|e| msg::update_failed("CLAUDE.md", e, retry()))?);
     remove_hooks(root, events)?;
-    events.extend(
-        remove_settings_deny(root).map_err(|e| msg::update_failed(".claude/settings.json", e, retry()))?,
-    );
+    events.extend(remove_settings_deny(root)?);
     remove_codex_rules(root, events)
 }
 
@@ -222,19 +220,24 @@ fn remove_codex_rules(root: &Path, events: &mut Vec<Event>) -> Result<(), String
 /// `permissions.deny`, leaving every other key and entry untouched. Deletes
 /// the file when nothing but what install wrote remains (an empty
 /// `permissions.deny` and no other key anywhere), then removes `.claude`
-/// once that leaves it empty. Does nothing when the file doesn't exist.
+/// once that leaves it empty. Does nothing when the file doesn't exist. A
+/// failure is the whole refusal, its move named once.
 fn remove_settings_deny(root: &Path) -> Result<Vec<Event>, String> {
+    const REL: &str = ".claude/settings.json";
+    let failed = |e: String| msg::update_failed(REL, e, retry());
     let dir = root.join(".claude");
     let path = dir.join("settings.json");
     if !path.exists() {
         return Ok(Vec::new());
     }
-    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let content = fs::read_to_string(&path).map_err(|e| failed(e.to_string()))?;
     if content.trim().is_empty() {
         return Ok(Vec::new());
     }
     let mut value: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| msg::parse_failed(&path.display().to_string(), e, retry()))?;
+        .map_err(|e| {
+            msg::parse_failed(REL, e, Next::agent(format!("fixes {} so it parses as JSON", REL)).and_owner_runs("adr uninstall"))
+        })?;
 
     let mut any_removed = false;
     if let Some(deny) = value
@@ -254,19 +257,19 @@ fn remove_settings_deny(root: &Path) -> Result<Vec<Event>, String> {
     }
 
     if settings_holds_only_deny(&value) {
-        fs::remove_file(&path).map_err(|e| e.to_string())?;
-        let mut events = vec![removed(".claude/settings.json")];
-        if remove_dir_when_empty(&dir).map_err(|e| format!("{}: {}", dir.display(), e))? {
+        fs::remove_file(&path).map_err(|e| failed(e.to_string()))?;
+        let mut events = vec![removed(REL)];
+        if remove_dir_when_empty(&dir).map_err(|e| failed(format!("{}: {}", dir.display(), e)))? {
             events.push(removed(".claude"));
         }
         return Ok(events);
     }
 
-    let mut pretty = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
+    let mut pretty = serde_json::to_string_pretty(&value).map_err(|e| failed(e.to_string()))?;
     pretty.push('\n');
-    fs::write(&path, pretty).map_err(|e| e.to_string())?;
+    fs::write(&path, pretty).map_err(|e| failed(e.to_string()))?;
 
-    Ok(vec![written(".claude/settings.json")])
+    Ok(vec![written(REL)])
 }
 
 /// True when `value` holds nothing but the shape install writes: a top

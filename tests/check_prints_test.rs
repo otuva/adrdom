@@ -270,3 +270,33 @@ fn check_prints_every_finding_on_standard_output_whatever_its_exit() {
         assert!(!stderr(&stop).is_empty(), "the stop is on standard error");
     }
 }
+
+#[test]
+fn a_commit_prints_each_finding_once_and_the_message_hook_reads_the_message_alone() {
+    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
+    // The pre-commit hook judges the staged files; the commit-msg hook reads
+    // the message alone, for banned words (per "What does the ban scan
+    // read?"), so an untested decision is named once a commit.
+    let dir = repo();
+    let rec = write_record(&dir, REL, &format!("# Gate\n\n{}", q("Does the widget hold?", "the widget breaks.")));
+    approve_record(&dir, REL);
+    assert!(adr(&dir, &["ask", rec.to_str().unwrap()], &[], "").status.success());
+    let id = extract_ids(&std::fs::read_to_string(&rec).unwrap()).remove(0);
+    assert!(adr_answer(&dir, &id, "A").status.success());
+    run_git(&dir, &["add", "-A"]);
+    let out = run_git(&dir, &["commit", "-q", "-m", "docs: answer the gate"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    let said = stdout(&out) + &stderr(&out);
+    assert_eq!(said.matches(&format!("adr: {}\" in a test", id)).count(), 1, "{}", said);
+
+    // A banned word in the message still stops the commit.
+    let ban = adr(&dir, &["ban"], &[], "zorblax\n");
+    assert!(ban.status.success(), "{}", stderr(&ban));
+    write_test_comment(&dir, &id);
+    run_git(&dir, &["add", "-A"]);
+    let out = run_git(&dir, &["commit", "-q", "-m", "chore: zorblax"]);
+    assert!(!out.status.success(), "a banned word in the message stops the commit");
+    let said = stdout(&out) + &stderr(&out);
+    assert!(said.contains("banned word"), "{}", said);
+    assert!(!said.to_lowercase().contains("zorblax"), "the word itself is never printed: {}", said);
+}

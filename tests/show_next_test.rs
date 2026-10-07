@@ -56,7 +56,7 @@ fn next(dir: &Path) -> Vec<String> {
 fn moves_in(shown: &str) -> Vec<String> {
     shown
         .lines()
-        .filter(|l| !l.starts_with(' ') && !l.starts_with("# ") && !l.starts_with('['))
+        .filter(|l| !l.starts_with(' ') && !l.starts_with("# ") && !l.starts_with(['[', '+', '-']))
         .map(str::to_string)
         .collect()
 }
@@ -79,6 +79,20 @@ fn plan_for() -> String {
 fn lines_for(headings: &[&str]) -> String {
     let names: Vec<String> = headings.iter().map(|h| format!("\"{}\"", h)).collect();
     format!("agent writes lines for {}", names.join(", "))
+}
+
+/// Asserts `lines` are the findings of one planning step: one or more per
+/// heading of `headings`, each a `plan:` finding about its heading that
+/// ends with the move `mv` names for it.
+fn assert_each_names(lines: &[String], headings: &[&str], mv: impl Fn(&str) -> String) {
+    assert!(!lines.is_empty(), "no finding");
+    for l in lines {
+        assert!(l.starts_with(&format!("plan: {}: ", REL)), "{}", l);
+        assert!(headings.iter().any(|h| l.ends_with(&format!("; {}", mv(h)))), "{}", l);
+    }
+    for h in headings {
+        assert!(lines.iter().any(|l| l.contains(&format!("\"{}\"", h))), "no finding for {}: {:?}", h, lines);
+    }
 }
 
 fn answer_for(dir: &Path, id: &str, heading: &str) -> String {
@@ -112,9 +126,11 @@ fn show_names_the_next_move_at_every_step() {
     // A plan that waits for its approval follows the planning steps: the
     // agent plans it, writes the lines of what it read, and only then does
     // the owner approve.
-    assert_eq!(next(&dir), vec![plan_for()]);
+    // Each step's findings carry the step's move (per "Does a command
+    // compute a move of its own?", aac5c313 A): one per question.
+    assert_each_names(&next(&dir), &[ONE, TWO, THREE], |_| plan_for());
     assert!(adr(&dir, &["plan", p], &[], "").status.success());
-    assert_eq!(next(&dir), vec![lines_for(&[ONE, TWO, THREE])]);
+    assert_each_names(&next(&dir), &[ONE, TWO, THREE], |h| lines_for(&[h]));
     plan_record(&dir, REL);
     assert_eq!(next(&dir), vec![format!("owner runs: adr approve {}", REL)]);
 
@@ -324,7 +340,14 @@ agent finds a question among the ones named that assumes the answer of another o
 or moves it to another file when none does",
         REL
     );
-    assert_eq!(next(&dir), vec![format!("agent clears: {}", refusal)]);
+    let five = "Is the widget gate five hold?";
+    assert_eq!(
+        next(&dir),
+        vec![
+            format!("plan: {}", refusal),
+            format!("plan: {}: \"{}\" has no reader rows for its heading; {}", REL, five, plan_for()),
+        ]
+    );
 
     let out = adr(&dir, &["check"], &[], "");
     // The edited file awaits approval again: check prints the refusal as a
@@ -380,7 +403,7 @@ fn show_names_what_replaced_a_superseded_question() {
 
     // What replaced a superseded question is computed from the records:
     // it comes under its flag.
-    let shown = stdout(&adr(&dir, &["show", "--all", "--stood-on"], &[], ""));
+    let shown = stdout(&adr(&dir, &["show", "--all", "--dependents"], &[], ""));
     let expected = format!(
         "[superseded] {one}\n  depends: widget\n  replaced by: {two}\n\
 [answered A] {two}\n  depends: widget\n  supersedes: {one}\n",

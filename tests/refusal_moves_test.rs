@@ -246,10 +246,10 @@ fn a_refusal_names_the_question_beside_its_identifier() {
 
     // Under alpha, show names under its flag the question of the other file
     // that stands on it: what would lose its ground with alpha.
-    let shown = stdout(&adr(&dir, &["show", "--all", "--stood-on"], &[], ""));
+    let shown = stdout(&adr(&dir, &["show", "--all", "--dependents"], &[], ""));
     assert!(
         shown.contains(&format!(
-            "[answered A] {}\n  depends: widget\n  stood on by: {} ({})\n",
+            "[answered A] {}\n  depends: widget\n  dependents: {} ({})\n",
             ALPHA, BETA, B
         )),
         "{}",
@@ -328,4 +328,74 @@ fn show_ends_without_a_word_when_its_reader_goes_away() {
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(err.is_empty(), "{}", err);
     assert_eq!(out.status.code(), Some(141), "{:?}", out.status);
+}
+
+/// The clauses of a refusal's move, split at `, ` and `; `: no clause may
+/// come twice, and none may be the command that just failed by itself.
+fn assert_one_clearing_move(line: &str, failed: &str) {
+    let (_, mv) = line.split_once("; ").unwrap_or_else(|| panic!("a refusal with no move: {}", line));
+    let clauses: Vec<&str> = mv.split(['\n']).flat_map(|l| l.split("; ")).collect();
+    for (i, c) in clauses.iter().enumerate() {
+        assert!(!clauses[..i].contains(c), "a clause named twice: {}", line);
+    }
+    assert_ne!(mv.trim(), format!("owner runs: {}", failed), "the move is the failed command: {}", line);
+    assert_ne!(mv.trim(), format!("agent runs: {}", failed), "the move is the failed command: {}", line);
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// A settings file install cannot read names the fix once, in install's
+// refusal and in check's finding alike; uninstall names the fix and its own
+// run once.
+#[test]
+fn a_settings_file_that_does_not_parse_names_its_fix_once() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    std::fs::write(dir.join(".claude/settings.json"), "{ not json").unwrap();
+
+    let out = adr(&dir, &["install", "--claude"], &[], "");
+    assert!(!out.status.success());
+    let err = stderr(&out);
+    let fix = "agent fixes .claude/settings.json so it parses as JSON, then runs: adr install --claude";
+    assert!(err.contains(fix), "{}", err);
+    assert_eq!(err.matches("agent ").count(), 1, "{}", err);
+    assert_one_clearing_move(err.trim_end(), "adr install --claude");
+
+    let check = stdout(&adr(&dir, &["check"], &[], ""));
+    let line = check.lines().find(|l| l.contains("settings.json")).unwrap_or_else(|| panic!("{}", check));
+    assert!(line.ends_with(fix), "check names another move: {}", line);
+
+    let out = adr_owner(&dir, &["uninstall"], "");
+    assert!(!out.status.success());
+    let err = stderr(&out);
+    assert!(err.contains("agent fixes .claude/settings.json so it parses as JSON, owner runs: adr uninstall"), "{}", err);
+    assert_eq!(err.matches("owner runs: adr uninstall").count(), 1, "{}", err);
+    assert_one_clearing_move(err.trim_end(), "adr uninstall");
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// Outside a git repository every command names the step that clears it,
+// changing into one, ahead of the command, and nothing twice.
+#[test]
+fn outside_a_repository_every_command_names_the_step_that_clears_it() {
+    let outside = std::env::temp_dir().join(format!("adr-outside-moves-{}", std::process::id()));
+    std::fs::create_dir_all(&outside).unwrap();
+    for (args, owner) in [
+        (vec!["approve", "x.md"], true),
+        (vec!["answer", "id@abcd1234", "A"], true),
+        (vec!["unban"], true),
+        (vec!["uninstall"], true),
+        (vec!["show"], false),
+        (vec!["check"], false),
+        (vec!["ask", "x.md"], false),
+    ] {
+        let out = if owner { adr_owner(&outside, &args, "") } else { adr(&outside, &args, &[], "") };
+        assert!(!out.status.success(), "{:?}", args);
+        let err = stderr(&out);
+        assert!(err.contains("not inside a git repository; "), "{:?}: {}", args, err);
+        assert!(err.contains("changes into a git repository and runs: adr "), "{:?}: {}", args, err);
+        assert_one_clearing_move(err.trim_end(), &format!("adr {}", args.join(" ")));
+    }
+    std::fs::remove_dir_all(&outside).unwrap();
 }

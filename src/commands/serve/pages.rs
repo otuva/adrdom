@@ -44,19 +44,30 @@ pub(super) fn overview(root: &Path, last: &[Line], token: &str) -> String {
     let mut body = banner(last);
 
     body.push_str("<section class=\"listing\">\n");
-    for line in show::summary(&r) {
-        if let Some(path) = approve_path(&line) {
+    let summary = show::summary(&r);
+    for line in &summary {
+        if let Some(path) = approve_path(line) {
             if let Ok(lines) = show::file_form(&r, &path, Views::default()) {
-                let change: Vec<Line> = lines.into_iter().filter(|l| !matches!(l, Line::Move(_))).collect();
+                let change: Vec<Line> =
+                    lines.into_iter().filter(|l| !matches!(l, Line::Move(_) | Line::Finding(_))).collect();
                 body.push_str(&format!("<div class=\"change\">\n{}</div>\n", plain(&change)));
             }
         }
-        body.push_str(&with_form(&line, &r, token));
+        body.push_str(&with_form(line, &r, token));
     }
     body.push_str("</section>\n");
 
+    // What `adr check` prints beyond the findings the listing above holds:
+    // a finding is shown once on the page.
+    let shown: Vec<String> = summary.iter().filter(|l| matches!(l, Line::Finding(_))).map(out::text).collect();
     let report = crate::commands::check::collect_with_tests(root, &r.tests);
-    let findings: Vec<Line> = report.failures.into_iter().chain(report.notes).map(Line::Finding).collect();
+    let findings: Vec<Line> = report
+        .failures
+        .into_iter()
+        .chain(report.notes)
+        .map(Line::Finding)
+        .filter(|l| !shown.contains(&out::text(l)))
+        .collect();
     if !findings.is_empty() {
         body.push_str(&format!("<section class=\"findings\">\n{}</section>\n", plain(&findings)));
     }
@@ -84,7 +95,7 @@ pub(super) fn questions(root: &Path, last: &[Line], token: &str) -> String {
             continue;
         }
         let Ok(lines) = show::file_form(&r, &rf.rel, Views::default()) else { continue };
-        let (head, blocks, moves) = split(lines);
+        let (head, blocks, findings, moves) = split(lines);
         body.push_str("<article class=\"file\">\n");
         body.push_str(&plain(&head));
         let mut placed = vec![false; moves.len()];
@@ -99,6 +110,7 @@ pub(super) fn questions(root: &Path, last: &[Line], token: &str) -> String {
             }
             body.push_str("</div>\n");
         }
+        body.push_str(&plain(&findings));
         for (m, _) in moves.iter().zip(&placed).filter(|(_, p)| !**p) {
             body.push_str(&with_form(&Line::Move(m.clone()), &r, token));
         }
@@ -180,14 +192,16 @@ fn answer_form(r: &Records, id: &str, version: &str, token: &str) -> String {
 
 /// The file form cut into what comes before the first question, one block
 /// per status line from there on (a question, or a question struck), and
-/// the moves at its end.
-fn split(lines: Vec<Line>) -> (Vec<Line>, Vec<Vec<Line>>, Vec<Move>) {
+/// the findings and the moves at its end.
+fn split(lines: Vec<Line>) -> (Vec<Line>, Vec<Vec<Line>>, Vec<Line>, Vec<Move>) {
     let mut head = Vec::new();
     let mut blocks: Vec<Vec<Line>> = Vec::new();
+    let mut findings = Vec::new();
     let mut moves = Vec::new();
     for l in lines {
         match l {
             Line::Move(m) => moves.push(m),
+            f @ Line::Finding(_) => findings.push(f),
             Line::Status { status: Status::Question { .. }, .. } => blocks.push(vec![l]),
             Line::Status { .. } if !blocks.is_empty() => blocks.push(vec![l]),
             l => match blocks.last_mut() {
@@ -196,7 +210,7 @@ fn split(lines: Vec<Line>) -> (Vec<Line>, Vec<Vec<Line>>, Vec<Move>) {
             },
         }
     }
-    (head, blocks, moves)
+    (head, blocks, findings, moves)
 }
 
 fn is_asked(line: &Line) -> bool {

@@ -6,6 +6,7 @@
 //! a command that writes nothing print?", 848e1b76 A); a command that writes
 //! prints one event per row or file it wrote, or the finding that stopped it
 //! (per "What does a command that writes print?", 069a6b4a A).
+use crate::approval::Side;
 use crate::ledger::Row;
 use crate::moves::Move;
 use crate::rules::Finding;
@@ -134,8 +135,12 @@ pub enum Line {
     /// Text the command read from the records, at a depth under what holds
     /// it (a decision's heading at 1, its picked option at 2).
     Record { depth: usize, text: String },
-    /// A thing in the records and its status.
-    Status { subject: String, status: Status },
+    /// A thing in the records and its status; `mark` is the side of a
+    /// change beyond its latest approval the thing is on as a whole: a thing
+    /// new since that approval (`Added`) or struck from it (`Removed`), the
+    /// marks of a diff (per "Does show print what a file holds beyond its
+    /// latest approval?", bceceda8 A).
+    Status { subject: String, status: Status, mark: Option<Side> },
     Finding(Finding),
     Move(Move),
     Event(Event),
@@ -143,12 +148,17 @@ pub enum Line {
 
 const INDENT: &str = "  ";
 
+/// A report as lines: each finding, then each move.
+pub fn report(r: &crate::moves::Report) -> Vec<Line> {
+    r.findings.iter().cloned().map(Line::Finding).chain(r.moves.iter().cloned().map(Line::Move)).collect()
+}
+
 /// The line for the terminal.
 pub fn text(line: &Line) -> String {
     match line {
         Line::Record { depth, text } => format!("{}{}", INDENT.repeat(*depth), text),
-        Line::Status { subject, status } => format!("[{}] {}", status.name(), subject),
-        Line::Finding(f) => format!("{}: {}", f.rule, f.message),
+        Line::Status { subject, status, mark } => format!("{}[{}] {}", mark_of(*mark), status.name(), subject),
+        Line::Finding(f) => f.text(),
         Line::Move(m) => m.text(),
         Line::Event(e) => e.text(),
     }
@@ -161,8 +171,9 @@ pub fn html(line: &Line) -> String {
         Line::Record { depth, text } => {
             format!("<p class=\"record depth-{}\">{}</p>", depth, esc(text))
         }
-        Line::Status { subject, status } => format!(
-            "<p class=\"status\"><span class=\"status-name\">[{}]</span> {}</p>",
+        Line::Status { subject, status, mark } => format!(
+            "<p class=\"status\">{}<span class=\"status-name\">[{}]</span> {}</p>",
+            esc(mark_of(*mark)),
             esc(&status.name()),
             esc(subject)
         ),
@@ -173,6 +184,17 @@ pub fn html(line: &Line) -> String {
         ),
         Line::Move(m) => format!("<p class=\"move {}\">{}</p>", mover_class(m), esc(&m.text())),
         Line::Event(e) => format!("<p class=\"event\">{}</p>", esc(&e.text())),
+    }
+}
+
+/// The mark a status line leads with: `+ ` or `- `, the marks of the change
+/// lines under it; nothing for a thing approved as it stands, or changed in
+/// part (its lines carry the marks).
+fn mark_of(mark: Option<Side>) -> &'static str {
+    match mark {
+        Some(Side::Added) => "+ ",
+        Some(Side::Removed) => "- ",
+        Some(Side::Both) | None => "",
     }
 }
 
@@ -299,6 +321,7 @@ mod tests {
             Line::Status {
                 subject: "Does it?".to_string(),
                 status: Status::Question { status: QuestionStatus::Asked, letter: None, version: Some("ab12".into()) },
+                mark: Some(Side::Added),
             },
             Line::Finding(Finding::new("plan", "x.md: a <fault>; agent fixes it".to_string())),
             Line::Move(Move::new(MoveKind::Approve { path: "x.md".to_string() })),
@@ -312,7 +335,7 @@ mod tests {
                 assert!(page.contains(w), "{:?} lacks {:?}", page, w);
             }
         }
-        assert_eq!(text(&lines[1]), "[asked @ab12] Does it?");
+        assert_eq!(text(&lines[1]), "+ [asked @ab12] Does it?");
         // The page's text of each line is the terminal's line, its indent
         // left to the page.
         for l in &lines {

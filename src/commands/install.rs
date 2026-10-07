@@ -6,10 +6,22 @@ use crate::repo;
 use std::fs;
 use std::path::Path;
 
-/// The agent's next move on any I/O failure while installing: fix the
-/// underlying problem, then run install again.
-fn retry() -> Next {
-    Next::agent("checks the error and retries")
+/// The agent's next move on any I/O failure while installing: fix what the
+/// error names, then run `command`, the install that failed, again.
+fn retry(command: &str) -> Next {
+    Next::agent(format!("fixes what the error names, then runs: {}", command))
+}
+
+/// The install command as it was given, flags and all.
+fn install_command(claude: bool, codex: bool) -> String {
+    let mut c = String::from("adr install");
+    if claude {
+        c.push_str(" --claude");
+    }
+    if codex {
+        c.push_str(" --codex");
+    }
+    c
 }
 
 /// The agent brief, final at `assets/brief.md`. `adr install` writes it
@@ -95,46 +107,47 @@ pub fn run(claude: bool, codex: bool) -> i32 {
 /// Every piece install writes, in order, each file it writes pushed onto
 /// `events`; the first failure stops it, as its message.
 fn install_all(root: &Path, claude: bool, codex: bool, events: &mut Vec<Event>) -> Result<(), String> {
+    let cmd = &install_command(claude, codex);
     for dir in [repo::DECISIONS_DIR, repo::STATE_DIR] {
         let path = root.join(dir);
-        fs::create_dir_all(&path).map_err(|e| msg::create_failed(&path.display().to_string(), e, retry()))?;
+        fs::create_dir_all(&path).map_err(|e| msg::create_failed(&path.display().to_string(), e, retry(cmd)))?;
     }
 
     for rel in [repo::LEDGER_PATH, repo::READER_PATH, banned::BAN_LIST] {
         let path = root.join(rel);
         events.extend(
-            create_if_missing(root, rel).map_err(|e| msg::write_failed(&path.display().to_string(), e, retry()))?,
+            create_if_missing(root, rel).map_err(|e| msg::write_failed(&path.display().to_string(), e, retry(cmd)))?,
         );
     }
 
-    events.extend(install_gitattributes(root).map_err(|e| msg::write_failed(repo::GITATTRIBUTES_PATH, e, retry()))?);
-    events.extend(install_gitignore(root).map_err(|e| msg::write_failed(repo::GITIGNORE_PATH, e, retry()))?);
+    events.extend(install_gitattributes(root).map_err(|e| msg::write_failed(repo::GITATTRIBUTES_PATH, e, retry(cmd)))?);
+    events.extend(install_gitignore(root).map_err(|e| msg::write_failed(repo::GITIGNORE_PATH, e, retry(cmd)))?);
 
     let hooks = root.join(".githooks");
-    fs::create_dir_all(&hooks).map_err(|e| msg::create_failed(&hooks.display().to_string(), e, retry()))?;
+    fs::create_dir_all(&hooks).map_err(|e| msg::create_failed(&hooks.display().to_string(), e, retry(cmd)))?;
     for (rel, content) in [
         (repo::PRE_COMMIT_HOOK_PATH, PRE_COMMIT_HOOK),
         (repo::COMMIT_MSG_HOOK_PATH, COMMIT_MSG_HOOK),
         (repo::PRE_PUSH_HOOK_PATH, PRE_PUSH_HOOK),
     ] {
-        events.extend(create_hook(root, rel, content).map_err(|e| msg::write_failed(rel, e, retry()))?);
+        events.extend(create_hook(root, rel, content).map_err(|e| msg::write_failed(rel, e, retry(cmd)))?);
     }
 
     // Without this git runs none of the hooks written above.
     if repo::git(root, &["config", "core.hooksPath", ".githooks"]).is_none() {
-        return Err(msg::hooks_path_failed("set", retry()));
+        return Err(msg::hooks_path_failed("set", retry(cmd)));
     }
 
-    events.extend(install_agents_md(root).map_err(|e| msg::update_failed("AGENTS.md", e, retry()))?);
-    events.extend(install_claude_md(root, claude).map_err(|e| msg::update_failed("CLAUDE.md", e, retry()))?);
+    events.extend(install_agents_md(root).map_err(|e| msg::update_failed("AGENTS.md", e, retry(cmd)))?);
+    events.extend(install_claude_md(root, claude).map_err(|e| msg::update_failed("CLAUDE.md", e, retry(cmd)))?);
 
     if claude {
-        events.extend(merge_settings(root).map_err(|e| msg::update_failed(".claude/settings.json", e, retry()))?);
+        events.extend(merge_settings(root, cmd)?);
     }
 
     if codex {
         events.extend(
-            install_codex_rules(root).map_err(|e| msg::write_failed(".codex/rules/adrdom.rules", e, retry()))?,
+            install_codex_rules(root).map_err(|e| msg::write_failed(".codex/rules/adrdom.rules", e, retry(cmd)))?,
         );
     }
     Ok(())
@@ -346,26 +359,31 @@ fn install_claude_md(root: &Path, create: bool) -> Result<Option<Event>, String>
 /// Merges `deny_entries()` into `.claude/settings.json`'s
 /// `permissions.deny` array, preserving every other key and array entry.
 /// Creates the directory/file if missing; writes the file only when an
-/// entry is missing from it.
-fn merge_settings(root: &Path) -> Result<Option<Event>, String> {
+/// entry is missing from it. A failure is the whole refusal, its move once:
+/// a file the agent fixes so it holds what install merges into, or the
+/// error to fix, then `cmd` again.
+fn merge_settings(root: &Path, cmd: &str) -> Result<Option<Event>, String> {
+    const REL: &str = ".claude/settings.json";
+    let failed = |e: String| msg::update_failed(REL, e, retry(cmd));
+    let fix = |so: &str| msg::fix_then(REL, so, cmd);
     let dir = root.join(".claude");
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    fs::create_dir_all(&dir).map_err(|e| failed(e.to_string()))?;
     let path = dir.join("settings.json");
 
     let mut value: serde_json::Value = if path.exists() {
-        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        let content = fs::read_to_string(&path).map_err(|e| failed(e.to_string()))?;
         if content.trim().is_empty() {
             serde_json::json!({})
         } else {
             serde_json::from_str(&content)
-                .map_err(|e| msg::parse_failed(&path.display().to_string(), e, retry()))?
+                .map_err(|e| msg::parse_failed(REL, e, fix("it parses as JSON")))?
         }
     } else {
         serde_json::json!({})
     };
 
     if !value.is_object() {
-        return Err(msg::settings_not_json_object(&path.display().to_string(), retry()));
+        return Err(msg::settings_not_json_object(REL, fix("it holds a JSON object")));
     }
     let obj = value.as_object_mut().unwrap();
 
@@ -373,10 +391,7 @@ fn merge_settings(root: &Path) -> Result<Option<Event>, String> {
         .entry("permissions")
         .or_insert_with(|| serde_json::json!({}));
     if !permissions.is_object() {
-        return Err(msg::settings_permissions_not_object(
-            &path.display().to_string(),
-            retry(),
-        ));
+        return Err(msg::settings_permissions_not_object(REL, fix("permissions is an object")));
     }
     let permissions_obj = permissions.as_object_mut().unwrap();
 
@@ -384,7 +399,7 @@ fn merge_settings(root: &Path) -> Result<Option<Event>, String> {
         .entry("deny")
         .or_insert_with(|| serde_json::json!([]));
     if !deny.is_array() {
-        return Err(msg::settings_deny_not_array(&path.display().to_string(), retry()));
+        return Err(msg::settings_deny_not_array(REL, fix("permissions.deny is an array")));
     }
     let deny_arr = deny.as_array_mut().unwrap();
 
@@ -399,11 +414,11 @@ fn merge_settings(root: &Path) -> Result<Option<Event>, String> {
         return Ok(None);
     }
 
-    let mut pretty = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
+    let mut pretty = serde_json::to_string_pretty(&value).map_err(|e| failed(e.to_string()))?;
     pretty.push('\n');
-    fs::write(&path, pretty).map_err(|e| e.to_string())?;
+    fs::write(&path, pretty).map_err(|e| failed(e.to_string()))?;
 
-    Ok(written(".claude/settings.json"))
+    Ok(written(REL))
 }
 
 /// Writes `.codex/rules/adrdom.rules` (creating `.codex/rules/`). Codex

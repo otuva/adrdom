@@ -159,7 +159,7 @@ fn show_prints_each_status_and_the_lines_each_question_carries() {
 
     // "id-open"'s version is the current section hash's own prefix (per
     // "Does an answer carry the version of the question the owner read?").
-    // No tier heading and no "stood on by" line: what is computed from the
+    // No tier heading and no "dependents:" line: what is computed from the
     // records comes under a flag. The body is printed for the asked
     // question alone.
     let expected = "\
@@ -179,10 +179,10 @@ fn show_prints_each_status_and_the_lines_each_question_carries() {
     Costs: c.
 [refused] 2.2 Also depends?
   depends: 1.1 Root?=A
-agent clears: adrdom/decisions/tiered-topic.md: \"1.1 Root?\" has no depends line; agent writes what the question stands on
-agent clears: adrdom/decisions/tiered-topic.md: \"1.2 Unasked root?\" has no depends line; agent writes what the question stands on
-agent clears: adrdom/decisions/tiered-topic.md: \"1.3 Skeleton?\" has no depends line; agent writes what the question stands on
-agent clears: adrdom/decisions/tiered-topic.md: \"2.2 Also depends?\": answered; agent removes the edit
+plan: adrdom/decisions/tiered-topic.md: \"1.1 Root?\" has no depends line; agent writes what the question stands on
+plan: adrdom/decisions/tiered-topic.md: \"1.2 Unasked root?\" has no depends line; agent writes what the question stands on
+plan: adrdom/decisions/tiered-topic.md: \"1.3 Skeleton?\" has no depends line; agent writes what the question stands on
+plan_frozen: adrdom/decisions/tiered-topic.md: \"2.2 Also depends?\": answered; agent removes the edit
 agent runs: adr plan adrdom/decisions/tiered-topic.md
 agent runs: adr ask adrdom/decisions/tiered-topic.md  # \"1.2 Unasked root?\"
 owner runs: adr answer id-open@11024127 <letter>  # \"2.1 Depends on root?\"
@@ -335,15 +335,15 @@ fn show_prints_no_guess_for_an_ambiguous_cross_file_heading_dependency() {
     let shown = stdout(&out);
 
     // Everything `show` prints for file B, from its status line to the next
-    // file's: its question as written, marked new, and the one move left,
-    // the agent naming the decision by id -- never a guess at which of the
-    // two decisions the heading means.
+    // file's: its question as written, marked new, and the finding whose
+    // move is the agent naming the decision by id -- never a guess at which
+    // of the two decisions the heading means.
     let b_start = shown.find("[new] Topic B").expect("topic B status line");
     let b_end = shown.find("Topic C (").map(|i| shown[..i].rfind('\n').unwrap()).unwrap_or(shown.len());
     let b_block = shown[b_start..b_end].trim_end();
     assert!(b_block.contains("  + depends: 1.1 Shared heading?"), "{}", shown);
     assert!(
-        b_block.ends_with("agent clears: adrdom/decisions/topic-b.md: \"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\" which is a current decision in more than one file: adrdom/decisions/topic-a.md, adrdom/decisions/topic-c.md; agent names it by id instead"),
+        b_block.contains("plan: adrdom/decisions/topic-b.md: \"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\" which is a current decision in more than one file: adrdom/decisions/topic-a.md, adrdom/decisions/topic-c.md; agent names it by id instead"),
         "an ambiguous cross-file dependency names the agent's move and no guess: {}",
         shown
     );

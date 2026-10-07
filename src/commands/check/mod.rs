@@ -273,7 +273,19 @@ pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: 
         }
     };
 
-    let report = build(&root, staged, message.as_deref(), since.as_deref(), None);
+    // The commit-msg hook: the staged files were judged by the pre-commit
+    // hook of the same commit, so only the message is read, for banned
+    // words (per "What does the ban scan read?": the staged files and the
+    // commit message before every commit). Each finding prints once a commit.
+    if let Some(m) = message.as_deref() {
+        let findings: Vec<Line> = banned::check_banned(&root, false, Some(m), &Source::for_check(false, true))
+            .into_iter()
+            .map(|f| Line::Finding(f.finding()))
+            .collect();
+        out::print(&findings);
+        return if findings.is_empty() { 0 } else { 1 };
+    }
+    let report = build(&root, staged, None, since.as_deref(), None);
     let exit_code = if report.failures.is_empty() { 0 } else { 1 };
     let lines: Vec<Line> = report.failures.into_iter().chain(report.notes).map(Line::Finding).collect();
     out::print(&lines);

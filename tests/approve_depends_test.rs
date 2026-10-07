@@ -1026,7 +1026,7 @@ fn a_depends_entry_naming_an_unanswered_question_of_another_file_waits_until_it_
         assert!(stderr(&out).contains(waits), "{}", stderr(&out));
         let show = stdout(&adr(&dir, &["show"], &[], ""));
         assert!(
-            show.contains("not yet: adrdom/decisions/topic-b.md: \"Is the decision follow?\" depends on \"Is the decision hold?\" (adrdom/decisions/topic-a.md) which is not answered yet"),
+            show.contains(&format!("plan: adrdom/decisions/{}", waits)),
             "{}",
             show
         );
@@ -1060,5 +1060,5 @@ fn a_depends_entry_naming_a_refused_question_of_another_file_says_so() {
     let check = stdout(&adr(&dir, &["check"], &[], ""));
     assert!(check.contains(refused), "{}", check);
     let show = stdout(&adr(&dir, &["show"], &[], ""));
-    assert!(show.contains("agent clears: adrdom/decisions/topic-b.md: \"Is the decision follow?\" depends on \"Is the decision hold?\""), "{}", show);
+    assert!(show.contains(&format!("plan: adrdom/decisions/{}", refused)), "{}", show);
 }

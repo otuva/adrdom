@@ -110,26 +110,28 @@ fn show_prints_a_line_for_each_neighbour_with_both_words_and_the_agents_line() {
     assert!(adr(&dir, &["plan", dir.join(REL).to_str().unwrap()], &[], "").status.success());
     let shown = show(&dir, &NO_TOOLS);
     let lines = under(&shown, H1);
-    assert!(lines.contains(&format!("neighbour: decision \"{}\": heading: unrelated; no line", BASE_Q)), "{}", shown);
-    assert!(lines.contains(&"neighbour: term \"widget\": heading: unrelated; depends".to_string()), "{}", shown);
-    assert!(lines.contains(&"neighbour: term \"paint\": heading: unrelated; no line".to_string()), "{}", shown);
+    assert!(lines.iter().any(|l| l.starts_with(&format!("decision \"{}\": heading unrelated; no line; ", BASE_Q))), "{}", shown);
+    assert!(lines.iter().any(|l| l.starts_with("term \"widget\": heading unrelated; on the depends line; ")), "{}", shown);
+    assert!(lines.iter().any(|l| l.starts_with("term \"paint\": heading unrelated; no line; ")), "{}", shown);
 
-    // Both steps on record: one line for a neighbour at both, with both words.
+    // Both steps on record: one line for a neighbour at each step, each with
+    // the reader's word and reason and the agent's line.
     plan_record(&dir, REL);
     let shown = show(&dir, &NO_TOOLS);
     let lines = under(&shown, H1);
     assert!(
-        lines.contains(&format!("neighbour: decision \"{}\": heading: unrelated, body: unrelated; unrelated", BASE_Q)),
+        lines.iter().any(|l| l.starts_with(&format!("decision \"{}\": body unrelated; on the unrelated line; ", BASE_Q))),
         "{}",
         shown
     );
     assert!(
-        lines.iter().any(|l| l.starts_with(&format!("neighbour: question \"{}\": body: unrelated; unrelated", H2))),
+        lines.iter().any(|l| l.starts_with(&format!("question \"{}\": body unrelated; on the unrelated line; ", H2))),
         "{}",
         shown
     );
     assert!(!lines.iter().any(|l| l.contains("no reader records")), "{}", shown);
-    assert_eq!(lines.iter().filter(|l| l.starts_with("neighbour: ") && l.contains(BASE_Q)).count(), 1, "{}", shown);
+    assert_eq!(lines.iter().filter(|l| l.starts_with("decision ") && l.contains(BASE_Q)).count(), 2, "{}", shown);
+    assert!(lines.iter().filter(|l| l.starts_with("decision ")).all(|l| l.ends_with("The fake reader's reason.")), "{}", shown);
 
     // The reader's own words, and a supersedes line.
     reader_says(&dir, H1, "same", "consistent");
@@ -146,7 +148,8 @@ fn show_prints_a_line_for_each_neighbour_with_both_words_and_the_agents_line() {
     let shown = show(&dir, &NO_TOOLS);
     assert!(
         under(&shown, H1)
-            .contains(&format!("neighbour: decision \"{}\": heading: same, body: consistent; supersedes", BASE_Q)),
+            .iter()
+            .any(|l| l.starts_with(&format!("decision \"{}\": heading same; on the supersedes line; ", BASE_Q))),
         "{}",
         shown
     );
@@ -164,7 +167,7 @@ fn an_asked_question_with_no_records_prints_no_neighbour_line() {
     assert!(asked.status.success(), "{}", stderr(&asked));
     let shown = show(&dir, &NO_TOOLS);
     assert!(
-        under(&shown, H1).iter().any(|l| l.starts_with("neighbour: ")),
+        under(&shown, H1).iter().any(|l| l.starts_with("decision ") || l.starts_with("term ")),
         "an asked question prints its records: {}",
         shown
     );
@@ -183,21 +186,28 @@ fn the_next_lines_follow_the_planning_steps() {
     let next = |dir: &Path| -> Vec<String> {
         show(dir, &NO_TOOLS)
             .lines()
-            .filter(|l| !l.starts_with(' ') && !l.starts_with('['))
+            .filter(|l| !l.starts_with([' ', '[', '+', '-']))
             .map(str::to_string)
             .collect()
     };
     std::fs::write(&p, format!("# Topic\n{}{}", section(H1, ""), section(H2, ""))).unwrap();
-    assert_eq!(next(&dir), vec![format!("agent runs: adr plan {}", REL)]);
+    // Each step's findings carry the step's move, one per question (per
+    // "Does a command compute a move of its own?", aac5c313 A).
+    let ends = |lines: &[String], mv: &dyn Fn(&str) -> String| {
+        assert!(!lines.is_empty());
+        for h in [H1, H2] {
+            assert!(lines.iter().any(|l| l.ends_with(&format!("; {}", mv(h)))), "{} in {:?}", h, lines);
+        }
+        assert!(lines.iter().all(|l| [H1, H2].iter().any(|h| l.ends_with(&format!("; {}", mv(h))))), "{:?}", lines);
+    };
+    ends(&next(&dir), &|_| format!("agent runs: adr plan {}", REL));
     assert!(adr(&dir, &["plan", p.to_str().unwrap()], &[], "").status.success());
-    let lines = next(&dir);
-    assert_eq!(lines.len(), 1);
-    assert!(lines[0].starts_with("agent writes lines for \"Does the first widget glow?\""), "{:?}", lines);
+    ends(&next(&dir), &|h| format!("agent writes lines for \"{}\"", h));
     plan_record(&dir, REL);
-    assert_eq!(next(&dir), vec![format!("agent writes the body of \"{}\", \"{}\"", H1, H2)]);
+    ends(&next(&dir), &|h| format!("agent writes the body of \"{}\"", h));
     // The bodies written over a file without the lines: the lines come first.
     write_topic(&dir);
-    assert_eq!(next(&dir), vec![format!("agent writes lines for \"{}\", \"{}\"", H1, H2)]);
+    ends(&next(&dir), &|h| format!("agent writes lines for \"{}\"", h));
     plan_record(&dir, REL);
     assert_eq!(next(&dir), vec![format!("owner runs: adr approve {}", REL)]);
 }

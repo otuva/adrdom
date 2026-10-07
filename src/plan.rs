@@ -410,14 +410,14 @@ fn load_inner(
     let phrase_lookup = terms::phrase_lookup(terms_list);
     let cross = depends::cross_file_heading_index(all, led);
     let headings = decision_headings(all);
-    let rows = reader::read_file(root).rows;
+    let rows = reader::rows(root);
     // A row counts only when it was written with the prompt and the model
     // that would read its pair now; a row from another prompt or model is
     // kept apart, and its kind at that hash is read again.
     let mut by_hash: HashMap<&str, Vec<&reader::Row>> = HashMap::new();
     let mut stale: HashSet<(&str, Kind)> = HashSet::new();
     let current: HashMap<Kind, String> = [Kind::Heading, Kind::Body, Kind::Plan].into_iter().map(|k| (k, k.prompt_hash())).collect();
-    for r in &rows {
+    for r in rows.iter() {
         let kinds = [row_kind(Kind::Heading, &r.neighbour), row_kind(Kind::Body, &r.neighbour)];
         if r.model == reader::MODEL && kinds.iter().any(|k| current[k] == r.prompt_hash) {
             by_hash.entry(r.text_hash.as_str()).or_default().push(r);
@@ -587,41 +587,54 @@ impl Planning {
         }
         out
     }
+
+    /// The rows missing at the step `adr plan` takes next: every heading's
+    /// rows while one heading lacks them, else every body's. A body's rows
+    /// wait on the heading step, as `next` reads the steps in order.
+    pub fn rows_missing_at_step(&self) -> Vec<String> {
+        if !self.missing_heading().is_empty() {
+            return self
+                .questions
+                .iter()
+                .filter(|q| !q.heading_done)
+                .map(|q| msg::plan_rows_missing(&self.rel, &q.heading, "heading"))
+                .collect();
+        }
+        self.questions
+            .iter()
+            .filter(|q| q.has_body && !q.body_done)
+            .map(|q| msg::plan_rows_missing(&self.rel, &q.heading, "heading with its body"))
+            .collect()
+    }
 }
 
-/// The lines show and the page print under an open question: one line for
-/// each neighbour on record at either step, carrying the reader's word of
-/// each step it is on record at and the agent's line; and, for a question
-/// not yet asked that has no records, one line saying so. Nothing for an
+/// The lines `show --neighbours` prints under an open question: each
+/// neighbour on record at the heading step, then at the body step, each
+/// with the reader's word, the agent's line and the reader's reason; and,
+/// for a question not yet asked that has no records, one line saying so. Nothing for an
 /// asked question with no records (planned before the records existed).
 pub fn neighbour_lines(rel: &str, q: &Question) -> Vec<String> {
-    let mut merged: Vec<(&Neighbour, Option<&str>, Option<&str>)> = Vec::new();
-    for n in &q.heading_neighbours {
-        merged.push((n, Some(n.word.as_str()), None));
-    }
-    for n in &q.body_neighbours {
-        match merged.iter_mut().find(|(m, _, _)| m.key == n.key) {
-            Some(m) => m.2 = Some(n.word.as_str()),
-            None => merged.push((n, None, Some(n.word.as_str()))),
-        }
-    }
-    let mut out: Vec<String> = merged
-        .iter()
-        .map(|(n, h, b)| {
-            let mut words = Vec::new();
-            if let Some(h) = h {
-                words.push(("heading", *h));
-            }
-            if let Some(b) = b {
-                words.push(("body", *b));
-            }
-            msg::show_neighbour(n.kind.label(), &n.name, &words, n.line.map(LineKind::label))
-        })
-        .collect();
+    let mut out = neighbour_lines_at(q, Step::Heading);
+    out.extend(neighbour_lines_at(q, Step::Body));
     if !q.asked && (!q.heading_done || (q.has_body && !q.body_done)) {
         out.push(msg::show_no_records(rel));
     }
     out
+}
+
+/// The neighbours of `q` read at `step`, one line each, by the one
+/// renderer of a neighbour (`msg::neighbour`): what `adr plan` prints for
+/// the step it read, and `adr show --neighbours` for both steps.
+pub fn neighbour_lines_at(q: &Question, step: Step) -> Vec<String> {
+    let (label, ns) = match step {
+        Step::Heading => ("heading", &q.heading_neighbours),
+        Step::Body => ("body", &q.body_neighbours),
+    };
+    ns.iter()
+        .map(|n| {
+            msg::neighbour(n.kind.label(), &n.name, label, &n.word, n.line.map(LineKind::label), &reader::flatten(&n.reason))
+        })
+        .collect()
 }
 
 /// The text a heading is read as: the heading alone.

@@ -60,10 +60,12 @@ fn names() -> HashSet<&'static str> {
         .collect()
 }
 
-/// The status of each line `show` opens with one, `[<status>]`: the name
+/// The status of each line `show` opens with one, `[<status>]` (after the
+/// `+ ` or `- ` of a thing new or struck as a whole): the name
 /// with an answered question's letter or an asked one's version taken off.
 fn bracketed(text: &str) -> Vec<String> {
     text.lines()
+        .map(|l| l.strip_prefix("+ ").or_else(|| l.strip_prefix("- ")).unwrap_or(l))
         .filter_map(|l| l.strip_prefix('['))
         .filter_map(|l| l.split_once(']').map(|(s, _)| s.to_string()))
         .map(|s| match s.split_once(" @") {

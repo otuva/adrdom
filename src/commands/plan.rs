@@ -32,7 +32,6 @@ use crate::reader;
 use crate::record::{self, RecordFile};
 use crate::repo;
 use crate::state;
-use crate::status;
 use std::path::{Path, PathBuf};
 
 /// Per "What does a command that writes nothing print?" (848e1b76 A): the
@@ -110,10 +109,11 @@ fn env(root: &Path) -> Env {
     }
 }
 
-fn planning(root: &Path, rf: &RecordFile) -> Planning {
-    let led = ledger::read(&root.join(repo::LEDGER_PATH));
-    let e = env(root);
-    plan::load(root, rf, &e.all, &e.terms, &led)
+/// The planning records of `rf` as they stand, against the records `e`
+/// and the ledger `led` loaded once for the run: `adr plan` writes reader
+/// rows, never a topic file, the terms or the ledger.
+fn planning(root: &Path, rf: &RecordFile, e: &Env, led: &ledger::Ledger) -> Planning {
+    plan::load(root, rf, &e.all, &e.terms, led)
 }
 
 /// What the questions in `idxs` read at `step`: each question, then each of
@@ -121,25 +121,19 @@ fn planning(root: &Path, rf: &RecordFile) -> Planning {
 /// reader's sentence of reason, which the move on its lines needs.
 fn did(pl: &Planning, idxs: &[usize], step: Step, out: &mut Vec<Line>) {
     for q in pl.questions.iter().filter(|q| idxs.contains(&q.idx)) {
-        let (what, ns) = match step {
-            Step::Heading => ("heading", &q.heading_neighbours),
-            Step::Body => ("heading with its body", &q.body_neighbours),
+        let what = match step {
+            Step::Heading => "heading",
+            Step::Body => "heading with its body",
         };
         out.push(Line::Record { depth: 0, text: msg::plan_question_read(&q.heading, what) });
-        for n in ns {
-            let reason = reader::flatten(&n.reason);
-            out.push(Line::Record {
-                depth: 1,
-                text: msg::plan_neighbour(n.kind.label(), &n.name, &n.word, n.on_line, &reason),
-            });
-        }
+        out.extend(plan::neighbour_lines_at(q, step).into_iter().map(|text| Line::Record { depth: 1, text }));
     }
 }
 
 /// What the run prints, or the refusal that stopped it. The run reads what
 /// the step the file is at needs, then prints the file's status, what it
-/// read, the findings on the file that are not already a move, and the
-/// file's moves: the one computation `show` reads too (per "Does a command
+/// read, the findings on the file and the file's moves: the one computation
+/// `show` reads too (per "Does a command
 /// compute a move of its own?", aac5c313 A).
 fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
     let shape = shape_refusals(rf);
@@ -147,18 +141,19 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
         return Err(shape.iter().map(|m| out::refusal("plan", m)).collect());
     }
     let mut read = Vec::new();
+    let e = env(root);
+    let led = ledger::read(&root.join(repo::LEDGER_PATH));
 
     // The neighbours of each heading with no rows.
-    let mut pl = planning(root, rf);
+    let mut pl = planning(root, rf, &e, &led);
     let todo: Vec<usize> = pl.missing_heading().iter().map(|q| q.idx).collect();
     if !todo.is_empty() {
-        let led = ledger::read(&root.join(repo::LEDGER_PATH));
         let queries: Vec<String> = todo.iter().map(|&i| plan::heading_text(&rf.sections[i])).collect();
         let near = index::nearest(root, &led, &queries, index::NEIGHBOURS).map_err(stop)?;
         for (&i, n) in todo.iter().zip(&near) {
             reader::read(root, &plan::heading_pairs(&rf.sections[i], n)).map_err(stop)?;
         }
-        pl = planning(root, rf);
+        pl = planning(root, rf, &e, &led);
         did(&pl, &todo, Step::Heading, &mut read);
     }
 
@@ -166,7 +161,6 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
     // its body, the neighbours of each question with its body.
     let todo: Vec<usize> = pl.missing_body().iter().map(|q| q.idx).collect();
     if pl.lines_missing(Step::Heading).is_empty() && pl.without_body().is_empty() && !todo.is_empty() {
-        let led = ledger::read(&root.join(repo::LEDGER_PATH));
         // The other questions not yet asked are ranked by their own text. One
         // call embeds the texts of the questions to read and of every
         // planned question.
@@ -184,34 +178,17 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
             };
             reader::read(root, &plan::body_pairs(rf, i, n, &own)).map_err(stop)?;
         }
-        pl = planning(root, rf);
+        pl = planning(root, rf, &e, &led);
         did(&pl, &todo, Step::Body, &mut read);
     }
 
     // What the run prints is read after the rows it wrote: the status, the
     // findings and the moves of the file as it stands now.
-    let led = ledger::read(&root.join(repo::LEDGER_PATH));
-    let e = env(root);
     let tests = crate::commands::check::test_index(root, &repo::Source::WorkingTree);
-    let moves = crate::moves::of_topic_file_in(root, rf, &e.all, &e.terms, &led, &tests);
-    // Every finding `approve` refuses on is printed once: a finding with a
-    // move of its own as that move, a finding of the planning steps here,
-    // its move being the planning move. Missing rows are what this command
-    // writes: rows still missing after the run wait on the step before,
-    // whose move is printed, so they are not printed as findings too.
-    let (_, steps) = crate::rules::judge_topic_file_split_at(root, rf, &e.all, &e.terms, &led);
-    let mut pl = planning(root, rf);
-    pl.rel = rf.rel.clone();
-    let rows_missing = pl.rows_missing();
-    let steps = steps.into_iter().filter(|f| !rows_missing.contains(&f.message));
-
-    let mut lines = vec![Line::Status {
-        subject: rf.rel.clone(),
-        status: out::Status::File(status::topic_file_status(&led, rf)),
-    }];
+    let report = crate::moves::of_topic_file_in(root, rf, &e.all, &e.terms, &led, &tests);
+    let mut lines = vec![crate::commands::show::topic_file_status_line(&led, rf)];
     lines.extend(read);
-    lines.extend(steps.map(Line::Finding));
-    lines.extend(moves.into_iter().map(Line::Move));
+    lines.extend(out::report(&report));
     Ok(lines)
 }
 

@@ -160,16 +160,16 @@ pub fn run(record_path: PathBuf) -> i32 {
     // file at all -- checked against the hashes captured before the
     // normalize pass above, never the normalized `rf`.
     // The refusal names the moves of the file, the ones `show` names for it.
-    let file_moves = || -> Vec<crate::moves::Move> {
+    let file_moves = || -> crate::moves::Report {
         let tests = crate::commands::check::test_index(&root, &repo::Source::WorkingTree);
-        let moves = match all_records.iter().find(|f| f.rel == rel) {
+        let mut report = match all_records.iter().find(|f| f.rel == rel) {
             Some(loaded) => crate::moves::of_topic_file_in(&root, loaded, &all_records, &terms_list, &led, &tests),
-            None => Vec::new(),
+            None => crate::moves::Report::default(),
         };
-        if moves.is_empty() {
-            return vec![crate::moves::Move::new(crate::moves::MoveKind::Approve { path: rel.clone() })];
+        if report.findings.is_empty() && report.moves.is_empty() {
+            report.moves.push(crate::moves::Move::new(crate::moves::MoveKind::Approve { path: rel.clone() }));
         }
-        moves
+        report
     };
     if !state::plan_approved_hashes(&led, &rel, &raw_question_hashes) {
         let status = crate::status::plan_status(&led, &rel, false);

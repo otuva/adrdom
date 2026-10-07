@@ -135,12 +135,13 @@ fn show_marks_what_a_file_holds_beyond_its_latest_approval() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
-    // A new topic file: every line of every question is marked new.
+    // A new topic file: every question, its heading and every line, is
+    // marked new.
     let path = write_record(&dir, REL, &format!("# Gate\n\nWhat the gate does.\n\n{}{}", q(ONE), q(TWO)));
     let shown = show(&dir, &[REL]);
-    assert!(shown.starts_with("[new] Gate (adrdom/decisions/gate.md)\n[new] prose\n  + What the gate does.\n"), "{}", shown);
-    assert!(shown.contains(&format!("[not asked] {}\n  + depends: widget\n  + Problem: the widget breaks.\n", ONE)), "{}", shown);
-    assert!(shown.ends_with(&format!("agent runs: adr plan {}\n", REL)), "{}", shown);
+    assert!(shown.starts_with("[new] Gate (adrdom/decisions/gate.md)\n+ [new] prose\n  + What the gate does.\n"), "{}", shown);
+    assert!(shown.contains(&format!("+ [not asked] {}\n  + depends: widget\n  + Problem: the widget breaks.\n", ONE)), "{}", shown);
+    assert!(shown.ends_with(&format!("; agent runs: adr plan {}\n", REL)), "{}", shown);
 
     // Approved and asked, then changed: ONE's body edited, TWO struck.
     approve_record(&dir, REL);
@@ -161,7 +162,7 @@ fn show_marks_what_a_file_holds_beyond_its_latest_approval() {
         shown
     );
     assert!(
-        shown.contains(&format!("[removed] {}\n  - depends: widget\n  - unrelated: {}\n  - Problem: the widget breaks.\n", TWO, ONE)),
+        shown.contains(&format!("- [removed] {}\n  - depends: widget\n  - unrelated: {}\n  - Problem: the widget breaks.\n", TWO, ONE)),
         "{}",
         shown
     );
@@ -217,17 +218,18 @@ fn a_view_computed_from_the_records_comes_under_its_flag() {
     assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
 
     let plain = show(&dir, &[REL]);
-    for word in ["neighbour", "stood on by", "replaced by"] {
+    for word in ["neighbour", "dependents:", "replaced by"] {
         assert!(!plain.contains(word), "{}: {}", word, plain);
     }
     let all = show(&dir, &["--all"]);
-    assert!(!all.contains("neighbour") && !all.contains("stood on by"), "{}", all);
+    assert!(!all.contains("neighbour") && !all.contains("dependents:"), "{}", all);
 
     let neighbours = show(&dir, &[REL, "--neighbours"]);
-    assert!(neighbours.contains("  neighbour: term \"widget\""), "{}", neighbours);
-    let stood_on = show(&dir, &[REL, "--stood-on"]);
-    assert!(stood_on.contains(&format!("  stood on by: {}\n", three)), "{}", stood_on);
-    assert!(!stood_on.contains("neighbour"), "{}", stood_on);
+    assert!(neighbours.contains("  term \"widget\": heading "), "{}", neighbours);
+    assert!(!plain.contains("  term \"widget\": heading "), "{}", plain);
+    let dependents = show(&dir, &[REL, "--dependents"]);
+    assert!(dependents.contains(&format!("  dependents: {}\n", three)), "{}", dependents);
+    assert!(!dependents.contains("  term \"widget\": heading "), "{}", dependents);
 
     let out = adr(&dir, &["show", "--neighbours"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
@@ -319,4 +321,53 @@ fn show_into_a_full_device_does_not_pass() {
         .unwrap();
     assert_eq!(out.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&out.stderr).contains("standard output cannot be written"));
+}
+
+// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+//
+// A question new since the latest approval is marked as a whole, its
+// heading line too, at every stage: a heading alone, its lines written, its
+// body written, and a heading added to an approved plan.
+#[test]
+fn a_question_new_since_approval_marks_its_heading_at_every_stage() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let path = write_record(&dir, REL, &format!("# Gate\n\n### {}\n", ONE));
+    assert!(show(&dir, &[REL]).contains(&format!("\n+ [no body] {}\n", ONE)), "headings only: {}", show(&dir, &[REL]));
+    std::fs::write(&path, format!("# Gate\n\n### {}\ndepends: widget\n", ONE)).unwrap();
+    let shown = show(&dir, &[REL]);
+    assert!(shown.contains(&format!("\n+ [no body] {}\n  + depends: widget\n", ONE)), "lines written: {}", shown);
+    std::fs::write(&path, format!("# Gate\n\n{}", q(ONE))).unwrap();
+    let shown = show(&dir, &[REL]);
+    assert!(shown.contains(&format!("\n+ [not asked] {}\n  + depends: widget\n", ONE)), "body written: {}", shown);
+
+    approve_record(&dir, REL);
+    commit_all(&dir, "the gate");
+    let shown = show(&dir, &[REL]);
+    assert!(!shown.lines().any(|l| l.starts_with("+ ") || l.starts_with("- ")), "approved: {}", shown);
+    let text = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(&path, format!("{}\n### {}\ndepends: widget\n", text, TWO)).unwrap();
+    let shown = show(&dir, &[REL]);
+    assert!(shown.contains(&format!("\n+ [no body] {}\n  + depends: widget\n", TWO)), "plan change: {}", shown);
+    assert!(shown.contains(&format!("\n[not asked] {}\n", ONE)), "the approved question is not marked: {}", shown);
+}
+
+// adr: 36dfbeaa-698d-4a57-b3b0-d425348e14a5
+//
+// What stands on a term entry is computed from the records: the current
+// decisions whose terms line or depends line names the term come under
+// `--dependents`, and the plain form of the terms file has none of them.
+#[test]
+fn the_decisions_standing_on_a_term_come_under_the_dependents_flag() {
+    let (dir, _) = asked();
+    let plain = show(&dir, &["adrdom/terms.md"]);
+    assert!(!plain.contains("dependents:"), "{}", plain);
+    let dependents = show(&dir, &["adrdom/terms.md", "--dependents"]);
+    let at = dependents.find("] widget\n").unwrap_or_else(|| panic!("{}", dependents));
+    let entry = &dependents[at..];
+    let entry = &entry[..entry[1..].find("\n[").map(|i| i + 1).unwrap_or(entry.len())];
+    // ONE is answered, a current decision; TWO is asked, not yet one.
+    assert!(entry.contains(&format!("  dependents: {} ({})\n", ONE, REL)), "{}", dependents);
+    assert!(!entry.contains(TWO), "{}", dependents);
 }

@@ -382,16 +382,14 @@ pub fn refusal_lines(out: &Output, prefix: &str) -> Vec<String> {
         .collect()
 }
 
-/// The move lines `adr show <rel>` prints for the file: the one computation
-/// every command that names a move for the file reads (per "Does a command
-/// compute a move of its own?", aac5c313 A).
+/// The finding and move lines `adr show <rel>` prints for the file, each
+/// finding whole with its move: the one computation every command that names
+/// a move for the file reads (per "Does a command compute a move of its
+/// own?", aac5c313 A). Every line at the left edge that is no status line,
+/// marked or not.
 pub fn file_moves(dir: &Path, rel: &str) -> Vec<String> {
     let out = adr(dir, &["show", rel], &[], "");
-    stdout(&out)
-        .lines()
-        .filter(|l| l.starts_with("agent ") || l.starts_with("owner runs: ") || l.starts_with("not yet: "))
-        .map(str::to_string)
-        .collect()
+    stdout(&out).lines().filter(|l| !l.starts_with([' ', '[', '#', '+', '-'])).map(str::to_string).collect()
 }
 
 /// Returns every `id: <value>` found in a record, in file order.

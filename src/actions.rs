@@ -291,7 +291,7 @@ fn answer_gate(root: &Path, rf: &RecordFile, led: &Ledger, tf: &terms::TermsFile
             Ok(leaf) => {
                 let sec = &rf.sections[leaf];
                 match &sec.id {
-                    _ if sec.is_skeleton => Waits::Unwritten { heading, moves: moves_for(leaf, true) },
+                    _ if sec.is_skeleton => Waits::Unwritten { heading, report: moves_for(leaf, true) },
                     Some(id) if state::asked_text_stands(led, id, &record::section_hash(&rf.lines, sec)) => {
                         let answer = Move::new(MoveKind::Answer {
                             id: id.clone(),
@@ -300,7 +300,7 @@ fn answer_gate(root: &Path, rf: &RecordFile, led: &Ledger, tf: &terms::TermsFile
                         });
                         Waits::Unanswered { heading, answer }
                     }
-                    _ => Waits::Asking { heading, moves: moves_for(leaf, false) },
+                    _ => Waits::Asking { heading, report: moves_for(leaf, false) },
                 }
             }
         });
@@ -391,7 +391,7 @@ fn finish_answer(
         msg::write_failed(
             "topic file",
             e,
-            Next::owner_runs(format!("adr answer {}@{} {}", id, version, retry_words)),
+            msg::after_fix_owner_runs(format!("adr answer {}@{} {}", id, version, retry_words)),
         )
     })?;
 
@@ -399,7 +399,7 @@ fn finish_answer(
         msg::update_failed(
             "ledger",
             e,
-            Next::owner_runs(format!("adr answer {}@{} {}", id, version, retry_words)),
+            msg::after_fix_owner_runs(format!("adr answer {}@{} {}", id, version, retry_words)),
         )
     })?;
 
@@ -702,7 +702,7 @@ fn do_approve_removal(root: &Path, rel: &str, led: &Ledger, ledger_path: &Path) 
         msg::approve_prefixed(msg::update_failed(
             "ledger",
             e,
-            Next::owner_runs(format!("adr approve {}", rel)),
+            msg::after_fix_owner_runs(format!("adr approve {}", rel)),
         ))
     })?;
     Ok(Outcome::of_rows(&rows, &HashMap::new()))
@@ -728,7 +728,7 @@ fn do_approve_blame(
         msg::approve_prefixed(msg::read_failed(
             &file.display().to_string(),
             e,
-            Next::owner_runs(format!("adr approve {}", rel)),
+            msg::after_fix_owner_runs(format!("adr approve {}", rel)),
         ))
     })?;
 
@@ -813,7 +813,7 @@ fn do_approve_blame(
             msg::approve_prefixed(msg::write_failed(
                 &file.display().to_string(),
                 e,
-                Next::owner_runs(format!("adr approve {}", rel)),
+                msg::after_fix_owner_runs(format!("adr approve {}", rel)),
             ))
         })?;
     }
@@ -837,7 +837,7 @@ fn do_approve_blame(
             msg::approve_prefixed(msg::update_failed(
                 "ledger",
                 e,
-                Next::owner_runs(format!("adr approve {}", rel)),
+                msg::after_fix_owner_runs(format!("adr approve {}", rel)),
             ))
         })?;
         rows.push(row);
@@ -871,7 +871,7 @@ fn do_approve_terms(
         msg::approve_prefixed(msg::read_failed(
             &file.display().to_string(),
             e,
-            Next::owner_runs("adr approve adrdom/terms.md"),
+            msg::after_fix_owner_runs("adr approve adrdom/terms.md"),
         ))
     })?;
 
@@ -930,7 +930,7 @@ fn do_approve_terms(
         msg::approve_prefixed(msg::write_failed(
             &file.display().to_string(),
             e,
-            Next::owner_runs("adr approve adrdom/terms.md"),
+            msg::after_fix_owner_runs("adr approve adrdom/terms.md"),
         ))
     })?;
 
@@ -949,7 +949,7 @@ fn do_approve_terms(
         msg::approve_prefixed(msg::write_failed(
             crate::repo::TERMS_BRIEF_PATH,
             e,
-            Next::owner_runs("adr approve adrdom/terms.md"),
+            msg::after_fix_owner_runs("adr approve adrdom/terms.md"),
         ))
     })?;
 
@@ -969,7 +969,7 @@ fn do_approve_terms(
         msg::approve_prefixed(msg::update_failed(
             "ledger",
             e,
-            Next::owner_runs("adr approve adrdom/terms.md"),
+            msg::after_fix_owner_runs("adr approve adrdom/terms.md"),
         ))
     };
 
@@ -1072,7 +1072,7 @@ fn do_approve_record(
         msg::approve_prefixed(msg::read_failed(
             &file.display().to_string(),
             e,
-            Next::owner_runs(format!("adr approve {}", rel)),
+            msg::after_fix_owner_runs(format!("adr approve {}", rel)),
         ))
     })?;
 
@@ -1317,7 +1317,7 @@ fn do_approve_record(
         msg::approve_prefixed(msg::write_failed(
             &file.display().to_string(),
             e,
-            Next::owner_runs(format!("adr approve {}", rel)),
+            msg::after_fix_owner_runs(format!("adr approve {}", rel)),
         ))
     })?;
 
@@ -1407,7 +1407,7 @@ fn do_approve_record(
         msg::approve_prefixed(msg::update_failed(
             "ledger",
             e,
-            Next::owner_runs(format!("adr approve {}", rel)),
+            msg::after_fix_owner_runs(format!("adr approve {}", rel)),
         ))
     })?;
 
@@ -1418,7 +1418,7 @@ fn do_approve_record(
             msg::approve_prefixed(msg::update_failed(
                 "ledger",
                 e,
-                Next::owner_runs(format!("adr approve {}", rel)),
+                msg::after_fix_owner_runs(format!("adr approve {}", rel)),
             ))
         })?;
     }
@@ -1514,7 +1514,7 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
         .filter(|(h, _)| !to_remove.contains(h))
         .collect();
     crate::banned::write_sorted(&banned_path, remaining).map_err(|e| {
-        msg::update_failed("banned list", e, Next::owner_runs("adr unban"))
+        msg::update_failed("banned list", e, msg::after_fix_owner_runs("adr unban"))
     })?;
 
     // One time for every row this run writes (per "Does a command write a
@@ -1534,7 +1534,7 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
         })
         .collect();
     ledger::append(&ledger_path, &rows)
-        .map_err(|e| msg::update_failed("ledger", e, Next::owner_runs("adr unban")))?;
+        .map_err(|e| msg::update_failed("ledger", e, msg::after_fix_owner_runs("adr unban")))?;
 
     let mut outcome = Outcome::of_rows(&rows, &HashMap::new());
     outcome.input_findings = input_findings;

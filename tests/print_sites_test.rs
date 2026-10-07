@@ -246,3 +246,69 @@ fn every_move_that_names_a_command_reads_runs_colon() {
     }
     assert!(found.is_empty(), "a move naming a command without `runs:`:\n{}", found.join("\n"));
 }
+
+/// The findings and moves a command printed: every line at the left edge
+/// that is no status line, no topic line and no question `plan` read.
+fn report_of(out: &str) -> Vec<String> {
+    out.lines().filter(|l| !l.starts_with([' ', '[', '"', '#', '+', '-'])).map(str::to_string).collect()
+}
+
+/// Asserts show, plan (when `plan_out` is given) and check print one set of
+/// findings for the file, and show and plan one list of moves: a finding
+/// renders one way in every command (per "Does a command compute a move of
+/// its own?", aac5c313 A, and "What does a command that writes nothing
+/// print?", 848e1b76 A).
+fn assert_one_report(dir: &Path, plan_out: Option<&str>, stage: &str) -> Vec<String> {
+    let show = report_of(&stdout(&adr(dir, &["show", REL], &[], "")));
+    let check: Vec<String> = stdout(&adr(dir, &["check"], &[], "")).lines().filter(|l| l.contains(REL)).map(str::to_string).collect();
+    let findings: Vec<String> = show.iter().filter(|l| !(l.starts_with("agent ") || l.starts_with("owner runs:") || l.starts_with("not yet"))).cloned().collect();
+    let mut sorted_check = check.clone();
+    sorted_check.sort();
+    let mut sorted_findings = findings.clone();
+    sorted_findings.sort();
+    assert_eq!(sorted_findings, sorted_check, "{}: show and check print other findings", stage);
+    if let Some(p) = plan_out {
+        assert_eq!(report_of(p), show, "{}: plan and show print another report", stage);
+    }
+    findings
+}
+
+// adr: aac5c313-dedd-466b-a0c3-ead5e99ce913
+// adr: 848e1b76-9cfe-483b-94dd-094eb9b2f995
+//
+// At every planning stage -- headings only, the lines written, the bodies
+// written, ready -- show, plan and check print the same findings, each
+// with its move, and show and plan the same moves.
+#[test]
+fn every_planning_stage_prints_one_report_in_every_command() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_terms_with(&dir, &["widget", "paint"]);
+    let (h1, h2) = ("Does the widget hold?", "Does the widget bend?");
+    let path = write_record(&dir, REL, &format!("# Gate\n\n### {}\ndepends: widget\n\n### {}\ndepends: widget\n", h1, h2));
+    let plan = |dir: &Path| stdout(&adr(dir, &["plan", path.to_str().unwrap()], &[], ""));
+
+    assert!(!assert_one_report(&dir, None, "headings, not planned").is_empty());
+    let out = plan(&dir);
+    assert!(!assert_one_report(&dir, Some(&out), "headings planned").is_empty());
+    assert!(report_of(&out).iter().any(|l| l.contains("is on no line")), "{}", out);
+
+    std::fs::write(&path, add_unrelated(&std::fs::read_to_string(&path).unwrap(), &lines_wanted(&out))).unwrap();
+    let out = plan(&dir);
+    assert!(!assert_one_report(&dir, Some(&out), "lines written").is_empty());
+    assert!(report_of(&out).iter().any(|l| l.contains("[no body]")), "{}", out);
+
+    let text = std::fs::read_to_string(&path)
+        .unwrap()
+        .replace(&format!("### {}\n", h1), &format!("### {}\n{}", h1, "\nProblem: the widget holds.\n\nStandard: plain words.\n\n"))
+        .replace(&format!("### {}\n", h2), &format!("### {}\n{}", h2, "\nProblem: the widget bends.\n\nStandard: plain words.\n\n"));
+    let text = text.replace("\nStandard: plain words.\n\n", &format!("\nStandard: plain words.\n\n{}", GATE_OPTIONS));
+    std::fs::write(&path, text).unwrap();
+    let out = plan(&dir);
+    assert!(!assert_one_report(&dir, Some(&out), "bodies written").is_empty(), "{}", out);
+
+    std::fs::write(&path, add_unrelated(&std::fs::read_to_string(&path).unwrap(), &lines_wanted(&out))).unwrap();
+    let out = plan(&dir);
+    assert!(assert_one_report(&dir, Some(&out), "ready").is_empty(), "{}", out);
+    assert_eq!(report_of(&out), vec![format!("owner runs: adr approve {}", REL)], "{}", out);
+}

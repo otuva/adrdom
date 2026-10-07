@@ -136,14 +136,14 @@ pub fn not_a_repo(cmd: &str, args: &str, actor: Actor) -> String {
     } else {
         format!("adr {} {}", cmd, args)
     };
+    // What clears it is where the command runs, so the move names that
+    // first: the command itself is run again from inside a repository.
+    let step = format!("changes into a git repository and runs: {}", command);
     let next = match actor {
-        Actor::Agent => Next::agent("changes into the repository and retries"),
-        Actor::Owner => Next::owner_runs(command),
+        Actor::Agent => Next::agent(step),
+        Actor::Owner => Next(vec![(Actor::Owner, step)]),
     };
-    refuse(
-        format!("{}: not inside a git repository; it runs inside one", cmd),
-        next,
-    )
+    refuse(format!("{}: not inside a git repository", cmd), next)
 }
 
 /// The refusal every owner-only command prints when stdin isn't an
@@ -700,9 +700,10 @@ pub fn letter_not_an_option(letter: char, heading: &str, letters: &[char], id: &
     )
 }
 
-/// `moves`: the moves of the question's file (`moves::of_unasked_question_in`).
-pub fn not_in_asked_state(heading: &str, moves: &[crate::moves::Move]) -> String {
-    format!("\"{}\" is edited since it was asked; {}", heading, crate::moves::tail(moves))
+/// `report`: what the rules find in the question's file and its moves
+/// (`moves::of_unasked_question_in`).
+pub fn not_in_asked_state(heading: &str, report: &crate::moves::Report) -> String {
+    format!("\"{}\" is edited since it was asked; {}", heading, report.tail())
 }
 
 /// The question's latest ledger state is `withdrawn`: it was struck from
@@ -742,9 +743,10 @@ pub fn already_dropped(heading: &str) -> String {
 }
 
 /// A question with a body that no `ask` has put to the owner.
-/// `moves`: the moves of the question's file (`moves::of_unasked_question_in`).
-pub fn not_asked_yet(heading: &str, moves: &[crate::moves::Move]) -> String {
-    format!("\"{}\" is {}; {}", heading, crate::status::QuestionStatus::NotAsked.name(), crate::moves::tail(moves))
+/// `report`: what the rules find in the question's file and its moves
+/// (`moves::of_unasked_question_in`).
+pub fn not_asked_yet(heading: &str, report: &crate::moves::Report) -> String {
+    format!("\"{}\" is {}; {}", heading, crate::status::QuestionStatus::NotAsked.name(), report.tail())
 }
 
 /// An answer that would remove a question with no identifier.
@@ -780,8 +782,8 @@ pub fn drop_not_approved(heading: &str, rel: &str) -> String {
 }
 
 /// A question with no body yet: nothing to ask or answer.
-pub fn not_written(heading: &str, moves: &[crate::moves::Move]) -> String {
-    format!("\"{}\" is [{}]; {}", heading, crate::status::QuestionStatus::NoBody.name(), crate::moves::tail(moves))
+pub fn not_written(heading: &str, report: &crate::moves::Report) -> String {
+    format!("\"{}\" is [{}]; {}", heading, crate::status::QuestionStatus::NoBody.name(), report.tail())
 }
 
 /// `adr answer <id> <letter>` with no `@<version>` (per "Does an answer
@@ -913,13 +915,13 @@ pub fn edited_after_refused(path: &str, heading: &str) -> String {
 /// (`moves::of_topic_file_in`): the same moves `show` names for the file, so
 /// the refusal never names the owner's approve while approve would refuse
 /// (per "Does a command compute a move of its own?", aac5c313 A).
-pub fn plan_not_approved(rel: &str, status: FileStatus, moves: &[crate::moves::Move]) -> String {
-    format!("{}: plan is {}; {}", rel, status.name(), crate::moves::tail(moves))
+pub fn plan_not_approved(rel: &str, status: FileStatus, report: &crate::moves::Report) -> String {
+    format!("{}: plan is {}; {}", rel, status.name(), report.tail())
 }
 
 /// `plan_not_approved` for the prose above the first question.
-pub fn context_not_approved(rel: &str, status: FileStatus, moves: &[crate::moves::Move]) -> String {
-    format!("{}: prose is {}; {}", rel, status.name(), crate::moves::tail(moves))
+pub fn context_not_approved(rel: &str, status: FileStatus, report: &crate::moves::Report) -> String {
+    format!("{}: prose is {}; {}", rel, status.name(), report.tail())
 }
 
 pub fn missing_answer_set(rel: &str, dependent: &str, target: &str) -> String {
@@ -1012,14 +1014,20 @@ pub fn plan_question_read(heading: &str, what: &str) -> String {
     format!("\"{}\": {}", heading, what)
 }
 
-/// One neighbour of a question: its kind, its name, the reader's word,
-/// whether the agent's lines hold it, and the reader's sentence of reason.
-pub fn plan_neighbour(kind: &str, name: &str, word: &str, on_line: bool, reason: &str) -> String {
-    let line = format!("{} \"{}\": {}; {}", kind, name, word, if on_line { "on a line" } else { "no line" });
+/// One neighbour of a question as every command prints it (`adr plan` for
+/// what it read, `adr show --neighbours`): its kind and name, the step whose
+/// text the reader read and the reader's word, the line the agent put it
+/// on, and the reader's sentence of reason.
+pub fn neighbour(kind: &str, name: &str, step: &str, word: &str, line: Option<&str>, reason: &str) -> String {
+    let on = match line {
+        Some(l) => format!("on the {} line", l),
+        None => "no line".to_string(),
+    };
+    let text = format!("{} \"{}\": {} {}; {}", kind, name, step, word, on);
     if reason.is_empty() {
-        line
+        text
     } else {
-        format!("{}; {}", line, reason)
+        format!("{}; {}", text, reason)
     }
 }
 
@@ -1176,18 +1184,11 @@ pub fn show_topic(topic: &str, rel: &str) -> String {
     format!("# {} ({})", topic, rel)
 }
 
-/// A question of another topic file, in `show_stood_on_by`.
+/// A question of another topic file, as `show --dependents` names it.
 pub fn show_question_of(heading: &str, rel: &str) -> String {
     format!("{} ({})", heading, rel)
 }
 
-/// Under an open question: one neighbour on record, with the reader's word
-/// at each step it was read at and the agent's line (`depends`,
-/// `supersedes`, `unrelated` or `no line`).
-pub fn show_neighbour(kind: &str, name: &str, words: &[(&str, &str)], line: Option<&str>) -> String {
-    let words: Vec<String> = words.iter().map(|(step, word)| format!("{}: {}", step, word)).collect();
-    format!("    neighbour: {} \"{}\": {}; {}", kind, name, words.join(", "), line.unwrap_or("no line"))
-}
 
 /// Under a question not yet asked: the reader has recorded nothing for it.
 pub fn show_no_records(rel: &str) -> String {
@@ -1248,6 +1249,19 @@ pub fn already_in_use() -> String {
 }
 
 // --- settings.json shape (install --claude / check / uninstall) -----------
+
+/// The move on a failure of an owner command the owner cannot clear by
+/// running it again (a file it cannot read or write): the agent fixes what
+/// the error names, then the owner runs `command`.
+pub fn after_fix_owner_runs(command: impl Into<String>) -> Next {
+    Next::agent("fixes what the error names").and_owner_runs(command)
+}
+
+/// The agent's move on a file a command cannot take as it stands: fix the
+/// file at `path` so `so` holds, then run `command` again.
+pub fn fix_then(path: &str, so: &str, command: &str) -> Next {
+    Next::agent(format!("fixes {} so {}, then runs: {}", path, so, command))
+}
 
 pub fn settings_not_json_object(path: &str, next: Next) -> String {
     refuse(format!("{} is not a JSON object", path), next)
@@ -1366,12 +1380,12 @@ pub fn refused_row_without_line(rel: &str, heading: &str) -> String {
     )
 }
 
-/// An asked question whose text no longer hashes as asked. `moves`: the
-/// moves of the question's file (`moves::of_unasked_question_in`), the ones
+/// An asked question whose text no longer hashes as asked. `report`: the
+/// findings and moves of the question's file (`moves::of_unasked_question_in`), the ones
 /// `show` names for it (per "Does a command compute a move of its own?",
 /// aac5c313 A).
-pub fn edited_after_asking(rel: &str, heading: &str, moves: &[crate::moves::Move]) -> String {
-    format!("{}: {}: edited after asking; {}", rel, heading, crate::moves::tail(moves))
+pub fn edited_after_asking(rel: &str, heading: &str, report: &crate::moves::Report) -> String {
+    format!("{}: {}: edited after asking; {}", rel, heading, report.tail())
 }
 
 pub fn answer_set_changed(rel: &str, dep_heading: &str, heading: &str) -> String {
@@ -1600,10 +1614,7 @@ pub fn missing_deny_entry(entry: &str) -> String {
 }
 
 pub fn settings_unparseable(path: &str) -> String {
-    refuse(
-        format!("{} cannot be parsed", path),
-        Next::agent("runs: adr install --claude"),
-    )
+    refuse(format!("{} cannot be parsed", path), fix_then(".claude/settings.json", "it parses as JSON", "adr install --claude"))
 }
 
 /// `check`'s `install` check on a git hook (`.githooks/pre-commit` or
@@ -2431,8 +2442,10 @@ mod tests {
     #[test]
     fn every_refusal_names_its_next_move() {
         let e = "boom";
-        let approve_x = crate::moves::Move::new(crate::moves::MoveKind::Approve { path: "x.md".to_string() });
-        let approve_x2 = approve_x.clone();
+        let approve_x = crate::moves::Report {
+            findings: Vec::new(),
+            moves: vec![crate::moves::Move::new(crate::moves::MoveKind::Approve { path: "x.md".to_string() })],
+        };
         let outputs: Vec<String> = vec![
             write_failed("x", e, Next::agent("retries")),
             read_failed("x", e, Next::agent("retries")),
@@ -2510,10 +2523,7 @@ mod tests {
             crate::moves::answer_waits(
                 "heading",
                 "x.md",
-                vec![crate::moves::Waits::Asking {
-                    heading: "target".to_string(),
-                    moves: vec![crate::moves::Move::new(crate::moves::MoveKind::Approve { path: "x.md".to_string() })],
-                }],
+                vec![crate::moves::Waits::Asking { heading: "target".to_string(), report: approve_x.clone() }],
             ),
             tier_cap_exceeded("x.md", &["heading".to_string()], 0, 4),
             tier_cap_exceeded("x.md", &["heading".to_string()], 3, 4),
@@ -2523,14 +2533,14 @@ mod tests {
             already_refused("heading"),
             already_answered("heading"),
             letter_not_an_option('Z', "heading", &['A', 'B'], "id-1", "abcd1234"),
-            not_in_asked_state("heading", std::slice::from_ref(&approve_x)),
+            not_in_asked_state("heading", &approve_x),
             answer_missing_version("id-1", None),
             answer_missing_version("id-1", Some(("heading", "12345678"))),
             stale_version("heading", "x.md"),
             already_withdrawn("heading"),
             already_superseded("heading"),
-            not_asked_yet("heading", std::slice::from_ref(&approve_x)),
-            not_written("heading", std::slice::from_ref(&approve_x)),
+            not_asked_yet("heading", &approve_x),
+            not_written("heading", &approve_x),
             dep_retired_term("x.md", "heading", "widget"),
             show_not_a_file_approve_takes("x.md"),
             invalid_version_format("Z0ZZZZZZ"),
@@ -2540,8 +2550,8 @@ mod tests {
             terms_line_names_retired_term("id-1", "heading", "term"),
             edited_after_answered("x.md", "heading"),
             edited_after_refused("x.md", "heading"),
-            plan_not_approved("x.md", FileStatus::New, &[approve_x]),
-            context_not_approved("x.md", FileStatus::New, &[approve_x2]),
+            plan_not_approved("x.md", FileStatus::New, &approve_x),
+            context_not_approved("x.md", FileStatus::New, &approve_x),
             missing_answer_set("x.md", "dependent", "target"),
             set_on_answered_question("x.md", "dependent", "target"),
             question_without_body("x.md", "heading"),
@@ -2567,7 +2577,17 @@ mod tests {
             answered_text_changed("x.md", "heading", "id-1"),
             answered_row_without_line("x.md", "heading"),
             refused_row_without_line("x.md", "heading"),
-            edited_after_asking("x.md", "heading", &[crate::moves::Move::new(crate::moves::MoveKind::Ask { rel: "x.md".into(), headings: vec!["heading".into()] })]),
+            edited_after_asking(
+                "x.md",
+                "heading",
+                &crate::moves::Report {
+                    findings: Vec::new(),
+                    moves: vec![crate::moves::Move::new(crate::moves::MoveKind::Ask {
+                        rel: "x.md".into(),
+                        headings: vec!["heading".into()],
+                    })],
+                },
+            ),
             answer_set_changed("x.md", "dependent", "heading"),
             answer_conflict("x.md", "heading", "id-1", "A", "B"),
             banned_word_at("x.md:3", ""),
@@ -2645,7 +2665,7 @@ mod tests {
         ];
         for o in &outputs {
             assert!(
-                o.contains("; agent ") || o.contains("owner runs: "),
+                o.contains("; agent ") || o.contains("owner runs: ") || o.contains("; owner changes into"),
                 "no next move: {}",
                 o
             );

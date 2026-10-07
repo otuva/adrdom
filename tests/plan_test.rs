@@ -96,6 +96,12 @@ fn has_line(out: &str, line: &str) -> bool {
     out.lines().any(|l| l == line)
 }
 
+/// Whether `out` names the move `mv`: as a move line, or as the move a
+/// finding line ends with.
+fn names_move(out: &str, mv: &str) -> bool {
+    out.lines().any(|l| l == mv || l.ends_with(&format!("; {}", mv)))
+}
+
 /// True when `out` holds a line that starts with `prefix`.
 fn has_line_starting(out: &str, prefix: &str) -> bool {
     out.lines().any(|l| l.starts_with(prefix))
@@ -141,13 +147,16 @@ fn the_steps_in_order_from_headings_to_approval() {
     // decision and both terms; the heading's own depends line holds one term.
     let out = ok(&plan(&dir));
     assert_eq!(rows(&dir).len() - before, 6, "{}", out);
-    assert!(has_line(&out, &format!("[new] {}", REL)), "{}", out);
+    assert!(has_line(&out, &format!("[new] Topic ({})", REL)), "{}", out);
     assert!(has_line(&out, &format!("\"{}\": heading", H1)), "{}", out);
-    assert!(out.contains(&format!("  decision \"{}\": unrelated; no line", BASE_Q)), "{}", out);
-    assert!(out.contains("  term \"widget\": unrelated; on a line"), "{}", out);
+    assert!(out.contains(&format!("  decision \"{}\": heading unrelated; no line", BASE_Q)), "{}", out);
+    assert!(out.contains("  term \"widget\": heading unrelated; on the depends line"), "{}", out);
     assert!(lines_wanted(&out).contains(&(H1.to_string(), BASE_Q.to_string())), "{}", out);
     assert!(lines_wanted(&out).contains(&(H1.to_string(), "paint".to_string())), "{}", out);
-    assert!(has_line(&out, &format!("agent writes lines for \"{}\", \"{}\"", H1, H2)), "{}", out);
+    // Each neighbour on no line is a finding that carries the move.
+    for h in [H1, H2] {
+        assert!(out.lines().any(|l| l.ends_with(&format!("; agent writes lines for \"{}\"", h))), "{}", out);
+    }
     assert!(!out.contains("heading with its body"), "step 5 waits for the lines and the bodies: {}", out);
     assert!(!out.contains("neighbours,") && !out.contains(" read, "), "no counts: {}", out);
 
@@ -158,13 +167,15 @@ fn the_steps_in_order_from_headings_to_approval() {
     // Step 3: the lines. Step 4 has not come: no heading has a body.
     assert_eq!(write_lines(&dir, &out), 4);
     let out = ok(&plan(&dir));
-    assert!(has_line(&out, &format!("agent writes the body of \"{}\", \"{}\"", H1, H2)), "{}", out);
+    for h in [H1, H2] {
+        assert!(names_move(&out, &format!("agent writes the body of \"{}\"", h)), "{}", out);
+    }
 
     // A body under one heading only: the other is named, and no body is read
     // until it has its body.
     rewrite(&dir, &[(H1, body("one")), (H2, String::new())]);
     let out = ok(&plan(&dir));
-    assert!(has_line(&out, &format!("agent writes the body of \"{}\"", H2)), "{}", out);
+    assert!(names_move(&out, &format!("agent writes the body of \"{}\"", H2)), "{}", out);
     assert!(out.contains(&format!("\"{}\" is [no body]", H2)), "{}", out);
     assert!(!out.contains("heading with its body"), "{}", out);
 
@@ -175,14 +186,14 @@ fn the_steps_in_order_from_headings_to_approval() {
     let out = ok(&plan(&dir));
     assert_eq!(rows(&dir).len() - before, 8, "{}", out);
     assert!(has_line(&out, &format!("\"{}\": heading with its body", H1)), "{}", out);
-    assert!(out.contains(&format!("  question \"{}\": unrelated; no line", H2)), "{}", out);
+    assert!(out.contains(&format!("  question \"{}\": body unrelated; no line", H2)), "{}", out);
     assert!(lines_wanted(&out).contains(&(H1.to_string(), H2.to_string())), "{}", out);
     assert_eq!(write_lines(&dir, &out), 2);
 
     // Step 6: nothing is missing, and the owner approves. Approve needs
     // neither the model nor the reader.
     let out = ok(&plan(&dir));
-    assert_eq!(out, format!("[new] {}\nowner runs: adr approve {}\n", REL, REL), "the status and the move, nothing else");
+    assert_eq!(out, format!("[new] Topic ({})\nowner runs: adr approve {}\n", REL, REL), "the status and the move, nothing else");
     let again = rows(&dir).len();
     ok(&plan(&dir));
     assert_eq!(rows(&dir).len(), again, "a second run reads nothing");
@@ -262,7 +273,9 @@ fn a_step_needs_the_record_of_the_step_before() {
     write(&dir, &format!("# Topic\n{}{}", section(H1, &body("one")), section(H2, &body("two"))));
     let err = refused(&approve(&dir));
     assert!(err.contains(&format!("\"{}\" has no reader rows for its heading;", H1)), "{}", err);
-    assert!(err.contains(&format!("\"{}\" has no reader rows for its heading with its body;", H2)), "{}", err);
+    // The steps run in order: the body rows wait on the heading rows.
+    assert!(err.contains(&format!("\"{}\" has no reader rows for its heading;", H2)), "{}", err);
+    assert!(!err.contains("has no reader rows for its heading with its body"), "{}", err);
     assert!(err.contains(&format!("agent runs: adr plan {}", REL)), "{}", err);
 
     // A step-2 neighbour on no line stops step 5: the heading rows are made,
@@ -310,14 +323,14 @@ fn a_heading_added_after_the_bodies_gets_its_neighbours_first() {
     assert!(has_line(&out, &format!("\"{}\": heading", h3)), "{}", out);
     assert!(!has_line(&out, &format!("\"{}\": heading", H1)), "{}", out);
     assert!(lines_wanted(&out).iter().any(|(h, _)| h == h3), "{}", out);
-    assert!(has_line(&out, &format!("agent writes lines for \"{}\"", h3)), "{}", out);
+    assert!(out.lines().any(|l| l.ends_with(&format!("; agent writes lines for \"{}\"", h3))), "{}", out);
     // Approve refuses it too.
     assert!(refused(&approve(&dir)).contains(h3));
 
     // Then the lines, then the move for the missing body.
     write_lines(&dir, &out);
     let out = ok(&plan(&dir));
-    assert!(has_line(&out, &format!("agent writes the body of \"{}\"", h3)), "{}", out);
+    assert!(names_move(&out, &format!("agent writes the body of \"{}\"", h3)), "{}", out);
 
     // Then the body, and step 5 for that question alone; the two others are
     // not read again from their side.
@@ -346,7 +359,7 @@ fn the_plans_own_questions_are_neighbours_of_each_other_at_the_body_step() {
     let out = ok(&plan(&dir));
     write_lines(&dir, &out);
     let out = ok(&plan(&dir));
-    assert!(out.contains(&format!("  question \"{}\": depends; no line", H2)), "{}", out);
+    assert!(out.contains(&format!("  question \"{}\": body depends; no line", H2)), "{}", out);
 
     let rf = record::load(&dir.join(REL)).unwrap();
     let text1 = record::body_text(&rf, &rf.sections[0]);
@@ -452,10 +465,10 @@ fn the_readers_word_never_stops_a_command() {
     let b1 = body("one").replace("problem one", "problem one [word:inconsistent@-]");
     write(&dir, &format!("# Topic\n{}", section(&h1, &b1)));
     let out = ok(&plan(&dir));
-    assert!(out.contains("decision \"Does the base hold?\": same; no line"), "{}", out);
+    assert!(out.contains("decision \"Does the base hold?\": heading same; no line"), "{}", out);
     write_lines(&dir, &out);
     let out = ok(&plan(&dir));
-    assert!(out.contains(": inconsistent;"), "{}", out);
+    assert!(out.contains(": body inconsistent;"), "{}", out);
     write_lines(&dir, &out);
     let out = ok(&plan(&dir));
     assert!(has_line(&out, &format!("owner runs: adr approve {}", REL)), "{}", out);

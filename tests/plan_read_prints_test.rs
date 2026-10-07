@@ -74,23 +74,29 @@ fn plan_moves(out: &str) -> Vec<String> {
     out.lines().filter(|l| is_move(l)).map(|l| l.trim().to_string()).collect()
 }
 
-/// The moves `show` printed about the topic file: those naming its path or
-/// one of its headings.
-fn show_moves_of_file(out: &str) -> Vec<String> {
+/// The findings and the moves a command printed: every line at the left
+/// edge that is no status line, no topic line and no question `plan` read.
+fn report(out: &str) -> Vec<String> {
     out.lines()
-        .filter(|l| is_move(l))
-        .map(|l| l.trim().to_string())
-        .filter(|l| l.contains(REL) || l.contains(H1) || l.contains(H2))
+        .filter(|l| !l.starts_with([' ', '[', '"', '#', '+', '-']))
+        .map(str::to_string)
         .collect()
 }
 
-/// Plan and show name the same moves for the file, in the same order.
+/// The findings and moves `show` printed about the topic file: those naming
+/// its path or one of its headings.
+fn show_report_of_file(out: &str) -> Vec<String> {
+    report(out).into_iter().filter(|l| l.contains(REL) || l.contains(H1) || l.contains(H2)).collect()
+}
+
+/// Plan and show name the same findings and the same moves for the file,
+/// in the same order.
 fn same_moves(dir: &Path, stage: &str) -> String {
     let p = plan(dir);
     let s = show(dir);
-    let pm = plan_moves(&p);
-    assert!(!pm.is_empty(), "{}: plan names no move: {}", stage, p);
-    assert_eq!(pm, show_moves_of_file(&s), "{}: plan\n{}\nshow\n{}", stage, p, s);
+    let pr = report(&p);
+    assert!(!pr.is_empty(), "{}: plan names no move: {}", stage, p);
+    assert_eq!(pr, show_report_of_file(&s), "{}: plan\n{}\nshow\n{}", stage, p, s);
     p
 }
 
@@ -148,7 +154,7 @@ fn plan_names_the_moves_show_names_at_every_step() {
 /// Every line `plan` prints is one of: the file's status, a question it
 /// read, a neighbour of it, a finding on the file, or a move.
 fn plan_line_kind(line: &str) -> Option<&'static str> {
-    if line.starts_with('[') && line.ends_with(&format!("] {}", REL)) {
+    if line.starts_with('[') && line.ends_with(&format!("({})", REL)) {
         Some("status")
     } else if line.starts_with('"') && (line.ends_with("\": heading") || line.ends_with("\": heading with its body")) {
         Some("read")
@@ -185,7 +191,7 @@ fn plan_prints_the_status_what_it_read_the_findings_and_the_moves_and_nothing_el
         assert!(!out.lines().any(|l| l.contains(" neighbours") || l.contains(" read, ")), "no counts: {}", out);
     }
     // Ready: the status and the move, nothing else.
-    assert_eq!(outs.last().unwrap(), &format!("[new] {}\nowner runs: adr approve {}\n", REL, REL));
+    assert_eq!(outs.last().unwrap(), &format!("[new] Topic ({})\nowner runs: adr approve {}\n", REL, REL));
 }
 
 // adr: 848e1b76-9cfe-483b-94dd-094eb9b2f995

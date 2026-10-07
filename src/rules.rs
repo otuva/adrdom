@@ -9,7 +9,7 @@
 //! version `answer` takes) stays with that command.
 use crate::depends::{self, DepTarget};
 use crate::ledger::Ledger;
-use crate::moves::{self, Move};
+use crate::moves;
 use crate::msg::{self, Next};
 use crate::record::{self, RecordFile};
 use crate::repo;
@@ -49,15 +49,12 @@ pub struct Finding {
     /// `check` reads it to tell a finding in text that can still change from
     /// one in an asked or answered question.
     pub sections: Vec<usize>,
-    /// What the finding waits for, when its only move is an answer
-    /// elsewhere first: the message without its waiting tail.
-    waits_for: Option<String>,
 }
 
 impl Finding {
     /// A finding about the records; `about` names its subject.
     pub fn new(rule: &'static str, message: String) -> Finding {
-        Finding { subject: Subject::Records, rule, message, sections: Vec::new(), waits_for: None }
+        Finding { subject: Subject::Records, rule, message, sections: Vec::new() }
     }
     pub fn about(mut self, subject: Subject) -> Finding {
         self.subject = subject;
@@ -71,17 +68,10 @@ impl Finding {
         self.sections = indexes;
         self
     }
-    /// A finding nobody moves on until `what` is answered elsewhere.
-    pub fn waiting(mut self, what: String) -> Finding {
-        self.waits_for = Some(what);
-        self
-    }
-    pub fn waits_for(&self) -> Option<&str> {
-        self.waits_for.as_deref()
-    }
-    /// The move that clears this finding.
-    pub fn mv(&self) -> Move {
-        moves::of_finding(self)
+    /// The finding as one line: its rule, then the finding whole with the
+    /// move that clears it. The one rendering every command prints.
+    pub fn text(&self) -> String {
+        format!("{}: {}", self.rule, self.message)
     }
 }
 
@@ -903,11 +893,7 @@ fn waiting_on_other_file(
         for sec in other.sections.iter().filter(|s| s.heading_text.trim() == entry.trim()) {
             match status::question_status(led, sec) {
                 QuestionStatus::NoBody | QuestionStatus::NotAsked | QuestionStatus::Asked => {
-                    let what = msg::dep_waits_on_other_file_what(rel, section, entry, &other.rel);
-                    return Some(
-                        Finding::new("plan", msg::dep_waits_on_other_file(rel, section, entry, &other.rel))
-                            .waiting(what),
-                    );
+                    return Some(Finding::new("plan", msg::dep_waits_on_other_file(rel, section, entry, &other.rel)));
                 }
                 QuestionStatus::Refused => refused = Some(other.rel.as_str()),
                 _ => {}
@@ -1221,29 +1207,6 @@ pub fn judge_topic_file(j: &TopicFileJudge) -> Vec<Finding> {
     out
 }
 
-/// The findings of the planning steps on `rf`: a question not yet asked with
-/// no body, and its planning records (the reader's rows at each step and
-/// every neighbour on a line), judged only while the file awaits approval:
-/// they are what the owner's approval of the plan waits on, and an approved
-/// file has nothing for approve to take. Per "What does the agent do to plan
-/// a topic file?" and "Does a planning step run without the record of the
-/// step before?": the rows are read as they stand; neither the model nor
-/// the reader is needed. `rf` normalized or as loaded gives one status: an
-/// approved file holds identifiers, which normalizing leaves as they are.
-fn planning_step_refusals(
-    root: &Path,
-    rel: &str,
-    rf: &RecordFile,
-    all: &[RecordFile],
-    terms_list: &[terms::Term],
-    led: &Ledger,
-) -> Vec<String> {
-    if !planning_rules_apply(led, rf, rel) {
-        return Vec::new();
-    }
-    planning_steps(root, rel, rf, all, terms_list, led)
-}
-
 /// A question not yet asked with no body, and the planning records of the
 /// questions not yet asked: per "What does the agent do to plan a topic
 /// file?" and "Does a planning step run without the record of the step
@@ -1264,7 +1227,7 @@ fn planning_steps(
     // step's records are missing only because this one is not done (per
     // "Does a command compute a move of its own?", aac5c313 A).
     match planning.next() {
-        crate::plan::NextMove::Plan => planning.rows_missing(),
+        crate::plan::NextMove::Plan => planning.rows_missing_at_step(),
         crate::plan::NextMove::WriteLines => planning.line_refusals(),
         crate::plan::NextMove::WriteBodies(_) => no_body_refusals(rel, rf, led),
         crate::plan::NextMove::Ready => Vec::new(),
@@ -1304,21 +1267,6 @@ pub fn judge_topic_file_at(
         led,
         planning: planning_rules_apply(led, &rf, &rf.rel),
     })
-}
-
-/// `judge_topic_file_at` in two parts: the findings each cleared by a move
-/// of its own, and the findings of the planning steps (a question not yet
-/// asked with no body, missing reader rows, a neighbour on no line), whose
-/// moves are the planning moves (`moves::of_planning`).
-pub fn judge_topic_file_split_at(
-    root: &Path,
-    rf: &RecordFile,
-    all: &[RecordFile],
-    terms_list: &[terms::Term],
-    led: &Ledger,
-) -> (Vec<Finding>, Vec<Finding>) {
-    let steps: HashSet<String> = planning_step_refusals(root, &rf.rel, rf, all, terms_list, led).into_iter().collect();
-    judge_topic_file_at(root, rf, all, terms_list, led).into_iter().partition(|f| !steps.contains(&f.message))
 }
 
 /// Per "Does the agent write the bodies before approve?": the plan is

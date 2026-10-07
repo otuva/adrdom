@@ -73,16 +73,19 @@ runtime dependencies beyond `git` on `PATH`.
 - `adr ban` — read lines from stdin and ban them (and their tokens) from
   ever appearing in the repository or a commit message.
 - `adr show [file]` — with no file, print every current decision (its
-  heading and the option picked) and every move, one line each, opening
-  with who makes it. With a topic file, `adrdom/terms.md` or a blame file
+  heading and the option picked), every finding (its rule, then the finding
+  with the move that clears it) and every move, one line each, a move
+  opening with who makes it. With a topic file, `adrdom/terms.md` or a blame file
   (every file `adr approve` takes): each question, entry or row with its
   status (`no body`, `not asked`, `asked @<version>`, `answered <letter>`,
   `refused`, `superseded`, `withdrawn`, `dropped`; a file is `new`,
   `changed`, `approved` or `removed`), the lines it carries, the body of an
   asked question, and what the file holds beyond its latest approval,
-  marked `+` and `-`; then the file's moves. `--all` prints every such file
+  marked `+` and `-` (a question new or struck as a whole carries the mark
+  on its own line too); then the file's findings and moves. `--all` prints every such file
   that way; `--neighbours` adds each neighbour with the reader's word, and
-  `--stood-on` what stands on each question and what replaced one.
+  `--dependents` what stands on each question or term entry and what
+  replaced a question.
 - `adr plan <topic_file>` — do the planning step the file is at (read its
   headings, then its bodies, against their nearest current decisions and
   terms) and print what it read, the findings on the file and its next

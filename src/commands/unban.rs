@@ -1,5 +1,5 @@
 use crate::actions;
-use crate::msg::{self, Actor, Next};
+use crate::msg::{self, Actor};
 use crate::out;
 use crate::repo;
 use std::io::Read;
@@ -22,7 +22,7 @@ pub fn run() -> i32 {
     if std::io::stdin().read_to_string(&mut input).is_err() {
         out::eprint_stop(&format!(
             "unban: {}",
-            msg::stdin_read_failed(Next::owner_runs("adr unban"))
+            msg::stdin_read_failed(msg::after_fix_owner_runs("adr unban"))
         ));
         return 1;
     }
