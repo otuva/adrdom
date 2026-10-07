@@ -200,14 +200,14 @@ pub(super) fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> 
         ));
         body.push_str("<ul class=\"failures\">\n");
         for f in &snap.check.failures {
-            body.push_str(&format!("<li>{}</li>\n", esc(f)));
+            body.push_str(&format!("<li>{}</li>\n", esc(&crate::out::text(&crate::out::Line::Finding(f.clone())))));
         }
         body.push_str("</ul>\n");
     }
     if !snap.check.notes.is_empty() {
         body.push_str("<ul class=\"notes\">\n");
         for n in &snap.check.notes {
-            body.push_str(&format!("<li>{}</li>\n", esc(n)));
+            body.push_str(&format!("<li>{}</li>\n", esc(&crate::out::text(&crate::out::Line::Finding(n.clone())))));
         }
         body.push_str("</ul>\n");
     }

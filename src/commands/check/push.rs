@@ -7,8 +7,9 @@
 // this push's local sha; a push is not itself a commit to judge those
 // against).
 
-use super::Failure;
+use super::{stopped, Failure};
 use crate::msg::{self, Actor, Next};
+use crate::out::{self, Line};
 use crate::repo;
 use std::io::Read;
 use std::path::Path;
@@ -22,17 +23,14 @@ pub fn run() -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("check", "", Actor::Agent));
+            out::eprint(&[stopped(msg::not_a_repo("check", "", Actor::Agent))]);
             return 1;
         }
     };
 
     let mut input = String::new();
     if std::io::stdin().read_to_string(&mut input).is_err() {
-        eprintln!(
-            "check: {}",
-            msg::stdin_read_failed(Next::agent("checks stdin and retries"))
-        );
+        out::eprint(&[stopped(msg::stdin_read_failed(Next::agent("checks stdin and retries")))]);
         return 1;
     }
 
@@ -41,10 +39,10 @@ pub fn run() -> i32 {
         failures.extend(check_one_ref(&root, line));
     }
 
-    for f in &failures {
-        println!("{}: {}", f.check, f.message);
-    }
-    if failures.is_empty() {
+    let failed = !failures.is_empty();
+    let lines: Vec<Line> = failures.into_iter().map(|f| Line::Finding(f.finding())).collect();
+    out::print(&lines);
+    if !failed {
         0
     } else {
         1
@@ -79,7 +77,7 @@ fn check_one_ref(root: &Path, line: &str) -> Vec<Failure> {
 
     if !super::ledger::parent_object_present(root, remote_sha) {
         return vec![Failure {
-            check: "ledger".to_string(),
+            check: "ledger",
             message: msg::ledger_push_remote_unreadable(remote_ref),
         }];
     }
@@ -87,7 +85,7 @@ fn check_one_ref(root: &Path, line: &str) -> Vec<Failure> {
     // The ledger and the reader file are held the same way ("Does check hold
     // the reader's file as it holds the ledger?", 26c5352f-3f82-4376-9dc2-8ccc0074d080).
     let mut out = Vec::new();
-    let files: [(&str, &str, String); 2] = [
+    let files: [(&str, &'static str, String); 2] = [
         (repo::LEDGER_PATH, "ledger", msg::ledger_push_drops_rows(local_ref, remote_ref)),
         (repo::READER_PATH, "reader", msg::reader_push_drops_rows(local_ref, remote_ref)),
     ];
@@ -99,7 +97,7 @@ fn check_one_ref(root: &Path, line: &str) -> Vec<Failure> {
         let local_content = repo::git(root, &["show", &format!("{}:{}", local_sha, path)]).unwrap_or_default();
         let present: std::collections::HashSet<&str> = local_content.lines().collect();
         if super::ledger::lines_missing(&remote_content, &present) {
-            out.push(Failure { check: check.to_string(), message });
+            out.push(Failure { check, message });
         }
     }
     out

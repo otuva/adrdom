@@ -35,6 +35,14 @@ fn ledger_rows(dir: &std::path::Path, event: &str) -> Vec<Vec<String>> {
         .collect()
 }
 
+/// Whether the file at `REL` differs from its latest approval, read through
+/// the one status the tool holds (check prints no line for it, 3fc35d4f).
+fn awaits_approval(dir: &std::path::Path) -> bool {
+    let led = adr::ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+    let rf = adr::record::load(&dir.join(REL)).unwrap();
+    adr::status::topic_file_status_at(&led, &rf, REL).awaits_approval()
+}
+
 fn check_out(dir: &std::path::Path) -> std::process::Output {
     adr(dir, &["check"], &[], "")
 }
@@ -83,15 +91,14 @@ fn approve_writes_a_row_per_question_and_a_file_hash_over_the_sorted_parts() {
         &content[first_at..second_at]
     );
     std::fs::write(dir.join(REL), swapped).unwrap();
-    let out = check_out(&dir);
-    assert!(!stdout(&out).contains("awaiting approval"), "{}", stdout(&out));
+    assert!(!awaits_approval(&dir));
 
     // An edited body awaits approval.
     let edited = std::fs::read_to_string(dir.join(REL))
         .unwrap()
         .replace("another decision.", "another, changed decision.");
     std::fs::write(dir.join(REL), edited).unwrap();
-    assert!(stdout(&check_out(&dir)).contains("awaiting approval"));
+    assert!(awaits_approval(&dir));
 }
 
 // adr: 61e73795-63de-4669-b09f-48be96919325
@@ -109,11 +116,10 @@ fn a_struck_heading_awaits_approval_unless_its_hash_is_dropped() {
     let content = std::fs::read_to_string(dir.join(REL)).unwrap();
     let cut = content.find("### 1.2 ").unwrap();
     std::fs::write(dir.join(REL), &content[..cut]).unwrap();
-    assert!(stdout(&check_out(&dir)).contains("awaiting approval"));
+    assert!(awaits_approval(&dir));
 
     append_ledger_row_at(&dir, "dropped", &id2, &row2[3], "dropped for the test", "2999-01-01T00:00:00Z");
-    let out = check_out(&dir);
-    assert!(!stdout(&out).contains("awaiting approval"), "{}", stdout(&out));
+    assert!(!awaits_approval(&dir));
 }
 
 // adr: f5eeaacf-1c9f-478b-8a97-2df1aaf39458
@@ -194,24 +200,23 @@ fn approve_refuses_a_set_on_an_entry_naming_an_answered_question() {
 // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
 //
 // "Does check fail a topic file awaiting approval?" (No): a file with its
-// bodies, committed before approval, is counted and never failed.
+// bodies, committed before approval, is never failed, and its status is no
+// line of check's (3fc35d4f): what it owes before approve are notes.
 #[test]
-fn check_counts_a_file_awaiting_approval_and_passes() {
+fn check_passes_a_file_awaiting_approval() {
     let dir = setup(&file_of(&[Q1, Q2]));
     let out = check_out(&dir);
     assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
-    let text = stdout(&out);
-    assert!(text.contains("1 file(s) awaiting approval") && text.contains(REL), "{}", text);
+    assert!(!stdout(&out).contains("awaiting approval"), "{}", stdout(&out));
 
-    // After approve the count is gone; after an edit it is back and check
-    // still passes.
+    // After approve nothing is printed; after an edit check still passes.
     assert!(approve(&dir).status.success());
-    assert!(!stdout(&check_out(&dir)).contains("awaiting approval"));
+    assert_eq!(stdout(&check_out(&dir)), "");
     let edited = std::fs::read_to_string(dir.join(REL)).unwrap().replace("s2.", "s2, reworded.");
     std::fs::write(dir.join(REL), edited).unwrap();
     let out = check_out(&dir);
-    assert!(stdout(&out).contains("1 file(s) awaiting approval"), "{}", stdout(&out));
     assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
+    assert!(!stdout(&out).contains("awaiting approval"), "{}", stdout(&out));
 }
 
 // adr: 946263aa-519a-47aa-b743-5cdcf52f5d35
@@ -316,28 +321,28 @@ fn approve_refuses_a_set_on_an_entry_naming_a_term() {
 
 // adr: 61e73795-63de-4669-b09f-48be96919325
 //
-// "Does approve hash each question on its own?": check names the questions
-// that differ from the last approval, a changed one and a struck one, and
-// still passes.
+// "Does approve hash each question on its own?": a changed question and a
+// struck one each put the file back to the owner, and check still passes;
+// which questions differ is no line of check's (3fc35d4f).
 #[test]
-fn check_names_the_changed_and_the_struck_questions() {
+fn a_changed_and_a_struck_question_each_await_approval() {
     let dir = setup(&file_of(&[Q1, Q2]));
     assert!(approve(&dir).status.success());
     let edited = std::fs::read_to_string(dir.join(REL)).unwrap().replace("s2.", "s2, reworded.");
     std::fs::write(dir.join(REL), edited).unwrap();
     let out = check_out(&dir);
     assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
-    let text = stdout(&out);
-    assert!(text.contains("new or changed: \"1.2 Second question?\""), "{}", text);
-    assert!(!text.contains("struck"), "{}", text);
+    assert!(!stdout(&out).contains("new or changed"), "{}", stdout(&out));
+    assert!(awaits_approval(&dir));
 
     let id2 = adr::record::load(&dir.join(REL)).unwrap().sections[1].id.clone().unwrap();
     let kept = std::fs::read_to_string(dir.join(REL)).unwrap();
     let cut = kept.find("### 1.2 ").unwrap();
     std::fs::write(dir.join(REL), kept[..cut].trim_end().to_string() + "\n").unwrap();
     let out = check_out(&dir);
-    let text = stdout(&out);
-    assert!(text.contains(&format!("struck: {}", id2)), "{}", text);
+    assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
+    assert!(!stdout(&out).contains(&format!("struck: {}", id2)), "{}", stdout(&out));
+    assert!(awaits_approval(&dir));
 }
 
 // adr: 946263aa-519a-47aa-b743-5cdcf52f5d35

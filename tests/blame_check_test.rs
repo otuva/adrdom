@@ -152,8 +152,10 @@ fn check_staged_reads_the_blame_file_from_the_index_not_the_working_tree() {
     // Restore the good file on disk; only the index still holds the bad shape.
     std::fs::write(&path, &good).unwrap();
 
+    // A shape fault in a blame file awaiting approval is a note
+    // (fe14991d, 05141f49): printed, failing nothing.
     let staged_out = adr(&dir, &["check", "--staged"], &[], "");
-    assert!(!staged_out.status.success());
+    assert!(staged_out.status.success(), "{}", stdout(&staged_out));
     assert!(stdout(&staged_out).contains("not a row"), "{}", stdout(&staged_out));
 
     let plain_out = adr(&dir, &["check"], &[], "");
@@ -325,14 +327,15 @@ fn check_fails_when_the_origin_is_gone_and_the_blame_file_is_unapproved() {
     assert!(text.contains("approval"), "{}", text);
 }
 
-// --- 9c3cc17e A: an unapproved blame file is a count, never a stop ------
+// --- an unapproved blame file is no line of check's ----------------------
 
 //
-// "check reports a blame file awaiting approval as a count line ... and
-// passes": a draft blame file (its origin still present) never fails
-// `check`, only earns a count note.
+// A draft blame file with no fault (its origin still present) never fails
+// `check`, and its status is no line of check's: its move is in `adr show`
+// (3fc35d4f).
 #[test]
-fn check_passes_on_an_unapproved_blame_file_with_a_count_note() {
+fn check_passes_an_unapproved_blame_file_and_prints_nothing_of_it() {
+    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
     let (dir, _id1, _id2) = blame_setup();
     let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
     let rows = "1-1\tdropped: dead\n2-2\tdropped: detail\n";
@@ -341,12 +344,7 @@ fn check_passes_on_an_unapproved_blame_file_with_a_count_note() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "check should pass: {}", stdout(&out));
-    let text = stdout(&out);
-    assert!(
-        text.contains("blame: 1 file(s) awaiting approval: adrdom/blame/x.md"),
-        "{}",
-        text
-    );
+    assert!(!stdout(&out).contains("adrdom/blame/x.md"), "{}", stdout(&out));
 }
 
 //
@@ -382,13 +380,16 @@ fn ask_and_answer_ignore_an_unapproved_blame_file() {
 
 // A blame file's own shape error is always a failure, draft or not.
 #[test]
-fn check_fails_a_blame_file_with_a_shape_error() {
+fn check_notes_a_shape_error_in_a_blame_file_awaiting_approval() {
+    // adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
+    // approve refuses the shape fault; check reports it with the same move,
+    // as a note, since the file awaits approval (05141f49).
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     write_blame_file(&dir, "adrdom/blame/bad.md", "docs/x.md", "not-a-blob", "1-1\tdropped: dead\n");
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
+    assert!(out.status.success(), "{}", stdout(&out));
     assert!(stdout(&out).contains("blame:"), "{}", stdout(&out));
 }
 

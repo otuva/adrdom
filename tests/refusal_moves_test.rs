@@ -99,7 +99,7 @@ fn a_tie_in_a_file_named_outside_ascii_counts() {
     for args in [&["check"][..], &["check", "--staged"][..]] {
         let out = adr(&dir, args, &[], "");
         assert!(out.status.success(), "{:?}: {}", args, stdout(&out));
-        assert!(stdout(&out).contains("tested: 1"), "{:?}: {}", args, stdout(&out));
+        assert!(!stdout(&out).contains("untested:"), "{:?}: {}", args, stdout(&out));
     }
 }
 
@@ -227,7 +227,7 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(
         stdout(&out).contains(&format!(
-            "untested: {}: \"{}\"; no tracked file holds \"adr: {}\"",
+            "untested: {}: \"{}\" is answered and no tracked file holds \"adr: {}\"",
             A, ALPHA, alpha
         )),
         "{}",

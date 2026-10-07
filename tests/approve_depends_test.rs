@@ -590,13 +590,11 @@ fn ask_and_check_refuse_a_cross_file_depends_line_reverted_by_hand_after_approve
     );
 
     let check_out = adr(&dir, &["check"], &[], "");
-    // An unapproved file is only a count note, never a failure of its own.
+    // An unapproved file is never a failure of its own, and its status is no
+    // line of check's (3fc35d4f).
     let checked = stdout(&check_out);
-    assert!(
-        checked.contains("plan: 1 file(s) awaiting approval: adrdom/decisions/topic-b.md"),
-        "{}",
-        checked
-    );
+    assert!(check_out.status.success(), "{}", checked);
+    assert!(!checked.contains("awaiting approval"), "{}", checked);
     assert!(!checked.contains("body under unapproved heading"), "{}", checked);
 }
 

@@ -14,7 +14,7 @@ pub(super) fn check_banned(root: &Path, staged: bool, message: Option<&Path>, so
     if let Some(msg_path) = message {
         if let Err(e) = std::fs::read_to_string(msg_path) {
             out.push(Failure {
-                check: "banned".to_string(),
+                check: "banned",
                 message: msg::message_file_unreadable(&msg_path.display().to_string(), e),
             });
         }
@@ -31,7 +31,7 @@ pub(super) fn check_banned(root: &Path, staged: bool, message: Option<&Path>, so
         for hit in banned::hits(&content, &hash_map, terms_list) {
             let suffix = msg::term_suffix(hit.term.as_deref());
             out.push(Failure {
-                check: "banned".to_string(),
+                check: "banned",
                 message: msg::banned_word_at(&msg::location(&name, hit.line), &suffix),
             });
         }
@@ -75,7 +75,7 @@ pub(super) fn check_banned_ledger(led: &Ledger, root: &Path, source: &Source) ->
     missing_from_file.sort();
     for h in missing_from_file {
         out.push(Failure {
-            check: "banned".to_string(),
+            check: "banned",
             message: msg::banned_missing_from_file(hash_prefix(h)),
         });
     }
@@ -87,7 +87,7 @@ pub(super) fn check_banned_ledger(led: &Ledger, root: &Path, source: &Source) ->
     missing_from_ledger.sort();
     for h in missing_from_ledger {
         out.push(Failure {
-            check: "banned".to_string(),
+            check: "banned",
             message: msg::banned_missing_from_ledger(hash_prefix(h)),
         });
     }
@@ -99,7 +99,7 @@ pub(super) fn check_banned_ledger(led: &Ledger, root: &Path, source: &Source) ->
     unbanned_but_in_file.sort();
     for h in unbanned_but_in_file {
         out.push(Failure {
-            check: "banned".to_string(),
+            check: "banned",
             message: msg::banned_unbanned_but_in_file(hash_prefix(h)),
         });
     }

@@ -127,9 +127,12 @@ pub struct TermsView {
     pub entries: Vec<TermEntryView>,
 }
 
+/// What `check` reports: the findings that fail it, and the notes, the
+/// findings that fail nothing (a fault on a file awaiting approval, an
+/// untested decision).
 pub struct CheckReport {
-    pub failures: Vec<String>,
-    pub notes: Vec<String>,
+    pub failures: Vec<crate::rules::Finding>,
+    pub notes: Vec<crate::rules::Finding>,
 }
 
 pub struct Snapshot {
@@ -631,11 +634,7 @@ pub fn snapshot(root: &Path) -> Snapshot {
 
     let terms = terms_opt.map(|tf| build_terms_view(root, &led, tf));
 
-    let report = check::collect_with_tests(root, &test_idx);
-    let check_report = CheckReport {
-        failures: report.failures,
-        notes: report.notes,
-    };
+    let check_report = check::collect_with_tests(root, &test_idx);
 
     Snapshot {
         files,

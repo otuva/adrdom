@@ -1177,14 +1177,30 @@ pub struct TopicFileJudge<'a> {
     pub names: &'a HashMap<String, String>,
     pub replaced: &'a HashSet<String>,
     pub led: &'a Ledger,
+    /// Whether the planning rules judge the file (`planning_rules_apply`,
+    /// read off the file as written, before the normalize pass).
+    pub planning: bool,
+}
+
+/// Whether the rules of the planning steps (a question with no body, the
+/// reader's rows, every neighbour on a line) judge a topic file: while it
+/// awaits approval, its plan on the way to the owner. An approved file is
+/// judged by the rules of its record alone, so a heading approved before
+/// those rules is no finding. The one scope `approve` and `check` both read
+/// (per "Does a command refuse what check passes?", fe14991d A). `rf` is the
+/// file as written, before `depends::normalize_cross_file_deps`; `rel` its
+/// path from the root, as the ledger names it.
+pub fn planning_rules_apply(led: &Ledger, rf: &RecordFile, rel: &str) -> bool {
+    status::topic_file_status_at(led, rf, rel).awaits_approval()
 }
 
 /// Every rule one topic file breaks on its own, in the order `approve`
 /// names them: the rules of the record (`record_refusals`), its own name and
 /// headings, a heading in another topic file, an answer-set letter its
-/// target has no option for, a question not yet asked with no body, and the
-/// planning records of a question not yet asked (the reader's rows at each
-/// step and every neighbour on a line). The one judgement `approve` refuses
+/// target has no option for, and, while `planning_rules_apply`, a question
+/// not yet asked with no body and the planning records of a question not
+/// yet asked (the reader's rows at each step and every neighbour on a
+/// line). The one judgement `approve` refuses
 /// on (per "Does a command refuse what check passes?", fe14991d A).
 pub fn judge_topic_file(j: &TopicFileJudge) -> Vec<Finding> {
     let (rel, rf, led) = (j.rel, j.rf, j.led);
@@ -1207,7 +1223,9 @@ pub fn judge_topic_file(j: &TopicFileJudge) -> Vec<Finding> {
     // Per "Does a depends entry carry the answers it holds under?": a letter
     // the target has no option for is found before `ask`.
     out.extend(about_topic_file(in_sections("plan", letter_found(rel, rf, led)), rel));
-    out.extend(found("plan", rel, planning_step_refusals(j.root, rel, rf, j.all, j.terms_list, led)));
+    if j.planning {
+        out.extend(found("plan", rel, planning_steps(j.root, rel, rf, j.all, j.terms_list, led)));
+    }
     out
 }
 
@@ -1228,9 +1246,25 @@ fn planning_step_refusals(
     terms_list: &[terms::Term],
     led: &Ledger,
 ) -> Vec<String> {
-    if !crate::status::topic_file_status(led, rf).awaits_approval() {
+    if !planning_rules_apply(led, rf, rel) {
         return Vec::new();
     }
+    planning_steps(root, rel, rf, all, terms_list, led)
+}
+
+/// A question not yet asked with no body, and the planning records of the
+/// questions not yet asked: per "What does the agent do to plan a topic
+/// file?" and "Does a planning step run without the record of the step
+/// before?", the rows are read as they stand; neither the model nor the
+/// reader is needed.
+fn planning_steps(
+    root: &Path,
+    rel: &str,
+    rf: &RecordFile,
+    all: &[RecordFile],
+    terms_list: &[terms::Term],
+    led: &Ledger,
+) -> Vec<String> {
     let mut planning = crate::plan::load(root, rf, all, terms_list, led);
     planning.rel = rel.to_string();
     no_body_refusals(rel, rf, led).into_iter().chain(planning.approve_refusals()).collect()
@@ -1267,6 +1301,7 @@ pub fn judge_topic_file_at(
         names: &names,
         replaced: &replaced,
         led,
+        planning: planning_rules_apply(led, &rf, &rf.rel),
     })
 }
 
@@ -1352,16 +1387,20 @@ pub fn judge_blame_coverage(bf: &crate::blame::BlameFile, n: usize) -> Vec<Findi
 /// is the file's `origin:` path.
 pub fn judge_blame_destinations(
     root: &Path,
+    source: &repo::Source,
     bf: &crate::blame::BlameFile,
     origin: &str,
 ) -> (Vec<Finding>, Vec<crate::blame::Resolved>) {
     use crate::blame;
-    let all_records: Vec<RecordFile> = record::load_all(root);
+    // Every name a row resolves against is read through `source`, the same
+    // tree the caller judges: `check --staged` resolves against the staged
+    // files.
+    let (all_records, _) = record::load_all_via(root, source);
     let (any_headings, known_heading_ids) = blame::heading_ids(&all_records);
     let terms_list: Vec<terms::Term> =
-        state::load_terms(root).map(|tf| terms::minted_copy(&tf).terms).unwrap_or_default();
+        state::load_terms_via(root, source).map(|tf| terms::minted_copy(&tf).terms).unwrap_or_default();
     let phrase_lookup = terms::phrase_lookup(&terms_list);
-    let decision_stems: HashSet<String> = repo::list_decision_files(root)
+    let decision_stems: HashSet<String> = repo::list_decision_files_via(root, source)
         .iter()
         .filter_map(|p| p.file_stem().and_then(|s| s.to_str()).map(str::to_string))
         .collect();
@@ -1370,8 +1409,9 @@ pub fn judge_blame_destinations(
         known_heading_ids,
         terms_list: terms_list.as_slice(),
         phrase_lookup: &phrase_lookup,
+        source: *source,
         decision_stems,
-        known_origins: blame::known_origins(root),
+        known_origins: blame::known_origins_via(root, source),
         own_origin: origin.to_string(),
         root: root.to_path_buf(),
     };
@@ -1396,11 +1436,12 @@ pub fn judge_blame_destinations(
 /// through the same two functions.
 pub fn judge_blame_file(root: &Path, st: &crate::blame::FileState, bf: &crate::blame::BlameFile) -> Vec<Finding> {
     let about = || Subject::BlameFile(bf.rel.clone());
-    let mut out: Vec<Finding> = st.failures.iter().map(|f| Finding::new("blame", f.clone()).about(about())).collect();
+    let mut out: Vec<Finding> =
+        st.shape.iter().chain(&st.failures).map(|f| Finding::new("blame", f.clone()).about(about())).collect();
     if let Some(c) = &st.origin_content {
         out.extend(judge_blame_coverage(bf, c.lines().count()));
         if let Some(origin) = &bf.origin {
-            out.extend(judge_blame_destinations(root, bf, origin).0);
+            out.extend(judge_blame_destinations(root, &repo::Source::WorkingTree, bf, origin).0);
         }
     }
     out

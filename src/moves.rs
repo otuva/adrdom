@@ -346,6 +346,23 @@ pub fn of_topic_file_in(
     of_topic_file(&rf, led, plan_ok, &findings, tests, Some(&planning))
 }
 
+/// The move of the answered decision `id`, section `i` of `rf`, that no
+/// test names yet: the agent builds it, or nobody yet while a question
+/// beside it waits for an answer or is refused (per "Does the agent build
+/// on a decision before its tier is fully answered?"). The same move
+/// `of_topic_file` names for it; what `check` prints beside an untested
+/// decision.
+pub fn of_untested(rf: &RecordFile, i: usize, id: &str) -> Move {
+    let heading = rf.sections[i].heading_text.clone();
+    match state::unresolved_sibling(rf, i) {
+        Some(s) if s.is_refused() => {
+            Move::new(MoveKind::BuildWaitsRefused { heading, beside: s.heading_text.clone() })
+        }
+        Some(s) => Move::new(MoveKind::BuildWaits { heading, beside: s.heading_text.clone() }),
+        None => Move::new(MoveKind::Build { heading, id: id.to_string() }),
+    }
+}
+
 /// The moves for one question that is not asked or was edited since
 /// (`unwritten`: it has no body), for the refusal `answer` makes of a
 /// question waiting on it, by the rule `of_topic_file` applies: the plan's

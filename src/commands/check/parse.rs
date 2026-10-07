@@ -21,17 +21,17 @@ pub(super) fn check_parse(
     refusals: &[Vec<Finding>],
     awaiting: &[String],
     led: &Ledger,
-) -> (Vec<Failure>, Vec<String>) {
+) -> (Vec<Failure>, Vec<Failure>) {
     let mut out = Vec::new();
     let mut notes = Vec::new();
     for (rf, refs) in records.iter().zip(refusals) {
         let draft = awaiting.contains(&rf.rel);
         for r in refs.iter().filter(|r| r.rule == "parse") {
             if is_note(rf, r, draft, led) {
-                notes.push(format!("parse: {}", r.message));
+                notes.push(Failure { check: "parse", message: r.message.clone() });
             } else {
                 out.push(Failure {
-                    check: "parse".to_string(),
+                    check: "parse",
                     message: r.message.clone(),
                 });
             }
