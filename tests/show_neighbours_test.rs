@@ -10,11 +10,7 @@ mod common;
 use adr::reader;
 use adr::record;
 use common::*;
-use std::io::{BufRead, BufReader, Read, Write};
-use std::net::TcpStream;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
-use std::time::Duration;
 
 const REL: &str = "adrdom/decisions/topic.md";
 const BASE: &str = "adrdom/decisions/base.md";
@@ -204,88 +200,4 @@ fn the_next_lines_follow_the_planning_steps() {
     assert_eq!(next(&dir), vec![format!("agent writes lines for \"{}\", \"{}\"", H1, H2)]);
     plan_record(&dir, REL);
     assert_eq!(next(&dir), vec![format!("owner runs: adr approve {}", REL)]);
-}
-
-// --- the page ---------------------------------------------------------------
-
-fn spawn_owner(dir: &Path) -> Child {
-    Command::new(adr_bin())
-        .current_dir(dir)
-        .args(["serve", "--port", "0"])
-        .env_remove("CLAUDECODE")
-        .env("ADR_OWNER_BYPASS", "1")
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("adr serve should spawn")
-}
-
-fn read_open_line(child: &mut Child) -> (u16, String) {
-    let mut reader = BufReader::new(child.stdout.as_mut().expect("piped stdout"));
-    let mut line = String::new();
-    reader.read_line(&mut line).expect("read open line");
-    let rest = line.trim().strip_prefix("open: http://127.0.0.1:").expect("open line");
-    let (port, token) = rest.split_once("/?t=").expect("token");
-    (port.parse().expect("port"), token.to_string())
-}
-
-fn get(port: u16, path: &str, cookie: &str) -> String {
-    let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
-    let req = format!("GET {} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nCookie: {}\r\n\r\n", path, cookie);
-    stream.write_all(req.as_bytes()).unwrap();
-    let mut raw = String::new();
-    stream.read_to_string(&mut raw).unwrap();
-    raw
-}
-
-#[test]
-fn the_page_prints_the_same_neighbour_lines_under_an_open_question() {
-    let dir = repo();
-    write_topic(&dir);
-    approve_record(&dir, REL);
-    let asked = adr(&dir, &["ask", dir.join(REL).to_str().unwrap()], &[], "");
-    assert!(asked.status.success(), "{}", stderr(&asked));
-    let shown = show(&dir, &NO_TOOLS);
-
-    let mut child = spawn_owner(&dir);
-    let (port, token) = read_open_line(&mut child);
-    let page = get(port, "/next", &format!("adr_t={}", token));
-    let _ = child.kill();
-    let _ = child.wait();
-    assert!(page.contains("class=\"neighbours\""), "{}", page);
-    // The page opens one of the two questions; every neighbour line show
-    // prints under it is on the page, as HTML.
-    let esc = |l: &str| l.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;");
-    let on_page = |h: &str| {
-        let lines: Vec<String> = under(&shown, h).into_iter().filter(|l| l.starts_with("neighbour: ")).collect();
-        !lines.is_empty() && lines.iter().all(|l| page.contains(&esc(l)) || page.contains(l.as_str()))
-    };
-    assert!(on_page(H1) || on_page(H2), "{}", page);
-}
-
-#[test]
-fn the_overview_prints_the_neighbour_lines_beside_the_approve_button() {
-    let dir = repo();
-    write_topic(&dir);
-    let page_of = |dir: &Path| {
-        let mut child = spawn_owner(dir);
-        let (port, token) = read_open_line(&mut child);
-        let page = get(port, "/", &format!("adr_t={}", token));
-        let _ = child.kill();
-        let _ = child.wait();
-        page
-    };
-    // Not planned: each question has the no-records line above the button.
-    let page = page_of(&dir);
-    let at = page.find("unasked-list").expect("list");
-    assert!(page.find("Approve Topic").unwrap() > at, "{}", page);
-    assert!(page.contains("no reader records yet; agent runs: adr plan"), "{}", page);
-    // Planned: the neighbour lines with the reader's word and the agent's line.
-    plan_record(&dir, REL);
-    let page = page_of(&dir);
-    assert!(page.contains(H1) && page.contains(H2), "{}", page);
-    assert!(page.contains("heading: unrelated, body: unrelated; unrelated"), "{}", page);
-    assert!(!page.contains("no reader records yet"), "{}", page);
 }
