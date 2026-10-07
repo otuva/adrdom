@@ -406,6 +406,7 @@ fn outside_a_repository_every_command_names_the_step_that_clears_it() {
         (vec!["install", "--claude", "--codex"], false),
         (vec!["ban"], false),
         (vec!["ban", "--term", "widget"], false),
+        (vec!["ban", "--term", "answer set"], false),
         (vec!["ban", "--rebuild"], false),
     ] {
         let out = if owner { adr_owner(&outside, &args, "") } else { adr(&outside, &args, &[], "") };
@@ -413,8 +414,11 @@ fn outside_a_repository_every_command_names_the_step_that_clears_it() {
         let err = stderr(&out);
         let line = err.trim_end();
         assert!(line.contains("not inside a git repository; "), "{:?}: {}", args, err);
-        // The move is the command line as given, so it runs as printed.
-        let command = format!("adr {}", args.join(" "));
+        // The move is the command line as given, so it runs as printed: an
+        // argument of several words is quoted.
+        let quoted: Vec<String> =
+            args.iter().map(|a| if a.contains(' ') { format!("'{}'", a) } else { a.to_string() }).collect();
+        let command = format!("adr {}", quoted.join(" "));
         assert!(line.ends_with(&format!("changes into a git repository and runs: {}", command)), "{:?}: {}", args, err);
         assert!(line.starts_with(&format!("{}: not inside", args[0])), "{:?}: {}", args, err);
         assert_one_clearing_move(line, &command);

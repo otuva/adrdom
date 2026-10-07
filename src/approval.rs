@@ -105,7 +105,9 @@ fn changed(old: Option<Vec<String>>, new: &[String]) -> Vec<DiffLine> {
 /// was: the commits that touched a path, the text of a path at a commit,
 /// and that text parsed as a topic file. A long-running `serve` drops all of
 /// it when `HEAD` moves, so what it keeps is bounded by one `HEAD`'s history
-/// and a new commit is read. A `git show` that fails is not kept: the next
+/// and a new commit is read. A path a commit does not hold (the commit that
+/// deleted it) is kept as absent, since a commit's content never changes; a
+/// `git show` that fails for any other reason is not kept, and the next
 /// reader asks git again.
 #[derive(Default)]
 struct History {
@@ -115,8 +117,9 @@ struct History {
     /// thread moved the cache on can never stand for another repository.
     commits: HashMap<(PathBuf, String, String), Arc<Vec<String>>>,
     /// Keyed by repository, commit and path: what a commit holds never
-    /// changes, whatever `HEAD` is.
-    texts: HashMap<(PathBuf, String, String), Arc<String>>,
+    /// changes, whatever `HEAD` is. `None` where the commit does not hold
+    /// the path.
+    texts: HashMap<(PathBuf, String, String), Option<Arc<String>>>,
     topics: HashMap<(PathBuf, String, String), Arc<RecordFile>>,
 }
 
@@ -153,14 +156,28 @@ fn commits_of(root: &Path, rel: &str) -> Arc<Vec<String>> {
 fn text_at(root: &Path, commit: &str, rel: &str) -> Option<Arc<String>> {
     let key = (root.to_path_buf(), commit.to_string(), rel.to_string());
     if let Some(found) = history().texts.get(&key) {
-        return Some(found.clone());
+        return found.clone();
     }
-    let text = Arc::new(repo::git(root, &["show", &format!("{}:{}", commit, rel)])?);
+    let text = match repo::git(root, &["show", &format!("{}:{}", commit, rel)]) {
+        Some(text) => Some(Arc::new(text)),
+        // Kept as absent only when the commit's tree holds no such path (the
+        // commit that deleted it); any other failure is asked again.
+        None if commit_lacks(root, commit, rel) => None,
+        None => return None,
+    };
     history().texts.insert(key, text.clone());
-    Some(text)
+    text
 }
 
-/// The text of `rel` at `commit` parsed as a topic file.
+/// Whether `commit`'s tree holds nothing at `rel`: git lists the tree and
+/// names no entry.
+fn commit_lacks(root: &Path, commit: &str, rel: &str) -> bool {
+    repo::git(root, &["ls-tree", "--name-only", commit, "--", rel]).is_some_and(|out| out.trim().is_empty())
+}
+
+/// The text of `rel` at `commit` parsed as a topic file. The parsed file
+/// carries `root.join(rel)` as its path, and the key holds `root`, so a
+/// version kept for one repository never stands for another.
 fn topic_at(root: &Path, commit: &str, rel: &str) -> Option<Arc<RecordFile>> {
     let key = (root.to_path_buf(), commit.to_string(), rel.to_string());
     if let Some(found) = history().topics.get(&key) {
@@ -474,5 +491,38 @@ mod tests {
     fn a_part_with_no_approved_text_reads_as_added() {
         let d = changed(None, &l(&["a"]));
         assert_eq!(d[0].side, Side::Added);
+    }
+
+    fn git_in(dir: &Path, args: &[&str]) {
+        let ok = std::process::Command::new("git").current_dir(dir).args(args).output().unwrap().status.success();
+        assert!(ok, "git {:?}", args);
+    }
+
+    #[test]
+    fn a_commit_that_deleted_the_path_is_kept_as_absent() {
+        let dir = std::env::temp_dir().join(format!("adr-approval-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        git_in(&dir, &["init", "-q"]);
+        git_in(&dir, &["config", "user.email", "t@example.com"]);
+        git_in(&dir, &["config", "user.name", "T"]);
+        git_in(&dir, &["config", "commit.gpgsign", "false"]);
+        std::fs::write(dir.join("f.md"), "one\n").unwrap();
+        git_in(&dir, &["add", "f.md"]);
+        git_in(&dir, &["commit", "-q", "-m", "add"]);
+        git_in(&dir, &["rm", "-q", "f.md"]);
+        git_in(&dir, &["commit", "-q", "-m", "delete"]);
+        let commits = commits_of(&dir, "f.md");
+        assert_eq!(commits.len(), 2);
+        // The newest commit deleted the path: absent, and kept so.
+        assert!(text_at(&dir, &commits[0], "f.md").is_none());
+        let key = (dir.clone(), commits[0].clone(), "f.md".to_string());
+        assert_eq!(history().texts.get(&key), Some(&None));
+        // The older one holds it.
+        assert_eq!(text_at(&dir, &commits[1], "f.md").as_deref().map(String::as_str), Some("one\n"));
+        // A commit git cannot read is not kept at all.
+        assert!(text_at(&dir, "0000000000000000000000000000000000000000", "f.md").is_none());
+        let unknown = (dir.clone(), "0000000000000000000000000000000000000000".to_string(), "f.md".to_string());
+        assert!(!history().texts.contains_key(&unknown));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

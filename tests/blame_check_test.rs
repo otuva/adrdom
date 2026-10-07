@@ -484,3 +484,38 @@ fn check_fails_a_present_unreadable_origin_as_its_own_failure() {
     assert!(text.contains("exists but cannot be read"), "{}", text);
     assert!(!text.contains("is missing"), "{}", text);
 }
+
+// adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
+//
+// A blame row resolves against the topic files as they are written, in
+// check as in show, with a topic file present whose depends line names a
+// decision of another file by its heading (an entry check's normalize pass
+// rewrites): a `decision:` row naming that decision resolves in both, and a
+// row naming no question gets the one finding both print.
+#[test]
+fn check_and_show_resolve_a_blame_row_alike() {
+    let (dir, _id1, _id2) = blame_setup();
+    let other = "# Other\n\n### Does the other rule pass?\ndepends: pass, Is this pass?\n\nProblem: p.\n\nStandard: s.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n";
+    write_record(&dir, "adrdom/decisions/other.md", other);
+    let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
+    let rows = "1-1\tdecision: Is this pass?\n2-2\tdecision: Is nothing here at all?\n";
+    write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
+
+    let check = adr(&dir, &["check"], &[], "");
+    let show = adr(&dir, &["show", "adrdom/blame/x.md"], &[], "");
+    assert!(show.status.success(), "{}", stderr(&show));
+    let blame_lines = |text: &str| -> Vec<String> {
+        let mut v: Vec<String> = text.lines().filter(|l| l.starts_with("blame: ")).map(str::to_string).collect();
+        v.sort();
+        v
+    };
+    let from_check = blame_lines(&stdout(&check));
+    let from_show = blame_lines(&stdout(&show));
+    assert!(
+        from_check.iter().any(|l| l.contains("Is nothing here at all?")),
+        "check names the row with no question: {}",
+        stdout(&check)
+    );
+    assert!(!from_check.iter().any(|l| l.contains("Is this pass?")), "{}", stdout(&check));
+    assert_eq!(from_check, from_show, "check:\n{}\nshow:\n{}", stdout(&check), stdout(&show));
+}

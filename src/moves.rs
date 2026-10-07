@@ -341,39 +341,25 @@ pub fn of_topic_file(
     out
 }
 
+/// What the moves of a file are judged against, read once for a run: the
+/// repository root, every topic file as loaded, the terms, the ledger and
+/// what the judgement shares across files (`rules::RepoIndex`).
+pub struct Judging<'a> {
+    pub root: &'a std::path::Path,
+    pub all: &'a [RecordFile],
+    pub terms_list: &'a [crate::terms::Term],
+    pub led: &'a Ledger,
+    pub index: &'a crate::rules::RepoIndex,
+}
+
 /// `of_unasked_question` of the question `heading` of the topic file `rf`
 /// as loaded from disk, with the findings and planning records read the
 /// way `of_topic_file_in` reads them: the move `answer` names for a
 /// question it cannot take yet is the one `show` names for its file.
-pub fn of_unasked_question_in(
-    root: &std::path::Path,
-    rf: &RecordFile,
-    all: &[RecordFile],
-    terms_list: &[crate::terms::Term],
-    led: &Ledger,
-    heading: &str,
-    unwritten: bool,
-) -> Report {
-    let index = crate::rules::RepoIndex::new(root, all, terms_list, led);
-    of_unasked_question_with(root, rf, all, terms_list, led, heading, unwritten, &index)
-}
-
-/// `of_unasked_question_in` with what the run shares read once (`index`):
-/// what a caller that names many questions calls once per question.
-#[allow(clippy::too_many_arguments)]
-pub fn of_unasked_question_with(
-    root: &std::path::Path,
-    rf: &RecordFile,
-    all: &[RecordFile],
-    terms_list: &[crate::terms::Term],
-    led: &Ledger,
-    heading: &str,
-    unwritten: bool,
-    index: &crate::rules::RepoIndex,
-) -> Report {
-    let plan_ok = state::plan_approved(led, rf, &rf.rel) && state::context_approved(led, rf, &rf.rel);
-    let planning = crate::plan::load_with(rf, terms_list, led, &index.planning);
-    let findings = crate::rules::judge_topic_file_in(root, rf, all, terms_list, led, index);
+pub fn of_unasked_question_in(j: &Judging, rf: &RecordFile, heading: &str, unwritten: bool) -> Report {
+    let plan_ok = state::plan_approved(j.led, rf, &rf.rel) && state::context_approved(j.led, rf, &rf.rel);
+    let planning = crate::plan::load_with(rf, j.terms_list, j.led, &j.index.planning);
+    let findings = crate::rules::judge_topic_file_in(j.root, rf, j.all, j.terms_list, j.led, j.index);
     let moves = of_unasked_question(rf, plan_ok, &findings, Some(&planning), heading, unwritten);
     Report { findings, moves }
 }

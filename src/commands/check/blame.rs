@@ -19,11 +19,14 @@ use crate::rules::{self, Finding};
 use std::path::Path;
 
 /// The failures, and the notes: the findings on a blame file awaiting
-/// approval.
+/// approval. `as_loaded` is every topic file as read, before the normalize
+/// pass rewrites `records`: what a row's destination resolves against, the
+/// same files `show` resolves it against.
 pub(super) fn check_blame(
     root: &Path,
     source: &Source,
     records: &[RecordFile],
+    as_loaded: &[RecordFile],
     terms_list: &[crate::terms::Term],
     led: &Ledger,
 ) -> (Vec<Failure>, Vec<Finding>) {
@@ -42,7 +45,7 @@ pub(super) fn check_blame(
     let (any_headings, known_ids) = blame::heading_ids(records);
     // What every row's destination resolves against, read once for the run
     // rather than once per blame file.
-    let names = (!rels.is_empty()).then(|| rules::BlameNames::of(root, source, records, terms_list.to_vec()));
+    let names = (!rels.is_empty()).then(|| rules::BlameNames::of(root, source, as_loaded, terms_list.to_vec()));
 
     for rel in &rels {
         let Some(content) = source.read(root, rel) else {

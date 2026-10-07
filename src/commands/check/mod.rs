@@ -229,7 +229,7 @@ fn build(
     push_failures(&mut failures, plan_failures);
     push_failures(&mut notes, plan_notes);
     push_failures(&mut failures, terms::check_terms(root, &records, &led, &source, &approved_rels));
-    let (blame_failures, blame_notes) = blame::check_blame(root, &source, &records, &terms_list, &led);
+    let (blame_failures, blame_notes) = blame::check_blame(root, &source, &records, &as_loaded, &terms_list, &led);
     push_failures(&mut failures, blame_failures);
     notes.extend(blame_notes);
     let (test_failures, untested) = tests::check_tests(root, &records, &led, tests, &source);

@@ -145,16 +145,8 @@ pub(super) fn check_answers(
                     if latest_asked_hash != cur {
                         let loaded = as_loaded.iter().find(|f| f.rel == rf.rel).unwrap_or(rf);
                         let index = index.get_or_init(|| crate::rules::RepoIndex::new(root, as_loaded, terms_list, led));
-                        let moves = crate::moves::of_unasked_question_with(
-                            root,
-                            loaded,
-                            as_loaded,
-                            terms_list,
-                            led,
-                            &sec.heading_text,
-                            false,
-                            index,
-                        );
+                        let j = crate::moves::Judging { root, all: as_loaded, terms_list, led, index };
+                        let moves = crate::moves::of_unasked_question_in(&j, loaded, &sec.heading_text, false);
                         out.push(Failure {
                             check: "answers",
                             message: msg::edited_after_asking(&rf.rel, &sec.heading_text, &moves),

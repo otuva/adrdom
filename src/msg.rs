@@ -2726,6 +2726,29 @@ mod tests {
         );
     }
 
+    // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+    //
+    // The moves ban and unban print when their input cannot be read, the
+    // ban list or the ledger cannot be written, or they run outside a
+    // repository: each names the command as it runs, its words read on its
+    // input as always, with nothing after it that the shell would take for
+    // an argument.
+    #[test]
+    fn ban_and_unban_moves_name_a_command_that_runs_as_printed() {
+        let e = "boom";
+        for (line, command) in [
+            (owner_refusal("unban", ""), "owner runs: adr unban"),
+            (not_a_repo("unban", "", Actor::Owner), "owner changes into a git repository and runs: adr unban"),
+            (stdin_read_failed(after_fix_owner_runs("adr unban")), "owner runs: adr unban"),
+            (stdin_read_failed(after_fix_agent_runs("adr ban")), "then runs: adr ban"),
+            (update_failed("banned list", e, after_fix_agent_runs("adr ban")), "then runs: adr ban"),
+            (update_failed("ledger", e, after_fix_agent_runs("adr ban")), "then runs: adr ban"),
+            (update_failed("banned list", e, after_fix_agent_runs("adr ban --rebuild")), "then runs: adr ban --rebuild"),
+        ] {
+            assert!(line.ends_with(command), "{} should end with {}", line, command);
+        }
+    }
+
     #[test]
     fn untested_names_the_decision_its_place_and_its_move() {
         let line = untested("x.md", "heading", "id-1", "agent builds it");

@@ -60,6 +60,10 @@ pub(crate) struct Records {
     /// What every blame row resolves against, read the first time a blame
     /// file is judged (`rules::BlameNames`).
     blame_names: std::cell::OnceCell<rules::BlameNames>,
+    /// The terms file with an identifier on every entry
+    /// (`terms::minted_copy`), minted the first time it is needed: the one
+    /// list the terms judgement and the blame rows read, as in `check`.
+    minted_terms: std::cell::OnceCell<Option<TermsFile>>,
 }
 
 impl Records {
@@ -94,12 +98,17 @@ impl Records {
             names,
             index: std::cell::OnceCell::new(),
             blame_names: std::cell::OnceCell::new(),
+            minted_terms: std::cell::OnceCell::new(),
         }
+    }
+
+    fn minted_terms(&self) -> Option<&TermsFile> {
+        self.minted_terms.get_or_init(|| self.terms_file.as_ref().map(terms::minted_copy)).as_ref()
     }
 
     fn blame_names(&self) -> &rules::BlameNames {
         self.blame_names.get_or_init(|| {
-            let minted = self.terms_file.as_ref().map(|tf| terms::minted_copy(tf).terms).unwrap_or_default();
+            let minted = self.minted_terms().map(|tf| tf.terms.clone()).unwrap_or_default();
             rules::BlameNames::of(&self.root, &repo::Source::WorkingTree, &self.topic_files, minted)
         })
     }
@@ -605,6 +614,9 @@ fn removed_report(r: &Records, rel: &str) -> Report {
 /// (`moves::of_terms_file`), judged as `approve` judges it.
 fn terms_report(r: &Records, tf: &TermsFile) -> (FileStatus, Report) {
     let st = status::terms_file_status(&r.led, tf);
+    let Some(minted) = r.minted_terms() else {
+        return (st, Report::default());
+    };
     if st == FileStatus::Approved {
         return (st, Report::default());
     }
@@ -614,11 +626,10 @@ fn terms_report(r: &Records, tf: &TermsFile) -> (FileStatus, Report) {
         .filter(|rf| state::plan_approved(&r.led, rf, &rf.rel))
         .map(|rf| rf.rel.clone())
         .collect();
-    let minted = terms::minted_copy(tf);
     let (findings, _) = rules::judge_terms_file(
         &r.root,
         &r.topic_files,
-        &minted,
+        minted,
         &r.led,
         &repo::Source::WorkingTree,
         true,

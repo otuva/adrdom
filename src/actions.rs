@@ -216,7 +216,9 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
             // The move is the one `show` names for the question's file.
             let moves = || {
                 let all = record::load_all(root);
-                crate::moves::of_unasked_question_in(root, &rf, &all, &tf.terms, &led, &sec.heading_text, sec.is_skeleton)
+                let index = crate::rules::RepoIndex::new(root, &all, &tf.terms, &led);
+                let j = crate::moves::Judging { root, all: &all, terms_list: &tf.terms, led: &led, index: &index };
+                crate::moves::of_unasked_question_in(&j, &rf, &sec.heading_text, sec.is_skeleton)
             };
             return Err(if sec.is_skeleton {
                 msg::not_written(&sec.heading_text, &moves())
@@ -273,7 +275,8 @@ fn answer_gate(root: &Path, rf: &RecordFile, led: &Ledger, tf: &terms::TermsFile
     let moves_for = |leaf: usize, unwritten: bool| {
         let all = all.get_or_init(|| record::load_all(root));
         let index = index.get_or_init(|| crate::rules::RepoIndex::new(root, all, &tf.terms, led));
-        crate::moves::of_unasked_question_with(root, rf, all, &tf.terms, led, &rf.sections[leaf].heading_text, unwritten, index)
+        let j = crate::moves::Judging { root, all, terms_list: &tf.terms, led, index };
+        crate::moves::of_unasked_question_in(&j, rf, &rf.sections[leaf].heading_text, unwritten)
     };
     for &t in &w.unanswered {
         let heading = rf.sections[t].heading_text.clone();
