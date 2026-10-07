@@ -79,7 +79,7 @@ fn a_copied_heading_never_reaches_ask_because_approve_refuses_it() {
     // Ask on the unapproved copy refuses on the approval, not on the heading.
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
-    assert!(stderr(&out).contains("not approved"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("plan is new"), "{}", stderr(&out));
     assert_eq!(asked_row_count(&dir), 0);
 }
 

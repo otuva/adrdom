@@ -1,4 +1,5 @@
 pub mod actions;
+pub mod approval;
 pub mod banned;
 pub mod blame;
 pub mod commands;

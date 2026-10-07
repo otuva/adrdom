@@ -96,7 +96,7 @@ pub fn require_terms(root: &Path, led: &Ledger, rel: &str) -> Result<terms::Term
         return Err(out);
     }
     if !state::terms_approved(led, &tf) {
-        return Err(msg::terms_not_approved(rel));
+        return Err(msg::terms_not_approved(rel, crate::status::terms_file_status(led, &tf)));
     }
     Ok(tf)
 }
@@ -229,12 +229,16 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
             } else if led.latest_asked(id).is_none() {
                 msg::not_asked_yet(&sec.heading_text, &rel)
             } else {
-                match led.latest_state(id).map(|r| r.event.as_str()) {
-                    Some("withdrawn") => msg::already_withdrawn(&sec.heading_text),
-                    Some("answered") => msg::already_answered(&sec.heading_text),
-                    Some("refused") => msg::already_refused(&sec.heading_text),
-                    Some("superseded") => msg::already_superseded(&sec.heading_text),
-                    _ => msg::not_in_asked_state(&sec.heading_text, &rel),
+                use crate::status::QuestionStatus;
+                match crate::status::question_status(&led, sec) {
+                    QuestionStatus::Withdrawn => msg::already_withdrawn(&sec.heading_text),
+                    QuestionStatus::Answered => msg::already_answered(&sec.heading_text),
+                    QuestionStatus::Refused => msg::already_refused(&sec.heading_text),
+                    QuestionStatus::Superseded => msg::already_superseded(&sec.heading_text),
+                    QuestionStatus::Dropped => msg::already_dropped(&sec.heading_text),
+                    QuestionStatus::NoBody | QuestionStatus::NotAsked | QuestionStatus::Asked => {
+                        msg::not_in_asked_state(&sec.heading_text, &rel)
+                    }
                 }
             });
         }

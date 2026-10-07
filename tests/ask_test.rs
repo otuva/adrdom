@@ -181,7 +181,7 @@ fn ask_refuses_a_heading_added_after_approval_and_a_never_approved_file() {
     );
     assert_eq!(
         stderr(&out).trim_end(),
-        "ask: adrdom/decisions/never.md: plan not approved; owner runs: adr approve adrdom/decisions/never.md"
+        "ask: adrdom/decisions/never.md: plan is new; owner runs: adr approve adrdom/decisions/never.md"
     );
 
     // A heading added after approval: the owner approved only 1.1, then the
@@ -202,7 +202,7 @@ fn ask_refuses_a_heading_added_after_approval_and_a_never_approved_file() {
     );
     assert_eq!(
         stderr(&out).trim_end(),
-        "ask: adrdom/decisions/example.md: plan not approved; owner runs: adr approve adrdom/decisions/example.md"
+        "ask: adrdom/decisions/example.md: plan is changed; owner runs: adr approve adrdom/decisions/example.md"
     );
 
     // Nothing written: no id minted for the new heading, no ledger row.
@@ -605,7 +605,7 @@ fn ask_refuses_a_depends_entry_that_no_longer_resolves_or_is_missing_after_appro
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
     assert!(
-        stderr(&out).contains("plan not approved"),
+        stderr(&out).contains("plan is changed"),
         "{}",
         stderr(&out)
     );
@@ -630,7 +630,7 @@ fn ask_refuses_a_depends_entry_that_no_longer_resolves_or_is_missing_after_appro
     let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out2.status.success(), "ask should have refused: {}", stdout(&out2));
     assert!(
-        stderr(&out2).contains("plan not approved"),
+        stderr(&out2).contains("plan is changed"),
         "{}",
         stderr(&out2)
     );

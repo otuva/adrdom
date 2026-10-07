@@ -428,6 +428,17 @@ pub fn of_blame_file(rel: &str, findings: &[Finding], awaiting: bool) -> Vec<Mov
     out
 }
 
+/// The moves of the terms file: each finding of the rules on it as the
+/// agent's move, and, for a file that differs from its latest approval with
+/// nothing left to clear, the owner's approval.
+pub fn of_terms_file(findings: &[Finding], status: status::TermsFileStatus) -> Vec<Move> {
+    let mut out: Vec<Move> = findings.iter().map(of_finding).collect();
+    if out.is_empty() && status.awaits_approval() {
+        out.push(Move::new(MoveKind::Approve { path: crate::repo::TERMS_PATH.to_string() }));
+    }
+    out
+}
+
 /// The move after a reading that marked a pair same or inconsistent.
 pub fn of_marked_pairs() -> Move {
     Move::new(MoveKind::SupersedeMarkedPairs)

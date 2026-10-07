@@ -244,12 +244,12 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     );
     write_test_comment(&dir, &beta);
 
-    // Under alpha, show names the question of the other file that stands
-    // on it: what would lose its ground with alpha.
-    let shown = stdout(&adr(&dir, &["show", "--all"], &[], ""));
+    // Under alpha, show names under its flag the question of the other file
+    // that stands on it: what would lose its ground with alpha.
+    let shown = stdout(&adr(&dir, &["show", "--all", "--stood-on"], &[], ""));
     assert!(
         shown.contains(&format!(
-            "  [answered A] {}\n    stands on: widget\n    stood on by: {} ({})\n",
+            "[answered A] {}\n  depends: widget\n  stood on by: {} ({})\n",
             ALPHA, BETA, B
         )),
         "{}",

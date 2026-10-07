@@ -65,10 +65,12 @@ fn show_lists_every_question_with_its_state_and_tier() {
     assert!(out.status.success(), "stderr: {}", stderr(&out));
     let shown = stdout(&out);
 
-    assert!(shown.starts_with("# Example (adrdom/decisions/example.md)\n"), "{}", shown);
-    assert!(shown.contains("tier 1\n"), "{}", shown);
+    assert!(shown.starts_with("[approved] Example (adrdom/decisions/example.md)\n"), "{}", shown);
+    assert!(!shown.contains("tier 1"), "{}", shown);
     assert!(shown.contains("[answered A] 1.1 Is this current?"), "{}", shown);
-    assert!(shown.contains("Yes it is current."), "{}", shown);
+    // An answered question carries its status and its lines; its body and
+    // the option picked are in the listing with no file named.
+    assert!(!shown.contains("Yes it is current."), "{}", shown);
     // The second question is still open (asked, not answered): it is now
     // listed too, with its state, rather than left out.
     //
@@ -83,7 +85,9 @@ fn show_lists_every_question_with_its_state_and_tier() {
         "{}",
         shown
     );
-    assert!(!shown.contains("Yes only asked."), "no chosen sentence for an unanswered question: {}", shown);
+    // The body of the asked question, options and all, for the owner who
+    // answers it.
+    assert!(shown.contains("  - A) Yes only asked."), "{}", shown);
 }
 
 const TIERED_RECORD: &str = "# Tiered Topic\n\n\
@@ -116,29 +120,25 @@ Standard: s4.\n\n\
 - B) y.\n  Why: w.\n  Costs: c.\n\n\
 **Answer:** refused\n";
 
-/// Exercises tiers, every state `show` prints, the "stands on:" line, and
-/// the chosen sentence, all via hand-crafted ledger rows and `**Answer:**`
-/// lines (per the wave-2 brief) rather than `adr ask`/`adr answer`, which
-/// are being rebuilt by other agents on this same branch.
-//
-// "show prints the tiers": the fixture below states no tier anywhere in
-// its text (only `depends:` lines and hand-written ledger rows), yet
-// `show` prints "tier 1" and "tier 2" derived from those depends lines.
-//
-// adr: b782664f-7465-4e1e-99e0-13f6dd2de774
+/// Exercises every status `show` prints and the lines a question carries,
+/// all via hand-crafted ledger rows and `**Answer:**` lines, on a file whose
+/// plan and prose equal their latest approval: nothing is beyond it, so no
+/// line is marked.
 //
 // "show prints no decision" for a refused question: `id-refused` carries
 // `**Answer:** refused`, and the expected output below lists it as
-// `[refused] 2.2 Also depends?` with no chosen-sentence line under it,
-// unlike `id-root`'s `[answered A]` line, which does print one.
+// `[refused] 2.2 Also depends?` with its depends line and nothing else.
+//
+// adr: b782664f-7465-4e1e-99e0-13f6dd2de774
 #[test]
-fn show_prints_tiers_states_stands_on_and_chosen_sentence() {
+fn show_prints_each_status_and_the_lines_each_question_carries() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     // "root" is a word the unasked questions already carry in their
     // headings, so they pair a term without a change of text.
     approve_terms_with(&dir, &["root"]);
-    let record = write_record(&dir, "adrdom/decisions/tiered.md", TIERED_RECORD);
+    let record = write_record(&dir, "adrdom/decisions/tiered-topic.md", TIERED_RECORD);
+    approve_via_ledger(&dir, "adrdom/decisions/tiered-topic.md", TIERED_RECORD);
     // Every row carries the hash of its section's text as it stands: a
     // stand-in hash reads as "edited since", for the answered root as for
     // the open question (show prints no version and no owner command then).
@@ -159,29 +159,35 @@ fn show_prints_tiers_states_stands_on_and_chosen_sentence() {
 
     // "id-open"'s version is the current section hash's own prefix (per
     // "Does an answer carry the version of the question the owner read?").
+    // No tier heading and no "stood on by" line: what is computed from the
+    // records comes under a flag. The body is printed for the asked
+    // question alone.
     let expected = "\
-# Tiered Topic (adrdom/decisions/tiered.md)
-tier 1
-  [answered A] 1.1 Root?
-    stood on by: 2.1 Depends on root?
-    First choice.
-  [not asked] 1.2 Unasked root?
-    neighbours: no reader records yet; agent runs: adr plan adrdom/decisions/tiered.md
-  [no body] 1.3 Skeleton?
-    neighbours: no reader records yet; agent runs: adr plan adrdom/decisions/tiered.md
-tier 2
-  [asked @11024127] 2.1 Depends on root?
-    stands on: 1.1 Root?=A
-  [refused] 2.2 Also depends?
-    stands on: 1.1 Root?=A
-next
-  agent clears: adrdom/decisions/tiered.md: \"1.1 Root?\" has no depends line; agent writes what the question stands on
-  agent clears: adrdom/decisions/tiered.md: \"1.2 Unasked root?\" has no depends line; agent writes what the question stands on
-  agent clears: adrdom/decisions/tiered.md: \"1.3 Skeleton?\" has no depends line; agent writes what the question stands on
-  agent clears: adrdom/decisions/tiered.md: \"2.2 Also depends?\": answered; agent removes the edit
-  owner runs: adr answer id-open@11024127 <letter>  # \"2.1 Depends on root?\"
-  agent changes the plan: \"2.2 Also depends?\" is refused and holds the questions that come after it
-  not yet: \"1.1 Root?\" is answered and is built once \"1.2 Unasked root?\" is answered
+[approved] Tiered Topic (adrdom/decisions/tiered-topic.md)
+[answered A] 1.1 Root?
+[not asked] 1.2 Unasked root?
+[no body] 1.3 Skeleton?
+[asked @11024127] 2.1 Depends on root?
+  depends: 1.1 Root?=A
+  Problem: p3.
+  Standard: s3.
+  - A) x.
+    Why: w.
+    Costs: c.
+  - B) y.
+    Why: w.
+    Costs: c.
+[refused] 2.2 Also depends?
+  depends: 1.1 Root?=A
+agent clears: adrdom/decisions/tiered-topic.md: \"1.1 Root?\" has no depends line; agent writes what the question stands on
+agent clears: adrdom/decisions/tiered-topic.md: \"1.2 Unasked root?\" has no depends line; agent writes what the question stands on
+agent clears: adrdom/decisions/tiered-topic.md: \"1.3 Skeleton?\" has no depends line; agent writes what the question stands on
+agent clears: adrdom/decisions/tiered-topic.md: \"2.2 Also depends?\": answered; agent removes the edit
+agent runs: adr plan adrdom/decisions/tiered-topic.md
+agent runs adr ask adrdom/decisions/tiered-topic.md  # \"1.2 Unasked root?\"
+owner runs: adr answer id-open@11024127 <letter>  # \"2.1 Depends on root?\"
+agent changes the plan: \"2.2 Also depends?\" is refused and holds the questions that come after it
+not yet: \"1.1 Root?\" is answered and is built once \"1.2 Unasked root?\" is answered
 ";
     assert_eq!(shown, expected, "full output: {}", shown);
 }
@@ -197,8 +203,8 @@ fn show_with_a_file_argument_shows_only_that_file() {
     let out = adr(&dir, &["show", one.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "stderr: {}", stderr(&out));
     let shown = stdout(&out);
-    assert!(shown.contains("# Tiered Topic"), "{}", shown);
-    assert!(!shown.contains("# Second Topic"), "{}", shown);
+    assert!(shown.contains("Tiered Topic (adrdom/decisions/one.md)"), "{}", shown);
+    assert!(!shown.contains("Second Topic"), "{}", shown);
 }
 
 // adr: 48f4647d-8c81-4e8a-a936-6b32f5fb0699
@@ -272,15 +278,10 @@ fn show_derives_tiers_for_an_unapproved_file_whose_depends_line_names_a_cross_fi
     assert!(out.status.success(), "stderr: {}", stderr(&out));
     let shown = stdout(&out);
 
-    assert!(shown.contains("# Topic B"), "{}", shown);
+    assert!(shown.contains("[new] Topic B (adrdom/decisions/topic-b.md)"), "{}", shown);
     assert!(
-        shown.contains("tier 1\n  [not asked] 1.1 Is B stand on A?"),
-        "B's only question should land in tier 1 and be listed as unasked: {}",
-        shown
-    );
-    assert!(
-        shown.contains("stands on: 1.1 Is A do a thing?"),
-        "the cross-file dependency should resolve back to A's heading text: {}",
+        shown.contains("[not asked] 1.1 Is B stand on A?\n  + depends: 1.1 Is A do a thing?"),
+        "B's only question should be listed as unasked, its new lines marked: {}",
         shown
     );
     assert!(
@@ -333,20 +334,17 @@ fn show_prints_no_guess_for_an_ambiguous_cross_file_heading_dependency() {
     assert!(out.status.success(), "stderr: {}", stderr(&out));
     let shown = stdout(&out);
 
-    // Everything `show` prints for file B, from its topic line to the next
-    // file's (or end of output): tier derivation failed on the ambiguous
-    // entry, so this is the topic line and the one move left -- no tier, no
-    // question, and in particular no guessed "stands on" line.
-    let b_start = shown.find("# Topic B").expect("topic B header");
-    let b_end = shown[b_start..]
-        .find("\n# ")
-        .map(|i| b_start + i)
-        .unwrap_or(shown.len());
+    // Everything `show` prints for file B, from its status line to the next
+    // file's: its question as written, marked new, and the one move left,
+    // the agent naming the decision by id -- never a guess at which of the
+    // two decisions the heading means.
+    let b_start = shown.find("[new] Topic B").expect("topic B status line");
+    let b_end = shown.find("Topic C (").map(|i| shown[..i].rfind('\n').unwrap()).unwrap_or(shown.len());
     let b_block = shown[b_start..b_end].trim_end();
-    assert_eq!(
-        b_block,
-        "# Topic B (adrdom/decisions/topic-b.md)\nnext\n  agent clears: adrdom/decisions/topic-b.md: \"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\" which is a current decision in more than one file: adrdom/decisions/topic-a.md, adrdom/decisions/topic-c.md; agent names it by id instead",
-        "an ambiguous cross-file dependency must print no guessed tier or \"stands on\": {}",
+    assert!(b_block.contains("  + depends: 1.1 Shared heading?"), "{}", shown);
+    assert!(
+        b_block.ends_with("agent clears: adrdom/decisions/topic-b.md: \"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\" which is a current decision in more than one file: adrdom/decisions/topic-a.md, adrdom/decisions/topic-c.md; agent names it by id instead"),
+        "an ambiguous cross-file dependency names the agent's move and no guess: {}",
         shown
     );
 }

@@ -160,11 +160,11 @@ pub fn run(record_path: PathBuf) -> i32 {
     // file at all -- checked against the hashes captured before the
     // normalize pass above, never the normalized `rf`.
     if !state::plan_approved_hashes(&led, &rel, &raw_question_hashes) {
-        out::eprint_stop(&format!("ask: {}", msg::plan_not_approved(&rel)));
+        out::eprint_stop(&format!("ask: {}", msg::plan_not_approved(&rel, crate::status::plan_status(&led, &rel, false))));
         return 1;
     }
     if !state::context_approved_hash(&led, &rel, &raw_context_hash) {
-        out::eprint_stop(&format!("ask: {}", msg::context_not_approved(&rel)));
+        out::eprint_stop(&format!("ask: {}", msg::context_not_approved(&rel, crate::status::prose_status(&led, &rel, false))));
         return 1;
     }
 

@@ -81,7 +81,7 @@ fn check_fails_naming_the_owners_move_while_terms_is_unapproved() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     let text = stdout(&out);
-    assert!(text.contains("terms: adrdom/terms.md not approved"), "{}", text);
+    assert!(text.contains("terms: adrdom/terms.md is new"), "{}", text);
     assert!(text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
 }
 
@@ -103,7 +103,7 @@ fn ask_refuses_while_terms_is_unapproved() {
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("terms not approved"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("adrdom/terms.md is changed"), "{}", stderr(&out));
 }
 
 // adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
@@ -135,11 +135,11 @@ fn answer_and_refuse_stop_while_terms_is_unapproved() {
 
     let answer_out = adr_answer(&dir, &id1, "A");
     assert!(!answer_out.status.success(), "{}", stdout(&answer_out));
-    assert!(stderr(&answer_out).contains("terms not approved"), "{}", stderr(&answer_out));
+    assert!(stderr(&answer_out).contains("adrdom/terms.md is changed"), "{}", stderr(&answer_out));
 
     let refuse_out = adr_answer(&dir, &id2, "refuse");
     assert!(!refuse_out.status.success(), "{}", stdout(&refuse_out));
-    assert!(stderr(&refuse_out).contains("terms not approved"), "{}", stderr(&refuse_out));
+    assert!(stderr(&refuse_out).contains("adrdom/terms.md is changed"), "{}", stderr(&refuse_out));
 }
 
 // adr: aa475aa3-05b2-429a-b33a-46b1dcb52049

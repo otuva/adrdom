@@ -227,7 +227,9 @@ fn answer_with_supersedes_writes_superseded_row_and_show_hides_old() {
         ledger
     );
 
-    let show = adr(&dir, &["show", "--all"], &[], "");
+    // The listing with no file named prints every current decision with
+    // the option picked.
+    let show = adr(&dir, &["show"], &[], "");
     assert!(show.status.success());
     let shown = stdout(&show);
     assert!(
@@ -367,7 +369,9 @@ fn answered_question_text_is_immutable_until_a_later_decision_supersedes_it() {
         stderr(&answer_out)
     );
 
-    let show = adr(&dir, &["show", "--all"], &[], "");
+    // The listing with no file named prints every current decision with
+    // the option picked.
+    let show = adr(&dir, &["show"], &[], "");
     assert!(show.status.success());
     let shown = stdout(&show);
     assert!(
@@ -1015,11 +1019,11 @@ fn answer_and_refuse_stop_while_terms_md_holds_an_unapproved_added_term() {
 
     let answer_out = adr_answer(&dir, &id1, "A");
     assert!(!answer_out.status.success(), "answer should have refused: {}", stdout(&answer_out));
-    assert!(stderr(&answer_out).contains("terms not approved"), "{}", stderr(&answer_out));
+    assert!(stderr(&answer_out).contains("adrdom/terms.md is changed"), "{}", stderr(&answer_out));
 
     let refuse_out = adr_answer(&dir, &id2, "refuse");
     assert!(!refuse_out.status.success(), "refuse should have refused: {}", stdout(&refuse_out));
-    assert!(stderr(&refuse_out).contains("terms not approved"), "{}", stderr(&refuse_out));
+    assert!(stderr(&refuse_out).contains("adrdom/terms.md is changed"), "{}", stderr(&refuse_out));
 }
 
 // adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
@@ -1077,7 +1081,7 @@ fn answer_refuses_while_a_draft_sits_on_top_of_a_real_retirement() {
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
-        "answer: adrdom/decisions/example.md: terms not approved; owner runs: adr approve adrdom/terms.md"
+        "answer: adrdom/decisions/example.md: adrdom/terms.md is changed; owner runs: adr approve adrdom/terms.md"
     );
 }
 

@@ -86,17 +86,22 @@ pub fn question_status(led: &Ledger, sec: &Section) -> QuestionStatus {
     } else {
         QuestionStatus::NotAsked
     };
-    let Some(id) = &sec.id else {
-        return never_asked;
-    };
-    match led.latest_state(id).map(|r| r.event.as_str()) {
-        Some("asked") => QuestionStatus::Asked,
-        Some("answered") => QuestionStatus::Answered,
-        Some("refused") => QuestionStatus::Refused,
-        Some("superseded") => QuestionStatus::Superseded,
-        Some("withdrawn") => QuestionStatus::Withdrawn,
-        Some("dropped") => QuestionStatus::Dropped,
-        _ => never_asked,
+    sec.id.as_deref().and_then(|id| question_status_of_id(led, id)).unwrap_or(never_asked)
+}
+
+/// The status of the question `id` from its latest state row, `None` when it
+/// has none (never asked: whether it has a body is read off its section,
+/// `question_status`). What a reader with an identifier and no section
+/// reads, a blame row or a removed file.
+pub fn question_status_of_id(led: &Ledger, id: &str) -> Option<QuestionStatus> {
+    match led.latest_state(id)?.event.as_str() {
+        "asked" => Some(QuestionStatus::Asked),
+        "answered" => Some(QuestionStatus::Answered),
+        "refused" => Some(QuestionStatus::Refused),
+        "superseded" => Some(QuestionStatus::Superseded),
+        "withdrawn" => Some(QuestionStatus::Withdrawn),
+        "dropped" => Some(QuestionStatus::Dropped),
+        _ => None,
     }
 }
 
@@ -168,14 +173,38 @@ pub fn topic_file_status(led: &Ledger, rf: &RecordFile) -> TopicFileStatus {
 /// `topic_file_status` of `rf` at `rel`, its path from the root as the
 /// ledger names it (a file loaded by its path carries that path in `rel`).
 pub fn topic_file_status_at(led: &Ledger, rf: &RecordFile, rel: &str) -> TopicFileStatus {
-    if crate::state::plan_approved(led, rf, rel) && crate::state::context_approved(led, rf, rel) {
-        return FileStatus::Approved;
+    let plan = plan_status(led, rel, crate::state::plan_approved(led, rf, rel));
+    let prose = prose_status(led, rel, crate::state::context_approved(led, rf, rel));
+    match (plan, prose) {
+        (FileStatus::Approved, FileStatus::Approved) => FileStatus::Approved,
+        (FileStatus::New, FileStatus::New) => FileStatus::New,
+        _ => FileStatus::Changed,
     }
-    if led.latest_for_path("approved", rel).is_some() || led.latest_for_path("context", rel).is_some() {
+}
+
+/// The status of what one approval covers, `approved` read by the caller:
+/// `Approved` when it equals its latest approval, `Changed` when it differs
+/// from one, `New` when the ledger holds no `event` row for `rel`.
+fn approval_status(led: &Ledger, event: &str, rel: &str, approved: bool) -> FileStatus {
+    if approved {
+        FileStatus::Approved
+    } else if led.latest_for_path(event, rel).is_some() {
         FileStatus::Changed
     } else {
         FileStatus::New
     }
+}
+
+/// The status of a topic file's plan, `approved` as
+/// `state::plan_approved_hashes` reads it.
+pub fn plan_status(led: &Ledger, rel: &str, approved: bool) -> FileStatus {
+    approval_status(led, "approved", rel, approved)
+}
+
+/// The status of a topic file's prose, `approved` as
+/// `state::context_approved_hash` reads it.
+pub fn prose_status(led: &Ledger, rel: &str, approved: bool) -> FileStatus {
+    approval_status(led, "context", rel, approved)
 }
 
 /// The status of a topic file at `rel` that is gone from disk: `Removed`
@@ -186,23 +215,11 @@ pub fn removed_topic_file_status(led: &Ledger, rel: &str) -> Option<TopicFileSta
 }
 
 pub fn terms_file_status(led: &Ledger, tf: &TermsFile) -> TermsFileStatus {
-    if crate::state::terms_approved(led, tf) {
-        FileStatus::Approved
-    } else if led.latest_for_path("terms", crate::repo::TERMS_PATH).is_some() {
-        FileStatus::Changed
-    } else {
-        FileStatus::New
-    }
+    approval_status(led, "terms", crate::repo::TERMS_PATH, crate::state::terms_approved(led, tf))
 }
 
 pub fn blame_file_status(led: &Ledger, rel: &str, content: &str) -> BlameFileStatus {
-    if crate::state::blame_approved(led, rel, content) {
-        FileStatus::Approved
-    } else if led.latest_for_path("blame", rel).is_some() {
-        FileStatus::Changed
-    } else {
-        FileStatus::New
-    }
+    approval_status(led, "blame", rel, crate::state::blame_approved(led, rel, content))
 }
 
 /// The status of one entry of the terms file against its latest `term` row.
@@ -231,14 +248,18 @@ impl TermStatus {
     }
 }
 
-/// The status of `t`: `New` with no `term` row for its id, `Changed` when
-/// its hash differs from that row, else `Retired` or `Approved`.
-pub fn term_status(led: &Ledger, t: &Term) -> TermStatus {
+/// The status of `t`, an entry of `tf`: `Changed` when its hash differs from
+/// the latest `term` row of its id, `New` with no such row, else `Retired`
+/// or `Approved`. An entry with no row of its own in a terms file equal to
+/// its latest approval is held by that approval (an approval written before
+/// the tool kept a row per entry).
+pub fn term_status(led: &Ledger, tf: &TermsFile, t: &Term) -> TermStatus {
+    let settled = if t.retired { TermStatus::Retired } else { TermStatus::Approved };
     match t.id.as_deref().and_then(|id| led.latest_for_id("term", id)) {
+        None if crate::state::terms_approved(led, tf) => settled,
         None => TermStatus::New,
         Some(r) if r.hash != terms::term_hash(t) => TermStatus::Changed,
-        Some(_) if t.retired => TermStatus::Retired,
-        Some(_) => TermStatus::Approved,
+        Some(_) => settled,
     }
 }
 

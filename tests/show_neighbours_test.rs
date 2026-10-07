@@ -1,7 +1,9 @@
-// What `adr show` and the page print under each open question: one line for
-// each neighbour the reader recorded, with its word at each step and the
-// agent's line. The embedding model and the reader are the fakes; show and
-// the page read the records only.
+// What `adr show --neighbours` and the page print under each open question:
+// one line for each neighbour the reader recorded, with its word at each step
+// and the agent's line, a view computed from the records and so printed under
+// its flag (per "Does a command print under a flag what it computes from the
+// records?"). The embedding model and the reader are the fakes; show and the
+// page read the records only.
 
 mod common;
 
@@ -51,19 +53,19 @@ fn write_topic(dir: &Path) {
 }
 
 fn show(dir: &Path, envs: &[(&str, &str)]) -> String {
-    let out = adr(dir, &["show", dir.join(REL).to_str().unwrap()], envs, "");
+    let out = adr(dir, &["show", dir.join(REL).to_str().unwrap(), "--neighbours"], envs, "");
     assert!(out.status.success(), "{}", stderr(&out));
     stdout(&out)
 }
 
 /// The lines of `shown` under the question `heading`, up to the next
-/// question or the next line.
+/// status line or move.
 fn under(shown: &str, heading: &str) -> Vec<String> {
     shown
         .lines()
         .skip_while(|l| !l.ends_with(&format!("] {}", heading)))
         .skip(1)
-        .take_while(|l| l.starts_with("    "))
+        .take_while(|l| l.starts_with("  "))
         .map(|l| l.trim().to_string())
         .collect()
 }
@@ -131,7 +133,7 @@ fn show_prints_a_line_for_each_neighbour_with_both_words_and_the_agents_line() {
         shown
     );
     assert!(!lines.iter().any(|l| l.contains("no reader records")), "{}", shown);
-    assert_eq!(lines.iter().filter(|l| l.contains(BASE_Q)).count(), 1, "{}", shown);
+    assert_eq!(lines.iter().filter(|l| l.starts_with("neighbour: ") && l.contains(BASE_Q)).count(), 1, "{}", shown);
 
     // The reader's own words, and a supersedes line.
     reader_says(&dir, H1, "same", "consistent");
@@ -152,8 +154,8 @@ fn show_prints_a_line_for_each_neighbour_with_both_words_and_the_agents_line() {
         "{}",
         shown
     );
-    // `--all` prints the same lines.
-    let all = stdout(&adr(&dir, &["show", "--all"], &NO_TOOLS, ""));
+    // `--all` prints the same lines under the same flag.
+    let all = stdout(&adr(&dir, &["show", "--all", "--neighbours"], &NO_TOOLS, ""));
     assert_eq!(under(&all, H1), under(&shown, H1));
 }
 
@@ -181,12 +183,12 @@ fn an_asked_question_with_no_records_prints_no_neighbour_line() {
 fn the_next_lines_follow_the_planning_steps() {
     let dir = repo();
     let p = dir.join(REL);
+    // The moves: every line that is neither a status line nor under one.
     let next = |dir: &Path| -> Vec<String> {
         show(dir, &NO_TOOLS)
             .lines()
-            .skip_while(|l| *l != "next")
-            .skip(1)
-            .map(|l| l.trim().to_string())
+            .filter(|l| !l.starts_with(' ') && !l.starts_with('['))
+            .map(str::to_string)
             .collect()
     };
     std::fs::write(&p, format!("# Topic\n{}{}", section(H1, ""), section(H2, ""))).unwrap();

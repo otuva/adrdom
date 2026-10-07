@@ -184,9 +184,9 @@ pub fn terms_shape_error(e: &str) -> String {
 /// `adrdom/terms.md` exists and parses, but isn't approved at its current
 /// hash -- named from a dependent topic file's own path (`rel`), the way
 /// `ask`/`answer`/`approve` all report it.
-pub fn terms_not_approved(rel: &str) -> String {
+pub fn terms_not_approved(rel: &str, status: FileStatus) -> String {
     refuse(
-        format!("{}: terms not approved", rel),
+        format!("{}: adrdom/terms.md is {}", rel, status.name()),
         Next::owner_runs("adr approve adrdom/terms.md"),
     )
 }
@@ -196,9 +196,9 @@ pub fn terms_not_approved(rel: &str) -> String {
 /// aa475aa3 A): `check`'s own report of the same fact `terms_not_approved`
 /// names from a dependent topic file -- this one names the file itself,
 /// since `check` judges it on its own, not on behalf of one dependent.
-pub fn terms_file_not_approved() -> String {
+pub fn terms_file_not_approved(status: FileStatus) -> String {
     refuse(
-        "adrdom/terms.md not approved".to_string(),
+        format!("adrdom/terms.md is {}", status.name()),
         Next::owner_runs("adr approve adrdom/terms.md"),
     )
 }
@@ -447,10 +447,13 @@ pub fn dep_no_term(rel: &str, heading: &str, text: &str) -> String {
 }
 
 /// `show <file>` on a file that is not one of the topic files.
-pub fn show_not_a_topic_file(rel: &str) -> String {
+/// `show` names a path approve does not take (per "Does show print what a
+/// file holds beyond its latest approval?": show takes every file approve
+/// takes).
+pub fn show_not_a_file_approve_takes(rel: &str) -> String {
     refuse(
-        format!("{} is not a topic file", rel),
-        Next::agent("names a file under adrdom/decisions"),
+        format!("{} is not a file approve takes", rel),
+        Next::agent("names a topic file under adrdom/decisions, adrdom/terms.md or a blame file under adrdom/blame"),
     )
 }
 
@@ -717,6 +720,18 @@ pub fn already_superseded(heading: &str) -> String {
     )
 }
 
+/// The question's latest ledger state is `dropped`: an answer whose set
+/// lacked its letter removed it, and its identifier never returns.
+pub fn already_dropped(heading: &str) -> String {
+    refuse(
+        format!(
+            "\"{}\" is already dropped; show prints every question that waits for an answer",
+            heading
+        ),
+        Next::owner_runs("adr show"),
+    )
+}
+
 /// A question with a body that no `ask` has put to the owner.
 pub fn not_asked_yet(heading: &str, rel: &str) -> String {
     refuse(
@@ -890,16 +905,16 @@ pub fn edited_after_refused(path: &str, heading: &str) -> String {
     )
 }
 
-pub fn plan_not_approved(rel: &str) -> String {
+pub fn plan_not_approved(rel: &str, status: FileStatus) -> String {
     refuse(
-        format!("{}: plan not approved", rel),
+        format!("{}: plan is {}", rel, status.name()),
         Next::owner_runs(format!("adr approve {}", rel)),
     )
 }
 
-pub fn context_not_approved(rel: &str) -> String {
+pub fn context_not_approved(rel: &str, status: FileStatus) -> String {
     refuse(
-        format!("{}: prose not approved", rel),
+        format!("{}: prose is {}", rel, status.name()),
         Next::owner_runs(format!("adr approve {}", rel)),
     )
 }
@@ -1153,7 +1168,7 @@ pub fn no_id_line(rel: &str, heading: &str) -> String {
 // --- show: the lines of its listing ----------------------------------------
 // Labels and layout, no refusal among them: a note carries no `Next`.
 
-use crate::status::QuestionStatus;
+use crate::status::FileStatus;
 
 pub fn show_topic(topic: &str, rel: &str) -> String {
     if topic.is_empty() {
@@ -1162,50 +1177,9 @@ pub fn show_topic(topic: &str, rel: &str) -> String {
     format!("# {} ({})", topic, rel)
 }
 
-/// Under a question: the questions whose depends line names it, the ones
-/// that would lose their ground with it.
-pub fn show_stood_on_by(entries: &[String]) -> String {
-    format!("    stood on by: {}", entries.join(", "))
-}
-
 /// A question of another topic file, in `show_stood_on_by`.
 pub fn show_question_of(heading: &str, rel: &str) -> String {
     format!("{} ({})", heading, rel)
-}
-
-pub fn show_tier(tier: usize) -> String {
-    format!("tier {}", tier)
-}
-
-/// The state word `show` prints inside `[...]`: `answered` also carries
-/// the chosen letter (`answered A`), every other state is the bare word.
-pub fn show_state(state: QuestionStatus, letter: Option<char>) -> String {
-    state.name_with(letter)
-}
-
-/// `version` is given for an asked, unanswered question: what the owner
-/// puts after the `@` of `adr answer`.
-pub fn show_question(state: &str, version: Option<&str>, heading: &str) -> String {
-    match version {
-        Some(v) => format!("  [{} @{}] {}", state, v, heading),
-        None => format!("  [{}] {}", state, heading),
-    }
-}
-
-/// A current decision in the short listing: its heading alone, the answer
-/// follows on the next line (`show_chosen`).
-pub fn show_decision(heading: &str) -> String {
-    format!("  {}", heading)
-}
-
-/// The last line of the short listing: how to read the rest.
-pub fn show_whole_hint() -> String {
-    "adr show <topic file> prints every question of one file with what it stands on; adr show --all prints all of them"
-        .to_string()
-}
-
-pub fn show_stands_on(entries: &[String]) -> String {
-    format!("    stands on: {}", entries.join(", "))
 }
 
 /// Under an open question: one neighbour on record, with the reader's word
@@ -1221,89 +1195,12 @@ pub fn show_no_records(rel: &str) -> String {
     format!("    neighbours: no reader records yet; {}", Next::agent(format!("runs: adr plan {}", rel)).render())
 }
 
-pub fn show_chosen(sentence: &str) -> String {
-    format!("    {}", sentence)
-}
-
-/// Under a question: the decisions it replaces, by heading.
-pub fn show_supersedes(headings: &[String]) -> String {
-    format!("    supersedes: {}", headings.join(", "))
-}
-
-/// Under a superseded question: the heading of the question that took its
-/// place.
-pub fn show_replaced_by(heading: &str) -> String {
-    format!("    replaced by: {}", heading)
-}
-
-pub fn show_from(origin: &str, rows: usize) -> String {
-    format!(
-        "    from: {} ({} {})",
-        origin,
-        rows,
-        if rows == 1 { "row" } else { "rows" }
-    )
-}
-
 pub fn next_heading() -> String {
     "next".to_string()
 }
 
 pub fn next_line(line: &str) -> String {
     format!("  {}", line)
-}
-
-pub fn show_blame(rel: &str) -> String {
-    format!("# blame: {}", rel)
-}
-
-/// A topic file show could not read: printed in its place, so a file with
-/// decisions in it is never missing from the listing without a word.
-pub fn show_topic_unreadable(rel: &str, e: impl Display) -> String {
-    format!(
-        "# {} (cannot be read: {}; agent fixes the file so it can be read as text)",
-        rel, e
-    )
-}
-
-pub fn show_blame_unreadable(rel: &str, e: impl Display) -> String {
-    format!("# blame: {} (cannot be read: {})", rel, e)
-}
-
-pub fn show_blame_shape(e: &str) -> String {
-    format!("  shape: {}", e)
-}
-
-pub fn show_blame_origin(origin: &str, approved: bool) -> String {
-    let status = if approved { "approved" } else { "awaiting approval" };
-    format!("  origin: {} ({})", origin, status)
-}
-
-pub fn show_blame_counts(counts: &[String]) -> String {
-    format!("  {}", counts.join(", "))
-}
-
-pub fn show_blame_count(kind: &str, rows: usize) -> String {
-    format!("{} {}", kind, rows)
-}
-
-pub fn show_blame_decision(range: &str, heading: &str, state: &str) -> String {
-    format!("  {}\tdecision: {} [{}]", range, heading, state)
-}
-
-pub fn show_blame_dropped(range: &str, reason: &str) -> String {
-    format!("  {}\tdropped: {}", range, reason)
-}
-
-pub fn show_blame_row(range: &str, dest: &str) -> String {
-    format!("  {}\t{}", range, dest)
-}
-
-pub fn show_blame_copy_of(target: &str, state: Option<&str>) -> String {
-    match state {
-        Some(s) => format!("copy of {} [{}]", target, s),
-        None => format!("copy of {}", target),
-    }
 }
 
 // --- ask: the lines of its summary ------------------------------------------
@@ -2556,8 +2453,8 @@ mod tests {
             terms_missing(),
             terms_load_error(e, Next::agent("retries")),
             terms_shape_error(e),
-            terms_not_approved("adrdom/decisions/x.md"),
-            terms_file_not_approved(),
+            terms_not_approved("adrdom/decisions/x.md", FileStatus::Changed),
+            terms_file_not_approved(FileStatus::Changed),
             terms_brief_missing(),
             terms_brief_differs(),
             terms_brief_not_staged(),
@@ -2641,7 +2538,7 @@ mod tests {
             not_asked_yet("heading", "x.md"),
             not_written("heading"),
             dep_retired_term("x.md", "heading", "widget"),
-            show_not_a_topic_file("x.md"),
+            show_not_a_file_approve_takes("x.md"),
             invalid_version_format("Z0ZZZZZZ"),
             no_terms_line("id-1", "heading"),
             malformed_terms_line("id-1", "heading"),
@@ -2649,8 +2546,8 @@ mod tests {
             terms_line_names_retired_term("id-1", "heading", "term"),
             edited_after_answered("x.md", "heading"),
             edited_after_refused("x.md", "heading"),
-            plan_not_approved("x.md"),
-            context_not_approved("x.md"),
+            plan_not_approved("x.md", FileStatus::New),
+            context_not_approved("x.md", FileStatus::New),
             missing_answer_set("x.md", "dependent", "target"),
             set_on_answered_question("x.md", "dependent", "target"),
             question_without_body("x.md", "heading"),
@@ -2838,8 +2735,4 @@ pub fn removal_holds_open(rel: &str, hold: &crate::moves::RemovalHold) -> String
     )
 }
 
-/// `show`: a topic file removed, its removal not yet approved.
-pub fn show_removal_awaiting(rel: &str) -> String {
-    format!("# {} (removed, awaiting approval)", rel)
-}
 

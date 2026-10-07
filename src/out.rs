@@ -197,11 +197,25 @@ pub fn refusal(cmd: &'static str, text: &str) -> Line {
     Line::Finding(Finding::new(cmd, message.to_string()))
 }
 
-/// Prints `lines` to standard output, one terminal line each.
+/// The exit code of a command whose reader went away, as a shell reports a
+/// process ended by a closed pipe (128 + 13).
+const READER_GONE: i32 = 141;
+
+/// Prints `lines` to standard output, one terminal line each. The reader
+/// gone (`adr show | head`) is no fault of the tool: the process ends
+/// without a word, with `READER_GONE`, so a pipeline that watches exit codes
+/// never reads it as a pass.
 pub fn print(lines: &[Line]) {
     let mut out = std::io::stdout().lock();
     for l in lines {
-        let _ = writeln!(out, "{}", text(l));
+        if let Err(e) = writeln!(out, "{}", text(l)) {
+            if e.kind() == std::io::ErrorKind::BrokenPipe {
+                std::process::exit(READER_GONE);
+            }
+        }
+    }
+    if out.flush().is_err_and(|e| e.kind() == std::io::ErrorKind::BrokenPipe) {
+        std::process::exit(READER_GONE);
     }
 }
 
