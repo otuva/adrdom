@@ -999,77 +999,26 @@ pub fn plan_line_missing(rel: &str, heading: &str, kind: &str, name: &str) -> St
     )
 }
 
-/// `adr plan` stops: some headings have no body while others do.
-pub fn plan_bodies_missing(rel: &str, headings: &[String]) -> String {
-    let names: Vec<String> = headings.iter().map(|h| format!("\"{}\"", h)).collect();
-    refuse(
-        format!("plan: {}: some headings have a body and these have none: {}", rel, names.join(", ")),
-        Next::agent(format!("writes the bodies of these headings, then runs: adr plan {}", rel)),
-    )
+/// One question `adr plan` read the neighbours of, and the step it read them
+/// at: its heading, or its heading with its body.
+pub fn plan_question_read(heading: &str, what: &str) -> String {
+    format!("\"{}\": {}", heading, what)
 }
 
-/// The first line of what `adr plan` did.
-pub fn plan_head(rel: &str) -> String {
-    format!("plan: {}", rel)
-}
-
-/// What `adr plan` read for one question at one step.
-pub fn plan_read(heading: &str, what: &str, count: usize) -> String {
-    format!("\"{}\": {} read, {} neighbours", heading, what, count)
-}
-
-/// One neighbour of a question: its kind, its name, the reader's word, and
-/// whether the agent's lines hold it.
-pub fn plan_neighbour(kind: &str, name: &str, word: &str, on_line: bool) -> String {
-    format!("  {} \"{}\": {}; {}", kind, name, word, if on_line { "on a line" } else { "no line" })
+/// One neighbour of a question: its kind, its name, the reader's word,
+/// whether the agent's lines hold it, and the reader's sentence of reason.
+pub fn plan_neighbour(kind: &str, name: &str, word: &str, on_line: bool, reason: &str) -> String {
+    let line = format!("{} \"{}\": {}; {}", kind, name, word, if on_line { "on a line" } else { "no line" });
+    if reason.is_empty() {
+        line
+    } else {
+        format!("{}; {}", line, reason)
+    }
 }
 
 /// One pair of current decisions the reader marked, as `adr read` prints it.
 pub fn read_pair(word: &str, first: &str, second: &str, reason: &str) -> String {
     format!("{}: \"{}\" and \"{}\": {}", word, first, second, reason)
-}
-
-/// The last line of `adr read`.
-pub fn read_summary(now: usize, before: usize, marked: usize) -> String {
-    let pairs = if now == 1 { "pair" } else { "pairs" };
-    format!("read {} {} now, {} read before, {} marked", now, pairs, before, marked)
-}
-
-/// A reading that stopped: the reader's error, which carries the move, and
-/// how many pairs are unread; the rows of earlier chunks are kept.
-pub fn read_stopped(e: &str, unread: usize) -> String {
-    format!("{}\nread: {} {} unread", e, unread, if unread == 1 { "pair" } else { "pairs" })
-}
-
-/// One neighbour that is on no line, the move that clears it as one line.
-pub fn plan_line_wanted(heading: &str, kind: &str, name: &str) -> String {
-    format!("line missing: {} \"{}\" under \"{}\"", kind, name, heading)
-}
-
-/// What `adr plan` has nothing left to do for.
-pub fn plan_ready(rel: &str) -> String {
-    format!("plan: {}: every question has its rows and every neighbour is on a line", rel)
-}
-
-/// The run's last line while a length hit remains: the fix, then plan again.
-pub fn plan_next_length(rel: &str) -> String {
-    Next::agent(format!("fixes the lines above, then runs: adr plan {}", rel)).render_line()
-}
-
-pub fn plan_next_plan(rel: &str) -> String {
-    Next::agent(format!("runs: adr plan {}", rel)).render_line()
-}
-
-pub fn plan_next_lines(rel: &str) -> String {
-    Next::agent(format!("writes the lines above, then runs: adr plan {}", rel)).render_line()
-}
-
-pub fn plan_next_bodies(rel: &str) -> String {
-    Next::agent(format!("writes the bodies, then runs: adr plan {}", rel)).render_line()
-}
-
-pub fn plan_next_approve(rel: &str) -> String {
-    Next::owner_runs(format!("adr approve {}", rel)).render_line()
 }
 
 pub fn ask_supersedes_not_current(rel: &str, heading: &str, old: &str, name: Option<&str>) -> String {
@@ -3074,9 +3023,7 @@ mod tests {
             unrelated_ambiguous("x.md", "Does X?", "Y", &["a.md".to_string(), "b.md".to_string()]),
             plan_rows_missing("x.md", "Does X?", "heading"),
             plan_line_missing("x.md", "Does X?", "term", "widget"),
-            plan_bodies_missing("x.md", &["Does X?".to_string()]),
             reader_failed("id-1", "no answer"),
-            read_stopped(&reader_failed("id-1", "no answer"), 3),
             reader_write_failed("disk full"),
             malformed_reader_row(3, "bad row"),
             reader_not_append_only(),

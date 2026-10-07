@@ -564,15 +564,27 @@ impl Planning {
         let rel = &self.rel;
         let mut out = Vec::new();
         for q in &self.questions {
-            if !q.heading_done {
-                out.push(msg::plan_rows_missing(rel, &q.heading, "heading"));
-            }
-            if q.has_body && !q.body_done {
-                out.push(msg::plan_rows_missing(rel, &q.heading, "heading with its body"));
-            }
+            out.extend(self.rows_missing_of(q));
             for n in q.heading_neighbours.iter().chain(&q.body_neighbours).filter(|n| !n.on_line) {
                 out.push(msg::plan_line_missing(rel, &q.heading, n.kind.label(), &n.name));
             }
+        }
+        out
+    }
+
+    /// The part of `approve_refusals` on missing rows: a question with no
+    /// rows at its heading hash or its body hash.
+    pub fn rows_missing(&self) -> Vec<String> {
+        self.questions.iter().flat_map(|q| self.rows_missing_of(q)).collect()
+    }
+
+    fn rows_missing_of(&self, q: &Question) -> Vec<String> {
+        let mut out = Vec::new();
+        if !q.heading_done {
+            out.push(msg::plan_rows_missing(&self.rel, &q.heading, "heading"));
+        }
+        if q.has_body && !q.body_done {
+            out.push(msg::plan_rows_missing(&self.rel, &q.heading, "heading with its body"));
         }
         out
     }

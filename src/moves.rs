@@ -320,6 +320,32 @@ pub fn of_topic_file(
     out
 }
 
+/// Every move of the topic file `rf` as loaded from disk: the approval of
+/// its plan and prose and its planning records read off the file as loaded,
+/// then every finding `approve` refuses on (`rules::judge_topic_file_at`)
+/// that is no planning step, each cleared by its own move; the planning
+/// steps come from the planning records (`of_planning`). `all` is every
+/// topic file as loaded and `tests` is `check::test_index`. The one move a
+/// command that names one file prints (per "Does a command compute a move
+/// of its own?", aac5c313 A).
+pub fn of_topic_file_in(
+    root: &std::path::Path,
+    rf: &RecordFile,
+    all: &[RecordFile],
+    terms_list: &[crate::terms::Term],
+    led: &Ledger,
+    tests: &HashMap<String, Vec<String>>,
+) -> Vec<Move> {
+    let plan_ok = state::plan_approved(led, rf, &rf.rel) && state::context_approved(led, rf, &rf.rel);
+    let planning = crate::plan::load(root, rf, all, terms_list, led);
+    let (findings, _) = crate::rules::judge_topic_file_split_at(root, rf, all, terms_list, led);
+    let lookup = crate::terms::phrase_lookup(terms_list);
+    let cross = crate::depends::cross_file_heading_index(all, led);
+    let mut rf = rf.clone();
+    crate::depends::normalize_cross_file_deps(&mut rf, terms_list, &lookup, &cross, led);
+    of_topic_file(&rf, led, plan_ok, &findings, tests, Some(&planning))
+}
+
 /// The moves for one question that is not asked or was edited since
 /// (`unwritten`: it has no body), for the refusal `answer` makes of a
 /// question waiting on it, by the rule `of_topic_file` applies: the plan's
