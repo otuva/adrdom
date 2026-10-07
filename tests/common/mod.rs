@@ -26,6 +26,7 @@ pub fn asked_row_count(dir: &Path) -> usize {
 /// and makes an initial commit so `git show HEAD:...` has something to
 /// compare against later.
 pub fn init_repo() -> PathBuf {
+    SWEEP.call_once(sweep_dead_test_repos);
     let n = COUNTER.fetch_add(1, Ordering::SeqCst);
     let dir = std::env::temp_dir().join(format!(
         "adr-test-{}-{}-{}",
@@ -47,6 +48,33 @@ pub fn init_repo() -> PathBuf {
     run_git(&dir, &["commit", "-q", "-m", "initial"]);
 
     dir
+}
+
+static SWEEP: std::sync::Once = std::sync::Once::new();
+
+/// Removes the `adr-test-<pid>-*` repos `init_repo` made in runs whose
+/// process is gone. A test binary has no hook at exit to remove its own
+/// repos, so each run clears the ones its predecessors left; a run still
+/// going keeps its repos, since its pid is still in /proc.
+fn sweep_dead_test_repos() {
+    if !Path::new("/proc/self").exists() {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(rest) = name.to_str().and_then(|n| n.strip_prefix("adr-test-")) else {
+            continue;
+        };
+        let Some(pid) = rest.split('-').next().filter(|p| p.parse::<u32>().is_ok()) else {
+            continue;
+        };
+        if !Path::new("/proc").join(pid).exists() {
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
+    }
 }
 
 /// Runs git with the directory holding our freshly built `adr` binary
