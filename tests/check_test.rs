@@ -1570,7 +1570,6 @@ fn check_prints_done_for_a_fully_answered_approved_file() {
     );
 }
 
-// adr: d981f6b0-df0d-428f-8c0e-e220b1651fa1
 //
 // "no close: a topic file is done when every question in its plan is
 // answered, check reports it as done, and a heading added later is a plan
@@ -2453,7 +2452,6 @@ agent fixes the file so it can be read as text (e.g. its encoding)"
 }
 
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
-// adr: 154e4b9a-c811-4a84-a522-598914eb39f1
 //
 // The commit hooks run check with --quiet. A commit that passes prints
 // nothing; one that fails prints what failed and no note. check run by hand
@@ -2539,7 +2537,6 @@ fn ask_two_in_one_tier(dir: &std::path::Path) -> (String, String) {
 }
 
 // adr: 3460d220-e523-448b-aeff-baa8051b7d06
-// adr: 154e4b9a-c811-4a84-a522-598914eb39f1
 //
 // An untested current decision is a note whether or not its tier is open:
 // with one of two answered, one note; with both answered and no tests, two

@@ -92,7 +92,6 @@ fn reader_says(dir: &Path, heading: &str, heading_word: &str, body_word: &str) {
     reader::append(dir, &new).unwrap();
 }
 
-// adr: 97c679f6-e8e6-4970-b547-940477753d7d
 #[test]
 fn show_prints_a_line_for_each_neighbour_with_both_words_and_the_agents_line() {
     let dir = repo();
@@ -158,7 +157,6 @@ fn show_prints_a_line_for_each_neighbour_with_both_words_and_the_agents_line() {
     assert_eq!(under(&all, H1), under(&shown, H1));
 }
 
-// adr: 97c679f6-e8e6-4970-b547-940477753d7d
 #[test]
 fn an_asked_question_with_no_records_prints_no_neighbour_line() {
     let dir = repo();
@@ -179,7 +177,6 @@ fn an_asked_question_with_no_records_prints_no_neighbour_line() {
     assert!(!shown.contains("neighbour"), "{}", shown);
 }
 
-// adr: 97c679f6-e8e6-4970-b547-940477753d7d
 #[test]
 fn the_next_lines_follow_the_planning_steps() {
     let dir = repo();
@@ -241,7 +238,6 @@ fn get(port: u16, path: &str, cookie: &str) -> String {
     raw
 }
 
-// adr: 97c679f6-e8e6-4970-b547-940477753d7d
 #[test]
 fn the_page_prints_the_same_neighbour_lines_under_an_open_question() {
     let dir = repo();
@@ -267,7 +263,6 @@ fn the_page_prints_the_same_neighbour_lines_under_an_open_question() {
     assert!(on_page(H1) || on_page(H2), "{}", page);
 }
 
-// adr: 97c679f6-e8e6-4970-b547-940477753d7d
 #[test]
 fn the_overview_prints_the_neighbour_lines_beside_the_approve_button() {
     let dir = repo();

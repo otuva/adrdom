@@ -327,7 +327,6 @@ fn check_fails_when_the_origin_is_gone_and_the_blame_file_is_unapproved() {
 
 // --- 9c3cc17e A: an unapproved blame file is a count, never a stop ------
 
-// adr: 9c3cc17e-33f4-4855-b761-f8f82381cdca
 //
 // "check reports a blame file awaiting approval as a count line ... and
 // passes": a draft blame file (its origin still present) never fails
@@ -350,7 +349,6 @@ fn check_passes_on_an_unapproved_blame_file_with_a_count_note() {
     );
 }
 
-// adr: 9c3cc17e-33f4-4855-b761-f8f82381cdca
 //
 // "ask, answer ... must not read blame files at all": with an unapproved
 // blame file present, `ask` and `answer` on an ordinary topic file still

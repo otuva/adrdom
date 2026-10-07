@@ -419,7 +419,6 @@ fn show_prints_no_next_when_nothing_is_left() {
     assert!(!stdout(&out).lines().any(|l| l == "next"), "{}", stdout(&out));
 }
 
-// adr: 75075c78-fe3c-4fd8-8a33-29a5913d9d34
 //
 // With no topic file and no flag show prints the short listing: each
 // current decision as its heading and its answer, the next moves, and how

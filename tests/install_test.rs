@@ -236,7 +236,6 @@ fn install_without_flags_writes_only_githooks_and_agents_md_brief() {
 // --- git hooks -----------------------------------------------------------
 
 // adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
-// adr: 154e4b9a-c811-4a84-a522-598914eb39f1
 // install refreshes an existing hook whose content differs from what it
 // writes, and leaves an already-current hook untouched (byte-identical
 // second run) -- the same missing/stale/current shape as AGENTS.md.
@@ -264,7 +263,6 @@ fn install_rewrites_a_stale_hook_and_leaves_a_current_one_untouched() {
     );
 }
 
-// adr: 154e4b9a-c811-4a84-a522-598914eb39f1
 // install's "already up to date" and check's "hook differs" both compare a
 // hook's on-disk content to what install writes; a hook that differs only
 // by trailing whitespace on one line must read the same way on both sides,

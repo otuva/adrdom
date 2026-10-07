@@ -21,6 +21,8 @@ Standard: a state machine with a closed set of statuses, each named once.
   Why: each command describes what it sees in its own words.
   Costs: two commands name one status two ways, and an agent adds a status no decision gave.
 
+**Answer:** A
+
 ### Does a command refuse what check passes?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 0942e445-0163-423e-8ba7-84dd8ac07045, e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 3c8d4c9c-abca-4faa-b7c1-aae39951376c, b0e865b4-9204-4c55-9f5b-dcb755b3a03b, 48f4647d-8c81-4e8a-a936-6b32f5fb0699, 902bd279-e6c1-4a21-9637-a3a43f360bae, 4f04bae4-98e3-48eb-9403-3257268e2d87, 3ce82f34-a4fc-4918-bb9b-65a0d81a6853, d808917b-0717-45ad-ab83-9fa274b9a9d4, 05141f49-d9d2-407c-b60c-ebb195a05864, 7cf81ded-be48-4777-b83e-f8a2998c1ab5, aa475aa3-05b2-429a-b33a-46b1dcb52049
 unrelated: 751ef30c-6a2f-4936-bf9b-b9d487146e53, 154e4b9a-c811-4a84-a522-598914eb39f1, 06b7e003-4d9f-427a-a798-c1af97865411, 6ef9eca6-fd8b-4211-aae7-00b37a2a9245, c3127af2-4c96-48d5-a164-bac49a9a09ec, b782664f-7465-4e1e-99e0-13f6dd2de774, f53ac3b9-efde-427c-8027-19988aa8fda7, aac5c313-dedd-466b-a0c3-ead5e99ce913, 848e1b76-9cfe-483b-94dd-094eb9b2f995, 069a6b4a-de35-45f3-8c6c-8e254bf40565, 3fc35d4f-90f3-4425-9dac-951a89631fdf, bceceda8-133a-4c9b-b439-b5c1a4414a02, 36dfbeaa-698d-4a57-b3b0-d425348e14a5, c84a4bd9-fc2d-44f0-b333-172978f61544, 6addc2f4-ff23-4fc6-851e-7cd67063b9f8, 7857d633-2055-47eb-857f-cb70da9fa7ba, 6108b8b2-911e-443b-abe0-4c6f8b407384, 9c3cc17e-33f4-4855-b761-f8f82381cdca
@@ -36,6 +38,8 @@ Standard: one judgement per rule on the records, read by every command that acts
 - B) Yes.
   Why: each command judges what it needs when it writes.
   Costs: a draft passes check and the commit, then stops at approve, and the agent learns the rule from the refusal.
+
+**Answer:** A
 
 ### Does a command compute a move of its own?
 depends: d904dc0d-231f-4e93-ac74-7babe888107d, 209081f4-864f-4ef6-8909-65da87f135e5, f53ac3b9-efde-427c-8027-19988aa8fda7=*, 48f4647d-8c81-4e8a-a936-6b32f5fb0699
@@ -53,6 +57,8 @@ Standard: one function per fact, every caller reads it.
   Why: each command knows its own step best.
   Costs: two commands name two moves for one status, and the agent follows the wrong one.
 
+**Answer:** A
+
 ### What does a command that writes nothing print?
 depends: 209081f4-864f-4ef6-8909-65da87f135e5, d904dc0d-231f-4e93-ac74-7babe888107d, 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, f53ac3b9-efde-427c-8027-19988aa8fda7=*, aac5c313-dedd-466b-a0c3-ead5e99ce913=*, 05141f49-d9d2-407c-b60c-ebb195a05864, 2db33118-82b4-4edf-a9cb-e92ac62738b9, df452a5a-1e2d-497e-93e9-7d6a80e8540d, 99619e27-19b6-47ef-83b9-c79ac30ee2f0, 3460d220-e523-448b-aeff-baa8051b7d06
 unrelated: 4f04bae4-98e3-48eb-9403-3257268e2d87, 902bd279-e6c1-4a21-9637-a3a43f360bae, f422c5db-13d0-4ff7-9e43-b68ab44a7cb9, aefa7f3c-70c3-412e-8d73-16ff9e2b703a, dfd32ef6-c2ac-40ef-b8b3-9c58732516b1, bf27b020-4e60-48e0-8d3b-5f818e6bf6d8, d8a9dfff-de89-442c-a08c-8276efab3f36, 34e81f57-9b3c-4dc4-a2ba-ca227523177d, 6108b8b2-911e-443b-abe0-4c6f8b407384, fe14991d-9715-4ae0-9a23-d314a950d3b9, 069a6b4a-de35-45f3-8c6c-8e254bf40565, 3fc35d4f-90f3-4425-9dac-951a89631fdf, bceceda8-133a-4c9b-b439-b5c1a4414a02, 36dfbeaa-698d-4a57-b3b0-d425348e14a5, c84a4bd9-fc2d-44f0-b333-172978f61544, 6addc2f4-ff23-4fc6-851e-7cd67063b9f8, 7857d633-2055-47eb-857f-cb70da9fa7ba, 154e4b9a-c811-4a84-a522-598914eb39f1, 75075c78-fe3c-4fd8-8a33-29a5913d9d34
@@ -68,6 +74,8 @@ Standard: a read-only command prints what it read and what follows from it, as g
 - B) Everything it computed on the way: statuses, findings, counts, notes and the move.
   Why: the one who runs it sees that the command ran and what it covered.
   Costs: hundreds of lines around one move; each new command adds lines no decision names.
+
+**Answer:** A
 
 ### What does a command that writes print?
 depends: e18b82d8-5271-4385-bbab-2b89e5da278f, 0942e445-0163-423e-8ba7-84dd8ac07045, d904dc0d-231f-4e93-ac74-7babe888107d, e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 3c8d4c9c-abca-4faa-b7c1-aae39951376c, b36113a1-1384-4e4c-a798-8399f4181366, ef83beae-6857-4200-b251-a0fcc3c72f9d, fe14991d-9715-4ae0-9a23-d314a950d3b9=*, 4f04bae4-98e3-48eb-9403-3257268e2d87, f422c5db-13d0-4ff7-9e43-b68ab44a7cb9, ae63df95-0643-4108-af65-1e7a0009d631
@@ -88,6 +96,8 @@ Standard: a command that writes prints one line per event, as git commit does, o
   Why: one command gives the agent its next move.
   Costs: ask repeats what show prints, and the owner's answer lines reach a terminal the owner answers from the page.
 
+**Answer:** A
+
 ### Does check print a line that names no move?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, d904dc0d-231f-4e93-ac74-7babe888107d, 848e1b76-9cfe-483b-94dd-094eb9b2f995=*, aac5c313-dedd-466b-a0c3-ead5e99ce913=*, 3460d220-e523-448b-aeff-baa8051b7d06, 05141f49-d9d2-407c-b60c-ebb195a05864
 supersedes: 154e4b9a-c811-4a84-a522-598914eb39f1, d981f6b0-df0d-428f-8c0e-e220b1651fa1, 9c3cc17e-33f4-4855-b761-f8f82381cdca
@@ -105,6 +115,8 @@ Standard: a checker prints its findings, each with the fix, and is silent on a p
   Why: the one who runs check sees what it covered.
   Costs: dozens of lines with no move on every run, and twice per commit without a flag.
 
+**Answer:** A
+
 ### Does show print what a file holds beyond its latest approval?
 depends: e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 1d7e59ea-99e3-4d4b-9928-5dabca62723d, 209081f4-864f-4ef6-8909-65da87f135e5, 08193e75-dd89-4857-8e9f-b19e1a9e75e6, 528fe6f6-6d77-42d5-9086-017048d1448d, 108053a8-c2c3-4561-874c-2f573a5409f2, f53ac3b9-efde-427c-8027-19988aa8fda7=*, 848e1b76-9cfe-483b-94dd-094eb9b2f995=*, aa475aa3-05b2-429a-b33a-46b1dcb52049, e879fe72-ec07-48cd-9902-2b158aaae726
 unrelated: 3ce82f34-a4fc-4918-bb9b-65a0d81a6853, 05141f49-d9d2-407c-b60c-ebb195a05864, 912f4f3b-1213-435a-af0d-7617017fcff4, 9c3cc17e-33f4-4855-b761-f8f82381cdca, 154e4b9a-c811-4a84-a522-598914eb39f1, 26c5352f-3f82-4376-9dc2-8ccc0074d080, 4bb5ef1b-da16-4206-a7d2-c7380c36a4cc, 34e81f57-9b3c-4dc4-a2ba-ca227523177d, 11be073c-ce91-44d8-833a-ef0b5e0b1672, 644b43ce-be10-4e9a-a7d5-71b27c51e365, d981f6b0-df0d-428f-8c0e-e220b1651fa1, fe14991d-9715-4ae0-9a23-d314a950d3b9, aac5c313-dedd-466b-a0c3-ead5e99ce913, 069a6b4a-de35-45f3-8c6c-8e254bf40565, 3fc35d4f-90f3-4425-9dac-951a89631fdf, 36dfbeaa-698d-4a57-b3b0-d425348e14a5, c84a4bd9-fc2d-44f0-b333-172978f61544, 6addc2f4-ff23-4fc6-851e-7cd67063b9f8, 7857d633-2055-47eb-857f-cb70da9fa7ba, 75075c78-fe3c-4fd8-8a33-29a5913d9d34, 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
@@ -120,6 +132,8 @@ Standard: a diff before a commit: the change is read before it is signed.
 - B) No.
   Why: show prints status, and a draft is read with git diff.
   Costs: the owner leaves the tool to see what approve will sign.
+
+**Answer:** A
 
 ### Does a command print under a flag what it computes from the records?
 depends: daec9ffd-676f-4111-a359-2827bfd4527c, be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, d904dc0d-231f-4e93-ac74-7babe888107d, 848e1b76-9cfe-483b-94dd-094eb9b2f995=*, 2db33118-82b4-4edf-a9cb-e92ac62738b9, 11be073c-ce91-44d8-833a-ef0b5e0b1672
@@ -137,6 +151,8 @@ Standard: a computed view is printed on request, under a flag named for it, as g
 - B) No.
   Why: a command prints the status and the move, and nothing computed, flag or not.
   Costs: the nearest decisions and the reader's word are read from plan's output or the reader's file alone.
+
+**Answer:** A
 
 ### What does show print with no file named?
 depends: 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, e2533580-1486-4dc9-8697-e6c53605fe72, 43778946-d44c-4acf-a766-0a4915fce199, d904dc0d-231f-4e93-ac74-7babe888107d, 848e1b76-9cfe-483b-94dd-094eb9b2f995=*, 36dfbeaa-698d-4a57-b3b0-d425348e14a5=*
@@ -158,6 +174,8 @@ Standard: a listing command prints a summary and takes a flag or an argument for
   Why: one listing holds everything.
   Costs: hundreds of lines to find one move, growing with every question.
 
+**Answer:** A
+
 ### What does show print with a file named?
 depends: 209081f4-864f-4ef6-8909-65da87f135e5, 277a8338-c57a-43cc-8b28-6b42e9347f6a, f590059d-b681-40ec-8a1c-c8916d71f6bb, 08193e75-dd89-4857-8e9f-b19e1a9e75e6, 528fe6f6-6d77-42d5-9086-017048d1448d, 108053a8-c2c3-4561-874c-2f573a5409f2, 3c8d4c9c-abca-4faa-b7c1-aae39951376c, 644b43ce-be10-4e9a-a7d5-71b27c51e365, bceceda8-133a-4c9b-b439-b5c1a4414a02=*, 36dfbeaa-698d-4a57-b3b0-d425348e14a5=*, 848e1b76-9cfe-483b-94dd-094eb9b2f995=*, 38216d39-b064-4927-ab60-951a3c89e388, 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f, 11be073c-ce91-44d8-833a-ef0b5e0b1672, 34f0202a-0be4-4049-94de-d3886f4f8ffc, f53ac3b9-efde-427c-8027-19988aa8fda7=*
 supersedes: 75075c78-fe3c-4fd8-8a33-29a5913d9d34, 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
@@ -175,6 +193,8 @@ Standard: a listing command takes every path the writing command takes and print
   Why: the whole file in one run, options and all.
   Costs: a file of twenty answered questions prints hundreds of lines to find one status.
 
+**Answer:** A
+
 ### Does the ui show what the terminal prints?
 depends: 7127ab1e-c313-4c51-9134-c09d551682cf, 1d7e59ea-99e3-4d4b-9928-5dabca62723d, 848e1b76-9cfe-483b-94dd-094eb9b2f995=*, 069a6b4a-de35-45f3-8c6c-8e254bf40565=*, c84a4bd9-fc2d-44f0-b333-172978f61544=*, 644b43ce-be10-4e9a-a7d5-71b27c51e365, 11be073c-ce91-44d8-833a-ef0b5e0b1672, ece60954-56d4-4622-883e-265f3b997c9f
 unrelated: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15, 75075c78-fe3c-4fd8-8a33-29a5913d9d34, 2db33118-82b4-4edf-a9cb-e92ac62738b9, 154e4b9a-c811-4a84-a522-598914eb39f1, b3cb190d-d6f1-4930-bdcd-7827e31ac62a, 97c679f6-e8e6-4970-b547-940477753d7d, 0487a1cf-eb61-4bf8-bd16-eed899d22d2c, aa275fac-def5-42a2-8a61-660142acad8e, c3127af2-4c96-48d5-a164-bac49a9a09ec, 05141f49-d9d2-407c-b60c-ebb195a05864, 3460d220-e523-448b-aeff-baa8051b7d06, f53ac3b9-efde-427c-8027-19988aa8fda7, fe14991d-9715-4ae0-9a23-d314a950d3b9, aac5c313-dedd-466b-a0c3-ead5e99ce913, 3fc35d4f-90f3-4425-9dac-951a89631fdf, bceceda8-133a-4c9b-b439-b5c1a4414a02, 36dfbeaa-698d-4a57-b3b0-d425348e14a5, 6addc2f4-ff23-4fc6-851e-7cd67063b9f8
@@ -190,3 +210,5 @@ Standard: one view model, two renderings.
 - B) No.
   Why: the page is laid out for the owner alone, with its own lines.
   Costs: two sets of lines to hold right, and a line on the page with no decision behind it.
+
+**Answer:** A

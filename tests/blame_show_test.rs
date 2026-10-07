@@ -2,7 +2,6 @@ mod common;
 
 use common::*;
 
-// adr: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
 //
 // "show prints, after the topic sections, one section per blame file: the
 // origin path, approved or awaiting approval, the row count per
@@ -59,7 +58,6 @@ fn show_prints_the_blame_file_counts_dropped_rows_and_the_from_line() {
     let _ = id1;
 }
 
-// adr: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
 //
 // A blame file still a draft shows "awaiting approval" rather than
 // "approved".
@@ -82,7 +80,6 @@ fn show_prints_awaiting_approval_for_a_draft_blame_file() {
     assert!(text.contains("awaiting approval"), "{}", text);
 }
 
-// adr: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
 //
 // A `decision:` row naming a question that was approved but never asked
 // prints the "unasked" state, not "answered".
@@ -109,7 +106,6 @@ fn show_tags_a_decision_row_naming_an_unasked_question_with_the_unasked_state() 
     assert!(text.contains("decision: Is this pass? [not asked]"), "{}", text);
 }
 
-// adr: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
 //
 // A `decision:` row naming a question that is asked but not yet answered
 // prints the "open" state.
@@ -128,7 +124,6 @@ fn show_tags_a_decision_row_naming_an_asked_unanswered_question_with_the_open_st
     assert!(text.contains("decision: Is this also pass? [asked]"), "{}", text);
 }
 
-// adr: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
 //
 // Two blame files, two different origins, both holding a `decision:` row
 // naming the same answered question: `show` prints both `# blame:`
@@ -166,7 +161,6 @@ fn show_prints_a_from_line_per_origin_for_two_blame_files_naming_the_same_decisi
     let _ = id1;
 }
 
-// adr: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
 //
 // A blame file with a shape error is still printed (7b05f8df A: "each
 // blame file"): a bad header (no "origin: ..." on line 1) prints only its
@@ -207,7 +201,6 @@ fn a_blame_file_with_a_bad_header_and_one_with_a_bad_row_are_both_still_printed(
     assert!(text.contains("dropped: detail"), "{}", text);
 }
 
-// adr: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
 //
 // A draft row `dropped:  dead` (two spaces after the prefix) is counted in
 // the counts line as `dropped: dead 1` and printed as a dropped row with
@@ -227,7 +220,6 @@ fn a_dropped_row_with_extra_spaces_after_the_prefix_is_counted_and_printed_as_de
     assert!(text.contains("1\tdropped: dead"), "{}", text);
 }
 
-// adr: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
 //
 // The owner's follow-up: a `dropped: copy of <heading>` row earns the
 // same `[state]` tag a `decision:` row gets, e.g. `[answered A]`.
@@ -252,7 +244,6 @@ fn show_tags_a_copy_of_heading_row_with_the_targets_state() {
     );
 }
 
-// adr: 75075c78-fe3c-4fd8-8a33-29a5913d9d34
 //
 // "the next lines of every blame file" join the short listing: a blame file
 // awaiting approval names the owner's command, and once the owner approves
