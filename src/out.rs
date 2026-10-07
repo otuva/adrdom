@@ -54,7 +54,9 @@ pub enum Event {
     Asked { heading: String },
     /// A question asked while one standing on it carries an answer set.
     Assumes { dependent: String, target: String },
-    Answered { heading: String, letter: String },
+    /// `sentence` is the picked option's sentence when the caller knows it
+    /// (`answer` does; a row alone does not carry it).
+    Answered { heading: String, letter: String, sentence: String },
     Refused { heading: String },
     Superseded { heading: String },
     Withdrawn { heading: String },
@@ -81,7 +83,9 @@ impl Event {
             "blame" => Event::BlameApproved { path: row.detail.clone() },
             "asked" => Event::Asked { heading: row.detail.clone() },
             "assumes" => Event::Assumes { dependent: name(&row.detail), target: name(&row.id) },
-            "answered" => Event::Answered { heading: name(&row.id), letter: row.detail.clone() },
+            "answered" => {
+                Event::Answered { heading: name(&row.id), letter: row.detail.clone(), sentence: String::new() }
+            }
             "refused" => Event::Refused { heading: row.detail.clone() },
             "superseded" => Event::Superseded { heading: name(&row.id) },
             "withdrawn" => Event::Withdrawn { heading: row.detail.clone() },
@@ -105,7 +109,12 @@ impl Event {
             Event::Assumes { dependent, target } => {
                 format!("assumes: \"{}\" stands on \"{}\" under its answer set", dependent, target)
             }
-            Event::Answered { heading, letter } => format!("answered: \"{}\" {}", heading, letter),
+            Event::Answered { heading, letter, sentence } if sentence.is_empty() => {
+                format!("answered: \"{}\" {}", heading, letter)
+            }
+            Event::Answered { heading, letter, sentence } => {
+                format!("answered: \"{}\" {}: {}", heading, letter, sentence)
+            }
             Event::Refused { heading } => format!("refused: \"{}\"", heading),
             Event::Superseded { heading } => format!("superseded: \"{}\"", heading),
             Event::Withdrawn { heading } => format!("withdrawn: \"{}\"", heading),
@@ -201,6 +210,23 @@ pub fn eprint(lines: &[Line]) {
     let mut err = std::io::stderr().lock();
     for l in lines {
         let _ = writeln!(err, "{}", text(l));
+    }
+}
+
+/// Prints the events a writing command wrote, one line each (per "What
+/// does a command that writes print?", 069a6b4a A): nothing when it wrote
+/// nothing.
+pub fn print_events(events: &[Event]) {
+    let lines: Vec<Line> = events.iter().cloned().map(Line::Event).collect();
+    print(&lines);
+}
+
+/// Prints to standard error what stopped a command, as the refusal text
+/// built for it: one finding per line, each naming its move.
+pub fn eprint_stop(stop: &str) {
+    let mut err = std::io::stderr().lock();
+    for l in stop.lines() {
+        let _ = writeln!(err, "{}", l);
     }
 }
 

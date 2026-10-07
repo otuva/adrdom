@@ -164,7 +164,7 @@ fn c1_flow(first: &str, second: &str, merge_target: &str, merge_source: &str) {
     let reask = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(reask.status.success(), "conflict re-ask failed: {}", stderr(&reask));
     assert!(
-        stdout(&reask).contains("re-asked"),
+        stdout(&reask).starts_with("asked: \""),
         "expected a re-ask in the output: {}",
         stdout(&reask)
     );
@@ -321,7 +321,7 @@ fn c1_flow_answer_then_refusal(settle_with_refusal: bool) {
     let reask = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(reask.status.success(), "conflict re-ask failed: {}", stderr(&reask));
     assert!(
-        stdout(&reask).contains("re-asked"),
+        stdout(&reask).starts_with("asked: \""),
         "expected a re-ask in the output: {}",
         stdout(&reask)
     );

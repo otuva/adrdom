@@ -303,12 +303,9 @@ fn approve_accepts_two_new_headings_when_two_in_the_tier_are_dead() {
         "approve should accept a tier with only 4 live questions: {}",
         stderr(&out)
     );
-    let text = stdout(&out);
-    assert!(!text.contains("holds"), "{}", text);
     // Live count only (8.8 A fix): the two dead questions (refused A,
-    // superseded B) no longer count toward the tier, matching `check`'s
-    // own "tiers: ..." note.
-    assert!(text.contains("approve: tiers: 1 (4)"), "{}", text);
+    // superseded B) do not count toward the tier, so no cap refusal.
+    assert!(!stderr(&out).contains("holds"), "{}", stderr(&out));
 }
 
 // adr: eb2cde37-ebcb-4407-a5b0-9fcda4bd9a4e
@@ -324,23 +321,22 @@ fn approve_accepts_four_root_questions_in_one_tier() {
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out.status.success(), "approve failed: {}", stderr(&out));
-    let text = stdout(&out);
-    assert!(text.contains("approve: tiers: 1 (4)"), "{}", text);
+    assert_eq!(tiers_of(&record), vec![1, 1, 1, 1]);
 }
 
-// --- the tiers print --------------------------------------------------------
+// --- the tiers the tool derives -----------------------------------------------
 
 //
 // "the tool derives the tiers from the depends lines and nothing in the
 // topic file states them; a question standing on no other question in its
 // file is in the first tier, any other one tier above the highest question
 // it stands on". Neither heading below carries a written tier of any kind
-// -- only a `depends:` line -- yet `approve` reports "A?" in tier 1 (it
+// -- only a `depends:` line -- yet the tool derives "A?" in tier 1 (it
 // stands on nothing in this file, only the `decision` term) and "B?" in
 // tier 2 (one above "A?", the only thing it stands on).
 // adr: 1fb71321-bb84-492f-b9d5-1444c9c444af
 #[test]
-fn approve_prints_tiers_across_a_chain() {
+fn the_tool_derives_tiers_across_a_chain() {
     let dir = init_repo();
     setup(&dir);
     let content = "# Example\n\n\
@@ -351,9 +347,15 @@ fn approve_prints_tiers_across_a_chain() {
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out.status.success(), "approve failed: {}", stderr(&out));
-    let text = stdout(&out);
     // "C?" stands on "A?" (tier 1) and "B?" (tier 2): one above the highest.
-    assert!(text.contains("approve: tiers: 1 (1) 2 (1) 3 (1)"), "{}", text);
+    assert_eq!(tiers_of(&record), vec![1, 2, 3]);
+}
+
+// The tier the tool derives for each question of the topic file at `path`,
+// in file order.
+fn tiers_of(path: &std::path::Path) -> Vec<usize> {
+    let rf = adr::record::load(path).unwrap();
+    (0..rf.sections.len()).map(|i| rf.tier_of(i).unwrap()).collect()
 }
 
 // --- refused id withdrawn when absent from every file (8.2 A) -------------
@@ -370,7 +372,7 @@ fn approve_withdraws_a_refused_id_missing_from_every_file() {
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out.status.success(), "approve failed: {}", stderr(&out));
-    assert!(stdout(&out).contains(&format!("approve: withdrawn: Some vanished question?")), "{}", stdout(&out));
+    assert!(stdout(&out).lines().any(|l| l == "withdrawn: \"Some vanished question?\""), "{}", stdout(&out));
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(
@@ -393,7 +395,7 @@ fn approve_question_hash_moves_when_only_an_answer_set_changes() {
 
     let out1 = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out1.status.success(), "approve failed: {}", stderr(&out1));
-    assert!(stdout(&out1).contains("plan approved"), "{}", stdout(&out1));
+    assert!(stdout(&out1).lines().any(|l| l == "approved: plan of adrdom/decisions/example.md"), "{}", stdout(&out1));
 
     let ledger1 = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let approved_count1 = ledger1.lines().filter(|l| l.contains("\tapproved\t")).count();
@@ -420,7 +422,7 @@ fn approve_question_hash_moves_when_only_an_answer_set_changes() {
     assert!(stderr(&asked).contains("plan not approved"), "{}", stderr(&asked));
     let out2 = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out2.status.success(), "approve failed: {}", stderr(&out2));
-    assert!(!stdout(&out2).contains("plan unchanged"), "{}", stdout(&out2));
+    assert!(stdout(&out2).lines().any(|l| l == "approved: plan of adrdom/decisions/example.md"), "{}", stdout(&out2));
 
     let ledger2 = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let approved_count2 = ledger2.lines().filter(|l| l.contains("\tapproved\t")).count();
@@ -499,7 +501,7 @@ fn approve_turns_a_depends_name_into_an_id_and_show_turns_it_back_into_words() {
         "a heading rename must break no reference: {}",
         stderr(&out2)
     );
-    assert!(stdout(&out2).contains("plan approved"), "{}", stdout(&out2));
+    assert!(stdout(&out2).lines().any(|l| l == "approved: plan of adrdom/decisions/example.md"), "{}", stdout(&out2));
 
     // B's dependency still resolves -- and now prints the *new* wording,
     // proving the depends line was never the text.

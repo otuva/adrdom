@@ -113,8 +113,9 @@ fn approve_writes_approved_and_context_rows_then_is_idempotent() {
     assert!(out2.status.success());
     let ledger2 = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert_eq!(ledger, ledger2, "rerunning approve with nothing changed must be a no-op");
-    assert!(stdout(&out2).contains("plan unchanged"), "{}", stdout(&out2));
-    assert!(stdout(&out2).contains("prose unchanged"), "{}", stdout(&out2));
+    // No row written, so nothing printed (per "What does a command that
+    // writes print?", 069a6b4a A).
+    assert_eq!(stdout(&out2), "", "{}", stdout(&out2));
 }
 
 // --- approve refuses on an option-count shape error --------------------
@@ -265,8 +266,10 @@ fn editing_a_heading_requires_reapproval_with_one_new_approved_row() {
 
     let out2 = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out2.status.success(), "approve failed: {}", stderr(&out2));
-    assert!(
-        stdout(&out2).contains("prose unchanged"),
+    // The renamed question's row and the file row; no prose row.
+    assert_eq!(
+        stdout(&out2),
+        "approved: \"1.1 First question, renamed?\"\napproved: plan of adrdom/decisions/example.md\n",
         "{}",
         stdout(&out2)
     );
@@ -321,7 +324,7 @@ fn ask_asks_group_two_beside_group_one_and_answer_waits_for_group_one() {
     assert!(out.status.success(), "ask failed: {}", stderr(&out));
     assert_eq!(stderr(&out), "");
     let shown = stdout(&out);
-    assert!(shown.contains("asked: \"2.1 Second question?\" (tier 2)"), "{}", shown);
+    assert_eq!(shown, "asked: \"2.1 Second question?\"\n", "{}", shown);
     assert_eq!(asked_row_count(&dir), 2);
 
     // `answer` takes group two only after group one has its decision.
@@ -1240,7 +1243,7 @@ fn approve_terms_reruns_as_already_approved_with_no_new_row() {
 
     let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
     assert!(out.status.success(), "approve failed: {}", stderr(&out));
-    assert!(stdout(&out).contains("already approved"), "{}", stdout(&out));
+    assert_eq!(stdout(&out), "", "{}", stdout(&out));
 
     let ledger_after = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert_eq!(

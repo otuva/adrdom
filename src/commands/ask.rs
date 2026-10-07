@@ -4,6 +4,8 @@ use crate::depends;
 use crate::ledger;
 use crate::rules;
 use crate::msg::{self, Actor, Next};
+use crate::out;
+use crate::view;
 use crate::record;
 use crate::repo;
 use crate::state;
@@ -16,7 +18,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("ask", "", Actor::Agent));
+            out::eprint_stop(&msg::not_a_repo("ask", "", Actor::Agent));
             return 1;
         }
     };
@@ -31,7 +33,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     let tf = match actions::require_terms(&root, &led, &rel) {
         Ok(tf) => tf,
         Err(e) => {
-            eprintln!("ask: {}", e);
+            out::eprint_stop(&format!("ask: {}", e));
             return 1;
         }
     };
@@ -40,14 +42,14 @@ pub fn run(record_path: PathBuf) -> i32 {
     let mut rf = match record::load(&record_path) {
         Ok(rf) => rf,
         Err(e) => {
-            eprintln!(
+            out::eprint_stop(&format!(
                 "ask: {}",
                 msg::read_failed(
                     &record_path.display().to_string(),
                     e,
                     Next::agent("checks the error and retries"),
                 )
-            );
+            ));
             return 1;
         }
     };
@@ -61,8 +63,8 @@ pub fn run(record_path: PathBuf) -> i32 {
     // re-asking a question whose text never moved. When the file has other
     // questions to ask, only the conflict is asked this run; a further
     // `ask` run asks the rest.
-    if let Some((idx, id, a, b)) = find_conflicted_section(&rf, &led) {
-        return do_conflict_reask(&root, &record_path, rf, &led, idx, &id, a, b);
+    if let Some((idx, id)) = find_conflicted_section(&rf, &led) {
+        return do_conflict_reask(&root, &record_path, rf, &led, idx, &id);
     }
 
     // Shape and parse errors refuse first, before anything else is even
@@ -103,7 +105,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     // refusal that would otherwise fire first on an unapproved file.
     depends::normalize_cross_file_deps(&mut rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
     if let Some(err @ record::DeriveError::AmbiguousHeading { .. }) = &rf.derive_error {
-        eprintln!("ask: {}", msg::derive_error(&rel, err));
+        out::eprint_stop(&format!("ask: {}", msg::derive_error(&rel, err)));
         return 1;
     }
 
@@ -126,9 +128,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     let shape_msgs: Vec<String> =
         findings.iter().filter(|r| r.rule == "parse").map(|r| format!("ask: {}", r.message)).collect();
     if !shape_msgs.is_empty() {
-        for m in &shape_msgs {
-            eprintln!("{}", m);
-        }
+        out::eprint_stop(&shape_msgs.join("\n"));
         return 1;
     }
 
@@ -145,17 +145,13 @@ pub fn run(record_path: PathBuf) -> i32 {
         }
         let cur = record::section_hash(&rf.lines, sec);
         if let state::ClosedMatch::Edited = state::closed_match(&led, &cur, sec, id) {
-            if sec.is_refused() {
-                eprintln!(
-                    "ask: {}",
-                    msg::edited_after_refused(&record_path.display().to_string(), &sec.heading_text)
-                );
+            let path = record_path.display().to_string();
+            let stop = if sec.is_refused() {
+                msg::edited_after_refused(&path, &sec.heading_text)
             } else {
-                eprintln!(
-                    "ask: {}",
-                    msg::edited_after_answered(&record_path.display().to_string(), &sec.heading_text)
-                );
-            }
+                msg::edited_after_answered(&path, &sec.heading_text)
+            };
+            out::eprint_stop(&format!("ask: {}", stop));
             return 1;
         }
     }
@@ -164,11 +160,11 @@ pub fn run(record_path: PathBuf) -> i32 {
     // file at all -- checked against the hashes captured before the
     // normalize pass above, never the normalized `rf`.
     if !state::plan_approved_hashes(&led, &rel, &raw_question_hashes) {
-        eprintln!("ask: {}", msg::plan_not_approved(&rel));
+        out::eprint_stop(&format!("ask: {}", msg::plan_not_approved(&rel)));
         return 1;
     }
     if !state::context_approved_hash(&led, &rel, &raw_context_hash) {
-        eprintln!("ask: {}", msg::context_not_approved(&rel));
+        out::eprint_stop(&format!("ask: {}", msg::context_not_approved(&rel)));
         return 1;
     }
 
@@ -184,7 +180,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     // either command can move: point the owner at the topic file first, the
     // re-approval second.
     if let Some(f) = rules::derive_finding(&rel, &rf, &all_records, &led) {
-        eprintln!("ask: {}", f.message);
+        out::eprint_stop(&format!("ask: {}", f.message));
         return 1;
     }
 
@@ -193,7 +189,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     // file-wide (mirrors approve's cap check, prefixed `ask:`). Dead
     // (refused/superseded/withdrawn) questions don't count.
     if let Some(f) = rules::cap_finding(&rel, &rf, &replaced, &led) {
-        eprintln!("ask: {}", f.message);
+        out::eprint_stop(&format!("ask: {}", f.message));
         return 1;
     }
 
@@ -258,7 +254,7 @@ pub fn run(record_path: PathBuf) -> i32 {
 
     if !refusals.is_empty() {
         for m in &refusals {
-            eprintln!("ask: {}", m);
+            out::eprint_stop(&format!("ask: {}", m));
         }
         return 1;
     }
@@ -290,7 +286,7 @@ pub fn run(record_path: PathBuf) -> i32 {
             None => {
                 // Unreachable given refusal 6 above, but never silently
                 // drop a binding if it somehow happens.
-                eprintln!("ask: {}", msg::pairs_no_term_at_write(&rel, &sec.heading_text));
+                out::eprint_stop(&format!("ask: {}", msg::pairs_no_term_at_write(&rel, &sec.heading_text)));
                 return 1;
             }
         };
@@ -307,7 +303,7 @@ pub fn run(record_path: PathBuf) -> i32 {
                     terms_touched = true;
                 }
                 None => {
-                    eprintln!("ask: {}", msg::no_id_line(&rel, &sec.heading_text));
+                    out::eprint_stop(&format!("ask: {}", msg::no_id_line(&rel, &sec.heading_text)));
                     return 1;
                 }
             },
@@ -322,9 +318,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     // A): the "asked" row and its "assumes" rows below all share it.
     let write_time = ledger::write_time(&led);
     let mut new_rows = Vec::new();
-    let mut summary: Vec<String> = Vec::new();
-    for i in 0..rf.sections.len() {
-        let sec = &rf.sections[i];
+    for (i, sec) in rf.sections.iter().enumerate() {
         // Per "Does a reference in a topic file carry the identifier of
         // what it names?": `approve` now gives a skeleton an id too, so an
         // id alone no longer means "this is a candidate" -- a skeleton
@@ -335,12 +329,11 @@ pub fn run(record_path: PathBuf) -> i32 {
         }
         let Some(id) = sec.id.clone() else { continue };
         let cur = record::section_hash(&rf.lines, sec);
-        let again = match led.latest_state(&id) {
-            None => false,
-            Some(row) if row.event == "asked" && row.hash != cur => true,
+        match led.latest_state(&id) {
+            None => {}
+            Some(row) if row.event == "asked" && row.hash != cur => {}
             _ => continue,
-        };
-        let tier = rf.tier_of(i).unwrap_or(1);
+        }
         new_rows.push(ledger::Row {
             time: write_time.clone(),
             event: "asked".to_string(),
@@ -348,11 +341,6 @@ pub fn run(record_path: PathBuf) -> i32 {
             hash: cur,
             detail: sec.heading_text.clone(),
             version: crate::version::VERSION.to_string(),
-        });
-        summary.push(if again {
-            msg::ask_reasked(&sec.heading_text, tier)
-        } else {
-            msg::ask_asked(&sec.heading_text, tier)
         });
 
         // One `assumes` row per dependent (per "Does a depends entry
@@ -376,7 +364,6 @@ pub fn run(record_path: PathBuf) -> i32 {
             let Some(dep_id) = dependent.id.clone() else {
                 continue;
             };
-            let set_str = record::canonical_set(set);
             new_rows.push(ledger::Row {
                 time: write_time.clone(),
                 event: "assumes".to_string(),
@@ -385,43 +372,36 @@ pub fn run(record_path: PathBuf) -> i32 {
                 detail: dep_id,
                 version: crate::version::VERSION.to_string(),
             });
-            summary.push(msg::ask_assumes(&dependent.heading_text, &set_str));
         }
     }
 
+    // Nothing to ask writes nothing and prints nothing: what is left to do
+    // is the move `show` names (per "What does a command that writes
+    // print?", 069a6b4a A).
     if new_rows.is_empty() {
-        println!("ask: {}", msg::nothing_to_ask(&record_path.display().to_string()));
-        // The plan is approved by this point (`ask` stops on an unapproved
-        // one above), so what is left is named move by move.
-        let tests = crate::commands::check::test_index(&root, &repo::Source::WorkingTree);
-        for m in crate::moves::of_topic_file(&rf, &led, true, &[], &tests, None) {
-            println!("{}", msg::next_line(&m.text()));
-        }
         return 0;
     }
 
     if let Err(e) = record::save(&rf) {
-        eprintln!(
+        out::eprint_stop(&format!(
             "ask: {}",
             msg::write_failed(
                 &record_path.display().to_string(),
                 e,
                 Next::agent("checks the error and retries"),
             )
-        );
+        ));
         return 1;
     }
     if let Err(e) = ledger::append(&ledger_path, &new_rows) {
-        eprintln!(
+        out::eprint_stop(&format!(
             "ask: {}",
             msg::update_failed("ledger", e, Next::agent("checks the error and retries"))
-        );
+        ));
         return 1;
     }
 
-    for s in &summary {
-        println!("{}", s);
-    }
+    out::print_events(&actions::Outcome::of_rows(&new_rows, &view::heading_texts(std::slice::from_ref(&rf))).events);
     0
 }
 
@@ -438,18 +418,15 @@ fn find_prefixed_line(lines: &[String], start: usize, end: usize, prefix: &str) 
 /// `**Answer:**` line is present (a genuine answer or refusal to remove --
 /// nothing to re-ask without one), and `state::conflicting_rulings` finds
 /// two or more standing rulings for its id. Returns the section's own
-/// index, its id, and the two rulings, for `do_conflict_reask`.
-fn find_conflicted_section(
-    rf: &record::RecordFile,
-    led: &ledger::Ledger,
-) -> Option<(usize, String, state::Ruling, state::Ruling)> {
+/// index and its id, for `do_conflict_reask`.
+fn find_conflicted_section(rf: &record::RecordFile, led: &ledger::Ledger) -> Option<(usize, String)> {
     for (i, sec) in rf.sections.iter().enumerate() {
         let Some(id) = &sec.id else { continue };
         if sec.answer_line.is_none() {
             continue;
         }
-        if let Some((a, b)) = state::conflicting_rulings(led, id) {
-            return Some((i, id.clone(), a, b));
+        if state::conflicting_rulings(led, id).is_some() {
+            return Some((i, id.clone()));
         }
     }
     None
@@ -495,29 +472,26 @@ fn do_conflict_reask(
     led: &ledger::Ledger,
     idx: usize,
     id: &str,
-    a: state::Ruling,
-    b: state::Ruling,
 ) -> i32 {
     let heading = rf.sections[idx].heading_text.clone();
 
     strip_answer_line(&mut rf, idx);
 
     if let Err(e) = record::save(&rf) {
-        eprintln!(
+        out::eprint_stop(&format!(
             "ask: {}",
             msg::write_failed(
                 &record_path.display().to_string(),
                 e,
                 Next::agent("checks the error and retries"),
             )
-        );
+        ));
         return 1;
     }
 
     let write_time = ledger::write_time(led);
     let sec = &rf.sections[idx];
     let cur = record::section_hash(&rf.lines, sec);
-    let tier = rf.tier_of(idx).unwrap_or(1);
 
     let mut new_rows = vec![ledger::Row {
         time: write_time.clone(),
@@ -528,11 +502,6 @@ fn do_conflict_reask(
         version: crate::version::VERSION.to_string(),
     }];
 
-    let mut summary = vec![
-        msg::ask_conflict(&heading, &a.label(), &b.label()),
-        msg::ask_reasked(&heading, tier),
-    ];
-
     // One `assumes` row per dependent that already carries a set, exactly
     // as an ordinary ask writes them (a dependent with no set at all is
     // skipped rather than refused).
@@ -540,7 +509,6 @@ fn do_conflict_reask(
         let Some(set) = set else { continue };
         let dependent = &rf.sections[di];
         let Some(dep_id) = dependent.id.clone() else { continue };
-        let set_str = record::canonical_set(set);
         new_rows.push(ledger::Row {
             time: write_time.clone(),
             event: "assumes".to_string(),
@@ -549,20 +517,17 @@ fn do_conflict_reask(
             detail: dep_id,
             version: crate::version::VERSION.to_string(),
         });
-        summary.push(msg::ask_assumes(&dependent.heading_text, &set_str));
     }
 
     let ledger_path = root.join(crate::repo::LEDGER_PATH);
     if let Err(e) = ledger::append(&ledger_path, &new_rows) {
-        eprintln!(
+        out::eprint_stop(&format!(
             "ask: {}",
             msg::update_failed("ledger", e, Next::agent("checks the error and retries"))
-        );
+        ));
         return 1;
     }
 
-    for s in &summary {
-        println!("{}", s);
-    }
+    out::print_events(&actions::Outcome::of_rows(&new_rows, &view::heading_texts(std::slice::from_ref(&rf))).events);
     0
 }
