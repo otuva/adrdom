@@ -36,3 +36,5 @@
 - embedding index (embedding indexes): The file holding the embeddings the tool looks a new text up against.
 - neighbour (neighbours, neighbor, neighbors): A text in the records whose embedding is near a new text's embedding.
 - reader (readers): A program apart from the agent that reads records on the owner's behalf.
+- status (statuses): The position a thing in the records is at, one of a closed set the tool holds.
+- move (moves): The step a thing in the records takes next from the status it is in, and who takes it.

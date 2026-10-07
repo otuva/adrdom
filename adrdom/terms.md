@@ -218,3 +218,14 @@ id: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641
 terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d
 definition: A program apart from the agent that reads records on the owner's behalf.
 aliases: readers
+
+## status
+id: 209081f4-864f-4ef6-8909-65da87f135e5
+definition: The position a thing in the records is at, one of a closed set the tool holds.
+aliases: statuses
+
+## move
+id: d904dc0d-231f-4e93-ac74-7babe888107d
+terms: status=209081f4-864f-4ef6-8909-65da87f135e5
+definition: The step a thing in the records takes next from the status it is in, and who takes it.
+aliases: moves
