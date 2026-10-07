@@ -22,7 +22,7 @@ pub(super) fn check_ledger(
     root: &Path,
     ledger_content: &str,
     since: Option<&str>,
-    removed_files: &[(String, Vec<msg::RemovalHold>)],
+    removed_files: &[(String, Vec<crate::moves::RemovalHold>)],
 ) -> Vec<Failure> {
     let mut out = Vec::new();
     for (lineno, raw) in &led.malformed {

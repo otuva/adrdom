@@ -16,9 +16,9 @@ mod tests;
 pub(crate) use banned::collect_targets;
 pub use tests::test_index;
 
-use crate::actions;
 use crate::depends;
 use crate::ledger::Ledger;
+use crate::rules;
 use crate::msg::{self, Actor};
 use crate::record::{self, RecordFile};
 use crate::repo::{self, Source};
@@ -147,22 +147,22 @@ fn build(
         .iter()
         .map(|rf| depends::replaced_ids(&replaced_base, rf, &cross_file_headings, &led))
         .collect();
-    let per_record_refusals: Vec<Vec<actions::Refusal>> = records
+    let per_record_refusals: Vec<Vec<rules::Finding>> = records
         .iter()
         .zip(&replaced_per_record)
         .map(|(rf, replaced)| {
-            actions::record_refusals(&rf.rel, rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &records, replaced, &led)
+            rules::record_refusals(&rf.rel, rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &records, replaced, &led)
         })
         .collect();
     let present_ids: std::collections::HashSet<String> = records
         .iter()
         .flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.clone()))
         .collect();
-    let removed_files: Vec<(String, Vec<msg::RemovalHold>)> =
-        actions::removal_awaiting(&led, &|rel| source.exists(root, rel))
+    let removed_files: Vec<(String, Vec<crate::moves::RemovalHold>)> =
+        rules::removal_awaiting(&led, &|rel| source.exists(root, rel))
             .into_iter()
             .map(|rel| {
-                let holds = actions::removal_holds(root, &rel, &led, &present_ids).holds;
+                let holds = rules::removal_holds(root, &rel, &led, &present_ids).holds;
                 (rel, holds)
             })
             .collect();
@@ -179,7 +179,7 @@ fn build(
         })
         .map(|r| r.id.clone())
         .collect();
-    let missing_answered = actions::missing_answered_refusals_except(&records, &led, &in_removed_file);
+    let missing_answered = rules::missing_answered_refusals_except(&records, &led, &in_removed_file);
     let mut failures: Vec<String> = unreadable_failures;
     let awaiting_early: Vec<String> = records
         .iter()
@@ -316,16 +316,16 @@ fn dropped_state(led: &Ledger, id: &str) -> bool {
 /// shape, a stray line, a line the tool writes), and it is not about a
 /// question with force. Anything else fails check; so does every finding
 /// on an approved file.
-fn is_note(rf: &RecordFile, r: &actions::Refusal, draft: bool, led: &Ledger) -> bool {
+fn is_note(rf: &RecordFile, r: &rules::Finding, draft: bool, led: &Ledger) -> bool {
     if !draft {
         return false;
     }
-    if !matches!(r.category, "tells" | "plan" | "parse") {
+    if !matches!(r.rule, "tells" | "plan" | "parse") {
         return false;
     }
     // Every question the finding is about must still be able to change; a
     // finding about none is about the file as a whole.
-    !r.sections.iter().filter_map(|i| rf.sections.get(*i)).any(|s| actions::has_force(rf, s, led))
+    !r.sections.iter().filter_map(|i| rf.sections.get(*i)).any(|s| rules::has_force(rf, s, led))
 }
 
 /// A file's plan/context approval state: its ledger-relative path, whether

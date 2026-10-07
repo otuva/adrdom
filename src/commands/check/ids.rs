@@ -1,5 +1,5 @@
 use super::Failure;
-use crate::actions::Refusal;
+use crate::rules::Finding;
 use crate::ledger::Ledger;
 use crate::msg;
 use crate::record::RecordFile;
@@ -9,9 +9,9 @@ use std::collections::{HashMap, HashSet};
 pub(super) fn check_ids(
     records: &[RecordFile],
     led: &Ledger,
-    missing_answered: &[Refusal],
+    missing_answered: &[Finding],
     raw_hashes: &HashMap<String, (Vec<String>, String)>,
-    removed: &[(String, Vec<msg::RemovalHold>)],
+    removed: &[(String, Vec<crate::moves::RemovalHold>)],
 ) -> Vec<Failure> {
     let mut out = Vec::new();
     let mut seen: HashMap<String, String> = HashMap::new();
@@ -134,7 +134,7 @@ pub(super) fn check_ids(
                 .unwrap_or_else(|| id.clone());
             out.push(Failure {
                 check: "ids".to_string(),
-                message: msg::removed_with_file(&id, &heading, event.unwrap_or("unknown"), msg::removal_move(rel, holds)),
+                message: msg::removed_with_file(&id, &heading, event.unwrap_or("unknown"), crate::moves::removal_next(rel, holds)),
             });
             continue;
         }

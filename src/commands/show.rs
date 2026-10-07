@@ -9,7 +9,8 @@ use crate::record::{self, RecordFile, Section};
 use crate::repo;
 use crate::state;
 use crate::terms::{self, Term};
-use crate::view::{self, QState};
+use crate::status::QuestionStatus;
+use crate::view;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
@@ -140,12 +141,12 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
         } else {
             print_file_short(rf, &led);
         }
-        let plan_refusals = view::plan_refusal_lines(&blame_names, rf, &blame_records, &terms_list, &led);
-        let next = view::next_moves(rf, &led, plan_ok, &plan_refusals, &tests, Some(&planning));
+        let findings = crate::rules::judge_record(&blame_names, rf, &blame_records, &terms_list, &led);
+        let next = crate::moves::of_topic_file(rf, &led, plan_ok, &findings, &tests, Some(&planning));
         if !next.is_empty() {
             println!("{}", msg::next_heading());
-            for line in next {
-                println!("{}", msg::next_line(&line));
+            for m in next {
+                println!("{}", msg::next_line(&m.text()));
             }
         }
     }
@@ -156,11 +157,11 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
             .iter()
             .flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.clone()))
             .collect();
-        for rel in crate::actions::removal_awaiting(&led, &|rel| root.join(rel).exists()) {
-            let holds = crate::actions::removal_holds(&root, &rel, &led, &present_ids).holds;
+        for rel in crate::rules::removal_awaiting(&led, &|rel| root.join(rel).exists()) {
+            let holds = crate::rules::removal_holds(&root, &rel, &led, &present_ids).holds;
             println!("{}", msg::show_removal_awaiting(&rel));
             println!("{}", msg::next_heading());
-            println!("{}", msg::next_line(&msg::removal_next(&rel, &holds)));
+            println!("{}", msg::next_line(&crate::moves::removal(&rel, &holds).text()));
         }
     }
 
@@ -179,10 +180,12 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
                 &any_headings_all,
                 &known_ids,
             );
-            print_blame_next(&bf.rel, blame::next_lines(&st, bf));
+            let findings = crate::rules::judge_blame_file(&root, &st, bf);
+            print_blame_next(&bf.rel, crate::moves::of_blame_file(&bf.rel, &findings, st.awaiting));
         }
         for (rel, _) in &unreadable_blame_files {
-            print_blame_next(rel, vec![msg::next_clears(&msg::blame_file_unreadable(rel))]);
+            let unreadable = crate::rules::Finding::new("blame", msg::blame_file_unreadable(rel));
+            print_blame_next(rel, vec![unreadable.mv()]);
         }
         println!("{}", msg::show_whole_hint());
         return 0;
@@ -202,14 +205,14 @@ pub fn run(record_arg: Option<PathBuf>, all: bool) -> i32 {
 }
 
 /// A blame file's heading and its next lines, printed only when it has one.
-fn print_blame_next(rel: &str, next: Vec<String>) {
+fn print_blame_next(rel: &str, next: Vec<crate::moves::Move>) {
     if next.is_empty() {
         return;
     }
     println!("{}", msg::show_blame(rel));
     println!("{}", msg::next_heading());
-    for line in next {
-        println!("{}", msg::next_line(&line));
+    for m in next {
+        println!("{}", msg::next_line(&m.text()));
     }
 }
 
@@ -220,7 +223,7 @@ fn print_blame_next(rel: &str, next: Vec<String>) {
 fn print_file_short(rf: &RecordFile, led: &Ledger) {
     println!("{}", msg::show_topic(rf.topic.as_deref().unwrap_or(""), &rf.rel));
     for sec in &rf.sections {
-        if view::qstate(led, sec) != QState::Answered {
+        if crate::status::question_status(led, sec) != QuestionStatus::Answered {
             continue;
         }
         println!("{}", msg::show_decision(&sec.heading_text));
@@ -321,14 +324,14 @@ fn print_question(
     known_ids: &HashSet<String>,
     shown: Option<&plan::Planning>,
 ) {
-    let state = view::qstate(led, sec);
+    let state = crate::status::question_status(led, sec);
     // Per "Does an answer carry the version of the question the owner
     // read?": an asked (`Open`), unanswered question also prints the
     // version `answer` and the page's POST both check against -- the
     // owner's next move is `adr answer <id>@<version> <letter>`.
     // No version for a question edited since it was asked: `answer` would
     // refuse it, and "next" names the agent's move, to ask it again.
-    let version = (state == QState::Open && view::asked_text_stands(led, rf, sec))
+    let version = (state == QuestionStatus::Asked && view::asked_text_stands(led, rf, sec))
         .then(|| record::version_of(&rf.lines, sec));
     println!(
         "{}",
@@ -360,21 +363,21 @@ fn print_question(
     // word?" (97c679f6-e8e6-4970-b547-940477753d7d A): under each open
     // question, one line for each neighbour on record. Read from the
     // reader's file; nothing is read by the model or the reader.
-    if matches!(state, QState::Skeleton | QState::Unasked | QState::Open) {
+    if matches!(state, QuestionStatus::NoBody | QuestionStatus::NotAsked | QuestionStatus::Asked) {
         if let Some(q) = shown.and_then(|p| p.questions.iter().find(|q| q.heading == sec.heading_text)) {
             for line in plan::neighbour_lines(&rf.rel, q) {
                 println!("{}", line);
             }
         }
     }
-    if state == QState::Answered {
+    if state == QuestionStatus::Answered {
         if let Some(s) = sec.chosen_sentence() {
             println!("{}", msg::show_chosen(&s));
         }
     }
     // A superseded question names what took its place: the ledger's
     // `superseded` row holds the id of the question that replaced it.
-    if state == QState::Superseded {
+    if state == QuestionStatus::Superseded {
         let replaced_by = sec
             .id
             .as_deref()
@@ -475,7 +478,7 @@ fn heading_and_state(
                 .iter()
                 .flat_map(|rf| rf.sections.iter())
                 .find(|s| s.id.as_deref() == Some(id.as_str()))
-                .map(|sec| state_label(view::qstate(led, sec), sec))
+                .map(|sec| state_label(crate::status::question_status(led, sec), sec))
                 .unwrap_or_else(|| "unknown".to_string());
             (heading, word)
         }
@@ -511,6 +514,6 @@ fn classify_dropped(
 }
 
 /// `msg::show_state` for a section.
-fn state_label(state: QState, sec: &Section) -> String {
+fn state_label(state: QuestionStatus, sec: &Section) -> String {
     msg::show_state(state, sec.answer_letter())
 }

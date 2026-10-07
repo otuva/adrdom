@@ -1,6 +1,6 @@
 //! The `/decisions` route: the current, answered decision list.
 use super::html::{esc, page, plural};
-use crate::view::{QState, QuestionView, Snapshot};
+use crate::view::{QuestionStatus, QuestionView, Snapshot};
 
 pub(super) fn render_decisions(snap: &Snapshot) -> String {
     let mut body = String::new();
@@ -10,7 +10,7 @@ pub(super) fn render_decisions(snap: &Snapshot) -> String {
         .map(|f| {
             f.questions
                 .iter()
-                .filter(|q| q.state == QState::Answered)
+                .filter(|q| q.state == QuestionStatus::Answered)
                 .count()
         })
         .sum();
@@ -23,7 +23,7 @@ pub(super) fn render_decisions(snap: &Snapshot) -> String {
         let answered: Vec<&QuestionView> = f
             .questions
             .iter()
-            .filter(|q| q.state == QState::Answered)
+            .filter(|q| q.state == QuestionStatus::Answered)
             .collect();
         if answered.is_empty() {
             continue;

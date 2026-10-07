@@ -3,7 +3,7 @@ use super::decisions::chosen_sentence;
 use super::html::{banner_html, esc, neighbours_html, page, plural};
 use super::percent_encode;
 use super::terms::unpaired_count;
-use crate::view::{self, QState, QuestionView, Snapshot};
+use crate::view::{self, QuestionStatus, QuestionView, Snapshot};
 
 pub(super) fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> String {
     let mut body = String::new();
@@ -46,7 +46,7 @@ pub(super) fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> 
             let unasked: Vec<&QuestionView> = f
                 .questions
                 .iter()
-                .filter(|q| matches!(q.state, QState::Skeleton | QState::Unasked))
+                .filter(|q| matches!(q.state, QuestionStatus::NoBody | QuestionStatus::NotAsked))
                 .collect();
             if !unasked.is_empty() {
                 body.push_str("<ul class=\"unasked-list\">\n");
@@ -79,7 +79,7 @@ pub(super) fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> 
         let open: Vec<&QuestionView> = f
             .questions
             .iter()
-            .filter(|q| q.state == QState::Open)
+            .filter(|q| q.state == QuestionStatus::Asked)
             .collect();
         if !open.is_empty() {
             body.push_str("<ol class=\"open-list\">\n");
@@ -112,7 +112,7 @@ pub(super) fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> 
         let refused: Vec<&QuestionView> = f
             .questions
             .iter()
-            .filter(|q| q.state == QState::Refused)
+            .filter(|q| q.state == QuestionStatus::Refused)
             .collect();
         if !refused.is_empty() {
             body.push_str("<ul class=\"refused-list\">\n");
@@ -128,7 +128,7 @@ pub(super) fn render_index(snap: &Snapshot, m: Option<&String>, token: &str) -> 
         let answered: Vec<&QuestionView> = f
             .questions
             .iter()
-            .filter(|q| q.state == QState::Answered)
+            .filter(|q| q.state == QuestionStatus::Answered)
             .collect();
         if !answered.is_empty() {
             body.push_str(&format!(

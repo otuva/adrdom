@@ -1,5 +1,5 @@
 use super::{file_approval, is_note, Failure};
-use crate::actions::{self, Refusal};
+use crate::rules::{self, Finding};
 use crate::ledger::Ledger;
 use crate::msg;
 use crate::record::{self, RecordFile};
@@ -32,7 +32,7 @@ pub(super) fn check_plan(
     source: &Source,
     records: &[RecordFile],
     led: &Ledger,
-    refusals: &[Vec<Refusal>],
+    refusals: &[Vec<Finding>],
     raw_hashes: &HashMap<String, (Vec<String>, String)>,
 ) -> (Vec<Failure>, Vec<String>, Vec<String>) {
     let mut out = Vec::new();
@@ -57,7 +57,7 @@ pub(super) fn check_plan(
             let (_, plan_ok, ctx_ok) = file_approval(rf, raw_hashes, led);
             !plan_ok || !ctx_ok
         });
-        for m in actions::own_name_refusals(&rel, topic) {
+        for m in rules::own_name_refusals(&rel, topic) {
             push_plan(&mut out, &mut notes, draft, m);
         }
     }
@@ -72,7 +72,7 @@ pub(super) fn check_plan(
         // file, computed once in `mod.rs`.
         let draft = !plan_ok || !ctx_ok;
         for r in refs {
-            if r.category != "plan" && r.category != "plan_frozen" {
+            if r.rule != "plan" && r.rule != "plan_frozen" {
                 continue;
             }
             push_plan(&mut out, &mut notes, is_note(rf, r, draft, led), r.message.clone());
@@ -80,13 +80,13 @@ pub(super) fn check_plan(
 
         // A letter in a depends entry's set that the same-file target has no
         // option for (per "Does a depends entry carry the answers it holds
-        // under?"): `actions::letter_refusals`, the function `approve` and
+        // under?"): `rules::letter_refusals`, the function `approve` and
         // `adr plan` read too, for every file, approved or not.
         // The producer skips every question with a ledger state, so the
         // dependent question here can always still change: the finding is
         // read through `is_note` like the rest and is a note on a draft.
-        for m in actions::letter_refusals(&rel, rf, led) {
-            let r = Refusal::new("plan", m);
+        for m in rules::letter_refusals(&rel, rf, led) {
+            let r = Finding::new("plan", m);
             push_plan(&mut out, &mut notes, is_note(rf, &r, draft, led), r.message);
         }
 
@@ -101,7 +101,7 @@ pub(super) fn check_plan(
                 .or_default()
                 .push(rel.clone());
         }
-        // The fault belongs to the copying question (`actions::copying_sections`):
+        // The fault belongs to the copying question (`rules::copying_sections`):
         // a note when one sits in a draft, a failure otherwise.
         let mut dup_headings: Vec<&str> = rf.sections.iter().map(|s| s.heading_text.as_str()).collect();
         dup_headings.sort();
@@ -112,15 +112,15 @@ pub(super) fn check_plan(
             if bearing.len() < 2 {
                 continue;
             }
-            let copied = !actions::copying_sections(rf, h, led).is_empty();
-            for m in actions::duplicate_heading_refusals(&rel, &bearing) {
+            let copied = !rules::copying_sections(rf, h, led).is_empty();
+            for m in rules::duplicate_heading_refusals(&rel, &bearing) {
                 push_plan(&mut out, &mut notes, draft && copied, m);
             }
         }
     }
 
     // One heading in two topic files (23f21671 A): the fault belongs to the
-    // copying question (`actions::copying_sections`, 05141f49 A). A note when
+    // copying question (`rules::copying_sections`, 05141f49 A). A note when
     // one sits in a file awaiting approval, a failure otherwise. The files
     // are compared section by section over every section each one holds,
     // superseded and answered ones included, the set `approve` compares too.
@@ -133,7 +133,7 @@ pub(super) fn check_plan(
         if paths.len() > 1 {
             let copied_in_draft = paths.iter().any(|rel| {
                 records_by_rel.get(rel.as_str()).is_some_and(|rf| {
-                    awaiting.contains(rel) && !actions::copying_sections(rf, heading, led).is_empty()
+                    awaiting.contains(rel) && !rules::copying_sections(rf, heading, led).is_empty()
                 })
             });
             let message = msg::duplicate_heading_across_files(heading, &paths[0], &paths[1]);

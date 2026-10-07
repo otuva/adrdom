@@ -256,7 +256,7 @@ fn a_problem_or_standard_value_stays_on_one_line() {
 // An option with no decision sentence at all, and an option whose decision
 // text holds a second sentence, are both parse errors, and `ask` now reads
 // them (point 1/point 2) the same way `check` does, through the shared
-// "parse" category in `actions::record_refusals` -- so neither an id nor a
+// "parse" category in `rules::record_refusals` -- so neither an id nor a
 // ledger row is ever written for either mistake, and `check` finds the
 // identical text afterward.
 #[test]

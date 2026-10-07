@@ -129,7 +129,9 @@ fn read_all(root: &std::path::Path) -> Result<String, String> {
         out.push('\n');
     }
     if marked.iter().any(|m| m.0 < 2) {
-        out.push_str(&msg::read_next());
+        out.push_str(&msg::next_heading());
+        out.push('\n');
+        out.push_str(&msg::next_line(&crate::moves::of_marked_pairs().text()));
         out.push('\n');
     }
     out.push_str(&msg::read_summary(pairs.len() - read_before, read_before, marked.len()));

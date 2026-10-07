@@ -78,7 +78,7 @@ fn shape_refusals(rf: &RecordFile) -> Vec<String> {
     for i in record::non_question_heading_lines(&rf.lines) {
         out.push(msg::heading_not_a_question(rel, i + 1));
     }
-    out.extend(crate::actions::duplicate_heading_refusals(rel, &rf.sections));
+    out.extend(crate::rules::duplicate_heading_refusals(rel, &rf.sections));
     out
 }
 
@@ -149,19 +149,19 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<(String, i32), String> {
     // The length hits in every body written so far, whatever step the file
     // is at: shown, never a stop.
     let led_now = ledger::read(&root.join(repo::LEDGER_PATH));
-    let mut hits = crate::actions::length_refusals(&rel, rf, &led_now);
+    let mut hits = crate::rules::length_refusals(&rel, rf, &led_now);
     // A loaded phrase in a body and a question that pairs no term: shown
     // the same way.
-    hits.extend(crate::actions::body_tell_refusals(&rel, rf, &led_now));
-    hits.extend(crate::actions::no_term_refusals(&rel, rf, &env(root).terms, &led_now));
+    hits.extend(crate::rules::body_tell_refusals(&rel, rf, &led_now));
+    hits.extend(crate::rules::no_term_refusals(&rel, rf, &env(root).terms, &led_now));
     // A set letter its same-file target has no option for: shown the same way.
-    hits.extend(crate::actions::letter_refusals(&rel, rf, &led_now));
+    hits.extend(crate::rules::letter_refusals(&rel, rf, &led_now));
     // The three shapes of a depends entry approve stops: shown the same way.
     {
         let e = env(root);
         let lookup = crate::terms::phrase_lookup(&e.terms);
         let headings = crate::depends::cross_file_heading_index(&e.all, &led_now);
-        hits.extend(crate::actions::depends_shape_refusals(&rel, rf, &e.terms, &lookup, &headings, &e.all, &led_now));
+        hits.extend(crate::rules::depends_shape_refusals(&rel, rf, &e.terms, &lookup, &headings, &e.all, &led_now));
     }
     for h in &hits {
         out.push_str(h);

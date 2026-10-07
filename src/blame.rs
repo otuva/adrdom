@@ -836,24 +836,6 @@ pub fn file_state(
     st
 }
 
-/// The next lines of one blame file, in the three openings `show` prints:
-/// each refusal of `file_state` as the agent's move, each range beyond the
-/// origin and each run of its lines covered by no row as the agent's move,
-/// and, for a draft with nothing left to clear, the owner's approval.
-pub fn next_lines(st: &FileState, bf: &BlameFile) -> Vec<String> {
-    let mut out: Vec<String> = st.failures.iter().map(|f| msg::next_clears(f)).collect();
-    if let Some(c) = &st.origin_content {
-        let n = c.lines().count();
-        let (beyond, gaps) = coverage_errors(&bf.rows, n);
-        out.extend(beyond.iter().map(|b| msg::next_clears(&msg::blame_range_beyond(&bf.rel, b.start, b.end, n))));
-        out.extend(gaps.iter().map(|g| msg::next_clears(&msg::blame_coverage_gap(&bf.rel, g.start, g.end))));
-    }
-    if out.is_empty() && st.awaiting {
-        out.push(msg::next_plan_unapproved(&bf.rel));
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

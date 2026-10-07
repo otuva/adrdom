@@ -1,6 +1,6 @@
 // Review finding: everything `adr approve` refuses on a topic file must
 // already show in `adr check`, all at once, computed by one shared
-// function (`actions::record_refusals`/`missing_answered_refusals`) rather
+// function (`rules::record_refusals`/`missing_answered_refusals`) rather
 // than two hand-duplicated copies of the same rules. This asserts that
 // parity holds across every refusal category `record_refusals` covers
 // (parse, tells, plan, ids) plus the terms-not-approved gate `approve` now

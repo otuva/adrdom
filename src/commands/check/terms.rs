@@ -1,6 +1,6 @@
 use super::Failure;
-use crate::actions;
 use crate::ledger::Ledger;
+use crate::rules;
 use crate::msg;
 use crate::record::{self, RecordFile};
 use crate::repo::{self, Source};
@@ -76,7 +76,7 @@ pub(super) fn check_terms(
     // twice (once prefixed `banned:`, once prefixed `terms:`).
     let minted = terms::minted_copy(&tf);
     let (refusals, _pairs) =
-        actions::terms_refusals(root, records, &minted, led, source, false, approved_plans);
+        rules::terms_refusals(root, records, &minted, led, source, false, approved_plans);
     let refused = !refusals.is_empty();
     for r in refusals {
         out.push(Failure {

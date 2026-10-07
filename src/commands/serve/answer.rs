@@ -2,7 +2,7 @@
 //! marking paired term words in its text.
 use super::html::{banner_html, esc, neighbours_html, page};
 use super::percent_encode;
-use crate::view::{self, FileView, QState, QuestionView, Snapshot};
+use crate::view::{self, FileView, QuestionStatus, QuestionView, Snapshot};
 use std::collections::HashMap;
 
 pub(super) fn render_next(
@@ -21,7 +21,7 @@ pub(super) fn render_next(
     let Some((file, q)) = picked else {
         // An asked question `answer` would refuse waits on another one:
         // nothing is wrong, but "every question is answered" would be false.
-        let waiting = all.iter().any(|(_, q)| q.state == QState::Open);
+        let waiting = all.iter().any(|(_, q)| q.state == QuestionStatus::Asked);
         let title = if waiting { "No question can be answered yet" } else { "Every question is answered" };
         body.push_str(&format!("<header class=\"lead\">\n<h1>{}</h1>\n", title));
         body.push_str("<p><a href=\"/\">Back to the overview</a></p>\n</header>\n");

@@ -50,7 +50,7 @@ impl Next {
         format!("next: {}", self.render())
     }
 
-    fn render(&self) -> String {
+    pub fn render(&self) -> String {
         self.0
             .iter()
             .map(|(actor, action)| {
@@ -338,7 +338,7 @@ pub fn terms_banned_word(line: usize, suffix: &str) -> String {
 }
 
 // --- a topic file's own shape/tells/depends/tier refusals ------------------
-// Shared by `actions::record_refusals` (approve + check) and, for the
+// Shared by `rules::record_refusals` (approve + check) and, for the
 // derive-error variant, by `ask` as well.
 
 pub fn shape_error(rel: &str, e: &str) -> String {
@@ -590,10 +590,13 @@ const WAIT_TAIL: &str = "; not yet, after it is answered";
 /// A `depends:` entry names a question of another topic file that is not
 /// answered yet.
 pub fn dep_waits_on_other_file(rel: &str, section: &str, entry: &str, other_rel: &str) -> String {
-    format!(
-        "{}: \"{}\" depends on \"{}\" ({}) which is not answered yet{}",
-        rel, section, entry, other_rel, WAIT_TAIL
-    )
+    format!("{}{}", dep_waits_on_other_file_what(rel, section, entry, other_rel), WAIT_TAIL)
+}
+
+/// `dep_waits_on_other_file` without its waiting tail: what the `not yet`
+/// move names.
+pub fn dep_waits_on_other_file_what(rel: &str, section: &str, entry: &str, other_rel: &str) -> String {
+    format!("{}: \"{}\" depends on \"{}\" ({}) which is not answered yet", rel, section, entry, other_rel)
 }
 
 /// A `depends:` entry names a question of another topic file that is
@@ -610,15 +613,6 @@ pub fn dep_on_refused_in_other_file(rel: &str, section: &str, entry: &str, other
 
 pub fn derive_error(rel: &str, e: &DeriveError) -> String {
     refuse(derive_what(rel, e), derive_next(e))
-}
-
-/// `ask`'s own wording: a derivation failure means `approve` would also
-/// refuse on this same file, so both fixes are named together.
-pub fn derive_error_ask(rel: &str, e: &DeriveError) -> String {
-    refuse(
-        derive_what(rel, e),
-        Next::agent("fixes the topic file").and_owner_runs(format!("adr approve {}", rel)),
-    )
 }
 
 pub fn answered_id_missing(id: &str, heading: &str) -> String {
@@ -729,115 +723,6 @@ pub fn not_asked_yet(heading: &str, rel: &str) -> String {
         format!("\"{}\" is not asked yet", heading),
         Next::agent(format!("runs adr ask {}", rel)),
     )
-}
-
-/// What one question `answer` waits on: `Unanswered` with the owner's
-/// `adr answer` command once the question is asked and stands as asked,
-/// `Asking` while it is not (its `moves` are what `next` names for it:
-/// the agent's `adr ask`, or the owner's approval of the plan ask waits
-/// for), or a refused question the plan has to drop or replace.
-pub enum Waits {
-    Unanswered { heading: String, command: String },
-    Asking { heading: String, moves: Vec<String> },
-    /// No decision yet and no question to answer first: the chain it waits
-    /// on ends on `refused`, a refused question.
-    Stuck { heading: String, refused: String },
-    /// No decision yet and no body written: `moves` are the planning move
-    /// `next` names for it.
-    Unwritten { heading: String, moves: Vec<String> },
-    RefusedTarget { heading: String },
-    RefusedTier { heading: String },
-}
-
-/// `answer` (a letter or a refusal) of a question that waits: it stands on a
-/// question of its file with no decision, or a question of a lower tier is
-/// refused (per "Does answer take a question standing on a question with
-/// no decision?" and "Does a refused question hold the tiers above it?").
-/// Every question it waits on is named, each with the move that clears it.
-pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> String {
-    let mut parts = Vec::new();
-    let mut command: Option<String> = None;
-    let mut refused = Vec::new();
-    // The moves `next` names, already rendered: agent clauses first, the
-    // one owner clause last (the lint reads what follows `owner runs: `).
-    let mut agent: Vec<String> = Vec::new();
-    let mut owner: Option<String> = None;
-    let ask_prefix = next_ask(rel, &[]);
-    let add = |moves: Vec<String>, agent: &mut Vec<String>, owner: &mut Option<String>| {
-        for m in moves {
-            if m.starts_with("owner") {
-                owner.get_or_insert(m);
-            } else if let Some(headings) = m.strip_prefix(&ask_prefix) {
-                // One `adr ask` clause naming every heading, as `show` prints it.
-                match agent.iter_mut().find(|a| a.starts_with(&ask_prefix)) {
-                    Some(a) => {
-                        let have: Vec<String> = a[ask_prefix.len()..].split(", ").map(String::from).collect();
-                        for h in headings.split(", ").filter(|h| !have.iter().any(|x| x == h)) {
-                            a.push_str(", ");
-                            a.push_str(h);
-                        }
-                    }
-                    None => agent.push(m),
-                }
-            } else if !agent.contains(&m) {
-                agent.push(m);
-            }
-        }
-    };
-    for w in waits {
-        match w {
-            Waits::Stuck { heading: h, refused: r } => {
-                parts.push(format!("\"{}\" has no decision yet and waits on the refused \"{}\"", h, r));
-                if !refused.contains(&r) {
-                    refused.push(r);
-                }
-            }
-            Waits::Unwritten { heading: h, moves } => {
-                parts.push(format!("\"{}\" has no decision yet and no body", h));
-                add(moves, &mut agent, &mut owner);
-            }
-            Waits::Asking { heading: h, moves } => {
-                parts.push(format!("\"{}\" has no decision yet", h));
-                add(moves, &mut agent, &mut owner);
-            }
-            Waits::Unanswered { heading: h, command: c } => {
-                parts.push(format!("\"{}\" has no decision yet", h));
-                command = command.or(Some(c));
-            }
-            Waits::RefusedTarget { heading: h } => {
-                parts.push(format!("\"{}\" is refused and the question stands on it", h));
-                if !refused.contains(&h) {
-                    refused.push(h);
-                }
-            }
-            Waits::RefusedTier { heading: h } => {
-                parts.push(format!("\"{}\" is refused and holds the tiers above it", h));
-                if !refused.contains(&h) {
-                    refused.push(h);
-                }
-            }
-        }
-    }
-    // One owner command, last: the plan's approval when a refused question
-    // has to go or the plan waits for it, else the first answer owed.
-    let mut clauses = agent;
-    if !refused.is_empty() {
-        clauses.push(
-            Next::agent(format!("writes the plan change that drops or replaces {}", quoted(&refused))).render(),
-        );
-        owner = Some(Next::owner_runs(format!("adr approve {}", rel)).render());
-    }
-    if owner.is_none() {
-        owner = command.map(|c| Next::owner_runs(c).render());
-    }
-    clauses.extend(owner);
-    format!("{}; {}", format!("\"{}\" waits: {}", heading, parts.join("; ")), clauses.join(", "))
-}
-
-/// The question `answer` would refuse, in the `not yet` line of `next`: the
-/// questions it waits on, by heading.
-pub fn next_answer_waits(heading: &str, on: &[String]) -> String {
-    format!("not yet: \"{}\" is asked and waits for {}", heading, quoted(on))
 }
 
 /// An answer that would remove a question with no identifier.
@@ -989,7 +874,7 @@ pub fn refused_summary(heading: &str, rel: &str) -> String {
 /// An identifier with the name the tool can put to it (a heading, a term)
 /// right beside it, `<id> ("<name>")`, or the identifier alone when the
 /// tool holds no name for it.
-fn named(id: &str, name: Option<&str>) -> String {
+pub fn named(id: &str, name: Option<&str>) -> String {
     match name {
         Some(n) => format!("{} (\"{}\")", id, n),
         None => id.to_string(),
@@ -1142,11 +1027,6 @@ pub fn plan_neighbour(kind: &str, name: &str, word: &str, on_line: bool) -> Stri
 /// One pair of current decisions the reader marked, as `adr read` prints it.
 pub fn read_pair(word: &str, first: &str, second: &str, reason: &str) -> String {
     format!("{}: \"{}\" and \"{}\": {}", word, first, second, reason)
-}
-
-/// The move `adr read` names when a pair is marked same or inconsistent.
-pub fn read_next() -> String {
-    "next\n  agent writes a question that supersedes one decision of each same or inconsistent pair".to_string()
 }
 
 /// The last line of `adr read`.
@@ -1332,94 +1212,11 @@ pub fn nothing_to_ask(path: &str) -> String {
 // refusal uses. `show` prints them under the file, `ask` when it has
 // nothing to ask.
 
-fn quoted(headings: &[String]) -> String {
-    headings
-        .iter()
-        .map(|h| format!("\"{}\"", h))
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
-pub fn next_plan_unresolved() -> String {
-    Next::agent("runs adr check and clears what it names in the plan").render()
-}
-
-/// A plan that waits for its approval and that `approve` would take.
-pub fn next_plan_unapproved(rel: &str) -> String {
-    Next::owner_runs(format!("adr approve {}", rel)).render()
-}
-
-/// A refusal `approve` would print for the plan, whole, with the move it
-/// names: the agent reads it here and not among the lines of `check`.
-pub fn next_clears(refusal: &str) -> String {
-    if let Some(what) = refusal.strip_suffix(WAIT_TAIL) {
-        return format!("not yet: {}", what);
-    }
-    Next::agent(format!("clears: {}", refusal)).render()
-}
-
-/// The agent plans the file: some question has no reader rows at a step.
-pub fn next_plan(rel: &str) -> String {
-    Next::agent(format!("runs: adr plan {}", rel)).render()
-}
-
-/// Some neighbour of a question is on no line.
-pub fn next_write_lines(headings: &[String]) -> String {
-    Next::agent(format!("writes lines for {}", quoted(headings))).render()
-}
-
-/// Headings of the plan with no body: the bodies are written before approve.
-pub fn next_write_bodies(headings: &[String]) -> String {
-    Next::agent(format!("writes the body of {}", quoted(headings))).render()
-}
-
-pub fn next_ask(rel: &str, headings: &[String]) -> String {
-    Next::agent(format!("runs adr ask {}  # {}", rel, quoted(headings))).render()
-}
-
-pub fn next_answer(id: &str, version: &str, heading: &str) -> String {
-    format!(
-        "{}  # \"{}\"",
-        Next::owner_runs(format!("adr answer {}@{} <letter>", id, version)).render(),
-        heading
-    )
-}
-
-pub fn next_refused(heading: &str) -> String {
-    Next::agent(format!(
-        "changes the plan: \"{}\" is refused and holds the questions that come after it",
-        heading
-    ))
-    .render()
-}
-
-pub fn next_build(heading: &str, id: &str) -> String {
-    Next::agent(format!(
-        "builds \"{}\" and puts \"adr: {}\" in a test that shows it",
-        heading, id
-    ))
-    .render()
-}
-
-pub fn next_build_waits(heading: &str, beside: &str) -> String {
-    format!(
-        "not yet: \"{}\" is answered and is built once \"{}\" is answered",
-        heading, beside
-    )
-}
-
-/// The question beside it is refused: no answer is coming, the plan changes.
-pub fn next_build_waits_refused(heading: &str, beside: &str) -> String {
-    format!(
-        "not yet: \"{}\" is answered and is built once the plan changes, \"{}\" beside it is refused",
-        heading, beside
-    )
-}
 
 // --- show: the lines of its listing ----------------------------------------
 // Labels and layout, no refusal among them: a note carries no `Next`.
 
-use crate::view::QState;
+use crate::status::QuestionStatus;
 
 pub fn show_topic(topic: &str, rel: &str) -> String {
     if topic.is_empty() {
@@ -1445,19 +1242,8 @@ pub fn show_tier(tier: usize) -> String {
 
 /// The state word `show` prints inside `[...]`: `answered` also carries
 /// the chosen letter (`answered A`), every other state is the bare word.
-pub fn show_state(state: QState, letter: Option<char>) -> String {
-    match state {
-        QState::Skeleton => "no body".to_string(),
-        QState::Unasked => "not asked".to_string(),
-        QState::Open => "asked".to_string(),
-        QState::Answered => match letter {
-            Some(c) => format!("answered {}", c),
-            None => "answered".to_string(),
-        },
-        QState::Refused => "refused".to_string(),
-        QState::Superseded => "superseded".to_string(),
-        QState::Withdrawn => "withdrawn".to_string(),
-    }
+pub fn show_state(state: QuestionStatus, letter: Option<char>) -> String {
+    state.name_with(letter)
 }
 
 /// `version` is given for an asked, unanswered question: what the owner
@@ -2307,7 +2093,7 @@ pub fn duplicate_heading_across_files(heading: &str, rel1: &str, rel2: &str) -> 
 /// (per "What names a topic file?"): a topic file whose own file name isn't lowercase ASCII
 /// words joined by single hyphens (`repo::valid_topic_file_name`). Not part
 /// of `record_refusals`: `approve` refuses it through
-/// `actions::own_name_refusals` and `check` through its plan check, from
+/// `rules::own_name_refusals` and `check` through its plan check, from
 /// the one message. No `owner runs:` clause: the fixed
 /// name is the agent's own choice, so there is no concrete command to name
 /// yet -- the agent's move covers telling the owner what re-approval a
@@ -2347,7 +2133,7 @@ pub fn topic_file_name_mismatch(rel: &str, topic: &str, expected: &str) -> Strin
 /// (`repo::expected_topic_file_stem`) holds a digit, or holds no letter at
 /// all, has no name any file can carry, so no rename clears it and the
 /// topic line itself has to change. `approve` refuses it through
-/// `actions::own_name_refusals` and `check` through its plan check, from the
+/// `rules::own_name_refusals` and `check` through its plan check, from the
 /// one message.
 pub fn topic_unnameable(rel: &str, topic: &str) -> String {
     refuse(
@@ -3181,20 +2967,33 @@ mod tests {
             dep_retired_term_id("x.md", "heading", "id-1", Some("name")),
             dep_no_term("x.md", "heading", "widget"),
             bad_option_letter("x.md", "dependent", "target", 'Z'),
-            answer_waits(
+            crate::moves::answer_waits(
                 "heading",
                 "x.md",
                 vec![
-                    Waits::Unanswered { heading: "target".to_string(), command: "adr answer id-1@abcd1234 <letter>".to_string() },
-                    Waits::RefusedTarget { heading: "refused".to_string() },
-                    Waits::RefusedTier { heading: "other".to_string() },
+                    crate::moves::Waits::Unanswered {
+                        heading: "target".to_string(),
+                        answer: crate::moves::Move::new(crate::moves::MoveKind::Answer {
+                            id: "id-1".to_string(),
+                            version: "abcd1234".to_string(),
+                            heading: "target".to_string(),
+                        }),
+                    },
+                    crate::moves::Waits::RefusedTarget { heading: "refused".to_string() },
+                    crate::moves::Waits::RefusedTier { heading: "other".to_string() },
                 ],
             ),
-            answer_waits("heading", "x.md", vec![Waits::Asking { heading: "target".to_string(), moves: vec!["owner runs: adr approve x.md".to_string()] }]),
+            crate::moves::answer_waits(
+                "heading",
+                "x.md",
+                vec![crate::moves::Waits::Asking {
+                    heading: "target".to_string(),
+                    moves: vec![crate::moves::Move::new(crate::moves::MoveKind::Approve { path: "x.md".to_string() })],
+                }],
+            ),
             tier_cap_exceeded("x.md", &["heading".to_string()], 0, 4),
             tier_cap_exceeded("x.md", &["heading".to_string()], 3, 4),
             derive_error("x.md", &DeriveError::SelfDep("heading".to_string())),
-            derive_error_ask("x.md", &DeriveError::SelfDep("heading".to_string())),
             answered_id_missing("id-1", "heading"),
             id_not_found("id-1"),
             already_refused("heading"),
@@ -3399,63 +3198,23 @@ pub fn removal_not_a_topic_file(rel: &str) -> String {
     )
 }
 
-/// What keeps a removed topic file from being approved away: a question
-/// of it that is a current decision, asked and not answered, or approved and
-/// not yet asked.
-pub struct RemovalHold {
-    pub id: String,
-    pub heading: String,
-    pub what: &'static str,
-}
-
-/// The move that clears a removal held by `holds`, or the owner's approval
-/// when nothing holds it. The agent restores the file, then settles each
-/// hold by a plan change the owner approves: a current decision is
-/// superseded, any other question struck from the plan.
-pub fn removal_move(rel: &str, holds: &[RemovalHold]) -> Next {
-    if holds.is_empty() {
-        return Next::owner_runs(format!("adr approve {}", rel));
-    }
-    let steps: Vec<String> = holds
-        .iter()
-        .map(|h| {
-            let q = named(&h.id, Some(&h.heading));
-            if h.what == "a current decision" {
-                format!("supersedes {} with a new question", q)
-            } else {
-                format!("strikes {} from the plan", q)
-            }
-        })
-        .collect();
-    Next::agent(format!(
-        "restores {}, then {}, by a plan change",
-        rel,
-        steps.join(", ")
-    ))
-    .and_owner_runs(format!("adr approve {}", rel))
-}
-
 /// A removed topic file still held a current decision or an open question.
-pub fn removal_holds_open(rel: &str, hold: &RemovalHold) -> String {
+pub fn removal_holds_open(rel: &str, hold: &crate::moves::RemovalHold) -> String {
     refuse(
         format!(
             "{} cannot be removed: {} is {}",
             rel,
             named(&hold.id, Some(&hold.heading)),
-            hold.what
+            crate::moves::hold_words(hold.status)
         ),
-        removal_move(rel, std::slice::from_ref(hold)),
+        crate::moves::removal_next(rel, std::slice::from_ref(hold)),
     )
 }
 
 /// A topic file gone from the content check judges, its removal not yet
 /// approved: a note naming the move that clears it.
-pub fn removal_awaiting(rel: &str, holds: &[RemovalHold]) -> String {
-    format!(
-        "plan: {} removed, awaiting approval; {}",
-        rel,
-        removal_move(rel, holds).render()
-    )
+pub fn removal_awaiting(rel: &str, holds: &[crate::moves::RemovalHold]) -> String {
+    format!("plan: {} removed, awaiting approval; {}", rel, crate::moves::removal(rel, holds).text())
 }
 
 /// `show`: a topic file removed, its removal not yet approved.
@@ -3463,7 +3222,3 @@ pub fn show_removal_awaiting(rel: &str) -> String {
     format!("# {} (removed, awaiting approval)", rel)
 }
 
-/// The next line of a removed topic file.
-pub fn removal_next(rel: &str, holds: &[RemovalHold]) -> String {
-    removal_move(rel, holds).render()
-}

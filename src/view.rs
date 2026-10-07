@@ -27,20 +27,7 @@ fn common_words() -> &'static HashSet<&'static str> {
     })
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum QState {
-    Skeleton,
-    Unasked,
-    Open,
-    Answered,
-    /// The owner's answer that the question cannot be answered as asked
-    /// (per "Does the owner answer a question with a refusal?":
-    /// `**Answer:** refused`): answered for hashing/editing, but
-    /// unanswered for the tier rule and for `done`.
-    Refused,
-    Superseded,
-    Withdrawn,
-}
+pub use crate::status::QuestionStatus;
 
 pub struct OptionView {
     pub letter: char,
@@ -75,7 +62,7 @@ pub struct QuestionView {
     /// file (a term name, a uuid, or a heading with its `=set` suffix
     /// restored — see `format_dep`), in file order.
     pub depends: Vec<String>,
-    pub state: QState,
+    pub state: QuestionStatus,
     /// True when `answer` takes this question now: it is asked, its text
     /// stands as asked, and `state::answer_waits` is empty. What the page
     /// offers the owner next.
@@ -151,31 +138,6 @@ pub struct Snapshot {
     pub check: CheckReport,
 }
 
-/// The state a question heading is in, from the ledger's latest state row
-/// for its id (`asked` -> `Open`, `answered` -> `Answered`, `refused` ->
-/// `Refused`, `superseded`/`withdrawn` accordingly). A heading with no such
-/// row, approved or not, is `Skeleton` while it has no body and `Unasked`
-/// once it has one: approve gives every heading an id, so the id says
-/// nothing about the body. `pub(crate)` so `commands::show` can reuse it
-/// instead of re-deriving state.
-pub(crate) fn qstate(led: &Ledger, sec: &Section) -> QState {
-    let never_asked = if sec.is_skeleton {
-        QState::Skeleton
-    } else {
-        QState::Unasked
-    };
-    let Some(id) = &sec.id else {
-        return never_asked;
-    };
-    match led.latest_state(id).map(|r| r.event.as_str()) {
-        Some("asked") => QState::Open,
-        Some("answered") => QState::Answered,
-        Some("refused") => QState::Refused,
-        Some("superseded") => QState::Superseded,
-        Some("withdrawn") => QState::Withdrawn,
-        _ => never_asked,
-    }
-}
 
 /// Every heading id, from any topic file (not just one), paired with its
 /// heading text (per "Does a reference in a topic file carry the
@@ -241,224 +203,6 @@ pub fn format_dep(
 pub(crate) fn asked_text_stands(led: &Ledger, rf: &RecordFile, sec: &Section) -> bool {
     let Some(id) = &sec.id else { return false };
     state::asked_text_stands(led, id, &record::section_hash(&rf.lines, sec))
-}
-
-/// What is next in one topic file, one line per move, each naming who
-/// makes it: what `show` prints under the file and `ask` prints when it has
-/// nothing to ask. The agent reads its next move here and never works it
-/// out from the tiers. In order: the decisions to build (per "Does the
-/// agent build on a decision before its tier is fully answered?": built
-/// once every question beside it is answered), the bodies to write, the
-/// questions to ask, the approval the file waits
-/// for, the answers the owner owes (the ones `answer` takes now), a refused
-/// question that holds the rest, the decisions that wait for a question
-/// beside them, and the asked questions `answer` would refuse, each naming
-/// what it waits on (`state::answer_waits`). Every question not asked or
-/// edited since is asked in one run, whatever its tier (per "What does ask
-/// put to the owner in one run?"). Empty when nothing is left to do.
-///
-/// `plan_ok` is read by the caller off the file as loaded, before
-/// `depends::normalize_cross_file_deps` (see `snapshot`). `tests` is
-/// `check::test_index`: an answered decision with a test tied to it is
-/// built. `planning` is `plan::load` of the file: a plan that waits for its
-/// approval, or holds a heading with no body, follows the planning steps
-/// (plan, write lines, write bodies, approve) from it ("What does the agent
-/// do to plan a topic file?", 46fc51ff-66b9-4841-a953-ae0d4c2fc424 A).
-pub(crate) fn next_moves(
-    rf: &RecordFile,
-    led: &Ledger,
-    plan_ok: bool,
-    plan_refusals: &[String],
-    tests: &HashMap<String, Vec<String>>,
-    planning: Option<&crate::plan::Planning>,
-) -> Vec<String> {
-    use crate::msg;
-    // What `approve` and `check` refuse in this file's plan
-    // (`actions::record_refusals`), each with the move it names.
-    let clears: Vec<String> = plan_refusals.iter().map(|r| msg::next_clears(r)).collect();
-    if rf.tiers.is_none() {
-        if clears.is_empty() {
-            return vec![msg::next_plan_unresolved()];
-        }
-        return clears;
-    }
-    let mut bare = false;
-    let mut to_ask = Vec::new();
-    let mut answers = Vec::new();
-    let mut held = Vec::new();
-    let mut build = Vec::new();
-    let mut build_waits = Vec::new();
-    let mut waiting = Vec::new();
-
-    for (i, sec) in rf.sections.iter().enumerate() {
-        let heading = sec.heading_text.as_str();
-        match qstate(led, sec) {
-            QState::Skeleton | QState::Unasked if sec.is_skeleton => bare = true,
-            QState::Skeleton | QState::Unasked => to_ask.push(heading.to_string()),
-            QState::Open => {
-                let Some(id) = &sec.id else { continue };
-                // Edited since it was asked: `answer` takes only the text
-                // the ledger holds, so the agent asks it again first.
-                if !asked_text_stands(led, rf, sec) {
-                    to_ask.push(heading.to_string());
-                    continue;
-                }
-                // `answer` takes it only once what it waits on is settled
-                // (the one test `answer` itself reads).
-                let w = state::answer_waits(rf, i);
-                if w.is_empty() {
-                    let version = record::version_of(&rf.lines, sec);
-                    answers.push(msg::next_answer(id, &version, heading));
-                } else {
-                    let on: Vec<String> = w
-                        .unanswered
-                        .iter()
-                        .chain(&w.refused_target)
-                        .chain(&w.refused_tier)
-                        .map(|&j| rf.sections[j].heading_text.clone())
-                        .collect();
-                    waiting.push(msg::next_answer_waits(heading, &on));
-                }
-            }
-            QState::Refused => held.push(msg::next_refused(heading)),
-            QState::Answered => {
-                let Some(id) = &sec.id else { continue };
-                if tests.get(id).is_some_and(|locations| !locations.is_empty()) {
-                    continue;
-                }
-                // A question beside it that still waits for an answer is
-                // named ahead of a refused one: the refused one has its own
-                // line, and the answer is what the build waits for longest.
-                match state::unresolved_sibling(rf, i) {
-                    Some(s) if s.is_refused() => {
-                        build_waits.push(msg::next_build_waits_refused(heading, &s.heading_text))
-                    }
-                    Some(s) => build_waits.push(msg::next_build_waits(heading, &s.heading_text)),
-                    None => build.push(msg::next_build(heading, id)),
-                }
-            }
-            QState::Superseded | QState::Withdrawn => {}
-        }
-    }
-
-    // What is answered is built before anything new is written. Answers are
-    // committed as given and check reports an untested decision as a note;
-    // `next` still holds the build until the tier is answered, per "Does
-    // the agent build on a decision before its tier is fully answered?"
-    // (f8d92841 A).
-    let mut out = build;
-    let refused = !clears.is_empty();
-    out.extend(clears);
-    if plan_ok {
-        // Approve refuses a heading with no body, so one in an approved file
-        // is one approved before it did: its body is written, then planned.
-        if bare && planning.is_some() {
-            out.extend(plan_moves(rf, planning));
-        }
-        if !to_ask.is_empty() {
-            out.push(msg::next_ask(&rf.rel, &to_ask));
-        }
-    } else if !refused {
-        // Nothing is asked under a plan that waits for its approval; what
-        // the owner owes and what is answered stands. The planning steps
-        // come first, the owner's command once `approve` would take the plan.
-        out.extend(plan_moves(rf, planning));
-    }
-    out.extend(answers);
-    out.extend(held);
-    out.extend(build_waits);
-    out.extend(waiting);
-    out
-}
-
-/// What `approve` and `check` refuse in the plan of `rf` (the file as
-/// loaded; `all` is every topic file), each message whole: what `show`
-/// reads for `next_moves`, and what the refusal `answer` makes reads too.
-/// Normalizes a copy of `rf` the way `approve` does before judging it.
-pub(crate) fn plan_refusal_lines(
-    names: &HashMap<String, String>,
-    rf: &RecordFile,
-    all: &[RecordFile],
-    terms_list: &[Term],
-    led: &Ledger,
-) -> Vec<String> {
-    let phrase_lookup = crate::terms::phrase_lookup(terms_list);
-    let cross_file_headings = crate::depends::cross_file_heading_index(all, led);
-    let base = crate::depends::replaced_base(all, &crate::depends::approved_plan_rels(all, led), &cross_file_headings, led);
-    let mut rf = rf.clone();
-    crate::depends::normalize_cross_file_deps(&mut rf, terms_list, &phrase_lookup, &cross_file_headings, led);
-    let replaced = crate::depends::replaced_ids(&base, &rf, &cross_file_headings, led);
-    crate::actions::record_refusals(
-        &rf.rel,
-        &rf,
-        terms_list,
-        &phrase_lookup,
-        &cross_file_headings,
-        names,
-        all,
-        &replaced,
-        led,
-    )
-    .into_iter()
-    .map(|r| r.message)
-    .collect()
-}
-
-/// The moves `next_moves` names for one question that is not asked or was
-/// edited since (`unwritten`: it has no body), for the refusal `answer`
-/// makes of a question waiting on it, by the same rule `next_moves` applies:
-/// what `approve` refuses in the plan comes first (`plan_refusals`); then,
-/// under an approved plan, the agent's `adr ask` (or, for a question with no
-/// body, the planning move); under a plan that waits for its approval and
-/// has no refusal, the planning move, the owner's approve once every record
-/// is there.
-pub(crate) fn ask_moves(
-    rf: &RecordFile,
-    plan_ok: bool,
-    plan_refusals: &[String],
-    planning: Option<&crate::plan::Planning>,
-    heading: &str,
-    unwritten: bool,
-) -> Vec<String> {
-    let mut out: Vec<String> = plan_refusals.iter().map(|r| crate::msg::next_clears(r)).collect();
-    if plan_ok {
-        if unwritten {
-            out.extend(plan_moves(rf, planning));
-        } else {
-            out.push(crate::msg::next_ask(&rf.rel, &[heading.to_string()]));
-        }
-    } else if plan_refusals.is_empty() {
-        out.extend(plan_moves(rf, planning));
-    }
-    out
-}
-
-/// The next move of the planning steps for the questions of `rf` not yet
-/// asked, as lines: the owner's approve once every record is there.
-fn plan_moves(rf: &RecordFile, planning: Option<&crate::plan::Planning>) -> Vec<String> {
-    use crate::msg;
-    use crate::plan::{NextMove, Step};
-    let Some(p) = planning else {
-        return vec![msg::next_plan_unapproved(&rf.rel)];
-    };
-    match p.next() {
-        NextMove::Plan => vec![msg::next_plan(&rf.rel)],
-        NextMove::WriteLines => {
-            let mut missing = p.lines_missing(Step::Heading);
-            if missing.is_empty() {
-                missing = p.lines_missing(Step::Body);
-            }
-            let mut headings: Vec<String> = Vec::new();
-            for (q, _) in missing {
-                if !headings.contains(&q.heading) {
-                    headings.push(q.heading.clone());
-                }
-            }
-            vec![msg::next_write_lines(&headings)]
-        }
-        NextMove::WriteBodies(headings) => vec![msg::next_write_bodies(&headings)],
-        NextMove::Ready => vec![msg::next_plan_unapproved(&rf.rel)],
-    }
 }
 
 /// The text following `prefix` (e.g. `"Problem: "`) on the first matching
@@ -637,8 +381,8 @@ fn build_question_view(
     all_headings: &HashMap<String, String>,
     planning: &crate::plan::Planning,
 ) -> QuestionView {
-    let state = qstate(led, sec);
-    let neighbours = if matches!(state, QState::Skeleton | QState::Unasked | QState::Open) {
+    let state = crate::status::question_status(led, sec);
+    let neighbours = if matches!(state, QuestionStatus::NoBody | QuestionStatus::NotAsked | QuestionStatus::Asked) {
         planning
             .questions
             .iter()
@@ -690,10 +434,10 @@ fn build_question_view(
         tier,
         depends,
         state,
-        answerable: state == QState::Open
+        answerable: state == QuestionStatus::Asked
             && asked_text_stands(led, rf, sec)
             && state::answer_waits(rf, idx).is_empty(),
-        waits_on: if state == QState::Open && asked_text_stands(led, rf, sec) {
+        waits_on: if state == QuestionStatus::Asked && asked_text_stands(led, rf, sec) {
             let w = state::answer_waits(rf, idx);
             w.unanswered
                 .iter()
@@ -905,7 +649,7 @@ pub fn open_questions(s: &Snapshot) -> Vec<(String, &QuestionView)> {
     let mut out = Vec::new();
     for f in &s.files {
         for q in &f.questions {
-            if q.state == QState::Open {
+            if q.state == QuestionStatus::Asked {
                 out.push((f.path.clone(), q));
             }
         }
@@ -1028,7 +772,7 @@ Standard: s2.\n\n\
             .iter()
             .find(|s| s.heading_text == "1.1 First question?")
             .unwrap();
-        assert_eq!(qstate(&led, sec1), QState::Open);
+        assert_eq!(crate::status::question_status(&led, sec1), QuestionStatus::Asked);
 
         // 2.1 has no id (never asked) but has a body -> Unasked.
         let sec2 = rf
@@ -1036,7 +780,7 @@ Standard: s2.\n\n\
             .iter()
             .find(|s| s.heading_text == "2.1 Second question?")
             .unwrap();
-        assert_eq!(qstate(&led, sec2), QState::Unasked);
+        assert_eq!(crate::status::question_status(&led, sec2), QuestionStatus::NotAsked);
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -1071,9 +815,9 @@ Standard: s2.\n\n\
             terms_line: None,
         };
 
-        assert_eq!(qstate(&led, &mk("id-a")), QState::Answered);
-        assert_eq!(qstate(&led, &mk("id-b")), QState::Superseded);
-        assert_eq!(qstate(&led, &mk("id-d")), QState::Withdrawn);
+        assert_eq!(crate::status::question_status(&led, &mk("id-a")), QuestionStatus::Answered);
+        assert_eq!(crate::status::question_status(&led, &mk("id-b")), QuestionStatus::Superseded);
+        assert_eq!(crate::status::question_status(&led, &mk("id-d")), QuestionStatus::Withdrawn);
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -1101,7 +845,7 @@ Standard: s2.\n\n\
             is_skeleton: false,
             terms_line: None,
         };
-        assert_eq!(qstate(&led, &sec), QState::Refused);
+        assert_eq!(crate::status::question_status(&led, &sec), QuestionStatus::Refused);
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -1113,7 +857,7 @@ Standard: s2.\n\n\
         let record = write_record(&dir, "adrdom/decisions/example.md", content);
         let rf = record::load(&record).unwrap();
         let led = ledger::read(&dir.join(repo::LEDGER_PATH));
-        assert_eq!(qstate(&led, &rf.sections[0]), QState::Skeleton);
+        assert_eq!(crate::status::question_status(&led, &rf.sections[0]), QuestionStatus::NoBody);
         std::fs::remove_dir_all(&dir).ok();
     }
 
