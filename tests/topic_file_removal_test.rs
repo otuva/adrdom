@@ -113,8 +113,8 @@ fn a_removed_file_holding_only_superseded_sections_is_approved_away() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
     assert!(!stdout(&out).contains(REL), "{}", stdout(&out));
-    let led = adr::ledger::read(&dir.join("adrdom/state/ledger.tsv"));
-    assert_eq!(adr::status::removed_topic_file_status(&led, REL), Some(adr::status::FileStatus::Removed));
+    let shown = adr(&dir, &["show"], &[], "");
+    assert!(stdout(&shown).contains(&format!("[removed] {}", REL)), "{}", stdout(&shown));
 
     let out = approve_removal(&dir);
     assert!(out.status.success(), "approve: {}", stderr(&out));

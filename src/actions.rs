@@ -33,17 +33,6 @@ impl Outcome {
             input_findings: Vec::new(),
         }
     }
-
-    /// The events as the terminal prints them, one line each, then the
-    /// findings on the input.
-    pub fn summary(&self) -> String {
-        self.events
-            .iter()
-            .map(|e| e.text())
-            .chain(self.input_findings.iter().cloned())
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
 }
 
 /// Every question heading and term name by identifier: what turns the
@@ -1156,6 +1145,7 @@ fn do_approve_record(
         replaced: &replaced,
         led,
         planning,
+        shared: None,
     };
     let refusals: Vec<String> = rules::judge_topic_file(&judge)
         .into_iter()
@@ -1285,7 +1275,7 @@ fn do_approve_record(
     // line under its heading?"): a decision, a term or a question of the
     // file by its identifier, a dropped question as written.
     for (i, sec) in sections_snapshot.iter().enumerate() {
-        if sec.unrelated.is_empty() || !crate::plan::is_unasked(led, sec) {
+        if sec.unrelated.is_empty() || !crate::status::question_status(led, sec).is_unasked() {
             continue;
         }
         let Some(j) = (sec.start + 1..sec.end).find(|&j| work_rf.lines[j].starts_with("unrelated: ")) else {

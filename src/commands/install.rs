@@ -84,7 +84,9 @@ pub fn run(claude: bool, codex: bool) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint_stop(&msg::not_a_repo("install", "", Actor::Agent));
+            let command = install_command(claude, codex);
+            let args = command.strip_prefix("adr install").unwrap_or("").trim();
+            out::eprint_stop("install", &msg::not_a_repo("install", args, Actor::Agent));
             return 1;
         }
     };
@@ -98,7 +100,7 @@ pub fn run(claude: bool, codex: bool) -> i32 {
     match result {
         Ok(()) => 0,
         Err(stop) => {
-            out::eprint_stop(&format!("install: {}", stop));
+            out::eprint_stop("install", &stop);
             1
         }
     }

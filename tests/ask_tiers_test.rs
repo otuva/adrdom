@@ -946,7 +946,10 @@ fn answer_names_one_ask_clause_for_every_edited_heading() {
     assert!(!refused.status.success());
     let err = stderr(&refused);
     assert_eq!(err.matches("agent runs: adr ask").count(), 1, "{}", err);
-    assert!(err.contains("# \"Is alpha ready?\", \"Is beta ready?\""), "{}", err);
+    // The refusal names both headings; its ask clause carries no `#`
+    // comment, so no clause after it is read as part of one.
+    assert!(err.contains("\"Is alpha ready?\" has no decision yet; \"Is beta ready?\" has no decision yet"), "{}", err);
+    assert!(!err.contains('#'), "{}", err);
 }
 
 // adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2

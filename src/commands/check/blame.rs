@@ -39,6 +39,9 @@ pub(super) fn check_blame(
     // Built once for every file this run, not once per row (`decision:`/
     // `dropped: copy of <heading>` resolution needs both).
     let (any_headings, known_ids) = blame::heading_ids(records);
+    // What every row's destination resolves against, read once for the run
+    // rather than once per blame file.
+    let names = (!rels.is_empty()).then(|| rules::BlameNames::read(root, source));
 
     for rel in &rels {
         let Some(content) = source.read(root, rel) else {
@@ -64,7 +67,9 @@ pub(super) fn check_blame(
         if let Some(origin_content) = &st.origin_content {
             found.extend(rules::judge_blame_coverage(&bf, origin_content.lines().count()));
             if let Some(origin) = &bf.origin {
-                found.extend(rules::judge_blame_destinations(root, source, &bf, origin).0);
+                if let Some(names) = &names {
+                    found.extend(rules::judge_blame_destinations_in(root, &bf, origin, names).0);
+                }
             }
         }
         if st.awaiting {

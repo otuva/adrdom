@@ -14,14 +14,14 @@ use tiny_http::{Header, Method, Request, Response, Server};
 
 pub fn run(port: u16) -> i32 {
     if !repo::owner_authorized() {
-        out::eprint_stop(&msg::owner_refusal("serve", ""));
+        out::eprint_stop("serve", &msg::owner_refusal("serve", ""));
         return 2;
     }
 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint_stop(&msg::not_a_repo("serve", &format!("--port {}", port), Actor::Owner));
+            out::eprint_stop("serve", &msg::not_a_repo("serve", &format!("--port {}", port), Actor::Owner));
             return 1;
         }
     };

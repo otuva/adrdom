@@ -157,6 +157,9 @@ fn build(
     // `approve` refuses on (`rules::judge_topic_file`, per "Does a command
     // refuse what check passes?", fe14991d A), one `Vec` per record in
     // `records`' order. `parse`/`tells`/`plan` below file them by rule.
+    // What the planning of every file reads of the whole repository (the
+    // reader's rows, the heading indexes), read once for the run.
+    let shared = crate::plan::Shared::new(root, &records, &terms_list, &led);
     let per_record_findings: Vec<Vec<rules::Finding>> = records
         .iter()
         .zip(&replaced_per_record)
@@ -173,6 +176,7 @@ fn build(
                 replaced,
                 led: &led,
                 planning: awaiting.contains(&rf.rel),
+                shared: Some(&shared),
             };
             topic_file_findings(&judge)
         })
@@ -260,6 +264,23 @@ fn topic_file_findings(j: &rules::TopicFileJudge) -> Vec<rules::Finding> {
 /// Every line is a finding with its move, the failures first, then the
 /// notes; a pass prints nothing, by hand or in a hook (per "Does check
 /// print a line that names no move?", 3fc35d4f A).
+/// The arguments `check` ran with, as the command line names them: what a
+/// refusal's move names to run again (per "Does a refusal name the command
+/// that clears it?").
+fn check_args(staged: bool, message: Option<&Path>, since: Option<&str>) -> String {
+    let mut args: Vec<String> = Vec::new();
+    if staged {
+        args.push("--staged".to_string());
+    }
+    if let Some(m) = message {
+        args.push(format!("--message {}", m.display()));
+    }
+    if let Some(s) = since {
+        args.push(format!("--since {}", s));
+    }
+    args.join(" ")
+}
+
 pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: bool) -> i32 {
     if push {
         return push::run();
@@ -268,7 +289,8 @@ pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint(&[stopped(msg::not_a_repo("check", "", Actor::Agent))]);
+            let args = check_args(staged, message.as_deref(), since.as_deref());
+            out::eprint(&[stopped(msg::not_a_repo("check", &args, Actor::Agent))]);
             return 1;
         }
     };

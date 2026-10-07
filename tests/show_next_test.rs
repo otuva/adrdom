@@ -67,6 +67,12 @@ fn id_of(path: &Path, heading: &str) -> String {
     extract_ids(&text[at..])[0].clone()
 }
 
+/// The agent's ask as one clause of a refusal: the command alone, with no
+/// `#` comment after it.
+fn ask_clause() -> String {
+    format!("agent runs: adr ask {}", REL)
+}
+
 fn ask_for(headings: &[&str]) -> String {
     let names: Vec<String> = headings.iter().map(|h| format!("\"{}\"", h)).collect();
     format!("agent runs: adr ask {}  # {}", REL, names.join(", "))
@@ -547,7 +553,7 @@ fn show_and_answer_agree_on_whether_the_asked_text_stands() {
     // gives the owner nothing to run.
     assert_eq!(
         stderr(&refused).trim_end(),
-        format!("answer: \"{}\" is edited since it was asked; {}", TWO, ask_for(&[TWO]))
+        format!("answer: \"{}\" is edited since it was asked; {}", TWO, ask_clause())
     );
 
     // The unedited question is still answerable.
@@ -569,7 +575,7 @@ fn answer_on_a_question_never_asked_names_the_ask() {
     assert!(!out.status.success());
     assert_eq!(
         stderr(&out).trim_end(),
-        format!("answer: \"{}\" is not asked; {}", ONE, ask_for(&[ONE]))
+        format!("answer: \"{}\" is not asked; {}", ONE, ask_clause())
     );
 
     // Asked, edited and asked again: the version read is old, the tool holds

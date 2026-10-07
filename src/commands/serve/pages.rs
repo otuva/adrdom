@@ -156,7 +156,6 @@ fn with_form(line: &Line, r: &Records, token: &str) -> String {
 fn approve_path(line: &Line) -> Option<String> {
     match line {
         Line::Move(Move { kind: MoveKind::Approve { path }, .. }) => Some(path.clone()),
-        Line::Move(Move { kind: MoveKind::Removal { rel, holds }, .. }) if holds.is_empty() => Some(rel.clone()),
         _ => None,
     }
 }

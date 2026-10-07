@@ -3,9 +3,7 @@
 use crate::ledger::Ledger;
 use crate::record::{self, RecordFile, Section};
 use crate::state;
-use crate::terms::Term;
 use std::collections::HashMap;
-use std::path::Path;
 
 pub use crate::status::QuestionStatus;
 
@@ -18,16 +16,9 @@ pub struct CheckReport {
 }
 
 
-/// Every heading id, from any topic file (not just one), paired with its
-/// heading text (per "Does a reference in a topic file carry the
-/// identifier of what it names?"): what turns a depends `Id` entry that
-/// names a decision in another topic file back into that decision's
-/// heading text, for `format_dep`.
-pub fn all_heading_texts(root: &Path) -> HashMap<String, String> {
-    heading_texts(&record::load_all(root))
-}
-
-/// `all_heading_texts` for a caller that holds every topic file loaded.
+/// Every heading id of the topic files `records`, paired with its heading
+/// text (per "Does a reference in a topic file carry the identifier of what
+/// it names?"): what turns an identifier back into the heading it names.
 pub fn heading_texts(records: &[RecordFile]) -> HashMap<String, String> {
     let mut out = HashMap::new();
     for rf in records {
@@ -38,43 +29,6 @@ pub fn heading_texts(records: &[RecordFile]) -> HashMap<String, String> {
         }
     }
     out
-}
-
-fn dep_with_set(text: &str, set: &Option<record::AnswerSet>) -> String {
-    format!("{}{}", text, record::set_suffix(set))
-}
-
-/// A `depends:` entry's text as words (per "Does a reference in a topic
-/// file carry the identifier of what it names?"): a `Text` entry (not yet
-/// approved) prints as written, with its `=set`
-/// suffix restored (`=A`, `=A|B`, `=*`) when it carries one. An `Id` entry
-/// is looked up -- first as a heading id in `rf` (this file), else as a
-/// term id (`terms_list`), else as another topic file's heading id
-/// (`all_headings`) -- printed as that name/heading with the same set
-/// suffix restored, or the bare id when none of the three resolve it
-/// (should not happen once a plan is approved, but never hidden). Shared by
-/// `show` (the "stands on:" line) and `/next` (the "Stands on:" line).
-pub fn format_dep(
-    d: &record::Dep,
-    rf: &RecordFile,
-    terms_list: &[Term],
-    all_headings: &HashMap<String, String>,
-) -> String {
-    match d {
-        record::Dep::Text { text, set } => dep_with_set(text, set),
-        record::Dep::Id { id, set } => {
-            if let Some(sec) = rf.sections.iter().find(|s| s.id.as_deref() == Some(id.as_str())) {
-                return dep_with_set(&sec.heading_text, set);
-            }
-            if let Some(t) = terms_list.iter().find(|t| t.id.as_deref() == Some(id.as_str())) {
-                return dep_with_set(&t.name, set);
-            }
-            if let Some(heading) = all_headings.get(id) {
-                return dep_with_set(heading, set);
-            }
-            dep_with_set(id, set)
-        }
-    }
 }
 
 /// `state::asked_text_stands` for a section of a loaded topic file: the
@@ -88,7 +42,7 @@ pub(crate) fn asked_text_stands(led: &Ledger, rf: &RecordFile, sec: &Section) ->
 mod tests {
     use super::*;
     use crate::{ledger, repo};
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::process::Command;
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -273,79 +227,4 @@ Standard: s2.\n\n\
         assert_eq!(crate::status::question_status(&led, &rf.sections[0]), QuestionStatus::NoBody);
         std::fs::remove_dir_all(&dir).ok();
     }
-
-    #[test]
-    fn format_dep_prints_words_for_text_and_id_entries() {
-        let dir = temp_repo();
-        let content = "# Topic\n\n\
-### 1.1 Q?\n\nid: 11111111-1111-1111-1111-111111111111\n\ndepends: widget\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
-### 1.2 R?\ndepends: 11111111-1111-1111-1111-111111111111=A|B\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
-        let record = write_record(&dir, "adrdom/decisions/example.md", content);
-        let rf = record::load(&record).unwrap();
-
-        let terms_list = vec![Term {
-            name: "widget".to_string(),
-            id: Some("22222222-2222-2222-2222-222222222222".to_string()),
-            definition: String::new(),
-            aliases: vec![],
-            retired: false,
-            start_line: 1,
-            id_line: None,
-            terms_line: None,
-            terms_line_idx: None,
-        }];
-
-        // A `Text` entry (not yet approved) prints as written.
-        assert_eq!(
-            format_dep(&rf.sections[0].depends[0], &rf, &terms_list, &HashMap::new()),
-            "widget"
-        );
-
-        // An `Id` entry naming a heading in this same file prints that
-        // heading's text with the set suffix restored.
-        assert_eq!(
-            format_dep(&rf.sections[1].depends[0], &rf, &terms_list, &HashMap::new()),
-            "1.1 Q?=A|B"
-        );
-
-        // An `Id` entry naming a term prints the term's name.
-        let term_dep = record::Dep::Id {
-            id: "22222222-2222-2222-2222-222222222222".to_string(),
-            set: None,
-        };
-        assert_eq!(
-            format_dep(&term_dep, &rf, &terms_list, &HashMap::new()),
-            "widget"
-        );
-
-        // An `Id` entry naming a decision in another topic file prints that
-        // decision's heading text, from `all_headings`.
-        let mut all_headings = HashMap::new();
-        all_headings.insert(
-            "33333333-3333-3333-3333-333333333333".to_string(),
-            "Elsewhere?".to_string(),
-        );
-        let decision_dep = record::Dep::Id {
-            id: "33333333-3333-3333-3333-333333333333".to_string(),
-            set: None,
-        };
-        assert_eq!(
-            format_dep(&decision_dep, &rf, &terms_list, &all_headings),
-            "Elsewhere?"
-        );
-
-        // An id resolving to none of the three (should not happen once
-        // approved) prints the bare id rather than hiding it.
-        let unknown_dep = record::Dep::Id {
-            id: "44444444-4444-4444-4444-444444444444".to_string(),
-            set: None,
-        };
-        assert_eq!(
-            format_dep(&unknown_dep, &rf, &terms_list, &HashMap::new()),
-            "44444444-4444-4444-4444-444444444444"
-        );
-
-        std::fs::remove_dir_all(&dir).ok();
-    }
-
 }

@@ -28,14 +28,14 @@ fn removed(rel: &str) -> Event {
 /// leaving `adrdom/` itself untouched.
 pub fn run() -> i32 {
     if !repo::owner_authorized() {
-        out::eprint_stop(&msg::owner_refusal("uninstall", ""));
+        out::eprint_stop("uninstall", &msg::owner_refusal("uninstall", ""));
         return 2;
     }
 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint_stop(&msg::not_a_repo("uninstall", "", Actor::Owner));
+            out::eprint_stop("uninstall", &msg::not_a_repo("uninstall", "", Actor::Owner));
             return 1;
         }
     };
@@ -49,7 +49,7 @@ pub fn run() -> i32 {
     out::print_events(&events);
     match failed {
         Some(m) => {
-            out::eprint_stop(&format!("uninstall: {}", m));
+            out::eprint_stop("uninstall", &m);
             1
         }
         None => 0,

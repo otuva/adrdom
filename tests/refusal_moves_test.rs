@@ -381,21 +381,41 @@ fn a_settings_file_that_does_not_parse_names_its_fix_once() {
 fn outside_a_repository_every_command_names_the_step_that_clears_it() {
     let outside = std::env::temp_dir().join(format!("adr-outside-moves-{}", std::process::id()));
     std::fs::create_dir_all(&outside).unwrap();
+    // Every command, with the arguments and flags it was run with: the move
+    // names that same command line to run again, the command's name leads
+    // the line once.
     for (args, owner) in [
         (vec!["approve", "x.md"], true),
         (vec!["answer", "id@abcd1234", "A"], true),
         (vec!["unban"], true),
         (vec!["uninstall"], true),
+        (vec!["serve", "--port", "0"], true),
         (vec!["show"], false),
+        (vec!["show", "x.md"], false),
+        (vec!["show", "--all", "--neighbours", "--dependents"], false),
         (vec!["check"], false),
+        (vec!["check", "--staged"], false),
+        (vec!["check", "--message", "m.txt"], false),
+        (vec!["check", "--since", "abc123"], false),
+        (vec!["check", "--push"], false),
         (vec!["ask", "x.md"], false),
+        (vec!["plan", "x.md"], false),
+        (vec!["read"], false),
+        (vec!["install"], false),
+        (vec!["install", "--claude"], false),
+        (vec!["install", "--claude", "--codex"], false),
+        (vec!["ban", "--term", "widget"], false),
+        (vec!["ban", "--rebuild"], false),
     ] {
         let out = if owner { adr_owner(&outside, &args, "") } else { adr(&outside, &args, &[], "") };
         assert!(!out.status.success(), "{:?}", args);
         let err = stderr(&out);
-        assert!(err.contains("not inside a git repository; "), "{:?}: {}", args, err);
-        assert!(err.contains("changes into a git repository and runs: adr "), "{:?}: {}", args, err);
-        assert_one_clearing_move(err.trim_end(), &format!("adr {}", args.join(" ")));
+        let line = err.trim_end();
+        assert!(line.contains("not inside a git repository; "), "{:?}: {}", args, err);
+        let command = format!("adr {}", args.join(" "));
+        assert!(line.ends_with(&format!("changes into a git repository and runs: {}", command)), "{:?}: {}", args, err);
+        assert!(line.starts_with(&format!("{}: not inside", args[0])), "{:?}: {}", args, err);
+        assert_one_clearing_move(line, &command);
     }
     std::fs::remove_dir_all(&outside).unwrap();
 }
@@ -423,4 +443,22 @@ fn ask_and_plan_on_a_missing_topic_file_name_the_command_that_clears_it() {
         );
         assert_one_clearing_move(line, &format!("adr {}", cmd));
     }
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// A refusal of several lines names the command on every line: ask on a terms
+// file with two faulty entries prints each finding with `ask: ` in front.
+#[test]
+fn a_refusal_of_several_lines_names_the_command_on_every_line() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    std::fs::write(dir.join("adrdom/terms.md"), "# Terms\n\n## widget\naliases: widgets\n\n## gadget\naliases: gadgets\n").unwrap();
+    let rec = write_record(&dir, "adrdom/decisions/x.md", "# X\n\n### Does the widget run?\n");
+    let out = adr(&dir, &["ask", rec.to_str().unwrap()], &[], "");
+    assert!(!out.status.success());
+    let err = stderr(&out);
+    let lines: Vec<&str> = err.lines().collect();
+    assert!(lines.len() >= 2, "{}", err);
+    assert!(lines.iter().all(|l| l.starts_with("ask: ") && !l.starts_with("ask: ask: ")), "{}", err);
 }

@@ -4,7 +4,7 @@
 //! command that prints a move reads it from here, and `Move::text` is the
 //! one place a move becomes words.
 use crate::ledger::Ledger;
-use crate::msg::{Actor, Next};
+use crate::msg::Next;
 use crate::record::{self, RecordFile};
 use crate::rules::Finding;
 use crate::state;
@@ -76,7 +76,6 @@ impl Move {
     pub fn new(kind: MoveKind) -> Move {
         let actor = match &kind {
             MoveKind::Approve { .. } | MoveKind::Answer { .. } => Mover::Owner,
-            MoveKind::Removal { holds, .. } if holds.is_empty() => Mover::Owner,
             MoveKind::AnswerWaits { .. } | MoveKind::BuildWaits { .. } | MoveKind::BuildWaitsRefused { .. } => {
                 Mover::NotYet
             }
@@ -94,7 +93,7 @@ impl Move {
             MoveKind::WriteLines { headings } => Next::agent(format!("writes lines for {}", quoted(headings))),
             MoveKind::WriteBodies { headings } => Next::agent(format!("writes the body of {}", quoted(headings))),
             MoveKind::Approve { path } => Next::owner_runs(format!("adr approve {}", path)),
-            MoveKind::Ask { rel, headings } => Next::agent(format!("runs: adr ask {}  # {}", rel, quoted(headings))),
+            MoveKind::Ask { rel, .. } => Next::agent(format!("runs: adr ask {}", rel)),
             MoveKind::Answer { id, version, .. } => Next::owner_runs(format!("adr answer {}@{} <letter>", id, version)),
             MoveKind::Refused { heading } => Next::agent(format!(
                 "changes the plan: \"{}\" is refused and holds the questions that come after it",
@@ -113,8 +112,20 @@ impl Move {
         })
     }
 
-    /// The move as one line: who does what, or `not yet: ...`.
+    /// The move as one line of its own: who does what, or `not yet: ...`.
+    /// A command line is followed by a `#` comment naming the questions it
+    /// is about, so it is printed only where the move stands alone.
     pub fn text(&self) -> String {
+        match &self.kind {
+            MoveKind::Answer { heading, .. } => format!("{}  # \"{}\"", self.clause_text(), heading),
+            MoveKind::Ask { headings, .. } => format!("{}  # {}", self.clause_text(), quoted(headings)),
+            _ => self.clause_text(),
+        }
+    }
+
+    /// The move as one clause among others in a refusal's tail: no `#`
+    /// comment, so the clauses after it are never read as part of one.
+    pub fn clause_text(&self) -> String {
         match &self.kind {
             MoveKind::AnswerWaits { heading, on } => {
                 format!("not yet: \"{}\" is asked and waits for {}", heading, quoted(on))
@@ -126,9 +137,6 @@ impl Move {
                 "not yet: \"{}\" is answered and is built once the plan changes, \"{}\" beside it is refused",
                 heading, beside
             ),
-            MoveKind::Answer { heading, .. } => {
-                format!("{}  # \"{}\"", self.next().expect("an answer has a mover").render(), heading)
-            }
             _ => self.next().expect("a move with a mover").render(),
         }
     }
@@ -152,7 +160,7 @@ impl Report {
     /// move, joined with `, `. A refusal names at least one of them.
     pub fn tail(&self) -> String {
         debug_assert!(!(self.findings.is_empty() && self.moves.is_empty()), "a refusal names at least one move");
-        self.findings.iter().map(Finding::text).chain(self.moves.iter().map(Move::text)).collect::<Vec<_>>().join(", ")
+        self.findings.iter().map(Finding::text).chain(self.moves.iter().map(Move::clause_text)).collect::<Vec<_>>().join(", ")
     }
 }
 
@@ -331,14 +339,6 @@ pub fn of_topic_file(
     out
 }
 
-/// Every move of the topic file `rf` as loaded from disk: the approval of
-/// its plan and prose and its planning records read off the file as loaded,
-/// then every finding `approve` refuses on (`rules::judge_topic_file_at`)
-/// that is no planning step, each cleared by its own move; the planning
-/// steps come from the planning records (`of_planning`). `all` is every
-/// topic file as loaded and `tests` is `check::test_index`. The one move a
-/// command that names one file prints (per "Does a command compute a move
-/// of its own?", aac5c313 A).
 /// `of_unasked_question` of the question `heading` of the topic file `rf`
 /// as loaded from disk, with the findings and planning records read the
 /// way `of_topic_file_in` reads them: the move `answer` names for a
@@ -352,13 +352,22 @@ pub fn of_unasked_question_in(
     heading: &str,
     unwritten: bool,
 ) -> Report {
+    let index = crate::rules::RepoIndex::new(root, all, terms_list, led);
     let plan_ok = state::plan_approved(led, rf, &rf.rel) && state::context_approved(led, rf, &rf.rel);
-    let planning = crate::plan::load(root, rf, all, terms_list, led);
-    let findings = crate::rules::judge_topic_file_at(root, rf, all, terms_list, led);
+    let planning = crate::plan::load_with(rf, terms_list, led, &index.planning);
+    let findings = crate::rules::judge_topic_file_in(root, rf, all, terms_list, led, &index);
     let moves = of_unasked_question(rf, plan_ok, &findings, Some(&planning), heading, unwritten);
     Report { findings, moves }
 }
 
+/// Every move of the topic file `rf` as loaded from disk: the approval of
+/// its plan and prose and its planning records read off the file as loaded,
+/// then every finding `approve` refuses on (`rules::judge_topic_file_at`)
+/// that is no planning step, each cleared by its own move; the planning
+/// steps come from the planning records (`of_planning`). `all` is every
+/// topic file as loaded and `tests` is `check::test_index`. The one move a
+/// command that names one file prints (per "Does a command compute a move
+/// of its own?", aac5c313 A).
 pub fn of_topic_file_in(
     root: &std::path::Path,
     rf: &RecordFile,
@@ -367,21 +376,33 @@ pub fn of_topic_file_in(
     led: &Ledger,
     tests: &HashMap<String, Vec<String>>,
 ) -> Report {
+    of_topic_file_with(root, rf, all, terms_list, led, tests, &crate::rules::RepoIndex::new(root, all, terms_list, led))
+}
+
+/// `of_topic_file_in` with what the run shares read once (`index`): what a
+/// command that reports many files calls once per file.
+pub fn of_topic_file_with(
+    root: &std::path::Path,
+    rf: &RecordFile,
+    all: &[RecordFile],
+    terms_list: &[crate::terms::Term],
+    led: &Ledger,
+    tests: &HashMap<String, Vec<String>>,
+    index: &crate::rules::RepoIndex,
+) -> Report {
+    let shared = &index.planning;
     let plan_ok = state::plan_approved(led, rf, &rf.rel) && state::context_approved(led, rf, &rf.rel);
-    let planning = crate::plan::load(root, rf, all, terms_list, led);
-    let findings = crate::rules::judge_topic_file_at(root, rf, all, terms_list, led);
-    let lookup = crate::terms::phrase_lookup(terms_list);
-    let cross = crate::depends::cross_file_heading_index(all, led);
+    let planning = crate::plan::load_with(rf, terms_list, led, shared);
+    let findings = crate::rules::judge_topic_file_in(root, rf, all, terms_list, led, index);
     let original = rf;
     let mut rf = rf.clone();
-    crate::depends::normalize_cross_file_deps(&mut rf, terms_list, &lookup, &cross, led);
+    crate::depends::normalize_cross_file_deps(&mut rf, terms_list, &shared.phrase_lookup, &shared.cross, led);
     let moves = of_topic_file(&rf, led, plan_ok, &findings, tests, Some(&planning));
     // A question asked and struck from the plan is cleared by the owner's
     // approve the moves above already name, so it joins the findings only
     // after the moves are computed from them.
     let mut findings = findings;
-    let stale = crate::rules::stale_files(all, led);
-    let sole = stale.len() == 1;
+    let sole = index.stale().len() == 1;
     findings.extend(crate::rules::struck_asked(&rf.rel, !state::plan_approved(led, original, &rf.rel), sole, all, led));
     Report { findings, moves }
 }
@@ -583,7 +604,7 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> String {
     // One owner move, last: the plan's approval when a refused question has
     // to go or the plan waits for it, else the first answer owed.
     let mut clauses: Vec<String> = found;
-    clauses.extend(agent.iter().map(Move::text));
+    clauses.extend(agent.iter().map(Move::clause_text));
     if !refused.is_empty() {
         clauses.push(
             Next::agent(format!("writes the plan change that drops or replaces {}", quoted(&refused))).render(),
@@ -593,19 +614,8 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> String {
     if owner.is_none() {
         owner = answer;
     }
-    // The answer move in a refusal is the command alone, without the heading
-    // comment `show` prints after it.
-    clauses.extend(owner.and_then(|m| m.next()).map(|n| n.render()));
+    clauses.extend(owner.map(|m| m.clause_text()));
     format!("\"{}\" waits: {}; {}", heading, parts.join("; "), clauses.join(", "))
-}
-
-/// The actor of a `msg::Next` clause, for a caller holding a `Mover`.
-pub fn actor(m: Mover) -> Option<Actor> {
-    match m {
-        Mover::Agent => Some(Actor::Agent),
-        Mover::Owner => Some(Actor::Owner),
-        Mover::NotYet => None,
-    }
 }
 
 #[cfg(test)]
@@ -631,6 +641,21 @@ mod tests {
         assert_eq!(Move::new(MoveKind::Approve { path: "x.md".into() }).text(), "owner runs: adr approve x.md");
     }
 
+    // adr: aac5c313-dedd-466b-a0c3-ead5e99ce913
+    #[test]
+    fn a_tail_of_clauses_holds_no_comment_before_a_later_clause() {
+        let report = Report {
+            findings: Vec::new(),
+            moves: vec![
+                Move::new(MoveKind::Ask { rel: "x.md".into(), headings: vec!["A?".into(), "B?".into()] }),
+                Move::new(MoveKind::Approve { path: "x.md".into() }),
+            ],
+        };
+        let tail = report.tail();
+        assert_eq!(tail, "agent runs: adr ask x.md, owner runs: adr approve x.md");
+        assert!(!tail.contains('#'), "{}", tail);
+    }
+
     #[test]
     fn answer_waits_merges_the_ask_moves_and_puts_the_owner_last() {
         let ask = |h: &str| Move::new(MoveKind::Ask { rel: "x.md".into(), headings: vec![h.into()] });
@@ -650,7 +675,7 @@ mod tests {
         );
         assert_eq!(
             line,
-            "\"heading\" waits: \"a\" has no decision yet; \"b\" has no decision yet; agent runs: adr ask x.md  # \"a\", \"b\", owner runs: adr approve x.md"
+            "\"heading\" waits: \"a\" has no decision yet; \"b\" has no decision yet; agent runs: adr ask x.md, owner runs: adr approve x.md"
         );
     }
 

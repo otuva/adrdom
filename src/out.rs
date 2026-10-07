@@ -276,13 +276,11 @@ pub fn print_events(events: &[Event]) {
     print(&lines);
 }
 
-/// Prints to standard error what stopped a command, as the refusal text
-/// built for it: one finding per line, each naming its move.
-pub fn eprint_stop(stop: &str) {
-    let mut err = std::io::stderr().lock();
-    for l in stop.lines() {
-        let _ = writeln!(err, "{}", l);
-    }
+/// Prints to standard error what stopped the command `cmd`: `out::stop` of
+/// the refusal text, so every line of a refusal of several lines leads with
+/// the command's name once.
+pub fn eprint_stop(cmd: &'static str, text: &str) {
+    eprint(&stop(cmd, text));
 }
 
 #[cfg(test)]

@@ -53,6 +53,13 @@ pub(crate) struct Records {
     /// Every question's heading and every term's name by its identifier:
     /// what turns an identifier on a line back into words.
     names: HashMap<String, String>,
+    /// What the judgement of every topic file reads of the whole
+    /// repository, read the first time a file is judged and kept for the
+    /// rest (`rules::RepoIndex`).
+    index: std::cell::OnceCell<rules::RepoIndex>,
+    /// What every blame row resolves against, read the first time a blame
+    /// file is judged (`rules::BlameNames`).
+    blame_names: std::cell::OnceCell<rules::BlameNames>,
 }
 
 impl Records {
@@ -85,7 +92,17 @@ impl Records {
             unreadable_blame_files,
             tests,
             names,
+            index: std::cell::OnceCell::new(),
+            blame_names: std::cell::OnceCell::new(),
         }
+    }
+
+    fn blame_names(&self) -> &rules::BlameNames {
+        self.blame_names.get_or_init(|| rules::BlameNames::read(&self.root, &repo::Source::WorkingTree))
+    }
+
+    fn index(&self) -> &rules::RepoIndex {
+        self.index.get_or_init(|| rules::RepoIndex::new(&self.root, &self.topic_files, &self.terms_list, &self.led))
     }
 
     fn present_ids(&self) -> HashSet<String> {
@@ -97,9 +114,30 @@ impl Records {
     }
 }
 
+/// The arguments `show` ran with, as the command line names them: what a
+/// refusal's move names to run again (per "Does a refusal name the command
+/// that clears it?").
+fn show_args(record_arg: Option<&std::path::Path>, all: bool, views: &Views) -> String {
+    let mut args: Vec<String> = Vec::new();
+    if let Some(p) = record_arg {
+        args.push(p.display().to_string());
+    }
+    if all {
+        args.push("--all".to_string());
+    }
+    if views.neighbours {
+        args.push("--neighbours".to_string());
+    }
+    if views.dependents {
+        args.push("--dependents".to_string());
+    }
+    args.join(" ")
+}
+
 pub fn run(record_arg: Option<PathBuf>, all: bool, views: Views) -> i32 {
     let Some(root) = repo::find_root() else {
-        out::eprint(&[Line::Finding(Finding::new("show", msg::not_a_repo("show", "", Actor::Agent)))]);
+        let args = show_args(record_arg.as_deref(), all, &views);
+        out::eprint(&[out::refusal("show", &msg::not_a_repo("show", &args, Actor::Agent))]);
         return 1;
     };
     let r = Records::load(root);
@@ -553,7 +591,7 @@ fn row_status(
 // --- findings and moves -----------------------------------------------------
 
 fn topic_file_report(r: &Records, rf: &RecordFile) -> Report {
-    moves::of_topic_file_in(&r.root, rf, &r.topic_files, &r.terms_list, &r.led, &r.tests)
+    moves::of_topic_file_with(&r.root, rf, &r.topic_files, &r.terms_list, &r.led, &r.tests, r.index())
 }
 
 fn removed_report(r: &Records, rel: &str) -> Report {
@@ -602,7 +640,7 @@ fn blame_report(r: &Records, bf: &blame::BlameFile) -> (FileStatus, Report) {
         &any_headings,
         &known_ids,
     );
-    let findings = rules::judge_blame_file(&r.root, &fs, bf);
+    let findings = rules::judge_blame_file(&r.root, &fs, bf, r.blame_names());
     (st, moves::of_blame_file(&bf.rel, findings, fs.awaiting))
 }
 

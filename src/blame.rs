@@ -277,13 +277,13 @@ pub struct ResolveCtx<'a> {
     /// mapped to the file and id of each section that carries it -- what
     /// `decision: <heading text>` resolves against (38216d39 A: "a question
     /// by heading", not only a *current* one).
-    pub any_headings: HashMap<String, Vec<(String, String)>>,
+    pub any_headings: &'a HashMap<String, Vec<(String, String)>>,
     /// Every id that names a section anywhere with an id -- what
     /// `decision: <uuid>` (already in uuid form) is checked against, and
     /// (per the owner's fix to 38216d39 A) what `dropped: copy of <heading
     /// text>` resolves against too, the same way a `decision:` row does --
     /// a copy target is any question with an id, not only a current one.
-    pub known_heading_ids: HashSet<String>,
+    pub known_heading_ids: &'a HashSet<String>,
     pub terms_list: &'a [Term],
     pub phrase_lookup: &'a HashMap<String, String>,
     /// The tree the rows are judged in: a copy target's path is looked up
@@ -291,14 +291,14 @@ pub struct ResolveCtx<'a> {
     pub source: repo::Source,
     /// Every topic file's stem (its file name without `.md`): what
     /// `prose: <stem>` is checked against.
-    pub decision_stems: HashSet<String>,
+    pub decision_stems: &'a HashSet<String>,
     /// Every other origin already named by some blame file's own `origin:`
     /// line (any blame file in `repo::BLAME_DIR`, including this one):
     /// alongside a path that exists in the working tree, what
     /// `dropped: copy of <path>` is checked against (38216d39 A: "a copy of
     /// a passage whose decision lives in an origin not yet mapped still
     /// has a target").
-    pub known_origins: HashSet<String>,
+    pub known_origins: &'a HashSet<String>,
     /// The `origin:` path of the blame file being resolved: what a
     /// `dropped: copy of <path>` row may never name (38216d39 A: "another
     /// origin").
@@ -669,8 +669,7 @@ pub fn resolve_heading_value(
 
 /// The heading text a section id carries, anywhere in `records`, any state
 /// -- what turns an id in a canonical row back into words to print, the
-/// same way `view::format_dep`/`all_heading_texts` turn a depends id back
-/// into a name.
+/// same way `view::heading_texts` turns a depends id back into a name.
 pub fn heading_text_for_id<'a>(records: &'a [RecordFile], id: &str) -> Option<&'a str> {
     records
         .iter()

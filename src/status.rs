@@ -207,13 +207,6 @@ pub fn prose_status(led: &Ledger, rel: &str, approved: bool) -> FileStatus {
     approval_status(led, "context", rel, approved)
 }
 
-/// The status of a topic file at `rel` that is gone from disk: `Removed`
-/// while the ledger still holds an approval of it, else `None` (a file never
-/// approved has no status once it is gone).
-pub fn removed_topic_file_status(led: &Ledger, rel: &str) -> Option<TopicFileStatus> {
-    crate::rules::removal_awaiting(led, &|_| false).iter().any(|r| r == rel).then_some(FileStatus::Removed)
-}
-
 pub fn terms_file_status(led: &Ledger, tf: &TermsFile) -> TermsFileStatus {
     approval_status(led, "terms", crate::repo::TERMS_PATH, crate::state::terms_approved(led, tf))
 }

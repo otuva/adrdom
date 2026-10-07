@@ -12,7 +12,9 @@ use crate::repo;
 use crate::state;
 use crate::status::FileStatus;
 use crate::terms::{self, TermsFile};
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
 
 /// The side of one line of a change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,24 +101,88 @@ fn changed(old: Option<Vec<String>>, new: &[String]) -> Vec<DiffLine> {
     }
 }
 
-/// The committed texts of `rel`, newest first, read one at a time: one for
-/// each commit that touched the path. The one walk
-/// of git history every reader of an approved text goes through; a reader
-/// that stops at its match reads no older version.
-pub fn committed_texts<'a>(root: &'a Path, rel: &'a str) -> impl Iterator<Item = String> + 'a {
+/// What the run has read of git history, kept for the rest of the run: the
+/// commits that touched a path at a given `HEAD`, the text of a path at a
+/// commit, and that text parsed as a topic file. A commit's text never
+/// changes, so it is read once; the list of commits is keyed by `HEAD`, so a
+/// long-running `serve` reads it again after a new commit.
+#[derive(Default)]
+struct History {
+    commits: HashMap<(PathBuf, String, String), Arc<Vec<String>>>,
+    texts: HashMap<(PathBuf, String, String), Option<Arc<String>>>,
+    topics: HashMap<(PathBuf, String, String), Arc<RecordFile>>,
+}
+
+fn history() -> std::sync::MutexGuard<'static, History> {
+    static HISTORY: OnceLock<Mutex<History>> = OnceLock::new();
+    HISTORY.get_or_init(Default::default).lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// The commits that touched `rel`, newest first.
+fn commits_of(root: &Path, rel: &str) -> Arc<Vec<String>> {
+    let head = repo::git(root, &["rev-parse", "HEAD"]).unwrap_or_default().trim().to_string();
+    let key = (root.to_path_buf(), rel.to_string(), head);
+    if let Some(found) = history().commits.get(&key) {
+        return found.clone();
+    }
     let commits: Vec<String> = repo::git(root, &["log", "--format=%H", "--", rel])
         .map(|log| log.lines().filter(|l| !l.is_empty()).map(str::to_string).collect())
         .unwrap_or_default();
-    commits.into_iter().filter_map(move |commit| repo::git(root, &["show", &format!("{}:{}", commit, rel)]))
+    let commits = Arc::new(commits);
+    history().commits.insert(key, commits.clone());
+    commits
+}
+
+/// The text of `rel` at `commit`, `None` where the commit deleted it.
+fn text_at(root: &Path, commit: &str, rel: &str) -> Option<Arc<String>> {
+    let key = (root.to_path_buf(), commit.to_string(), rel.to_string());
+    if let Some(found) = history().texts.get(&key) {
+        return found.clone();
+    }
+    let text = repo::git(root, &["show", &format!("{}:{}", commit, rel)]).map(Arc::new);
+    history().texts.insert(key, text.clone());
+    text
+}
+
+/// The text of `rel` at `commit` parsed as a topic file.
+fn topic_at(root: &Path, commit: &str, rel: &str) -> Option<Arc<RecordFile>> {
+    let key = (root.to_path_buf(), commit.to_string(), rel.to_string());
+    if let Some(found) = history().topics.get(&key) {
+        return Some(found.clone());
+    }
+    let text = text_at(root, commit, rel)?;
+    let rf = Arc::new(record::build(root.join(rel), rel.to_string(), record::split_lines(&text)));
+    history().topics.insert(key, rf.clone());
+    Some(rf)
+}
+
+/// The committed texts of `rel`, newest first, read one at a time: one for
+/// each commit that touched the path. The one walk of git history every
+/// reader of an approved text goes through; a reader that stops at its match
+/// reads no older version, and a version read once is not read again in the
+/// same run.
+pub fn committed_texts(root: &Path, rel: &str) -> impl Iterator<Item = Arc<String>> {
+    let (root, rel) = (root.to_path_buf(), rel.to_string());
+    let commits = commits_of(&root, &rel);
+    (0..commits.len()).filter_map(move |i| text_at(&root, &commits[i], &rel))
+}
+
+/// `committed_texts` of a topic file, each parsed.
+pub fn committed_topics(root: &Path, rel: &str) -> impl Iterator<Item = Arc<RecordFile>> {
+    let (root, rel) = (root.to_path_buf(), rel.to_string());
+    let commits = commits_of(&root, &rel);
+    (0..commits.len()).filter_map(move |i| topic_at(&root, &commits[i], &rel))
 }
 
 /// The newest committed text of `rel` that `matches` takes.
-pub fn approved_text(root: &Path, rel: &str, matches: &dyn Fn(&str) -> bool) -> Option<String> {
+pub fn approved_text(root: &Path, rel: &str, matches: &dyn Fn(&str) -> bool) -> Option<Arc<String>> {
     committed_texts(root, rel).find(|text| matches(text))
 }
 
-fn parse_topic(root: &Path, rel: &str, text: &str) -> RecordFile {
-    record::build(root.join(rel), rel.to_string(), record::split_lines(text))
+/// The newest committed version of the topic file `rel` that `matches`
+/// takes.
+fn approved_topic(root: &Path, rel: &str, matches: &dyn Fn(&RecordFile) -> bool) -> Option<Arc<RecordFile>> {
+    committed_topics(root, rel).find(|rf| matches(rf))
 }
 
 /// A question's lines as approve hashes them (`record::question_hash`), less
@@ -160,8 +226,8 @@ fn approved_question(root: &Path, rel: &str, id: &str, hash: &str, plan: Option<
     if let Some(found) = plan.and_then(lines_in) {
         return Some(found);
     }
-    let text = approved_text(root, rel, &|t| lines_in(&parse_topic(root, rel, t)).is_some())?;
-    lines_in(&parse_topic(root, rel, &text))
+    let rf = approved_topic(root, rel, &|rf| lines_in(rf).is_some())?;
+    lines_in(&rf)
 }
 
 /// What a topic file holds beyond its latest approval.
@@ -192,8 +258,7 @@ pub fn topic_file(root: &Path, rf: &RecordFile, led: &Ledger) -> TopicChanges {
             None => Some(Change { status: FileStatus::New, lines: added(&new) }),
             Some(row) => {
                 let hash = row.hash.clone();
-                let old = approved_text(root, rel, &|t| record::context_hash(&parse_topic(root, rel, t)) == hash)
-                    .map(|t| prose_lines(&parse_topic(root, rel, &t)));
+                let old = approved_topic(root, rel, &|rf| record::context_hash(rf) == hash).map(|rf| prose_lines(&rf));
                 Some(Change { status: FileStatus::Changed, lines: changed(old, &new) })
             }
         }
@@ -286,10 +351,8 @@ fn struck_ids(rf: &RecordFile, led: &Ledger) -> Vec<String> {
 /// approved one.
 fn latest_plan(root: &Path, rel: &str, led: &Ledger) -> Option<RecordFile> {
     led.latest_for_path("approved", rel)?;
-    let text = approved_text(root, rel, &|t| {
-        state::plan_approved_hashes(led, rel, &record::question_hashes(&parse_topic(root, rel, t)))
-    })?;
-    Some(parse_topic(root, rel, &text))
+    let rf = approved_topic(root, rel, &|rf| state::plan_approved_hashes(led, rel, &record::question_hashes(rf)))?;
+    Some(RecordFile::clone(&rf))
 }
 
 /// An entry's lines as the terms file holds them, less its `id:` and

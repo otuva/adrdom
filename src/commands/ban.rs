@@ -34,7 +34,12 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint_stop(&msg::not_a_repo("ban", "", Actor::Agent));
+            let args = match (&term, rebuild) {
+                (_, true) => "--rebuild".to_string(),
+                (Some(t), false) => format!("--term {}", t),
+                (None, false) => String::new(),
+            };
+            out::eprint_stop("ban", &msg::not_a_repo("ban", &args, Actor::Agent));
             return 1;
         }
     };
@@ -48,13 +53,13 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     let uuid: Option<String> = match &term {
         Some(name) => {
             let Some(tf) = state::load_terms(&root) else {
-                out::eprint_stop(&format!("ban: {}", msg::no_terms_file_for_term(name)));
+                out::eprint_stop("ban", &msg::no_terms_file_for_term(name));
                 return 1;
             };
             match resolve_term_uuid(&tf, name) {
                 Some(u) => Some(u),
                 None => {
-                    out::eprint_stop(&format!("ban: {}", msg::no_such_term(name)));
+                    out::eprint_stop("ban", &msg::no_such_term(name));
                     return 1;
                 }
             }
@@ -64,10 +69,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
 
     let mut input = String::new();
     if std::io::stdin().read_to_string(&mut input).is_err() {
-        out::eprint_stop(&format!(
-            "ban: {}",
-            msg::stdin_read_failed(msg::after_fix_agent_runs("adr ban with the words on its input"))
-        ));
+        out::eprint_stop("ban", &msg::stdin_read_failed(msg::after_fix_agent_runs("adr ban with the words on its input")));
         return 1;
     }
 
@@ -107,10 +109,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
         let expected = banned::sorted_content(&banned_now);
         if std::fs::read_to_string(&banned_path).unwrap_or_default() != expected {
             if let Err(e) = banned::write_sorted(&banned_path, banned_now) {
-                out::eprint_stop(&format!(
-                    "ban: {}",
-                    msg::update_failed("banned list", e, msg::after_fix_agent_runs("adr ban with the words on its input"))
-                ));
+                out::eprint_stop("ban", &msg::update_failed("banned list", e, msg::after_fix_agent_runs("adr ban with the words on its input")));
                 return 1;
             }
             out::print_events(&[Event::FileWritten { path: banned::BAN_LIST.to_string() }]);
@@ -138,9 +137,9 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     }
 
     if !hits.is_empty() {
-        let mut stop = vec![format!("ban: {}", msg::already_in_use())];
+        let mut stop = vec![msg::already_in_use()];
         stop.extend(hits);
-        out::eprint_stop(&stop.join("\n"));
+        out::eprint_stop("ban", &stop.join("\n"));
         return 1;
     }
 
@@ -154,10 +153,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     entries.extend(new_hashes.iter().map(|h| (h.clone(), uuid.clone())));
 
     if let Err(e) = banned::write_sorted(&banned_path, entries) {
-        out::eprint_stop(&format!(
-            "ban: {}",
-            msg::update_failed("banned list", e, msg::after_fix_agent_runs("adr ban with the words on its input"))
-        ));
+        out::eprint_stop("ban", &msg::update_failed("banned list", e, msg::after_fix_agent_runs("adr ban with the words on its input")));
         return 1;
     }
 
@@ -179,10 +175,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
         })
         .collect();
     if let Err(e) = ledger::append(&ledger_path, &rows) {
-        out::eprint_stop(&format!(
-            "ban: {}",
-            msg::update_failed("ledger", e, msg::after_fix_agent_runs("adr ban with the words on its input"))
-        ));
+        out::eprint_stop("ban", &msg::update_failed("ledger", e, msg::after_fix_agent_runs("adr ban with the words on its input")));
         return 1;
     }
 
@@ -208,10 +201,7 @@ fn run_rebuild(banned_path: &std::path::Path, ledger_path: &std::path::Path) -> 
         return 0;
     }
     if let Err(e) = banned::write_sorted(banned_path, entries) {
-        out::eprint_stop(&format!(
-            "ban: {}",
-            msg::update_failed("banned list", e, msg::after_fix_agent_runs("adr ban --rebuild"))
-        ));
+        out::eprint_stop("ban", &msg::update_failed("banned list", e, msg::after_fix_agent_runs("adr ban --rebuild")));
         return 1;
     }
     out::print_events(&[Event::FileWritten { path: banned::BAN_LIST.to_string() }]);

@@ -18,7 +18,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint_stop(&msg::not_a_repo("ask", "", Actor::Agent));
+            out::eprint_stop("ask", &msg::not_a_repo("ask", &record_path.display().to_string(), Actor::Agent));
             return 1;
         }
     };
@@ -33,7 +33,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     let tf = match actions::require_terms(&root, &led, &rel) {
         Ok(tf) => tf,
         Err(e) => {
-            out::eprint_stop(&format!("ask: {}", e));
+            out::eprint_stop("ask", &e);
             return 1;
         }
     };
@@ -42,10 +42,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     let mut rf = match record::load(&record_path) {
         Ok(rf) => rf,
         Err(e) => {
-            out::eprint_stop(&format!(
-                "ask: {}",
-                msg::read_failed(&record_path.display().to_string(), &e, msg::topic_file_unread("ask", &rel, &e))
-            ));
+            out::eprint_stop("ask", &msg::read_failed(&record_path.display().to_string(), &e, msg::topic_file_unread("ask", &rel, &e)));
             return 1;
         }
     };
@@ -101,7 +98,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     // refusal that would otherwise fire first on an unapproved file.
     depends::normalize_cross_file_deps(&mut rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
     if let Some(err @ record::DeriveError::AmbiguousHeading { .. }) = &rf.derive_error {
-        out::eprint_stop(&format!("ask: {}", msg::derive_error(&rel, err)));
+        out::eprint_stop("ask", &msg::derive_error(&rel, err));
         return 1;
     }
 
@@ -121,10 +118,9 @@ pub fn run(record_path: PathBuf) -> i32 {
     // findings first, then on what is found in the questions it asks.
     let findings =
         rules::record_refusals(&rel, &rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &all_records, &replaced, &led);
-    let shape_msgs: Vec<String> =
-        findings.iter().filter(|r| r.rule == "parse").map(|r| format!("ask: {}", r.message)).collect();
+    let shape_msgs: Vec<String> = findings.iter().filter(|r| r.rule == "parse").map(|r| r.message.clone()).collect();
     if !shape_msgs.is_empty() {
-        out::eprint_stop(&shape_msgs.join("\n"));
+        out::eprint_stop("ask", &shape_msgs.join("\n"));
         return 1;
     }
 
@@ -147,7 +143,7 @@ pub fn run(record_path: PathBuf) -> i32 {
             } else {
                 msg::edited_after_answered(&path, &sec.heading_text)
             };
-            out::eprint_stop(&format!("ask: {}", stop));
+            out::eprint_stop("ask", &stop);
             return 1;
         }
     }
@@ -169,12 +165,12 @@ pub fn run(record_path: PathBuf) -> i32 {
     };
     if !state::plan_approved_hashes(&led, &rel, &raw_question_hashes) {
         let status = crate::status::plan_status(&led, &rel, false);
-        out::eprint_stop(&format!("ask: {}", msg::plan_not_approved(&rel, status, &file_moves())));
+        out::eprint_stop("ask", &msg::plan_not_approved(&rel, status, &file_moves()));
         return 1;
     }
     if !state::context_approved_hash(&led, &rel, &raw_context_hash) {
         let status = crate::status::prose_status(&led, &rel, false);
-        out::eprint_stop(&format!("ask: {}", msg::context_not_approved(&rel, status, &file_moves())));
+        out::eprint_stop("ask", &msg::context_not_approved(&rel, status, &file_moves()));
         return 1;
     }
 
@@ -190,7 +186,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     // either command can move: point the owner at the topic file first, the
     // re-approval second.
     if let Some(f) = rules::derive_finding(&rel, &rf, &all_records, &led) {
-        out::eprint_stop(&format!("ask: {}", f.message));
+        out::eprint_stop("ask", &f.message);
         return 1;
     }
 
@@ -199,7 +195,7 @@ pub fn run(record_path: PathBuf) -> i32 {
     // file-wide (mirrors approve's cap check, prefixed `ask:`). Dead
     // (refused/superseded/withdrawn) questions don't count.
     if let Some(f) = rules::cap_finding(&rel, &rf, &replaced, &led) {
-        out::eprint_stop(&format!("ask: {}", f.message));
+        out::eprint_stop("ask", &f.message);
         return 1;
     }
 
@@ -264,7 +260,7 @@ pub fn run(record_path: PathBuf) -> i32 {
 
     if !refusals.is_empty() {
         for m in &refusals {
-            out::eprint_stop(&format!("ask: {}", m));
+            out::eprint_stop("ask", m);
         }
         return 1;
     }
@@ -296,7 +292,7 @@ pub fn run(record_path: PathBuf) -> i32 {
             None => {
                 // Unreachable given refusal 6 above, but never silently
                 // drop a binding if it somehow happens.
-                out::eprint_stop(&format!("ask: {}", msg::pairs_no_term_at_write(&rel, &sec.heading_text)));
+                out::eprint_stop("ask", &msg::pairs_no_term_at_write(&rel, &sec.heading_text));
                 return 1;
             }
         };
@@ -313,7 +309,7 @@ pub fn run(record_path: PathBuf) -> i32 {
                     terms_touched = true;
                 }
                 None => {
-                    out::eprint_stop(&format!("ask: {}", msg::no_id_line(&rel, &sec.heading_text)));
+                    out::eprint_stop("ask", &msg::no_id_line(&rel, &sec.heading_text));
                     return 1;
                 }
             },
@@ -393,21 +389,18 @@ pub fn run(record_path: PathBuf) -> i32 {
     }
 
     if let Err(e) = record::save(&rf) {
-        out::eprint_stop(&format!(
-            "ask: {}",
-            msg::write_failed(
+        out::eprint_stop(
+            "ask",
+            &msg::write_failed(
                 &record_path.display().to_string(),
                 e,
                 msg::after_fix_agent_runs(format!("adr ask {}", rel)),
-            )
-        ));
+            ),
+        );
         return 1;
     }
     if let Err(e) = ledger::append(&ledger_path, &new_rows) {
-        out::eprint_stop(&format!(
-            "ask: {}",
-            msg::update_failed("ledger", e, msg::after_fix_agent_runs(format!("adr ask {}", rel)))
-        ));
+        out::eprint_stop("ask", &msg::update_failed("ledger", e, msg::after_fix_agent_runs(format!("adr ask {}", rel))));
         return 1;
     }
 
@@ -488,14 +481,14 @@ fn do_conflict_reask(
     strip_answer_line(&mut rf, idx);
 
     if let Err(e) = record::save(&rf) {
-        out::eprint_stop(&format!(
-            "ask: {}",
-            msg::write_failed(
+        out::eprint_stop(
+            "ask",
+            &msg::write_failed(
                 &record_path.display().to_string(),
                 e,
                 msg::after_fix_agent_runs(format!("adr ask {}", state::rel_path(root, record_path))),
-            )
-        ));
+            ),
+        );
         return 1;
     }
 
@@ -531,10 +524,7 @@ fn do_conflict_reask(
 
     let ledger_path = root.join(crate::repo::LEDGER_PATH);
     if let Err(e) = ledger::append(&ledger_path, &new_rows) {
-        out::eprint_stop(&format!(
-            "ask: {}",
-            msg::update_failed("ledger", e, msg::after_fix_agent_runs(format!("adr ask {}", state::rel_path(root, record_path))))
-        ));
+        out::eprint_stop("ask", &msg::update_failed("ledger", e, msg::after_fix_agent_runs(format!("adr ask {}", state::rel_path(root, record_path)))));
         return 1;
     }
 
