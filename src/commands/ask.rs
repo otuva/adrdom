@@ -164,11 +164,11 @@ pub fn run(record_path: PathBuf) -> i32 {
     // file at all -- checked against the hashes captured before the
     // normalize pass above, never the normalized `rf`.
     if !state::plan_approved_hashes(&led, &rel, &raw_question_hashes) {
-        eprintln!("ask: {}", msg::plan_not_approved(&rel));
+        eprintln!("ask: {}", msg::plan_not_approved(&rel, crate::status::plan_status(&led, &rel, false)));
         return 1;
     }
     if !state::context_approved_hash(&led, &rel, &raw_context_hash) {
-        eprintln!("ask: {}", msg::context_not_approved(&rel));
+        eprintln!("ask: {}", msg::context_not_approved(&rel, crate::status::prose_status(&led, &rel, false)));
         return 1;
     }
 
@@ -391,10 +391,11 @@ pub fn run(record_path: PathBuf) -> i32 {
 
     if new_rows.is_empty() {
         println!("ask: {}", msg::nothing_to_ask(&record_path.display().to_string()));
-        // The plan is approved by this point (`ask` stops on an unapproved
-        // one above), so what is left is named move by move.
+        // What is left is named move by move, the moves `show` names for
+        // the file (`moves::of_topic_file_in`, the file as loaded).
         let tests = crate::commands::check::test_index(&root, &repo::Source::WorkingTree);
-        for m in crate::moves::of_topic_file(&rf, &led, true, &[], &tests, None) {
+        let loaded = all_records.iter().find(|f| f.rel == rel).unwrap_or(&rf);
+        for m in crate::moves::of_topic_file_in(&root, loaded, &all_records, &terms_list, &led, &tests) {
             println!("{}", msg::next_line(&m.text()));
         }
         return 0;

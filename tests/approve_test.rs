@@ -203,7 +203,7 @@ fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("prose not approved"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("prose is changed"), "{}", stderr(&out));
 
     let ledger_before = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let approved_before = ledger_before.lines().filter(|l| l.contains("\tapproved\t-\t")).count();
@@ -257,7 +257,7 @@ fn editing_a_heading_requires_reapproval_with_one_new_approved_row() {
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("plan not approved"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("plan is changed"), "{}", stderr(&out));
 
     let ledger_before = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let approved_before = ledger_before.lines().filter(|l| l.contains("\tapproved\t-\t")).count();
@@ -781,7 +781,7 @@ fn ask_refuses_while_terms_unapproved() {
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("terms not approved"), "{}", err);
+    assert!(err.contains("adrdom/terms.md is new"), "{}", err);
     assert!(err.contains("adr approve adrdom/terms.md"), "{}", err);
 }
 
@@ -1987,12 +1987,12 @@ fn a_supersedes_line_added_after_approval_waits_for_approval() {
     let text = format!("{}{}", stdout(&checked), stderr(&checked));
     assert!(text.contains("awaiting approval"), "{}", text);
     let asked = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(stderr(&asked).contains("plan not approved"), "{}", stderr(&asked));
+    assert!(stderr(&asked).contains("plan is changed"), "{}", stderr(&asked));
 
     approve_record(&dir, rel);
     let checked = adr(&dir, &["check"], &[], "");
     let text = format!("{}{}", stdout(&checked), stderr(&checked));
-    assert!(!text.contains("plan not approved"), "{}", text);
+    assert!(!text.contains("plan is changed") && !text.contains("plan is new"), "{}", text);
 }
 
 // --- approve leaves the supersedes line of an asked section ---------------

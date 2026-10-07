@@ -1207,14 +1207,82 @@ pub fn judge_topic_file(j: &TopicFileJudge) -> Vec<Finding> {
     // Per "Does a depends entry carry the answers it holds under?": a letter
     // the target has no option for is found before `ask`.
     out.extend(about_topic_file(in_sections("plan", letter_found(rel, rf, led)), rel));
-    out.extend(found("plan", rel, no_body_refusals(rel, rf, led)));
-    // Per "What does the agent do to plan a topic file?" and "Does a
-    // planning step run without the record of the step before?": the rows
-    // are read as they stand; neither the model nor the reader is needed.
-    let mut planning = crate::plan::load(j.root, rf, j.all, j.terms_list, led);
-    planning.rel = rel.to_string();
-    out.extend(found("plan", rel, planning.approve_refusals()));
+    out.extend(found("plan", rel, planning_step_refusals(j.root, rel, rf, j.all, j.terms_list, led)));
     out
+}
+
+/// The findings of the planning steps on `rf`: a question not yet asked with
+/// no body, and its planning records (the reader's rows at each step and
+/// every neighbour on a line), judged only while the file awaits approval:
+/// they are what the owner's approval of the plan waits on, and an approved
+/// file has nothing for approve to take. Per "What does the agent do to plan
+/// a topic file?" and "Does a planning step run without the record of the
+/// step before?": the rows are read as they stand; neither the model nor
+/// the reader is needed. `rf` normalized or as loaded gives one status: an
+/// approved file holds identifiers, which normalizing leaves as they are.
+fn planning_step_refusals(
+    root: &Path,
+    rel: &str,
+    rf: &RecordFile,
+    all: &[RecordFile],
+    terms_list: &[terms::Term],
+    led: &Ledger,
+) -> Vec<String> {
+    if !crate::status::topic_file_status(led, rf).awaits_approval() {
+        return Vec::new();
+    }
+    let mut planning = crate::plan::load(root, rf, all, terms_list, led);
+    planning.rel = rel.to_string();
+    no_body_refusals(rel, rf, led).into_iter().chain(planning.approve_refusals()).collect()
+}
+
+
+/// `judge_topic_file` of the topic file `rf` as loaded from disk, with what
+/// it is judged against built the way `approve` builds it: the file
+/// normalized (`depends::normalize_cross_file_deps`), every heading's text,
+/// and what the plan's supersedes lines replace. What `adr plan` prints as
+/// the findings on its file: the judgement `approve` refuses on.
+pub fn judge_topic_file_at(
+    root: &Path,
+    rf: &RecordFile,
+    all: &[RecordFile],
+    terms_list: &[terms::Term],
+    led: &Ledger,
+) -> Vec<Finding> {
+    let phrase_lookup = terms::phrase_lookup(terms_list);
+    let cross_file_headings = depends::cross_file_heading_index(all, led);
+    let mut rf = rf.clone();
+    depends::normalize_cross_file_deps(&mut rf, terms_list, &phrase_lookup, &cross_file_headings, led);
+    let names = crate::view::heading_texts(all);
+    let base = depends::replaced_base(all, &depends::approved_plan_rels(all, led), &cross_file_headings, led);
+    let replaced = depends::replaced_ids(&base, &rf, &cross_file_headings, led);
+    judge_topic_file(&TopicFileJudge {
+        root,
+        rel: &rf.rel,
+        rf: &rf,
+        all,
+        terms_list,
+        phrase_lookup: &phrase_lookup,
+        cross_file_headings: &cross_file_headings,
+        names: &names,
+        replaced: &replaced,
+        led,
+    })
+}
+
+/// `judge_topic_file_at` in two parts: the findings each cleared by a move
+/// of its own, and the findings of the planning steps (a question not yet
+/// asked with no body, missing reader rows, a neighbour on no line), whose
+/// moves are the planning moves (`moves::of_planning`).
+pub fn judge_topic_file_split_at(
+    root: &Path,
+    rf: &RecordFile,
+    all: &[RecordFile],
+    terms_list: &[terms::Term],
+    led: &Ledger,
+) -> (Vec<Finding>, Vec<Finding>) {
+    let steps: HashSet<String> = planning_step_refusals(root, &rf.rel, rf, all, terms_list, led).into_iter().collect();
+    judge_topic_file_at(root, rf, all, terms_list, led).into_iter().partition(|f| !steps.contains(&f.message))
 }
 
 /// Per "Does the agent write the bodies before approve?": the plan is

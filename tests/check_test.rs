@@ -1730,7 +1730,7 @@ fn check_fails_outright_when_terms_is_unapproved_even_if_nothing_pairs_it() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     assert!(
-        stdout(&out).contains("terms: adrdom/terms.md not approved"),
+        stdout(&out).contains("terms: adrdom/terms.md is new"),
         "{}",
         stdout(&out)
     );
@@ -1765,7 +1765,7 @@ fn check_and_ask_fail_when_terms_is_edited_after_its_latest_approval() {
     let check_out = adr(&dir, &["check"], &[], "");
     assert!(!check_out.status.success());
     assert!(
-        stdout(&check_out).contains("terms: adrdom/terms.md not approved"),
+        stdout(&check_out).contains("terms: adrdom/terms.md is changed"),
         "{}",
         stdout(&check_out)
     );
@@ -1778,7 +1778,7 @@ fn check_and_ask_fail_when_terms_is_edited_after_its_latest_approval() {
     let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!ask_out.status.success());
     let err = stderr(&ask_out);
-    assert!(err.contains("terms not approved"), "{}", err);
+    assert!(err.contains("adrdom/terms.md is changed"), "{}", err);
     assert!(err.contains("adr approve adrdom/terms.md"), "{}", err);
 }
 
@@ -2102,7 +2102,7 @@ fn check_staged_reads_terms_from_the_index() {
 
         let out = adr(&dir, &["check", "--staged"], &[], "");
         assert!(
-            !stdout(&out).contains("terms: adrdom/terms.md not approved"),
+            !stdout(&out).contains("terms: adrdom/terms.md is "),
             "{}",
             stdout(&out)
         );

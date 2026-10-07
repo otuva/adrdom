@@ -417,7 +417,7 @@ fn approve_question_hash_moves_when_only_an_answer_set_changes() {
     // covers: the file awaits approval again, and approve writes a new file
     // row and a new row for 1.2 only.
     let asked = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(stderr(&asked).contains("plan not approved"), "{}", stderr(&asked));
+    assert!(stderr(&asked).contains("plan is changed"), "{}", stderr(&asked));
     let out2 = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out2.status.success(), "approve failed: {}", stderr(&out2));
     assert!(!stdout(&out2).contains("plan unchanged"), "{}", stdout(&out2));
@@ -479,7 +479,7 @@ fn approve_turns_a_depends_name_into_an_id_and_show_turns_it_back_into_words() {
     let show1 = adr(&dir, &["show", "--all"], &[], "");
     assert!(show1.status.success(), "{}", stderr(&show1));
     assert!(
-        stdout(&show1).contains("stands on: 1.1 Is the widget red?"),
+        stdout(&show1).contains("depends: 1.1 Is the widget red?"),
         "{}",
         stdout(&show1)
     );
@@ -507,7 +507,7 @@ fn approve_turns_a_depends_name_into_an_id_and_show_turns_it_back_into_words() {
     assert!(show2.status.success(), "{}", stderr(&show2));
     let shown2 = stdout(&show2);
     assert!(shown2.contains("[not asked] 1.1 Is the gadget red?"), "{}", shown2);
-    assert!(shown2.contains("stands on: 1.1 Is the gadget red?"), "{}", shown2);
+    assert!(shown2.contains("depends: 1.1 Is the gadget red?=A"), "{}", shown2);
     assert!(!shown2.contains("Is the widget red?"), "{}", shown2);
 }
 
@@ -582,7 +582,7 @@ fn ask_and_check_refuse_a_cross_file_depends_line_reverted_by_hand_after_approve
         stdout(&ask_out)
     );
     assert!(
-        stderr(&ask_out).contains("adrdom/decisions/topic-b.md: plan not approved"),
+        stderr(&ask_out).contains("adrdom/decisions/topic-b.md: plan is changed"),
         "{}",
         stderr(&ask_out)
     );
@@ -693,7 +693,7 @@ fn approve_resolves_a_cross_file_heading_dependency_and_show_turns_it_back_into_
     let show = adr(&dir, &["show", "--all"], &[], "");
     assert!(show.status.success(), "{}", stderr(&show));
     assert!(
-        stdout(&show).contains("stands on: 1.1 Is A do a thing?"),
+        stdout(&show).contains("  depends: 1.1 Is A do a thing?\n"),
         "{}",
         stdout(&show)
     );

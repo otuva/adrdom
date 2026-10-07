@@ -555,15 +555,11 @@ pub fn is_current(led: &Ledger, id: &str) -> bool {
 /// The one shared "is this section frozen" test `approve` and `check` both
 /// use.
 pub fn is_frozen(led: &Ledger, sec: &Section) -> bool {
-    sec.id
-        .as_ref()
-        .map(|id| {
-            matches!(
-                led.latest_state(id).map(|r| r.event.as_str()),
-                Some("answered") | Some("refused") | Some("superseded")
-            )
-        })
-        .unwrap_or(false)
+    use crate::status::QuestionStatus;
+    matches!(
+        crate::status::question_status(led, sec),
+        QuestionStatus::Answered | QuestionStatus::Refused | QuestionStatus::Superseded
+    )
 }
 
 /// True when `sec`'s latest ledger state is `refused`, `superseded`, or
@@ -572,18 +568,11 @@ pub fn is_frozen(led: &Ledger, sec: &Section) -> bool {
 /// question no longer stands in the file -- so it no longer holds its tier
 /// for the cap (per "Does the tool cap the questions in a tier?").
 /// `answered` is still live for this purpose (only
-/// `is_frozen`'s edit-lock treats it as closed); a section with no id yet,
-/// or none of those three states, is live.
+/// `is_frozen`'s edit-lock treats it as closed); a section with no id yet
+/// is live. A `dropped` question is out of play too
+/// (`QuestionStatus::is_dead`).
 pub fn is_dead(led: &Ledger, sec: &Section) -> bool {
-    sec.id
-        .as_ref()
-        .map(|id| {
-            matches!(
-                led.latest_state(id).map(|r| r.event.as_str()),
-                Some("refused") | Some("superseded") | Some("withdrawn")
-            )
-        })
-        .unwrap_or(false)
+    crate::status::question_status(led, sec).is_dead()
 }
 
 /// True when `sec` is named on the supersedes line of a question not

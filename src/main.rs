@@ -51,13 +51,20 @@ enum Command {
         /// The letter of the option picked, or the word refuse.
         letter: String,
     },
-    /// Print the current decisions and what is next; with a topic file or --all, every question.
+    /// Print every current decision and every move; with a file approve takes or --all, every question, entry or row.
+    #[command(group(clap::ArgGroup::new("whole").args(["topic_file", "all"]).multiple(true)))]
     Show {
-        /// Print every question of this topic file, with its state and what it stands on.
+        /// A topic file, adrdom/terms.md, or a blame file under adrdom/blame: every question, entry or row with its status, what is beyond its latest approval marked, and its moves.
         topic_file: Option<PathBuf>,
-        /// Print every question of every topic file, and the blame files.
+        /// Print every file approve takes, each as with a file named.
         #[arg(long)]
         all: bool,
+        /// With a file or --all: each neighbour of a question not yet answered, with the reader's word and the agent's line.
+        #[arg(long, requires = "whole")]
+        neighbours: bool,
+        /// With a file or --all: what stands on each question, and what replaced a superseded one.
+        #[arg(long, requires = "whole")]
+        stood_on: bool,
     },
     /// Read lines from stdin and ban them (and their tokens) from the repo.
     Ban {
@@ -138,7 +145,9 @@ fn main() {
         Command::Read => commands::read::run(),
         Command::Approve { file } => commands::approve::run(file),
         Command::Answer { id, letter } => commands::answer::run(id, letter),
-        Command::Show { topic_file, all } => commands::show::run(topic_file, all),
+        Command::Show { topic_file, all, neighbours, stood_on } => {
+            commands::show::run(topic_file, all, commands::show::Views { neighbours, stood_on })
+        }
         Command::Ban { term, rebuild } => commands::ban::run(term, rebuild),
         Command::Unban => commands::unban::run(),
         Command::Serve { port } => commands::serve::run(port),

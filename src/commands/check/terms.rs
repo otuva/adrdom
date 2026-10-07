@@ -91,7 +91,7 @@ pub(super) fn check_terms(
         if !refused {
             out.push(Failure {
                 check: "terms".to_string(),
-                message: msg::terms_file_not_approved(),
+                message: msg::terms_file_not_approved(crate::status::terms_file_status(led, &tf)),
             });
         }
         return (out, notes);

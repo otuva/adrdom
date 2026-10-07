@@ -144,7 +144,7 @@ fn check_does_not_report_no_term_for_a_real_term_in_an_unapproved_terms_file() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     let text = stdout(&out);
-    assert!(text.contains("terms: adrdom/terms.md not approved"), "{}", text);
+    assert!(text.contains("terms: adrdom/terms.md is new"), "{}", text);
     assert!(!text.contains("no term"), "{}", text);
 }
 

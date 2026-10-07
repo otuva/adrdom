@@ -629,21 +629,6 @@ pub fn classify(dest: &str) -> Option<Kind> {
     }
 }
 
-/// Every kind that has at least one row, in `Kind::ALL` order, paired with
-/// its count.
-pub fn counts_by_kind(rows: &[Row]) -> Vec<(Kind, usize)> {
-    let mut counts: HashMap<Kind, usize> = HashMap::new();
-    for r in rows {
-        if let Some(k) = classify(&r.dest) {
-            *counts.entry(k).or_insert(0) += 1;
-        }
-    }
-    Kind::ALL
-        .iter()
-        .filter_map(|k| counts.get(k).map(|&n| (*k, n)))
-        .collect()
-}
-
 /// The value after `decision: `, from either a draft row (still the
 /// heading text) or a canonical one (the id `approve` rewrote it to).
 pub fn decision_target(dest: &str) -> Option<&str> {
@@ -692,20 +677,6 @@ pub fn heading_text_for_id<'a>(records: &'a [RecordFile], id: &str) -> Option<&'
         .map(|s| s.heading_text.as_str())
 }
 
-/// `dropped: copy of <value>`'s own target, rendered back to words: a
-/// canonical (uuid) decision copy becomes its heading text (or the bare id
-/// when the section is gone); a path, draft or canonical alike, is never
-/// rewritten and prints as written.
-pub fn render_copy_target(value: &str, records: &[RecordFile]) -> String {
-    if record::is_uuid(value) {
-        heading_text_for_id(records, value)
-            .map(str::to_string)
-            .unwrap_or_else(|| value.to_string())
-    } else {
-        value.to_string()
-    }
-}
-
 /// Every `decision:` row in `bf` whose target is closed (per the owner's
 /// fix to "Does an origin leave the repository while its blame file has an
 /// open row?", 4bb5ef1b A): closed means the id has an answered row in the
@@ -728,10 +699,13 @@ pub fn open_decision_rows(
         let Some(value) = decision_target(&row.dest) else { continue };
         let name = match resolve_heading_value(value, any_headings, known_ids) {
             Some(id) => {
-                let closed = led
-                    .rows
-                    .iter()
-                    .any(|r| r.id == id && r.event == "answered");
+                // Answered: a current decision, or one a later decision
+                // superseded once it was answered.
+                use crate::status::QuestionStatus;
+                let closed = matches!(
+                    crate::status::question_status_of_id(led, &id),
+                    Some(QuestionStatus::Answered | QuestionStatus::Superseded)
+                );
                 if closed {
                     continue;
                 }
@@ -743,34 +717,6 @@ pub fn open_decision_rows(
     }
     out.sort();
     out.dedup();
-    out
-}
-
-/// Every blame file among `files` that carries at least one `decision:`
-/// row naming `sec_id`, paired with how many (per "Does show print a blame
-/// file?", 7b05f8df A: "a line `from: <origin path> (<n> rows)` for every
-/// blame file with a row naming it"), sorted by origin path.
-pub fn origins_for_decision(
-    files: &[BlameFile],
-    any_headings: &HashMap<String, Vec<(String, String)>>,
-    known_ids: &HashSet<String>,
-    sec_id: &str,
-) -> Vec<(String, usize)> {
-    let mut counts: HashMap<String, usize> = HashMap::new();
-    for bf in files {
-        let Some(origin) = &bf.origin else { continue };
-        let n = bf
-            .rows
-            .iter()
-            .filter_map(|row| decision_target(&row.dest))
-            .filter(|v| resolve_heading_value(v, any_headings, known_ids).as_deref() == Some(sec_id))
-            .count();
-        if n > 0 {
-            *counts.entry(origin.clone()).or_insert(0) += n;
-        }
-    }
-    let mut out: Vec<(String, usize)> = counts.into_iter().collect();
-    out.sort();
     out
 }
 

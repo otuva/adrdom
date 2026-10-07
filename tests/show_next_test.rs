@@ -45,16 +45,19 @@ fn setup() -> (PathBuf, PathBuf) {
     (dir, path)
 }
 
-/// The lines `show` prints under "next" for the one topic file.
+/// The moves `show` prints for the one topic file: every line that is not
+/// the file's topic line, a status line or a decision under it.
 fn next(dir: &Path) -> Vec<String> {
     let out = adr(dir, &["show"], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
-    stdout(&out)
+    moves_in(&stdout(&out))
+}
+
+fn moves_in(shown: &str) -> Vec<String> {
+    shown
         .lines()
-        .skip_while(|l| *l != "next")
-        .skip(1)
-        .take_while(|l| l.starts_with("  "))
-        .map(|l| l.trim().to_string())
+        .filter(|l| !l.starts_with(' ') && !l.starts_with("# ") && !l.starts_with('['))
+        .map(str::to_string)
         .collect()
 }
 
@@ -152,7 +155,7 @@ fn show_names_the_next_move_at_every_step() {
     );
     // Its line in the listing carries no version for the owner to use.
     let shown = stdout(&adr(&dir, &["show", "--all"], &[], ""));
-    assert!(shown.contains(&format!("  [asked] {}\n", ONE)), "{}", shown);
+    assert!(shown.contains(&format!("\n[asked] {}\n", ONE)), "{}", shown);
     assert!(adr(&dir, &["ask", p], &[], "").status.success());
     assert_eq!(
         next(&dir),
@@ -374,10 +377,12 @@ fn show_names_what_replaced_a_superseded_question() {
     assert!(asked.status.success(), "{}", stderr(&asked));
     assert!(adr_answer(&dir, &two, "A").status.success());
 
-    let shown = stdout(&adr(&dir, &["show", "--all"], &[], ""));
+    // What replaced a superseded question is computed from the records:
+    // it comes under its flag.
+    let shown = stdout(&adr(&dir, &["show", "--all", "--stood-on"], &[], ""));
     let expected = format!(
-        "  [superseded] {one}\n    stands on: widget\n    replaced by: {two}\n  \
-[answered A] {two}\n    stands on: widget\n    supersedes: {one}\n",
+        "[superseded] {one}\n  depends: widget\n  replaced by: {two}\n\
+[answered A] {two}\n  depends: widget\n  supersedes: {one}\n",
         one = ONE,
         two = TWO
     );
@@ -421,9 +426,9 @@ fn show_prints_no_next_when_nothing_is_left() {
 
 //
 // With no topic file and no flag show prints the short listing: each
-// current decision as its heading and its answer, the next moves, and how
-// to read the rest. With a topic file, or with --all, it prints the whole
-// listing, the tiers among it ("show and the page print the tiers").
+// current decision as its heading and its answer, and the moves. With a
+// topic file it prints the file form: each question with its status, its
+// lines and the body of an asked one; --all prints that for every file.
 #[test]
 fn show_is_short_until_it_is_asked_for_the_whole() {
     let dir = init_repo();
@@ -449,8 +454,7 @@ fn show_is_short_until_it_is_asked_for_the_whole() {
     assert_eq!(
         short,
         format!(
-            "# Gate ({rel})\n  {one}\n    Yes the widget holds.\nnext\n  owner runs: adr answer {id}@{version} <letter>  # \"{three}\"\n\
-adr show <topic file> prints every question of one file with what it stands on; adr show --all prints all of them\n",
+            "# Gate ({rel})\n  {one}\n    Yes the widget holds.\nowner runs: adr answer {id}@{version} <letter>  # \"{three}\"\n",
             rel = REL,
             one = ONE,
             three = THREE,
@@ -460,16 +464,19 @@ adr show <topic file> prints every question of one file with what it stands on; 
     );
 
     let whole = format!(
-        "# Gate ({rel})\ntier 1\n  [answered A] {one}\n    stands on: widget\n    stood on by: {three}\n    Yes the widget holds.\n\
-tier 2\n  [asked @{version}] {three}\n    stands on: widget, {one}=A\n    neighbour: term \"widget\": heading: unrelated, body: unrelated; depends\nnext\n  owner runs: adr answer {id}@{version} <letter>  # \"{three}\"\n",
+        "[approved] Gate ({rel})\n[answered A] {one}\n  depends: widget\n  unrelated: {three}\n\
+[asked @{version}] {three}\n  depends: widget, {one}=A\n  Problem: the widget breaks.\n  Standard: plain words.\n  \
+- A) Yes the widget holds.\n    Why: reasons.\n    Costs: costs.\n  \
+- B) No the widget does not hold.\n    Why: other reasons.\n    Costs: other costs.\n\
+owner runs: adr answer {id}@{version} <letter>  # \"{three}\"\n",
         rel = REL,
         one = ONE,
         three = THREE,
         id = three,
         version = version
     );
-    assert_eq!(stdout(&adr(&dir, &["show", "--all"], &[], "")), whole);
     assert_eq!(stdout(&adr(&dir, &["show", p], &[], "")), whole);
+    assert!(stdout(&adr(&dir, &["show", "--all"], &[], "")).starts_with(&whole));
 }
 
 // adr: cd83e277-ebf0-4458-a77a-c526ab4cfeca
@@ -562,19 +569,21 @@ fn answer_on_a_question_never_asked_names_the_ask() {
 
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 //
-// `show <file>` on a file that is no topic file says so and names the
-// folder, instead of sending the agent to fix a topic file.
+// `show <file>` on a file approve does not take says so and names the
+// files it takes, instead of sending the agent to fix a topic file; the
+// terms file is one approve takes, so show prints it.
 #[test]
-fn show_refuses_a_file_that_is_not_a_topic_file() {
+fn show_refuses_a_file_approve_does_not_take() {
     let (dir, _path) = setup();
     approve_record(&dir, REL);
-    for rel in ["adrdom/terms.md", "README.md"] {
-        std::fs::write(dir.join("README.md"), "# Readme\n").unwrap();
-        let out = adr(&dir, &["show", rel], &[], "");
-        assert!(!out.status.success());
-        assert_eq!(
-            stderr(&out).trim_end(),
-            format!("show: {} is not a topic file; agent names a file under adrdom/decisions", rel)
-        );
-    }
+    std::fs::write(dir.join("README.md"), "# Readme\n").unwrap();
+    let out = adr(&dir, &["show", "README.md"], &[], "");
+    assert!(!out.status.success());
+    assert_eq!(
+        stderr(&out).trim_end(),
+        "show: README.md is not a file approve takes; agent names a topic file under adrdom/decisions, adrdom/terms.md or a blame file under adrdom/blame"
+    );
+    let terms = adr(&dir, &["show", "adrdom/terms.md"], &[], "");
+    assert!(terms.status.success(), "{}", stderr(&terms));
+    assert!(stdout(&terms).starts_with("[approved] adrdom/terms.md\n"), "{}", stdout(&terms));
 }

@@ -33,7 +33,7 @@ fn show_names_a_topic_file_it_cannot_read() {
     let out = adr(&dir, &["show"], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     assert!(
-        stdout(&out).contains("# adrdom/decisions/bad.md (cannot be read: "),
+        stdout(&out).contains("agent clears: parse: adrdom/decisions/bad.md: cannot be read: "),
         "{}",
         stdout(&out)
     );
