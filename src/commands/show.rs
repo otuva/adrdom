@@ -98,7 +98,10 @@ impl Records {
     }
 
     fn blame_names(&self) -> &rules::BlameNames {
-        self.blame_names.get_or_init(|| rules::BlameNames::read(&self.root, &repo::Source::WorkingTree))
+        self.blame_names.get_or_init(|| {
+            let minted = self.terms_file.as_ref().map(|tf| terms::minted_copy(tf).terms).unwrap_or_default();
+            rules::BlameNames::of(&self.root, &repo::Source::WorkingTree, &self.topic_files, minted)
+        })
     }
 
     fn index(&self) -> &rules::RepoIndex {

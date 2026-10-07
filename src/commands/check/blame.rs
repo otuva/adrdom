@@ -24,6 +24,7 @@ pub(super) fn check_blame(
     root: &Path,
     source: &Source,
     records: &[RecordFile],
+    terms_list: &[crate::terms::Term],
     led: &Ledger,
 ) -> (Vec<Failure>, Vec<Finding>) {
     let mut out = Vec::new();
@@ -41,7 +42,7 @@ pub(super) fn check_blame(
     let (any_headings, known_ids) = blame::heading_ids(records);
     // What every row's destination resolves against, read once for the run
     // rather than once per blame file.
-    let names = (!rels.is_empty()).then(|| rules::BlameNames::read(root, source));
+    let names = (!rels.is_empty()).then(|| rules::BlameNames::of(root, source, records, terms_list.to_vec()));
 
     for rel in &rels {
         let Some(content) = source.read(root, rel) else {

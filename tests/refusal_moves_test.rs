@@ -404,6 +404,7 @@ fn outside_a_repository_every_command_names_the_step_that_clears_it() {
         (vec!["install"], false),
         (vec!["install", "--claude"], false),
         (vec!["install", "--claude", "--codex"], false),
+        (vec!["ban"], false),
         (vec!["ban", "--term", "widget"], false),
         (vec!["ban", "--rebuild"], false),
     ] {
@@ -412,12 +413,43 @@ fn outside_a_repository_every_command_names_the_step_that_clears_it() {
         let err = stderr(&out);
         let line = err.trim_end();
         assert!(line.contains("not inside a git repository; "), "{:?}: {}", args, err);
-        let command = format!("adr {}", args.join(" "));
+        // ban and unban read their words on standard input: the move names
+        // that, so it can be run as printed.
+        let reads_words = (args[0] == "ban" && !args.contains(&"--rebuild")) || args[0] == "unban";
+        let command = if reads_words {
+            format!("adr {} with the words on its input", args.join(" "))
+        } else {
+            format!("adr {}", args.join(" "))
+        };
         assert!(line.ends_with(&format!("changes into a git repository and runs: {}", command)), "{:?}: {}", args, err);
         assert!(line.starts_with(&format!("{}: not inside", args[0])), "{:?}: {}", args, err);
         assert_one_clearing_move(line, &command);
     }
     std::fs::remove_dir_all(&outside).unwrap();
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// An owner command refused to an agent names the command line the owner
+// runs, as it can be run: serve with its port, unban with its words on its
+// input.
+#[test]
+fn an_owner_refusal_names_the_command_as_it_can_be_run() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    for (args, command) in [
+        (vec!["serve", "--port", "8123"], "adr serve --port 8123"),
+        (vec!["unban"], "adr unban with the words on its input"),
+    ] {
+        let out = adr(&dir, &args, &[], "");
+        assert_eq!(out.status.code(), Some(2), "{:?}", args);
+        let err = stderr(&out);
+        let line = err.trim_end();
+        // The owner running it is what clears an agent's refusal here, so the
+        // move is the command itself, named once.
+        assert!(line.ends_with(&format!("; owner runs: {}", command)), "{:?}: {}", args, err);
+        assert_eq!(line.matches("owner runs:").count(), 1, "{:?}: {}", args, err);
+    }
 }
 
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b

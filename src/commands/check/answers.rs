@@ -17,6 +17,9 @@ pub(super) fn check_answers(
     led: &Ledger,
 ) -> Vec<Failure> {
     let mut out = Vec::new();
+    // Read once, and only when a question edited after asking needs its
+    // file's moves.
+    let index = std::cell::OnceCell::new();
     for rf in records {
         for (ti, sec) in rf.sections.iter().enumerate() {
             let Some(id) = &sec.id else { continue };
@@ -141,7 +144,8 @@ pub(super) fn check_answers(
                     // no longer hashes the same, is "edited after asking".
                     if latest_asked_hash != cur {
                         let loaded = as_loaded.iter().find(|f| f.rel == rf.rel).unwrap_or(rf);
-                        let moves = crate::moves::of_unasked_question_in(
+                        let index = index.get_or_init(|| crate::rules::RepoIndex::new(root, as_loaded, terms_list, led));
+                        let moves = crate::moves::of_unasked_question_with(
                             root,
                             loaded,
                             as_loaded,
@@ -149,6 +153,7 @@ pub(super) fn check_answers(
                             led,
                             &sec.heading_text,
                             false,
+                            index,
                         );
                         out.push(Failure {
                             check: "answers",

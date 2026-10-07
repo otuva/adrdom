@@ -1250,6 +1250,10 @@ pub fn already_in_use() -> String {
 
 // --- settings.json shape (install --claude / check / uninstall) -----------
 
+/// What a command that reads words on its input (ban, unban) adds to the
+/// command a move names: the command as printed reads them there.
+pub const WORDS_ON_INPUT: &str = "with the words on its input";
+
 /// The move on a failure of an owner command the owner cannot clear by
 /// running it again (a file it cannot read or write): the agent fixes what
 /// the error names, then the owner runs `command`.

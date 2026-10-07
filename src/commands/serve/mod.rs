@@ -14,7 +14,7 @@ use tiny_http::{Header, Method, Request, Response, Server};
 
 pub fn run(port: u16) -> i32 {
     if !repo::owner_authorized() {
-        out::eprint_stop("serve", &msg::owner_refusal("serve", ""));
+        out::eprint_stop("serve", &msg::owner_refusal("serve", &format!("--port {}", port)));
         return 2;
     }
 

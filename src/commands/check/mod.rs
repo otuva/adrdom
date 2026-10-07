@@ -159,7 +159,9 @@ fn build(
     // `records`' order. `parse`/`tells`/`plan` below file them by rule.
     // What the planning of every file reads of the whole repository (the
     // reader's rows, the heading indexes), read once for the run.
-    let shared = crate::plan::Shared::new(root, &records, &terms_list, &led);
+    // Built only when a file awaits approval: the planning rules judge no
+    // other file (`rules::planning_rules_apply`).
+    let shared = (!awaiting.is_empty()).then(|| crate::plan::Shared::new(root, &records, &terms_list, &led));
     let per_record_findings: Vec<Vec<rules::Finding>> = records
         .iter()
         .zip(&replaced_per_record)
@@ -176,7 +178,7 @@ fn build(
                 replaced,
                 led: &led,
                 planning: awaiting.contains(&rf.rel),
-                shared: Some(&shared),
+                shared: shared.as_ref(),
             };
             topic_file_findings(&judge)
         })
@@ -227,7 +229,7 @@ fn build(
     push_failures(&mut failures, plan_failures);
     push_failures(&mut notes, plan_notes);
     push_failures(&mut failures, terms::check_terms(root, &records, &led, &source, &approved_rels));
-    let (blame_failures, blame_notes) = blame::check_blame(root, &source, &records, &led);
+    let (blame_failures, blame_notes) = blame::check_blame(root, &source, &records, &terms_list, &led);
     push_failures(&mut failures, blame_failures);
     notes.extend(blame_notes);
     let (test_failures, untested) = tests::check_tests(root, &records, &led, tests, &source);
@@ -254,16 +256,6 @@ fn topic_file_findings(j: &rules::TopicFileJudge) -> Vec<rules::Finding> {
     rules::judge_topic_file(j).into_iter().filter(|f| !own.contains(&f.message)).collect()
 }
 
-/// `push` (`--push`) short-circuits to `push::run`, which reads git's
-/// pre-push stdin and judges only that one ledger comparison, per ref line
-/// -- never the rest of what `check` reports (per "Does check look at the
-/// ledger before a push?", 19e1c023-a678-4842-a414-bb0e45c41601 P). Every
-/// other combination runs the plain report, `since` (`--since <commit>`)
-/// adding its one extra ledger comparison on top.
-///
-/// Every line is a finding with its move, the failures first, then the
-/// notes; a pass prints nothing, by hand or in a hook (per "Does check
-/// print a line that names no move?", 3fc35d4f A).
 /// The arguments `check` ran with, as the command line names them: what a
 /// refusal's move names to run again (per "Does a refusal name the command
 /// that clears it?").
@@ -281,6 +273,16 @@ fn check_args(staged: bool, message: Option<&Path>, since: Option<&str>) -> Stri
     args.join(" ")
 }
 
+/// `push` (`--push`) short-circuits to `push::run`, which reads git's
+/// pre-push stdin and judges only that one ledger comparison, per ref line
+/// -- never the rest of what `check` reports (per "Does check look at the
+/// ledger before a push?", 19e1c023-a678-4842-a414-bb0e45c41601 P). Every
+/// other combination runs the plain report, `since` (`--since <commit>`)
+/// adding its one extra ledger comparison on top.
+///
+/// Every line is a finding with its move, the failures first, then the
+/// notes; a pass prints nothing, by hand or in a hook (per "Does check
+/// print a line that names no move?", 3fc35d4f A).
 pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: bool) -> i32 {
     if push {
         return push::run();

@@ -135,12 +135,6 @@ pub enum NextMove {
     Ready,
 }
 
-/// Whether `sec` is a question not yet asked: its status is one of the
-/// statuses before `ask` (`QuestionStatus::is_unasked`).
-fn is_unasked(led: &Ledger, sec: &Section) -> bool {
-    crate::status::question_status(led, sec).is_unasked()
-}
-
 /// What an entry of a line names.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Target {
@@ -266,7 +260,7 @@ pub fn unrelated_refusals(
 ) -> Vec<String> {
     let mut out = Vec::new();
     for (i, sec) in rf.sections.iter().enumerate() {
-        if sec.unrelated.is_empty() || !is_unasked(led, sec) {
+        if sec.unrelated.is_empty() || !crate::status::question_status(led, sec).is_unasked() {
             continue;
         }
         for e in section_unrelated_entries(i, rf, terms_list, cross, led) {
@@ -418,7 +412,7 @@ pub struct Shared {
     /// read the pair now, by index into `rows`.
     by_hash: HashMap<String, Vec<usize>>,
     /// The kinds read at a hash by a row of another prompt or model.
-    stale: HashSet<(String, Kind)>,
+    stale: HashMap<Kind, HashSet<String>>,
     current: HashMap<Kind, String>,
     pool_empty: bool,
 }
@@ -430,7 +424,7 @@ impl Shared {
         // model that would read its pair now; a row from another prompt or
         // model is kept apart, and its kind at that hash is read again.
         let mut by_hash: HashMap<String, Vec<usize>> = HashMap::new();
-        let mut stale: HashSet<(String, Kind)> = HashSet::new();
+        let mut stale: HashMap<Kind, HashSet<String>> = HashMap::new();
         let current: HashMap<Kind, String> =
             [Kind::Heading, Kind::Body, Kind::Plan].into_iter().map(|k| (k, k.prompt_hash())).collect();
         for (i, r) in rows.iter().enumerate() {
@@ -439,7 +433,7 @@ impl Shared {
                 by_hash.entry(r.text_hash.clone()).or_default().push(i);
             } else {
                 for k in kinds {
-                    stale.insert((r.text_hash.clone(), k));
+                    stale.entry(k).or_default().insert(r.text_hash.clone());
                 }
             }
         }
@@ -465,15 +459,16 @@ fn load_inner(
 ) -> (Planning, Planning) {
     let Shared { phrase_lookup, cross, headings, rows, by_hash, stale, current, pool_empty } = shared;
     let pool_empty = *pool_empty;
-    let rows_at = |hash: &str| -> Option<Vec<&reader::Row>> { by_hash.get(hash).map(|is| is.iter().map(|&i| &rows[i]).collect()) };
+    // Borrowed from the shared index: no copy per lookup.
+    let rows_at = |hash: &str| by_hash.get(hash).map(|is| is.iter().map(|&i| &rows[i]));
     // Rows of a kind at a hash, none of them current.
     let is_stale = |hash: &str, kind: Kind| -> bool {
-        stale.contains(&(hash.to_string(), kind))
-            && !rows_at(hash).is_some_and(|rs| rs.iter().any(|r| current[&kind] == r.prompt_hash))
+        stale.get(&kind).is_some_and(|hs| hs.contains(hash))
+            && !rows_at(hash).is_some_and(|mut rs| rs.any(|r| current[&kind] == r.prompt_hash))
     };
     let build = |with_asked: bool| -> Planning {
     let unasked: Vec<usize> = (0..rf.sections.len())
-        .filter(|&i| is_unasked(led, &rf.sections[i]) || (with_asked && is_waiting(led, &rf.sections[i])))
+        .filter(|&i| crate::status::question_status(led, &rf.sections[i]).is_unasked() || (with_asked && is_waiting(led, &rf.sections[i])))
         .collect();
     let mut by_body: HashMap<String, usize> = HashMap::new();
     for &i in &unasked {
@@ -486,7 +481,7 @@ fn load_inner(
         // The latest row for a neighbour is the one that counts.
         let mut order: Vec<&str> = Vec::new();
         let mut last: HashMap<&str, &reader::Row> = HashMap::new();
-        for r in rs.iter().copied() {
+        for r in rs {
             if last.insert(r.neighbour.as_str(), r).is_none() {
                 order.push(r.neighbour.as_str());
             }
@@ -527,7 +522,7 @@ fn load_inner(
         questions.push(Question {
             idx: i,
             heading: sec.heading_text.clone(),
-            asked: !is_unasked(led, sec),
+            asked: !crate::status::question_status(led, sec).is_unasked(),
             heading_hash,
             has_body,
             body_hash,

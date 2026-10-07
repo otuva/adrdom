@@ -269,9 +269,11 @@ fn answer_gate(root: &Path, rf: &RecordFile, led: &Ledger, tf: &terms::TermsFile
     // ask would take it (`moves::of_unasked_question`, the pieces
     // `moves::of_topic_file` uses).
     let all = std::cell::OnceCell::new();
+    let index = std::cell::OnceCell::new();
     let moves_for = |leaf: usize, unwritten: bool| {
         let all = all.get_or_init(|| record::load_all(root));
-        crate::moves::of_unasked_question_in(root, rf, all, &tf.terms, led, &rf.sections[leaf].heading_text, unwritten)
+        let index = index.get_or_init(|| crate::rules::RepoIndex::new(root, all, &tf.terms, led));
+        crate::moves::of_unasked_question_with(root, rf, all, &tf.terms, led, &rf.sections[leaf].heading_text, unwritten, index)
     };
     for &t in &w.unanswered {
         let heading = rf.sections[t].heading_text.clone();

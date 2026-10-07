@@ -136,17 +136,19 @@ pub struct RemovalHolds {
 /// back to the newest committed version that has the file. That fallback can
 /// name a heading already struck by an uncommitted approval; the move stays
 /// executable: restore the file, strike the heading again, approve.
-pub(crate) fn latest_approved_version(root: &Path, rel: &str, led: &Ledger) -> Option<RecordFile> {
+pub(crate) fn latest_approved_version(root: &Path, rel: &str, led: &Ledger) -> Option<std::sync::Arc<RecordFile>> {
     // An approved removal is the empty plan: no version to read.
     if led.latest_for_path("approved", rel).is_some_and(|r| r.hash == empty_plan_hash()) {
         return None;
     }
-    let mut newest: Option<RecordFile> = None;
+    let mut newest: Option<std::sync::Arc<RecordFile>> = None;
     for old in crate::approval::committed_topics(root, rel) {
         if state::plan_approved_hashes(led, rel, &record::question_hashes(&old)) {
-            return Some(RecordFile::clone(&old));
+            return Some(old);
         }
-        newest.get_or_insert_with(|| RecordFile::clone(&old));
+        if newest.is_none() {
+            newest = Some(old);
+        }
     }
     newest
 }
@@ -1446,9 +1448,16 @@ pub struct BlameNames {
 impl BlameNames {
     pub fn read(root: &Path, source: &repo::Source) -> BlameNames {
         let (all_records, _) = record::load_all_via(root, source);
-        let (any_headings, known_heading_ids) = crate::blame::heading_ids(&all_records);
         let terms_list: Vec<terms::Term> =
             state::load_terms_via(root, source).map(|tf| terms::minted_copy(&tf).terms).unwrap_or_default();
+        BlameNames::of(root, source, &all_records, terms_list)
+    }
+
+    /// `read` from the topic files and terms the caller already holds, read
+    /// through the same `source`: `terms_list` is the terms file's minted
+    /// copy (`terms::minted_copy`), so an entry with no id yet resolves.
+    pub fn of(root: &Path, source: &repo::Source, records: &[RecordFile], terms_list: Vec<terms::Term>) -> BlameNames {
+        let (any_headings, known_heading_ids) = crate::blame::heading_ids(records);
         let phrase_lookup = terms::phrase_lookup(&terms_list);
         let decision_stems: HashSet<String> = repo::list_decision_files_via(root, source)
             .iter()

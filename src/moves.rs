@@ -195,6 +195,8 @@ pub fn hold_words(status: QuestionStatus) -> &'static str {
 /// settles each hold by a plan change the owner approves: a current
 /// decision is superseded, any other question struck from the plan.
 pub fn removal_next(rel: &str, holds: &[RemovalHold]) -> Next {
+    // Nothing holds the removal (check's ids rule names a removed file whose
+    // questions are refused, say): the owner approves it away.
     if holds.is_empty() {
         return Next::owner_runs(format!("adr approve {}", rel));
     }
@@ -353,9 +355,25 @@ pub fn of_unasked_question_in(
     unwritten: bool,
 ) -> Report {
     let index = crate::rules::RepoIndex::new(root, all, terms_list, led);
+    of_unasked_question_with(root, rf, all, terms_list, led, heading, unwritten, &index)
+}
+
+/// `of_unasked_question_in` with what the run shares read once (`index`):
+/// what a caller that names many questions calls once per question.
+#[allow(clippy::too_many_arguments)]
+pub fn of_unasked_question_with(
+    root: &std::path::Path,
+    rf: &RecordFile,
+    all: &[RecordFile],
+    terms_list: &[crate::terms::Term],
+    led: &Ledger,
+    heading: &str,
+    unwritten: bool,
+    index: &crate::rules::RepoIndex,
+) -> Report {
     let plan_ok = state::plan_approved(led, rf, &rf.rel) && state::context_approved(led, rf, &rf.rel);
     let planning = crate::plan::load_with(rf, terms_list, led, &index.planning);
-    let findings = crate::rules::judge_topic_file_in(root, rf, all, terms_list, led, &index);
+    let findings = crate::rules::judge_topic_file_in(root, rf, all, terms_list, led, index);
     let moves = of_unasked_question(rf, plan_ok, &findings, Some(&planning), heading, unwritten);
     Report { findings, moves }
 }

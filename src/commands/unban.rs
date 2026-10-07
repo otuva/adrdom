@@ -6,21 +6,21 @@ use std::io::Read;
 
 pub fn run() -> i32 {
     if !repo::owner_authorized() {
-        out::eprint_stop("unban", &msg::owner_refusal("unban", ""));
+        out::eprint_stop("unban", &msg::owner_refusal("unban", msg::WORDS_ON_INPUT));
         return 2;
     }
 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint_stop("unban", &msg::not_a_repo("unban", "", Actor::Owner));
+            out::eprint_stop("unban", &msg::not_a_repo("unban", msg::WORDS_ON_INPUT, Actor::Owner));
             return 1;
         }
     };
 
     let mut input = String::new();
     if std::io::stdin().read_to_string(&mut input).is_err() {
-        out::eprint_stop("unban", &msg::stdin_read_failed(msg::after_fix_owner_runs("adr unban")));
+        out::eprint_stop("unban", &msg::stdin_read_failed(msg::after_fix_owner_runs(&format!("adr unban {}", msg::WORDS_ON_INPUT))));
         return 1;
     }
 

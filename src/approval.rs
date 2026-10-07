@@ -101,16 +101,19 @@ fn changed(old: Option<Vec<String>>, new: &[String]) -> Vec<DiffLine> {
     }
 }
 
-/// What the run has read of git history, kept for the rest of the run: the
-/// commits that touched a path at a given `HEAD`, the text of a path at a
-/// commit, and that text parsed as a topic file. A commit's text never
-/// changes, so it is read once; the list of commits is keyed by `HEAD`, so a
-/// long-running `serve` reads it again after a new commit.
+/// What the run has read of git history, kept while `HEAD` stays where it
+/// was: the commits that touched a path, the text of a path at a commit,
+/// and that text parsed as a topic file. A long-running `serve` drops all of
+/// it when `HEAD` moves, so what it keeps is bounded by one `HEAD`'s history
+/// and a new commit is read. A `git show` that fails is not kept: the next
+/// reader asks git again.
 #[derive(Default)]
 struct History {
-    commits: HashMap<(PathBuf, String, String), Arc<Vec<String>>>,
-    texts: HashMap<(PathBuf, String, String), Option<Arc<String>>>,
-    topics: HashMap<(PathBuf, String, String), Arc<RecordFile>>,
+    /// The repository and the `HEAD` everything below was read at.
+    at: Option<(PathBuf, String)>,
+    commits: HashMap<String, Arc<Vec<String>>>,
+    texts: HashMap<(String, String), Arc<String>>,
+    topics: HashMap<(String, String), Arc<RecordFile>>,
 }
 
 fn history() -> std::sync::MutexGuard<'static, History> {
@@ -118,35 +121,43 @@ fn history() -> std::sync::MutexGuard<'static, History> {
     HISTORY.get_or_init(Default::default).lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// The commits that touched `rel`, newest first.
+/// The commits that touched `rel`, newest first. Reads `HEAD` first and
+/// drops what was kept of another repository or another `HEAD`.
 fn commits_of(root: &Path, rel: &str) -> Arc<Vec<String>> {
     let head = repo::git(root, &["rev-parse", "HEAD"]).unwrap_or_default().trim().to_string();
-    let key = (root.to_path_buf(), rel.to_string(), head);
-    if let Some(found) = history().commits.get(&key) {
-        return found.clone();
+    let at = Some((root.to_path_buf(), head));
+    {
+        let mut h = history();
+        if h.at != at {
+            *h = History { at, ..Default::default() };
+        }
+        if let Some(found) = h.commits.get(rel) {
+            return found.clone();
+        }
     }
     let commits: Vec<String> = repo::git(root, &["log", "--format=%H", "--", rel])
         .map(|log| log.lines().filter(|l| !l.is_empty()).map(str::to_string).collect())
         .unwrap_or_default();
     let commits = Arc::new(commits);
-    history().commits.insert(key, commits.clone());
+    history().commits.insert(rel.to_string(), commits.clone());
     commits
 }
 
-/// The text of `rel` at `commit`, `None` where the commit deleted it.
+/// The text of `rel` at `commit`, `None` where the commit deleted it or git
+/// could not read it.
 fn text_at(root: &Path, commit: &str, rel: &str) -> Option<Arc<String>> {
-    let key = (root.to_path_buf(), commit.to_string(), rel.to_string());
+    let key = (commit.to_string(), rel.to_string());
     if let Some(found) = history().texts.get(&key) {
-        return found.clone();
+        return Some(found.clone());
     }
-    let text = repo::git(root, &["show", &format!("{}:{}", commit, rel)]).map(Arc::new);
+    let text = Arc::new(repo::git(root, &["show", &format!("{}:{}", commit, rel)])?);
     history().texts.insert(key, text.clone());
-    text
+    Some(text)
 }
 
 /// The text of `rel` at `commit` parsed as a topic file.
 fn topic_at(root: &Path, commit: &str, rel: &str) -> Option<Arc<RecordFile>> {
-    let key = (root.to_path_buf(), commit.to_string(), rel.to_string());
+    let key = (commit.to_string(), rel.to_string());
     if let Some(found) = history().topics.get(&key) {
         return Some(found.clone());
     }
@@ -279,7 +290,7 @@ pub fn topic_file(root: &Path, rf: &RecordFile, led: &Ledger) -> TopicChanges {
                 None => Some(Change { status: FileStatus::New, lines: added(&new) }),
                 Some((_, h)) if h == hash => None,
                 Some((id, h)) => {
-                    let old = approved_question(root, rel, id, h, plan.as_ref());
+                    let old = approved_question(root, rel, id, h, plan.as_deref());
                     Some(Change { status: FileStatus::Changed, lines: changed(old, &new) })
                 }
             }
@@ -349,10 +360,9 @@ fn struck_ids(rf: &RecordFile, led: &Ledger) -> Vec<String> {
 
 /// The newest committed version of `rel` whose plan is exactly the latest
 /// approved one.
-fn latest_plan(root: &Path, rel: &str, led: &Ledger) -> Option<RecordFile> {
+fn latest_plan(root: &Path, rel: &str, led: &Ledger) -> Option<Arc<RecordFile>> {
     led.latest_for_path("approved", rel)?;
-    let rf = approved_topic(root, rel, &|rf| state::plan_approved_hashes(led, rel, &record::question_hashes(rf)))?;
-    Some(RecordFile::clone(&rf))
+    approved_topic(root, rel, &|rf| state::plan_approved_hashes(led, rel, &record::question_hashes(rf)))
 }
 
 /// An entry's lines as the terms file holds them, less its `id:` and
