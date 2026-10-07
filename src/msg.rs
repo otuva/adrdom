@@ -1291,17 +1291,14 @@ pub fn duplicate_id(id: &str, prev: &str, rel: &str, heading: &str) -> String {
     )
 }
 
-/// An asked/refused id missing from every current topic file, where at
-/// least one currently-unapproved file was previously approved.
-/// `removed_file` names that file when exactly one such file exists; when
-/// more than one does, which one dropped this id can't be told apart, so
-/// the owner is pointed at the generic fix instead of a guessed file.
-pub fn removed_from_plan(id: &str, heading: &str, event: &str, removed_file: Option<&str>) -> String {
-    let what = format!("{} (\"{}\", {}) was removed from the plan", id, heading, event);
-    match removed_file {
-        Some(rel) => refuse(what, Next::owner_runs(format!("adr approve {}", rel))),
-        None => refuse(what, Next::owner_runs("adr approve <topic file>")),
-    }
+/// An asked/refused id missing from every current topic file, struck from
+/// the plan of `rel`, the file awaiting approval it was approved in: the
+/// owner's approve of that file writes its withdrawn row.
+pub fn removed_from_plan(id: &str, heading: &str, event: &str, rel: &str) -> String {
+    refuse(
+        format!("{} (\"{}\", {}) was removed from the plan", id, heading, event),
+        Next::owner_runs(format!("adr approve {}", rel)),
+    )
 }
 
 /// An asked/refused id whose file is removed, its removal awaiting approval:
@@ -1724,14 +1721,6 @@ pub fn ledger_merge_parents_unreadable() -> String {
     refuse(
         "this merge commit's parents cannot be read; the clone is too shallow".to_string(),
         Next::agent("runs: git fetch --deepen=1"),
-    )
-}
-
-pub fn ledger_asked_id_missing(id: &str, heading: Option<&str>) -> String {
-    refuse(
-        format!("asked row id {} not found in any topic file", named(id, heading)),
-        Next::agent("restores the heading in its topic file, or leaves it out when it was removed on purpose")
-            .and_owner_runs("adr approve <topic file>"),
     )
 }
 
@@ -2568,8 +2557,7 @@ mod tests {
             settings_deny_not_array("path", Next::agent("retries")),
             check_parse_error("x.md", "heading", "duplicate id line"),
             duplicate_id("id-1", "x.md:heading", "y.md", "heading"),
-            removed_from_plan("id-1", "heading", "asked", Some("x.md")),
-            removed_from_plan("id-1", "heading", "asked", None),
+            removed_from_plan("id-1", "heading", "asked", "x.md"),
             ledger_id_not_found("id-1", Some("heading")),
             withdrawn_id_present("id-1", "heading", "x.md"),
             refusal_without_row("x.md", "heading"),
@@ -2629,7 +2617,6 @@ mod tests {
             ledger_not_append_only(),
             ledger_merge_drops_rows(),
             ledger_merge_parents_unreadable(),
-            ledger_asked_id_missing("id-1", Some("heading")),
             ledger_answered_without_asked("id-1", Some("heading")),
             ledger_push_drops_rows("refs/heads/feat", "refs/heads/main"),
             ledger_push_remote_unreadable("refs/heads/main"),

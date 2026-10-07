@@ -372,9 +372,17 @@ pub fn of_topic_file_in(
     let findings = crate::rules::judge_topic_file_at(root, rf, all, terms_list, led);
     let lookup = crate::terms::phrase_lookup(terms_list);
     let cross = crate::depends::cross_file_heading_index(all, led);
+    let original = rf;
     let mut rf = rf.clone();
     crate::depends::normalize_cross_file_deps(&mut rf, terms_list, &lookup, &cross, led);
     let moves = of_topic_file(&rf, led, plan_ok, &findings, tests, Some(&planning));
+    // A question asked and struck from the plan is cleared by the owner's
+    // approve the moves above already name, so it joins the findings only
+    // after the moves are computed from them.
+    let mut findings = findings;
+    let stale = crate::rules::stale_files(all, led);
+    let sole = stale.len() == 1;
+    findings.extend(crate::rules::struck_asked(&rf.rel, !state::plan_approved(led, original, &rf.rel), sole, all, led));
     Report { findings, moves }
 }
 

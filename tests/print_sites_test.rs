@@ -311,4 +311,17 @@ fn every_planning_stage_prints_one_report_in_every_command() {
     let out = plan(&dir);
     assert!(assert_one_report(&dir, Some(&out), "ready").is_empty(), "{}", out);
     assert_eq!(report_of(&out), vec![format!("owner runs: adr approve {}", REL)], "{}", out);
+
+    // Asked, then one question struck from the plan before the owner
+    // approves the change: the one finding, in every command.
+    approve_record(&dir, REL);
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    let text = std::fs::read_to_string(&path).unwrap();
+    let at = text.find(&format!("### {}", h2)).unwrap();
+    std::fs::write(&path, &text[..at]).unwrap();
+    let out = plan(&dir);
+    let findings = assert_one_report(&dir, Some(&out), "struck asked question");
+    assert_eq!(findings.len(), 1, "one finding for the struck question: {:?}", findings);
+    assert!(findings[0].starts_with("ids: ") && findings[0].contains(h2) && findings[0].contains("was removed from the plan"), "{:?}", findings);
+    assert!(findings[0].ends_with(&format!("; owner runs: adr approve {}", REL)), "{:?}", findings);
 }

@@ -1,4 +1,4 @@
-use super::{dropped_state, Failure};
+use super::Failure;
 use crate::ledger::{Ledger, Row};
 use crate::msg;
 use crate::record::{self, RecordFile};
@@ -22,7 +22,6 @@ pub(super) fn check_ledger(
     root: &Path,
     ledger_content: &str,
     since: Option<&str>,
-    removed_files: &[(String, Vec<crate::moves::RemovalHold>)],
 ) -> Vec<Failure> {
     let mut out = Vec::new();
     for (lineno, raw) in &led.malformed {
@@ -36,31 +35,6 @@ pub(super) fn check_ledger(
 
     out.extend(check_same_time_competition(led));
     out.extend(check_dropped(led, records, root));
-
-    let all_ids: HashSet<String> = records
-        .iter()
-        .flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.clone()))
-        .collect();
-
-    for row in &led.rows {
-        if row.event != "asked" || all_ids.contains(&row.id) || dropped_state(led, &row.id) {
-            continue;
-        }
-        // An id whose approved file is gone, its removal awaiting approval:
-        // every state it can be in (asked, refused, answered) is reported
-        // once by the ids check with the file's removal move, so the ledger
-        // check leaves it out (one finding per fault).
-        let in_removed = led
-            .latest_for_id("approved", &row.id)
-            .is_some_and(|a| removed_files.iter().any(|(rel, _)| *rel == a.detail));
-        if in_removed {
-            continue;
-        }
-        out.push(Failure {
-            check: "ledger",
-            message: msg::ledger_asked_id_missing(&row.id, Some(row.detail.as_str())),
-        });
-    }
 
     for row in &led.rows {
         if row.event == "answered" {

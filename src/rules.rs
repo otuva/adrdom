@@ -1207,6 +1207,65 @@ pub fn judge_topic_file(j: &TopicFileJudge) -> Vec<Finding> {
     out
 }
 
+/// The questions asked (or refused) in the topic file `rel` and struck from
+/// its plan since: each id whose latest `approved` row names `rel`, whose
+/// latest state is `asked` or `refused`, and which no topic file of `all`
+/// holds any more, while the plan of `rel` differs from its approval
+/// (`stale`, read by the caller off the file as written; `sole_stale` when
+/// it is the only such file). One finding per
+/// id, whose move is the owner's approve of `rel`, which writes the
+/// withdrawn row (per "Does approve withdraw an asked question struck from
+/// the plan?"). Not part of `judge_topic_file`: approve clears it rather
+/// than refusing on it; show, plan and check print it the same way.
+pub fn struck_asked(rel: &str, stale: bool, sole_stale: bool, all: &[RecordFile], led: &Ledger) -> Vec<Finding> {
+    if !stale {
+        return Vec::new();
+    }
+    struck_asked_ids(rel, sole_stale, all, led)
+        .into_iter()
+        .map(|(id, heading, event)| {
+            Finding::new("ids", msg::removed_from_plan(&id, &heading, event, rel)).about(Subject::TopicFile(rel.to_string()))
+        })
+        .collect()
+}
+
+/// The ids `struck_asked` reports for `rel`, each with the heading it was
+/// asked under and its latest state, in ledger order: the ids whose latest
+/// per-question `approved` row names `rel`, and, when `rel` is the only file
+/// awaiting a re-approval (`sole_stale`), the ids asked under a ledger that
+/// approved whole files only and so names no file for them.
+pub fn struck_asked_ids<'l>(rel: &str, sole_stale: bool, all: &[RecordFile], led: &'l Ledger) -> Vec<(String, String, &'l str)> {
+    let held: HashSet<&str> = all.iter().flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.as_deref())).collect();
+    let mut seen: HashSet<&str> = HashSet::new();
+    let mut out = Vec::new();
+    for row in led.rows.iter().filter(|r| r.event == "asked" && r.id != "-") {
+        let id = row.id.as_str();
+        if !seen.insert(id) || held.contains(id) {
+            continue;
+        }
+        match led.latest_for_id("approved", id).map(|r| r.detail.as_str()) {
+            Some(file) if file == rel => {}
+            None if sole_stale => {}
+            _ => continue,
+        }
+        let Some(event) = led.latest_state(id).map(|r| r.event.as_str()).filter(|e| *e == "asked" || *e == "refused") else {
+            continue;
+        };
+        let heading = led.latest_asked(id).map(|r| r.detail.clone()).unwrap_or_else(|| id.to_string());
+        out.push((id.to_string(), heading, event));
+    }
+    out
+}
+
+/// The topic files of `all` that were approved once and whose plan differs
+/// from that approval now, read off the files as written.
+pub fn stale_files<'a>(all: &'a [RecordFile], led: &Ledger) -> Vec<&'a str> {
+    all.iter()
+        .filter(|rf| led.latest_for_path("approved", &rf.rel).is_some() && !state::plan_approved(led, rf, &rf.rel))
+        .map(|rf| rf.rel.as_str())
+        .collect()
+}
+
 /// A question not yet asked with no body, and the planning records of the
 /// questions not yet asked: per "What does the agent do to plan a topic
 /// file?" and "Does a planning step run without the record of the step

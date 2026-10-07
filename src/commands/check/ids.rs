@@ -75,6 +75,17 @@ pub(super) fn check_ids(
         })
         .collect();
 
+    // A question asked in a file awaiting approval and struck from its
+    // plan: the one judgement show and plan print too (`rules::struck_asked`).
+    let mut struck: HashSet<String> = HashSet::new();
+    let sole = stale.len() == 1;
+    for (_, rel) in &stale {
+        struck.extend(crate::rules::struck_asked_ids(rel, sole, records, led).into_iter().map(|(id, _, _)| id));
+        for f in crate::rules::struck_asked(rel, true, sole, records, led) {
+            out.push(Failure { check: f.rule, message: f.message });
+        }
+    }
+
     for id in ledger_ids {
         if seen.contains_key(&id) {
             continue;
@@ -112,17 +123,11 @@ pub(super) fn check_ids(
             continue;
         }
 
-        // asked / refused, missing from every current topic file: when a
-        // file that was once approved now has a stale, still unapproved
-        // plan, the heading was very likely just edited out of it, so say
-        // what happened and point at the fix instead of the bare "not
-        // found" line. Name the file only when exactly one such file
-        // exists; with more than one, which one dropped this id can't be
-        // told apart, so nothing is named. A file that was never approved
-        // at all names nothing here -- there is no earlier approved plan
-        // for this id to have dropped out of.
-        // The file the id was approved in is gone, its removal awaiting
-        // approval: name that file, the same line a struck heading earns.
+        // asked / refused, missing from every current topic file. The file
+        // the id was approved in is gone, its removal awaiting approval:
+        // name that file's removal move. Struck from the plan of a file
+        // still there and awaiting approval: reported above, once. Else the
+        // id is not found anywhere.
         if let Some((rel, holds)) = led
             .latest_for_id("approved", &id)
             .map(|r| r.detail.as_str())
@@ -138,19 +143,7 @@ pub(super) fn check_ids(
             });
             continue;
         }
-        if !stale.is_empty() {
-            let heading = led
-                .latest_asked(&id)
-                .map(|r| r.detail.clone())
-                .unwrap_or_else(|| id.clone());
-            let removed_file = match stale.as_slice() {
-                [(_, rel)] => Some(*rel),
-                _ => None,
-            };
-            out.push(Failure {
-                check: "ids",
-                message: msg::removed_from_plan(&id, &heading, event.unwrap_or("unknown"), removed_file),
-            });
+        if struck.contains(&id) {
             continue;
         }
         out.push(Failure {
