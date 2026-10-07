@@ -37,24 +37,25 @@ pub struct Views {
     pub stood_on: bool,
 }
 
-/// Everything `show` reads, loaded once.
-struct Records {
-    root: PathBuf,
-    led: Ledger,
+/// Everything `show` reads, loaded once; the page reads its lines from the
+/// same (per "Does the ui show what the terminal prints?", 7857d633 A).
+pub(crate) struct Records {
+    pub(crate) root: PathBuf,
+    pub(crate) led: Ledger,
     terms_file: Option<TermsFile>,
     terms_list: Vec<Term>,
-    topic_files: Vec<RecordFile>,
+    pub(crate) topic_files: Vec<RecordFile>,
     unreadable_topic_files: Vec<(String, String)>,
     blame_files: Vec<blame::BlameFile>,
     unreadable_blame_files: Vec<(String, String)>,
-    tests: HashMap<String, Vec<String>>,
+    pub(crate) tests: HashMap<String, Vec<String>>,
     /// Every question's heading and every term's name by its identifier:
     /// what turns an identifier on a line back into words.
     names: HashMap<String, String>,
 }
 
 impl Records {
-    fn load(root: PathBuf) -> Records {
+    pub(crate) fn load(root: PathBuf) -> Records {
         let led = ledger::read(&root.join(repo::LEDGER_PATH));
         let terms_file = state::load_terms(&root);
         let terms_list: Vec<Term> = terms_file.as_ref().map(|tf| tf.terms.clone()).unwrap_or_default();
@@ -121,7 +122,7 @@ pub fn run(record_arg: Option<PathBuf>, all: bool, views: Views) -> i32 {
 /// Every current decision as its heading and the option picked, under its
 /// topic file, and every move: of each topic file, each removed topic file,
 /// the terms file and each blame file.
-fn summary(r: &Records) -> Vec<Line> {
+pub(crate) fn summary(r: &Records) -> Vec<Line> {
     let mut lines = Vec::new();
     for (rel, e) in &r.unreadable_topic_files {
         lines.push(Line::Move(Finding::new("parse", msg::topic_file_unreadable(rel, e)).mv()));
@@ -188,7 +189,7 @@ fn whole(r: &Records, views: Views) -> Vec<Line> {
 
 /// The file form of `rel`, or the refusal when it is not a file approve
 /// takes.
-fn file_form(r: &Records, rel: &str, views: Views) -> Result<Vec<Line>, String> {
+pub(crate) fn file_form(r: &Records, rel: &str, views: Views) -> Result<Vec<Line>, String> {
     if rel == repo::TERMS_PATH {
         return match &r.terms_file {
             Some(tf) => Ok(terms_file(r, tf)),
@@ -211,6 +212,27 @@ fn file_form(r: &Records, rel: &str, views: Views) -> Result<Vec<Line>, String> 
         return Ok(removed_topic_file(r, rel));
     }
     Err(msg::show_not_a_file_approve_takes(rel))
+}
+
+/// Every file approve takes, each as its status line and its path: the
+/// first line of its file form (each topic file, each removed topic file,
+/// the terms file, each blame file), read without the change beyond its
+/// approval.
+pub(crate) fn file_statuses(r: &Records) -> Vec<(String, Line)> {
+    let mut out: Vec<(String, Line)> = r
+        .topic_files
+        .iter()
+        .map(|rf| (rf.rel.clone(), file_status(&topic_subject(rf), status::topic_file_status(&r.led, rf))))
+        .collect();
+    out.extend(r.removed_topic_files().into_iter().map(|rel| (rel.clone(), file_status(&rel, FileStatus::Removed))));
+    if let Some(tf) = &r.terms_file {
+        out.push((repo::TERMS_PATH.to_string(), file_status(repo::TERMS_PATH, status::terms_file_status(&r.led, tf))));
+    }
+    for bf in &r.blame_files {
+        let st = status::blame_file_status(&r.led, &bf.rel, &record::join_lines(&bf.lines));
+        out.push((bf.rel.clone(), file_status(&bf.rel, st)));
+    }
+    out
 }
 
 /// A topic file as the status line names it: its topic and its path.

@@ -33,11 +33,11 @@ pub fn run() -> i32 {
     match actions::do_unban(&root, &input) {
         Ok(outcome) => {
             out::print_events(&outcome.events);
-            out::eprint_stop(&outcome.input_findings.join("\n"));
+            out::eprint(&out::stop("unban", &outcome.input_findings.join("\n")));
             0
         }
         Err(e) => {
-            out::eprint_stop(&format!("unban: {}", e));
+            out::eprint(&out::stop("unban", &e));
             1
         }
     }

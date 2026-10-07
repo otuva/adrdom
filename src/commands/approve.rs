@@ -26,7 +26,7 @@ pub fn run(file: PathBuf) -> i32 {
             0
         }
         Err(e) => {
-            out::eprint_stop(&e);
+            out::eprint(&out::stop("approve", &e));
             1
         }
     }
