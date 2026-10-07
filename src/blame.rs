@@ -450,15 +450,18 @@ fn resolve_copy_target(value: &str, ctx: &ResolveCtx) -> Result<Resolved, DestEr
     // blame file (38216d39 A) -- itself held to the same rule an origin's
     // own path is (`valid_origin_path`): not under adrdom, not a
     // directory.
-    if !valid_origin_path(&ctx.root, &ctx.source, value) {
+    // Looked up by its plain spelling, as the working tree resolves it, so
+    // `docs//x.md` or `docs/./x.md` reads the same at a commit as on disk.
+    let path = plain_path(value);
+    if !valid_origin_path(&ctx.root, &ctx.source, &path) {
         return Err(DestError::BadPath(value.to_string()));
     }
     // 38216d39 A: "copy of ... another origin" -- never the origin this
     // blame file itself maps.
-    if plain_path(value) == plain_path(&ctx.own_origin) {
+    if path == plain_path(&ctx.own_origin) {
         return Err(DestError::CopyOfOwnOrigin(value.to_string()));
     }
-    if ctx.source.exists(&ctx.root, value) || ctx.known_origins.contains(value) {
+    if ctx.source.exists(&ctx.root, &path) || ctx.known_origins.contains(value) || ctx.known_origins.contains(&path) {
         Ok(Resolved::DroppedCopyOrigin(value.to_string()))
     } else {
         Err(DestError::CopyPathMissing(value.to_string()))
@@ -535,19 +538,16 @@ pub fn dest_refusal_text(rel: &str, row: &Row, err: &DestError) -> String {
 pub fn load_all_with_errors(root: &Path) -> (Vec<BlameFile>, Vec<(String, String)>) {
     let mut out = Vec::new();
     let mut errors = Vec::new();
-    let dir = root.join(repo::BLAME_DIR);
-    let Ok(entries) = std::fs::read_dir(&dir) else {
-        return (out, errors);
-    };
-    let mut paths: Vec<PathBuf> = entries
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("md"))
+    // Every blame file under the directory, nested ones too: the listing
+    // `check` judges (`Source::list_under`) and approve takes.
+    let mut rels: Vec<String> = repo::Source::WorkingTree
+        .list_under(root, repo::BLAME_DIR)
+        .into_iter()
+        .filter(|p| p.ends_with(".md"))
         .collect();
-    paths.sort();
-    for p in paths {
-        let Some(name) = p.file_name().and_then(|n| n.to_str()) else { continue };
-        let rel = format!("{}/{}", repo::BLAME_DIR, name);
+    rels.sort();
+    for rel in rels {
+        let p = root.join(&rel);
         match std::fs::read_to_string(&p) {
             Ok(content) => out.push(parse(p.clone(), rel, record::split_lines(&content))),
             Err(e) => errors.push((rel, e.to_string())),
@@ -754,16 +754,25 @@ pub fn file_state(
     let rel = &bf.rel;
     let approved = crate::state::blame_approved(led, rel, content);
     let mut st = FileState { shape: Vec::new(), failures: Vec::new(), awaiting: !approved, origin_content: None };
-    if !bf.shape_errors.is_empty() {
-        st.shape = bf.shape_errors.iter().map(|e| msg::blame_shape_error(rel, e)).collect();
+    st.shape = bf.shape_errors.iter().map(|e| msg::blame_shape_error(rel, e)).collect();
+    let Some(origin) = bf.origin.clone() else {
         return st;
-    }
-    let origin = bf.origin.clone().expect("no shape error means origin is set");
-    let blob = bf.blob.clone().expect("no shape error means blob is set");
+    };
+    // An origin path that cannot be one is a fault of the file's header, a
+    // shape fault: a note while the file awaits approval, a failure once
+    // approved (per "What does check do with a fault on a file awaiting
+    // approval?").
     if !valid_origin_path(root, source, &origin) {
-        st.failures.push(msg::blame_bad_origin_path(rel, &origin));
+        let fault = msg::blame_bad_origin_path(rel, &origin);
+        if approved {
+            st.failures.push(fault);
+        } else {
+            st.shape.push(fault);
+        }
         return st;
     }
+    // The origin's own rule holds whatever else is wrong with the rows: a
+    // row typo never hides an origin gone while a row is open.
     if !source.exists(root, &origin) {
         let mut open = open_decision_rows(bf, records, led, any_headings, known_ids);
         if !approved {
@@ -775,6 +784,10 @@ pub fn file_state(
         }
         return st;
     }
+    if !st.shape.is_empty() {
+        return st;
+    }
+    let blob = bf.blob.clone().expect("no shape error means blob is set");
     match source.read(root, &origin) {
         None => st.failures.push(msg::blame_origin_unreadable(rel, &origin)),
         Some(origin_content) => {

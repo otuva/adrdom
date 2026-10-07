@@ -10,6 +10,7 @@
 //! "Does a command print under a flag what it computes from the records?",
 //! 36dfbeaa A): `--neighbours` and `--dependents`. Every line goes through
 //! `out` (per "What does a command that writes nothing print?", 848e1b76 A).
+use crate::rules::Rule;
 use crate::approval::{self, Change, Side};
 use crate::blame;
 use crate::ledger::{self, Ledger};
@@ -44,6 +45,9 @@ pub(crate) struct Records {
     pub(crate) root: PathBuf,
     pub(crate) led: Ledger,
     terms_file: Option<TermsFile>,
+    /// The error of an adrdom/terms.md that exists and cannot be read:
+    /// named, never skipped in silence.
+    terms_unreadable: Option<String>,
     terms_list: Vec<Term>,
     pub(crate) topic_files: Vec<RecordFile>,
     unreadable_topic_files: Vec<(String, String)>,
@@ -69,7 +73,11 @@ pub(crate) struct Records {
 impl Records {
     pub(crate) fn load(root: PathBuf) -> Records {
         let led = ledger::read(&root.join(repo::LEDGER_PATH));
-        let terms_file = state::load_terms(&root);
+        let (terms_file, terms_unreadable) = match state::load_terms_checked(&root) {
+            state::TermsLoad::Ok(tf) => (Some(tf), None),
+            state::TermsLoad::LoadError(e) => (None, Some(e)),
+            state::TermsLoad::Missing => (None, None),
+        };
         // The terms every topic file is judged against, as check judges
         // them: one minted copy, read by the topic files and the blame rows
         // alike, so an entry with no id yet carries one identifier.
@@ -93,6 +101,7 @@ impl Records {
             root,
             led,
             terms_file,
+            terms_unreadable,
             terms_list,
             topic_files,
             unreadable_topic_files,
@@ -104,6 +113,12 @@ impl Records {
             blame_names: std::cell::OnceCell::new(),
             minted_terms: std::cell::OnceCell::from(minted),
         }
+    }
+
+    /// The finding on an adrdom/terms.md that exists and cannot be read.
+    fn terms_unreadable_finding(&self) -> Option<Line> {
+        let e = self.terms_unreadable.as_ref()?;
+        Some(Line::Finding(Finding::new(Rule::Terms, msg::file_unreadable(repo::TERMS_PATH, e))))
     }
 
     fn minted_terms(&self) -> Option<&TermsFile> {
@@ -122,7 +137,7 @@ impl Records {
     }
 
     fn present_ids(&self) -> HashSet<String> {
-        self.topic_files.iter().flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.clone())).collect()
+        rules::held_ids(&self.topic_files).into_iter().map(str::to_string).collect()
     }
 
     fn removed_topic_files(&self) -> Vec<String> {
@@ -154,15 +169,15 @@ pub fn run(record_arg: Option<PathBuf>, all: bool, views: Views) -> i32 {
     let Some(root) = repo::find_root() else {
         let args = show_args(record_arg.as_deref(), all, &views);
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
-        out::eprint(&[out::refusal("show", &msg::not_a_repo("show", &args, Actor::Agent))]);
+        out::eprint(&[out::refusal(Rule::Show, &msg::not_a_repo("show", &args, Actor::Agent))]);
         return 1;
     };
     let r = Records::load(root);
     let lines = match &record_arg {
-        Some(p) => match file_form(&r, &state::rel_path(&r.root, p), views) {
+        Some(p) => match file_form(&r, &state::given_rel(&r.root, p).unwrap_or_else(|| p.display().to_string()), views) {
             Ok(lines) => lines,
             Err(refusal) => {
-                out::eprint(&[Line::Finding(Finding::new("show", refusal))]);
+                out::eprint(&[Line::Finding(Finding::new(Rule::Show, refusal))]);
                 return 1;
             }
         },
@@ -181,12 +196,13 @@ pub fn run(record_arg: Option<PathBuf>, all: bool, views: Views) -> i32 {
 pub(crate) fn summary(r: &Records) -> Vec<Line> {
     let mut lines = Vec::new();
     for (rel, e) in &r.unreadable_topic_files {
-        lines.push(Line::Finding(Finding::new("parse", msg::topic_file_unreadable(rel, e))));
+        lines.push(Line::Finding(Finding::new(Rule::Parse, msg::topic_file_unreadable(rel, e))));
     }
     // The terms file first: while it waits for its approval, approve, ask
     // and answer stop on it in every topic file (per "Does the tool stop
     // while the terms file waits for approval?"), so its move comes before
     // theirs, and the topic files below do not name it again.
+    lines.extend(r.terms_unreadable_finding());
     if let Some(tf) = &r.terms_file {
         let (st, report) = terms_report(r, tf);
         let report = out::report(&report);
@@ -219,6 +235,16 @@ pub(crate) fn summary(r: &Records) -> Vec<Line> {
     }
     for rel in r.removed_topic_files() {
         lines.push(file_status(&rel, FileStatus::Removed));
+        // Its current decisions stand until a plan change supersedes them:
+        // listed from its approved version, as every file's are.
+        if let Some(old) = rules::latest_approved_version(&r.root, &rel, &r.led) {
+            for sec in old.sections.iter().filter(|s| status::question_status(&r.led, s) == QuestionStatus::Answered) {
+                lines.push(Line::Record { depth: 1, text: sec.heading_text.clone() });
+                if let Some(s) = sec.chosen_sentence() {
+                    lines.push(Line::Record { depth: 2, text: s.to_string() });
+                }
+            }
+        }
         lines.extend(out::report(&removed_report(r, &rel)));
     }
     for bf in &r.blame_files {
@@ -230,7 +256,7 @@ pub(crate) fn summary(r: &Records) -> Vec<Line> {
         }
     }
     for (rel, _) in &r.unreadable_blame_files {
-        lines.push(Line::Finding(Finding::new("blame", msg::blame_file_unreadable(rel))));
+        lines.push(Line::Finding(Finding::new(Rule::Blame, msg::blame_file_unreadable(rel))));
     }
     lines
 }
@@ -241,7 +267,7 @@ pub(crate) fn summary(r: &Records) -> Vec<Line> {
 fn whole(r: &Records, views: Views) -> Vec<Line> {
     let mut lines = Vec::new();
     for (rel, e) in &r.unreadable_topic_files {
-        lines.push(Line::Finding(Finding::new("parse", msg::topic_file_unreadable(rel, e))));
+        lines.push(Line::Finding(Finding::new(Rule::Parse, msg::topic_file_unreadable(rel, e))));
     }
     for rf in &r.topic_files {
         lines.extend(topic_file(r, rf, views));
@@ -249,6 +275,7 @@ fn whole(r: &Records, views: Views) -> Vec<Line> {
     for rel in r.removed_topic_files() {
         lines.extend(removed_topic_file(r, &rel));
     }
+    lines.extend(r.terms_unreadable_finding());
     if let Some(tf) = &r.terms_file {
         lines.extend(terms_file(r, tf, views));
     }
@@ -256,7 +283,7 @@ fn whole(r: &Records, views: Views) -> Vec<Line> {
         lines.extend(blame_file(r, bf));
     }
     for (rel, _) in &r.unreadable_blame_files {
-        lines.push(Line::Finding(Finding::new("blame", msg::blame_file_unreadable(rel))));
+        lines.push(Line::Finding(Finding::new(Rule::Blame, msg::blame_file_unreadable(rel))));
     }
     lines
 }
@@ -265,9 +292,10 @@ fn whole(r: &Records, views: Views) -> Vec<Line> {
 /// takes.
 pub(crate) fn file_form(r: &Records, rel: &str, views: Views) -> Result<Vec<Line>, String> {
     if rel == repo::TERMS_PATH {
-        return match &r.terms_file {
-            Some(tf) => Ok(terms_file(r, tf, views)),
-            None => Err(msg::read_failed(rel, "no such file", msg::Next::agent("names a file that exists"))),
+        return match (&r.terms_file, &r.terms_unreadable) {
+            (Some(tf), _) => Ok(terms_file(r, tf, views)),
+            (None, Some(e)) => Err(msg::file_unreadable(rel, e)),
+            (None, None) => Err(msg::read_failed(rel, "no such file", msg::Next::agent("names a file that exists"))),
         };
     }
     if let Some(rf) = r.topic_files.iter().find(|rf| rf.rel == rel) {
@@ -276,8 +304,9 @@ pub(crate) fn file_form(r: &Records, rel: &str, views: Views) -> Result<Vec<Line
     if let Some(bf) = r.blame_files.iter().find(|bf| bf.rel == rel) {
         return Ok(blame_file(r, bf));
     }
+    // The finding `show` and `check` print for it, word for word.
     if let Some((_, e)) = r.unreadable_topic_files.iter().find(|(f, _)| f == rel) {
-        return Err(msg::read_failed(rel, e, msg::Next::agent("fixes the file so it can be read as text")));
+        return Err(msg::topic_file_unreadable(rel, e));
     }
     if r.unreadable_blame_files.iter().any(|(f, _)| f == rel) {
         return Err(msg::blame_file_unreadable(rel));
@@ -339,20 +368,47 @@ fn change_status(subject: &str, status: Status, change: Option<&Change>) -> Line
     Line::Status { subject: subject.to_string(), status, mark }
 }
 
-/// The lines of a change, marked, each identifier turned back into words.
-/// The heading line is left out, the status line above names it, unless
-/// the heading itself changed.
-fn change_lines(change: &Change, names: &HashMap<String, String>) -> Vec<Line> {
-    let is_heading = |t: &str| t.starts_with("### ") || t.starts_with("## ");
-    let heading_changed = [Side::Removed, Side::Added]
-        .iter()
-        .all(|side| change.lines.iter().any(|l| l.side == *side && is_heading(&l.text)));
-    change
-        .lines
-        .iter()
-        .filter(|l| heading_changed || !is_heading(&l.text))
-        .map(|l| Line::Record { depth: 1, text: named(&l.marked(), names) })
-        .collect()
+/// The lines of a change, marked, the identifiers of its reference lines
+/// turned back into words. `own` is the part's own heading line (`### ..`
+/// of a question, `## ..` of a term entry): left out, the status line above
+/// names it, unless the heading itself changed. Every other line is
+/// printed, one that starts like a heading included. A changed part whose
+/// approved text no commit holds says so above its lines, all marked added.
+fn change_lines(change: &Change, own: Option<&str>, names: &HashMap<String, String>) -> Vec<Line> {
+    let prefix = own.and_then(|o| o.split_once(' ').map(|(p, _)| format!("{} ", p)));
+    // The heading changed: a heading line gone and one come, both shown.
+    let heading_changed = prefix.as_deref().is_some_and(|p| {
+        [Side::Removed, Side::Added].iter().all(|side| change.lines.iter().any(|l| l.side == *side && l.text.starts_with(p)))
+    });
+    let mut out = Vec::new();
+    if !change.baseline {
+        out.push(Line::Record { depth: 1, text: msg::show_no_baseline() });
+    }
+    out.extend(
+        change
+            .lines
+            .iter()
+            .filter(|l| heading_changed || own != Some(l.text.as_str()))
+            .map(|l| Line::Record { depth: 1, text: reference_named(&l.marked(), &l.text, names) }),
+    );
+    out
+}
+
+/// `printed`, the printed form of the record line `line`, with the
+/// identifiers turned back into words when `line` is a reference line
+/// (`depends:`, `supersedes:`, `unrelated:`): what approve turns names into
+/// identifiers on, and nothing else. An identifier in prose stays as the
+/// file holds it, the text approve signs.
+fn reference_named(printed: &str, line: &str, names: &HashMap<String, String>) -> String {
+    if is_reference(line) {
+        named(printed, names)
+    } else {
+        printed.to_string()
+    }
+}
+
+fn is_reference(line: &str) -> bool {
+    ["depends:", "supersedes:", "unrelated:"].iter().any(|p| line.starts_with(p))
 }
 
 /// A line the records hold with every identifier on it turned back into
@@ -385,10 +441,8 @@ fn named(line: &str, names: &HashMap<String, String>) -> String {
 /// The reference lines a question carries (`depends:`, `supersedes:`,
 /// `unrelated:`), and its body, each as the file holds it.
 fn reference_and_body(lines: &[String]) -> (Vec<String>, Vec<String>) {
-    let is_reference =
-        |l: &&String| ["depends:", "supersedes:", "unrelated:"].iter().any(|p| l.starts_with(p));
     let rest = lines.iter().skip(1);
-    (rest.clone().filter(is_reference).cloned().collect(), rest.filter(|l| !is_reference(l)).cloned().collect())
+    (rest.clone().filter(|l| is_reference(l)).cloned().collect(), rest.filter(|l| !is_reference(l)).cloned().collect())
 }
 
 /// One topic file: its status, its prose when beyond its latest approval,
@@ -400,31 +454,21 @@ fn topic_file(r: &Records, rf: &RecordFile, views: Views) -> Vec<Line> {
     let changes = approval::topic_file(&r.root, rf, led);
     if let Some(prose) = &changes.prose {
         lines.push(change_status("prose", Status::File(prose.status), Some(prose)));
-        lines.extend(change_lines(prose, &r.names));
+        lines.extend(change_lines(prose, None, &r.names));
     }
-    let shown = (views.neighbours).then(|| plan::load_both(&r.root, rf, &r.topic_files, &r.terms_list, led).1);
+    let shown = (views.neighbours).then(|| plan::load_shown_with(rf, &r.terms_list, led, &r.index().planning));
     for (i, sec) in rf.sections.iter().enumerate() {
         let st = status::question_status(led, sec);
-        let version = (st == QuestionStatus::Asked && view::asked_text_stands(led, rf, sec))
-            .then(|| record::version_of(&rf.lines, sec));
         let change = changes.questions.get(i).and_then(Option::as_ref);
-        lines.push(change_status(
-            &sec.heading_text,
-            Status::Question { status: st, letter: sec.answer_letter(), version },
-            change,
-        ));
+        lines.push(change_status(&sec.heading_text, question_status_of(led, rf, sec), change));
         match change {
-            Some(change) => lines.extend(change_lines(change, &r.names)),
-            None => {
-                let (refs, body) = reference_and_body(&approval::question_lines(rf, sec));
-                let body = if st == QuestionStatus::Asked { body } else { Vec::new() };
-                lines.extend(refs.iter().chain(&body).map(|l| Line::Record { depth: 1, text: named(l, &r.names) }));
-            }
+            Some(change) => lines.extend(change_lines(change, Some(&format!("### {}", sec.heading_text)), &r.names)),
+            None => lines.extend(reference_and_body_lines(&approval::question_lines(rf, sec), st, &r.names)),
         }
         if views.neighbours && matches!(st, QuestionStatus::NoBody | QuestionStatus::NotAsked | QuestionStatus::Asked) {
             if let Some(q) = shown.as_ref().and_then(|p| p.questions.iter().find(|q| q.heading == sec.heading_text)) {
                 lines.extend(
-                    plan::neighbour_lines(&rf.rel, q)
+                    plan::neighbour_lines(q)
                         .into_iter()
                         .map(|l| Line::Record { depth: 1, text: l.trim_start().to_string() }),
                 );
@@ -434,12 +478,56 @@ fn topic_file(r: &Records, rf: &RecordFile, views: Views) -> Vec<Line> {
             lines.extend(stood_on_lines(r, rf, sec, st));
         }
     }
+    if changes.struck_unsure {
+        lines.push(Line::Record { depth: 0, text: msg::show_struck_unsure() });
+    }
     for (heading, change) in &changes.struck {
-        lines.push(change_status(heading, Status::File(change.status), Some(change)));
-        lines.extend(change_lines(change, &r.names));
+        // An identifier stands for a struck question whose approved text no
+        // commit holds: turned back into the heading its asked row carries.
+        let subject = names_of(heading, &r.names);
+        lines.push(change_status(&subject, Status::File(change.status), Some(change)));
+        lines.extend(change_lines(change, Some(&format!("### {}", heading)), &r.names));
     }
     lines.extend(out::report(&topic_file_report(r, rf)));
     lines
+}
+
+/// The status of a question as a status line names it: its status, the
+/// letter of an answer, the version of an asked question whose text stands
+/// as asked, or `changed since asked` for one edited since.
+fn question_status_of(led: &Ledger, rf: &RecordFile, sec: &Section) -> Status {
+    let st = status::question_status_in(led, rf, sec);
+    let version = (st == QuestionStatus::Asked).then(|| record::version_of(&rf.lines, sec));
+    Status::Question { status: st, letter: answer_letter(led, sec), version }
+}
+
+/// The letter of a question's standing answer: its `**Answer:**` line, or
+/// the ledger's latest `answered` row when the line is not written yet (an
+/// answer not yet committed, read from a committed version).
+fn answer_letter(led: &Ledger, sec: &Section) -> Option<char> {
+    sec.answer_letter().or_else(|| {
+        let id = sec.id.as_deref()?;
+        (status::question_status(led, sec) == QuestionStatus::Answered)
+            .then(|| led.latest_for_id("answered", id).and_then(|r| r.detail.chars().next()))
+            .flatten()
+    })
+}
+
+/// A question's reference lines with identifiers turned back into words,
+/// and its body when it is asked: what the file form prints under a
+/// question approved as it stands.
+fn reference_and_body_lines(qlines: &[String], st: QuestionStatus, names: &HashMap<String, String>) -> Vec<Line> {
+    let (refs, body) = reference_and_body(qlines);
+    let body = if st == QuestionStatus::Asked { body } else { Vec::new() };
+    refs.iter()
+        .map(|l| Line::Record { depth: 1, text: named(l, names) })
+        .chain(body.iter().map(|l| Line::Record { depth: 1, text: l.clone() }))
+        .collect()
+}
+
+/// `text` with an identifier turned back into the words it stands for.
+fn names_of(text: &str, names: &HashMap<String, String>) -> String {
+    named(text, names)
 }
 
 /// What stands on `sec`, and for a superseded question what replaced it.
@@ -544,13 +632,8 @@ fn removed_topic_file(r: &Records, rel: &str) -> Vec<Line> {
     if let Some(old) = rules::latest_approved_version(&r.root, rel, &r.led) {
         for sec in &old.sections {
             let st = status::question_status(&r.led, sec);
-            let version = (st == QuestionStatus::Asked && view::asked_text_stands(&r.led, &old, sec))
-                .then(|| record::version_of(&old.lines, sec));
-            lines.push(Line::Status {
-                subject: sec.heading_text.clone(),
-                status: Status::Question { status: st, letter: sec.answer_letter(), version },
-                mark: None,
-            });
+            lines.push(Line::Status { subject: sec.heading_text.clone(), status: question_status_of(&r.led, &old, sec), mark: None });
+            lines.extend(reference_and_body_lines(&approval::question_lines(&old, sec), st, &r.names));
         }
     }
     lines.extend(out::report(&removed_report(r, rel)));
@@ -563,11 +646,14 @@ fn removed_topic_file(r: &Records, rel: &str) -> Vec<Line> {
 fn terms_file(r: &Records, tf: &TermsFile, views: Views) -> Vec<Line> {
     let (st, report) = terms_report(r, tf);
     let mut lines = vec![file_status(repo::TERMS_PATH, st)];
-    let (entries, gone) = approval::terms_file(&r.root, tf, &r.led);
-    for (t, change) in tf.terms.iter().zip(&entries) {
+    let changes = approval::terms_file(&r.root, tf, &r.led);
+    if let Some(whole) = &changes.whole {
+        lines.extend(change_lines(whole, None, &r.names));
+    }
+    for (t, change) in tf.terms.iter().zip(&changes.entries) {
         lines.push(change_status(&t.name, Status::Term(status::term_status(&r.led, tf, t)), change.as_ref()));
         match change {
-            Some(change) => lines.extend(change_lines(change, &r.names)),
+            Some(change) => lines.extend(change_lines(change, Some(&format!("## {}", t.name)), &r.names)),
             None => lines.extend(
                 approval::entry_lines(tf, t)
                     .into_iter()
@@ -582,9 +668,9 @@ fn terms_file(r: &Records, tf: &TermsFile, views: Views) -> Vec<Line> {
             }
         }
     }
-    for (name, change) in &gone {
+    for (name, change) in &changes.gone {
         lines.push(change_status(name, Status::Term(status::TermStatus::Removed), Some(change)));
-        lines.extend(change_lines(change, &r.names));
+        lines.extend(change_lines(change, Some(&format!("## {}", name)), &r.names));
     }
     lines.extend(out::report(&report));
     lines
@@ -597,7 +683,7 @@ fn blame_file(r: &Records, bf: &blame::BlameFile) -> Vec<Line> {
     let (st, report) = blame_report(r, bf);
     let mut lines = vec![file_status(&bf.rel, st)];
     match approval::blame_file(&r.root, &bf.rel, &bf.lines, &r.led) {
-        Some(change) => lines.extend(change_lines(&change, &r.names)),
+        Some(change) => lines.extend(blame_change_lines(r, &change)),
         None => {
             if let Some(origin) = &bf.origin {
                 lines.push(Line::Record { depth: 1, text: format!("origin: {}", origin) });
@@ -617,6 +703,30 @@ fn blame_file(r: &Records, bf: &blame::BlameFile) -> Vec<Line> {
     }
     lines.extend(out::report(&report));
     lines
+}
+
+/// The lines of a blame file's change, marked, each row that names a
+/// question followed by that question's status as the approved form prints
+/// it: the owner reading a draft before `adr approve` sees which rows name
+/// an open question.
+fn blame_change_lines(r: &Records, change: &Change) -> Vec<Line> {
+    let (any_headings, known_ids) = blame::heading_ids(&r.topic_files);
+    let mut out = Vec::new();
+    if !change.baseline {
+        out.push(Line::Record { depth: 1, text: msg::show_no_baseline() });
+    }
+    for l in &change.lines {
+        let mut text = l.marked();
+        if l.side != Side::Removed {
+            if let Some((_, dest)) = l.text.split_once('\t') {
+                if let Some(s) = row_status(r, dest, &any_headings, &known_ids) {
+                    text = format!("{} [{}]", text, s);
+                }
+            }
+        }
+        out.push(Line::Record { depth: 1, text: named(&text, &r.names) });
+    }
+    out
 }
 
 /// The status of the question a blame row names (a `decision:` row, or a

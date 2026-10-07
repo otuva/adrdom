@@ -1,3 +1,4 @@
+use crate::rules::Rule;
 use super::Failure;
 use crate::ledger::Ledger;
 use crate::msg;
@@ -25,8 +26,12 @@ pub(super) fn check_answers(
         // The rules on each question's answer or refusal, the judgement
         // approve, ask, show and plan read (`rules::closed_findings`).
         for f in crate::rules::closed_findings(&rf.rel, rf, led) {
-            out.push(Failure { check: "answers", message: f.message });
+            out.push(Failure::new(Rule::Answers, f.message));
         }
+        // The file's report, judged once for every question of it edited
+        // after asking: the moves a refusal's line names are the file's, the
+        // same for each of them.
+        let file_report = std::cell::OnceCell::new();
         for (ti, sec) in rf.sections.iter().enumerate() {
             let Some(id) = &sec.id else { continue };
             let cur = record::section_hash(&rf.lines, sec);
@@ -42,14 +47,14 @@ pub(super) fn check_answers(
             if asked_open {
                 if let Some(latest_asked_hash) = led.latest_asked(id).map(|r| r.hash.clone()) {
                     if latest_asked_hash != cur {
-                        let loaded = as_loaded.iter().find(|f| f.rel == rf.rel).unwrap_or(rf);
-                        let index = index.get_or_init(|| crate::rules::RepoIndex::new_via(root, as_loaded, terms_list, led, source));
-                        let j = crate::moves::Judging { root, all: as_loaded, terms_list, led, index };
-                        let moves = crate::moves::of_unasked_question_in(&j, loaded, &sec.heading_text, false);
-                        out.push(Failure {
-                            check: "answers",
-                            message: msg::edited_after_asking(&rf.rel, &sec.heading_text, &moves),
+                        let moves = file_report.get_or_init(|| {
+                            let loaded = as_loaded.iter().find(|f| f.rel == rf.rel).unwrap_or(rf);
+                            let index =
+                                index.get_or_init(|| crate::rules::RepoIndex::new_via(root, as_loaded, terms_list, led, source));
+                            let j = crate::moves::Judging { root, all: as_loaded, terms_list, led, index };
+                            crate::moves::of_unasked_question_in(&j, loaded, &sec.heading_text, false)
                         });
+                        out.push(Failure::new(Rule::Answers, msg::edited_after_asking(&rf.rel, &sec.heading_text, moves)));
                     }
                 }
             }
@@ -107,10 +112,7 @@ fn check_frozen_sets(
             None => record::sha256_hex(&format!("{}=", dep_id)),
         };
         if expected != row.hash {
-            out.push(Failure {
-                check: "answers",
-                message: msg::answer_set_changed(&rf.rel, &dep_heading, &sec.heading_text),
-            });
+            out.push(Failure::new(Rule::Answers, msg::answer_set_changed(&rf.rel, &dep_heading, &sec.heading_text)));
         }
     }
     out

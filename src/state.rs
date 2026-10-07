@@ -21,6 +21,50 @@ pub fn rel_path(root: &Path, path: &Path) -> String {
     parts.join("/")
 }
 
+/// A path a command was given, from the repository root: read the way the
+/// shell that ran the command reads it (relative to the current directory
+/// unless absolute, `.` and `..` resolved), `None` when it lies outside the
+/// repository. What `show`, `plan`, `ask` and `approve` read a path
+/// argument by, so `cd adrdom/decisions && adr ask gate.md` names the file
+/// every other spelling names.
+pub fn given_rel(root: &Path, file: &Path) -> Option<String> {
+    let abs = if file.is_absolute() {
+        file.to_path_buf()
+    } else {
+        std::env::current_dir().map(|d| d.join(file)).unwrap_or_else(|_| root.join(file))
+    };
+    let normal = lexical(&abs);
+    let root_abs = lexical(&std::path::Path::new(std::path::MAIN_SEPARATOR_STR).join(root));
+    // A root reached through a link (the current directory canonical, the
+    // root as found, or the other way round) still holds its files.
+    let inside = normal.strip_prefix(&root_abs).ok().map(Path::to_path_buf).or_else(|| {
+        let canon_root = std::fs::canonicalize(root).ok()?;
+        let canon_parent = abs.parent().and_then(|p| std::fs::canonicalize(p).ok())?;
+        let canon = canon_parent.join(abs.file_name()?);
+        canon.strip_prefix(&canon_root).ok().map(Path::to_path_buf)
+    })?;
+    Some(rel_path(Path::new(""), &inside))
+}
+
+/// `path` with `.` dropped and `..` resolved against the component before
+/// it, text only.
+fn lexical(path: &Path) -> std::path::PathBuf {
+    let mut parts: Vec<std::ffi::OsString> = Vec::new();
+    for comp in path.components() {
+        match comp {
+            Component::ParentDir => {
+                parts.pop();
+            }
+            Component::CurDir => {}
+            Component::Normal(p) => parts.push(p.to_os_string()),
+            Component::RootDir | Component::Prefix(_) => parts.clear(),
+        }
+    }
+    let mut normal = std::path::PathBuf::from(std::path::MAIN_SEPARATOR_STR);
+    normal.extend(parts);
+    normal
+}
+
 /// True when `hash` matches the latest ledger row for `event`/`rel`: the
 /// comparison `plan_approved`/`context_approved` make, factored out so a
 /// caller that already holds the hash -- computed from the file exactly as
@@ -260,18 +304,13 @@ pub fn terms_edit_entries(led: &Ledger, tf: &TermsFile) -> Vec<String> {
     if terms_approved(led, tf) {
         return Vec::new();
     }
-    let catch_up = !led.rows.iter().any(|r| r.event == "term")
-        && led.latest_for_path("terms", crate::repo::TERMS_PATH).is_some();
-    let mut out: Vec<String> = Vec::new();
-    for t in &tf.terms {
-        let differs = match t.id.as_deref().and_then(|id| led.latest_for_id("term", id)) {
-            Some(r) => r.hash != terms::term_hash(t),
-            None => !catch_up,
-        };
-        if differs {
-            out.push(t.name.clone());
-        }
-    }
+    use crate::status::TermStatus;
+    let mut out: Vec<String> = tf
+        .terms
+        .iter()
+        .filter(|t| matches!(crate::status::term_status(led, tf, t), TermStatus::New | TermStatus::Changed))
+        .map(|t| t.name.clone())
+        .collect();
     out.extend(removed_terms(led, tf).into_iter().map(|(_, name)| name));
     out
 }

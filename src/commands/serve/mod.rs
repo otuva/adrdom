@@ -4,6 +4,7 @@
 mod html;
 mod pages;
 
+use crate::rules::Rule;
 use crate::actions;
 use crate::msg::{self, Actor};
 use crate::out::{self, Line};
@@ -14,14 +15,14 @@ use tiny_http::{Header, Method, Request, Response, Server};
 
 pub fn run(port: u16) -> i32 {
     if !repo::owner_authorized() {
-        out::eprint_stop("serve", &msg::owner_refusal("serve", &["--port", &port.to_string()]));
+        out::eprint_stop(Rule::Serve, &msg::owner_refusal("serve", &["--port", &port.to_string()]));
         return 2;
     }
 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint_stop("serve", &msg::not_a_repo("serve", &["--port", &port.to_string()], Actor::Owner));
+            out::eprint_stop(Rule::Serve, &msg::not_a_repo("serve", &["--port", &port.to_string()], Actor::Owner));
             return 1;
         }
     };
@@ -29,7 +30,7 @@ pub fn run(port: u16) -> i32 {
     let server = match Server::http(("127.0.0.1", port)) {
         Ok(s) => s,
         Err(e) => {
-            out::eprint(&out::stop("serve", &msg::bind_failed(port, e)));
+            out::eprint(&out::stop(Rule::Serve, &msg::bind_failed(port, e)));
             return 1;
         }
     };
@@ -50,10 +51,12 @@ pub fn run(port: u16) -> i32 {
     // printed once per start.
     out::print(&[Line::Record { depth: 0, text: format!("open: http://127.0.0.1:{}/?t={}", bound_port, token) }]);
 
-    // What the last act printed, shown once on the page it leads to.
-    let mut last: Vec<Line> = Vec::new();
+    // What each act printed, kept under a key of its own that its redirect
+    // carries, and shown once on the page that redirect leads to: two tabs
+    // never read each other's lines.
+    let mut acts = Acts::default();
     for request in server.incoming_requests() {
-        handle(request, &root, &token, &mut last);
+        handle(request, &root, &token, &mut acts);
     }
 
     0
@@ -61,13 +64,47 @@ pub fn run(port: u16) -> i32 {
 
 // --- request handling -----------------------------------------------------
 
+/// The lines of the acts not yet shown, each under the key its redirect
+/// carries (`?r=<key>`), the oldest dropped past `Acts::KEEP`.
+#[derive(Default)]
+struct Acts {
+    held: Vec<(String, Vec<Line>)>,
+}
+
+impl Acts {
+    const KEEP: usize = 16;
+
+    /// Keeps `lines` and returns the key that reads them back.
+    fn keep(&mut self, lines: Vec<Line>) -> String {
+        let key = uuid::Uuid::new_v4().simple().to_string();
+        self.held.push((key.clone(), lines));
+        if self.held.len() > Self::KEEP {
+            self.held.remove(0);
+        }
+        key
+    }
+
+    /// The lines kept under `key`, once.
+    fn take(&mut self, key: Option<&String>) -> Vec<Line> {
+        let Some(key) = key else { return Vec::new() };
+        match self.held.iter().position(|(k, _)| k == key) {
+            Some(i) => self.held.remove(i).1,
+            None => Vec::new(),
+        }
+    }
+}
+
+/// The most of a request's body the page reads: a form of its own is a few
+/// hundred bytes.
+const BODY_LIMIT: u64 = 64 * 1024;
+
 enum Reply {
     Html(u16, String),
     Redirect(String, Option<String>),
     Status(u16),
 }
 
-fn handle(mut request: Request, root: &Path, token: &str, last: &mut Vec<Line>) {
+fn handle(mut request: Request, root: &Path, token: &str, acts: &mut Acts) {
     let method = request.method().clone();
     let raw_url = request.url().to_string();
     let (path, query_string) = split_path_query(&raw_url);
@@ -79,15 +116,6 @@ fn handle(mut request: Request, root: &Path, token: &str, last: &mut Vec<Line>) 
     }
 
     let cookie_token = cookie_value(request.headers(), "adr_t");
-
-    let body = if method == Method::Post {
-        let mut s = String::new();
-        let _ = request.as_reader().read_to_string(&mut s);
-        s
-    } else {
-        String::new()
-    };
-    let form = parse_form(&body);
 
     // GET with a matching `?t=` token: set the cookie and redirect to the
     // same path with `t` stripped out of the query string.
@@ -104,31 +132,45 @@ fn handle(mut request: Request, root: &Path, token: &str, last: &mut Vec<Line>) 
         }
     }
 
+    // The cookie first: a request without it is refused before a byte of
+    // its body is read.
     let cookie_ok = cookie_token.as_deref().is_some_and(|c| token_eq(c, token));
     if !cookie_ok {
         send(request, Reply::Html(403, html::forbidden_page()));
         return;
     }
+    let body = if method == Method::Post {
+        if request.body_length().is_some_and(|n| n as u64 > BODY_LIMIT) {
+            send(request, Reply::Status(413));
+            return;
+        }
+        let mut s = String::new();
+        let _ = std::io::Read::read_to_string(&mut std::io::Read::take(request.as_reader(), BODY_LIMIT), &mut s);
+        s
+    } else {
+        String::new()
+    };
+    let form = parse_form(&body);
     if method == Method::Post && !form.get("t").is_some_and(|t| token_eq(t, token)) {
         send(request, Reply::Html(403, html::forbidden_page()));
         return;
     }
 
     let reply = match (method, path.as_str()) {
-        (Method::Get, "/") => Reply::Html(200, pages::overview(root, &std::mem::take(last), token)),
-        (Method::Get, "/next") => Reply::Html(200, pages::questions(root, &std::mem::take(last), token)),
-        (Method::Get, "/terms") => Reply::Html(200, pages::terms(root, &std::mem::take(last), token)),
+        (Method::Get, "/") => Reply::Html(200, pages::overview(root, &acts.take(query.get("r")), token)),
+        (Method::Get, "/next") => Reply::Html(200, pages::questions(root, &acts.take(query.get("r")), token)),
+        (Method::Get, "/terms") => Reply::Html(200, pages::terms(root, &acts.take(query.get("r")), token)),
         (Method::Post, "/approve") => {
-            *last = handle_approve(root, &form);
-            Reply::Redirect("/".to_string(), None)
+            let key = acts.keep(handle_approve(root, &form));
+            Reply::Redirect(format!("/?r={}", key), None)
         }
         (Method::Post, "/answer") => {
-            *last = handle_answer(root, &form);
-            Reply::Redirect("/next".to_string(), None)
+            let key = acts.keep(handle_answer(root, &form));
+            Reply::Redirect(format!("/next?r={}", key), None)
         }
         (Method::Post, "/unban") => {
-            *last = handle_unban(root, &form);
-            Reply::Redirect("/".to_string(), None)
+            let key = acts.keep(handle_unban(root, &form));
+            Reply::Redirect(format!("/?r={}", key), None)
         }
         _ => Reply::Html(404, html::simple_page("Not found", "<p>Not found.</p>")),
     };
@@ -169,7 +211,7 @@ fn header(name: &str, value: &str) -> Header {
 
 /// The lines an act prints: one per event it wrote, or the findings that
 /// stopped it, as the command `cmd` prints them in the terminal.
-fn act_lines(cmd: &'static str, result: Result<actions::Outcome, String>) -> Vec<Line> {
+fn act_lines(cmd: crate::rules::Rule, result: Result<actions::Outcome, String>) -> Vec<Line> {
     match result {
         Ok(o) => o
             .events
@@ -183,7 +225,7 @@ fn act_lines(cmd: &'static str, result: Result<actions::Outcome, String>) -> Vec
 
 fn handle_approve(root: &Path, form: &HashMap<String, String>) -> Vec<Line> {
     let file = form.get("file").cloned().unwrap_or_default();
-    act_lines("approve", actions::do_approve(root, &root.join(&file)))
+    act_lines(Rule::Approve, actions::do_approve(root, &root.join(&file)))
 }
 
 fn handle_answer(root: &Path, form: &HashMap<String, String>) -> Vec<Line> {
@@ -198,7 +240,7 @@ fn handle_answer(root: &Path, form: &HashMap<String, String>) -> Vec<Line> {
 
     // The Refuse button posts `answer=refuse`; everything else is a letter.
     if value == "refuse" {
-        return act_lines("answer", actions::do_refuse(root, &id, &version));
+        return act_lines(Rule::Answer, actions::do_refuse(root, &id, &version));
     }
     // Same letter parsing the CLI uses (`actions::parse_letter`), so a
     // lowercase or multi-character selection refuses the same way here as
@@ -206,15 +248,15 @@ fn handle_answer(root: &Path, form: &HashMap<String, String>) -> Vec<Line> {
     // all -- never happens from this page's own form) keeps its own
     // message, since there is nothing malformed to name.
     match actions::parse_letter(&value) {
-        Some(letter) => act_lines("answer", actions::do_answer(root, &id, &version, letter)),
-        None if value.is_empty() => out::stop("answer", &msg::missing_answer_selection(&id, &version)),
-        None => out::stop("answer", &msg::invalid_letter(&value, &format!("{}@{}", id, version))),
+        Some(letter) => act_lines(Rule::Answer, actions::do_answer(root, &id, &version, letter)),
+        None if value.is_empty() => out::stop(Rule::Answer, &msg::missing_answer_selection(&id, &version)),
+        None => out::stop(Rule::Answer, &msg::invalid_letter(&value, &format!("{}@{}", id, version))),
     }
 }
 
 fn handle_unban(root: &Path, form: &HashMap<String, String>) -> Vec<Line> {
     let lines = form.get("lines").cloned().unwrap_or_default();
-    act_lines("unban", actions::do_unban(root, &lines))
+    act_lines(Rule::Unban, actions::do_unban(root, &lines))
 }
 
 // --- small hand-rolled parsers/encoders (no extra crates) ---------------

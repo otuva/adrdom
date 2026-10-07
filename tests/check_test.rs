@@ -1744,7 +1744,7 @@ fn check_fails_an_asked_section_whose_terms_line_is_malformed() {
         text
     );
     assert!(
-        text.contains("agent re-asks so the terms line is written correctly"),
+        text.contains("malformed terms line; agent runs: adr ask adrdom/decisions/example.md"),
         "{}",
         text
     );
@@ -1819,7 +1819,7 @@ fn check_fails_an_asked_section_bound_to_a_retired_term() {
         text
     );
     assert!(
-        text.contains("agent re-asks so the terms line drops the retired term"),
+        text.contains("uses the retired term \"decision\"; agent runs: adr ask adrdom/decisions/example.md"),
         "an asked-only question bound to a retired term is still re-asked: {}",
         text
     );
@@ -1851,7 +1851,7 @@ fn check_fails_an_asked_section_with_no_terms_line() {
         text
     );
     assert!(
-        text.contains("agent re-asks so the terms line is written"),
+        text.contains("no terms line; agent runs: adr ask adrdom/decisions/example.md"),
         "an asked-only question with no terms line is still re-asked: {}",
         text
     );

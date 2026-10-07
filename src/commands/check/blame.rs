@@ -9,6 +9,7 @@
 //! awaiting approval, a failure on an approved one (per "What does check do
 //! with a fault on a file awaiting approval?"); the destinations resolve
 //! against the tree check reads.
+use crate::rules::Rule;
 use super::Failure;
 use crate::blame;
 use crate::ledger::Ledger;
@@ -51,35 +52,39 @@ pub(super) fn check_blame(
         let Some(content) = source.read(root, rel) else {
             // Present (it came from `list_under`) but unreadable as text:
             // its own failure, named, never silently skipped.
-            out.push(Failure {
-                check: "blame",
-                message: msg::blame_file_unreadable(rel),
-            });
+            out.push(Failure::new(Rule::Blame, msg::blame_file_unreadable(rel)));
             continue;
         };
         let bf = blame::parse(root.join(rel), rel.clone(), record::split_lines(&content));
 
         let st = blame::file_state(root, source, &bf, &content, records, led, &any_headings, &known_ids);
         for message in &st.failures {
-            out.push(Failure { check: "blame", message: message.clone() });
+            out.push(Failure::new(Rule::Blame, message.clone()));
         }
         let mut found: Vec<Finding> = st
             .shape
             .iter()
-            .map(|m| Finding::new("blame", m.clone()).about(rules::Subject::BlameFile(rel.clone())))
+            .map(|m| Finding::new(Rule::Blame, m.clone()).about(rules::Subject::BlameFile(rel.clone())))
             .collect();
+        // A row whose destination does not resolve: approve refuses it on a
+        // draft, so on an approved file its target went since (a term
+        // retired, a question dropped by an answer, a topic file removed by
+        // the owner). It is named with its move, and blocks no commit of
+        // the owner's own act: a note either way.
+        let mut destinations: Vec<Finding> = Vec::new();
         if let Some(origin_content) = &st.origin_content {
             found.extend(rules::judge_blame_coverage(&bf, origin_content.lines().count()));
             if let Some(origin) = &bf.origin {
                 if let Some(names) = &names {
-                    found.extend(rules::judge_blame_destinations_in(root, &bf, origin, names).0);
+                    destinations = rules::judge_blame_destinations_in(root, &bf, origin, names).0;
                 }
             }
         }
+        notes.extend(destinations);
         if st.awaiting {
             notes.extend(found);
         } else {
-            out.extend(found.into_iter().map(|f| Failure { check: "blame", message: f.message }));
+            out.extend(found.into_iter().map(|f| Failure::new(Rule::Blame, f.message)));
         }
     }
 

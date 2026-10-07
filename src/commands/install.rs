@@ -1,3 +1,4 @@
+use crate::rules::Rule;
 use crate::banned;
 use crate::commands::{deny_entries, OWNER_COMMANDS};
 use crate::moves::{command, Cmd};
@@ -91,7 +92,7 @@ pub fn run(claude: bool, codex: bool) -> i32 {
         Some(r) => r,
         None => {
             let words = install_words(claude, codex);
-            out::eprint_stop("install", &msg::not_a_repo("install", &words[2..], Actor::Agent));
+            out::eprint_stop(Rule::Install, &msg::not_a_repo("install", &words[2..], Actor::Agent));
             return 1;
         }
     };
@@ -105,7 +106,7 @@ pub fn run(claude: bool, codex: bool) -> i32 {
     match result {
         Ok(()) => 0,
         Err(stop) => {
-            out::eprint_stop("install", &stop);
+            out::eprint_stop(Rule::Install, &stop);
             1
         }
     }
@@ -140,9 +141,14 @@ fn install_all(root: &Path, claude: bool, codex: bool, events: &mut Vec<Event>) 
         events.extend(create_hook(root, rel, content).map_err(|e| msg::write_failed(rel, e, retry(cmd)))?);
     }
 
-    // Without this git runs none of the hooks written above.
-    if repo::git(root, &["config", "core.hooksPath", ".githooks"]).is_none() {
-        return Err(msg::hooks_path_failed("set", retry(cmd)));
+    // Without this git runs none of the hooks written above. A change of
+    // git's configuration is a write: one line, when it changes.
+    let hooks_path = repo::git(root, &["config", "core.hooksPath"]).map(|v| v.trim().to_string());
+    if hooks_path.as_deref() != Some(".githooks") {
+        if repo::git(root, &["config", "core.hooksPath", ".githooks"]).is_none() {
+            return Err(msg::hooks_path_failed("set", retry(cmd)));
+        }
+        events.push(Event::ConfigSet { key: "core.hooksPath".to_string(), value: ".githooks".to_string() });
     }
 
     events.extend(install_agents_md(root).map_err(|e| msg::update_failed("AGENTS.md", e, retry(cmd)))?);
@@ -186,9 +192,7 @@ fn create_if_missing(root: &Path, rel: &str) -> Result<Option<Event>, String> {
 fn create_hook(root: &Path, rel: &str, content: &str) -> Result<Option<Event>, String> {
     let path = root.join(rel);
     if let Ok(existing) = fs::read_to_string(&path) {
-        let existing_lines: Vec<&str> = existing.split('\n').collect();
-        let want_lines: Vec<&str> = content.split('\n').collect();
-        if crate::text::lines_match_trimmed(&existing_lines, &want_lines) {
+        if hook_is_current(&existing, content) {
             // Content current, but git runs a hook only when it is
             // executable (`repo::hook_is_executable`, the same test
             // `check` applies): repair the mode rather than leave a hook
@@ -254,12 +258,25 @@ fn write_whole(root: &Path, rel: &str, content: &str) -> Result<Option<Event>, S
 /// exactly (no trimming), and the end marker must come after the begin
 /// marker.
 pub(crate) fn find_markers(lines: &[&str]) -> Option<(usize, usize)> {
-    let begin = lines.iter().position(|l| *l == BRIEF_BEGIN)?;
+    // A marker line saved with a carriage return (a file with CRLF line
+    // ends) is the same marker: install, check and uninstall read it alike.
+    let is = |l: &str, marker: &str| l.trim_end_matches('\r') == marker;
+    let begin = lines.iter().position(|l| is(l, BRIEF_BEGIN))?;
     let end = lines[begin + 1..]
         .iter()
-        .position(|l| *l == BRIEF_END)
+        .position(|l| is(l, BRIEF_END))
         .map(|i| i + begin + 1)?;
     Some((begin, end))
+}
+
+/// Whether a hook file holding `existing` is the hook `content` install
+/// writes: the same lines, and no carriage return, since `sh` reads a CRLF
+/// hook's first line as a command that is not there and git cannot run it.
+/// The one comparison `install` and `check` judge a hook by.
+pub(crate) fn hook_is_current(existing: &str, content: &str) -> bool {
+    let existing_lines: Vec<&str> = existing.split('\n').collect();
+    let want_lines: Vec<&str> = content.split('\n').collect();
+    !existing.contains('\r') && crate::text::lines_match_trimmed(&existing_lines, &want_lines)
 }
 
 /// The marker lines plus the brief's own lines, in file order, as they

@@ -754,7 +754,7 @@ fn approve_refuses_a_text_depends_edit_in_a_superseded_section() {
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(
-        err.contains("\"1.1 Only question?\": answered; agent removes the edit"),
+        err.contains("\"1.1 Only question?\" is [superseded] and its depends line was edited; agent removes the edit"),
         "{}",
         err
     );

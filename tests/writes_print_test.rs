@@ -48,6 +48,13 @@ fn ledger_rows(dir: &Path) -> Vec<adr::ledger::Row> {
     adr::ledger::parse(&ledger_text(dir)).rows
 }
 
+/// Every question heading and term name by identifier, as the records hold
+/// them now.
+fn names_now(dir: &Path) -> std::collections::HashMap<String, String> {
+    let terms = adr::state::load_terms(dir).map(|tf| tf.terms).unwrap_or_default();
+    adr::actions::event_names(&adr::record::load_all(dir), &terms)
+}
+
 // Runs `act` and holds what it printed to the rows it appended: one line
 // per row, each the line of that row's event (an answer's line carries the
 // picked option's sentence after it). The place of a row in the ledger
@@ -57,10 +64,10 @@ fn prints_one_line_per_row(dir: &Path, act: impl FnOnce() -> Output) -> Output {
     // Names from before the act (a dropped question leaves the file) and
     // after it (approve gives a heading its identifier).
     let before = ledger_text(dir);
-    let mut names = adr::actions::event_names(dir);
+    let mut names = names_now(dir);
     let out = act();
     assert!(out.status.success(), "{}", stderr(&out));
-    names.extend(adr::actions::event_names(dir));
+    names.extend(names_now(dir));
     let after = ledger_text(dir);
     assert!(after.starts_with(&before), "the ledger is append-only");
     let appended = adr::ledger::parse(&after[before.len()..]).rows;

@@ -222,6 +222,14 @@ pub fn unrelated_entries(
     let mut i = 0;
     while i < pieces.len() {
         let mut chosen = i + 1;
+        // An identifier holds no comma: it is an entry of its own, and no
+        // longer join is tried (a line approve wrote holds identifiers
+        // alone, so it costs one look per entry, not one per pair).
+        if record::is_uuid(pieces[i].trim()) {
+            out.push(pieces[i].clone());
+            i = chosen;
+            continue;
+        }
         for j in (i + 2..=pieces.len()).rev() {
             if names_something(&pieces[i..j].join(", ")) {
                 chosen = j;
@@ -393,6 +401,12 @@ pub fn load_both(
     led: &Ledger,
 ) -> (Planning, Planning) {
     load_inner(rf, terms_list, led, &Shared::new(root, all, terms_list, led), true)
+}
+
+/// `load_shown` with what the run shares already read (`Shared`): what
+/// `show --neighbours` reads once per file.
+pub fn load_shown_with(rf: &RecordFile, terms_list: &[Term], led: &Ledger, shared: &Shared) -> Planning {
+    load_inner(rf, terms_list, led, shared, true).1
 }
 
 fn is_waiting(led: &Ledger, sec: &Section) -> bool {
@@ -600,13 +614,17 @@ impl Planning {
         self.questions.iter().flat_map(|q| self.lines_missing_of(q)).collect()
     }
 
+    /// One finding per neighbour on no line: a neighbour read at both steps
+    /// is named once.
     fn lines_missing_of(&self, q: &Question) -> Vec<String> {
-        q.heading_neighbours
-            .iter()
-            .chain(&q.body_neighbours)
-            .filter(|n| !n.on_line)
-            .map(|n| msg::plan_line_missing(&self.rel, &q.heading, n.kind.label(), &n.name))
-            .collect()
+        let mut out: Vec<String> = Vec::new();
+        for n in q.heading_neighbours.iter().chain(&q.body_neighbours).filter(|n| !n.on_line) {
+            let m = msg::plan_line_missing(&self.rel, &q.heading, n.kind.label(), &n.name);
+            if !out.contains(&m) {
+                out.push(m);
+            }
+        }
+        out
     }
 
     /// The rows missing at the step `adr plan` takes next: every heading's
@@ -634,11 +652,11 @@ impl Planning {
 /// with the reader's word, the agent's line and the reader's reason; and,
 /// for a question not yet asked that has no records, one line saying so. Nothing for an
 /// asked question with no records (planned before the records existed).
-pub fn neighbour_lines(rel: &str, q: &Question) -> Vec<String> {
+pub fn neighbour_lines(q: &Question) -> Vec<String> {
     let mut out = neighbour_lines_at(q, Step::Heading);
     out.extend(neighbour_lines_at(q, Step::Body));
-    if !q.asked && (!q.heading_done || (q.has_body && !q.body_done)) {
-        out.push(msg::show_no_records(rel));
+    if out.is_empty() && !q.asked {
+        out.push(msg::show_no_records());
     }
     out
 }

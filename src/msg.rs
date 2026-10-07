@@ -51,6 +51,11 @@ impl Next {
         Next(vec![(Actor::Owner, action.into())])
     }
 
+    /// `owner <action>, then runs: <command>`.
+    pub fn owner_then_runs(action: impl Into<String>, command: Cmd) -> Next {
+        Next(vec![(Actor::Owner, format!("{}, then runs: {}", action.into(), command))])
+    }
+
     pub fn owner_runs(command: Cmd) -> Next {
         Next(vec![(Actor::Owner, format!("runs: {}", command))])
     }
@@ -133,11 +138,15 @@ pub fn stdin_read_failed(next: Next) -> String {
 
 /// Standard output refused a line for a cause other than its reader going
 /// away (a full disk, a closed descriptor): what was printed is incomplete.
-pub fn stdout_write_failed(e: impl Display) -> String {
-    refuse(
-        format!("output: standard output cannot be written: {}", e),
-        Next::agent("frees the place standard output goes to and runs the command again"),
-    )
+/// `again` is the command line as it was run and `actor` who runs it: the
+/// owner for an owner command, else the agent.
+pub fn stdout_write_failed(e: impl Display, actor: Actor, again: Cmd) -> String {
+    let fix = "frees the place standard output goes to";
+    let next = match actor {
+        Actor::Agent => Next::agent_then_runs(fix, again),
+        Actor::Owner => Next::owner_then_runs(fix, again),
+    };
+    refuse(format!("output: standard output cannot be written: {}", e), next)
 }
 
 // --- repo.rs ----------------------------------------------------------------
@@ -427,9 +436,11 @@ pub fn no_depends_line_bare(heading: &str) -> String {
     )
 }
 
-pub fn frozen_depends_edited(rel: &str, heading: &str) -> String {
+/// A closed question's depends line edited: `st` is its status (answered,
+/// refused or superseded), named as the listing names it.
+pub fn frozen_depends_edited(rel: &str, heading: &str, st: crate::status::QuestionStatus) -> String {
     refuse(
-        format!("{}: \"{}\": answered", rel, heading),
+        format!("{}: \"{}\" is [{}] and its depends line was edited", rel, heading, st.name()),
         Next::agent("removes the edit"),
     )
 }
@@ -693,22 +704,11 @@ pub fn id_not_found_some_unread(id: &str, unread: &[String]) -> String {
     )
 }
 
-pub fn already_refused(heading: &str) -> String {
+/// The question `answer` was given is closed: its latest ledger state is
+/// `st`, an answer, a refusal, a supersede, a withdrawal or a drop.
+pub fn already_closed(heading: &str, st: crate::status::QuestionStatus) -> String {
     refuse(
-        format!(
-            "\"{}\" is already refused; show prints every question that waits for an answer",
-            heading
-        ),
-        Next::owner_runs(Cmd::fixed("adr show")),
-    )
-}
-
-pub fn already_answered(heading: &str) -> String {
-    refuse(
-        format!(
-            "\"{}\" is already answered; show prints every question that waits for an answer",
-            heading
-        ),
+        format!("\"{}\" is already {}; show prints every question that waits for an answer", heading, st.name()),
         Next::owner_runs(Cmd::fixed("adr show")),
     )
 }
@@ -734,41 +734,8 @@ pub fn not_in_asked_state(heading: &str, report: &crate::moves::Report) -> Strin
     format!("\"{}\" is edited since it was asked; {}", heading, report.tail())
 }
 
-/// The question's latest ledger state is `withdrawn`: it was struck from
-/// the plan, and `ask` never picks it up.
-pub fn already_withdrawn(heading: &str) -> String {
-    refuse(
-        format!(
-            "\"{}\" was withdrawn from the plan; show prints every question that waits for an answer",
-            heading
-        ),
-        Next::owner_runs(Cmd::fixed("adr show")),
-    )
-}
 
-/// The question's latest ledger state is `superseded`: a newer decision
-/// replaced it.
-pub fn already_superseded(heading: &str) -> String {
-    refuse(
-        format!(
-            "\"{}\" is already superseded; show prints every question that waits for an answer",
-            heading
-        ),
-        Next::owner_runs(Cmd::fixed("adr show")),
-    )
-}
 
-/// The question's latest ledger state is `dropped`: an answer whose set
-/// lacked its letter removed it, and its identifier never returns.
-pub fn already_dropped(heading: &str) -> String {
-    refuse(
-        format!(
-            "\"{}\" is already dropped; show prints every question that waits for an answer",
-            heading
-        ),
-        Next::owner_runs(Cmd::fixed("adr show")),
-    )
-}
 
 /// A question with a body that no `ask` has put to the owner.
 /// `report`: what the rules find in the question's file and its moves
@@ -867,40 +834,40 @@ pub fn invalid_version_format(version: &str) -> String {
     )
 }
 
-pub fn no_terms_line(id: &str, heading: &str) -> String {
-    refuse(
-        format!("{}: no terms line", named(id, Some(heading))),
-        Next::agent("re-asks"),
-    )
+/// The move that writes an asked question's terms line again: `ask` of its
+/// file, which rewrites the line in place.
+fn ask_again(rel: &str) -> Next {
+    Next::agent_runs(command(&["adr", "ask", rel]))
 }
 
-pub fn malformed_terms_line(id: &str, heading: &str) -> String {
-    refuse(
-        format!("{}: malformed terms line", named(id, Some(heading))),
-        Next::agent("re-asks"),
-    )
+pub fn no_terms_line(rel: &str, id: &str, heading: &str) -> String {
+    refuse(format!("{}: no terms line", named(id, Some(heading))), ask_again(rel))
+}
+
+pub fn malformed_terms_line(rel: &str, id: &str, heading: &str) -> String {
+    refuse(format!("{}: malformed terms line", named(id, Some(heading))), ask_again(rel))
 }
 
 /// `word` is the word of the question the gone term was named by.
-pub fn terms_line_names_gone_term(id: &str, heading: &str, uuid: &str, word: &str) -> String {
+pub fn terms_line_names_gone_term(rel: &str, id: &str, heading: &str, uuid: &str, word: &str) -> String {
     refuse(
         format!(
             "{}: terms line names term {} that no longer exists",
             named(id, Some(heading)),
             named(uuid, Some(word))
         ),
-        Next::agent("re-asks"),
+        ask_again(rel),
     )
 }
 
-pub fn terms_line_names_retired_term(id: &str, heading: &str, name: &str) -> String {
+pub fn terms_line_names_retired_term(rel: &str, id: &str, heading: &str, name: &str) -> String {
     refuse(
         format!(
             "{}: terms line names retired term \"{}\"",
             named(id, Some(heading)),
             name
         ),
-        Next::agent("re-asks"),
+        ask_again(rel),
     )
 }
 
@@ -955,6 +922,14 @@ pub fn depends_names_twice(rel: &str, dependent: &str, entry: &str) -> String {
     refuse(
         format!("{}: \"{}\": depends entry \"{}\" names what an earlier entry of the line names", rel, dependent, entry),
         Next::agent("removes the second entry from the depends line"),
+    )
+}
+
+/// A supersedes line naming one decision twice.
+pub fn supersedes_names_twice(rel: &str, heading: &str, entry: &str) -> String {
+    refuse(
+        format!("{}: \"{}\": supersedes entry \"{}\" names what an earlier entry of the line names", rel, heading, entry),
+        Next::agent("removes the second entry from the supersedes line"),
     )
 }
 
@@ -1214,8 +1189,23 @@ pub fn show_question_of(heading: &str, rel: &str) -> String {
 
 
 /// Under a question not yet asked: the reader has recorded nothing for it.
-pub fn show_no_records(rel: &str) -> String {
-    format!("    neighbours: no reader records yet; {}", crate::moves::clause(MoveKind::Plan { rel: rel.to_string() }).render())
+/// The move that reads them is the file's own (`moves::of_planning`), not
+/// computed here a second time.
+pub fn show_no_records() -> String {
+    "neighbours: no reader records yet".to_string()
+}
+
+/// Above the lines of a changed part whose approved text no commit holds:
+/// every line is shown as added, and why.
+pub fn show_no_baseline() -> String {
+    "the approved text is in no commit: every line shows as added".to_string()
+}
+
+/// Above the questions struck from a plan whose approved version no commit
+/// holds, when the ledger alone cannot tell which of them the latest plan
+/// held.
+pub fn show_struck_unsure() -> String {
+    "the approved plan is in no commit: every question approved for this file and gone from it is named, some may have left by an earlier approval".to_string()
 }
 
 // --- ask: the lines of its summary ------------------------------------------
@@ -1269,6 +1259,12 @@ pub fn already_in_use() -> String {
         "refusing: already in use".to_string(),
         Next::agent("removes the word from the repository first, or bans a different word"),
     )
+}
+
+/// One place a word `ban` was given already stands: its file and line,
+/// with the move that clears it, as check names a banned word's place.
+pub fn in_use_at(location: &str, again: Cmd) -> String {
+    refuse(format!("{}: holds a word given", location), Next::agent_then_runs("rewrites the line without the word", again))
 }
 
 // --- settings.json shape (install --claude / check / uninstall) -----------
@@ -1537,7 +1533,7 @@ pub fn section_no_terms_line(rel: &str, heading: &str, id: &str, answered: bool)
             rel, id
         ))
     } else {
-        Next::agent("re-asks so the terms line is written")
+        ask_again(rel)
     };
     refuse(format!("{}: {}: no terms line", rel, heading), next)
 }
@@ -1561,7 +1557,7 @@ pub fn section_terms_line_malformed(rel: &str, heading: &str, id: &str, answered
             rel, id
         ))
     } else {
-        Next::agent("re-asks so the terms line is written correctly")
+        ask_again(rel)
     };
     refuse(format!("{}: {}: malformed terms line", rel, heading), next)
 }
@@ -1585,7 +1581,7 @@ pub fn section_term_not_found(
             id
         ))
     } else {
-        Next::agent("re-asks so the terms line matches current terms")
+        ask_again(rel)
     };
     refuse(
         format!("{}: {}: term {} not found", rel, heading, named(uuid, Some(word))),
@@ -1603,7 +1599,7 @@ pub fn section_term_retired(rel: &str, heading: &str, name: &str, id: &str, answ
             id
         ))
     } else {
-        Next::agent("re-asks so the terms line drops the retired term")
+        ask_again(rel)
     };
     refuse(
         format!("{}: {}: uses the retired term \"{}\"", rel, heading, name),
@@ -1924,7 +1920,9 @@ pub fn ledger_since_unreadable(commit: &str) -> String {
 pub fn ledger_same_time_competition(time: &str, subject: &str) -> String {
     refuse(
         format!("two ledger rows at {} compete for {}", time, subject),
-        Next::agent("runs the command again, so it writes a later row that stands"),
+        // No one command wrote both: the act whose row is to stand is made
+        // once more, and its later row settles which stands.
+        Next::agent("names to the owner the act that wrote the row to stand; that act made once more writes a later row that stands"),
     )
 }
 
@@ -2222,7 +2220,7 @@ pub fn blame_file_unreadable(rel: &str) -> String {
 pub fn blame_hash_failed(rel: &str, origin: &str) -> String {
     refuse(
         format!("{}: git could not hash the current content of {}", rel, origin),
-        Next::agent(format!("retries; git must be able to read and hash {}", origin)),
+        Next::agent_then_runs(format!("makes git able to read and hash {}", origin), Cmd::fixed("adr check")),
     )
 }
 
@@ -2265,6 +2263,12 @@ pub fn untested(rel: &str, heading: &str, id: &str, mv: &str) -> String {
 
 /// A topic file `check` cannot read: a `parse` finding.
 pub fn topic_file_unreadable(path: &str, e: impl Display) -> String {
+    file_unreadable(path, e)
+}
+
+/// A file of the records that exists and cannot be read as text: a topic
+/// file, or adrdom/terms.md.
+pub fn file_unreadable(path: &str, e: impl Display) -> String {
     refuse(
         format!("{}: cannot be read: {}", path, e),
         Next::agent("fixes the file so it can be read as text (e.g. its encoding)"),
@@ -2383,7 +2387,7 @@ pub fn model_missing() -> String {
 pub fn model_load_failed(cache: &str, e: impl Display) -> String {
     refuse(
         format!("model: cannot load the embedding model from {}: {}", cache, e),
-        Next::agent("fetches the model by checking the network and the cache directory, then retries, or runs it on another machine"),
+        Next::agent("checks the network and the cache directory, then runs the same adr command again, or runs it on another machine"),
     )
 }
 
@@ -2404,10 +2408,12 @@ pub fn reader_missing() -> String {
 
 /// The reader gave no usable word for a pair of texts; nothing of that
 /// call is kept.
+/// The reader's own error is flattened to one line: a stack trace of
+/// several lines never runs into the move.
 pub fn reader_failed(neighbour: &str, e: impl Display) -> String {
     refuse(
-        format!("reader: no word for the neighbour {}: {}", neighbour, e),
-        Next::agent("retries; if it persists, runs it on another machine"),
+        format!("reader: no word for the neighbour {}: {}", neighbour, crate::reader::flatten(&e.to_string())),
+        Next::agent("runs the same adr command again; if the error stays, runs it on another machine"),
     )
 }
 
@@ -2536,7 +2542,7 @@ mod tests {
             term_definition_term_not_found("term", "uuid-1", "word"),
             term_definition_term_retired("term", "retired-term"),
             term_definition_terms_line_malformed("term"),
-            frozen_depends_edited("x.md", "heading"),
+            frozen_depends_edited("x.md", "heading", crate::status::QuestionStatus::Answered),
             dep_not_current_decision("x.md", "heading", "id-1", Some("name")),
             dep_retired_term_id("x.md", "heading", "id-1", Some("name")),
             dep_no_term("x.md", "heading", "widget"),
@@ -2567,24 +2573,24 @@ mod tests {
             derive_error("x.md", &DeriveError::SelfDep("heading".to_string())),
             answered_id_missing("id-1", "heading"),
             id_not_found("id-1"),
-            already_refused("heading"),
-            already_answered("heading"),
+            already_closed("heading", crate::status::QuestionStatus::Refused),
+            already_closed("heading", crate::status::QuestionStatus::Answered),
             letter_not_an_option('Z', "heading", &['A', 'B'], "id-1", "abcd1234"),
             not_in_asked_state("heading", &approve_x),
             answer_missing_version("id-1", None),
             answer_missing_version("id-1", Some(("heading", "12345678"))),
             stale_version("heading", "x.md"),
-            already_withdrawn("heading"),
-            already_superseded("heading"),
+            already_closed("heading", crate::status::QuestionStatus::Withdrawn),
+            already_closed("heading", crate::status::QuestionStatus::Superseded),
             not_asked_yet("heading", &approve_x),
             not_written("heading", &approve_x),
             dep_retired_term("x.md", "heading", "widget"),
             show_not_a_file_approve_takes("x.md"),
             invalid_version_format("Z0ZZZZZZ"),
-            no_terms_line("id-1", "heading"),
-            malformed_terms_line("id-1", "heading"),
-            terms_line_names_gone_term("id-1", "heading", "uuid-1", "word"),
-            terms_line_names_retired_term("id-1", "heading", "term"),
+            no_terms_line("x.md", "id-1", "heading"),
+            malformed_terms_line("x.md", "id-1", "heading"),
+            terms_line_names_gone_term("x.md", "id-1", "heading", "uuid-1", "word"),
+            terms_line_names_retired_term("x.md", "id-1", "heading", "term"),
             plan_not_approved("x.md", FileStatus::New, &approve_x),
             context_not_approved("x.md", FileStatus::New, &approve_x),
             missing_answer_set("x.md", "dependent", "target"),
@@ -2693,6 +2699,16 @@ mod tests {
             blame_file_unreadable("adrdom/blame/x.md"),
             blame_hash_failed("adrdom/blame/x.md", "docs/x.md"),
             blame_origin_unreadable("adrdom/blame/x.md", "docs/x.md"),
+            // Added with the one-printer build: each names its move too.
+            already_closed("heading", crate::status::QuestionStatus::Dropped),
+            in_use_at("x.md:3", command(&["adr", "ban"])),
+            supersedes_names_twice("x.md", "heading", "entry"),
+            depends_names_twice("x.md", "heading", "entry"),
+            stdout_write_failed(e, Actor::Owner, command(&["adr", "approve", "x.md"])),
+            stdout_write_failed(e, Actor::Agent, command(&["adr", "show"])),
+            file_unreadable("adrdom/terms.md", e),
+            plan_not_a_topic_file("adrdom/terms.md"),
+            no_terms_line("x.md", "id-1", "heading"),
         ];
         for o in &outputs {
             assert!(

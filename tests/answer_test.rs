@@ -1132,7 +1132,7 @@ fn answer_refuses_a_section_with_no_terms_line() {
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
-        format!("answer: {} (\"1.1 What is the authority?\"): no terms line; agent re-asks", id)
+        format!("answer: {} (\"1.1 What is the authority?\"): no terms line; agent runs: adr ask adrdom/decisions/example.md", id)
     );
 }
 
@@ -1186,7 +1186,7 @@ fn answer_refuses_a_malformed_terms_line() {
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
-        format!("answer: {} (\"1.1 What is the unit of authority called?\"): malformed terms line; agent re-asks", id)
+        format!("answer: {} (\"1.1 What is the unit of authority called?\"): malformed terms line; agent runs: adr ask adrdom/decisions/example.md", id)
     );
 }
 
@@ -1216,7 +1216,7 @@ fn answer_refuses_a_terms_line_naming_a_nonexistent_term() {
     assert_eq!(
         stderr(&out).trim_end(),
         format!(
-            "answer: {} (\"1.1 What is the unit of authority called?\"): terms line names term 00000000-0000-0000-0000-000000000000 (\"authority\") that no longer exists; agent re-asks",
+            "answer: {} (\"1.1 What is the unit of authority called?\"): terms line names term 00000000-0000-0000-0000-000000000000 (\"authority\") that no longer exists; agent runs: adr ask adrdom/decisions/example.md",
             id
         )
     );
@@ -1248,7 +1248,7 @@ fn answer_refuses_a_terms_line_naming_a_retired_term() {
     assert_eq!(
         stderr(&out).trim_end(),
         format!(
-            "answer: {} (\"1.1 What is the unit of authority called?\"): terms line names retired term \"authority\"; agent re-asks",
+            "answer: {} (\"1.1 What is the unit of authority called?\"): terms line names retired term \"authority\"; agent runs: adr ask adrdom/decisions/example.md",
             id
         )
     );
@@ -1558,16 +1558,19 @@ fn answer_on_a_withdrawn_question_says_withdrawn_not_edited() {
     let out = adr_owner(&dir, &["answer", &format!("{}@{}", id, version), "A"], "");
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("was withdrawn from the plan; show prints"), "{}", err);
+    assert!(err.contains("is already withdrawn; show prints"), "{}", err);
     assert!(err.contains("owner runs: adr show"), "{}", err);
     assert!(!err.contains("adr ask"), "{}", err);
 }
 
-// A letter that names no option is refused before the version is even
-// compared: an answer with both a stale version and a bad letter hears
-// about the letter, so fixing the version never uncovers a second refusal.
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// The version is judged before the letter: an answer with both a stale
+// version and a bad letter hears about the version, whose move names the
+// current one, so the letter refusal it may meet next names a command that
+// runs as printed.
 #[test]
-fn answer_with_a_bad_letter_and_a_stale_version_is_refused_for_the_letter() {
+fn answer_with_a_bad_letter_and_a_stale_version_is_refused_for_the_version() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -1594,8 +1597,12 @@ fn answer_with_a_bad_letter_and_a_stale_version_is_refused_for_the_letter() {
     let out = adr_owner(&dir, &["answer", &stale_arg, "Z"], "");
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("letter Z does not name an option"), "{}", err);
-    assert!(!err.contains("has moved since that version was read"), "{}", err);
+    assert!(err.contains("has moved since that version was read"), "{}", err);
+    assert!(!err.contains("letter Z does not name an option"), "{}", err);
+    // With the current version the letter is the one fault left.
+    let current = format!("{}@{}", question_id, current_version(&dir, &question_id));
+    let out = adr_owner(&dir, &["answer", &current, "Z"], "");
+    assert!(stderr(&out).contains("letter Z does not name an option"), "{}", stderr(&out));
 }
 
 // adr: 11be073c-ce91-44d8-833a-ef0b5e0b1672

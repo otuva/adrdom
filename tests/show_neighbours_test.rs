@@ -94,12 +94,13 @@ fn reader_says(dir: &Path, heading: &str, heading_word: &str, body_word: &str) {
 fn show_prints_a_line_for_each_neighbour_with_both_words_and_the_agents_line() {
     let dir = repo();
     write_topic(&dir);
-    // Nothing is recorded for a question not yet planned: one line, with the move.
+    // Nothing is recorded for a question not yet planned: one line; the move
+    // that reads them is the file's own, printed once below.
     let shown = show(&dir, &NO_TOOLS);
     for h in [H1, H2] {
         assert_eq!(
             under(&shown, h).last().unwrap(),
-            &format!("neighbours: no reader records yet; agent runs: adr plan {}", REL),
+            "neighbours: no reader records yet",
             "{}",
             shown
         );

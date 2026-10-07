@@ -1,3 +1,4 @@
+use crate::rules::Rule;
 use super::Failure;
 use crate::rules::Finding;
 use crate::ledger::Ledger;
@@ -17,10 +18,12 @@ pub(super) fn check_ids(
     // Every identifier a topic file holds.
     let held: HashSet<&str> =
         records.iter().flat_map(|rf| rf.sections.iter().filter(|s| !s.is_skeleton).filter_map(|s| s.id.as_deref())).collect();
-    let mut ledger_ids: HashSet<String> = HashSet::new();
+    // In ledger order, each once: two runs print the same lines in the
+    // same order.
+    let mut ledger_ids: Vec<String> = Vec::new();
     for row in &led.rows {
-        if (row.event == "asked" || row.event == "answered") && row.id != "-" {
-            ledger_ids.insert(row.id.clone());
+        if (row.event == "asked" || row.event == "answered") && row.id != "-" && !ledger_ids.contains(&row.id) {
+            ledger_ids.push(row.id.clone());
         }
     }
 
@@ -55,7 +58,7 @@ pub(super) fn check_ids(
     for (_, rel) in &stale {
         struck.extend(crate::rules::struck_asked_ids(rel, sole, records, led).into_iter().map(|(id, _, _)| id));
         for f in crate::rules::struck_asked(rel, true, sole, records, led) {
-            out.push(Failure { check: f.rule, message: f.message });
+            out.push(Failure::new(f.rule, f.message));
         }
     }
 
@@ -110,26 +113,17 @@ pub(super) fn check_ids(
                 .latest_asked(&id)
                 .map(|r| r.detail.clone())
                 .unwrap_or_else(|| id.clone());
-            out.push(Failure {
-                check: "ids",
-                message: msg::removed_with_file(&id, &heading, event.unwrap_or("unknown"), crate::moves::removal_next(rel, holds)),
-            });
+            out.push(Failure::new(Rule::Ids, msg::removed_with_file(&id, &heading, event.unwrap_or("unknown"), crate::moves::removal_next(rel, holds))));
             continue;
         }
         if struck.contains(&id) {
             continue;
         }
-        out.push(Failure {
-            check: "ids",
-            message: msg::ledger_id_not_found(&id, led.latest_asked(&id).map(|r| r.detail.as_str())),
-        });
+        out.push(Failure::new(Rule::Ids, msg::ledger_id_not_found(&id, led.latest_asked(&id).map(|r| r.detail.as_str()))));
     }
 
     for r in missing_answered {
-        out.push(Failure {
-            check: "ids",
-            message: r.message.clone(),
-        });
+        out.push(Failure::new(Rule::Ids, r.message.clone()));
     }
 
     out

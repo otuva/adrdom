@@ -172,6 +172,10 @@ pub fn append(path: &Path, rows: &[Row]) -> std::io::Result<()> {
     Ok(())
 }
 
+/// The events that put a question in a state (`Ledger::latest_state`): the
+/// one list every reader of a question's state reads.
+pub const STATE_EVENTS: [&str; 6] = ["asked", "answered", "refused", "superseded", "withdrawn", "dropped"];
+
 impl Ledger {
     /// The latest row that puts an id in a state: `asked`, `answered`,
     /// `refused`, `superseded`, `withdrawn`, or `dropped` are all state rows;
@@ -179,13 +183,13 @@ impl Ledger {
     /// "Does answer remove a question whose answer set lacks the answer?"):
     /// the question left its file, asked or not, and never returns.
     pub fn latest_state(&self, id: &str) -> Option<&Row> {
-        self.rows.iter().rfind(|r| {
-            r.id == id
-                && matches!(
-                    r.event.as_str(),
-                    "asked" | "answered" | "refused" | "superseded" | "withdrawn" | "dropped"
-                )
-        })
+        self.rows.iter().rfind(|r| r.id == id && STATE_EVENTS.contains(&r.event.as_str()))
+    }
+
+    /// Every identifier a state row names, each once, sorted: the
+    /// questions the ledger holds a state for.
+    pub fn state_ids(&self) -> std::collections::BTreeSet<String> {
+        self.rows.iter().filter(|r| STATE_EVENTS.contains(&r.event.as_str())).map(|r| r.id.clone()).collect()
     }
 
     pub fn latest_asked(&self, id: &str) -> Option<&Row> {

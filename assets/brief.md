@@ -37,14 +37,18 @@ lines it carries, and the body of a question that waits for the owner's
 answer; what the file holds beyond its latest approval is printed marked,
 `+` for a line added and `-` for a line gone, and a question new or struck
 as a whole carries the mark on its own line too; then the findings and the
-moves of the file. `adr show --dependents <file>` also prints what stands
-on each question or term entry and what took the place of a question that
-was replaced. Each question opens with where it stands, in brackets:
+moves of the file. The file itself, a term entry and the prose open with
+their status in brackets: `[new]`, `[changed]`, `[approved]`, `[removed]`,
+and `[retired]` for a term. `adr show --dependents <file>` also prints what
+stands on each question or term entry and what took the place of a question
+that was replaced. Each question opens with where it stands, in brackets:
 
 - `[no body]`: a heading of the plan, its body not written.
 - `[not asked]`: the body is written, `adr ask` has not run on it.
 - `[asked @<version>]`: it waits for the owner's answer; the version is
   what the owner writes after the id in `adr answer`.
+- `[changed since asked]`: it was asked and its text was edited since;
+  `adr ask` puts it to the owner again.
 - `[answered A]`: a current decision, the owner picked option A.
 - `[refused]`: the owner ruled that it cannot be settled as asked.
 - `[superseded]`: a later decision took its place.
@@ -167,13 +171,14 @@ approval every heading has an `id:` line and the entries of its lines are
 ids.
 
 **Then run `adr ask <file>`.** It asks the questions and prints one line
-for each question it asked, or prints in one run everything that stops it,
-each line with the move that clears it. Make every move before you run it
-again. Commit, post your lean for each question in chat, post the
-`owner runs: adr answer ...` lines `adr show` prints, and stop. The owner
-puts a letter, or the word `refuse`, in place of `<letter>`. When the
-answer is not in a question's answer set, the answer removes that question
-and every question standing on it from the file.
+for each ledger row it writes: `asked:` for each question, and `assumes:`
+for a question that stands on another under an answer set; or it prints in
+one run everything that stops it, each line with the move that clears it.
+Make every move before you run it again. Commit, post your lean for each
+question in chat, post the `owner runs: adr answer ...` lines `adr show`
+prints, and stop. The owner puts a letter, or the word `refuse`, in place of
+`<letter>`. When the answer is not in a question's answer set, the answer
+removes that question and every question standing on it from the file.
 
 **After the answer.** If you wrote the question, stop: another agent builds
 its decision from the record alone. Build the decisions the moves name. Tie

@@ -837,11 +837,16 @@ fn install_prints_one_line_per_file_written_and_nothing_else() {
     let text = stdout(&out);
     assert!(!text.is_empty());
     for line in text.lines() {
+        // git's configuration set is a write of its own, one line.
+        if line == "set: core.hooksPath .githooks" {
+            continue;
+        }
         let path = line
             .strip_prefix("written: ")
             .unwrap_or_else(|| panic!("a line that names no file written: {:?} in {}", line, text));
         assert!(dir.join(path).is_file(), "{} is not a file: {}", path, text);
     }
+    assert!(text.lines().any(|l| l == "set: core.hooksPath .githooks"), "{}", text);
     let mut paths: Vec<&str> = text.lines().collect();
     paths.dedup();
     assert_eq!(paths.len(), text.lines().count(), "a file printed twice: {}", text);

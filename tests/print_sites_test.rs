@@ -283,7 +283,13 @@ fn no_move_says_retry_without_naming_the_command() {
     for (rel, text) in source_files() {
         for (n, line) in code_lines(&text) {
             for literal in string_literals(line) {
-                if ["checks the error", "checks the path", "and retries"].iter().any(|w| literal.contains(w)) {
+                // Run again by reference ("the same adr command again", the
+                // command the line leads with) names it; every other way of
+                // saying "try again" names nothing to run.
+                let vague = ["checks the error", "checks the path", "retries", "re-ask", "tries again", "the command again"]
+                    .iter()
+                    .any(|w| literal.contains(w));
+                if vague && !literal.contains("the same adr command again") {
                     found.push(format!("{}:{}: {}", rel, n, line.trim()));
                 }
             }

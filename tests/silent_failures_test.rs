@@ -47,7 +47,7 @@ fn show_refuses_a_topic_file_argument_it_cannot_read() {
     let out = adr(&dir, &["show", "adrdom/decisions/bad.md"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     assert!(
-        stderr(&out).starts_with("show: cannot read adrdom/decisions/bad.md: "),
+        stderr(&out).starts_with("show: adrdom/decisions/bad.md: cannot be read: "),
         "{}",
         stderr(&out)
     );

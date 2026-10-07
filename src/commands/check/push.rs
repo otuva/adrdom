@@ -7,6 +7,7 @@
 // this push's local sha; a push is not itself a commit to judge those
 // against).
 
+use crate::rules::Rule;
 use super::{stopped, Failure};
 use crate::msg::{self, Actor};
 use crate::out::{self, Line};
@@ -40,7 +41,7 @@ pub fn run() -> i32 {
     }
 
     let failed = !failures.is_empty();
-    let lines: Vec<Line> = failures.into_iter().map(|f| Line::Finding(f.finding())).collect();
+    let lines: Vec<Line> = failures.into_iter().map(Line::Finding).collect();
     out::print(&lines);
     if !failed {
         0
@@ -76,18 +77,15 @@ fn check_one_ref(root: &Path, line: &str) -> Vec<Failure> {
     }
 
     if !super::ledger::parent_object_present(root, remote_sha) {
-        return vec![Failure {
-            check: "ledger",
-            message: msg::ledger_push_remote_unreadable(remote_ref),
-        }];
+        return vec![Failure::new(Rule::Ledger, msg::ledger_push_remote_unreadable(remote_ref))];
     }
 
     // The ledger and the reader file are held the same way ("Does check hold
     // the reader's file as it holds the ledger?", 26c5352f-3f82-4376-9dc2-8ccc0074d080).
     let mut out = Vec::new();
-    let files: [(&str, &'static str, String); 2] = [
-        (repo::LEDGER_PATH, "ledger", msg::ledger_push_drops_rows(local_ref, remote_ref)),
-        (repo::READER_PATH, "reader", msg::reader_push_drops_rows(local_ref, remote_ref)),
+    let files: [(&str, crate::rules::Rule, String); 2] = [
+        (repo::LEDGER_PATH, Rule::Ledger, msg::ledger_push_drops_rows(local_ref, remote_ref)),
+        (repo::READER_PATH, Rule::Reader, msg::reader_push_drops_rows(local_ref, remote_ref)),
     ];
     for (path, check, message) in files {
         let Some(remote_content) = repo::git(root, &["show", &format!("{}:{}", remote_sha, path)]) else {
@@ -97,7 +95,7 @@ fn check_one_ref(root: &Path, line: &str) -> Vec<Failure> {
         let local_content = repo::git(root, &["show", &format!("{}:{}", local_sha, path)]).unwrap_or_default();
         let present: std::collections::HashSet<&str> = local_content.lines().collect();
         if super::ledger::lines_missing(&remote_content, &present) {
-            out.push(Failure { check, message });
+            out.push(Failure::new(check, message));
         }
     }
     out

@@ -1,3 +1,4 @@
+use crate::rules::Rule;
 use super::Failure;
 use crate::ledger::Ledger;
 use crate::rules::{Finding, Subject};
@@ -72,12 +73,10 @@ pub(super) fn check_tests(
 
     // Where each question sits: a line that names an identifier names the
     // question beside it, whatever its state.
-    let mut at: HashMap<&str, (&str, &str)> = HashMap::new();
     let mut place: HashMap<&str, (&RecordFile, usize)> = HashMap::new();
     for rf in records {
         for (i, s) in rf.sections.iter().enumerate() {
             if let Some(id) = &s.id {
-                at.insert(id.as_str(), (rf.rel.as_str(), s.heading_text.as_str()));
                 place.insert(id.as_str(), (rf, i));
             }
         }
@@ -96,9 +95,16 @@ pub(super) fn check_tests(
         if crate::state::conflicting_rulings(led, id).is_some() {
             continue;
         }
-        let mv = crate::moves::of_untested(rf, i, id);
+        // A file whose tiers do not derive has no tier to wait on yet: its
+        // own finding names the move, and `show` names no build for it;
+        // the untested line says so.
+        let mv = if rf.tiers.is_none() {
+            crate::moves::Move::new(crate::moves::MoveKind::BuildWaitsTiers { heading: rf.sections[i].heading_text.clone() })
+        } else {
+            crate::moves::of_untested(rf, i, id)
+        };
         notes.push(
-            Finding::new("untested", msg::untested(&rf.rel, &rf.sections[i].heading_text, id, &mv.text()))
+            Finding::new(Rule::Untested, msg::untested(&rf.rel, &rf.sections[i].heading_text, id, &mv.text()))
                 .about(Subject::TopicFile(rf.rel.clone()))
                 .in_section(i),
         );
@@ -108,10 +114,8 @@ pub(super) fn check_tests(
         test_ids.iter().filter(|(id, _)| !current.contains(*id)).collect();
     stale.sort();
     for (id, locations) in stale {
-        out.push(Failure {
-            check: "tested",
-            message: msg::stale_test(id, at.get(id.as_str()).map(|(_, h)| *h), locations),
-        });
+        let heading = place.get(id.as_str()).map(|&(rf, i)| rf.sections[i].heading_text.as_str());
+        out.push(Failure::new(Rule::Tested, msg::stale_test(id, heading, locations)));
     }
 
     (out, notes)

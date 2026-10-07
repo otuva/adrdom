@@ -1,3 +1,4 @@
+use crate::rules::Rule;
 use super::{file_approval, is_note, Failure};
 use crate::rules::{self, Finding};
 use crate::ledger::Ledger;
@@ -67,10 +68,10 @@ pub(super) fn check_plan(
         // of the file's judgement, computed once in `mod.rs`.
         let draft = awaiting.contains(&rel);
         for r in refs {
-            if r.rule != "plan" && r.rule != "plan_frozen" {
+            if r.rule != Rule::Plan && r.rule != Rule::PlanFrozen {
                 continue;
             }
-            push_plan(&mut out, &mut notes, is_note(rf, r, draft, led), r.message.clone());
+            push_rule(&mut out, &mut notes, is_note(rf, r, draft, led), r.rule, r.message.clone());
         }
 
         // Same heading twice in one file (8.3-adjacent): the cross-file
@@ -129,9 +130,15 @@ pub(super) fn check_plan(
 
 /// One plan finding: a note when `note`, a failure otherwise.
 fn push_plan(out: &mut Vec<Failure>, notes: &mut Vec<Failure>, note: bool, message: String) {
+    push_rule(out, notes, note, Rule::Plan, message);
+}
+
+/// One finding of the rule `rule`, filed under it as every command prints
+/// it: a note when `note`, a failure otherwise.
+fn push_rule(out: &mut Vec<Failure>, notes: &mut Vec<Failure>, note: bool, rule: crate::rules::Rule, message: String) {
     if note {
-        notes.push(Failure { check: "plan", message });
+        notes.push(Failure::new(rule, message));
     } else {
-        out.push(Failure { check: "plan", message });
+        out.push(Failure::new(rule, message));
     }
 }

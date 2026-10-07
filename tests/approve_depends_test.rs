@@ -906,7 +906,7 @@ fn approve_refuses_a_frozen_sections_depends_line_hand_edited_to_a_cross_file_he
     let out = adr_owner(&dir, &["approve", record_x.to_str().unwrap()], "");
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     assert!(
-        stderr(&out).contains("\"1.1 Does X stand on something?\": answered; agent removes the edit"),
+        stderr(&out).contains("\"1.1 Does X stand on something?\" is [answered] and its depends line was edited; agent removes the edit"),
         "{}",
         stderr(&out)
     );
@@ -920,7 +920,7 @@ fn approve_refuses_a_frozen_sections_depends_line_hand_edited_to_a_cross_file_he
 
     let check = adr(&dir, &["check"], &[], "");
     assert!(
-        stdout(&check).contains("\"1.1 Does X stand on something?\": answered; agent removes the edit"),
+        stdout(&check).contains("\"1.1 Does X stand on something?\" is [answered] and its depends line was edited; agent removes the edit"),
         "check must report the same frozen-edit refusal: {}",
         stdout(&check)
     );

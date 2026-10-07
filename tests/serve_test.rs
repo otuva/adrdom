@@ -282,7 +282,9 @@ fn post_answer_with_cookie_and_token_answers_and_redirects() {
     let form = format!("id={}&v={}&answer=A&t={}", question_id, version, token);
     let resp = post(port, "/answer", Some(&cookie), &form);
     assert_eq!(resp.status, 302, "body: {}", resp.body);
-    assert_eq!(header(&resp, "Location"), Some("/next"));
+    // The redirect carries the key of the act's lines: shown once, on the
+    // page it leads to.
+    assert!(header(&resp, "Location").is_some_and(|l| l.starts_with("/next?r=")), "{:?}", header(&resp, "Location"));
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(
@@ -1049,7 +1051,7 @@ fn post_approve_with_cookie_and_token_approves_terms_from_the_page() {
     let form = format!("file=adrdom/terms.md&t={}", token);
     let resp = post(port, "/approve", Some(&cookie), &form);
     assert_eq!(resp.status, 302, "body: {}", resp.body);
-    assert_eq!(header(&resp, "Location"), Some("/"));
+    assert!(header(&resp, "Location").is_some_and(|l| l.starts_with("/?r=")), "{:?}", header(&resp, "Location"));
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(
@@ -1099,7 +1101,7 @@ fn post_unban_with_cookie_and_token_removes_a_banned_phrase_from_the_page() {
     let form = format!("lines=forbiddenword&t={}", token);
     let resp = post(port, "/unban", Some(&cookie), &form);
     assert_eq!(resp.status, 302, "body: {}", resp.body);
-    assert_eq!(header(&resp, "Location"), Some("/"));
+    assert!(header(&resp, "Location").is_some_and(|l| l.starts_with("/?r=")), "{:?}", header(&resp, "Location"));
     let followed = follow(port, &resp, &cookie);
     assert!(
         page_lines(&followed.body).contains(&"unbanned: a word".to_string()),
@@ -1366,8 +1368,11 @@ fn page_shows_a_waiting_question_without_a_form_and_offers_it_once_unlocked() {
     let shown = cli_lines(&dir, &["show"]);
     assert!(shown.iter().any(|l| l.contains("waits for")), "{:?}", shown);
     assert_on_page(&shown, &overview.body);
-    assert!(overview.body.contains(&form_of(&q1_id)), "body: {}", overview.body);
+    // The overview links the owner's answer to /next, where the options
+    // stand beside the form: no answer form on it.
+    assert!(!overview.body.contains(&form_of(&q1_id)), "body: {}", overview.body);
     assert!(!overview.body.contains(&form_of(&q2_id)), "body: {}", overview.body);
+    assert!(overview.body.contains("href=\"/next\""), "body: {}", overview.body);
 
     let first = get(port, "/next", Some(&cookie));
     assert!(first.body.contains(&form_of(&q1_id)), "body: {}", first.body);
@@ -1411,7 +1416,7 @@ fn page_shows_no_form_for_an_edited_question() {
     let shown = get(port, "/next", Some(&cookie));
     assert!(!shown.body.contains(&form), "body: {}", shown.body);
     let lines = page_lines(&shown.body);
-    assert!(lines.contains(&"[asked] 1.1 What color is the widget?".to_string()), "{:#?}", lines);
+    assert!(lines.contains(&"[changed since asked] 1.1 What color is the widget?".to_string()), "{:#?}", lines);
     let file = cli_lines(&dir, &["show", "adrdom/decisions/example.md"]);
     let ask_move = file.iter().find(|l| l.starts_with("agent runs: adr ask ")).expect("the ask move");
     assert!(lines.contains(ask_move), "{:#?}", lines);

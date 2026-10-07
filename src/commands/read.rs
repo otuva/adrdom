@@ -18,6 +18,7 @@
 //! chunks as large as it reads at once, so a failure keeps what earlier
 //! chunks read and loses at most one wave. The
 //! model and the reader are loaded only here and in `adr plan`.
+use crate::rules::Rule;
 use crate::embed;
 use crate::index::{self, Rec};
 use crate::ledger;
@@ -38,7 +39,7 @@ pub fn run() -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint(&[out::refusal("read", &msg::not_a_repo("read", &[], Actor::Agent))]);
+            out::eprint(&[out::refusal(Rule::Read, &msg::not_a_repo("read", &[], Actor::Agent))]);
             return 1;
         }
     };
@@ -48,7 +49,7 @@ pub fn run() -> i32 {
             0
         }
         Err(e) => {
-            out::eprint(&[out::refusal("read", &e)]);
+            out::eprint_stop(Rule::Read, &e);
             1
         }
     }
@@ -114,7 +115,7 @@ fn read_all(root: &std::path::Path) -> Result<Vec<Line>, String> {
         marked.push((group, &decisions[a].id, &decisions[b].id, line));
     }
     marked.sort();
-    let mut out: Vec<Line> = marked.iter().map(|m| Line::Finding(Finding::new("read", m.3.clone()))).collect();
+    let mut out: Vec<Line> = marked.iter().map(|m| Line::Finding(Finding::new(Rule::Read, m.3.clone()))).collect();
     if marked.iter().any(|m| m.0 < 2) {
         out.push(Line::Move(crate::moves::of_marked_pairs()));
     }

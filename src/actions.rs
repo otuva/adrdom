@@ -9,7 +9,7 @@ use crate::repo;
 use crate::state::{self, TermsLoad};
 use crate::rules::{self, empty_plan_hash, is_topic_file_path, removal_holds, terms_refusals, RemovalHolds};
 use crate::terms;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use uuid::Uuid;
 
@@ -35,17 +35,12 @@ impl Outcome {
     }
 }
 
-/// Every question heading and term name by identifier: what turns the
-/// identifiers of the rows an act wrote into words.
-pub fn event_names(root: &Path) -> HashMap<String, String> {
-    let mut names = crate::view::heading_texts(&record::load_all(root));
-    if let Some(tf) = state::load_terms(root) {
-        for t in tf.terms {
-            if let Some(id) = t.id.clone() {
-                names.insert(id, t.name.clone());
-            }
-        }
-    }
+/// Every question heading of `all` and term name of `terms` by
+/// identifier: what turns the identifiers of the rows an act wrote into
+/// words, from what the act already holds.
+pub fn event_names(all: &[RecordFile], terms: &[terms::Term]) -> HashMap<String, String> {
+    let mut names = crate::view::heading_texts(all);
+    names.extend(terms.iter().filter_map(|t| Some((t.id.clone()?, t.name.clone()))));
     names
 }
 
@@ -173,23 +168,24 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
     let cur_hash;
     {
         let sec = &rf.sections[idx];
+        use crate::status::QuestionStatus;
+        // Closed by the ledger, the status show prints (per "Does a command
+        // name a status of its own?", f53ac3b9 A).
+        match crate::status::question_status(&led, sec) {
+            st @ (QuestionStatus::Answered
+            | QuestionStatus::Refused
+            | QuestionStatus::Superseded
+            | QuestionStatus::Withdrawn
+            | QuestionStatus::Dropped) => return Err(msg::already_closed(&sec.heading_text, st)),
+            _ => {}
+        }
+        // A closing line the ledger does not hold is hand-written: the
+        // finding `check` and `show` print for it, the same move.
         if sec.is_refused() {
-            return Err(msg::already_refused(&sec.heading_text));
+            return Err(msg::refusal_without_row(&rel, &sec.heading_text));
         }
         if sec.answer_line.is_some() {
-            return Err(msg::already_answered(&sec.heading_text));
-        }
-        if let Some(letter) = letter {
-            if !sec.options.iter().any(|o| o.letter == letter) {
-                let letters: Vec<char> = sec.options.iter().map(|o| o.letter).collect();
-                return Err(msg::letter_not_an_option(
-                    letter,
-                    &sec.heading_text,
-                    &letters,
-                    id,
-                    version,
-                ));
-            }
+            return Err(msg::answer_without_row(&rel, &sec.heading_text));
         }
         cur_hash = record::section_hash(&rf.lines, sec);
         // Per "Does an answer carry the version of the question the owner
@@ -225,21 +221,19 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
             } else if led.latest_asked(id).is_none() {
                 msg::not_asked_yet(&sec.heading_text, &moves())
             } else {
-                use crate::status::QuestionStatus;
-                match crate::status::question_status(&led, sec) {
-                    QuestionStatus::Withdrawn => msg::already_withdrawn(&sec.heading_text),
-                    QuestionStatus::Answered => msg::already_answered(&sec.heading_text),
-                    QuestionStatus::Refused => msg::already_refused(&sec.heading_text),
-                    QuestionStatus::Superseded => msg::already_superseded(&sec.heading_text),
-                    QuestionStatus::Dropped => msg::already_dropped(&sec.heading_text),
-                    QuestionStatus::NoBody | QuestionStatus::NotAsked | QuestionStatus::Asked => {
-                        msg::not_in_asked_state(&sec.heading_text, &moves())
-                    }
-                }
+                msg::not_in_asked_state(&sec.heading_text, &moves())
             });
         }
         if version_lower != cur_hash[..record::VERSION_LEN] {
             return Err(msg::stale_version(&sec.heading_text, &rel));
+        }
+        // Checked once the identifier and the version are good, so the
+        // move it names runs as printed with a letter of the options.
+        if let Some(letter) = letter {
+            if !sec.options.iter().any(|o| o.letter == letter) {
+                let letters: Vec<char> = sec.options.iter().map(|o| o.letter).collect();
+                return Err(msg::letter_not_an_option(letter, &sec.heading_text, &letters, id, version));
+            }
         }
     }
 
@@ -286,7 +280,7 @@ fn answer_gate(root: &Path, rf: &RecordFile, led: &Ledger, tf: &terms::TermsFile
                 let sec = &rf.sections[leaf];
                 match &sec.id {
                     _ if sec.is_skeleton => Waits::Unwritten { heading, report: moves_for(leaf, true) },
-                    Some(id) if state::asked_text_stands(led, id, &record::section_hash(&rf.lines, sec)) => {
+                    Some(id) if crate::view::asked_text_stands(led, rf, sec) => {
                         let answer = Move::new(MoveKind::Answer {
                             id: id.clone(),
                             version: record::version_of(&rf.lines, sec),
@@ -490,17 +484,17 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
     {
         let sec = &rf.sections[idx];
         let Some(terms_line_idx) = sec.terms_line else {
-            return Err(msg::no_terms_line(id, &sec.heading_text));
+            return Err(msg::no_terms_line(&rel, id, &sec.heading_text));
         };
         let problems = terms::validate_pairs(rf.lines[terms_line_idx].trim_end(), &tf)
-            .map_err(|_| msg::malformed_terms_line(id, &sec.heading_text))?;
+            .map_err(|_| msg::malformed_terms_line(&rel, id, &sec.heading_text))?;
         if let Some(p) = problems.first() {
             return Err(match &p.kind {
                 terms::ProblemKind::Gone => {
-                    msg::terms_line_names_gone_term(id, &sec.heading_text, &p.uuid, &p.word)
+                    msg::terms_line_names_gone_term(&rel, id, &sec.heading_text, &p.uuid, &p.word)
                 }
                 terms::ProblemKind::Retired(name) => {
-                    msg::terms_line_names_retired_term(id, &sec.heading_text, name)
+                    msg::terms_line_names_retired_term(&rel, id, &sec.heading_text, name)
                 }
             });
         }
@@ -509,8 +503,8 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
     // `locate_asked` loads only the one file it finds, so every topic file
     // is loaded again here for the repo-wide heading index.
     let mut superseded_ids: Vec<String> = Vec::new();
+    let all = record::load_all(root);
     {
-        let all = record::load_all(root);
         let cross_file_headings = depends::cross_file_heading_index(&all, &led);
         // The same normalization `ask` and `check` run before judging a
         // file, so a cross-file heading-text entry reads the same here.
@@ -552,7 +546,13 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
         detail: letter.to_string(),
         version: crate::version::VERSION.to_string(),
     }];
+    // One row per decision replaced, however many times the line names it.
+    let mut once: Vec<&String> = Vec::new();
     for old in &superseded_ids {
+        if once.contains(&old) {
+            continue;
+        }
+        once.push(old);
         rows.push(ledger::Row {
             time: write_time.clone(),
             event: "superseded".to_string(),
@@ -579,7 +579,7 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
     }
 
     // Named before the write: a dropped question leaves the file with it.
-    let names = event_names(root);
+    let names = event_names(&all, &tf.terms);
     let mut outcome = Outcome::of_rows(&rows, &names);
     for e in &mut outcome.events {
         if let crate::out::Event::Answered { heading, sentence, .. } = e {
@@ -658,30 +658,9 @@ pub fn do_approve(root: &Path, file: &Path) -> Result<Outcome, String> {
 /// repository or no file approve takes: a topic file under
 /// adrdom/decisions, adrdom/terms.md, or a blame file under adrdom/blame.
 fn approved_rel(root: &Path, file: &Path) -> Result<String, String> {
-    let given = file.display().to_string();
-    let abs = if file.is_absolute() {
-        file.to_path_buf()
-    } else {
-        std::env::current_dir().map(|d| d.join(file)).unwrap_or_else(|_| root.join(file))
+    let Some(rel) = state::given_rel(root, file) else {
+        return Err(msg::approve_not_a_file_approve_takes(&file.display().to_string()));
     };
-    let mut parts: Vec<std::ffi::OsString> = Vec::new();
-    for comp in abs.components() {
-        match comp {
-            std::path::Component::ParentDir => {
-                parts.pop();
-            }
-            std::path::Component::CurDir => {}
-            std::path::Component::Normal(p) => parts.push(p.to_os_string()),
-            std::path::Component::RootDir | std::path::Component::Prefix(_) => parts.clear(),
-        }
-    }
-    let mut normal = std::path::PathBuf::from(std::path::MAIN_SEPARATOR_STR);
-    normal.extend(parts);
-    let root_abs = std::path::Path::new(std::path::MAIN_SEPARATOR_STR).join(root);
-    let Ok(inside) = normal.strip_prefix(&root_abs) else {
-        return Err(msg::approve_not_a_file_approve_takes(&given));
-    };
-    let rel = state::rel_path(Path::new(""), inside);
     if rules::approve_takes(&rel) {
         Ok(rel)
     } else {
@@ -701,10 +680,7 @@ fn do_approve_removal(root: &Path, rel: &str, led: &Ledger, ledger_path: &Path) 
         return Err(msg::approve_prefixed(msg::removal_not_a_topic_file(rel)));
     }
     let all_records: Vec<RecordFile> = record::load_all(root);
-    let present_ids: HashSet<String> = all_records
-        .iter()
-        .flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.clone()))
-        .collect();
+    let present_ids: HashSet<String> = rules::held_ids(&all_records).into_iter().map(str::to_string).collect();
     let RemovalHolds { held, .. } = removal_holds(root, rel, led, &present_ids);
 
     let refusals: Vec<String> = rules::judge_removed_topic_file(root, rel, led, &present_ids)
@@ -937,7 +913,10 @@ fn do_approve_terms(
     terms::write_terms_lines(&mut new_lines, &tf, &pairs_per_entry);
     tf.lines = new_lines;
 
-    let terms_changed = std::fs::read_to_string(&tf.path).ok().as_deref() != Some(tf.lines.join("\n").as_str());
+    // The files as they stand, put back when the ledger refuses the rows:
+    // never a terms file or terms brief rewritten for rows no ledger holds.
+    let terms_before = std::fs::read_to_string(&tf.path).ok();
+    let terms_changed = terms_before.as_deref() != Some(tf.lines.join("\n").as_str());
     terms::save(&tf).map_err(|e| {
         msg::approve_prefixed(msg::write_failed(
             &file.display().to_string(),
@@ -950,7 +929,8 @@ fn do_approve_terms(
     // every run, whether or not the terms file changed, so a repository
     // whose terms file is approved gets its terms brief from one run.
     let brief_path = root.join(crate::repo::TERMS_BRIEF_PATH);
-    let brief_changed = std::fs::read_to_string(&brief_path).ok().as_deref() != Some(terms::brief_text(&tf).as_str());
+    let brief_before = std::fs::read_to_string(&brief_path).ok();
+    let brief_changed = brief_before.as_deref() != Some(terms::brief_text(&tf).as_str());
     let write_brief = || -> std::io::Result<()> {
         if let Some(dir) = brief_path.parent() {
             std::fs::create_dir_all(dir)?;
@@ -1010,7 +990,20 @@ fn do_approve_terms(
                 version: crate::version::VERSION.to_string(),
             });
         }
-        ledger::append(ledger_path, &rows).map_err(append_failed)?;
+        if let Err(e) = ledger::append(ledger_path, &rows) {
+            if let Some(before) = &terms_before {
+                let _ = std::fs::write(&tf.path, before);
+            }
+            match &brief_before {
+                Some(before) => {
+                    let _ = std::fs::write(&brief_path, before);
+                }
+                None => {
+                    let _ = std::fs::remove_file(&brief_path);
+                }
+            }
+            return Err(append_failed(e));
+        }
         written = rows;
     }
 
@@ -1193,9 +1186,7 @@ fn do_approve_record(
         // superseded by now, and approve leaves the line as it is.
         // An asked section whose text no longer stands as asked is being
         // edited to be asked again: its line is turned like an unasked one's.
-        let stands_as_asked = sec.id.as_ref().is_some_and(|id| {
-            state::asked_text_stands(led, id, &record::section_hash(&rf.lines, sec))
-        });
+        let stands_as_asked = crate::view::asked_text_stands(led, &rf, sec);
         if sec.supersedes.is_empty() || stands_as_asked || state::is_frozen(led, sec) {
             continue;
         }
@@ -1208,19 +1199,8 @@ fn do_approve_record(
         supersedes_ids.insert(i, ids);
     }
 
-    let present_ids: HashSet<String> = all_records
-        .iter()
-        .flat_map(|rf2| rf2.sections.iter().filter_map(|s| s.id.clone()))
-        .collect();
-    let mut state_ids: BTreeSet<String> = BTreeSet::new();
-    for row in &led.rows {
-        if matches!(
-            row.event.as_str(),
-            "asked" | "answered" | "refused" | "superseded" | "withdrawn"
-        ) {
-            state_ids.insert(row.id.clone());
-        }
-    }
+    let present_ids: HashSet<String> = rules::held_ids(&all_records).into_iter().map(str::to_string).collect();
+    let state_ids = led.state_ids();
 
     // One time for every row this run writes (per "Does a command write a
     // time later than the last ledger row?", aefa7f3c-70c3-412e-8d73-16ff9e2b703a
@@ -1330,6 +1310,10 @@ fn do_approve_record(
     let plan_hash = record::plan_hash(&work_rf);
     let context_hash = record::context_hash(&work_rf);
 
+    // Whether the save below changes the file's bytes (ids written in, a
+    // reference line rewritten to identifiers, line ends made one kind).
+    let bytes_change = std::fs::read_to_string(&work_rf.path).ok().as_deref()
+        != Some(record::join_lines(&work_rf.lines).as_str());
     record::save(&work_rf).map_err(|e| {
         msg::approve_prefixed(msg::write_failed(
             &file.display().to_string(),
@@ -1441,7 +1425,14 @@ fn do_approve_record(
     }
     rows.extend(withdrawn_rows);
 
-    Ok(Outcome::of_rows(&rows, &crate::view::heading_texts(std::slice::from_ref(&work_rf))))
+    let mut outcome = Outcome::of_rows(&rows, &crate::view::heading_texts(std::slice::from_ref(&work_rf)));
+    // A file written that no row of this run covers is named by one line of
+    // its own (per "What does a command that writes print?", 069a6b4a A).
+    let covered = rows.iter().any(|r| (r.event == "approved" || r.event == "context") && r.detail == rel);
+    if bytes_change && !covered {
+        outcome.events.push(crate::out::Event::FileWritten { path: rel.to_string() });
+    }
+    Ok(outcome)
 }
 
 /// The final text one `depends:` entry rewrites to when `approve` rewrites
@@ -1492,54 +1483,48 @@ fn rewrite_dep_entry(
 pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
     let banned_path = root.join(crate::banned::BAN_LIST);
     let ledger_path = root.join(crate::repo::LEDGER_PATH);
+    let led = ledger::read(&ledger_path);
+    // What is banned is what the ledger says is banned (per "Does check hold
+    // the ban list equal to the ledger?"), the set `ban` reads too: a ban
+    // list that drifted from it, or cannot be read, changes nothing here.
+    let banned_now = crate::banned::currently_banned(&led);
+    let is_banned = |h: &str| banned_now.iter().any(|(b, _)| b == h);
 
-    let mut to_remove: HashSet<String> = HashSet::new();
+    // Each line given is one word (or phrase) and the hashes `ban` wrote
+    // for it: the line, and each run of letters in it.
+    let mut to_remove: Vec<String> = Vec::new();
+    let mut not_banned = 0;
     for line in input.lines() {
-        if line.trim().is_empty() {
+        let hashes: Vec<String> = crate::banned::tokenize(line).iter().map(|t| record::sha256_hex(t)).collect();
+        if hashes.is_empty() {
             continue;
         }
-        for tok in crate::banned::tokenize(line) {
-            to_remove.insert(record::sha256_hex(&tok));
+        let hit: Vec<String> = hashes.into_iter().filter(|h| is_banned(h)).collect();
+        if hit.is_empty() {
+            not_banned += 1;
+        }
+        for h in hit {
+            if !to_remove.contains(&h) {
+                to_remove.push(h);
+            }
         }
     }
-
-    let existing = crate::banned::read_entries(&banned_path);
-    let mut removed: Vec<String> = existing
-        .iter()
-        .filter(|(h, _)| to_remove.contains(h))
-        .map(|(h, _)| h.clone())
-        .collect();
-    removed.sort();
-    // A ban list may hold one hash on two lines (a merge, an edit by
-    // hand): it is one word, removed once.
-    removed.dedup();
+    to_remove.sort();
     // The words given that were not banned: a finding on the input, as a
-    // count, never dropped without a word.
-    let not_banned = to_remove.len() - removed.len();
-    let input_findings: Vec<String> = if not_banned == 0 {
-        Vec::new()
-    } else {
-        vec![msg::unban_not_banned(not_banned)]
-    };
+    // count of the words given, never dropped without a word.
+    let input_findings: Vec<String> = if not_banned == 0 { Vec::new() } else { vec![msg::unban_not_banned(not_banned)] };
 
-    if removed.is_empty() {
+    if to_remove.is_empty() {
         return Ok(Outcome { events: Vec::new(), input_findings });
     }
 
-    let remaining: Vec<(String, Option<String>)> = existing
-        .into_iter()
-        .filter(|(h, _)| !to_remove.contains(h))
-        .collect();
-    crate::banned::write_sorted(&banned_path, remaining).map_err(|e| {
-        msg::update_failed("banned list", e, msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr unban")))
-    })?;
-
     // One time for every row this run writes (per "Does a command write a
     // time later than the last ledger row?", aefa7f3c-70c3-412e-8d73-16ff9e2b703a
-    // A), whichever hash each row names.
-    let led = ledger::read(&ledger_path);
+    // A), whichever hash each row names. The ledger first: a ban list left
+    // behind by a failed write after it is brought back by the move check
+    // names (`adr ban --rebuild`), from the ledger.
     let write_time = ledger::write_time(&led);
-    let rows: Vec<ledger::Row> = removed
+    let rows: Vec<ledger::Row> = to_remove
         .iter()
         .map(|h| ledger::Row {
             time: write_time.clone(),
@@ -1552,6 +1537,10 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, String> {
         .collect();
     ledger::append(&ledger_path, &rows)
         .map_err(|e| msg::update_failed("ledger", e, msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr unban"))))?;
+    let remaining: Vec<(String, Option<String>)> = banned_now.into_iter().filter(|(h, _)| !to_remove.contains(h)).collect();
+    crate::banned::write_sorted(&banned_path, remaining).map_err(|e| {
+        msg::update_failed("banned list", e, msg::after_fix_agent_runs(crate::moves::Cmd::fixed("adr ban --rebuild")))
+    })?;
 
     let mut outcome = Outcome::of_rows(&rows, &HashMap::new());
     outcome.input_findings = input_findings;

@@ -57,9 +57,9 @@ pub enum MoveKind {
     /// An answered decision built once the plan changes: the question
     /// beside it is refused.
     BuildWaitsRefused { heading: String, beside: String },
-    /// A removed topic file: the agent restores it and settles each hold by a
-    /// plan change the owner approves.
-    Removal { rel: String, holds: Vec<RemovalHold> },
+    /// An answered decision built once its file's tiers derive: no tier is
+    /// known to wait on.
+    BuildWaitsTiers { heading: String },
     /// The agent writes a question that supersedes one decision of each pair
     /// the reader marked same or inconsistent.
     SupersedeMarkedPairs,
@@ -67,21 +67,31 @@ pub enum MoveKind {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Move {
-    pub actor: Mover,
     pub kind: MoveKind,
 }
 
 impl Move {
-    /// The move of `kind`, its actor fixed by the kind.
     pub fn new(kind: MoveKind) -> Move {
-        let actor = match &kind {
+        Move { kind }
+    }
+
+    /// Who takes the move, fixed by its kind.
+    pub fn actor(&self) -> Mover {
+        match &self.kind {
             MoveKind::Approve { .. } | MoveKind::Answer { .. } => Mover::Owner,
-            MoveKind::AnswerWaits { .. } | MoveKind::BuildWaits { .. } | MoveKind::BuildWaitsRefused { .. } => {
-                Mover::NotYet
-            }
-            _ => Mover::Agent,
-        };
-        Move { actor, kind }
+            MoveKind::AnswerWaits { .. }
+            | MoveKind::BuildWaits { .. }
+            | MoveKind::BuildWaitsRefused { .. }
+            | MoveKind::BuildWaitsTiers { .. } => Mover::NotYet,
+            MoveKind::PlanUnresolved
+            | MoveKind::Plan { .. }
+            | MoveKind::WriteLines { .. }
+            | MoveKind::WriteBodies { .. }
+            | MoveKind::Ask { .. }
+            | MoveKind::Refused { .. }
+            | MoveKind::Build { .. }
+            | MoveKind::SupersedeMarkedPairs => Mover::Agent,
+        }
     }
 
     /// The clauses of the move as a refusal's tail: who does what. `None` for
@@ -106,13 +116,13 @@ impl Move {
             MoveKind::Build { heading, id } => {
                 Next::agent(format!("builds \"{}\" and puts \"adr: {}\" in a test that shows it", heading, id))
             }
-            MoveKind::Removal { rel, holds } => removal_next(rel, holds),
             MoveKind::SupersedeMarkedPairs => {
                 Next::agent("writes a question that supersedes one decision of each same or inconsistent pair")
             }
-            MoveKind::AnswerWaits { .. } | MoveKind::BuildWaits { .. } | MoveKind::BuildWaitsRefused { .. } => {
-                return None
-            }
+            MoveKind::AnswerWaits { .. }
+            | MoveKind::BuildWaits { .. }
+            | MoveKind::BuildWaitsRefused { .. }
+            | MoveKind::BuildWaitsTiers { .. } => return None,
         })
     }
 
@@ -141,6 +151,9 @@ impl Move {
                 "not yet: \"{}\" is answered and is built once the plan changes, \"{}\" beside it is refused",
                 heading, beside
             ),
+            MoveKind::BuildWaitsTiers { heading } => {
+                format!("not yet: \"{}\" is answered and is built once the tiers of its file derive", heading)
+            }
             _ => self.next().expect("a move with a mover").render(),
         }
     }
@@ -310,19 +323,11 @@ pub fn removal_next(rel: &str, holds: &[RemovalHold]) -> Next {
 }
 
 /// The report of a removed topic file: each hold that keeps its removal
-/// from being approved (`rules::judge_removed_topic_file`), or, with none,
-/// the owner's approval.
+/// from being approved (`rules::judge_removed_topic_file`, each carrying
+/// the move `removal_next` names), or, with none, the owner's approval.
 pub fn of_removed_topic_file(rel: &str, findings: Vec<Finding>) -> Report {
-    let moves = if findings.is_empty() { vec![removal(rel, &[])] } else { Vec::new() };
+    let moves = if findings.is_empty() { vec![Move::new(MoveKind::Approve { path: rel.to_string() })] } else { Vec::new() };
     Report { findings, moves }
-}
-
-/// The move of a removed topic file.
-pub fn removal(rel: &str, holds: &[RemovalHold]) -> Move {
-    if holds.is_empty() {
-        return Move::new(MoveKind::Approve { path: rel.to_string() });
-    }
-    Move::new(MoveKind::Removal { rel: rel.to_string(), holds: holds.to_vec() })
 }
 
 /// Every move of the topic file `rf`, in the order they are taken: what is
@@ -342,7 +347,7 @@ pub fn of_topic_file(
     plan_ok: bool,
     findings: &[Finding],
     tests: &HashMap<String, Vec<String>>,
-    planning: Option<&crate::plan::Planning>,
+    planning: &crate::plan::Planning,
 ) -> Vec<Move> {
     if rf.tiers.is_none() {
         if findings.is_empty() {
@@ -360,17 +365,14 @@ pub fn of_topic_file(
 
     for (i, sec) in rf.sections.iter().enumerate() {
         let heading = sec.heading_text.as_str();
-        match status::question_status(led, sec) {
+        match status::question_status_in(led, rf, sec) {
             QuestionStatus::NoBody | QuestionStatus::NotAsked if sec.is_skeleton => bare = true,
             QuestionStatus::NoBody | QuestionStatus::NotAsked => to_ask.push(heading.to_string()),
+            // Edited since it was asked: `answer` takes only the text the
+            // ledger holds, so the agent asks it again first.
+            QuestionStatus::ChangedSinceAsked => to_ask.push(heading.to_string()),
             QuestionStatus::Asked => {
                 let Some(id) = &sec.id else { continue };
-                // Edited since it was asked: `answer` takes only the text
-                // the ledger holds, so the agent asks it again first.
-                if !crate::view::asked_text_stands(led, rf, sec) {
-                    to_ask.push(heading.to_string());
-                    continue;
-                }
                 // `answer` takes it only once what it waits on is settled
                 // (the one test `answer` itself reads).
                 let w = state::answer_waits(rf, i);
@@ -422,7 +424,7 @@ pub fn of_topic_file(
     if plan_ok {
         // Approve refuses a heading with no body, so one in an approved file
         // is one approved before it did: its body is written, then planned.
-        if bare && planning.is_some() {
+        if bare {
             out.extend(of_planning(rf, planning));
         }
         if !to_ask.is_empty() {
@@ -461,7 +463,7 @@ pub fn of_unasked_question_in(j: &Judging, rf: &RecordFile, heading: &str, unwri
     let planning = crate::plan::load_with(rf, j.terms_list, j.led, &j.index.planning);
     let mut findings = crate::rules::judge_topic_file_in(j.root, rf, j.all, j.terms_list, j.led, j.index);
     findings.extend(j.index.records().iter().cloned());
-    let mut moves = of_unasked_question(rf, plan_ok, &findings, Some(&planning), heading, unwritten);
+    let mut moves = of_unasked_question(rf, plan_ok, &findings, &planning, heading, unwritten);
     // The terms file's gate, as `of_topic_file_with` reads it.
     let gate = crate::rules::terms_gate(j.root, j.led, &rf.rel);
     if !gate.is_empty() {
@@ -505,7 +507,6 @@ pub fn of_topic_file_with(
     let plan_ok = state::plan_approved(led, rf, &rf.rel) && state::context_approved(led, rf, &rf.rel);
     let planning = crate::plan::load_with(rf, terms_list, led, shared);
     let findings = crate::rules::judge_topic_file_in(root, rf, all, terms_list, led, index);
-    let original = rf;
     let mut rf = rf.clone();
     crate::depends::normalize_cross_file_deps(&mut rf, terms_list, &shared.phrase_lookup, &shared.cross, led);
     // The rules on the topic files as a whole (an identifier twice, a
@@ -514,7 +515,7 @@ pub fn of_topic_file_with(
     // planning moves wait on them.
     let mut findings = findings;
     findings.extend(index.records().iter().cloned());
-    let mut moves = of_topic_file(&rf, led, plan_ok, &findings, tests, Some(&planning));
+    let mut moves = of_topic_file(&rf, led, plan_ok, &findings, tests, &planning);
     // While adrdom/terms.md is not approved, approve, ask and answer stop on
     // it: its gate is the file's finding, and their moves wait on it.
     let gate = crate::rules::terms_gate(root, led, &rf.rel);
@@ -525,8 +526,11 @@ pub fn of_topic_file_with(
     // A question asked and struck from the plan is cleared by the owner's
     // approve the moves above already name, so it joins the findings only
     // after the moves are computed from them.
+    // A file is stale once approved and changed since (`rules::stale_files`,
+    // the list check reads): a draft never approved strikes nothing.
     let sole = index.stale().len() == 1;
-    findings.extend(crate::rules::struck_asked(&rf.rel, !state::plan_approved(led, original, &rf.rel), sole, all, led));
+    let stale = index.stale().contains(&rf.rel);
+    findings.extend(crate::rules::struck_asked(&rf.rel, stale, sole, all, led));
     Report { findings, moves }
 }
 
@@ -560,7 +564,7 @@ pub fn of_unasked_question(
     rf: &RecordFile,
     plan_ok: bool,
     findings: &[Finding],
-    planning: Option<&crate::plan::Planning>,
+    planning: &crate::plan::Planning,
     heading: &str,
     unwritten: bool,
 ) -> Vec<Move> {
@@ -579,12 +583,9 @@ pub fn of_unasked_question(
 
 /// The next move of the planning steps for the questions of `rf` not yet
 /// asked: the owner's approve once every record is there.
-pub fn of_planning(rf: &RecordFile, planning: Option<&crate::plan::Planning>) -> Vec<Move> {
+pub fn of_planning(rf: &RecordFile, p: &crate::plan::Planning) -> Vec<Move> {
     use crate::plan::{NextMove, Step};
     let approve = || vec![Move::new(MoveKind::Approve { path: rf.rel.clone() })];
-    let Some(p) = planning else {
-        return approve();
-    };
     match p.next() {
         NextMove::Plan => vec![Move::new(MoveKind::Plan { rel: rf.rel.clone() })],
         NextMove::WriteLines => {
@@ -669,7 +670,7 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> String {
             }
         }
         for m in report.moves {
-            if m.actor == Mover::Owner {
+            if m.actor() == Mover::Owner {
                 owner.get_or_insert(m);
             } else if let MoveKind::Ask { headings, .. } = &m.kind {
                 let have = agent.iter_mut().find_map(|a| match &mut a.kind {
@@ -757,10 +758,10 @@ mod tests {
 
     #[test]
     fn the_kind_fixes_who_moves() {
-        assert_eq!(Move::new(MoveKind::Approve { path: "x.md".into() }).actor, Mover::Owner);
-        assert_eq!(Move::new(MoveKind::Plan { rel: "x.md".into() }).actor, Mover::Agent);
-        assert_eq!(Move::new(MoveKind::BuildWaits { heading: "h".into(), beside: "b".into() }).actor, Mover::NotYet);
-        assert_eq!(removal("x.md", &[]).actor, Mover::Owner);
+        assert_eq!(Move::new(MoveKind::Approve { path: "x.md".into() }).actor(), Mover::Owner);
+        assert_eq!(Move::new(MoveKind::Plan { rel: "x.md".into() }).actor(), Mover::Agent);
+        assert_eq!(Move::new(MoveKind::BuildWaits { heading: "h".into(), beside: "b".into() }).actor(), Mover::NotYet);
+        assert_eq!(of_removed_topic_file("x.md", Vec::new()).moves[0].actor(), Mover::Owner);
     }
 
     // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
@@ -838,7 +839,7 @@ mod tests {
             RemovalHold { id: "id-1".into(), heading: "A?".into(), status: QuestionStatus::Answered },
             RemovalHold { id: "id-2".into(), heading: "B?".into(), status: QuestionStatus::Asked },
         ];
-        let text = removal("x.md", &holds).text();
+        let text = removal_next("x.md", &holds).render();
         assert!(text.contains("supersedes") && text.contains("strikes"), "{}", text);
         assert!(text.ends_with("owner runs: adr approve x.md"), "{}", text);
     }

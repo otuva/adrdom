@@ -91,16 +91,34 @@ pub fn find_root() -> Option<PathBuf> {
 /// any non-zero exit (e.g. `git show HEAD:...` for a path that doesn't
 /// exist yet on HEAD).
 pub fn git(root: &Path, args: &[&str]) -> Option<String> {
-    let out = Command::new("git")
-        .current_dir(root)
-        .args(args)
-        .output()
-        .ok()?;
-    if out.status.success() {
-        Some(String::from_utf8_lossy(&out.stdout).to_string())
-    } else {
-        None
+    git_bytes(root, args).map(|b| String::from_utf8_lossy(&b).to_string())
+}
+
+/// What git prints, as bytes: `None` on a failure to run it or a non-zero
+/// exit.
+fn git_bytes(root: &Path, args: &[&str]) -> Option<Vec<u8>> {
+    let out = Command::new("git").current_dir(root).args(args).output().ok()?;
+    out.status.success().then_some(out.stdout)
+}
+
+/// Every path the index holds, read once per repository for the process:
+/// what `Source::Index` answers `exists` and `is_dir` from, so a run that
+/// asks of many paths (a blame file's copy rows at a commit) asks git once.
+fn index_files(root: &Path) -> std::sync::Arc<std::collections::HashSet<String>> {
+    use std::collections::{HashMap, HashSet};
+    use std::sync::{Arc, Mutex, OnceLock};
+    static INDEX: OnceLock<Mutex<HashMap<std::path::PathBuf, Arc<HashSet<String>>>>> = OnceLock::new();
+    let map = INDEX.get_or_init(Default::default);
+    if let Some(found) = map.lock().unwrap_or_else(|e| e.into_inner()).get(root) {
+        return found.clone();
     }
+    let Some(paths) = git_paths(root, &["ls-files"]) else {
+        // Not kept: a failure to run git is asked again.
+        return Arc::new(HashSet::new());
+    };
+    let set: Arc<HashSet<String>> = Arc::new(paths.into_iter().collect());
+    map.lock().unwrap_or_else(|e| e.into_inner()).insert(root.to_path_buf(), set.clone());
+    set
 }
 
 /// The paths a git listing command prints (`ls-files`, `diff --name-only`),
@@ -336,7 +354,10 @@ impl Source {
     pub fn read(&self, root: &Path, rel: &str) -> Option<String> {
         match self {
             Source::WorkingTree => std::fs::read_to_string(root.join(rel)).ok(),
-            Source::Index => git(root, &["show", &format!(":{}", rel)]),
+            // The staged bytes as text, refused as `WorkingTree` refuses
+            // them when they are not UTF-8: never a lossy copy hashed or
+            // judged as if it were the file.
+            Source::Index => git_bytes(root, &["show", &format!(":{}", rel)]).and_then(|b| String::from_utf8(b).ok()),
         }
     }
 
@@ -348,10 +369,7 @@ impl Source {
     pub fn exists(&self, root: &Path, rel: &str) -> bool {
         match self {
             Source::WorkingTree => root.join(rel).exists(),
-            Source::Index => {
-                git(root, &["cat-file", "-e", &format!(":{}", rel)]).is_some()
-                    || self.is_dir(root, rel)
-            }
+            Source::Index => index_files(root).contains(rel) || self.is_dir(root, rel),
         }
     }
 
@@ -364,7 +382,7 @@ impl Source {
             // tracked file, so only a path below `rel` makes it a directory.
             Source::Index => {
                 let prefix = format!("{}/", rel.trim_end_matches('/'));
-                self.list_under(root, rel).iter().any(|p| p.starts_with(&prefix))
+                index_files(root).iter().any(|p| p.starts_with(&prefix))
             }
         }
     }

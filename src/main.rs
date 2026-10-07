@@ -91,8 +91,8 @@ enum Command {
         /// Judge the files as they are staged for the commit, not as they are on disk.
         #[arg(long, conflicts_with = "push")]
         staged: bool,
-        /// Look for banned words in this commit message file; at a merge, judge the staged files too.
-        #[arg(long, conflicts_with = "push")]
+        /// What the commit-msg hook runs: look for banned words in this commit message file; at a merge, judge the staged files too. Takes neither --staged nor --since.
+        #[arg(long, conflicts_with_all = ["push", "staged", "since"])]
         message: Option<PathBuf>,
         /// Also fail when a line of the ledger as it was at <commit> is missing from the ledger now.
         #[arg(long, conflicts_with = "push")]

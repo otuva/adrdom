@@ -186,7 +186,7 @@ fn show_prints_each_status_and_the_lines_each_question_carries() {
 plan: adrdom/decisions/tiered-topic.md: \"1.1 Root?\" has no depends line; agent writes what the question stands on
 plan: adrdom/decisions/tiered-topic.md: \"1.2 Unasked root?\" has no depends line; agent writes what the question stands on
 plan: adrdom/decisions/tiered-topic.md: \"1.3 Skeleton?\" has no depends line; agent writes what the question stands on
-plan_frozen: adrdom/decisions/tiered-topic.md: \"2.2 Also depends?\": answered; agent removes the edit
+plan_frozen: adrdom/decisions/tiered-topic.md: \"2.2 Also depends?\" is [refused] and its depends line was edited; agent removes the edit
 agent runs: adr plan adrdom/decisions/tiered-topic.md
 agent runs: adr ask adrdom/decisions/tiered-topic.md  # \"1.2 Unasked root?\"
 owner runs: adr answer aaaaaaaa-0000-4000-8000-000000000002@{V} <letter>  # \"2.1 Depends on root?\"

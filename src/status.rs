@@ -16,6 +16,11 @@ pub enum QuestionStatus {
     NotAsked,
     /// It waits for the owner's answer.
     Asked,
+    /// It was asked and its text was edited since: `answer` takes only the
+    /// text the ledger holds, so it is asked again before it is answered.
+    /// Named by `question_status_in`, which reads the text; the ledger alone
+    /// (`question_status`) reads it as `Asked`.
+    ChangedSinceAsked,
     Answered,
     /// The owner's answer that the question cannot be settled as asked
     /// (per "Does the owner answer a question with a refusal?").
@@ -30,10 +35,11 @@ pub enum QuestionStatus {
 
 impl QuestionStatus {
     /// Every status, in the order a question passes through them.
-    pub const ALL: [QuestionStatus; 8] = [
+    pub const ALL: [QuestionStatus; 9] = [
         QuestionStatus::NoBody,
         QuestionStatus::NotAsked,
         QuestionStatus::Asked,
+        QuestionStatus::ChangedSinceAsked,
         QuestionStatus::Answered,
         QuestionStatus::Refused,
         QuestionStatus::Superseded,
@@ -46,6 +52,7 @@ impl QuestionStatus {
             QuestionStatus::NoBody => "no body",
             QuestionStatus::NotAsked => "not asked",
             QuestionStatus::Asked => "asked",
+            QuestionStatus::ChangedSinceAsked => "changed since asked",
             QuestionStatus::Answered => "answered",
             QuestionStatus::Refused => "refused",
             QuestionStatus::Superseded => "superseded",
@@ -87,6 +94,16 @@ pub fn question_status(led: &Ledger, sec: &Section) -> QuestionStatus {
         QuestionStatus::NotAsked
     };
     sec.id.as_deref().and_then(|id| question_status_of_id(led, id)).unwrap_or(never_asked)
+}
+
+/// The status of `sec` of `rf` as a reader of its text names it:
+/// `question_status`, with an asked question whose text no longer stands as
+/// asked named `ChangedSinceAsked`.
+pub fn question_status_in(led: &Ledger, rf: &RecordFile, sec: &Section) -> QuestionStatus {
+    match question_status(led, sec) {
+        QuestionStatus::Asked if !crate::view::asked_text_stands(led, rf, sec) => QuestionStatus::ChangedSinceAsked,
+        st => st,
+    }
 }
 
 /// The status of the question `id` from its latest state row, `None` when it
@@ -249,11 +266,18 @@ impl TermStatus {
 pub fn term_status(led: &Ledger, tf: &TermsFile, t: &Term) -> TermStatus {
     let settled = if t.retired { TermStatus::Retired } else { TermStatus::Approved };
     match t.id.as_deref().and_then(|id| led.latest_for_id("term", id)) {
-        None if crate::state::terms_approved(led, tf) => settled,
+        None if crate::state::terms_approved(led, tf) || terms_rows_catch_up(led) => settled,
         None => TermStatus::New,
         Some(r) if r.hash != terms::term_hash(t) => TermStatus::Changed,
         Some(_) => settled,
     }
+}
+
+/// Whether the ledger approved the terms file before the tool kept a row
+/// per entry: a `terms` row and no `term` row at all. An entry with no row
+/// of its own is then held by that approval, not new.
+pub fn terms_rows_catch_up(led: &Ledger) -> bool {
+    !led.rows.iter().any(|r| r.event == "term") && led.latest_for_path("terms", crate::repo::TERMS_PATH).is_some()
 }
 
 #[cfg(test)]

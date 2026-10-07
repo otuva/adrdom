@@ -22,6 +22,7 @@ fn every_closed_list_is_whole_and_names_each_status_once() {
             QuestionStatus::NoBody
             | QuestionStatus::NotAsked
             | QuestionStatus::Asked
+            | QuestionStatus::ChangedSinceAsked
             | QuestionStatus::Answered
             | QuestionStatus::Refused
             | QuestionStatus::Superseded
@@ -39,7 +40,7 @@ fn every_closed_list_is_whole_and_names_each_status_once() {
             TermStatus::New | TermStatus::Changed | TermStatus::Approved | TermStatus::Retired | TermStatus::Removed => {}
         }
     }
-    assert_eq!(QuestionStatus::ALL.len(), 8);
+    assert_eq!(QuestionStatus::ALL.len(), 9);
     assert_eq!(FileStatus::ALL.len(), 4);
     assert_eq!(TermStatus::ALL.len(), 5);
     let q: HashSet<&str> = QuestionStatus::ALL.iter().map(|s| s.name()).collect();
@@ -129,6 +130,16 @@ fn show_prints_every_status_by_its_name() {
     assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
     commit_all(&dir);
     seen.extend(bracketed(&show(&dir, &[REL])));
+
+    // Asked, then its text edited: changed since asked; put back as asked.
+    let asked = std::fs::read_to_string(&path).unwrap();
+    let at = asked.find(&format!("### {}\n", heads[0])).unwrap();
+    let edited = format!("{}{}", &asked[..at], asked[at..].replacen("Problem: ", "Problem: now ", 1));
+    std::fs::write(&path, &edited).unwrap();
+    let shown = show(&dir, &[REL]);
+    assert!(shown.contains(&format!("[changed since asked] {}", heads[0])), "{}", shown);
+    seen.extend(bracketed(&shown));
+    std::fs::write(&path, &asked).unwrap();
 
     // Answered and refused by the owner; superseded, withdrawn and dropped
     // as the ledger records them.

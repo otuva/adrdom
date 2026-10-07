@@ -94,7 +94,7 @@ runtime dependencies beyond `git` on `PATH`.
   `127.0.0.1` (default port 7357), gated by a per-start token printed to
   stdout; shows status, open questions, decisions, and a `/terms` page
   listing every term, with forms to approve, answer, and unban.
-- `adr check [--staged] [--message <path>]` — run every governance check,
+- `adr check [--staged | --message <path>]` — run every governance check,
   including failing outright while `adrdom/terms.md` differs from its
   latest approval; used by `.githooks/pre-commit` and
   `.githooks/commit-msg`. Prints only findings, each with the move that

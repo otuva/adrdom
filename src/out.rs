@@ -9,7 +9,7 @@
 use crate::approval::Side;
 use crate::ledger::Row;
 use crate::moves::Move;
-use crate::rules::Finding;
+use crate::rules::{Finding, Rule};
 use crate::status::{FileStatus, QuestionStatus, TermStatus};
 use std::collections::HashMap;
 use std::io::Write;
@@ -66,6 +66,11 @@ pub enum Event {
     Unbanned,
     FileWritten { path: String },
     FileRemoved { path: String },
+    /// A key of git's configuration set to `value` (install's
+    /// `core.hooksPath`).
+    ConfigSet { key: String, value: String },
+    /// A key of git's configuration unset.
+    ConfigUnset { key: String },
 }
 
 impl Event {
@@ -125,6 +130,8 @@ impl Event {
             Event::Unbanned => "unbanned: a word".to_string(),
             Event::FileWritten { path } => format!("written: {}", path),
             Event::FileRemoved { path } => format!("removed: {}", path),
+            Event::ConfigSet { key, value } => format!("set: {} {}", key, value),
+            Event::ConfigUnset { key } => format!("unset: {}", key),
         }
     }
 }
@@ -148,20 +155,47 @@ pub enum Line {
 
 const INDENT: &str = "  ";
 
-/// A report as lines: each finding, then each move.
+/// A report as lines: the builds of what is answered first, as the moves
+/// are taken (what is answered is built before anything new is written),
+/// then each finding, then the other moves.
 pub fn report(r: &crate::moves::Report) -> Vec<Line> {
-    r.findings.iter().cloned().map(Line::Finding).chain(r.moves.iter().cloned().map(Line::Move)).collect()
+    let is_build = |m: &&Move| matches!(m.kind, crate::moves::MoveKind::Build { .. });
+    r.moves
+        .iter()
+        .filter(is_build)
+        .cloned()
+        .map(Line::Move)
+        .chain(r.findings.iter().cloned().map(Line::Finding))
+        .chain(r.moves.iter().filter(|m| !is_build(m)).cloned().map(Line::Move))
+        .collect()
 }
 
-/// The line for the terminal.
+/// The line for the terminal, every character that would move the cursor,
+/// clear the line or turn the text around written visibly (`visible`).
 pub fn text(line: &Line) -> String {
-    match line {
+    visible(&match line {
         Line::Record { depth, text } => format!("{}{}", INDENT.repeat(*depth), text),
         Line::Status { subject, status, mark } => format!("{}[{}] {}", mark_of(*mark), status.name(), subject),
         Line::Finding(f) => f.text(),
         Line::Move(m) => m.text(),
         Line::Event(e) => e.text(),
+    })
+}
+
+/// `s` with every control character but the tab, every bidirectional
+/// control and every zero-width character written as `\u{..}`: text from
+/// the records reaches the terminal and the page as the characters it
+/// holds, never as a carriage return, an escape sequence or a reordering
+/// that rewrites what is shown.
+pub fn visible(s: &str) -> String {
+    let hidden = |c: char| {
+        (c.is_control() && c != '\t')
+            || matches!(c, '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}'..='\u{2064}' | '\u{2066}'..='\u{2069}' | '\u{061C}' | '\u{FEFF}')
+    };
+    if !s.chars().any(hidden) {
+        return s.to_string();
     }
+    s.chars().map(|c| if hidden(c) { format!("\\u{{{:x}}}", c as u32) } else { c.to_string() }).collect()
 }
 
 /// The line for the page: the words of `text`, the indent left to the page,
@@ -179,7 +213,7 @@ pub fn html(line: &Line) -> String {
         ),
         Line::Finding(f) => format!(
             "<p class=\"finding\"><span class=\"rule\">{}:</span> {}</p>",
-            esc(f.rule),
+            esc(f.rule.as_str()),
             esc(&f.message)
         ),
         Line::Move(m) => format!("<p class=\"move {}\">{}</p>", mover_class(m), esc(&m.text())),
@@ -199,21 +233,36 @@ fn mark_of(mark: Option<Side>) -> &'static str {
 }
 
 fn mover_class(m: &Move) -> &'static str {
-    match m.actor {
+    match m.actor() {
         crate::moves::Mover::Agent => "agent",
         crate::moves::Mover::Owner => "owner",
         crate::moves::Mover::NotYet => "not-yet",
     }
 }
 
-fn esc(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+/// `s` for the page: the characters HTML reads as markup written as
+/// entities, every hidden character written visibly (`visible`). The one
+/// escaper of the page.
+pub fn esc(s: &str) -> String {
+    let s = visible(s);
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&#39;"),
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 /// The refusal a command `cmd` stopped on, whole, as a finding of the rule
 /// named after the command: the command's own name leads the line once,
 /// whether or not `text` already starts with it.
-pub fn refusal(cmd: &'static str, text: &str) -> Line {
+pub fn refusal(cmd: Rule, text: &str) -> Line {
     let prefix = format!("{}: ", cmd);
     let message = text.strip_prefix(&prefix).unwrap_or(text);
     Line::Finding(Finding::new(cmd, message.to_string()))
@@ -223,7 +272,7 @@ pub fn refusal(cmd: &'static str, text: &str) -> Line {
 /// command's name leading each once: what the terminal prints on standard
 /// error and the page shows in its banner, the same lines (per "Does the ui
 /// show what the terminal prints?", 7857d633 A).
-pub fn stop(cmd: &'static str, stop: &str) -> Vec<Line> {
+pub fn stop(cmd: Rule, stop: &str) -> Vec<Line> {
     stop.lines().filter(|l| !l.trim().is_empty()).map(|l| refusal(cmd, l)).collect()
 }
 
@@ -256,7 +305,18 @@ fn unwritable(e: std::io::Error) -> ! {
     if e.kind() == std::io::ErrorKind::BrokenPipe {
         std::process::exit(READER_GONE);
     }
-    let _ = writeln!(std::io::stderr().lock(), "{}", crate::msg::stdout_write_failed(&e));
+    // The command as it was run, by whoever runs it: the move runs as
+    // printed once standard output can be written.
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let owner = args.first().is_some_and(|a| crate::commands::OWNER_COMMANDS.contains(&a.as_str()));
+    let mut words = vec!["adr"];
+    words.extend(args.iter().map(String::as_str));
+    let actor = if owner { crate::msg::Actor::Owner } else { crate::msg::Actor::Agent };
+    let _ = writeln!(
+        std::io::stderr().lock(),
+        "{}",
+        crate::msg::stdout_write_failed(&e, actor, crate::moves::command(&words))
+    );
     std::process::exit(1);
 }
 
@@ -279,7 +339,7 @@ pub fn print_events(events: &[Event]) {
 /// Prints to standard error what stopped the command `cmd`: `out::stop` of
 /// the refusal text, so every line of a refusal of several lines leads with
 /// the command's name once.
-pub fn eprint_stop(cmd: &'static str, text: &str) {
+pub fn eprint_stop(cmd: Rule, text: &str) {
     eprint(&stop(cmd, text));
 }
 
@@ -321,13 +381,13 @@ mod tests {
                 status: Status::Question { status: QuestionStatus::Asked, letter: None, version: Some("ab12".into()) },
                 mark: Some(Side::Added),
             },
-            Line::Finding(Finding::new("plan", "x.md: a <fault>; agent fixes it".to_string())),
+            Line::Finding(Finding::new(crate::rules::Rule::Plan, "x.md: a <fault>; agent fixes it".to_string())),
             Line::Move(Move::new(MoveKind::Approve { path: "x.md".to_string() })),
             Line::Event(Event::Asked { heading: "Does it?".to_string() }),
         ];
         for l in &lines {
             let t = text(l);
-            let words = t.trim_start().replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;");
+            let words = esc(t.trim_start());
             let page = html(l);
             for w in words.split(' ').filter(|w| !w.starts_with('[') && !w.ends_with(']') && !w.ends_with(':')) {
                 assert!(page.contains(w), "{:?} lacks {:?}", page, w);
@@ -353,6 +413,20 @@ mod tests {
                 _ => {}
             }
         }
-        out.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&amp;", "&")
+        out.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&")
+    }
+
+    // adr: 7857d633-2055-47eb-857f-cb70da9fa7ba
+    //
+    // A carriage return and an escape sequence in a record never reach the
+    // terminal or the page as themselves: both show them written out.
+    #[test]
+    fn a_hidden_character_is_written_visibly_on_the_terminal_and_the_page() {
+        let line = Line::Record { depth: 1, text: "A) ok\r\u{1b}[2K- A) other \u{202e}x\u{200b}y\tz".to_string() };
+        let t = text(&line);
+        assert_eq!(t, "  A) ok\\u{d}\\u{1b}[2K- A) other \\u{202e}x\\u{200b}y\tz");
+        let h = html(&line);
+        assert!(!h.contains('\r') && !h.contains('\u{1b}') && !h.contains('\u{202e}'), "{:?}", h);
+        assert!(h.contains("\\u{1b}"), "{}", h);
     }
 }

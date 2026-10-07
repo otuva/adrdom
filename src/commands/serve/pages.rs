@@ -45,8 +45,10 @@ pub(super) fn overview(root: &Path, last: &[Line], token: &str) -> String {
 
     body.push_str("<section class=\"listing\">\n");
     let summary = show::summary(&r);
+    // An answer is made on /next, where the question's options stand
+    // beside the form: here the answer move links there.
     for line in &summary {
-        body.push_str(&with_form(line, &r, token, true));
+        body.push_str(&with_form(line, &r, token, true, false));
     }
     body.push_str("</section>\n");
 
@@ -97,7 +99,7 @@ pub(super) fn questions(root: &Path, last: &[Line], token: &str) -> String {
             let heading = status_subject(&block[0]);
             for (i, m) in moves.iter().enumerate() {
                 if move_heading(m) == Some(heading) {
-                    body.push_str(&with_form(&Line::Move(m.clone()), &r, token, true));
+                    body.push_str(&with_form(&Line::Move(m.clone()), &r, token, true, true));
                     placed[i] = true;
                 }
             }
@@ -105,7 +107,7 @@ pub(super) fn questions(root: &Path, last: &[Line], token: &str) -> String {
         }
         body.push_str(&plain(&findings));
         for (m, _) in moves.iter().zip(&placed).filter(|(_, p)| !**p) {
-            body.push_str(&with_form(&Line::Move(m.clone()), &r, token, true));
+            body.push_str(&with_form(&Line::Move(m.clone()), &r, token, true, true));
         }
         body.push_str("</article>\n");
     }
@@ -120,10 +122,10 @@ pub(super) fn terms(root: &Path, last: &[Line], token: &str) -> String {
         Ok(lines) => {
             // The whole file form is on this page, its change among it.
             for l in &lines {
-                body.push_str(&with_form(l, &r, token, false));
+                body.push_str(&with_form(l, &r, token, false, false));
             }
         }
-        Err(e) => body.push_str(&plain(&out::stop("show", &e))),
+        Err(e) => body.push_str(&plain(&out::stop(crate::rules::Rule::Show, &e))),
     }
     page("adr show adrdom/terms.md", "/terms", &body, false)
 }
@@ -134,8 +136,11 @@ pub(super) fn terms(root: &Path, last: &[Line], token: &str) -> String {
 /// approval as `adr show <file>` prints it, wherever the form appears, so
 /// the page never offers to approve what it does not show (per "Does show
 /// print what a file holds beyond its latest approval?"); `change` is false
-/// only where the page shows the whole file form already.
-fn with_form(line: &Line, r: &Records, token: &str, change: bool) -> String {
+/// only where the page shows the whole file form already. `answers` is true
+/// on the page that shows each asked question's options (`/next`): an
+/// answer move gets its form there, and elsewhere a link to it, so no
+/// answer is one click away from a page that does not show the options.
+fn with_form(line: &Line, r: &Records, token: &str, change: bool, answers: bool) -> String {
     let mut s = String::new();
     if let (true, Some(path)) = (change, approve_path(line)) {
         if let Ok(lines) = show::file_form(r, &path, Views::default()) {
@@ -152,7 +157,12 @@ fn with_form(line: &Line, r: &Records, token: &str, change: bool) -> String {
         ));
     }
     if let Line::Move(Move { kind: MoveKind::Answer { id, version, .. }, .. }) = line {
-        s.push_str(&answer_form(r, id, version, token));
+        if answers {
+            s.push_str(&answer_form(r, id, version, token));
+        } else {
+            // A link, not a line: the page's lines are the terminal's.
+            s.push_str("<div class=\"act\"><a href=\"/next\">answer it on /next</a></div>\n");
+        }
     }
     s
 }
@@ -183,15 +193,16 @@ fn answer_form(r: &Records, id: &str, version: &str, token: &str) -> String {
         esc(version),
         esc(token)
     );
-    for (i, l) in letters.iter().enumerate() {
+    // No letter is picked for the owner: the form posts only the one
+    // chosen.
+    for l in &letters {
         s.push_str(&format!(
-            "<label class=\"letter\"><input type=\"radio\" name=\"answer\" value=\"{l}\"{}> {l}</label> ",
-            if i == 0 { " checked" } else { "" },
+            "<label class=\"letter\"><input type=\"radio\" name=\"answer\" value=\"{l}\" required> {l}</label> "
         ));
     }
     // The refuse button comes after the letters: its `answer=refuse` is the
     // last field of that name the form posts, and the one the page reads.
-    s.push_str("<button type=\"submit\">Answer</button> <button type=\"submit\" name=\"answer\" value=\"refuse\">Refuse</button></form>\n");
+    s.push_str("<button type=\"submit\">Answer</button> <button type=\"submit\" name=\"answer\" value=\"refuse\" formnovalidate>Refuse</button></form>\n");
     s
 }
 
@@ -218,8 +229,13 @@ fn split(lines: Vec<Line>) -> (Vec<Line>, Vec<Vec<Line>>, Vec<Line>, Vec<Move>) 
     (head, blocks, findings, moves)
 }
 
+/// A question put to the owner: asked, or asked and changed since (shown
+/// with the move that asks it again).
 fn is_asked(line: &Line) -> bool {
-    matches!(line, Line::Status { status: Status::Question { status: QuestionStatus::Asked, .. }, .. })
+    matches!(
+        line,
+        Line::Status { status: Status::Question { status: QuestionStatus::Asked | QuestionStatus::ChangedSinceAsked, .. }, .. }
+    )
 }
 
 fn status_subject(line: &Line) -> &str {

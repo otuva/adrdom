@@ -1,3 +1,4 @@
+use crate::rules::Rule;
 use super::Failure;
 use crate::ledger::{Ledger, Row};
 use crate::msg;
@@ -25,13 +26,10 @@ pub(super) fn check_ledger(
 ) -> Vec<Failure> {
     let mut out = Vec::new();
     for (lineno, raw) in &led.malformed {
-        out.push(Failure {
-            check: "ledger",
-            message: msg::malformed_ledger_row(*lineno, raw),
-        });
+        out.push(Failure::new(Rule::Ledger, msg::malformed_ledger_row(*lineno, raw)));
     }
 
-    out.extend(check_held(root, repo::LEDGER_PATH, ledger_content, since, "ledger", &LEDGER_MSGS));
+    out.extend(check_held(root, repo::LEDGER_PATH, ledger_content, since, Rule::Ledger, &LEDGER_MSGS));
 
     out.extend(check_same_time_competition(led));
     out.extend(check_dropped(led, records, root));
@@ -43,13 +41,10 @@ pub(super) fn check_ledger(
                 .iter()
                 .any(|r| r.event == "asked" && r.id == row.id && r.hash == row.hash);
             if !has_match {
-                out.push(Failure {
-                    check: "ledger",
-                    message: msg::ledger_answered_without_asked(
+                out.push(Failure::new(Rule::Ledger, msg::ledger_answered_without_asked(
                         &row.id,
                         led.latest_asked(&row.id).map(|r| r.detail.as_str()),
-                    ),
-                });
+                    )));
             }
         }
     }
@@ -68,7 +63,7 @@ pub(super) fn check_ledger(
 /// or the entry on the dropped question (dependent).
 fn check_dropped(led: &Ledger, records: &[RecordFile], root: &Path) -> Vec<Failure> {
     let mut out = Vec::new();
-    let fail = |message: String| Failure { check: "ledger", message };
+    let fail = |message: String| Failure::new(Rule::Ledger, message);
     for (at, row) in led.rows.iter().enumerate().filter(|(_, r)| r.event == "dropped") {
         // Per "Does a decision change after it is answered?": a question
         // that was answered or refused is never removed. `led.rows` is
@@ -188,7 +183,7 @@ pub(super) fn check_held(
     path: &str,
     content: &str,
     since: Option<&str>,
-    check: &'static str,
+    check: crate::rules::Rule,
     msgs: &HeldMsgs,
 ) -> Vec<Failure> {
     let ledger_content = content;
@@ -213,10 +208,7 @@ pub(super) fn check_held(
     // test just below -- the same rule, just against a different ref.
     if let Some(head_content) = repo::git(root, &["show", &format!("HEAD:{}", path)]) {
         if lines_missing(&head_content, &present) {
-            out.push(Failure {
-                check,
-                message: (msgs.not_append_only)(),
-            });
+            out.push(Failure::new(check, (msgs.not_append_only)()));
         }
     }
 
@@ -244,10 +236,7 @@ pub(super) fn check_held(
     // passing.
     if repo::git(root, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_some() {
         if ref_ledger_has_rows_missing(root, path, "MERGE_HEAD", &present) {
-            out.push(Failure {
-                check,
-                message: (msgs.merge_drops_rows)(),
-            });
+            out.push(Failure::new(check, (msgs.merge_drops_rows)()));
         }
     } else {
         let parents = head_parents(root);
@@ -265,15 +254,9 @@ pub(super) fn check_held(
             }
             if unreadable && !msgs.report_unreadable {
             } else if unreadable {
-                out.push(Failure {
-                    check,
-                    message: msg::ledger_merge_parents_unreadable(),
-                });
+                out.push(Failure::new(check, msg::ledger_merge_parents_unreadable()));
             } else if drops {
-                out.push(Failure {
-                    check,
-                    message: (msgs.merge_drops_rows)(),
-                });
+                out.push(Failure::new(check, (msgs.merge_drops_rows)()));
             }
         }
     }
@@ -292,16 +275,10 @@ pub(super) fn check_held(
         if !repo::is_zero_sha(commit) {
             if !parent_object_present(root, commit) {
                 if msgs.report_unreadable {
-                    out.push(Failure {
-                        check,
-                        message: msg::ledger_since_unreadable(commit),
-                    });
+                    out.push(Failure::new(check, msg::ledger_since_unreadable(commit)));
                 }
             } else if ref_ledger_has_rows_missing(root, path, commit, &present) {
-                out.push(Failure {
-                    check,
-                    message: (msgs.since_drops_rows)(commit),
-                });
+                out.push(Failure::new(check, (msgs.since_drops_rows)(commit)));
             }
         }
     }
@@ -437,10 +414,7 @@ fn check_same_time_competition(led: &Ledger) -> Vec<Failure> {
     subjects.sort();
     subjects
         .into_iter()
-        .map(|(time, subject)| Failure {
-            check: "ledger",
-            message: msg::ledger_same_time_competition(&time, &subject),
-        })
+        .map(|(time, subject)| Failure::new(Rule::Ledger, msg::ledger_same_time_competition(&time, &subject)))
         .collect()
 }
 

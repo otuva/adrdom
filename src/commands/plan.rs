@@ -23,6 +23,7 @@
 //! model?", 21cdad59-4f0c-42a5-b4f3-6af946637df3; "Does planning stop
 //! without the reader?", 3dba486c-a399-4ce3-a794-e38c4f733403 A); `adr read`
 //! loads them too.
+use crate::rules::Rule;
 use crate::index;
 use crate::ledger;
 use crate::msg;
@@ -42,26 +43,28 @@ pub fn run(file: PathBuf) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint(&[out::refusal(
-                "plan",
+            out::eprint(&[out::refusal(Rule::Plan,
                 &msg::not_a_repo("plan", &[&file.display().to_string()], msg::Actor::Agent),
             )]);
             return 1;
         }
     };
-    let rel = state::rel_path(&root, &file);
     // Planning is the planning of a topic file ("What does the agent do to
     // plan a topic file?"): the terms file, a blame file or any other path
-    // is refused with the move, never read as a topic file.
-    if !crate::rules::is_topic_file_path(&rel) {
-        out::eprint(&[out::refusal("plan", &msg::plan_not_a_topic_file(&rel))]);
-        return 1;
-    }
-    let mut rf = match record::load(&file) {
+    // is refused with the move, never read as a topic file. The path is
+    // read as the shell that ran plan reads it.
+    let rel = match state::given_rel(&root, &file) {
+        Some(rel) if crate::rules::is_topic_file_path(&rel) => rel,
+        rel => {
+            let rel = rel.unwrap_or_else(|| file.display().to_string());
+            out::eprint(&[out::refusal(Rule::Plan, &msg::plan_not_a_topic_file(&rel))]);
+            return 1;
+        }
+    };
+    let mut rf = match record::load(&root.join(&rel)) {
         Ok(rf) => rf,
         Err(e) => {
-            out::eprint(&[out::refusal(
-                "plan",
+            out::eprint(&[out::refusal(Rule::Plan,
                 &msg::read_failed(&rel, &e, msg::topic_file_unread("plan", &rel, &e)),
             )]);
             return 1;
@@ -83,17 +86,21 @@ pub fn run(file: PathBuf) -> i32 {
 /// The shape and parse errors of the file, a `###` line that is no question
 /// (9913568f A), and a heading used twice: the
 /// planning keys its rows by heading text.
-fn shape_refusals(rf: &RecordFile) -> Vec<String> {
+/// Each is filed under the rule it is a finding of, as `show` and `check`
+/// file it: `parse` for the file's shape, `plan` for a heading twice.
+fn shape_refusals(rf: &RecordFile) -> Vec<crate::rules::Finding> {
+    use crate::rules::Finding;
     let rel = &rf.rel;
-    let mut out: Vec<String> = rf.shape_errors.iter().map(|e| msg::shape_error(rel, e)).collect();
+    let mut parse: Vec<String> = rf.shape_errors.iter().map(|e| msg::shape_error(rel, e)).collect();
     for sec in &rf.sections {
-        out.extend(sec.shape_errors.iter().map(|e| msg::section_shape_error(rel, &sec.heading_text, e)));
-        out.extend(sec.parse_errors.iter().map(|e| msg::check_parse_error(rel, &sec.heading_text, e)));
+        parse.extend(sec.shape_errors.iter().map(|e| msg::section_shape_error(rel, &sec.heading_text, e)));
+        parse.extend(sec.parse_errors.iter().map(|e| msg::check_parse_error(rel, &sec.heading_text, e)));
     }
     for i in record::non_question_heading_lines(&rf.lines) {
-        out.push(msg::heading_not_a_question(rel, i + 1));
+        parse.push(msg::heading_not_a_question(rel, i + 1));
     }
-    out.extend(crate::rules::duplicate_heading_refusals(rel, &rf.sections));
+    let mut out: Vec<Finding> = parse.into_iter().map(|m| Finding::new(Rule::Parse, m)).collect();
+    out.extend(crate::rules::duplicate_heading_refusals(rel, &rf.sections).into_iter().map(|m| Finding::new(Rule::Plan, m)));
     out
 }
 
@@ -138,7 +145,7 @@ fn did(pl: &Planning, idxs: &[usize], step: Step, out: &mut Vec<Line>) {
 fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
     let shape = shape_refusals(rf);
     if !shape.is_empty() {
-        return Err(shape.iter().map(|m| out::refusal("plan", m)).collect());
+        return Err(shape.into_iter().map(Line::Finding).collect());
     }
     let mut read = Vec::new();
     let e = env(root);
@@ -193,6 +200,8 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
 }
 
 /// A stop of the model or the reader: the error, which names its move.
+/// What stopped `plan`, every line of it led by the command's name once
+/// (`out::stop`).
 fn stop(e: String) -> Vec<Line> {
-    vec![out::refusal("plan", &e)]
+    out::stop(Rule::Plan, &e)
 }

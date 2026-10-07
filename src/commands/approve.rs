@@ -1,3 +1,4 @@
+use crate::rules::Rule;
 use crate::actions;
 use crate::msg::{self, Actor};
 use crate::out;
@@ -6,14 +7,14 @@ use std::path::PathBuf;
 
 pub fn run(file: PathBuf) -> i32 {
     if !repo::owner_authorized() {
-        out::eprint_stop("approve", &msg::owner_refusal("approve", &[&file.display().to_string()]));
+        out::eprint_stop(Rule::Approve, &msg::owner_refusal("approve", &[&file.display().to_string()]));
         return 2;
     }
 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint_stop("approve", &msg::not_a_repo("approve", &[&file.display().to_string()], Actor::Owner));
+            out::eprint_stop(Rule::Approve, &msg::not_a_repo("approve", &[&file.display().to_string()], Actor::Owner));
             return 1;
         }
     };
@@ -26,7 +27,7 @@ pub fn run(file: PathBuf) -> i32 {
             0
         }
         Err(e) => {
-            out::eprint(&out::stop("approve", &e));
+            out::eprint(&out::stop(Rule::Approve, &e));
             1
         }
     }

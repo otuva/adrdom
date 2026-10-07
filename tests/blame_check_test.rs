@@ -386,6 +386,8 @@ fn check_notes_a_shape_error_in_a_blame_file_awaiting_approval() {
     // as a note, since the file awaits approval (05141f49).
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
+    // The origin is there: the shape fault is the file's only finding.
+    write_origin(&dir, "docs/x.md", "one\n");
     write_blame_file(&dir, "adrdom/blame/bad.md", "docs/x.md", "not-a-blob", "1-1\tdropped: dead\n");
 
     let out = adr(&dir, &["check"], &[], "");
@@ -396,9 +398,10 @@ fn check_notes_a_shape_error_in_a_blame_file_awaiting_approval() {
 // adr: 34f0202a-0be4-4049-94de-d3886f4f8ffc
 //
 // A draft blame file naming a directory as its origin: `check` prints the
-// shape failure (the "origin" term: "a prose file outside adrdom"), never
-// the missing-origin message -- a directory is never "missing", it is
-// just never a valid origin at all.
+// fault of its header (the "origin" term: "a prose file outside adrdom"),
+// never the missing-origin message -- a directory is never "missing", it
+// is just never a valid origin at all. On a draft it is a note like every
+// shape fault (05141f49), on an approved file a failure.
 #[test]
 fn check_prints_the_shape_failure_not_missing_origin_for_a_directory() {
     let dir = init_repo();
@@ -411,10 +414,10 @@ fn check_prints_the_shape_failure_not_missing_origin_for_a_directory() {
         "0".repeat(40).as_str(),
         "1-1\tdropped: dead\n",
     );
-    // Never approved.
+    // Never approved: a note.
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
+    assert!(out.status.success(), "{}", stdout(&out));
     let text = stdout(&out);
     assert!(text.contains("is not a regular file outside adrdom"), "{}", text);
     assert!(!text.contains("is missing"), "{}", text);

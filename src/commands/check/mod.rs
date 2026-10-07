@@ -8,13 +8,13 @@ mod parse;
 mod plan;
 mod push;
 mod reader;
-mod tells;
 mod terms;
 mod tests;
 
 pub(crate) use banned::collect_targets;
 pub use tests::test_index;
 
+use crate::rules::Rule;
 use crate::depends;
 use crate::ledger::Ledger;
 use crate::rules;
@@ -28,22 +28,13 @@ use crate::view;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-/// One finding of a category of `check` that is not a rule `approve` or
-/// `ask` judge (the ledger, the install, the ban list, the tests): its
-/// category and its message, the move that clears it inside.
-struct Failure {
-    check: &'static str,
-    message: String,
-}
-
-impl Failure {
-    pub(super) fn finding(self) -> rules::Finding {
-        rules::Finding::new(self.check, self.message)
-    }
-}
+/// One finding of a category of `check`: a `rules::Finding` filed under its
+/// category, the move that clears it inside its message. One type for every
+/// finding check prints, the rules' and its own categories' alike.
+type Failure = rules::Finding;
 
 fn push_failures(out: &mut Vec<rules::Finding>, fs: Vec<Failure>) {
-    out.extend(fs.into_iter().map(Failure::finding));
+    out.extend(fs);
 }
 
 /// The full check report for the owner's page, reusing a test index the
@@ -84,7 +75,7 @@ fn build(
     let (mut records, unreadable) = record::load_all_via(root, &source);
     let unreadable_failures: Vec<rules::Finding> = unreadable
         .into_iter()
-        .map(|(f, e)| rules::Finding::new("parse", msg::topic_file_unreadable(&state::rel_path(root, &f), e)))
+        .map(|(f, e)| rules::Finding::new(Rule::Parse, msg::topic_file_unreadable(&state::rel_path(root, &f), e)))
         .collect();
     let mut notes: Vec<rules::Finding> = Vec::new();
 
@@ -183,10 +174,8 @@ fn build(
             topic_file_findings(&judge)
         })
         .collect();
-    let present_ids: std::collections::HashSet<String> = records
-        .iter()
-        .flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.clone()))
-        .collect();
+    let present_ids: std::collections::HashSet<String> =
+        rules::held_ids(&records).into_iter().map(str::to_string).collect();
     let removed_files: Vec<(String, Vec<crate::moves::RemovalHold>)> =
         rules::removal_awaiting(&led, &|rel| source.exists(root, rel))
             .into_iter()
@@ -215,7 +204,7 @@ fn build(
     // The rules on the topic files as a whole (`rules::judge_records`).
     let missing_answered = rules::judge_records_except(&records, &led, &in_removed_file);
     let mut failures: Vec<rules::Finding> = unreadable_failures;
-    let (parse_failures, parse_notes) = parse::check_parse(&records, &per_record_findings, &awaiting, &led);
+    let (parse_failures, parse_notes) = parse::check_rule(Rule::Parse, &records, &per_record_findings, &awaiting, &led);
     push_failures(&mut failures, parse_failures);
     push_failures(&mut notes, parse_notes);
     push_failures(&mut failures, ids::check_ids(&records, &led, &missing_answered, &raw_hashes, &removed_files));
@@ -235,7 +224,7 @@ fn build(
     notes.extend(blame_notes);
     let (test_failures, untested) = tests::check_tests(root, &records, &led, tests, &source);
     push_failures(&mut failures, test_failures);
-    let (tells_failures, tells_notes) = tells::check_tells(&records, &per_record_findings, &awaiting, &led);
+    let (tells_failures, tells_notes) = parse::check_rule(Rule::Tells, &records, &per_record_findings, &awaiting, &led);
     push_failures(&mut failures, tells_failures);
     push_failures(&mut notes, tells_notes);
     // Per "What does check do with an untested current decision?": reported
@@ -311,7 +300,7 @@ pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: 
     if let Some(m) = message.as_deref().filter(|_| !merging) {
         let findings: Vec<Line> = banned::check_banned(&root, false, Some(m), &Source::for_check(false, true))
             .into_iter()
-            .map(|f| Line::Finding(f.finding()))
+            .map(Line::Finding)
             .collect();
         out::print(&findings);
         return if findings.is_empty() { 0 } else { 1 };
@@ -328,7 +317,7 @@ pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: 
 /// that name in front already.
 pub(super) fn stopped(message: String) -> Line {
     let message = message.strip_prefix("check: ").map(str::to_string).unwrap_or(message);
-    Line::Finding(rules::Finding::new("check", message))
+    Line::Finding(rules::Finding::new(Rule::Check, message))
 }
 
 /// Whether a finding `r` on `rf` is a note rather than a failure (per
@@ -342,7 +331,7 @@ fn is_note(rf: &RecordFile, r: &rules::Finding, draft: bool, led: &Ledger) -> bo
     if !draft {
         return false;
     }
-    if !matches!(r.rule, "tells" | "plan" | "parse") {
+    if !matches!(r.rule, rules::Rule::Tells | rules::Rule::Plan | rules::Rule::Parse) {
         return false;
     }
     // Every question the finding is about must still be able to change; a

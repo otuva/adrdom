@@ -173,9 +173,10 @@ fn show_names_the_next_move_at_every_step() {
         next(&dir),
         vec![ask_for(&[ONE]), answer_for(&dir, &two, TWO), waits(THREE, TWO)]
     );
-    // Its line in the listing carries no version for the owner to use.
+    // Its line in the listing names it changed since asked, and carries no
+    // version for the owner to use.
     let shown = stdout(&adr(&dir, &["show", "--all"], &[], ""));
-    assert!(shown.contains(&format!("\n[asked] {}\n", ONE)), "{}", shown);
+    assert!(shown.contains(&format!("\n[changed since asked] {}\n", ONE)), "{}", shown);
     assert!(adr(&dir, &["ask", p], &[], "").status.success());
     assert_eq!(
         next(&dir),

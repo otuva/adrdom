@@ -192,6 +192,8 @@ fn what_approve_refuses_of_a_blame_draft_check_reports_with_the_same_move() {
 fn a_blame_draft_with_a_shape_fault_is_a_note() {
     // adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
     let (dir, _, _) = blame_setup();
+    // The origin is there: the shape fault is the file's only finding.
+    write_origin(&dir, "docs/old.md", "one\ntwo\n");
     write_record(&dir, "adrdom/blame/old.md", "origin: docs/old.md\n\n1-2\tdropped: dead\n");
     let out = approve(&dir, &dir.join("adrdom/blame/old.md"));
     let (ok, text, _) = check(&dir);

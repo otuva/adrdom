@@ -37,6 +37,76 @@ pub enum Subject {
     Directory(String),
 }
 
+/// The rule a finding is filed under, the label every command prints it
+/// with: a rule of the records (`parse`, `plan`, `tells` ...), a category of
+/// `check` (`ledger`, `install`, `tested` ...), or the command whose own
+/// input a stop is about (`ask`, `approve`, `serve` ...). One closed list,
+/// so a finding is filed and read back by one name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Rule {
+    Parse,
+    Plan,
+    PlanFrozen,
+    Tells,
+    Answers,
+    Ids,
+    Terms,
+    Blame,
+    Banned,
+    Ledger,
+    Reader,
+    Install,
+    Tested,
+    Untested,
+    Check,
+    Show,
+    Ask,
+    Approve,
+    Answer,
+    Ban,
+    Unban,
+    Uninstall,
+    Serve,
+    Read,
+}
+
+impl Rule {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Rule::Parse => "parse",
+            Rule::Plan => "plan",
+            Rule::PlanFrozen => "plan_frozen",
+            Rule::Tells => "tells",
+            Rule::Answers => "answers",
+            Rule::Ids => "ids",
+            Rule::Terms => "terms",
+            Rule::Blame => "blame",
+            Rule::Banned => "banned",
+            Rule::Ledger => "ledger",
+            Rule::Reader => "reader",
+            Rule::Install => "install",
+            Rule::Tested => "tested",
+            Rule::Untested => "untested",
+            Rule::Check => "check",
+            Rule::Show => "show",
+            Rule::Ask => "ask",
+            Rule::Approve => "approve",
+            Rule::Answer => "answer",
+            Rule::Ban => "ban",
+            Rule::Unban => "unban",
+            Rule::Uninstall => "uninstall",
+            Rule::Serve => "serve",
+            Rule::Read => "read",
+        }
+    }
+}
+
+impl std::fmt::Display for Rule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// One rule a thing in the records breaks, tagged with the rule's name (the
 /// `check` category under which the identical text is filed: `parse`,
 /// `tells`, `plan`, `plan_frozen`, `ids`, or `answers`, which `check` prints
@@ -46,7 +116,7 @@ pub enum Subject {
 #[derive(Debug, Clone)]
 pub struct Finding {
     pub subject: Subject,
-    pub rule: &'static str,
+    pub rule: Rule,
     /// The finding whole, with the move that clears it.
     pub message: String,
     /// The questions of the file the finding is about, by index; empty for
@@ -58,7 +128,7 @@ pub struct Finding {
 
 impl Finding {
     /// A finding about the records; `about` names its subject.
-    pub fn new(rule: &'static str, message: String) -> Finding {
+    pub fn new(rule: Rule, message: String) -> Finding {
         Finding { subject: Subject::Records, rule, message, sections: Vec::new() }
     }
     pub fn about(mut self, subject: Subject) -> Finding {
@@ -89,14 +159,21 @@ fn about_topic_file(fs: Vec<Finding>, rel: &str) -> Vec<Finding> {
 }
 
 /// Strings of one rule, each a finding about the topic file `rel`.
-fn found(rule: &'static str, rel: &str, messages: Vec<String>) -> Vec<Finding> {
+fn found(rule: Rule, rel: &str, messages: Vec<String>) -> Vec<Finding> {
     messages.into_iter().map(|m| Finding::new(rule, m).about(Subject::TopicFile(rel.to_string()))).collect()
+}
+
+/// Every identifier the topic files `all` hold: the one set of the
+/// questions in the files every reader of "held by no file" reads.
+pub fn held_ids(all: &[RecordFile]) -> HashSet<&str> {
+    all.iter().flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.as_deref())).collect()
 }
 
 /// A path of the shape of a topic file: `adrdom/decisions/<name>.md`.
 pub(crate) fn is_topic_file_path(rel: &str) -> bool {
-    rel.strip_prefix(&format!("{}/", repo::DECISIONS_DIR))
-        .is_some_and(|name| !name.contains('/') && name.ends_with(".md"))
+    // Any `.md` under the directory, nested too: the files the loader,
+    // show, check, ask and approve take (`repo::list_decision_files_via`).
+    rel.strip_prefix(&format!("{}/", repo::DECISIONS_DIR)).is_some_and(|name| name.ends_with(".md"))
 }
 
 /// Whether `rel` (a path from the repository root) names a file approve
@@ -200,11 +277,13 @@ pub fn removal_holds(root: &Path, rel: &str, led: &Ledger, present_ids: &HashSet
 
     let mut holds = Vec::new();
     for (id, heading) in &held {
-        let status = match led.latest_state(id).map(|r| r.event.as_str()) {
+        // The status the closed list names (`status::question_status_of_id`):
+        // a question never asked, asked, or a current decision holds the
+        // removal; a closed one does not.
+        let status = match status::question_status_of_id(led, id) {
             None => status::QuestionStatus::NotAsked,
-            Some("asked") => status::QuestionStatus::Asked,
-            Some("answered") => status::QuestionStatus::Answered,
-            _ => continue,
+            Some(st @ (status::QuestionStatus::Asked | status::QuestionStatus::Answered)) => st,
+            Some(_) => continue,
         };
         holds.push(moves::RemovalHold { id: id.clone(), heading: heading.clone(), status });
     }
@@ -445,7 +524,7 @@ fn messages(found: Vec<(usize, String)>) -> Vec<String> {
 }
 
 /// `found` as findings of `rule`, each about its question.
-fn in_sections(rule: &'static str, found: Vec<(usize, String)>) -> Vec<Finding> {
+fn in_sections(rule: Rule, found: Vec<(usize, String)>) -> Vec<Finding> {
     found.into_iter().map(|(i, m)| Finding::new(rule, m).in_section(i)).collect()
 }
 
@@ -545,7 +624,7 @@ pub fn closed_findings(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<Finding>
     for (si, sec) in rf.sections.iter().enumerate() {
         let Some(id) = &sec.id else { continue };
         let cur = record::section_hash(&rf.lines, sec);
-        let mut push = |m: String| out.push(Finding::new("answers", m).in_section(si));
+        let mut push = |m: String| out.push(Finding::new(Rule::Answers, m).in_section(si));
         // The file's own `**Answer:**` line shows one side only: two
         // standing rulings for different options are read off the ledger.
         if let Some((a, b)) = state::conflicting_rulings(led, id) {
@@ -701,14 +780,14 @@ pub fn record_refusals(
     let mut out: Vec<Finding> = Vec::new();
 
     for e in &rf.shape_errors {
-        out.push(Finding::new("parse", msg::shape_error(rel, e)));
+        out.push(Finding::new(Rule::Parse, msg::shape_error(rel, e)));
     }
     for i in record::non_question_heading_lines(&rf.lines) {
-        out.push(Finding::new("parse", msg::heading_not_a_question(rel, i + 1)));
+        out.push(Finding::new(Rule::Parse, msg::heading_not_a_question(rel, i + 1)));
     }
     for (si, sec) in rf.sections.iter().enumerate() {
         for e in &sec.shape_errors {
-            out.push(Finding::new("parse", msg::section_shape_error(rel, &sec.heading_text, e)).in_section(si));
+            out.push(Finding::new(Rule::Parse, msg::section_shape_error(rel, &sec.heading_text, e)).in_section(si));
         }
     }
     // 178a232e A point 1: an option with no decision sentence (or more than
@@ -718,7 +797,7 @@ pub fn record_refusals(
     // already refuses on a shape error.
     for (si, sec) in rf.sections.iter().enumerate() {
         for e in &sec.parse_errors {
-            out.push(Finding::new("parse", msg::check_parse_error(rel, &sec.heading_text, e)).in_section(si));
+            out.push(Finding::new(Rule::Parse, msg::check_parse_error(rel, &sec.heading_text, e)).in_section(si));
         }
     }
 
@@ -735,25 +814,25 @@ pub fn record_refusals(
             continue;
         }
         for (line, phrase, what) in tells::heading_tells(sec.start, &sec.heading_text) {
-            out.push(Finding::new("tells", msg::tell(rel, line, &sec.heading_text, &phrase, what)).in_section(si));
+            out.push(Finding::new(Rule::Tells, msg::tell(rel, line, &sec.heading_text, &phrase, what)).in_section(si));
         }
     }
     // Per "Does ask refuse an option over a word limit?" and "Does an option
     // under a heading that opens with Does hold one word?": the same length
     // rules `ask` enforces, found before approval in a question not yet asked.
-    out.extend(in_sections("tells", length_found(rel, rf, led)));
+    out.extend(in_sections(Rule::Tells, length_found(rel, rf, led)));
     // The other two body rules `ask` enforces, found the same way: a loaded
     // phrase in a body, and a question that pairs no term.
-    out.extend(in_sections("tells", body_tell_found(rel, rf, led)));
-    out.extend(in_sections("tells", no_term_found(rel, rf, terms_list, led)));
+    out.extend(in_sections(Rule::Tells, body_tell_found(rel, rf, led)));
+    out.extend(in_sections(Rule::Tells, no_term_found(rel, rf, terms_list, led)));
     // The three shapes of a depends entry approve stops, found the same way.
     for message in depends_shape_refusals(rel, rf, terms_list, phrase_lookup, cross_file_headings, all, led) {
-        out.push(Finding::new("plan", message));
+        out.push(Finding::new(Rule::Plan, message));
     }
     {
         let (cs, ce) = rf.context_range;
         for (line, phrase, what) in tells::prose_tells_in(&rf.lines, cs, ce) {
-            out.push(Finding::new("tells", msg::tell(rel, line, "context", &phrase, what)));
+            out.push(Finding::new(Rule::Tells, msg::tell(rel, line, "context", &phrase, what)));
         }
     }
 
@@ -762,7 +841,7 @@ pub fn record_refusals(
     // stands on, before anything about it is resolved or written.
     for (si, sec) in rf.sections.iter().enumerate() {
         if sec.depends.is_empty() {
-            out.push(Finding::new("plan", msg::no_depends_line(rel, &sec.heading_text)).in_section(si));
+            out.push(Finding::new(Rule::Plan, msg::no_depends_line(rel, &sec.heading_text)).in_section(si));
         }
     }
 
@@ -784,7 +863,8 @@ pub fn record_refusals(
         let frozen = state::is_frozen(led, sec);
         for d in &sec.depends {
             if frozen && matches!(d, record::Dep::Text { .. }) {
-                out.push(Finding::new("plan_frozen", msg::frozen_depends_edited(rel, &sec.heading_text)).in_section(si));
+                let st = status::question_status(led, sec);
+                out.push(Finding::new(Rule::PlanFrozen, msg::frozen_depends_edited(rel, &sec.heading_text, st)).in_section(si));
                 continue;
             }
             if let record::Dep::Text { text, .. } = d {
@@ -816,7 +896,7 @@ pub fn record_refusals(
                     _ => None,
                 };
                 out.push(
-                    Finding::new("plan", depends::dep_refusal_text(rel, &sec.heading_text, &e, name)).in_section(si),
+                    Finding::new(Rule::Plan, depends::dep_refusal_text(rel, &sec.heading_text, &e, name)).in_section(si),
                 );
             }
         }
@@ -834,7 +914,7 @@ pub fn record_refusals(
     // `unrelated:` entry names a current decision, a term, another question
     // of the file or a dropped question.
     for message in crate::plan::unrelated_refusals(rel, rf, terms_list, cross_file_headings, led) {
-        out.push(Finding::new("plan", message));
+        out.push(Finding::new(Rule::Plan, message));
     }
 
     out
@@ -862,7 +942,7 @@ pub fn supersedes_refusals(
     led: &Ledger,
     only: Option<usize>,
 ) -> Vec<Finding> {
-    let refuse = |index: usize, message: String| Finding::new("plan", message).in_section(index);
+    let refuse = |index: usize, message: String| Finding::new(Rule::Plan, message).in_section(index);
     let mut out: Vec<Finding> = Vec::new();
     // (section index, asked, target ids) of each judged section.
     let mut judged: Vec<(usize, bool, Vec<String>)> = Vec::new();
@@ -874,13 +954,15 @@ pub fn supersedes_refusals(
         {
             continue;
         }
-        let asked = sec
-            .id
-            .as_deref()
-            .is_some_and(|id| state::asked_text_stands(led, id, &record::section_hash(&rf.lines, sec)));
+        let asked = crate::view::asked_text_stands(led, rf, sec);
         let mut ids = Vec::new();
         for old in &depends::supersedes_entries(&sec.supersedes, cross_file_headings, led) {
             match depends::resolve_supersedes(old, cross_file_headings, led) {
+                // One decision named twice (by heading and by identifier, or
+                // twice alike): found before approval, never written twice.
+                Ok(id) if ids.contains(&id) => {
+                    out.push(refuse(i, msg::supersedes_names_twice(rel, &sec.heading_text, old)));
+                }
                 Ok(id) => ids.push(id),
                 Err(depends::SupersedesError::Ambiguous(files)) => {
                     out.push(refuse(i, msg::ask_supersedes_ambiguous(rel, &sec.heading_text, old, &files)));
@@ -966,14 +1048,14 @@ fn waiting_on_other_file(
         for sec in other.sections.iter().filter(|s| s.heading_text.trim() == entry.trim()) {
             match status::question_status(led, sec) {
                 QuestionStatus::NoBody | QuestionStatus::NotAsked | QuestionStatus::Asked => {
-                    return Some(Finding::new("plan", msg::dep_waits_on_other_file(rel, section, entry, &other.rel)));
+                    return Some(Finding::new(Rule::Plan, msg::dep_waits_on_other_file(rel, section, entry, &other.rel)));
                 }
                 QuestionStatus::Refused => refused = Some(other.rel.as_str()),
                 _ => {}
             }
         }
     }
-    refused.map(|r| Finding::new("plan", msg::dep_on_refused_in_other_file(rel, section, entry, r)))
+    refused.map(|r| Finding::new(Rule::Plan, msg::dep_on_refused_in_other_file(rel, section, entry, r)))
 }
 
 /// Refusals about a topic file's own name and its own headings, one
@@ -1028,10 +1110,7 @@ pub fn duplicate_heading_refusals(rel: &str, sections: &[record::Section]) -> Ve
 /// Whether a question has force: its text can no longer change because it
 /// is answered, refused, superseded, or asked and unedited since.
 pub fn has_force(rf: &RecordFile, s: &record::Section, led: &Ledger) -> bool {
-    state::is_frozen(led, s)
-        || s.id
-            .as_deref()
-            .is_some_and(|id| state::asked_text_stands(led, id, &record::section_hash(&rf.lines, s)))
+    state::is_frozen(led, s) || crate::view::asked_text_stands(led, rf, s)
 }
 
 /// The questions of `rf` bearing `heading` that are the copy (05141f49 A):
@@ -1109,15 +1188,7 @@ pub fn missing_answered_refusals_except(records: &[RecordFile], led: &Ledger, sk
         }
     }
 
-    let mut state_ids: BTreeSet<String> = BTreeSet::new();
-    for row in &led.rows {
-        if matches!(
-            row.event.as_str(),
-            "asked" | "answered" | "refused" | "superseded" | "withdrawn"
-        ) {
-            state_ids.insert(row.id.clone());
-        }
-    }
+    let state_ids = led.state_ids();
 
     let mut out = Vec::new();
     for id in &state_ids {
@@ -1130,7 +1201,7 @@ pub fn missing_answered_refusals_except(records: &[RecordFile], led: &Ledger, sk
                     .latest_asked(id)
                     .map(|a| a.detail.clone())
                     .unwrap_or_else(|| id.clone());
-                out.push(Finding::new("ids", msg::answered_id_missing(id, &heading)));
+                out.push(Finding::new(Rule::Ids, msg::answered_id_missing(id, &heading)));
             }
         }
     }
@@ -1174,7 +1245,7 @@ pub fn derive_finding(rel: &str, rf: &RecordFile, all: &[RecordFile], led: &Ledg
         .filter(|(_, s)| named.contains(&s.heading_text.as_str()))
         .map(|(i, _)| i)
         .collect();
-    let f = waiting.unwrap_or_else(|| Finding::new("plan", msg::derive_error(rel, err)));
+    let f = waiting.unwrap_or_else(|| Finding::new(Rule::Plan, msg::derive_error(rel, err)));
     Some(f.in_sections(at))
 }
 
@@ -1185,7 +1256,7 @@ pub fn derive_finding(rel: &str, rf: &RecordFile, all: &[RecordFile], led: &Ledg
 pub fn cap_finding(rel: &str, rf: &RecordFile, replaced: &HashSet<String>, led: &Ledger) -> Option<Finding> {
     let tiers = rf.tiers.as_ref()?;
     let (open, answered) = state::over_cap_headings(led, rf, tiers, replaced)?;
-    Some(Finding::new("plan", msg::tier_cap_exceeded(rel, &open, answered, record::TIER_CAP)))
+    Some(Finding::new(Rule::Plan, msg::tier_cap_exceeded(rel, &open, answered, record::TIER_CAP)))
 }
 
 // --- the judgements every command reads --------------------------------------
@@ -1272,16 +1343,48 @@ pub fn judge_topic_file(j: &TopicFileJudge) -> Vec<Finding> {
         ),
         rel,
     );
-    let directory = |m: String| Finding::new("plan", m).about(Subject::Directory(rel.to_string()));
+    let directory = |m: String| Finding::new(Rule::Plan, m).about(Subject::Directory(rel.to_string()));
     out.extend(own_name_and_heading_refusals(rel, rf.topic.as_deref(), &rf.sections).into_iter().map(directory));
     out.extend(cross_file_heading_refusals(rel, rf, j.all, led).into_iter().map(directory));
     // Per "Does a depends entry carry the answers it holds under?": a letter
     // the target has no option for is found before `ask`.
-    out.extend(about_topic_file(in_sections("plan", letter_found(rel, rf, led)), rel));
+    out.extend(about_topic_file(in_sections(Rule::Plan, letter_found(rel, rf, led)), rel));
     if j.planning {
-        out.extend(found("plan", rel, planning_steps(j.root, rel, rf, j.all, j.terms_list, led, j.shared)));
+        out.extend(found(Rule::Plan, rel, planning_steps(j.root, rel, rf, j.all, j.terms_list, led, j.shared)));
     }
+    out.extend(about_topic_file(in_sections(Rule::Banned, banned_in_questions(j.root, rel, rf, j.terms_list, led)), rel));
     out
+}
+
+/// A banned word in the text of a question open to ask (per "What does the
+/// ban scan read?" and "Does ban refuse a word that appears in the
+/// repository?"): one finding per question, naming the question and never
+/// the word. What `ask` refuses a candidate on, read by `show`, `plan` and
+/// `approve` alike, so no command names `adr ask` or the owner's approve
+/// for a plan holding one. `check` reports the word by file and line in
+/// its own scan of every tracked file and does not file these again.
+pub fn banned_in_questions(
+    root: &Path,
+    rel: &str,
+    rf: &RecordFile,
+    terms_list: &[terms::Term],
+    led: &Ledger,
+) -> Vec<(usize, String)> {
+    let entries: HashMap<String, Option<String>> =
+        crate::banned::read_entries(&root.join(crate::banned::BAN_LIST)).into_iter().collect();
+    if entries.is_empty() {
+        return Vec::new();
+    }
+    rf.sections
+        .iter()
+        .enumerate()
+        .filter(|(_, sec)| status::open_to_ask_text(led, rf, sec))
+        .filter_map(|(i, sec)| {
+            let text = state::section_text_excluding_terms_line(&rf.lines, sec);
+            let hit = crate::banned::first_hit(&text, &entries, terms_list)?;
+            Some((i, msg::banned_word_in_candidate(rel, &sec.heading_text, &msg::term_suffix(hit.term.as_deref()))))
+        })
+        .collect()
 }
 
 /// The questions asked (or refused) in the topic file `rel` and struck from
@@ -1301,7 +1404,7 @@ pub fn struck_asked(rel: &str, stale: bool, sole_stale: bool, all: &[RecordFile]
     struck_asked_ids(rel, sole_stale, all, led)
         .into_iter()
         .map(|(id, heading, event)| {
-            Finding::new("ids", msg::removed_from_plan(&id, &heading, event, rel)).about(Subject::TopicFile(rel.to_string()))
+            Finding::new(Rule::Ids, msg::removed_from_plan(&id, &heading, event, rel)).about(Subject::TopicFile(rel.to_string()))
         })
         .collect()
 }
@@ -1312,7 +1415,7 @@ pub fn struck_asked(rel: &str, stale: bool, sole_stale: bool, all: &[RecordFile]
 /// awaiting a re-approval (`sole_stale`), the ids asked under a ledger that
 /// approved whole files only and so names no file for them.
 pub fn struck_asked_ids<'l>(rel: &str, sole_stale: bool, all: &[RecordFile], led: &'l Ledger) -> Vec<(String, String, &'l str)> {
-    let held: HashSet<&str> = all.iter().flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.as_deref())).collect();
+    let held: HashSet<&str> = held_ids(all);
     let mut seen: HashSet<&str> = HashSet::new();
     let mut out = Vec::new();
     for row in led.rows.iter().filter(|r| r.event == "asked" && r.id != "-") {
@@ -1492,7 +1595,7 @@ pub fn judged_terms(tf: Option<&terms::TermsFile>) -> Vec<terms::Term> {
 pub fn terms_gate(root: &Path, led: &Ledger, rel: &str) -> Vec<Finding> {
     match crate::actions::require_terms(root, led, rel) {
         Ok(_) => Vec::new(),
-        Err(text) => text.lines().map(|l| Finding::new("terms", l.to_string()).about(Subject::TermsFile)).collect(),
+        Err(text) => text.lines().map(|l| Finding::new(Rule::Terms, l.to_string()).about(Subject::TermsFile)).collect(),
     }
 }
 
@@ -1511,7 +1614,7 @@ pub fn judge_records_except(records: &[RecordFile], led: &Ledger, skip: &HashSet
             let Some(id) = sec.id.as_deref() else { continue };
             match seen.get(id) {
                 Some(prev) => out.push(
-                    Finding::new("ids", msg::duplicate_id(id, prev, &rf.rel, &sec.heading_text))
+                    Finding::new(Rule::Ids, msg::duplicate_id(id, prev, &rf.rel, &sec.heading_text))
                         .about(Subject::TopicFile(rf.rel.clone())),
                 ),
                 None => {
@@ -1525,7 +1628,7 @@ pub fn judge_records_except(records: &[RecordFile], led: &Ledger, skip: &HashSet
             let Some(id) = &sec.id else { continue };
             if led.latest_state(id).is_some_and(|row| row.event == "withdrawn") {
                 out.push(
-                    Finding::new("ids", msg::withdrawn_id_present(id, &sec.heading_text, &rf.rel))
+                    Finding::new(Rule::Ids, msg::withdrawn_id_present(id, &sec.heading_text, &rf.rel))
                         .about(Subject::TopicFile(rf.rel.clone())),
                 );
             }
@@ -1541,7 +1644,7 @@ pub fn judge_removed_topic_file(root: &Path, rel: &str, led: &Ledger, present_id
     removal_holds(root, rel, led, present_ids)
         .holds
         .iter()
-        .map(|h| Finding::new("plan", msg::removal_holds_open(rel, h)).about(Subject::TopicFile(rel.to_string())))
+        .map(|h| Finding::new(Rule::Plan, msg::removal_holds_open(rel, h)).about(Subject::TopicFile(rel.to_string())))
         .collect()
 }
 
@@ -1559,7 +1662,7 @@ pub fn judge_terms_file(
     approved_plans: &HashSet<String>,
 ) -> (Vec<Finding>, Vec<Vec<(String, String)>>) {
     let (messages, pairs) = terms_refusals(root, records, tf, led, source, scan_banned, approved_plans);
-    (messages.into_iter().map(|m| Finding::new("terms", m).about(Subject::TermsFile)).collect(), pairs)
+    (messages.into_iter().map(|m| Finding::new(Rule::Terms, m).about(Subject::TermsFile)).collect(), pairs)
 }
 
 /// The coverage rule of a blame file over an origin of `n` lines (per "Does a
@@ -1570,10 +1673,10 @@ pub fn judge_blame_coverage(bf: &crate::blame::BlameFile, n: usize) -> Vec<Findi
     let about = || Subject::BlameFile(bf.rel.clone());
     let mut out: Vec<Finding> = beyond
         .iter()
-        .map(|b| Finding::new("blame", msg::blame_range_beyond(&bf.rel, b.start, b.end, n)).about(about()))
+        .map(|b| Finding::new(Rule::Blame, msg::blame_range_beyond(&bf.rel, b.start, b.end, n)).about(about()))
         .collect();
     out.extend(
-        gaps.iter().map(|g| Finding::new("blame", msg::blame_coverage_gap(&bf.rel, g.start, g.end)).about(about())),
+        gaps.iter().map(|g| Finding::new(Rule::Blame, msg::blame_coverage_gap(&bf.rel, g.start, g.end)).about(about())),
     );
     out
 }
@@ -1659,7 +1762,7 @@ pub fn judge_blame_destinations_in(
         match blame::resolve_destination(&row.dest, &ctx) {
             Ok(r) => resolved.push(r),
             Err(e) => findings.push(
-                Finding::new("blame", blame::dest_refusal_text(&bf.rel, row, &e))
+                Finding::new(Rule::Blame, blame::dest_refusal_text(&bf.rel, row, &e))
                     .about(Subject::BlameFile(bf.rel.clone())),
             ),
         }
@@ -1681,7 +1784,7 @@ pub fn judge_blame_file(
 ) -> Vec<Finding> {
     let about = || Subject::BlameFile(bf.rel.clone());
     let mut out: Vec<Finding> =
-        st.shape.iter().chain(&st.failures).map(|f| Finding::new("blame", f.clone()).about(about())).collect();
+        st.shape.iter().chain(&st.failures).map(|f| Finding::new(Rule::Blame, f.clone()).about(about())).collect();
     if let Some(c) = &st.origin_content {
         out.extend(judge_blame_coverage(bf, c.lines().count()));
         if let Some(origin) = &bf.origin {

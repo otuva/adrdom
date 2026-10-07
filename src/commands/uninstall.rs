@@ -1,6 +1,7 @@
 use crate::commands::install::{
     self, CLAUDE_MD_IMPORT, CLAUDE_MD_MARKER, COMMIT_MSG_HOOK, PRE_COMMIT_HOOK, PRE_PUSH_HOOK,
 };
+use crate::rules::Rule;
 use crate::commands::deny_entries;
 use crate::msg::{self, Actor, Next};
 use crate::out::{self, Event};
@@ -28,14 +29,14 @@ fn removed(rel: &str) -> Event {
 /// leaving `adrdom/` itself untouched.
 pub fn run() -> i32 {
     if !repo::owner_authorized() {
-        out::eprint_stop("uninstall", &msg::owner_refusal("uninstall", &[]));
+        out::eprint_stop(Rule::Uninstall, &msg::owner_refusal("uninstall", &[]));
         return 2;
     }
 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint_stop("uninstall", &msg::not_a_repo("uninstall", &[], Actor::Owner));
+            out::eprint_stop(Rule::Uninstall, &msg::not_a_repo("uninstall", &[], Actor::Owner));
             return 1;
         }
     };
@@ -49,7 +50,7 @@ pub fn run() -> i32 {
     out::print_events(&events);
     match failed {
         Some(m) => {
-            out::eprint_stop("uninstall", &m);
+            out::eprint_stop(Rule::Uninstall, &m);
             1
         }
         None => 0,
@@ -62,8 +63,19 @@ fn remove_all(root: &Path, events: &mut Vec<Event>) -> Result<(), String> {
     events.extend(remove_agents_md_section(root).map_err(|e| msg::update_failed("AGENTS.md", e, retry()))?);
     events.extend(remove_claude_md_import(root).map_err(|e| msg::update_failed("CLAUDE.md", e, retry()))?);
     remove_hooks(root, events)?;
-    events.extend(remove_settings_deny(root)?);
+    remove_settings_deny(root, events)?;
     remove_codex_rules(root, events)
+}
+
+/// The text of `path`, `None` when it is not there. A file that is there
+/// and cannot be read as text is a failure, named, never skipped: what
+/// install wrote into it would stay without a word.
+fn read_if_present(path: &Path) -> Result<Option<String>, String> {
+    match fs::read_to_string(path) {
+        Ok(c) => Ok(Some(c)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 /// Removes the marked brief section from AGENTS.md, plus the one blank
@@ -71,9 +83,8 @@ fn remove_all(root: &Path, events: &mut Vec<Event>) -> Result<(), String> {
 /// nothing but whitespace remains.
 fn remove_agents_md_section(root: &Path) -> Result<Option<Event>, String> {
     let path = root.join("AGENTS.md");
-    let existing = match fs::read_to_string(&path) {
-        Ok(c) => c,
-        Err(_) => return Ok(None),
+    let Some(existing) = read_if_present(&path)? else {
+        return Ok(None);
     };
     let parts: Vec<&str> = existing.split('\n').collect();
     let Some((begin, end)) = install::find_markers(&parts) else {
@@ -118,9 +129,8 @@ fn remove_agents_md_section(root: &Path) -> Result<Option<Event>, String> {
 /// above it is the owner's own and is left alone.
 fn remove_claude_md_import(root: &Path) -> Result<Option<Event>, String> {
     let path = root.join("CLAUDE.md");
-    let existing = match fs::read_to_string(&path) {
-        Ok(c) => c,
-        Err(_) => return Ok(None),
+    let Some(existing) = read_if_present(&path)? else {
+        return Ok(None);
     };
     let parts: Vec<&str> = existing.split('\n').collect();
     let Some(marker_idx) = parts.iter().position(|l| *l == CLAUDE_MD_MARKER) else {
@@ -173,9 +183,15 @@ fn remove_hooks(root: &Path, events: &mut Vec<Event>) -> Result<(), String> {
         events.push(removed(".githooks"));
     }
 
+    // Unset only once every hook install wrote is gone: a hook left (one
+    // edited by hand) keeps running where git looks for it. The change of
+    // git's configuration is printed as the write it is.
     if let Some(val) = repo::git(root, &["config", "core.hooksPath"]) {
-        if val.trim() == ".githooks" && repo::git(root, &["config", "--unset", "core.hooksPath"]).is_none() {
-            return Err(msg::hooks_path_failed("unset", retry()));
+        if val.trim() == ".githooks" && !hooks.exists() {
+            if repo::git(root, &["config", "--unset", "core.hooksPath"]).is_none() {
+                return Err(msg::hooks_path_failed("unset", retry()));
+            }
+            events.push(Event::ConfigUnset { key: "core.hooksPath".to_string() });
         }
     }
 
@@ -229,17 +245,17 @@ fn remove_codex_rules(root: &Path, events: &mut Vec<Event>) -> Result<(), String
 /// `permissions.deny` and no other key anywhere), then removes `.claude`
 /// once that leaves it empty. Does nothing when the file doesn't exist. A
 /// failure is the whole refusal, its move named once.
-fn remove_settings_deny(root: &Path) -> Result<Vec<Event>, String> {
+fn remove_settings_deny(root: &Path, events: &mut Vec<Event>) -> Result<(), String> {
     const REL: &str = ".claude/settings.json";
     let failed = |e: String| msg::update_failed(REL, e, retry());
     let dir = root.join(".claude");
     let path = dir.join("settings.json");
     if !path.exists() {
-        return Ok(Vec::new());
+        return Ok(());
     }
     let content = fs::read_to_string(&path).map_err(|e| failed(e.to_string()))?;
     if content.trim().is_empty() {
-        return Ok(Vec::new());
+        return Ok(());
     }
     let mut value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|e| {
@@ -260,23 +276,24 @@ fn remove_settings_deny(root: &Path) -> Result<Vec<Event>, String> {
     }
 
     if !any_removed {
-        return Ok(Vec::new());
+        return Ok(());
     }
 
     if settings_holds_only_deny(&value) {
         fs::remove_file(&path).map_err(|e| failed(e.to_string()))?;
-        let mut events = vec![removed(REL)];
-        if remove_dir_when_empty(&dir).map_err(|e| failed(format!("{}: {}", dir.display(), e)))? {
+        // Printed whatever follows: the file is gone.
+        events.push(removed(REL));
+        if remove_dir_when_empty(&dir).map_err(|e| msg::remove_failed(".claude", e, retry()))? {
             events.push(removed(".claude"));
         }
-        return Ok(events);
+        return Ok(());
     }
 
     let mut pretty = serde_json::to_string_pretty(&value).map_err(|e| failed(e.to_string()))?;
     pretty.push('\n');
     fs::write(&path, pretty).map_err(|e| failed(e.to_string()))?;
-
-    Ok(vec![written(REL)])
+    events.push(written(REL));
+    Ok(())
 }
 
 /// True when `value` holds nothing but the shape install writes: a top

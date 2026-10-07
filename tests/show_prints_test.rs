@@ -155,7 +155,7 @@ fn show_marks_what_a_file_holds_beyond_its_latest_approval() {
     assert!(shown.starts_with("[changed] Gate (adrdom/decisions/gate.md)\n"), "{}", shown);
     assert!(
         shown.contains(&format!(
-            "[asked] {}\n    depends: widget\n    unrelated: {}\n  - Problem: the widget breaks.\n  + Problem: the widget breaks in use.\n    Standard: plain words.\n",
+            "[changed since asked] {}\n    depends: widget\n    unrelated: {}\n  - Problem: the widget breaks.\n  + Problem: the widget breaks in use.\n    Standard: plain words.\n",
             ONE, TWO
         )),
         "{}",
