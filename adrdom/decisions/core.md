@@ -418,8 +418,10 @@ Standard: a limit on a set is judged on the set as the change leaves it.
 **Answer:** A
 
 ### What does a comment in code carry to name a decision?
-depends: decision, identifier, check, agent, What does a test carry to name its decision?, Does check fail a test that names a decision that is not current?, Does the agent build what no current decision covers?, What does check do with an untested current decision?
-unrelated: Does a command name a status of its own?, Does a depends entry on a question in its file carry an answer set?, Does a finding carry the identifier of the decision it judges?, Does a supersedes line name every current decision standing on its target?, Does the word limit hold for an option's Why line?, depends, supersede, Does check read the words of an answered question again?, Does a reference in a topic file carry the identifier of what it names?, Does the adr binary serve the ui?, What does check do with a fault on a file awaiting approval?
+depends: 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, e877e4a9-2caf-4fe6-9f82-5476a2abb00b, 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, f90dbd5b-8fbe-4899-8588-f8762795c2e2, 4319a653-6901-446c-94ab-6420ef472134, 751ef30c-6a2f-4936-bf9b-b9d487146e53, c3127af2-4c96-48d5-a164-bac49a9a09ec, 3460d220-e523-448b-aeff-baa8051b7d06
+unrelated: f53ac3b9-efde-427c-8027-19988aa8fda7, 946263aa-519a-47aa-b743-5cdcf52f5d35, 110f471d-ac4b-4cbb-aa7b-3f74ac442d78, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, 0487a1cf-eb61-4bf8-bd16-eed899d22d2c, aef1b384-2b33-47a2-92a8-ec7f8fb258ef, 2bae531b-c4df-48a0-89a0-3d52726741ea, 6108b8b2-911e-443b-abe0-4c6f8b407384, 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f, ece60954-56d4-4622-883e-265f3b997c9f, 05141f49-d9d2-407c-b60c-ebb195a05864
+id: 23d55c81-2224-487c-a579-298915957a79
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, checks=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, finding=ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862
 
 Problem: a comment adr: <id> is the test of a decision wherever it stands, so the same comment on the code that follows the decision clears the untested finding without a test.
 Standard: a code annotation names the requirement it implements and is distinct from the test that proves it.
