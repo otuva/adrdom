@@ -416,3 +416,20 @@ Standard: a limit on a set is judged on the set as the change leaves it.
   Costs: a full tier takes no replacement in its own file, so the replacement lands away from its subject.
 
 **Answer:** A
+
+### What does a comment in code carry to name a decision?
+depends: decision, identifier, check, agent, What does a test carry to name its decision?, Does check fail a test that names a decision that is not current?, Does the agent build what no current decision covers?, What does check do with an untested current decision?
+unrelated: Does a command name a status of its own?, Does a depends entry on a question in its file carry an answer set?, Does a finding carry the identifier of the decision it judges?, Does a supersedes line name every current decision standing on its target?, Does the word limit hold for an option's Why line?, depends, supersede, Does check read the words of an answered question again?, Does a reference in a topic file carry the identifier of what it names?, Does the adr binary serve the ui?, What does check do with a fault on a file awaiting approval?
+
+Problem: a comment adr: <id> is the test of a decision wherever it stands, so the same comment on the code that follows the decision clears the untested finding without a test.
+Standard: a code annotation names the requirement it implements and is distinct from the test that proves it.
+
+- A) A comment adr-code: <id>, found by text search, never a test tie, judged by no rule.
+  Why: an agent finds the code behind a decision with one search, and the comment can clear nothing.
+  Costs: a claim no gate checks; a stale or wrong comment is caught at review alone.
+- B) The same comment adr: <id> a test carries, counted as the test.
+  Why: one comment form for test and code.
+  Costs: a comment on code clears the untested finding, and a decision passes as tested with no test.
+- C) Nothing: code carries no decision name.
+  Why: the record names code through tests alone.
+  Costs: an agent building on a decision reads the code with no mark of what follows it.
