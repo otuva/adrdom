@@ -1,14 +1,21 @@
 //! The owner's page: served by the binary on loopback, token-gated. Every
-//! page renders the lines the terminal prints (per "Does the ui show what
-//! the terminal prints?", 7857d633 A).
+//! page shows the lines the terminal prints (per "Does the ui show what the
+//! terminal prints?", 7857d633 A): statuses, findings and moves from the
+//! one computation, the events of an act from its outcome.
+mod answer;
+mod data;
+mod decisions;
 mod html;
-mod pages;
+mod overview;
+mod terms;
+mod words;
 
 use crate::rules::Rule;
 use crate::actions;
 use crate::msg::{self, Actor};
 use crate::out::{self, Line};
 use crate::repo;
+use crate::commands::show::Records;
 use std::collections::HashMap;
 use std::path::Path;
 use tiny_http::{Header, Method, Request, Response, Server};
@@ -157,16 +164,36 @@ fn handle(mut request: Request, root: &Path, token: &str, acts: &mut Acts) {
     }
 
     let reply = match (method, path.as_str()) {
-        (Method::Get, "/") => Reply::Html(200, pages::overview(root, &acts.take(query.get("r")), token)),
-        (Method::Get, "/next") => Reply::Html(200, pages::questions(root, &acts.take(query.get("r")), token)),
-        (Method::Get, "/terms") => Reply::Html(200, pages::terms(root, &acts.take(query.get("r")), token)),
+        (Method::Get, "/") => {
+            let last = acts.take(query.get("r"));
+            Reply::Html(200, overview::render_index(&Records::load(root.to_path_buf()), &last, token))
+        }
+        (Method::Get, "/next") => {
+            let last = acts.take(query.get("r"));
+            let r = Records::load(root.to_path_buf());
+            Reply::Html(200, answer::render_next(&r, &last, query.get("after"), query.get("show"), token))
+        }
+        (Method::Get, "/decisions") => {
+            let last = acts.take(query.get("r"));
+            Reply::Html(200, decisions::render_decisions(&Records::load(root.to_path_buf()), &last))
+        }
+        (Method::Get, "/terms") => {
+            let last = acts.take(query.get("r"));
+            Reply::Html(200, terms::render_terms(&Records::load(root.to_path_buf()), &last, token))
+        }
         (Method::Post, "/approve") => {
             let key = acts.keep(handle_approve(root, &form));
             Reply::Redirect(format!("/?r={}", key), None)
         }
         (Method::Post, "/answer") => {
-            let key = acts.keep(handle_answer(root, &form));
-            Reply::Redirect(format!("/next?r={}", key), None)
+            // An answer moves on to the next question; a stop shows the
+            // same question again with the findings above it.
+            let id = form.get("id").cloned().unwrap_or_default();
+            let lines = handle_answer(root, &form);
+            let wrote = lines.iter().any(|l| matches!(l, Line::Event(_)));
+            let key = acts.keep(lines);
+            let place = if wrote { "after" } else { "show" };
+            Reply::Redirect(format!("/next?r={}&{}={}", key, place, percent_encode(&id)), None)
         }
         (Method::Post, "/unban") => {
             let key = acts.keep(handle_unban(root, &form));
@@ -344,6 +371,17 @@ fn percent_decode(s: &str) -> String {
         }
     }
     String::from_utf8_lossy(&out).to_string()
+}
+
+fn percent_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.as_bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(*b as char),
+            _ => out.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    out
 }
 
 fn cookie_value(headers: &[Header], name: &str) -> Option<String> {

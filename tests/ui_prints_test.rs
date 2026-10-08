@@ -123,36 +123,6 @@ impl Drop for Page {
     }
 }
 
-/// The text of every line the page renders (one `<p class=...>` per line),
-/// tags dropped, entities read back, without its indent.
-fn page_lines(body: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut rest = body;
-    while let Some(i) = rest.find("<p class=\"") {
-        let after = &rest[i..];
-        let end = after.find("</p>").unwrap_or(after.len());
-        let mut text = String::new();
-        let mut in_tag = false;
-        for c in after[..end].chars() {
-            match c {
-                '<' => in_tag = true,
-                '>' => in_tag = false,
-                c if !in_tag => text.push(c),
-                _ => {}
-            }
-        }
-        let text = text
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replace("&quot;", "\"")
-            .replace("&#39;", "'")
-            .replace("&amp;", "&");
-        out.push(text.trim_start().to_string());
-        rest = &after[end..];
-    }
-    out
-}
-
 /// The lines `adr <args>` prints, each without its indent: standard output,
 /// or standard error with `err`.
 fn cli(dir: &Path, args: &[&str], owner: bool, err: bool) -> Vec<String> {
@@ -171,18 +141,70 @@ fn terminal(dir: &Path) -> Vec<String> {
     lines
 }
 
-/// Every page shows only lines the terminal prints, and the overview shows
-/// every line `adr show` prints.
+const PAGES: [&str; 4] = ["/", "/next", "/decisions", "/terms"];
+
+/// What the page shows of a line the terminal prints, by kind: a status, a
+/// finding or an agent's or a waiting move as text; the owner's move as the
+/// form or link that makes it; a topic's heading line as the card's title.
+#[derive(PartialEq)]
+enum Kind {
+    Owner,
+    Heading,
+    Text,
+}
+
+fn kind(l: &str) -> Kind {
+    if is_owner_move(l) {
+        Kind::Owner
+    } else if l.starts_with("# ") {
+        Kind::Heading
+    } else {
+        Kind::Text
+    }
+}
+
+/// A status or a move as `show --all` prints it, not a line of a record.
+fn is_status_or_move(l: &str) -> bool {
+    let bare = l.strip_prefix("+ ").or_else(|| l.strip_prefix("- ")).unwrap_or(l);
+    bare.starts_with('[') || l.starts_with("agent ") || l.starts_with("not yet:") || is_owner_move(l)
+}
+
+/// Every page shows only lines the terminal prints; the overview shows every
+/// line `adr show` and `adr check` print (an owner's move as its form or
+/// link); and every status and move of `adr show --all` is on a page,
+/// whichever, the owner's moves as the form or link that makes them and
+/// never as the command's text.
 fn assert_page_is_terminal(dir: &Path, page: &Page) {
     let terminal = terminal(dir);
-    for path in ["/", "/next", "/terms"] {
-        for l in page.lines(path) {
-            assert!(terminal.contains(&l), "{} shows {:?}, which no command prints: {:#?}", path, l, terminal);
+    let words: Vec<String> = terminal.iter().map(|l| page_words(l)).collect();
+    let mut every_page: Vec<String> = Vec::new();
+    let mut bodies = String::new();
+    for path in PAGES {
+        let (status, _, body) = page.request(&format!("GET {} HTTP/1.1", path), "");
+        assert_eq!(status, 200, "{}", body);
+        assert!(!body.contains("class=\"move owner\""), "{} shows an owner move as text", path);
+        for l in page_lines(&body) {
+            assert!(words.contains(&l), "{} shows {:?}, which no command prints: {:#?}", path, l, terminal);
+            every_page.push(l);
+        }
+        bodies.push_str(&body);
+    }
+    let (_, _, overview_body) = page.request("GET / HTTP/1.1", "");
+    let overview = page_lines(&overview_body);
+    let mut owed = cli(dir, &["show"], false, false);
+    owed.extend(cli(dir, &["check"], false, false));
+    for l in owed {
+        match kind(&l) {
+            Kind::Owner => assert_owner_move_shown(&l, &overview_body),
+            Kind::Heading => {}
+            Kind::Text => assert!(overview.contains(&page_words(&l)), "/ lacks {:?}: {:#?}", l, overview),
         }
     }
-    let overview = page.lines("/");
-    for l in cli(dir, &["show"], false, false) {
-        assert!(overview.contains(&l), "/ lacks {:?}: {:#?}", l, overview);
+    for l in cli(dir, &["show", "--all"], false, false).into_iter().filter(|l| is_status_or_move(l)) {
+        match kind(&l) {
+            Kind::Owner => assert_owner_move_shown(&l, &bodies),
+            _ => assert!(every_page.contains(&page_words(&l)), "no page shows {:?}: {:#?}", l, every_page),
+        }
     }
 }
 
@@ -229,6 +251,16 @@ fn every_page_shows_what_the_terminal_prints_at_each_status() {
     for l in &check {
         assert!(overview.contains(l), "/ lacks check's {:?}", l);
     }
+
+    // A refused question: its status and the agent's move on it are on the
+    // page.
+    let ids = extract_ids(&std::fs::read_to_string(dir.join(REL)).unwrap());
+    let refused = adr_answer(&dir, &ids[1], "refuse");
+    assert!(refused.status.success(), "{}", stderr(&refused));
+    let show = cli(&dir, &["show", "--all"], false, false);
+    assert!(show.iter().any(|l| l.starts_with("[refused] ")), "{:?}", show);
+    assert!(show.iter().any(|l| l.starts_with("agent changes the plan: ")), "{:?}", show);
+    assert_page_is_terminal(&dir, &page);
 
     // A finding: a loaded word in a new draft is check's note on the page.
     write_record(

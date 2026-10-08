@@ -506,10 +506,27 @@ pub fn of_topic_file_with(
     tests: &HashMap<String, Vec<String>>,
     index: &crate::rules::RepoIndex,
 ) -> Report {
+    of_topic_file_judged(root, rf, all, terms_list, led, tests, index).0
+}
+
+/// `of_topic_file_with` and the file's own judgement
+/// (`rules::judge_topic_file_in`) that the report's findings start from,
+/// before the findings on the records as a whole, the terms gate and the
+/// struck questions join them: what `check` files by rule for the file.
+pub fn of_topic_file_judged(
+    root: &std::path::Path,
+    rf: &RecordFile,
+    all: &[RecordFile],
+    terms_list: &[crate::terms::Term],
+    led: &Ledger,
+    tests: &HashMap<String, Vec<String>>,
+    index: &crate::rules::RepoIndex,
+) -> (Report, Vec<Finding>) {
     let shared = &index.planning;
     let plan_ok = state::plan_approved(led, rf, &rf.rel) && state::context_approved(led, rf, &rf.rel);
     let planning = crate::plan::load_with(rf, terms_list, led, shared);
     let findings = crate::rules::judge_topic_file_in(root, rf, all, terms_list, led, index);
+    let judged = findings.clone();
     let mut rf = rf.clone();
     crate::depends::normalize_cross_file_deps(&mut rf, terms_list, &shared.phrase_lookup, &shared.cross, led);
     // The rules on the topic files as a whole (an identifier twice, a
@@ -534,7 +551,7 @@ pub fn of_topic_file_with(
     let sole = index.stale().len() == 1;
     let stale = index.stale().contains(&rf.rel);
     findings.extend(crate::rules::struck_asked(&rf.rel, stale, sole, all, led));
-    Report { findings, moves }
+    (Report { findings, moves }, judged)
 }
 
 /// The move of the answered decision `id`, section `i` of `rf`, that no

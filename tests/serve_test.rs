@@ -144,20 +144,6 @@ fn follow(port: u16, resp: &HttpResponse, cookie: &str) -> HttpResponse {
     get(port, location, Some(cookie))
 }
 
-/// The text of every line the page renders (one `<p class=...>` per line,
-/// `out::html`), tags dropped, entities read back, without its indent.
-fn page_lines(body: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut rest = body;
-    while let Some(i) = rest.find("<p class=\"") {
-        let after = &rest[i..];
-        let end = after.find("</p>").unwrap_or(after.len());
-        out.push(unhtml(&after[..end]).trim_start().to_string());
-        rest = &after[end..];
-    }
-    out
-}
-
 fn unhtml(s: &str) -> String {
     let mut text = String::new();
     let mut in_tag = false;
@@ -186,11 +172,35 @@ fn cli_lines(dir: &Path, args: &[&str]) -> Vec<String> {
         .collect()
 }
 
-/// Every line `lines` holds is a line of the page.
+/// A page of one file shows only lines the command prints for it, and every
+/// status, finding and move the command prints is on the page: the owner's
+/// moves as their forms and links, the others as text.
+fn assert_page_shows(body: &str, shown: &[String]) {
+    let page = page_lines(body);
+    let words: Vec<String> = shown.iter().map(|l| page_words(l)).collect();
+    for l in &page {
+        assert!(words.contains(l), "the page shows {:?}, which the command does not print: {:#?}", l, shown);
+    }
+    for l in shown {
+        let bare = l.strip_prefix("+ ").or_else(|| l.strip_prefix("- ")).unwrap_or(l);
+        if is_owner_move(l) {
+            assert_owner_move_shown(l, body);
+        } else if bare.starts_with('[') || l.starts_with("agent ") || l.starts_with("not yet:") {
+            assert!(page.contains(&page_words(l)), "the page lacks {:?}: {:#?}", l, page);
+        }
+    }
+}
+
+/// Every line `lines` holds is on the page: as text, except a topic's
+/// heading line (the card's title) and the owner's moves (forms and links).
 fn assert_on_page(lines: &[String], body: &str) {
     let page = page_lines(body);
     for l in lines {
-        assert!(page.contains(l), "the page lacks the line {:?}: {:#?}", l, page);
+        if is_owner_move(l) {
+            assert_owner_move_shown(l, body);
+        } else if !l.starts_with("# ") {
+            assert!(page.contains(&page_words(l)), "the page lacks the line {:?}: {:#?}", l, page);
+        }
     }
 }
 
@@ -278,7 +288,7 @@ fn nav_has_terms_link() {
 
     let resp = get(port, "/", Some(&cookie));
     assert_eq!(resp.status, 200, "body: {}", resp.body);
-    assert!(resp.body.contains("<a href=\"/terms\">adrdom/terms.md</a>"), "body: {}", resp.body);
+    assert!(resp.body.contains("<a href=\"/terms\">Terms</a>"), "body: {}", resp.body);
 
     let _ = child.kill();
     let _ = child.wait();
@@ -498,11 +508,11 @@ fn get_next_with_cookie_shows_question_heading() {
 // adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
 //
 // Wherever the page offers the owner's approve, what the approve signs
-// stands above the form: on `/next`, a file with an asked question and a
+// stands above the form: on `/`, a file with an asked question and a
 // question added since its approval shows the new question, marked, above
 // its Approve button.
 #[test]
-fn next_shows_the_change_an_approve_form_signs() {
+fn overview_shows_the_change_an_approve_form_signs() {
     let dir = setup_repo_with_open_question();
     let path = dir.join("adrdom/decisions/example.md");
     let mut text = std::fs::read_to_string(&path).unwrap();
@@ -511,7 +521,7 @@ fn next_shows_the_change_an_approve_form_signs() {
     plan_record(&dir, "adrdom/decisions/example.md");
     let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
     let (port, token) = read_open_line(&mut child);
-    let resp = get(port, "/next", Some(&format!("adr_t={}", token)));
+    let resp = get(port, "/", Some(&format!("adr_t={}", token)));
     let _ = child.kill();
     let _ = child.wait();
     assert_eq!(resp.status, 200, "body: {}", resp.body);
@@ -577,7 +587,8 @@ fn terms_page_shows_what_show_prints_of_the_terms_file() {
     assert_eq!(resp.status, 200, "body: {}", resp.body);
     let shown = cli_lines(&dir, &["show", "adrdom/terms.md"]);
     assert!(shown.iter().any(|l| l.contains("A choice answered by the owner.")), "{:?}", shown);
-    assert_eq!(page_lines(&resp.body), shown);
+    assert!(resp.body.contains("A choice answered by the owner."), "body: {}", resp.body);
+    assert_page_shows(&resp.body, &shown);
 
     let _ = child.kill();
     let _ = child.wait();
@@ -644,7 +655,7 @@ fn terms_page_shows_an_unapproved_edit_marked_with_the_approve_form() {
     let resp = get(port, "/terms", Some(&cookie));
     assert_eq!(resp.status, 200, "body: {}", resp.body);
     let shown = cli_lines(&dir, &["show", "adrdom/terms.md"]);
-    assert_eq!(page_lines(&resp.body), shown);
+    assert_page_shows(&resp.body, &shown);
     assert!(shown.contains(&"owner runs: adr approve adrdom/terms.md".to_string()), "{:?}", shown);
     assert!(
         shown.iter().any(|l| l.contains("A choice the owner answers in, once, in writing.")),
@@ -714,11 +725,11 @@ fn get_next_shows_the_lines_a_question_carries_and_a_refuse_button() {
     assert!(
         lines
             .iter()
-            .any(|l| l.starts_with("[asked @") && l.ends_with("1.1 What is the unit of authority called?")),
+            .any(|l| l == "[asked] 1.1 What is the unit of authority called?"),
         "{:#?}",
         lines
     );
-    assert!(lines.contains(&"depends: example".to_string()), "{:#?}", lines);
+    assert!(resp.body.contains("<p class=\"stands-on\">Stands on: example</p>"), "body: {}", resp.body);
 
     // A Refuse button beside the Answer button, posting `answer=refuse` to
     // the same route.
@@ -1180,16 +1191,17 @@ fn page_shows_question_options_and_the_decisions_list() {
     // The open question's own options, from EXAMPLE_RECORD, are on /next.
     let next = get(port, "/next", Some(&cookie));
     assert_eq!(next.status, 200, "body: {}", next.body);
-    let lines = page_lines(&next.body);
     assert!(
-        lines.contains(
-            &"- A) The authoritative sentence is a decision, and the question that produced it is a question."
-                .to_string()
-        ),
-        "option A missing from the page: {:#?}",
-        lines
+        next.body.contains("<span class=\"key\">A</span>")
+            && unhtml(&next.body).contains("The authoritative sentence is a decision, and the question that produced it is a question."),
+        "option A missing from the page: {}",
+        next.body
     );
-    assert!(lines.contains(&"- B) The whole unit is a block.".to_string()), "{:#?}", lines);
+    assert!(
+        next.body.contains("<span class=\"key\">B</span>") && next.body.contains("The whole unit is a block."),
+        "option B missing from the page: {}",
+        next.body
+    );
 
     // Answer it for real, then / shows it as a current decision with the
     // sentence the owner picked.
@@ -1203,6 +1215,9 @@ fn page_shows_question_options_and_the_decisions_list() {
     assert_eq!(decisions.status, 200, "body: {}", decisions.body);
     let lines = page_lines(&decisions.body);
     assert!(lines.contains(&"1.1 What is the unit of authority called?".to_string()), "{:#?}", lines);
+    // /decisions lists it with its status line and the option picked.
+    let list = get(port, "/decisions", Some(&cookie));
+    assert!(page_lines(&list.body).iter().any(|l| l.starts_with("[answered A] 1.1 ")), "{}", list.body);
     assert!(
         lines.iter().any(|l| l.contains(
             "The authoritative sentence is a decision, and the question that produced it is a question."
@@ -1226,7 +1241,7 @@ fn page_shows_question_options_and_the_decisions_list() {
     let next = get(port, "/next", Some(&cookie));
     assert_eq!(next.status, 200, "body: {}", next.body);
     assert!(
-        page_lines(&next.body).contains(&"supersedes: 1.1 What is the unit of authority called?".to_string()),
+        next.body.contains("<p class=\"stands-on\">Supersedes: 1.1 What is the unit of authority called?</p>"),
         "superseded heading missing from /next: {}",
         next.body
     );
@@ -1502,15 +1517,11 @@ fn page_shows_a_heading_depends_entry_by_name_not_id() {
     let next = get(port, "/next", Some(&cookie));
     assert_eq!(next.status, 200, "body: {}", next.body);
     assert!(
-        page_lines(&next.body).contains(&"depends: 1.1 What color is the widget?".to_string()),
+        next.body.contains("Stands on: 1.1 What color is the widget?"),
         "expected the page to turn the id back into the heading name: {}",
         next.body
     );
-    assert!(
-        !page_lines(&next.body).iter().any(|l| l.starts_with("depends:") && l.contains(&q1_id)),
-        "the depends line must never print the raw id: {}",
-        next.body
-    );
+    assert!(!next.body.contains(&q1_id), "the page must never print the raw id: {}", next.body);
 
     let _ = child.kill();
     let _ = child.wait();
@@ -1675,4 +1686,360 @@ fn a_banner_with_events_and_input_findings_shows_both_and_is_no_stop() {
     let lines = page_lines(banner);
     assert!(lines.contains(&"unbanned: a word".to_string()), "{:?}", lines);
     assert!(lines.iter().any(|l| l.starts_with("unban: ")), "the input finding shows too: {:?}", lines);
+}
+
+// --- the restored pages: topic cards, one question at a time, decisions ---
+
+const TWO_QUESTIONS: &str = r#"# Example
+
+### 1.1 What is the unit of authority called?
+depends: example
+
+Problem: names leaked into decisions.
+
+Standard: plain words.
+
+- A) The authoritative sentence is a decision.
+  Why: plainest word.
+  Costs: two nouns.
+- B) The whole unit is a block.
+  Why: matches predecessors.
+  Costs: names a region.
+
+### 1.2 What is the second unit called?
+depends: example, 1.1 What is the unit of authority called?=A
+
+Problem: naming the second unit of a decision.
+
+Standard: plain words.
+
+- A) The second thing is a widget.
+  Why: reasons.
+  Costs: costs.
+- B) The second thing is a gadget.
+  Why: other reasons.
+  Costs: other costs.
+"#;
+
+fn two_asked() -> std::path::PathBuf {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_terms_with(&dir, &["decision", "example"]);
+    let record = write_record(&dir, "adrdom/decisions/example.md", TWO_QUESTIONS);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(ask_out.status.success(), "ask failed: {}", stderr(&ask_out));
+    dir
+}
+
+// adr: 7857d633-2055-47eb-857f-cb70da9fa7ba
+//
+// The overview is a card per topic file under the heading "Overview": the
+// count of open questions, a link to the answer page, the file's status
+// line, each asked question with its status line (a link where `answer`
+// takes it, the move that says what it waits on where it does not), the
+// terms card and the unban form.
+#[test]
+fn overview_is_one_card_per_topic_with_the_asked_questions() {
+    let dir = two_asked();
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+    let resp = get(port, "/", Some(&cookie));
+    let _ = child.kill();
+    let _ = child.wait();
+    assert_eq!(resp.status, 200, "body: {}", resp.body);
+
+    let b = &resp.body;
+    assert!(b.contains("<h1>Overview</h1>"), "{}", b);
+    assert!(b.contains("2 open questions across 1 topic."), "{}", b);
+    assert!(b.contains("<a class=\"primary\" href=\"/next\">Answer the next question</a>"), "{}", b);
+    assert!(b.contains("<article class=\"topic\">") && b.contains("<h2>Example</h2>"), "{}", b);
+    assert!(b.contains("<ol class=\"open-list\">"), "{}", b);
+    // The first question is a link to its answer page; the second waits.
+    assert!(b.contains("<a href=\"/next?show="), "{}", b);
+    let lines = page_lines(b);
+    assert!(
+        lines.iter().any(|l| l.starts_with("not yet: \"1.2 What is the second unit called?\" is asked and waits for")),
+        "{:#?}",
+        lines
+    );
+    assert!(b.contains("<span class=\"label waiting\">waiting</span>"), "{}", b);
+    // The terms card and the unban form.
+    assert!(b.contains("<h2>Terms</h2>") && b.contains("Open the terms"), "{}", b);
+    assert!(b.contains("<details class=\"unban\"><summary>Unban a phrase</summary>"), "{}", b);
+    assert!(b.contains("action=\"/unban\""), "{}", b);
+}
+
+// adr: 7857d633-2055-47eb-857f-cb70da9fa7ba
+//
+// The answer page is one question at a time: its position among the open
+// questions and their count, the options with Why and Costs, the terms its
+// words pair beside it, what it stands on, the Answer, Refuse and Skip
+// controls, and a link to each other open question. An answer moves on to
+// the next question `answer` takes, with the act's event in the banner.
+#[test]
+fn next_is_one_question_with_the_count_and_the_others_linked() {
+    let dir = two_asked();
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    let resp = get(port, "/next", Some(&cookie));
+    assert_eq!(resp.status, 200, "body: {}", resp.body);
+    let b = &resp.body;
+    assert!(b.contains("Question 1 of 2 open."), "{}", b);
+    assert!(b.contains("<h1>") && b.contains("What is the unit of authority called?"), "{}", b);
+    assert!(b.contains("<h2>2 open questions</h2>"), "the count of open questions: {}", b);
+    assert!(b.contains("<span class=\"label waiting\">waiting</span>"), "the other question is listed: {}", b);
+    assert!(b.contains("<dt>Why</dt><dd>plainest word.</dd>") && b.contains("<dt>Costs</dt><dd>two nouns.</dd>"), "{}", b);
+    assert!(b.contains("<aside class=\"tq\">") && b.contains("<dt>decision</dt>"), "the terms aside: {}", b);
+    assert!(b.contains("Stands on: example"), "{}", b);
+    assert!(b.contains(">Refuse<") && b.contains("Skip this one") && b.contains("id=\"answer-button\""), "{}", b);
+    // As on the old page the first option is picked, and the button names it.
+    assert!(b.contains("id=\"opt-A\" value=\"A\" required checked"), "{}", b);
+    assert!(b.contains("Answer <span id=\"answer-letter\">A</span>"), "{}", b);
+    // The owner's move is the form, never the command text.
+    assert!(!b.contains("class=\"move owner\""), "{}", b);
+
+    // Answering moves on: the redirect carries the question to go after, and
+    // the next page offers the question that was waiting, the event above.
+    let id = extract_ids(&std::fs::read_to_string(dir.join("adrdom/decisions/example.md")).unwrap())[0].clone();
+    let version = current_version(&dir, &id);
+    let form = format!("id={}&v={}&answer=A&t={}", id, version, token);
+    let answered = post(port, "/answer", Some(&cookie), &form);
+    assert_eq!(answered.status, 302, "body: {}", answered.body);
+    let location = header(&answered, "Location").unwrap().to_string();
+    assert!(location.starts_with("/next?r=") && location.contains(&format!("after={}", id)), "{}", location);
+    let next = follow(port, &answered, &cookie);
+    let _ = child.kill();
+    let _ = child.wait();
+    assert!(next.body.contains("<div class=\"banner\">"), "{}", next.body);
+    assert!(page_lines(&next.body).iter().any(|l| l.starts_with("answered: \"1.1 What is the unit of authority called?\" A")), "{}", next.body);
+    assert!(next.body.contains("What is the second unit called?") && next.body.contains("Question 1 of 1 open."), "{}", next.body);
+}
+
+// adr: 7857d633-2055-47eb-857f-cb70da9fa7ba
+//
+// A stop on an answer shows the same question again, the findings that
+// stopped it above it as a refused banner.
+#[test]
+fn a_stopped_answer_shows_the_same_question_with_its_findings() {
+    let dir = two_asked();
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+    let id = extract_ids(&std::fs::read_to_string(dir.join("adrdom/decisions/example.md")).unwrap())[0].clone();
+    let form = format!("id={}&v=deadbeef&answer=A&t={}", id, token);
+    let stopped = post(port, "/answer", Some(&cookie), &form);
+    let location = header(&stopped, "Location").unwrap().to_string();
+    assert!(location.contains(&format!("show={}", id)), "{}", location);
+    let page = follow(port, &stopped, &cookie);
+    let _ = child.kill();
+    let _ = child.wait();
+    assert!(page.body.contains("<div class=\"banner refused\">"), "{}", page.body);
+    assert!(page.body.contains("What is the unit of authority called?"), "{}", page.body);
+}
+
+// adr: 644b43ce-be10-4e9a-a7d5-71b27c51e365
+//
+// `/decisions` lists every current decision under its topic: the status
+// line with the letter picked, the sentence, and how many tests tie to it.
+#[test]
+fn decisions_page_lists_each_decision_with_its_status_and_tests() {
+    let dir = two_asked();
+    let id = extract_ids(&std::fs::read_to_string(dir.join("adrdom/decisions/example.md")).unwrap())[0].clone();
+    assert!(adr_answer(&dir, &id, "A").status.success());
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let resp = get(port, "/decisions", Some(&format!("adr_t={}", token)));
+    let _ = child.kill();
+    let _ = child.wait();
+    assert_eq!(resp.status, 200, "body: {}", resp.body);
+    let b = &resp.body;
+    assert!(b.contains("<h1>Current decisions</h1>") && b.contains("1 decision."), "{}", b);
+    assert!(b.contains("<dl class=\"decisions\">"), "{}", b);
+    assert!(page_lines(b).contains(&"[answered A] 1.1 What is the unit of authority called?".to_string()), "{}", b);
+    assert!(b.contains("<span class=\"sentence\">The authoritative sentence is a decision.</span><span class=\"meta\">untested"), "{}", b);
+}
+
+// --- the review round: pick order, removed files, move ids, keys ---
+
+const THREE_FLAT: &str = r#"# Example
+
+### 1.1 What is the first unit called?
+depends: example
+
+Problem: names leaked into decisions.
+
+Standard: plain words.
+
+- A) The first thing is a decision.
+  Why: plainest word.
+  Costs: two nouns.
+- B) The first thing is a block.
+  Why: matches predecessors.
+  Costs: names a region.
+
+### 1.2 What is the second unit called?
+depends: example
+
+Problem: naming the second unit of a decision.
+
+Standard: plain words.
+
+- A) The second thing is a widget.
+  Why: reasons.
+  Costs: costs.
+- B) The second thing is a gadget.
+  Why: other reasons.
+  Costs: other costs.
+
+### 1.3 What is the third unit called?
+depends: example
+
+Problem: naming the third unit of a decision.
+
+Standard: plain words.
+
+- A) The third thing is a cog.
+  Why: reasons.
+  Costs: costs.
+- B) The third thing is a gear.
+  Why: other reasons.
+  Costs: other costs.
+"#;
+
+fn three_asked() -> (std::path::PathBuf, Vec<String>) {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_terms_with(&dir, &["decision", "example"]);
+    let record = write_record(&dir, "adrdom/decisions/example.md", THREE_FLAT);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(ask_out.status.success(), "ask failed: {}", stderr(&ask_out));
+    let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
+    (dir, ids)
+}
+
+/// The heading of the question the answer page is on.
+fn focus_heading(body: &str) -> String {
+    let h1 = body.split("<h1>").nth(1).expect("an h1").split("</h1>").next().unwrap();
+    unhtml(h1).trim().to_string()
+}
+
+// adr: 7857d633-2055-47eb-857f-cb70da9fa7ba
+//
+// Skip moves on in the order of the file and comes back to the one skipped
+// last; an answer moves on from the place of the question answered, though
+// that question is no longer open, so a question skipped earlier does not
+// come first.
+#[test]
+fn next_moves_on_from_the_place_of_the_question_and_a_skipped_one_comes_last() {
+    let (dir, ids) = three_asked();
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    assert!(focus_heading(&get(port, "/next", Some(&cookie)).body).contains("1.1 "));
+    // Skip walks the file order and wraps to the first last.
+    let after_1 = get(port, &format!("/next?after={}", ids[0]), Some(&cookie));
+    assert!(focus_heading(&after_1.body).contains("1.2 "), "{}", after_1.body);
+    let after_2 = get(port, &format!("/next?after={}", ids[1]), Some(&cookie));
+    assert!(focus_heading(&after_2.body).contains("1.3 "), "{}", after_2.body);
+    let after_3 = get(port, &format!("/next?after={}", ids[2]), Some(&cookie));
+    assert!(focus_heading(&after_3.body).contains("1.1 "), "{}", after_3.body);
+
+    // 1.1 skipped, 1.2 answered: the page goes on to 1.3, not back to 1.1.
+    let form = format!("id={}&v={}&answer=A&t={}", ids[1], current_version(&dir, &ids[1]), token);
+    let answered = post(port, "/answer", Some(&cookie), &form);
+    assert_eq!(answered.status, 302, "body: {}", answered.body);
+    let next = follow(port, &answered, &cookie);
+    assert!(focus_heading(&next.body).contains("1.3 "), "{}", next.body);
+
+    // The last in the file answered: the page wraps to the first open one.
+    let form = format!("id={}&v={}&answer=A&t={}", ids[2], current_version(&dir, &ids[2]), token);
+    let answered = post(port, "/answer", Some(&cookie), &form);
+    let next = follow(port, &answered, &cookie);
+    let _ = child.kill();
+    let _ = child.wait();
+    assert!(focus_heading(&next.body).contains("1.1 "), "{}", next.body);
+}
+
+// adr: 644b43ce-be10-4e9a-a7d5-71b27c51e365
+//
+// `/decisions` lists the current decisions of a topic file removed from
+// disk too, from its approved version, as `show` lists them.
+#[test]
+fn decisions_page_lists_the_decisions_of_a_removed_topic_file() {
+    let dir = two_asked();
+    let record = dir.join("adrdom/decisions/example.md");
+    let id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
+    assert!(adr_answer(&dir, &id, "A").status.success());
+    assert!(run_git(&dir, &["add", "-A"]).status.success());
+    let c = run_git(&dir, &["commit", "-q", "--no-verify", "-m", "chore: the example topic"]);
+    assert!(c.status.success(), "{}", String::from_utf8_lossy(&c.stderr));
+    std::fs::remove_file(&record).unwrap();
+
+    let shown = stdout(&adr(&dir, &["show"], &[], ""));
+    assert!(shown.contains("[removed]") && shown.contains("1.1 What is the unit of authority called?"), "{}", shown);
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let resp = get(port, "/decisions", Some(&format!("adr_t={}", token)));
+    let _ = child.kill();
+    let _ = child.wait();
+    let b = &resp.body;
+    assert!(b.contains("1 decision."), "{}", b);
+    assert!(page_lines(b).contains(&"[answered A] 1.1 What is the unit of authority called?".to_string()), "{}", b);
+    assert!(b.contains("The authoritative sentence is a decision."), "{}", b);
+}
+
+fn answer_script(body: &str) -> &str {
+    let from = body.find("<script>").expect("the answer page carries its script");
+    let to = body[from..].find("</script>").expect("script end");
+    &body[from..from + to]
+}
+
+// adr: 7857d633-2055-47eb-857f-cb70da9fa7ba
+//
+// The keys of the answer page, read off the script it emits: a letter and S
+// work while a radio, a button or a link holds focus (only a field that takes
+// text swallows keys); Enter submits from the page itself only, never from a
+// button or a link (Refuse refuses, Skip skips, natively) and not from a
+// radio, where the browser's own Enter submits the form once.
+#[test]
+fn answer_page_keys_leave_enter_to_buttons_links_and_radios() {
+    let dir = two_asked();
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let resp = get(port, "/next", Some(&format!("adr_t={}", token)));
+    let _ = child.kill();
+    let _ = child.wait();
+    let b = &resp.body;
+    let js = answer_script(b);
+
+    // The first option stays picked and the button names it.
+    assert!(b.contains("id=\"opt-A\" value=\"A\" required checked"), "{}", b);
+    assert!(b.contains("Answer <span id=\"answer-letter\">A</span>"), "{}", b);
+
+    // Only a text field swallows keys: neither INPUT as a whole nor a radio.
+    assert!(js.contains("tag === 'TEXTAREA'") && js.contains("type !== 'radio'"), "{}", js);
+    assert!(!js.contains("if (tag === 'INPUT' || tag === 'TEXTAREA')"), "{}", js);
+    // The letter and S branches sit apart from the focus rule on Enter, so
+    // they run with focus on a radio, a button or a link.
+    let enter = js.find("key === 'ENTER'").expect("an Enter branch");
+    let letters = js.find("key >= 'A'").expect("a letter branch");
+    let skip = js.find("key === 'S'").expect("an S branch");
+    assert!(letters < enter && enter < skip, "{}", js);
+    // Enter does nothing on a button, a link or a radio: the browser acts.
+    let enter_branch = &js[enter..skip];
+    for tag in ["'BUTTON'", "'A'", "'INPUT'"] {
+        assert!(enter_branch.contains(tag), "{}: {}", tag, enter_branch);
+    }
+    assert!(enter_branch.contains("return;"), "{}", enter_branch);
+    // requestSubmit appears once, in the Enter branch after that guard: a
+    // radio never submits twice.
+    assert_eq!(js.matches("requestSubmit").count(), 1, "{}", js);
+    assert!(enter_branch.find("return;").unwrap() < enter_branch.find("requestSubmit").unwrap(), "{}", enter_branch);
 }
