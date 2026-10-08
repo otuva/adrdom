@@ -44,7 +44,7 @@ pub struct BlameFile {
 
 /// A git object id: 40 hex characters (sha1) or 64 (sha256, per a
 /// `--object-format=sha256` repository).
-fn is_hex_oid(s: &str) -> bool {
+pub(crate) fn is_hex_oid(s: &str) -> bool {
     (s.len() == 40 || s.len() == 64) && s.chars().all(|c| c.is_ascii_hexdigit())
 }
 

@@ -262,9 +262,11 @@ pub fn shell_word(word: &str) -> String {
         return word.to_string();
     }
     // A control character (a newline, an escape) would end or redraw the
-    // printed line inside plain quotes: such a word is written `$'..'`,
-    // every control character and quote escaped, so the move stays one line.
-    if word.chars().any(char::is_control) {
+    // printed line inside plain quotes, and a zero-width or bidirectional
+    // one would be written `\u{..}` by the printer inside them: such a word
+    // is written `$'..'`, each of those characters and every quote escaped,
+    // so the move stays one line and runs as printed.
+    if word.chars().any(|c| c == '\t' || crate::out::is_hidden(c)) {
         let mut s = String::from("$'");
         for c in word.chars() {
             match c {
@@ -273,7 +275,8 @@ pub fn shell_word(word: &str) -> String {
                 '\n' => s.push_str("\\n"),
                 '\t' => s.push_str("\\t"),
                 '\r' => s.push_str("\\r"),
-                c if c.is_control() => s.push_str(&format!("\\x{:02x}", c as u32 & 0xff)),
+                c if (c as u32) < 0x80 && c.is_control() => s.push_str(&format!("\\x{:02x}", c as u32)),
+                c if crate::out::is_hidden(c) => s.push_str(&format!("\\U{:08x}", c as u32)),
                 c => s.push(c),
             }
         }
@@ -339,7 +342,7 @@ pub fn of_removed_topic_file(rel: &str, findings: Vec<Finding>) -> Report {
 /// `plan::load` of the file: a plan that waits for its approval, or holds a
 /// heading with no body, follows the planning steps from it ("What does the
 /// agent do to plan a topic file?", 46fc51ff A). `findings` are what the
-/// rules find in the file (`rules::judge_topic_file_at`): each carries its
+/// rules find in the file (`rules::judge_topic_file_in`): each carries its
 /// own move, so while one stands the planning steps wait on it.
 pub fn of_topic_file(
     rf: &RecordFile,
@@ -475,7 +478,7 @@ pub fn of_unasked_question_in(j: &Judging, rf: &RecordFile, heading: &str, unwri
 
 /// Every move of the topic file `rf` as loaded from disk: the approval of
 /// its plan and prose and its planning records read off the file as loaded,
-/// then every finding `approve` refuses on (`rules::judge_topic_file_at`)
+/// then every finding `approve` refuses on (`rules::judge_topic_file_in`)
 /// that is no planning step, each cleared by its own move; the planning
 /// steps come from the planning records (`of_planning`). `all` is every
 /// topic file as loaded and `tests` is `check::test_index`. The one move a
@@ -782,6 +785,22 @@ mod tests {
         assert_eq!(shell_word("`id`"), "'`id`'");
         let m = Move::new(MoveKind::Answer { id: "x$(touch P)".into(), version: "abcd".into(), heading: "H?".into() });
         assert_eq!(m.clause_text(), "owner runs: adr answer 'x$(touch P)@abcd' <letter>");
+    }
+
+    // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+    //
+    // A word holding a zero-width, bidirectional or control character is
+    // quoted so the terminal line shows it escaped and the shell, reading the
+    // move as printed, gets the word back as the file holds it.
+    #[test]
+    fn a_word_with_a_hidden_character_runs_as_printed() {
+        for word in ["adrdom/decisions/z\u{200b}z.md", "a\u{202e}b.md", "x\u{85}y", "p\u{1b}[2Kq", "it's\u{feff}"] {
+            let line = crate::out::text(&crate::out::Line::Move(Move::new(MoveKind::Approve { path: word.into() })));
+            assert!(!line.contains("\\u{"), "{:?} printed as {}", word, line);
+            let printed = line.strip_prefix("owner runs: adr approve ").unwrap();
+            let out = std::process::Command::new("bash").arg("-c").arg(format!("printf %s {}", printed)).output().unwrap();
+            assert_eq!(String::from_utf8(out.stdout).unwrap(), word, "{}", line);
+        }
     }
 
     #[test]

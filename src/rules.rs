@@ -1471,7 +1471,8 @@ impl RepoIndex {
     }
 }
 
-/// `judge_topic_file_at` with what the run shares read once (`index`).
+/// `judge_topic_file` of the file as loaded, judged the way approve judges
+/// it, with what the run shares read once (`index`).
 pub fn judge_topic_file_in(
     root: &Path,
     rf: &RecordFile,
@@ -1588,6 +1589,17 @@ pub fn judge_removed_topic_file(root: &Path, rel: &str, led: &Ledger, present_id
         .iter()
         .map(|h| Finding::new(Rule::Plan, msg::removal_holds_open(rel, h)).about(Subject::TopicFile(rel.to_string())))
         .collect()
+}
+
+/// What approve would refuse in the terms file `tf` (minted) as it stands
+/// in the working tree, banned words in its text included: the one terms
+/// judgement `show` prints and the gate of `ask`, `answer` and the approve
+/// of a topic file names, so no command offers the owner's approve of the
+/// terms file while approve would refuse it.
+pub fn terms_file_findings(root: &Path, records: &[RecordFile], tf: &terms::TermsFile, led: &Ledger) -> Vec<Finding> {
+    let approved_plans: HashSet<String> =
+        records.iter().filter(|rf| state::plan_approved(led, rf, &rf.rel)).map(|rf| rf.rel.clone()).collect();
+    judge_terms_file(root, records, tf, led, &repo::Source::WorkingTree, true, &approved_plans).0
 }
 
 /// The rules on the terms file (`terms_refusals`), each a finding about it;

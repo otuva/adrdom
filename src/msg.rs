@@ -152,6 +152,12 @@ pub fn stdout_write_failed(e: impl Display, actor: Actor, again: Cmd) -> String 
 
 /// `adr <cmd> <args>` as a command a move names, every word quoted as a
 /// shell reads it.
+/// The git command that puts `rel` back as the last commit holds it, its
+/// path quoted so the hint runs as printed.
+fn git_restore(rel: &str) -> Cmd {
+    command(&["git", "checkout", "--", rel])
+}
+
 fn adr_command(cmd: &str, args: &[&str]) -> Cmd {
     let mut words = vec!["adr", cmd];
     words.extend_from_slice(args);
@@ -1395,8 +1401,8 @@ pub fn answered_text_changed(rel: &str, heading: &str, id: &str) -> String {
     refuse(
         format!("{}: {}: text changed since being answered", rel, heading),
         Next::agent(format!(
-            "restores it from git (e.g. git checkout -- {}), or writes a new question that supersedes {}",
-            rel, id
+            "restores it from git (e.g. {}), or writes a new question that supersedes {}",
+            git_restore(rel), id
         )),
     )
 }
@@ -1408,7 +1414,7 @@ pub fn answered_text_changed(rel: &str, heading: &str, id: &str) -> String {
 pub fn refused_text_changed(rel: &str, heading: &str) -> String {
     refuse(
         format!("{}: {}: text changed since being refused", rel, heading),
-        Next::agent(format!("restores its text from git (e.g. git checkout -- {})", rel)),
+        Next::agent(format!("restores its text from git (e.g. {})", git_restore(rel))),
     )
 }
 
@@ -1519,8 +1525,8 @@ pub fn banned_unbanned_but_in_file(hash_prefix: &str) -> String {
 pub fn section_no_terms_line(rel: &str, heading: &str, id: &str, answered: bool) -> String {
     let next = if answered {
         Next::agent(format!(
-            "restores the terms line from git (e.g. git checkout -- {}), or writes a question that supersedes {}",
-            rel, id
+            "restores the terms line from git (e.g. {}), or writes a question that supersedes {}",
+            git_restore(rel), id
         ))
     } else {
         ask_again(rel)
@@ -1533,7 +1539,7 @@ pub fn section_no_terms_line(rel: &str, heading: &str, id: &str, answered: bool)
 pub fn asked_terms_line_unreadable(rel: &str, heading: &str) -> String {
     refuse(
         format!("{}: {}: terms line cannot be read", rel, heading),
-        Next::agent(format!("restores {} from git (e.g. git checkout -- {})", rel, rel)),
+        Next::agent(format!("restores {} from git (e.g. {})", rel, git_restore(rel))),
     )
 }
 
@@ -1543,8 +1549,8 @@ pub fn asked_terms_line_unreadable(rel: &str, heading: &str) -> String {
 pub fn section_terms_line_malformed(rel: &str, heading: &str, id: &str, answered: bool) -> String {
     let next = if answered {
         Next::agent(format!(
-            "restores the terms line from git (e.g. git checkout -- {}), or writes a question that supersedes {}",
-            rel, id
+            "restores the terms line from git (e.g. {}), or writes a question that supersedes {}",
+            git_restore(rel), id
         ))
     } else {
         ask_again(rel)
@@ -2685,6 +2691,38 @@ mod tests {
             file_unreadable("adrdom/terms.md", e),
             plan_not_a_topic_file("adrdom/terms.md"),
             no_terms_line("x.md", "id-1", "heading"),
+            remove_failed("x", e, Next::agent("fixes it")),
+            hooks_path_failed("set", Next::agent("fixes it")),
+            heading_not_a_question("x.md", 3),
+            approve_not_a_file_approve_takes("README.md"),
+            dep_on_refused_in_other_file("x.md", "H?", "E?", "y.md"),
+            id_not_found_some_unread("id-1", &["y.md".to_string()]),
+            drop_without_id("H?"),
+            drop_of_closed("H?", true),
+            drop_of_closed("H?", false),
+            drop_not_approved("H?", "x.md"),
+            set_on_term("x.md", "H?"),
+            supersedes_leaves_out("x.md", "H?", &[("y.md".to_string(), "G?".to_string(), "id-2".to_string())], SupersedesMoment::Approve),
+            supersedes_leaves_out("x.md", "H?", &[("x.md".to_string(), "G?".to_string(), "id-2".to_string())], SupersedesMoment::Asked),
+            stands_on_what_it_supersedes("x.md", "H?", "G?"),
+            stands_on_what_the_plan_supersedes("x.md", "H?", "G?", "F?"),
+            ask_supersedes_ambiguous("x.md", "H?", "G?", &["y.md".to_string(), "z.md".to_string()]),
+            no_terms_file_for_term("widget"),
+            removed_with_file("id-1", "H?", "asked", Next::owner_runs(command(&["adr", "approve", "x.md"]))),
+            refused_text_changed("x.md", "H?"),
+            asked_terms_line_unreadable("x.md", "H?"),
+            install_file_not_staged(".githooks/pre-commit"),
+            ledger_dropped_malformed("id-1", "d"),
+            ledger_dropped_without_cause("id-1", "id-2"),
+            ledger_dropped_not_approved("id-1"),
+            ledger_dropped_closed("id-1", "answered"),
+            ledger_dropped_still_in_file("id-1", "x.md"),
+            ledger_dropped_text_differs("id-1"),
+            ledger_dropped_set_holds_letter("id-1", "A"),
+            ledger_dropped_not_standing_on("id-1", "id-2"),
+            blame_row_copy_of_own_origin("adrdom/blame/x.md", 1, 3, "docs/x.md"),
+            unban_not_banned(2),
+            message_file_unreadable("m.txt", e),
         ];
         for o in &outputs {
             assert!(
@@ -2744,6 +2782,24 @@ mod tests {
     // repository: each names the command as it runs, its words read on its
     // input as always, with nothing after it that the shell would take for
     // an argument.
+    // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+    //
+    // The git hint a refusal gives to restore a file quotes its path, so the
+    // hint runs as printed whatever the path holds.
+    #[test]
+    fn a_git_restore_hint_quotes_its_path() {
+        let rel = "adrdom/decisions/a b.md";
+        for text in [
+            answered_text_changed(rel, "H?", "id-1"),
+            refused_text_changed(rel, "H?"),
+            section_no_terms_line(rel, "H?", "id-1", true),
+            section_terms_line_malformed(rel, "H?", "id-1", true),
+            asked_terms_line_unreadable(rel, "H?"),
+        ] {
+            assert!(text.contains("git checkout -- 'adrdom/decisions/a b.md'"), "{}", text);
+        }
+    }
+
     #[test]
     fn ban_and_unban_moves_name_a_command_that_runs_as_printed() {
         let e = "boom";

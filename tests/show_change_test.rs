@@ -232,3 +232,98 @@ fn a_blame_draft_names_the_status_of_each_question_a_row_names() {
     let shown = show(&dir, &["adrdom/blame/old.md"]);
     assert!(shown.contains("+ 1-1\tdecision: Is this also pass? ["), "{}", shown);
 }
+
+// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+//
+// A repository whose objects are named by sha256 (64 hex characters): the
+// approved text is found in its history all the same, and an edited
+// question prints its real change, the approved line gone and the new one
+// added.
+#[test]
+fn an_approved_text_is_found_in_a_sha256_repository() {
+    let dir = init_repo();
+    // The same repository, made again with sha256 object names.
+    std::fs::remove_dir_all(dir.join(".git")).unwrap();
+    assert!(run_git(&dir, &["init", "-q", "--object-format=sha256"]).status.success());
+    run_git(&dir, &["config", "user.email", "test@example.com"]);
+    run_git(&dir, &["config", "user.name", "Test User"]);
+    run_git(&dir, &["config", "commit.gpgsign", "false"]);
+    commit_all(&dir);
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_terms_with(&dir, &["widget"]);
+    let path = write_record(&dir, REL, &format!("# Gate\n\n{}", gate_question(ONE, "the widget breaks.")));
+    approve_record(&dir, REL);
+    commit_all(&dir);
+    let text = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(&path, text.replacen("the widget breaks.", "the widget breaks in use.", 1)).unwrap();
+    let shown = show(&dir, &[REL]);
+    assert!(!shown.contains("in no commit"), "{}", shown);
+    assert!(shown.contains("- Problem: the widget breaks.\n"), "{}", shown);
+    assert!(shown.contains("+ Problem: the widget breaks in use.\n"), "{}", shown);
+}
+
+// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+//
+// approve signs a question's `id:` line with the rest of it, so the change
+// show prints of a question holds that line too: an identifier written by
+// hand under an approved question is shown before approve signs it.
+#[test]
+fn the_change_of_a_question_shows_its_id_line() {
+    let (dir, path) = approved();
+    let old = id_of(&path, ONE);
+    let new = "0e0e0e0e-1111-4222-8333-444455556666";
+    let text = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(&path, text.replacen(&format!("id: {}", old), &format!("id: {}", new), 1)).unwrap();
+    let shown = show(&dir, &[REL]);
+    assert!(shown.contains(&format!("- id: {}\n", old)), "{}", shown);
+    assert!(shown.contains(&format!("+ id: {}\n", new)), "{}", shown);
+}
+
+// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+//
+// A blank line added at the end of the terms file or of a blame file
+// changes what approve signs: show marks the blank line it added, so a
+// changed file never prints with nothing marked.
+#[test]
+fn a_blank_line_added_at_the_end_of_a_file_is_marked() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_terms_with(&dir, &["widget"]);
+    commit_all(&dir);
+    let terms = dir.join("adrdom/terms.md");
+    let text = std::fs::read_to_string(&terms).unwrap();
+    std::fs::write(&terms, format!("{}\n", text)).unwrap();
+    let shown = show(&dir, &["adrdom/terms.md"]);
+    assert!(shown.starts_with("[changed] adrdom/terms.md\n"), "{}", shown);
+    assert!(shown.lines().any(|l| l.trim() == "+" || l.trim() == "-"), "{}", shown);
+
+    let (dir, _, _) = blame_setup();
+    let blob = write_origin(&dir, "docs/old.md", "one\n");
+    let blame = write_blame_file(&dir, "adrdom/blame/old.md", "docs/old.md", &blob, "1-1\tdropped: dead\n");
+    assert!(adr(&dir, &["approve", blame.to_str().unwrap()], &[("ADR_OWNER_BYPASS", "1")], "").status.success());
+    commit_all(&dir);
+    let text = std::fs::read_to_string(&blame).unwrap();
+    std::fs::write(&blame, format!("{}\n", text)).unwrap();
+    let shown = show(&dir, &["adrdom/blame/old.md"]);
+    assert!(shown.contains("[changed]"), "{}", shown);
+    assert!(shown.lines().any(|l| l.trim() == "+" || l.trim() == "-"), "{}", shown);
+}
+
+// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+//
+// A question struck by a plan change the owner approved and nobody has
+// committed yet, then put back: no commit holds the approved plan, so the
+// ledger tells which questions it held, and the one put back reads as new
+// beyond it.
+#[test]
+fn a_question_put_back_after_an_uncommitted_strike_reads_as_new() {
+    let (dir, path) = approved();
+    let full = std::fs::read_to_string(&path).unwrap();
+    let at = full.find(&format!("### {}\n", TWO)).unwrap();
+    let kept: String = full[..at].lines().filter(|l| !l.starts_with("unrelated:")).map(|l| format!("{}\n", l)).collect();
+    std::fs::write(&path, kept).unwrap();
+    approve_record(&dir, REL);
+    std::fs::write(&path, &full).unwrap();
+    let shown = show(&dir, &[REL]);
+    assert!(shown.contains(&format!("+ [not asked] {}\n", TWO)), "{}", shown);
+}

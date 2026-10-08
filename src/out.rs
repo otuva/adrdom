@@ -188,14 +188,19 @@ pub fn text(line: &Line) -> String {
 /// holds, never as a carriage return, an escape sequence or a reordering
 /// that rewrites what is shown.
 pub fn visible(s: &str) -> String {
-    let hidden = |c: char| {
-        (c.is_control() && c != '\t')
-            || matches!(c, '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}'..='\u{2064}' | '\u{2066}'..='\u{2069}' | '\u{061C}' | '\u{FEFF}')
-    };
-    if !s.chars().any(hidden) {
+    if !s.chars().any(is_hidden) {
         return s.to_string();
     }
-    s.chars().map(|c| if hidden(c) { format!("\\u{{{:x}}}", c as u32) } else { c.to_string() }).collect()
+    s.chars().map(|c| if is_hidden(c) { format!("\\u{{{:x}}}", c as u32) } else { c.to_string() }).collect()
+}
+
+/// A character the terminal or the page would act on rather than show: a
+/// control character but the tab, a bidirectional control, a zero-width
+/// character. `visible` writes each as `\u{..}`; `moves::shell_word` quotes
+/// a word holding one so the move still runs as printed.
+pub fn is_hidden(c: char) -> bool {
+    (c.is_control() && c != '\t')
+        || matches!(c, '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}'..='\u{2064}' | '\u{2066}'..='\u{2069}' | '\u{061C}' | '\u{FEFF}')
 }
 
 /// The line for the page: the words of `text`, the indent left to the page,

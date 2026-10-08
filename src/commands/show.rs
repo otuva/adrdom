@@ -517,7 +517,10 @@ fn answer_letter(led: &Ledger, sec: &Section) -> Option<char> {
 /// and its body when it is asked: what the file form prints under a
 /// question approved as it stands.
 fn reference_and_body_lines(qlines: &[String], st: QuestionStatus, names: &HashMap<String, String>) -> Vec<Line> {
-    let (refs, body) = reference_and_body(qlines);
+    // The `id:` line is printed only as part of a change (what approve signs
+    // beyond its latest approval), never in the listing of a question.
+    let qlines: Vec<String> = qlines.iter().filter(|l| !l.starts_with("id: ")).cloned().collect();
+    let (refs, body) = reference_and_body(&qlines);
     let body = if st == QuestionStatus::Asked { body } else { Vec::new() };
     refs.iter()
         .map(|l| Line::Record { depth: 1, text: named(l, names) })
@@ -763,21 +766,7 @@ fn terms_report(r: &Records, tf: &TermsFile) -> (FileStatus, Report) {
     if st == FileStatus::Approved {
         return (st, Report::default());
     }
-    let approved_plans: HashSet<String> = r
-        .topic_files
-        .iter()
-        .filter(|rf| state::plan_approved(&r.led, rf, &rf.rel))
-        .map(|rf| rf.rel.clone())
-        .collect();
-    let (findings, _) = rules::judge_terms_file(
-        &r.root,
-        &r.topic_files,
-        minted,
-        &r.led,
-        &repo::Source::WorkingTree,
-        true,
-        &approved_plans,
-    );
+    let findings = rules::terms_file_findings(&r.root, &r.topic_files, minted, &r.led);
     (st, moves::of_terms_file(findings, st))
 }
 

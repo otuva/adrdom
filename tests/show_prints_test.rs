@@ -154,17 +154,24 @@ fn show_marks_what_a_file_holds_beyond_its_latest_approval() {
     let edited = text[..at].replacen("the widget breaks.", "the widget breaks in use.", 1);
     std::fs::write(&path, edited).unwrap();
     let shown = show(&dir, &[REL]);
+    // The `id:` line approve signs is part of the change, unmarked here.
+    let id_one = extract_ids(&text[text.find(&format!("### {}\n", ONE)).unwrap()..])[0].clone();
     assert!(shown.starts_with("[changed] Gate (adrdom/decisions/gate.md)\n"), "{}", shown);
     assert!(
         shown.contains(&format!(
-            "[changed since asked] {}\n    depends: widget\n    unrelated: {}\n  - Problem: the widget breaks.\n  + Problem: the widget breaks in use.\n    Standard: plain words.\n",
-            ONE, TWO
+            "[changed since asked] {}\n    depends: widget\n    unrelated: {}\n    id: {}\n  - Problem: the widget breaks.\n  + Problem: the widget breaks in use.\n    Standard: plain words.\n",
+            ONE, TWO, id_one
         )),
         "{}",
         shown
     );
     assert!(
-        shown.contains(&format!("- [removed] {}\n  - depends: widget\n  - unrelated: {}\n  - Problem: the widget breaks.\n", TWO, ONE)),
+        shown.contains(&format!(
+            "- [removed] {}\n  - depends: widget\n  - unrelated: {}\n  - id: {}\n  - Problem: the widget breaks.\n",
+            TWO,
+            ONE,
+            extract_ids(&text[at..])[0]
+        )),
         "{}",
         shown
     );

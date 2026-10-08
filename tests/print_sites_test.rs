@@ -440,3 +440,38 @@ fn every_judged_state_prints_one_report_in_every_command() {
     assert!(check.lines().any(|l| l == conflict), "check names another line:\n{}\n{}", conflict, check);
     assert!(!show.iter().any(|l| l.starts_with("agent builds")), "{:?}", show);
 }
+
+// adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
+// adr: aac5c313-dedd-466b-a0c3-ead5e99ce913
+//
+// The terms file changed to hold a banned word: approve of the terms file
+// refuses on the word, so no command names the owner's approve of it;
+// show, plan, ask and check each name the word's line and its move.
+#[test]
+fn a_banned_word_in_a_changed_terms_file_withholds_its_approve_everywhere() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_terms_with(&dir, &["widget"]);
+    let path = write_record(&dir, REL, &format!("# Gate\n\n{}", gate_question("Does the widget hold?", "the widget breaks.")));
+    approve_record(&dir, REL);
+    assert!(adr(&dir, &["ban"], &[], "zorblax\n").status.success());
+    // Tracked, as check scans the files git tracks.
+    run_git(&dir, &["add", "-A"]);
+    assert!(run_git(&dir, &["commit", "-q", "-m", "gate"]).status.success());
+    let terms = dir.join("adrdom/terms.md");
+    let text = std::fs::read_to_string(&terms).unwrap();
+    std::fs::write(&terms, text.replacen("definition: ", "definition: A zorblax kind of ", 1)).unwrap();
+    let approve_terms = "owner runs: adr approve adrdom/terms.md";
+    let outputs = [
+        ("show", adr(&dir, &["show"], &[], "")),
+        ("show file", adr(&dir, &["show", REL], &[], "")),
+        ("plan", adr(&dir, &["plan", path.to_str().unwrap()], &[], "")),
+        ("ask", adr(&dir, &["ask", path.to_str().unwrap()], &[], "")),
+        ("check", adr(&dir, &["check"], &[], "")),
+    ];
+    for (name, out) in &outputs {
+        let text = format!("{}{}", stdout(out), stderr(out));
+        assert!(!text.contains(approve_terms), "{} names the terms approve: {}", name, text);
+        assert!(text.contains("adrdom/terms.md:"), "{} names no line of the word: {}", name, text);
+    }
+}

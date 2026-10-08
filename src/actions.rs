@@ -80,6 +80,12 @@ pub fn require_terms(root: &Path, led: &Ledger, rel: &str) -> Result<terms::Term
         return Err(out);
     }
     if !state::terms_approved(led, &tf) {
+        // What approve of the terms file would refuse comes first: the
+        // owner's approve is named only when approve would take the file.
+        let findings = rules::terms_file_findings(root, &record::load_all(root), &terms::minted_copy(&tf), led);
+        if !findings.is_empty() {
+            return Err(findings.iter().map(|f| f.message.clone()).collect::<Vec<_>>().join("\n"));
+        }
         return Err(msg::terms_not_approved(rel, crate::status::terms_file_status(led, &tf)));
     }
     Ok(tf)
