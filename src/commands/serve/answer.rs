@@ -193,7 +193,11 @@ fn queue(all: &[&Q], current: &str) -> String {
 /// The terms the question's words pair, each once with the forms the
 /// question uses, and the words that pair none.
 fn term_aside(words: &[WordPair], no_entry: &[String]) -> String {
-    let mut s = String::from("<aside class=\"tq\">\n<h2>Terms in this question</h2>\n");
+    // Folded by default: the question and its options come first; the
+    // definitions open on a click, and each paired word in the text keeps
+    // its definition on hover.
+    let count = words.iter().map(|w| w.term_name.as_str()).collect::<std::collections::HashSet<_>>().len();
+    let mut s = format!("<aside class=\"tq\">\n<details>\n<summary>Terms in this question ({})</summary>\n", count);
     if words.is_empty() {
         s.push_str("<p class=\"meta\">No words pair a term.</p>\n");
     } else {
@@ -223,7 +227,7 @@ fn term_aside(words: &[WordPair], no_entry: &[String]) -> String {
     if !no_entry.is_empty() {
         s.push_str(&format!("<p class=\"none\"><b>No term:</b> {}</p>\n", esc(&no_entry.join(", "))));
     }
-    s.push_str("</aside>\n");
+    s.push_str("</details>\n</aside>\n");
     s
 }
 
