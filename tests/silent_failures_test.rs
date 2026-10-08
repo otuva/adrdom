@@ -33,7 +33,7 @@ fn show_names_a_topic_file_it_cannot_read() {
     let out = adr(&dir, &["show"], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     assert!(
-        stdout(&out).contains("parse: adrdom/decisions/bad.md: cannot be read: "),
+        stdout(&out).contains("show: adrdom/decisions/bad.md: cannot be read: "),
         "{}",
         stdout(&out)
     );
@@ -76,7 +76,7 @@ fn check_fails_on_a_commit_message_file_it_cannot_read() {
     let out = adr(&dir, &["check", "--message", "no-such-message-file"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     assert!(
-        stdout(&out).contains("banned: cannot read the commit message file no-such-message-file: "),
+        stdout(&out).contains("check: cannot read the commit message file no-such-message-file: "),
         "{}",
         stdout(&out)
     );

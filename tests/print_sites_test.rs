@@ -69,7 +69,7 @@ fn all_of(dir: &Path, args: &[&str]) -> String {
 
 /// The move a refusal line names: what follows its finding.
 fn move_of(refusal: &str) -> &str {
-    refusal.split_once("; ").map(|(_, m)| m).unwrap_or_else(|| panic!("a refusal with no move: {}", refusal))
+    refusal.rsplit_once("; ").map(|(_, m)| m).unwrap_or_else(|| panic!("a refusal with no move: {}", refusal))
 }
 
 /// Asserts every command that reads the state names the move of each line
@@ -373,7 +373,7 @@ fn every_planning_stage_prints_one_report_in_every_command() {
     let out = plan(&dir);
     let findings = assert_one_report(&dir, Some(&out), "struck asked question");
     assert_eq!(findings.len(), 1, "one finding for the struck question: {:?}", findings);
-    assert!(findings[0].starts_with("ids: ") && findings[0].contains(h2) && findings[0].contains("was removed from the plan"), "{:?}", findings);
+    assert!(findings[0].contains(h2) && findings[0].contains("was removed from the plan"), "{:?}", findings);
     assert!(findings[0].ends_with(&format!("; owner runs: adr approve {}", REL)), "{:?}", findings);
 }
 

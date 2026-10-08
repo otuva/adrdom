@@ -1,4 +1,4 @@
-use crate::rules::Rule;
+use crate::rules::Class;
 use super::ledger::{check_held, READER_MSGS};
 use super::Failure;
 use crate::msg;
@@ -11,13 +11,13 @@ use std::path::Path;
 /// rows at HEAD, at the other side of a merge and at `--since` stay byte for
 /// byte, by the same rule as the ledger's. A missing file is fine: a fresh
 /// repository has no rows.
-pub(super) fn check_reader(root: &Path, source: &Source, since: Option<&str>) -> Vec<Failure> {
+pub(super) fn check_reader(root: &Path, source: &Source, since: Option<&str>, stops: &mut Vec<String>) -> Vec<Failure> {
     let content = source.read(root, repo::READER_PATH).unwrap_or_default();
     let mut out: Vec<Failure> = reader::parse(&content)
         .malformed
         .iter()
-        .map(|(lineno, raw)| Failure::new(Rule::Reader, msg::malformed_reader_row(*lineno, raw)))
+        .map(|(lineno, raw)| Failure::said(Class::Reader, msg::malformed_reader_row(*lineno, raw)))
         .collect();
-    out.extend(check_held(root, repo::READER_PATH, &content, since, Rule::Reader, &READER_MSGS));
+    out.extend(check_held(root, repo::READER_PATH, &content, since, Class::Reader, &READER_MSGS, stops));
     out
 }

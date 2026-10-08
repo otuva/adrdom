@@ -1,4 +1,5 @@
-use crate::rules::Rule;
+use crate::rules::Command;
+use crate::rules;
 use crate::banned;
 use crate::commands::check::collect_targets;
 use crate::ledger;
@@ -52,7 +53,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint_stop(Rule::Ban, &msg::not_a_repo("ban", &args, Actor::Agent));
+            out::eprint_stop(Command::Ban, &msg::not_a_repo("ban", &args, Actor::Agent));
             return 1;
         }
     };
@@ -68,7 +69,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     let (uuid, term_name): (Option<String>, Option<String>) = match &term {
         Some(name) => {
             let Some(tf) = state::load_terms(&root) else {
-                out::eprint_stop(Rule::Ban, &msg::no_terms_file_for_term(name));
+                out::eprint_stop(Command::Ban, &msg::no_terms_file_for_term(name));
                 return 1;
             };
             match resolve_term_uuid(&tf, name) {
@@ -77,7 +78,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
                     (Some(u), held.or_else(|| Some(name.clone())))
                 }
                 None => {
-                    out::eprint_stop(Rule::Ban, &msg::no_such_term(name));
+                    out::eprint_stop(Command::Ban, &msg::no_such_term(name));
                     return 1;
                 }
             }
@@ -87,7 +88,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
 
     let mut input = String::new();
     if std::io::stdin().read_to_string(&mut input).is_err() {
-        out::eprint_stop(Rule::Ban, &msg::stdin_read_failed(msg::after_fix_agent_runs(again.clone())));
+        out::eprint_stop(Command::Ban, &msg::stdin_read_failed(msg::after_fix_agent_runs(again.clone())));
         return 1;
     }
 
@@ -132,7 +133,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
                 0
             }
             Err(e) => {
-                out::eprint_stop(Rule::Ban, &msg::update_failed("banned list", e, msg::after_fix_agent_runs(again.clone())));
+                out::eprint_stop(Command::Ban, &msg::update_failed("banned list", e, msg::after_fix_agent_runs(again.clone())));
                 1
             }
         };
@@ -145,22 +146,25 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     // detail, so a plain membership check over each line's tokens is all
     // it takes.
     let new_hash_set: HashSet<&str> = new_hashes.iter().map(|h| h.as_str()).collect();
-    let mut hits: Vec<String> = Vec::new();
+    let mut hits: Vec<out::Line> = Vec::new();
     for (name, content) in collect_targets(&root, false, None) {
         for (i, line) in content.lines().enumerate() {
             if banned::tokenize(line)
                 .iter()
                 .any(|tok| new_hash_set.contains(record::sha256_hex(tok).as_str()))
             {
-                hits.push(msg::in_use_at(&msg::location(&name, i + 1), again.clone()));
+                hits.push(out::Line::Finding(rules::Finding::said(
+                    rules::Class::Banned,
+                    msg::in_use_at(&msg::location(&name, i + 1), again.clone()),
+                )));
             }
         }
     }
 
     if !hits.is_empty() {
-        let mut stop = vec![msg::already_in_use()];
+        let mut stop = vec![out::Line::Finding(rules::Finding::said(rules::Class::Banned, msg::already_in_use()))];
         stop.extend(hits);
-        out::eprint_stop(Rule::Ban, &stop.join("\n"));
+        out::eprint(&stop);
         return 1;
     }
 
@@ -174,7 +178,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     entries.extend(new_hashes.iter().map(|h| (h.clone(), uuid.clone())));
 
     if let Err(e) = banned::write_sorted(&banned_path, entries) {
-        out::eprint_stop(Rule::Ban, &msg::update_failed("banned list", e, msg::after_fix_agent_runs(again.clone())));
+        out::eprint_stop(Command::Ban, &msg::update_failed("banned list", e, msg::after_fix_agent_runs(again.clone())));
         return 1;
     }
 
@@ -196,7 +200,7 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
         })
         .collect();
     if let Err(e) = ledger::append(&ledger_path, &rows) {
-        out::eprint_stop(Rule::Ban, &msg::update_failed("ledger", e, msg::after_fix_agent_runs(again.clone())));
+        out::eprint_stop(Command::Ban, &msg::update_failed("ledger", e, msg::after_fix_agent_runs(again.clone())));
         return 1;
     }
 
@@ -225,7 +229,7 @@ fn run_rebuild(banned_path: &std::path::Path, ledger_path: &std::path::Path) -> 
             0
         }
         Err(e) => {
-            out::eprint_stop(Rule::Ban,
+            out::eprint_stop(Command::Ban,
                 &msg::update_failed("banned list", e, msg::after_fix_agent_runs(crate::moves::Cmd::fixed("adr ban --rebuild"))),
             );
             1

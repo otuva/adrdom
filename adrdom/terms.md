@@ -229,3 +229,8 @@ id: d904dc0d-231f-4e93-ac74-7babe888107d
 terms: status=209081f4-864f-4ef6-8909-65da87f135e5
 definition: The step a thing in the records takes next from the status it is in, and who takes it.
 aliases: moves
+
+## finding
+id: ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862
+definition: The report of one rule that one thing in the records breaks.
+aliases: findings

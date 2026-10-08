@@ -61,8 +61,7 @@ fn a_question_needs_two_or_three_options() {
         let out = adr(&dir, &["check"], &[], "");
         assert!(!out.status.success());
         let text = stdout(&out);
-        assert!(text.contains("parse:"), "{}", text);
-        assert!(text.contains("1 options; at least two"), "{}", text);
+        assert!(text.contains("1 options, at least two"), "{}", text);
     }
 
     // Four options: refused.
@@ -75,8 +74,7 @@ fn a_question_needs_two_or_three_options() {
         let out = adr(&dir, &["check"], &[], "");
         assert!(!out.status.success());
         let text = stdout(&out);
-        assert!(text.contains("parse:"), "{}", text);
-        assert!(text.contains("4 options; at most three"), "{}", text);
+        assert!(text.contains("4 options, at most three"), "{}", text);
     }
 
     // Two options: accepted.

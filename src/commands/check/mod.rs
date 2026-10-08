@@ -14,7 +14,7 @@ mod tests;
 pub(crate) use banned::collect_targets;
 pub use tests::test_index;
 
-use crate::rules::Rule;
+use crate::rules::{Class, Command};
 use crate::depends;
 use crate::ledger::Ledger;
 use crate::rules;
@@ -84,13 +84,13 @@ fn build(
     let ledger_rel = repo::LEDGER_PATH;
     let ledger_content = source.read(root, ledger_rel).unwrap_or_default();
     let parsed_led;
-    let (led, mut records, unreadable_failures): (&Ledger, Vec<RecordFile>, Vec<rules::Finding>) = match held {
+    let (led, mut records, unreadable_stops): (&Ledger, Vec<RecordFile>, Vec<String>) = match held {
         Some((h, _)) => (
             &h.led,
             h.topic_files.clone(),
             h.unreadable_topic_files
                 .iter()
-                .map(|(rel, e)| rules::Finding::new(Rule::Parse, msg::topic_file_unreadable(rel, e)))
+                .map(|(rel, e)| msg::topic_file_unreadable(rel, e))
                 .collect::<Vec<_>>(),
         ),
         None => {
@@ -98,11 +98,11 @@ fn build(
             // A topic file that cannot be read is a failure: nothing in it is
             // judged, and a pass would let it through with its decisions unread.
             let (records, unreadable) = record::load_all_via(root, &source);
-            let unreadable_failures: Vec<rules::Finding> = unreadable
+            let unreadable_stops: Vec<String> = unreadable
                 .into_iter()
-                .map(|(f, e)| rules::Finding::new(Rule::Parse, msg::topic_file_unreadable(&state::rel_path(root, &f), e)))
+                .map(|(f, e)| msg::topic_file_unreadable(&state::rel_path(root, &f), e))
                 .collect();
-            (&parsed_led, records, unreadable_failures)
+            (&parsed_led, records, unreadable_stops)
         }
     };
     let mut notes: Vec<rules::Finding> = Vec::new();
@@ -246,35 +246,36 @@ fn build(
         .collect();
     // The rules on the topic files as a whole (`rules::judge_records`).
     let missing_answered = rules::judge_records_except(&records, &led, &in_removed_file);
-    let mut failures: Vec<rules::Finding> = unreadable_failures;
-    let (parse_failures, parse_notes) = parse::check_rule(Rule::Parse, &records, &per_record_findings, &awaiting, &led);
+    let mut failures: Vec<rules::Finding> = Vec::new();
+    let mut stops: Vec<String> = unreadable_stops;
+    let (parse_failures, parse_notes) = parse::check_rule(Class::Parse, &records, &per_record_findings, &awaiting, &led);
     push_failures(&mut failures, parse_failures);
     push_failures(&mut notes, parse_notes);
     push_failures(&mut failures, ids::check_ids(&records, &led, &missing_answered, &raw_hashes, &removed_files));
-    push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_content, since));
-    push_failures(&mut failures, reader::check_reader(root, &source, since));
+    push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_content, since, &mut stops));
+    push_failures(&mut failures, reader::check_reader(root, &source, since, &mut stops));
     push_failures(&mut failures, banned::check_banned_ledger(&led, root, &source));
     push_failures(&mut failures, answers::check_answers(root, &records, &as_loaded, &terms_list, &led, &source));
-    push_failures(&mut failures, banned::check_banned(root, staged, message, &source));
+    push_failures(&mut failures, banned::check_banned(root, staged, message, &source, &mut stops));
     push_failures(&mut failures, install::check_install(root, &source));
     let (plan_failures, plan_notes) =
         plan::check_plan(root, &source, &records, &led, &per_record_findings, &awaiting);
     push_failures(&mut failures, plan_failures);
     push_failures(&mut notes, plan_notes);
     push_failures(&mut failures, terms::check_terms(root, &records, &led, &source, &approved_rels));
-    let (blame_failures, blame_notes) = blame::check_blame(root, &source, &records, &as_loaded, &terms_list, &led);
+    let (blame_failures, blame_notes) = blame::check_blame(root, &source, &records, &as_loaded, &terms_list, &led, &mut stops);
     push_failures(&mut failures, blame_failures);
     notes.extend(blame_notes);
     let (test_failures, untested) = tests::check_tests(root, &records, &led, tests, &source);
     push_failures(&mut failures, test_failures);
-    let (tells_failures, tells_notes) = parse::check_rule(Rule::Tells, &records, &per_record_findings, &awaiting, &led);
+    let (tells_failures, tells_notes) = parse::check_rule(Class::Tells, &records, &per_record_findings, &awaiting, &led);
     push_failures(&mut failures, tells_failures);
     push_failures(&mut notes, tells_notes);
     // Per "What does check do with an untested current decision?": reported
     // on every run, never a failure, each with the move that builds it.
     notes.extend(untested);
 
-    view::CheckReport { failures, notes }
+    view::CheckReport { failures, notes, stops }
 }
 
 /// What `check` reports of one topic file of the records: the judgement
@@ -341,16 +342,17 @@ pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: 
     // branches?").
     let merging = repo::git(&root, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_some();
     if let Some(m) = message.as_deref().filter(|_| !merging) {
-        let findings: Vec<Line> = banned::check_banned(&root, false, Some(m), &Source::for_check(false, true))
-            .into_iter()
-            .map(Line::Finding)
-            .collect();
-        out::print(&findings);
-        return if findings.is_empty() { 0 } else { 1 };
+        let mut stops: Vec<String> = Vec::new();
+        let found = banned::check_banned(&root, false, Some(m), &Source::for_check(false, true), &mut stops);
+        let mut lines: Vec<Line> = stops.into_iter().map(stopped).collect();
+        lines.extend(found.into_iter().map(Line::Finding));
+        out::print(&lines);
+        return if lines.is_empty() { 0 } else { 1 };
     }
     let report = build(&root, staged, message.as_deref(), since.as_deref(), None, None);
-    let exit_code = if report.failures.is_empty() { 0 } else { 1 };
-    let lines: Vec<Line> = report.failures.into_iter().chain(report.notes).map(Line::Finding).collect();
+    let exit_code = if report.failures.is_empty() && report.stops.is_empty() { 0 } else { 1 };
+    let mut lines: Vec<Line> = report.stops.into_iter().map(stopped).collect();
+    lines.extend(report.failures.into_iter().chain(report.notes).map(Line::Finding));
     out::print(&lines);
     exit_code
 }
@@ -359,7 +361,7 @@ pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: 
 /// repository, unreadable input), filed under `check`; `message` may carry
 /// that name in front already.
 pub(super) fn stopped(message: String) -> Line {
-    out::refusal(Rule::Check, &message)
+    out::refusal(Command::Check, &message)
 }
 
 /// Whether a finding `r` on `rf` is a note rather than a failure (per
@@ -373,7 +375,7 @@ fn is_note(rf: &RecordFile, r: &rules::Finding, draft: bool, led: &Ledger) -> bo
     if !draft {
         return false;
     }
-    if !matches!(r.rule, rules::Rule::Tells | rules::Rule::Plan | rules::Rule::Parse) {
+    if !matches!(r.class, rules::Class::Tells | rules::Class::Plan | rules::Class::Parse) {
         return false;
     }
     // Every question the finding is about must still be able to change; a

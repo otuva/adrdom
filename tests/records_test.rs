@@ -41,8 +41,8 @@ fn approve_refuses_a_heading_with_a_loaded_opening() {
     assert!(!out.status.success(), "approve should refuse: {}", stdout(&out));
     let text = stderr(&out);
     assert!(text.contains("\"which\""), "{}", text);
-    assert!(text.contains("opens assuming an answer"), "{}", text);
-    assert!(text.contains("agent rewrites the line"), "{}", text);
+    assert!(text.contains("a heading opens without assuming an answer"), "{}", text);
+    assert!(text.contains("agent rewrites the heading"), "{}", text);
 }
 
 const CONTEXT_TELL_RECORD: &str = r#"# Example
@@ -79,7 +79,7 @@ fn approve_refuses_a_context_line_with_a_provenance_tell() {
     assert!(!out.status.success(), "approve should refuse: {}", stdout(&out));
     let text = stderr(&out);
     assert!(text.contains("\"claude\""), "{}", text);
-    assert!(text.contains("says who said it"), "{}", text);
+    assert!(text.contains("names who said it"), "{}", text);
     assert!(text.contains("\"context\""), "{}", text);
 }
 
@@ -128,7 +128,7 @@ fn ask_refuses_a_candidate_with_a_code_state_tell_in_its_body() {
     assert!(!out.status.success(), "ask should refuse: {}", stdout(&out));
     let text = stderr(&out);
     assert!(text.contains("\"already\""), "{}", text);
-    assert!(text.contains("states what the code does now"), "{}", text);
+    assert!(text.contains("states what the code does"), "{}", text);
 }
 
 const UNFROZEN_TELL_RECORD: &str = r#"# Example
@@ -169,11 +169,14 @@ fn check_reports_a_tell_in_an_unfrozen_heading_and_in_context_prose() {
     assert!(out.status.success(), "{}", stdout(&out));
     let text = stdout(&out);
     assert!(text.contains("\"how many\""), "{}", text);
-    assert!(text.contains("opens assuming an answer"), "{}", text);
+    assert!(text.contains("a heading opens without assuming an answer"), "{}", text);
     assert!(text.contains("\"said\""), "{}", text);
-    assert!(text.contains("says who said it"), "{}", text);
+    assert!(text.contains("names who said it"), "{}", text);
 
-    let tells_lines: Vec<&str> = text.lines().filter(|l| l.starts_with("tells:")).collect();
+    let tells_lines: Vec<&str> = text
+        .lines()
+        .filter(|l| l.contains("a heading opens without assuming an answer") || l.contains("names who said it"))
+        .collect();
     assert_eq!(
         tells_lines.len(),
         2,
@@ -213,7 +216,7 @@ fn check_passes_a_frozen_answered_section_with_a_tell() {
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
     assert!(
-        !text.contains("tells:"),
+        !text.contains("a heading opens without assuming an answer"),
         "a frozen answered section must never fail on a tell: {}",
         text
     );
@@ -304,7 +307,7 @@ fn approve_and_check_report_a_tell_and_a_bad_depends_entry_together() {
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success(), "approve should refuse: {}", stdout(&out));
     let err = stderr(&out);
-    assert!(err.contains("opens assuming an answer"), "{}", err);
+    assert!(err.contains("a heading opens without assuming an answer"), "{}", err);
     assert!(
         err.contains("depends on \"nosuchterm\" which is no term"),
         "{}",
@@ -315,12 +318,12 @@ fn approve_and_check_report_a_tell_and_a_bad_depends_entry_together() {
     assert!(check_out.status.success(), "{}", stdout(&check_out));
     let text = stdout(&check_out);
     assert!(
-        text.contains("tells:") && text.contains("opens assuming an answer"),
+        text.contains("a heading opens without assuming an answer"),
         "{}",
         text
     );
     assert!(
-        text.contains("plan:") && text.contains("depends on \"nosuchterm\" which is no term"),
+        text.contains("depends on \"nosuchterm\" which is no term"),
         "{}",
         text
     );

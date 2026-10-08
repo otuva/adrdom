@@ -1,4 +1,4 @@
-use crate::rules::Rule;
+use crate::rules::Class;
 use super::{is_note, Failure};
 use crate::rules::{self, Finding};
 use crate::ledger::Ledger;
@@ -63,10 +63,10 @@ pub(super) fn check_plan(
         // of the file's judgement, computed once in `mod.rs`.
         let draft = awaiting.contains(&rel);
         for r in refs {
-            if r.rule != Rule::Plan && r.rule != Rule::PlanFrozen {
+            if r.class != Class::Plan && r.class != Class::PlanFrozen {
                 continue;
             }
-            push_rule(&mut out, &mut notes, is_note(rf, r, draft, led), r.rule, r.message.clone());
+            push_finding(&mut out, &mut notes, is_note(rf, r, draft, led), r.clone());
         }
 
         // Same heading twice in one file (8.3-adjacent): the cross-file
@@ -116,7 +116,7 @@ pub(super) fn check_plan(
                 })
             });
             let message = msg::duplicate_heading_across_files(heading, &paths[0], &paths[1]);
-            push_plan(&mut out, &mut notes, copied_in_draft, message);
+            push_plan(&mut out, &mut notes, copied_in_draft, Failure::said(Class::Plan, message));
         }
     }
 
@@ -124,16 +124,15 @@ pub(super) fn check_plan(
 }
 
 /// One plan finding: a note when `note`, a failure otherwise.
-fn push_plan(out: &mut Vec<Failure>, notes: &mut Vec<Failure>, note: bool, message: String) {
-    push_rule(out, notes, note, Rule::Plan, message);
+fn push_plan(out: &mut Vec<Failure>, notes: &mut Vec<Failure>, note: bool, f: Failure) {
+    push_finding(out, notes, note, f.class(Class::Plan));
 }
 
-/// One finding of the rule `rule`, filed under it as every command prints
-/// it: a note when `note`, a failure otherwise.
-fn push_rule(out: &mut Vec<Failure>, notes: &mut Vec<Failure>, note: bool, rule: crate::rules::Rule, message: String) {
+/// One finding: a note when `note`, a failure otherwise.
+fn push_finding(out: &mut Vec<Failure>, notes: &mut Vec<Failure>, note: bool, f: Failure) {
     if note {
-        notes.push(Failure::new(rule, message));
+        notes.push(f);
     } else {
-        out.push(Failure::new(rule, message));
+        out.push(f);
     }
 }

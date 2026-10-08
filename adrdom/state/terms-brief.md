@@ -38,3 +38,4 @@
 - reader (readers): A program apart from the agent that reads records on the owner's behalf.
 - status (statuses): The position a thing in the records is at, one of a closed set the tool holds.
 - move (moves): The step a thing in the records takes next from the status it is in, and who takes it.
+- finding (findings): The report of one rule that one thing in the records breaks.

@@ -95,7 +95,6 @@ not yet: \"{one}\" is answered and is built once \"{two}\" is answered\n",
     );
 }
 
-// adr: 6addc2f4-ff23-4fc6-851e-7cd67063b9f8
 //
 // With a file named: every question with its status and the lines it
 // carries; the body of the asked one alone; then the moves of that file.
@@ -109,8 +108,8 @@ fn show_with_a_file_prints_each_question_its_lines_and_an_asked_body() {
         shown,
         format!(
             "[approved] Gate ({rel})\n\
-[answered A] {one}\n  depends: widget\n  unrelated: {two}\n\
-[asked @{version}] {two}\n  depends: widget\n  unrelated: {one}\n  Problem: the widget breaks.\n  Standard: plain words.\n  \
+[answered A] {one}\n  depends: widget\n\
+[asked @{version}] {two}\n  depends: widget\n  Problem: the widget breaks.\n  Standard: plain words.\n  \
 - A) Yes the widget holds.\n    Why: reasons.\n    Costs: costs.\n  \
 - B) No the widget does not hold.\n    Why: other reasons.\n    Costs: other costs.\n\
 owner runs: adr answer {two_id}@{version} <letter>  # \"{two}\"\n\
@@ -124,7 +123,32 @@ not yet: \"{one}\" is answered and is built once \"{two}\" is answered\n",
     );
 }
 
-// adr: 6addc2f4-ff23-4fc6-851e-7cd67063b9f8
+// The unrelated line comes under its own flag.
+#[test]
+fn show_prints_the_unrelated_line_only_under_its_flag() {
+    // adr: dce141e9-7d2e-4b70-b317-9f3d70bf5a69
+    let (dir, path) = asked();
+    let plain = show(&dir, &[REL]);
+    assert!(plain.contains("  depends: widget\n"), "{}", plain);
+    assert!(!plain.contains("unrelated:"), "{}", plain);
+    let flagged = show(&dir, &[REL, "--unrelated"]);
+    assert!(flagged.contains(&format!("  unrelated: {}\n", TWO)), "{}", flagged);
+
+    // Edit the unrelated line of the first question: plain show keeps the
+    // changed status and prints no marked line; the flag prints the mark.
+    let text = std::fs::read_to_string(&path).unwrap();
+    let edited = text.replacen(&format!("unrelated: {}", id_of(&path, TWO)), "unrelated: widget", 1);
+    assert_ne!(edited, text);
+    std::fs::write(&path, edited).unwrap();
+    let plain = show(&dir, &[REL]);
+    assert!(plain.contains("[changed"), "{}", plain);
+    assert!(!plain.contains("unrelated:"), "{}", plain);
+    assert!(!plain.lines().any(|l| l.trim_start().starts_with("+ ") || l.trim_start().starts_with("- ") && !l.contains(") ")), "{}", plain);
+    let flagged = show(&dir, &[REL, "--unrelated"]);
+    assert!(flagged.contains(&format!("- unrelated: {}\n", TWO)), "{}", flagged);
+    assert!(flagged.contains("+ unrelated: widget\n"), "{}", flagged);
+}
+
 //
 // adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
 //
@@ -159,17 +183,16 @@ fn show_marks_what_a_file_holds_beyond_its_latest_approval() {
     assert!(shown.starts_with("[changed] Gate (adrdom/decisions/gate.md)\n"), "{}", shown);
     assert!(
         shown.contains(&format!(
-            "[changed since asked] {}\n    depends: widget\n    unrelated: {}\n    id: {}\n  - Problem: the widget breaks.\n  + Problem: the widget breaks in use.\n    Standard: plain words.\n",
-            ONE, TWO, id_one
+            "[changed since asked] {}\n    depends: widget\n    id: {}\n  - Problem: the widget breaks.\n  + Problem: the widget breaks in use.\n    Standard: plain words.\n",
+            ONE, id_one
         )),
         "{}",
         shown
     );
     assert!(
         shown.contains(&format!(
-            "- [removed] {}\n  - depends: widget\n  - unrelated: {}\n  - id: {}\n  - Problem: the widget breaks.\n",
+            "- [removed] {}\n  - depends: widget\n  - id: {}\n  - Problem: the widget breaks.\n",
             TWO,
-            ONE,
             extract_ids(&text[at..])[0]
         )),
         "{}",

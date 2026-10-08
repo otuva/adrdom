@@ -1,7 +1,7 @@
 use super::{is_note, Failure};
 use crate::ledger::Ledger;
 use crate::record::RecordFile;
-use crate::rules::Finding;
+use crate::rules::{Class, Finding};
 
 /// The findings of the rule `rule` (`parse`: a topic file's shape, its
 /// stray lines, the lines the tool writes; `tells`: the provenance, code
@@ -15,7 +15,7 @@ use crate::rules::Finding;
 /// failing because a later release grew a list: the rules judge only text
 /// not yet frozen.
 pub(super) fn check_rule(
-    rule: crate::rules::Rule,
+    class: Class,
     records: &[RecordFile],
     refusals: &[Vec<Finding>],
     awaiting: &[String],
@@ -25,8 +25,8 @@ pub(super) fn check_rule(
     let mut notes = Vec::new();
     for (rf, refs) in records.iter().zip(refusals) {
         let draft = awaiting.contains(&rf.rel);
-        for r in refs.iter().filter(|r| r.rule == rule) {
-            let f = Failure::new(rule, r.message.clone());
+        for r in refs.iter().filter(|r| r.class == class) {
+            let f = r.clone();
             if is_note(rf, r, draft, led) {
                 notes.push(f);
             } else {

@@ -8,11 +8,12 @@
 //! `check` holds a blame file to its origin's blob and to the open
 //! decision rows an about-to-vanish origin still carries (5fddeeb5 A,
 //! 4bb5ef1b A -- `commands::check::blame`); `show` prints a blame file in
-//! the form every file approve takes is printed (6addc2f4 A, bceceda8 A --
+//! the form every file approve takes is printed (dce141e9 A, bceceda8 A --
 //! `commands::show`).
 use crate::ledger::Ledger;
 use crate::msg;
 use crate::record::{self, RecordFile};
+use crate::rules::{Class, Finding, Subject};
 use crate::repo;
 use crate::terms::Term;
 use std::collections::{HashMap, HashSet};
@@ -479,7 +480,7 @@ pub fn resolve_destination(text: &str, ctx: &ResolveCtx) -> Result<Resolved, Des
 /// The refusal text for a `resolve_destination` failure on `row`, the
 /// `msg::blame_row_*` wording matching every destination kind in the
 /// closed set, plus the catch-all for text naming none of it.
-pub fn dest_refusal_text(rel: &str, row: &Row, err: &DestError) -> String {
+pub fn dest_refusal_text(rel: &str, row: &Row, err: &DestError) -> msg::Said {
     match err {
         DestError::UnknownHeading(text) => msg::blame_row_unknown_heading(rel, text),
         DestError::AmbiguousHeading(text, files) => msg::blame_row_ambiguous_heading(rel, text, files),
@@ -487,7 +488,7 @@ pub fn dest_refusal_text(rel: &str, row: &Row, err: &DestError) -> String {
         DestError::RetiredTerm(name) => msg::blame_row_retired_term(rel, name),
         DestError::MissingProseStem(stem) => msg::blame_row_missing_prose_stem(rel, stem),
         DestError::CopyPathMissing(path) => msg::blame_row_copy_path_missing(rel, path),
-        DestError::BadPath(path) => msg::blame_bad_origin_path(rel, path),
+        DestError::BadPath(path) => msg::blame_bad_origin_path(rel, path, true),
         DestError::CopyOfOwnOrigin(path) => {
             msg::blame_row_copy_of_own_origin(rel, row.start, row.end, path)
         }
@@ -634,12 +635,15 @@ pub fn open_decision_rows(
 pub struct FileState {
     /// The shape errors of the file itself: a note while the file awaits
     /// approval, a failure once approved (per "What does check do with a
-    /// fault on a file awaiting approval?").
-    pub shape: Vec<String>,
+    /// fault on a file awaiting approval?"), each a finding about the file.
+    pub shape: Vec<Finding>,
     /// What fails whatever the file's approval: the origin against the file
     /// (per "Does check hold a blame file to its origin?" and "Does an
     /// origin leave the repository while its blame file has an open row?").
-    pub failures: Vec<String>,
+    pub failures: Vec<Finding>,
+    /// What stopped the read of the origin (unreadable as text, git could
+    /// not hash it): not a rule broken, a stop, each with its move.
+    pub stops: Vec<String>,
     pub awaiting: bool,
     pub origin_content: Option<String>,
 }
@@ -656,8 +660,9 @@ pub fn file_state(
 ) -> FileState {
     let rel = &bf.rel;
     let approved = crate::state::blame_approved(led, rel, content);
-    let mut st = FileState { shape: Vec::new(), failures: Vec::new(), awaiting: !approved, origin_content: None };
-    st.shape = bf.shape_errors.iter().map(|e| msg::blame_shape_error(rel, e)).collect();
+    let mut st = FileState { shape: Vec::new(), failures: Vec::new(), stops: Vec::new(), awaiting: !approved, origin_content: None };
+    let about = |said: msg::Said| Finding::said(Class::Blame, said).about(Subject::BlameFile(rel.clone()));
+    st.shape = bf.shape_errors.iter().map(|e| about(msg::blame_shape_error(rel, e))).collect();
     let Some(origin) = bf.origin.clone() else {
         return st;
     };
@@ -666,7 +671,7 @@ pub fn file_state(
     // approved (per "What does check do with a fault on a file awaiting
     // approval?").
     if !valid_origin_path(root, source, &origin) {
-        let fault = msg::blame_bad_origin_path(rel, &origin);
+        let fault = about(msg::blame_bad_origin_path(rel, &origin, false));
         if approved {
             st.failures.push(fault);
         } else {
@@ -683,7 +688,7 @@ pub fn file_state(
             open.sort();
         }
         if !open.is_empty() {
-            st.failures.push(msg::blame_origin_missing(rel, &origin, &open));
+            st.failures.push(about(msg::blame_origin_missing(rel, &origin, &open)));
         }
         return st;
     }
@@ -692,12 +697,12 @@ pub fn file_state(
     }
     let blob = bf.blob.clone().expect("no shape error means blob is set");
     match source.read(root, &origin) {
-        None => st.failures.push(msg::blame_origin_unreadable(rel, &origin)),
+        None => st.stops.push(msg::blame_origin_unreadable(rel, &origin)),
         Some(origin_content) => {
             match repo::git_hash_object_stdin(root, &origin_content) {
-                Some(actual) if actual != blob => st.failures.push(msg::blame_blob_mismatch(rel, &origin)),
+                Some(actual) if actual != blob => st.failures.push(about(msg::blame_blob_mismatch(rel, &origin))),
                 Some(_) => {}
-                None => st.failures.push(msg::blame_hash_failed(rel, &origin)),
+                None => st.stops.push(msg::blame_hash_failed(rel, &origin)),
             }
             st.origin_content = Some(origin_content);
         }

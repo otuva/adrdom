@@ -14,6 +14,7 @@ pub mod plan;
 pub mod reader;
 pub mod record;
 pub mod repo;
+pub mod rule;
 pub mod rules;
 pub mod state;
 pub mod status;

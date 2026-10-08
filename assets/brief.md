@@ -32,16 +32,17 @@ it.
   Leave it.
 
 `adr show <file>` takes every file `adr approve` takes: a topic file, the
-terms file, a blame file. For a topic file it prints every question, the
-lines it carries, and the body of a question that waits for the owner's
-answer; what the file holds beyond its latest approval is printed marked,
+terms file, a blame file. For a topic file it prints every question with its
+status, every depends and supersedes line, and the body of a question that
+waits for the owner's answer; what the file holds beyond its latest approval is printed marked,
 `+` for a line added and `-` for a line gone, and a question new or struck
 as a whole carries the mark on its own line too; then the findings and the
 moves of the file. The file itself, a term entry and the prose open with
 their status in brackets: `[new]`, `[changed]`, `[approved]`, `[removed]`,
 and `[retired]` for a term. `adr show --dependents <file>` also prints what
 stands on each question or term entry and what took the place of a question
-that was replaced. Each question opens with where it stands, in brackets:
+that was replaced. `adr show --unrelated <file>` also prints the unrelated
+lines. Each question opens with where it stands, in brackets:
 
 - `[no body]`: a heading of the plan, its body not written.
 - `[not asked]`: the body is written, `adr ask` has not run on it.

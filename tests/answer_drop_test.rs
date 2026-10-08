@@ -227,7 +227,7 @@ fn check_verifies_each_dropped_row() {
     fail_with(
         good_ledger.replace(&two_row, &wrong_letter),
         None,
-        "which the question's set at HEAD holds",
+        "which the set at HEAD holds",
     );
     // A dependent naming a question with no dropped row.
     let other = "00000000-0000-4000-8000-000000000000";
@@ -342,7 +342,7 @@ fn an_answer_never_removes_an_answered_question() {
     assert!(!out.status.success(), "{}{}", stdout(&out), stderr(&out));
     let err = stderr(&out);
     assert!(err.contains(TWO) && err.contains("answered"), "{}", err);
-    assert!(err.contains("agent says so in chat and stops"), "{}", err);
+    assert!(err.contains("agent writes a question that supersedes"), "{}", err);
     assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
     assert_eq!(std::fs::read_to_string(ledger_path(&dir)).unwrap(), ledger_before);
 }

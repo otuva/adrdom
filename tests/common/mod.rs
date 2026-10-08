@@ -636,14 +636,11 @@ pub fn plan_record(dir: &Path, rel: &str) {
 }
 
 /// The (heading, name) of each finding `adr plan` printed of a neighbour on
-/// no line: `plan: <rel>: the <kind> "<name>" is a neighbour of
+/// no line: `<rel>: the <kind> "<name>" is a neighbour of
 /// "<heading>" and is on no line; ...`.
 pub fn lines_wanted(plan_stdout: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
     for l in plan_stdout.lines() {
-        if !l.starts_with("plan: ") {
-            continue;
-        }
         let Some((left, right)) = l.split_once("\" is a neighbour of \"") else { continue };
         let Some((_, name)) = left.rsplit_once(" \"") else { continue };
         let Some((heading, _)) = right.split_once("\" and is on no line") else { continue };

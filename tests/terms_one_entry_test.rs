@@ -30,8 +30,8 @@ fn approve_refuses_a_terms_edit_that_changes_more_than_one_entry() {
     let out = raw_approve(&dir);
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("2 entries are new, and the file has no approval yet: \"alpha\", \"beta\""), "{}", err);
-    assert!(err.contains("agent keeps one of these edits in the file"), "{}", err);
+    assert!(err.contains("\"alpha\", \"beta\" are new, and the file has no approval yet"), "{}", err);
+    assert!(err.contains("agent restores all but one of these entries from git"), "{}", err);
     assert_eq!(err.matches("owner runs").count(), 0, "{}", err);
     assert_eq!(std::fs::read_to_string(&path).unwrap().matches("\nid: ").count(), 0, "a refusal writes nothing");
 
@@ -48,12 +48,12 @@ fn approve_refuses_a_terms_edit_that_changes_more_than_one_entry() {
     std::fs::write(&path, format!("{}{}", two.replace("A first thing.", "A first item."), entry("gamma", "A third thing."))).unwrap();
     let out = raw_approve(&dir);
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("2 entries differ from the last approval: \"alpha\", \"gamma\""), "{}", stderr(&out));
+    assert!(stderr(&out).contains("\"alpha\", \"gamma\" differ from the last approval"), "{}", stderr(&out));
     let start = two.find("## beta").unwrap();
     std::fs::write(&path, two[..start].replace("A first thing.", "A first item.")).unwrap();
     let out = raw_approve(&dir);
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("2 entries differ"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("differ from the last approval; an approval covers one terms entry"), "{}", stderr(&out));
 
     // One change alone passes.
     std::fs::write(&path, two.replace("A first thing.", "A first item.")).unwrap();
@@ -105,7 +105,7 @@ fn check_reports_a_two_entry_edit_with_the_agent_move() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let text = stdout(&out);
-    assert!(text.contains("2 entries differ from the last approval: \"beta\", \"gamma\""), "{}", text);
-    assert!(text.contains("agent keeps one of these edits in the file"), "{}", text);
+    assert!(text.contains("\"beta\", \"gamma\" differ from the last approval"), "{}", text);
+    assert!(text.contains("agent restores all but one of these entries from git"), "{}", text);
     assert!(!text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
 }

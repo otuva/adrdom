@@ -9,7 +9,7 @@
 use crate::approval::Side;
 use crate::ledger::Row;
 use crate::moves::Move;
-use crate::rules::{Finding, Rule};
+use crate::rules::{Command, Finding};
 use crate::status::{FileStatus, QuestionStatus, TermStatus};
 use std::collections::HashMap;
 use std::io::Write;
@@ -148,7 +148,12 @@ pub enum Line {
     /// marks of a diff (per "Does show print what a file holds beyond its
     /// latest approval?", bceceda8 A).
     Status { subject: String, status: Status, mark: Option<Side> },
+    /// A rule one thing in the records breaks: found, what the rule
+    /// protects, the move.
     Finding(Finding),
+    /// What stopped a command on its own input, files, environment or gate:
+    /// `<command>: <what>; <move>`.
+    Stop { command: Command, text: String },
     Move(Move),
     Event(Event),
 }
@@ -165,6 +170,7 @@ pub fn report(r: &crate::moves::Report) -> Vec<Line> {
         .filter(is_build)
         .cloned()
         .map(Line::Move)
+        .chain(r.stops.iter().cloned())
         .chain(r.findings.iter().cloned().map(Line::Finding))
         .chain(r.moves.iter().filter(|m| !is_build(m)).cloned().map(Line::Move))
         .collect()
@@ -177,6 +183,7 @@ pub fn text(line: &Line) -> String {
         Line::Record { depth, text } => format!("{}{}", INDENT.repeat(*depth), text),
         Line::Status { subject, status, mark } => format!("{}[{}] {}", mark_of(*mark), status.name(), subject),
         Line::Finding(f) => f.text(),
+        Line::Stop { command, text } => format!("{}: {}", command, text),
         Line::Move(m) => m.text(),
         Line::Event(e) => e.text(),
     })
@@ -216,11 +223,10 @@ pub fn html(line: &Line) -> String {
             esc(&status.name()),
             esc(subject)
         ),
-        Line::Finding(f) => format!(
-            "<p class=\"finding\"><span class=\"rule\">{}:</span> {}</p>",
-            esc(f.rule.as_str()),
-            esc(&f.message)
-        ),
+        Line::Finding(f) => format!("<p class=\"finding\">{}</p>", esc(&f.text())),
+        Line::Stop { command, text } => {
+            format!("<p class=\"finding\"><span class=\"rule\">{}:</span> {}</p>", esc(command.as_str()), esc(text))
+        }
         Line::Move(m) => format!("<p class=\"move {}\">{}</p>", mover_class(m), esc(&m.text())),
         Line::Event(e) => format!("<p class=\"event\">{}</p>", esc(&e.text())),
     }
@@ -264,26 +270,51 @@ pub fn esc(s: &str) -> String {
     out
 }
 
-/// The refusal a command `cmd` stopped on, whole, as a finding of the rule
-/// named after the command: the command's own name leads the line once,
-/// whether or not `text` already starts with it.
-pub fn refusal(cmd: Rule, text: &str) -> Line {
+/// What stopped the command `cmd`, whole: the command's own name leads the
+/// line once, whether or not `text` already starts with it.
+pub fn refusal(cmd: Command, text: &str) -> Line {
     let prefix = format!("{}: ", cmd);
-    let message = text.strip_prefix(&prefix).unwrap_or(text);
-    Line::Finding(Finding::new(cmd, message.to_string()))
+    let text = text.strip_prefix(&prefix).unwrap_or(text);
+    Line::Stop { command: cmd, text: text.to_string() }
 }
 
-/// What stopped the command `cmd`, one finding per line of `stop`, the
+/// What stopped the command `cmd`, one line per line of `stop`, the
 /// command's name leading each once: what the terminal prints on standard
 /// error and the page shows in its banner, the same lines (per "Does the ui
 /// show what the terminal prints?", 7857d633 A).
-pub fn stop(cmd: Rule, stop: &str) -> Vec<Line> {
+pub fn stop(cmd: Command, stop: &str) -> Vec<Line> {
     stop.lines().filter(|l| !l.trim().is_empty()).map(|l| refusal(cmd, l)).collect()
 }
 
 /// The exit code of a command whose reader went away, as a shell reports a
 /// process ended by a closed pipe (128 + 13).
 const READER_GONE: i32 = 141;
+
+/// The lines as every output shows them, the terminal's standard output and
+/// standard error and the page alike: each run of findings in the one order
+/// of `rules::finding_order`, and a finding or stop whose text an earlier
+/// line of the call already has left out.
+pub fn present(lines: &[Line]) -> Vec<&Line> {
+    let mut shown: Vec<&Line> = Vec::with_capacity(lines.len());
+    let mut i = 0;
+    while i < lines.len() {
+        if matches!(lines[i], Line::Finding(_)) {
+            let mut run: Vec<&Line> = lines[i..].iter().take_while(|l| matches!(l, Line::Finding(_))).collect();
+            i += run.len();
+            run.sort_by(|a, b| match (a, b) {
+                (Line::Finding(x), Line::Finding(y)) => crate::rules::finding_order(x, y),
+                _ => std::cmp::Ordering::Equal,
+            });
+            shown.extend(run);
+        } else {
+            shown.push(&lines[i]);
+            i += 1;
+        }
+    }
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    shown.retain(|l| !matches!(l, Line::Finding(_) | Line::Stop { .. }) || seen.insert(text(l)));
+    shown
+}
 
 /// Prints `lines` to standard output, one terminal line each. The reader
 /// gone (`adr show | head`) is no fault of the tool: the process ends
@@ -295,7 +326,7 @@ const READER_GONE: i32 = 141;
 /// all reach their reader never passes.
 pub fn print(lines: &[Line]) {
     let mut out = std::io::stdout().lock();
-    for l in lines {
+    for l in present(lines) {
         if let Err(e) = writeln!(out, "{}", text(l)) {
             unwritable(e);
         }
@@ -328,7 +359,7 @@ fn unwritable(e: std::io::Error) -> ! {
 /// Prints `lines` to standard error: the findings that stopped a command.
 pub fn eprint(lines: &[Line]) {
     let mut err = std::io::stderr().lock();
-    for l in lines {
+    for l in present(lines) {
         let _ = writeln!(err, "{}", text(l));
     }
 }
@@ -344,7 +375,7 @@ pub fn print_events(events: &[Event]) {
 /// Prints to standard error what stopped the command `cmd`: `out::stop` of
 /// the refusal text, so every line of a refusal of several lines leads with
 /// the command's name once.
-pub fn eprint_stop(cmd: Rule, text: &str) {
+pub fn eprint_stop(cmd: Command, text: &str) {
     eprint(&stop(cmd, text));
 }
 
@@ -386,7 +417,8 @@ mod tests {
                 status: Status::Question { status: QuestionStatus::Asked, letter: None, version: Some("ab12".into()) },
                 mark: Some(Side::Added),
             },
-            Line::Finding(Finding::new(crate::rules::Rule::Plan, "x.md: a <fault>; agent fixes it".to_string())),
+            Line::Finding(Finding::new(&crate::rule::TOPIC_FILE_SHAPE, "x.md: a <fault>".to_string(), "agent rewrites the file".to_string())),
+            Line::Stop { command: Command::Show, text: "x.md is not a file; agent names one".to_string() },
             Line::Move(Move::new(MoveKind::Approve { path: "x.md".to_string() })),
             Line::Event(Event::Asked { heading: "Does it?".to_string() }),
         ];

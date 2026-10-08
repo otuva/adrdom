@@ -1,4 +1,4 @@
-use crate::rules::Rule;
+use crate::rules::Command;
 use crate::banned;
 use crate::commands::{deny_entries, OWNER_COMMANDS};
 use crate::moves::{command, Cmd};
@@ -88,7 +88,7 @@ pub fn run(claude: bool, codex: bool) -> i32 {
         Some(r) => r,
         None => {
             let words = install_words(claude, codex);
-            out::eprint_stop(Rule::Install, &msg::not_a_repo("install", &words[2..], Actor::Agent));
+            out::eprint_stop(Command::Install, &msg::not_a_repo("install", &words[2..], Actor::Agent));
             return 1;
         }
     };
@@ -102,7 +102,7 @@ pub fn run(claude: bool, codex: bool) -> i32 {
     match result {
         Ok(()) => 0,
         Err(stop) => {
-            out::eprint_stop(Rule::Install, &stop);
+            out::eprint_stop(Command::Install, &stop);
             1
         }
     }

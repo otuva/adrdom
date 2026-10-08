@@ -23,7 +23,7 @@
 //! model?", 21cdad59-4f0c-42a5-b4f3-6af946637df3; "Does planning stop
 //! without the reader?", 3dba486c-a399-4ce3-a794-e38c4f733403 A); `adr read`
 //! loads them too.
-use crate::rules::Rule;
+use crate::rules::Command;
 use crate::index;
 use crate::ledger;
 use crate::msg;
@@ -43,7 +43,7 @@ pub fn run(file: PathBuf) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint(&[out::refusal(Rule::Plan,
+            out::eprint(&[out::refusal(Command::Plan,
                 &msg::not_a_repo("plan", &[&file.display().to_string()], msg::Actor::Agent),
             )]);
             return 1;
@@ -57,14 +57,14 @@ pub fn run(file: PathBuf) -> i32 {
         Some(rel) if crate::rules::is_topic_file_path(&rel) => rel,
         rel => {
             let rel = rel.unwrap_or_else(|| file.display().to_string());
-            out::eprint(&[out::refusal(Rule::Plan, &msg::plan_not_a_topic_file(&rel))]);
+            out::eprint(&[out::refusal(Command::Plan, &msg::plan_not_a_topic_file(&rel))]);
             return 1;
         }
     };
     let mut rf = match record::load(&root.join(&rel)) {
         Ok(rf) => rf,
         Err(e) => {
-            out::eprint(&[out::refusal(Rule::Plan,
+            out::eprint(&[out::refusal(Command::Plan,
                 &msg::read_failed(&rel, &e, msg::topic_file_unread("plan", &rel, &e)),
             )]);
             return 1;
@@ -88,11 +88,7 @@ pub fn run(file: PathBuf) -> i32 {
 /// the planning keys its rows by heading text.
 fn shape_refusals(rf: &RecordFile) -> Vec<crate::rules::Finding> {
     let mut out = crate::rules::parse_findings(&rf.rel, rf);
-    out.extend(
-        crate::rules::duplicate_heading_refusals(&rf.rel, &rf.sections)
-            .into_iter()
-            .map(|m| crate::rules::Finding::new(Rule::Plan, m)),
-    );
+    out.extend(crate::rules::duplicate_heading_refusals(&rf.rel, &rf.sections));
     out
 }
 
@@ -195,5 +191,5 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
 /// What stopped `plan`, every line of it led by the command's name once
 /// (`out::stop`).
 fn stop(e: String) -> Vec<Line> {
-    out::stop(Rule::Plan, &e)
+    out::stop(Command::Plan, &e)
 }

@@ -141,7 +141,7 @@ fn ask_names_every_fault_in_one_run() {
     let err = stderr(&out);
     let lines: Vec<&str> = err.lines().collect();
     assert_eq!(lines.len(), 3, "{}", err);
-    assert!(lines.iter().all(|l| l.starts_with("ask: adrdom/decisions/example.md")), "{}", err);
+    assert!(lines.iter().all(|l| l.starts_with("adrdom/decisions/example.md:")), "{}", err);
     for word in ["already", "currently", "today"] {
         assert_eq!(
             lines.iter().filter(|l| l.contains(&format!("\"{}\"", word))).count(),
@@ -448,7 +448,7 @@ fn approve_refuses_a_tier_over_the_cap() {
     let approve_out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!approve_out.status.success());
     assert!(
-        stderr(&approve_out).contains("5 questions would be put to the owner together, the most is 4"),
+        stderr(&approve_out).contains("5 questions in one tier, the most is 4"),
         "{}",
         stderr(&approve_out)
     );
@@ -587,7 +587,7 @@ fn answer_takes_a_question_in_the_order_it_stands_on() {
         assert_eq!(
             stderr(&out).trim_end(),
             format!(
-                "answer: \"1.2 Does the widget's paint match its color?\" waits: \"1.1 What color is the widget?\" has no decision yet; owner runs: adr answer {}@{} <letter>",
+                "\"1.2 Does the widget's paint match its color?\" waits: \"1.1 What color is the widget?\" has no decision yet; no question is answered above one with no decision; owner runs: adr answer {}@{} <letter>",
                 q1_id,
                 current_version(&dir, &q1_id)
             )
@@ -623,7 +623,7 @@ fn answer_refuses_a_question_standing_on_a_refused_question() {
         assert!(!out.status.success(), "{}", letter);
         assert_eq!(
             stderr(&out).trim_end(),
-            "answer: \"1.2 Does the widget's paint match its color?\" waits: \"1.1 What color is the widget?\" is refused and the question stands on it; agent writes the plan change that drops or replaces \"1.1 What color is the widget?\", owner runs: adr approve adrdom/decisions/example.md"
+            "\"1.2 Does the widget's paint match its color?\" waits: \"1.1 What color is the widget?\" is refused and the question stands on it; nothing is asked above a refused question; agent writes the plan change that drops or replaces \"1.1 What color is the widget?\", owner runs: adr approve adrdom/decisions/example.md"
         );
     }
 }
@@ -697,7 +697,7 @@ fn approve_refuses_a_set_naming_an_option_the_target_does_not_have() {
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success());
     assert!(
-        stderr(&out).contains("\"1.2 Does the widget's paint match its color?\" depends on \"1.1 What color is the widget?\" names option C which \"1.1 What color is the widget?\" does not have"),
+        stderr(&out).contains("\"1.2 Does the widget's paint match its color?\" depends on \"1.1 What color is the widget?\" under an answer set naming option C, which it does not have"),
         "{}",
         stderr(&out)
     );
@@ -797,12 +797,12 @@ fn ask_refuses_when_a_refused_section_was_edited_since_refusal() {
     // rule, with its move.
     assert_eq!(
         stderr(&out).trim_end(),
-        "answers: adrdom/decisions/example.md: 1.1 What color is the widget?: text changed since being refused; agent restores its text from git (e.g. git checkout -- adrdom/decisions/example.md)"
+        "adrdom/decisions/example.md: 1.1 What color is the widget?: text changed since being refused; a refused question keeps the text it was refused with; agent restores adrdom/decisions/example.md from git"
     );
     let checked = stdout(&adr(&dir, &["check"], &[], ""));
-    assert!(checked.contains("answers: adrdom/decisions/example.md: 1.1 What color is the widget?: text changed since being refused;"), "{}", checked);
+    assert!(checked.contains("adrdom/decisions/example.md: 1.1 What color is the widget?: text changed since being refused;"), "{}", checked);
     let shown = stdout(&adr(&dir, &["show", "adrdom/decisions/example.md"], &[], ""));
-    assert!(shown.contains("answers: adrdom/decisions/example.md: 1.1 What color is the widget?: text changed since being refused;"), "{}", shown);
+    assert!(shown.contains("adrdom/decisions/example.md: 1.1 What color is the widget?: text changed since being refused;"), "{}", shown);
 
     // Nothing changed: the file is exactly as edited, no new ledger rows.
     let after = std::fs::read_to_string(&record).unwrap();
@@ -959,7 +959,7 @@ fn answer_names_one_ask_clause_for_every_edited_heading() {
     assert_eq!(err.matches("agent runs: adr ask").count(), 1, "{}", err);
     // The refusal names both headings; its ask clause carries no `#`
     // comment, so no clause after it is read as part of one.
-    assert!(err.contains("\"Is alpha ready?\" has no decision yet; \"Is beta ready?\" has no decision yet"), "{}", err);
+    assert!(err.contains("\"Is alpha ready?\" has no decision yet, \"Is beta ready?\" has no decision yet"), "{}", err);
     assert!(!err.contains('#'), "{}", err);
 }
 

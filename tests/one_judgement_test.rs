@@ -97,7 +97,7 @@ fn an_answered_question_no_file_holds_is_named_and_approve_is_not() {
     std::fs::write(&rec, format!("{}### Does the widget stay?\ndepends: widget\n\nProblem: p.\n\nStandard: s.\n\n{}", &text[..cut], GATE_OPTIONS)).unwrap();
     plan_record(&dir, REL);
     let checked = stdout(&adr(&dir, &["check"], &[], ""));
-    let missing = checked.lines().find(|l| l.starts_with("ids: ") && l.contains("Does the widget hold?")).unwrap_or_else(|| panic!("{}", checked)).to_string();
+    let missing = checked.lines().find(|l| l.contains("is answered and current but missing from every topic file") && l.contains("Does the widget hold?")).unwrap_or_else(|| panic!("{}", checked)).to_string();
     for args in [vec!["show", REL], vec!["plan", REL]] {
         let text = all_of(&dir, &args);
         assert!(text.contains(&missing), "{:?} lacks the finding:\n{}", args, text);
@@ -199,7 +199,7 @@ fn ask_refuses_a_hand_written_answer_line_check_fails() {
     let finding = checked.lines().find(|l| l.contains("answer line without ledger row")).unwrap_or_else(|| panic!("{}", checked));
     let out = adr(&dir, &["ask", rec.to_str().unwrap()], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
-    let message = finding.strip_prefix("answers: ").unwrap();
+    let message = finding;
     assert!(stderr(&out).contains(message), "{}", stderr(&out));
 }
 

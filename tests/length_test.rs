@@ -90,7 +90,7 @@ fn refused_for(content: &str, kind: &str) -> bool {
     let err = stderr(&out);
     let refused = !out.status.success() && err.contains(&format!("the {} has", kind));
     if refused {
-        assert!(err.contains("agent shortens the line"), "{}", err);
+        assert!(err.contains("agent rewrites the "), "{}", err);
         assert_eq!(asked_row_count(&dir), 0, "a refusal writes no asked row");
     }
     refused
@@ -102,7 +102,7 @@ fn an_option_under_a_does_heading_holds_one_word() {
     let (dir, rec) = setup(&question("Does the decision hold?", "Yes: because.", "w.", "c."));
     let out = ask(&dir, &rec);
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("a heading that opens with Does takes one"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("an option under a Does heading holds one word"), "{}", stderr(&out));
 
     let (dir, rec) = setup(&question("Does the decision hold?", "Yes.", "w.", "c."));
     let out = ask(&dir, &rec);
@@ -182,7 +182,7 @@ fn check_approve_and_plan_find_a_too_long_option_before_approval() {
     let out = adr_owner(&dir, &["approve", rec.to_str().unwrap()], "");
     assert!(!out.status.success());
     assert!(stderr(&out).contains("the option has 25 words"), "{}", stderr(&out));
-    assert!(stderr(&out).contains("agent shortens the line"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("agent rewrites the "), "{}", stderr(&out));
     let out = adr(&dir, &["plan", rec.to_str().unwrap()], &[], "");
     let all = format!("{}{}", stdout(&out), stderr(&out));
     assert!(all.contains("the option has 25 words"), "{}", all);
@@ -194,10 +194,10 @@ fn check_approve_and_plan_find_a_too_long_option_before_approval() {
 fn check_and_approve_find_a_many_word_option_under_a_does_heading() {
     let (dir, rec) = unapproved(&question("Does the decision hold?", "Yes: because.", "w.", "c."));
     let out = both(&adr(&dir, &["check"], &[], ""));
-    assert!(out.contains("a heading that opens with Does takes one"), "{}", out);
+    assert!(out.contains("an option under a Does heading holds one word"), "{}", out);
     let out = adr_owner(&dir, &["approve", rec.to_str().unwrap()], "");
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("agent writes one word"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("agent rewrites the option"), "{}", stderr(&out));
 }
 
 // adr: d808917b-0717-45ad-ab83-9fa274b9a9d4

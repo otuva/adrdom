@@ -99,7 +99,7 @@ impl Move {
     pub fn next(&self) -> Option<Next> {
         Some(match &self.kind {
             MoveKind::PlanUnresolved => {
-                Next::all(vec![Next::agent_runs(Cmd::fixed("adr check")), Next::agent("clears what it names in the plan")])
+                Next::all(vec![Next::agent_runs(Cmd::fixed("adr check")), Next::agent("rewrites the headings and lines of the plan that adr check names")])
             }
             MoveKind::Plan { rel } => Next::agent_runs(command(&["adr", "plan", rel])),
             MoveKind::WriteLines { headings } => Next::agent(format!("writes lines for {}", quoted(headings))),
@@ -168,36 +168,28 @@ impl Move {
 /// turned into a move of its own: it carries its move.
 #[derive(Debug, Clone, Default)]
 pub struct Report {
+    /// What stopped the terms file's gate on its own input or files
+    /// (`rules::terms_gate`): a stop line, printed before the findings.
+    pub stops: Vec<crate::out::Line>,
     pub findings: Vec<Finding>,
     pub moves: Vec<Move>,
 }
 
 impl Report {
-    /// The report as the tail of a refusal: the moves on the refusal's own
-    /// line, joined with `, `, then each finding whole on a line of its own,
-    /// as `show` and `check` print them, so no finding runs into another
-    /// and a command printing the refusal names its command on every line.
-    pub fn tail(&self) -> String {
-        let mut s = self.moves_tail();
-        for f in &self.findings {
-            s.push('\n');
-            s.push_str(&f.text());
-        }
-        s
-    }
-
-    /// The moves alone, joined with `, `: for a refusal whose command prints
-    /// the findings apart (`check` prints every finding of the file on its
-    /// own line). With no move, each finding carries its own: the clause
-    /// says so.
-    pub fn moves_tail(&self) -> String {
+    /// The moves alone, joined with `, `: the findings are printed apart,
+    /// each on its own line. With no move, `fallback` names the act.
+    pub fn moves_tail(&self, fallback: Next) -> String {
         if self.moves.is_empty() {
             debug_assert!(!self.findings.is_empty(), "a refusal names at least one move");
-            return Next::agent("makes the move each finding of the file names").render();
+            return fallback.render();
         }
         self.moves.iter().map(Move::clause_text).collect::<Vec<_>>().join(", ")
     }
 }
+
+/// The move of a pair of decisions the reader marks as depending on one
+/// another: nobody moves on it.
+pub const PAIR_WAIT: &str = "not yet, nobody moves on a pair that depends";
 
 /// The tail of a finding whose only move is to wait for an answer
 /// elsewhere: nobody moves on it yet.
@@ -330,7 +322,7 @@ pub fn removal_next(rel: &str, holds: &[RemovalHold]) -> Next {
 /// the move `removal_next` names), or, with none, the owner's approval.
 pub fn of_removed_topic_file(rel: &str, findings: Vec<Finding>) -> Report {
     let moves = if findings.is_empty() { vec![Move::new(MoveKind::Approve { path: rel.to_string() })] } else { Vec::new() };
-    Report { findings, moves }
+    Report { stops: Vec::new(), findings, moves }
 }
 
 /// Every move of the topic file `rf`, in the order they are taken: what is
@@ -469,11 +461,13 @@ pub fn of_unasked_question_in(j: &Judging, rf: &RecordFile, heading: &str, unwri
     let mut moves = of_unasked_question(rf, plan_ok, &findings, &planning, heading, unwritten);
     // The terms file's gate, as `of_topic_file_with` reads it.
     let gate = crate::rules::terms_gate(j.root, j.led, &rf.rel);
+    let mut stops = Vec::new();
     if !gate.is_empty() {
         moves.retain(|m| !matches!(m.kind, MoveKind::Approve { .. } | MoveKind::Ask { .. } | MoveKind::Answer { .. }));
-        findings.splice(0..0, gate);
+        findings.splice(0..0, gate.findings);
+        stops = gate.stops;
     }
-    Report { findings, moves }
+    Report { stops, findings, moves }
 }
 
 /// Every move of the topic file `rf` as loaded from disk: the approval of
@@ -539,9 +533,11 @@ pub fn of_topic_file_judged(
     // While adrdom/terms.md is not approved, approve, ask and answer stop on
     // it: its gate is the file's finding, and their moves wait on it.
     let gate = crate::rules::terms_gate(root, led, &rf.rel);
+    let mut stops = Vec::new();
     if !gate.is_empty() {
         moves.retain(|m| !matches!(m.kind, MoveKind::Approve { .. } | MoveKind::Ask { .. } | MoveKind::Answer { .. }));
-        findings.splice(0..0, gate);
+        findings.splice(0..0, gate.findings);
+        stops = gate.stops;
     }
     // A question asked and struck from the plan is cleared by the owner's
     // approve the moves above already name, so it joins the findings only
@@ -551,7 +547,7 @@ pub fn of_topic_file_judged(
     let sole = index.stale().len() == 1;
     let stale = index.stale().contains(&rf.rel);
     findings.extend(crate::rules::struck_asked(&rf.rel, stale, sole, all, led));
-    (Report { findings, moves }, judged)
+    (Report { stops, findings, moves }, judged)
 }
 
 /// The move of the answered decision `id`, section `i` of `rf`, that no
@@ -627,13 +623,14 @@ pub fn of_planning(rf: &RecordFile, p: &crate::plan::Planning) -> Vec<Move> {
 }
 
 /// The report of one blame file: its findings, and, for a draft with
-/// nothing left to clear, the owner's approval.
-pub fn of_blame_file(rel: &str, findings: Vec<Finding>, awaiting: bool) -> Report {
+/// nothing left to clear (no finding, no stop on reading its origin), the
+/// owner's approval.
+pub fn of_blame_file(rel: &str, stops: Vec<crate::out::Line>, findings: Vec<Finding>, awaiting: bool) -> Report {
     let mut moves = Vec::new();
-    if findings.is_empty() && awaiting {
+    if findings.is_empty() && stops.is_empty() && awaiting {
         moves.push(Move::new(MoveKind::Approve { path: rel.to_string() }));
     }
-    Report { findings, moves }
+    Report { stops, findings, moves }
 }
 
 /// The report of the terms file: the findings of the rules on it, and, for
@@ -644,7 +641,7 @@ pub fn of_terms_file(findings: Vec<Finding>, status: status::TermsFileStatus) ->
     if findings.is_empty() && status.awaits_approval() {
         moves.push(Move::new(MoveKind::Approve { path: crate::repo::TERMS_PATH.to_string() }));
     }
-    Report { findings, moves }
+    Report { stops: Vec::new(), findings, moves }
 }
 
 /// The move after a reading that marked a pair same or inconsistent.
@@ -676,17 +673,19 @@ pub enum Waits {
 /// Every question it waits on is named, each with the move that clears it:
 /// the agent's moves first, one `adr ask` naming every heading, and the one
 /// owner move last.
-pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> String {
+pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> (crate::msg::Said, Vec<Finding>) {
     let mut parts = Vec::new();
     let mut answer: Option<Move> = None;
     let mut refused: Vec<String> = Vec::new();
-    let mut found: Vec<String> = Vec::new();
+    let mut found: Vec<Finding> = Vec::new();
     let mut agent: Vec<Move> = Vec::new();
     let mut owner: Option<Move> = None;
-    let add = |report: Report, found: &mut Vec<String>, agent: &mut Vec<Move>, owner: &mut Option<Move>| {
+    let mut unwritten: Vec<String> = Vec::new();
+    let mut asking: Vec<String> = Vec::new();
+    let add = |report: Report, found: &mut Vec<Finding>, agent: &mut Vec<Move>, owner: &mut Option<Move>| {
         for f in &report.findings {
-            if !found.contains(&f.text()) {
-                found.push(f.text());
+            if !found.iter().any(|g| g.text() == f.text()) {
+                found.push(f.clone());
             }
         }
         for m in report.moves {
@@ -725,10 +724,12 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> String {
             }
             Waits::Unwritten { heading: h, report } => {
                 parts.push(format!("\"{}\" has no decision yet and is [{}]", h, QuestionStatus::NoBody.name()));
+                unwritten.push(h.clone());
                 add(report, &mut found, &mut agent, &mut owner);
             }
             Waits::Asking { heading: h, report } => {
                 parts.push(format!("\"{}\" has no decision yet", h));
+                asking.push(h.clone());
                 add(report, &mut found, &mut agent, &mut owner);
             }
             Waits::Unanswered { heading: h, answer: m } => {
@@ -760,21 +761,37 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> String {
     }
     clauses.extend(owner.map(|m| m.clause_text()));
     if clauses.is_empty() {
-        clauses.push(Next::agent("makes the move each finding of the file names").render());
+        // No move of the questions it waits on: the act on each of them.
+        if !unwritten.is_empty() {
+            clauses.push(Next::agent(format!("writes the body of {}", quoted(&unwritten))).render());
+        }
+        if !asking.is_empty() {
+            clauses.push(Next::agent(format!("rewrites {} as the findings below name", quoted(&asking))).render());
+        }
     }
-    // What the rules find in the files it waits on, each whole on a line of
-    // its own after the refusal's line.
-    let mut s = format!("\"{}\" waits: {}; {}", heading, parts.join("; "), clauses.join(", "));
-    for f in found {
-        s.push('\n');
-        s.push_str(&f);
-    }
-    s
+    // What the rules find in the files it waits on is returned apart: each
+    // finding prints whole on a line of its own after the refusal's line.
+    let rule = if refused.is_empty() {
+        &crate::rule::ANSWER_NEEDS_LOWER_ANSWERS
+    } else {
+        &crate::rule::ANSWER_NEEDS_NO_REFUSED_BELOW
+    };
+    (crate::msg::said_raw(rule, format!("\"{}\" waits: {}", heading, parts.join(", ")), clauses.join(", ")), found)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // adr: 184b5bcb-fa72-436b-92cb-4d4605366c59
+    #[test]
+    fn a_report_with_no_move_names_the_fallback_act() {
+        let mut empty = Report::default();
+        empty.findings.push(Finding::new(&crate::rule::ASKED_TEXT_FROZEN, "f".into(), "agent m".into()));
+        assert_eq!(empty.moves_tail(Next::agent("restores x.md from git")), "agent restores x.md from git");
+        assert!(!crate::msg::edited_after_asking("x.md", "h", &empty).text().contains("each finding of the file names"));
+        assert!(crate::msg::edited_after_asking("x.md", "h", &empty).text().ends_with("agent restores x.md from git"));
+    }
 
     #[test]
     fn the_kind_fixes_who_moves() {
@@ -835,13 +852,14 @@ mod tests {
     #[test]
     fn a_tail_of_clauses_holds_no_comment_before_a_later_clause() {
         let report = Report {
+            stops: Vec::new(),
             findings: Vec::new(),
             moves: vec![
                 Move::new(MoveKind::Ask { rel: "x.md".into(), headings: vec!["A?".into(), "B?".into()] }),
                 Move::new(MoveKind::Approve { path: "x.md".into() }),
             ],
         };
-        let tail = report.tail();
+        let tail = report.moves_tail(Next::agent("restores x.md from git"));
         assert_eq!(tail, "agent runs: adr ask x.md, owner runs: adr approve x.md");
         assert!(!tail.contains('#'), "{}", tail);
     }
@@ -849,24 +867,23 @@ mod tests {
     #[test]
     fn answer_waits_merges_the_ask_moves_and_puts_the_owner_last() {
         let ask = |h: &str| Move::new(MoveKind::Ask { rel: "x.md".into(), headings: vec![h.into()] });
-        let line = answer_waits(
+        let (said, _) = answer_waits(
             "heading",
             "x.md",
             vec![
-                Waits::Asking { heading: "a".into(), report: Report { findings: Vec::new(), moves: vec![ask("a")] } },
+                Waits::Asking { heading: "a".into(), report: Report { stops: Vec::new(), findings: Vec::new(), moves: vec![ask("a")] } },
                 Waits::Asking {
                     heading: "b".into(),
                     report: Report {
+            stops: Vec::new(),
                         findings: Vec::new(),
                         moves: vec![ask("b"), Move::new(MoveKind::Approve { path: "x.md".into() })],
                     },
                 },
             ],
         );
-        assert_eq!(
-            line,
-            "\"heading\" waits: \"a\" has no decision yet; \"b\" has no decision yet; agent runs: adr ask x.md, owner runs: adr approve x.md"
-        );
+        assert_eq!(said.found, "\"heading\" waits: \"a\" has no decision yet, \"b\" has no decision yet");
+        assert_eq!(said.next, "agent runs: adr ask x.md, owner runs: adr approve x.md");
     }
 
     #[test]

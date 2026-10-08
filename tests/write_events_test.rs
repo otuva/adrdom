@@ -156,7 +156,7 @@ fn ban_names_each_place_a_word_stands_with_its_move() {
     let out = adr(&dir, &["ban"], &[], "zorblax\n");
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("ban: notes.md:1: holds a word given; agent rewrites the line without the word, then runs: adr ban"), "{}", err);
+    assert!(err.contains("notes.md:1: holds a word given; a ban never lands on a word the repository holds; agent rewrites the line, then runs: adr ban"), "{}", err);
 }
 
 // adr: 069a6b4a-de35-45f3-8c6c-8e254bf40565

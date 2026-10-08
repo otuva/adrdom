@@ -69,12 +69,12 @@ fn check_parse_failure() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
-    assert!(stdout(&out).contains("parse:"), "{}", stdout(&out));
     assert!(
-        stdout(&out).contains("no decision sentence"),
+        stdout(&out).contains("adrdom/decisions/bad.md: \"4.1 Bad option test?\": missing Problem line; a question holds Problem, Standard and two or three options; agent rewrites the question"),
         "{}",
         stdout(&out)
     );
+    assert!(!stdout(&out).contains("parse:"), "{}", stdout(&out));
 }
 
 #[test]
@@ -103,8 +103,12 @@ fn check_ledger_malformed_row() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
-    assert!(stdout(&out).contains("ledger:"), "{}", stdout(&out));
-    assert!(stdout(&out).contains("malformed row"), "{}", stdout(&out));
+    assert!(!stdout(&out).contains("ledger:"), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains("line 1: malformed row: this-is-not-a-valid-row; the record of owner acts stays readable; owner removes or repairs the row at line 1"),
+        "{}",
+        stdout(&out)
+    );
 }
 
 #[test]
@@ -124,12 +128,12 @@ fn check_answers_failure_hand_written_answer_line() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
-    assert!(stdout(&out).contains("answers:"), "{}", stdout(&out));
     assert!(
-        stdout(&out).contains("answer line without ledger row"),
+        stdout(&out).contains("3.1 Is this pass?: answer line without ledger row; an answer line needs the owner's answer row; agent removes the answer line"),
         "{}",
         stdout(&out)
     );
+    assert!(!stdout(&out).contains("answers:"), "{}", stdout(&out));
 }
 
 #[test]
@@ -202,7 +206,7 @@ fn check_banned_default_and_message_modes_name_the_line() {
     assert!(!out.status.success());
     let out_text = stdout(&out);
     assert!(
-        out_text.contains("banned: notes.txt:1: banned word"),
+        out_text.contains("notes.txt:1: banned word; no banned word appears in a tracked file; agent rewrites the line"),
         "{}",
         out_text
     );
@@ -279,12 +283,12 @@ fn check_banned_scanner_catches_word_in_quotes_and_backticks() {
     );
     let text = stdout(&out);
     assert!(
-        text.contains("banned: notes.txt:1: banned word"),
+        text.contains("notes.txt:1: banned word; no banned word appears in a tracked file; agent rewrites the line"),
         "word inside double quotes must still be caught: {}",
         text
     );
     assert!(
-        text.contains("banned: notes.txt:2: banned word"),
+        text.contains("notes.txt:2: banned word; no banned word appears in a tracked file; agent rewrites the line"),
         "word inside a backtick code span must still be caught: {}",
         text
     );
@@ -331,7 +335,7 @@ fn check_reports_a_banned_word_inside_terms_md_exactly_once() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains("banned: adrdom/terms.md:5: banned word"),
+        text.contains("adrdom/terms.md:5: banned word; no banned word appears in a tracked file; agent rewrites the line"),
         "{}",
         text
     );
@@ -346,7 +350,7 @@ fn check_reports_a_banned_word_inside_terms_md_exactly_once() {
         text
     );
     assert!(
-        !text.contains("terms: adrdom/terms.md:5: banned word"),
+        !text.contains("terms: adrdom/terms.md:5"),
         "check_terms must not re-scan and duplicate the banned-word hit: {}",
         text
     );
@@ -356,7 +360,7 @@ fn check_reports_a_banned_word_inside_terms_md_exactly_once() {
     assert!(!out2.status.success());
     let text2 = stdout(&out2);
     assert!(
-        text2.contains("banned: adrdom/terms.md:5: banned word"),
+        text2.contains("adrdom/terms.md:5: banned word; no banned word appears in a tracked file; agent rewrites the line"),
         "{}",
         text2
     );
@@ -382,7 +386,7 @@ fn check_tests_note_when_untested() {
     let out = adr(&dir, &["check"], &[], "");
     let out_text = stdout(&out);
     assert!(out.status.success(), "{}", out_text);
-    let untested_line = |t: &str| t.lines().any(|l| l.starts_with("untested:") && l.contains(&format!("adr: {}", id)));
+    let untested_line = |t: &str| t.lines().any(|l| l.contains("no tracked file holds its tie") && l.contains(&format!("adr: {}", id)));
     assert!(untested_line(&out_text), "check must name the untested decision by id: {}", out_text);
 
     write_test_comment(&dir, &id);
@@ -452,11 +456,11 @@ fn check_fails_an_answered_question_whose_text_changed_since_answering() {
     let out2 = adr(&dir, &["check"], &[], "");
     assert!(!out2.status.success());
     let text = stdout(&out2);
-    assert!(text.contains("answers:"), "{}", text);
+    assert!(!text.contains("answers:"), "{}", text);
     assert!(text.contains("text changed since being answered"), "{}", text);
     assert!(
         text.contains(&format!(
-            "agent restores it from git (e.g. git checkout -- adrdom/decisions/example.md), or writes a new question that supersedes {}",
+            "an answered question's text stays as it was answered; agent restores adrdom/decisions/example.md from git, or writes a question that supersedes {}",
             id
         )),
         "{}",
@@ -501,7 +505,8 @@ fn check_fails_on_a_renamed_answered_option_never_as_answer_without_row() {
     let out2 = adr(&dir, &["check"], &[], "");
     assert!(!out2.status.success());
     let text = stdout(&out2);
-    assert!(text.contains("answers:"), "{}", text);
+    assert!(!text.contains("answers:"), "{}", text);
+    assert!(text.contains("answer names missing option A; an answer names an option the question has; agent restores the answer line from git"), "{}", text);
     assert!(text.contains("text changed since being answered"), "{}", text);
     assert!(
         !text.contains("answer line without ledger row"),
@@ -530,7 +535,7 @@ fn check_tests_ignores_a_tie_under_adrdom_and_an_untracked_tie() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
     assert!(
-        stdout(&out).contains(&format!("no tracked file holds \"adr: {}\"", id)),
+        stdout(&out).contains(&format!("puts \"adr: {}\" in a test", id)),
         "a tie under adrdom/ must not count: {}",
         stdout(&out)
     );
@@ -541,7 +546,7 @@ fn check_tests_ignores_a_tie_under_adrdom_and_an_untracked_tie() {
     let out2 = adr(&dir, &["check"], &[], "");
     assert!(out2.status.success(), "{}", stdout(&out2));
     assert!(
-        stdout(&out2).contains(&format!("no tracked file holds \"adr: {}\"", id)),
+        stdout(&out2).contains(&format!("puts \"adr: {}\" in a test", id)),
         "an untracked tie must not count: {}",
         stdout(&out2)
     );
@@ -550,7 +555,7 @@ fn check_tests_ignores_a_tie_under_adrdom_and_an_untracked_tie() {
     run_git(&dir, &["add", "outside.txt"]);
     let out3 = adr(&dir, &["check"], &[], "");
     assert!(out3.status.success(), "{}", stdout(&out3));
-    assert!(!stdout(&out3).contains("untested:"), "{}", stdout(&out3));
+    assert!(!stdout(&out3).contains("no tracked file holds its tie"), "{}", stdout(&out3));
 }
 
 // adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
@@ -567,9 +572,8 @@ fn check_install_fails_when_settings_deny_entry_removed_and_passes_after_install
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let out_text = stdout(&out);
-    assert!(out_text.contains("install:"), "{}", out_text);
     assert!(
-        out_text.contains(".claude/settings.json lacks deny entry"),
+        out_text.contains(".claude/settings.json lacks deny entry Bash(adr answer*); agent settings forbid every owner command; agent runs: adr install --claude"),
         "{}",
         out_text
     );
@@ -580,7 +584,7 @@ fn check_install_fails_when_settings_deny_entry_removed_and_passes_after_install
     let out2 = adr(&dir, &["check"], &[], "");
     let out2_text = stdout(&out2);
     assert!(
-        !out2_text.contains("install:"),
+        !out2_text.contains("agent runs: adr install"),
         "install check should pass after re-install: {}",
         out2_text
     );
@@ -599,7 +603,7 @@ fn check_install_passes_when_no_claude_directory() {
     let out = adr(&dir, &["check"], &[], "");
     let out_text = stdout(&out);
     assert!(
-        !out_text.contains("install:"),
+        !out_text.contains("agent runs: adr install"),
         "no .claude directory should not trigger the install check: {}",
         out_text
     );
@@ -614,7 +618,7 @@ fn check_install_fails_when_agents_md_is_missing() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("install: AGENTS.md lacks the adrdom brief; agent runs: adr install"),
+        stdout(&out).contains("AGENTS.md lacks the adrdom brief; AGENTS.md carries the brief text install writes; agent runs: adr install"),
         "{}",
         stdout(&out)
     );
@@ -640,14 +644,14 @@ fn check_staged_refuses_an_unstaged_agents_md_from_install() {
     // The working tree holds what install wrote: staging it is the move,
     // never install again (which would write nothing).
     assert!(
-        text.contains("install: AGENTS.md not staged; agent runs: git add AGENTS.md"),
+        text.contains("AGENTS.md not staged; a commit carries the files check judged; agent runs: git add AGENTS.md"),
         "an unstaged AGENTS.md from install must not satisfy a staged check: {}",
         text
     );
 
     let out2 = adr(&dir, &["check"], &[], "");
     assert!(
-        !stdout(&out2).contains("install:"),
+        !stdout(&out2).contains("agent runs: adr install"),
         "plain check reads the working tree, where AGENTS.md is fine: {}",
         stdout(&out2)
     );
@@ -662,7 +666,7 @@ fn check_install_fails_when_agents_md_has_no_marked_section() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("install: AGENTS.md lacks the adrdom brief; agent runs: adr install"),
+        stdout(&out).contains("AGENTS.md lacks the adrdom brief; AGENTS.md carries the brief text install writes; agent runs: adr install"),
         "{}",
         stdout(&out)
     );
@@ -689,7 +693,7 @@ fn check_install_fails_when_agents_md_brief_differs() {
     assert!(!out.status.success());
     assert!(
         stdout(&out)
-            .contains("install: AGENTS.md brief differs from this binary's; agent runs: adr install"),
+            .contains("AGENTS.md brief differs from this binary's; AGENTS.md carries the brief text install writes; agent runs: adr install"),
         "{}",
         stdout(&out)
     );
@@ -708,7 +712,7 @@ fn check_install_fails_when_claude_md_does_not_import_agents_md() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("install: CLAUDE.md does not import AGENTS.md; agent runs: adr install --claude"),
+        stdout(&out).contains("CLAUDE.md does not import AGENTS.md; CLAUDE.md imports AGENTS.md; agent runs: adr install --claude"),
         "{}",
         stdout(&out)
     );
@@ -729,7 +733,7 @@ fn check_install_fails_when_pre_commit_hook_differs_and_passes_after_reinstall()
     assert!(!out.status.success());
     assert!(
         stdout(&out).contains(
-            "install: .githooks/pre-commit differs from what install writes; agent runs: adr install"
+            ".githooks/pre-commit differs from what install writes; a git hook equals what install writes; agent runs: adr install"
         ),
         "{}",
         stdout(&out)
@@ -744,7 +748,7 @@ fn check_install_fails_when_pre_commit_hook_differs_and_passes_after_reinstall()
 
     let out2 = adr(&dir, &["check"], &[], "");
     assert!(
-        !stdout(&out2).contains("install:"),
+        !stdout(&out2).contains("agent runs: adr install"),
         "install check should pass after re-install: {}",
         stdout(&out2)
     );
@@ -768,7 +772,7 @@ fn check_install_fails_when_pre_commit_hook_is_not_executable_and_install_repair
     assert!(!out.status.success());
     assert!(
         stdout(&out).contains(
-            "install: .githooks/pre-commit is not executable, git skips it; agent runs: adr install"
+            ".githooks/pre-commit is not executable; a git hook has its execute bit set; agent runs: adr install"
         ),
         "{}",
         stdout(&out)
@@ -788,7 +792,7 @@ fn check_install_fails_when_pre_commit_hook_is_not_executable_and_install_repair
 
     let out2 = adr(&dir, &["check"], &[], "");
     assert!(
-        !stdout(&out2).contains("install:"),
+        !stdout(&out2).contains("agent runs: adr install"),
         "install check should pass after re-install: {}",
         stdout(&out2)
     );
@@ -808,7 +812,7 @@ fn check_install_fails_when_commit_msg_hook_missing_and_passes_after_reinstall()
     assert!(!out.status.success());
     assert!(
         stdout(&out).contains(
-            "install: .githooks/commit-msg is missing; agent runs: adr install"
+            ".githooks/commit-msg is missing; a git hook equals what install writes; agent runs: adr install"
         ),
         "{}",
         stdout(&out)
@@ -819,7 +823,7 @@ fn check_install_fails_when_commit_msg_hook_missing_and_passes_after_reinstall()
 
     let out2 = adr(&dir, &["check"], &[], "");
     assert!(
-        !stdout(&out2).contains("install:"),
+        !stdout(&out2).contains("agent runs: adr install"),
         "install check should pass after re-install: {}",
         stdout(&out2)
     );
@@ -851,7 +855,7 @@ fn check_staged_judges_the_staged_hook_not_the_working_tree_copy() {
     );
     assert!(
         stdout(&out2).contains(
-            "install: .githooks/pre-commit differs from what install writes; agent runs: adr install"
+            ".githooks/pre-commit differs from what install writes; a git hook equals what install writes; agent runs: adr install"
         ),
         "{}",
         stdout(&out2)
@@ -945,7 +949,7 @@ fn check_install_passes_right_after_install_with_a_claude_md_present() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(
-        !stdout(&out).contains("install:"),
+        !stdout(&out).contains("agent runs: adr install"),
         "check should pass right after install: {}",
         stdout(&out)
     );
@@ -959,7 +963,7 @@ fn check_install_passes_right_after_install_claude_created_claude_md() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(
-        !stdout(&out).contains("install:"),
+        !stdout(&out).contains("agent runs: adr install"),
         "check should pass right after install --claude: {}",
         stdout(&out)
     );
@@ -978,7 +982,7 @@ fn check_install_passes_when_no_codex_directory() {
     let out = adr(&dir, &["check"], &[], "");
     let out_text = stdout(&out);
     assert!(
-        !out_text.contains("install:"),
+        !out_text.contains("agent runs: adr install"),
         "no .codex directory should not trigger the install check: {}",
         out_text
     );
@@ -992,7 +996,7 @@ fn check_install_passes_right_after_install_codex() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(
-        !stdout(&out).contains("install:"),
+        !stdout(&out).contains("agent runs: adr install"),
         "check should pass right after install --codex: {}",
         stdout(&out)
     );
@@ -1017,7 +1021,7 @@ fn check_install_fails_when_codex_rules_missing_and_passes_after_reinstall() {
     assert!(adr(&dir, &["install", "--codex"], &[], "").status.success());
     let out2 = adr(&dir, &["check"], &[], "");
     assert!(
-        !stdout(&out2).contains("install:"),
+        !stdout(&out2).contains("agent runs: adr install"),
         "install check should pass after re-install --codex: {}",
         stdout(&out2)
     );
@@ -1055,7 +1059,7 @@ fn check_tests_ignores_adr_prefix_that_is_not_a_uuid() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "check should pass: {}", stdout(&out));
-    assert!(!stdout(&out).contains("untested:"), "{}", stdout(&out));
+    assert!(!stdout(&out).contains("no tracked file holds its tie"), "{}", stdout(&out));
 }
 
 #[test]
@@ -1071,8 +1075,12 @@ fn check_parse_reports_a_file_shape_error() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let text = stdout(&out);
-    assert!(text.contains("parse:"), "{}", text);
-    assert!(text.contains("missing h1"), "{}", text);
+    assert!(!text.contains("parse:"), "{}", text);
+    assert!(
+        text.contains("adrdom/decisions/bad.md: missing h1; a topic file holds a heading, prose and questions only; agent rewrites the file"),
+        "{}",
+        text
+    );
 }
 
 //
@@ -1113,9 +1121,12 @@ Standard: s2.\n\n\
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "check should have failed: {}", stdout(&out));
     let text = stdout(&out);
-    assert!(text.contains("parse:"), "{}", text);
+    assert!(!text.contains("parse:"), "{}", text);
     assert!(
-        text.contains(&format!("stray line {}", stray_line_no)),
+        text.contains(&format!(
+            "\"1.1 First question?\": stray line {}; a question holds Problem, Standard and two or three options; agent rewrites the question",
+            stray_line_no
+        )),
         "{}",
         text
     );
@@ -1254,7 +1265,7 @@ fn check_fails_a_question_heading_duplicated_across_two_files() {
     let text = stdout(&out);
     assert!(
         text.contains(
-            "plan: duplicate heading \"9.9 Same heading?\" in adrdom/decisions/a.md and adrdom/decisions/b.md"
+            "duplicate heading \"9.9 Same heading?\" in adrdom/decisions/a.md and adrdom/decisions/b.md; a question heading stands in one topic file; agent rewrites one of the two sections"
         ),
         "{}",
         text
@@ -1270,7 +1281,7 @@ fn check_notes_a_question_heading_duplicated_within_one_file_in_a_draft_and_fail
     // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
     let rel = "adrdom/decisions/dup.md";
     let content = "# Dup\n\n### 9.9 Same heading?\ndepends: widget\n\n### 9.9 Same heading?\ndepends: widget\n";
-    let want = "plan: duplicate heading \"9.9 Same heading?\" twice in adrdom/decisions/dup.md";
+    let want = "adrdom/decisions/dup.md: the heading \"9.9 Same heading?\" appears twice; a heading appears once in its file; agent rewrites one of the headings";
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -1299,7 +1310,7 @@ fn check_notes_a_bad_topic_file_name_in_a_draft_and_fails_it_when_approved() {
     // adr: 912f4f3b-1213-435a-af0d-7617017fcff4
     let rel = "adrdom/decisions/Bad_Name.md";
     let content = "# Bad Name\n\n### 1.1 Q?\ndepends: widget\n";
-    let want = "plan: adrdom/decisions/Bad_Name.md: file name is not lowercase words joined by single hyphens";
+    let want = "adrdom/decisions/Bad_Name.md: file name is not lowercase words joined by single hyphens; a file name is its topic in lowercase words; agent renames the file";
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -1363,7 +1374,7 @@ fn check_fails_a_topic_file_name_that_does_not_match_its_topic() {
     let text = stdout(&out);
     assert!(
         text.contains(
-            "plan: adrdom/decisions/other-name.md: file name does not match its topic \"Two Words\"; agent renames the file to two-words.md"
+            "adrdom/decisions/other-name.md: file name does not match its topic \"Two Words\"; a file name is its topic in lowercase words; agent renames the file or rewrites the topic line"
         ),
         "{}",
         text
@@ -1387,7 +1398,7 @@ fn check_notes_a_numbered_topic_file_name_in_a_draft_and_fails_it_when_approved(
     // adr: 625dea67-13a7-4e8e-913f-e997081a120c
     let rel = "adrdom/decisions/01-terms.md";
     let content = "# Terms\n\n### 1.1 Q?\ndepends: widget\n";
-    let want = "plan: adrdom/decisions/01-terms.md: file name is not lowercase words joined by single hyphens";
+    let want = "adrdom/decisions/01-terms.md: file name is not lowercase words joined by single hyphens; a file name is its topic in lowercase words; agent renames the file";
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -1410,7 +1421,7 @@ fn check_notes_a_doubled_hyphen_in_a_topic_file_name_in_a_draft_and_fails_it_whe
     // adr: 625dea67-13a7-4e8e-913f-e997081a120c
     let rel = "adrdom/decisions/two--words.md";
     let content = "# Two Words\n\n### 1.1 Q?\ndepends: widget\n";
-    let want = "plan: adrdom/decisions/two--words.md: file name is not lowercase words joined by single hyphens";
+    let want = "adrdom/decisions/two--words.md: file name is not lowercase words joined by single hyphens; a file name is its topic in lowercase words; agent renames the file";
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -1433,7 +1444,7 @@ fn check_reports_a_prefixed_topic_file_name_as_not_matching_its_topic() {
     // adr: 625dea67-13a7-4e8e-913f-e997081a120c
     let rel = "adrdom/decisions/adr-terms.md";
     let content = "# Terms\n\n### 1.1 Q?\ndepends: widget\n";
-    let want = "plan: adrdom/decisions/adr-terms.md: file name does not match its topic \"Terms\"; agent renames the file to terms.md";
+    let want = "adrdom/decisions/adr-terms.md: file name does not match its topic \"Terms\"; a file name is its topic in lowercase words; agent renames the file or rewrites the topic line";
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -1467,7 +1478,7 @@ fn check_fails_a_topic_whose_text_no_file_name_can_carry() {
     let text = stdout(&out);
     assert!(
         text.contains(
-            "plan: adrdom/decisions/rule.md: topic \"Rule 2\" has no file name: a name holds lowercase words only, no number; agent rewords the topic line"
+            "adrdom/decisions/rule.md: topic \"Rule 2\" has no file name: a name holds lowercase words only; a file name is its topic in lowercase words; agent rewrites the topic line"
         ),
         "{}",
         text
@@ -1539,7 +1550,7 @@ fn check_fails_a_withdrawn_id_still_present_in_a_record() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let text = stdout(&out);
-    assert!(text.contains("ids:"), "{}", text);
+    assert!(!text.contains("ids:"), "{}", text);
     assert!(
         text.contains(&format!("withdrawn id {} (\"1.1 Some question?\") still present in", wd_id)),
         "{}",
@@ -1548,7 +1559,7 @@ fn check_fails_a_withdrawn_id_still_present_in_a_record() {
     // The move removes the section: the identifier never comes back, so no
     // approve clears it. show names the same finding.
     let line = text.lines().find(|l| l.contains("still present in")).unwrap();
-    assert!(line.ends_with("agent removes the section from adrdom/decisions/example.md; a question to ask again is written as a new question"), "{}", line);
+    assert!(line.ends_with("a withdrawn question never returns to a file; agent removes the section from adrdom/decisions/example.md"), "{}", line);
     let shown = stdout(&adr(&dir, &["show", "adrdom/decisions/example.md"], &[], ""));
     assert!(shown.contains(line), "{}", shown);
 }
@@ -1594,7 +1605,7 @@ fn check_fails_on_a_terms_file_shape_error() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains("terms: adrdom/terms.md: line 1: missing h1 \"# Terms\""),
+        text.contains("adrdom/terms.md: line 1: missing h1 \"# Terms\"; the terms file holds one heading and term entries; agent rewrites the line"),
         "{}",
         text
     );
@@ -1615,7 +1626,7 @@ fn check_fails_when_terms_missing_and_a_record_exists() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("terms: adrdom/terms.md missing"),
+        stdout(&out).contains("adrdom/terms.md missing; the terms file exists once a topic file does; agent writes adrdom/terms.md, owner runs: adr approve adrdom/terms.md"),
         "{}",
         stdout(&out)
     );
@@ -1629,7 +1640,7 @@ fn check_passes_when_terms_missing_and_no_records_exist() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
-    assert!(!stdout(&out).contains("terms:"), "{}", stdout(&out));
+    assert_eq!(stdout(&out), "", "{}", stdout(&out));
 }
 
 // adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
@@ -1658,7 +1669,7 @@ fn check_fails_outright_when_terms_is_unapproved_even_if_nothing_pairs_it() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     assert!(
-        stdout(&out).contains("terms: adrdom/terms.md is new"),
+        stdout(&out).contains("adrdom/terms.md is new; commands read only the approved terms file; owner runs: adr approve adrdom/terms.md"),
         "{}",
         stdout(&out)
     );
@@ -1693,7 +1704,7 @@ fn check_and_ask_fail_when_terms_is_edited_after_its_latest_approval() {
     let check_out = adr(&dir, &["check"], &[], "");
     assert!(!check_out.status.success());
     assert!(
-        stdout(&check_out).contains("terms: adrdom/terms.md is changed"),
+        stdout(&check_out).contains("adrdom/terms.md is changed; commands read only the approved terms file; owner runs: adr approve adrdom/terms.md"),
         "{}",
         stdout(&check_out)
     );
@@ -1744,7 +1755,7 @@ fn check_fails_an_asked_section_whose_terms_line_is_malformed() {
         text
     );
     assert!(
-        text.contains("malformed terms line; agent runs: adr ask adrdom/decisions/example.md"),
+        text.contains("malformed terms line; a question's terms line is word and identifier pairs; agent runs: adr ask adrdom/decisions/example.md"),
         "{}",
         text
     );
@@ -1777,10 +1788,14 @@ fn check_fails_an_asked_section_whose_terms_line_names_a_missing_uuid() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains(&format!(
-            "adrdom/decisions/example.md: 1.1 Some question?: term {} (\"decision\") not found",
-            missing_uuid
-        )),
+        text.contains(
+            "adrdom/decisions/example.md: 1.1 Some question?: term decision not found; an asked question keeps the terms it was asked with; agent runs: adr ask adrdom/decisions/example.md"
+        ),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains(&format!("term {} (\"decision\") removed but used by adrdom/decisions/example.md", missing_uuid)),
         "{}",
         text
     );
@@ -1813,13 +1828,13 @@ fn check_fails_an_asked_section_bound_to_a_retired_term() {
     let text = stdout(&out);
     assert!(
         text.contains(
-            "adrdom/decisions/example.md: 1.1 Some question?: uses the retired term \"decision\""
+            "adrdom/decisions/example.md: 1.1 Some question?: uses the retired term decision"
         ),
         "{}",
         text
     );
     assert!(
-        text.contains("uses the retired term \"decision\"; agent runs: adr ask adrdom/decisions/example.md"),
+        text.contains("uses the retired term decision; an asked question keeps the terms it was asked with; agent runs: adr ask adrdom/decisions/example.md"),
         "an asked-only question bound to a retired term is still re-asked: {}",
         text
     );
@@ -1851,7 +1866,7 @@ fn check_fails_an_asked_section_with_no_terms_line() {
         text
     );
     assert!(
-        text.contains("no terms line; agent runs: adr ask adrdom/decisions/example.md"),
+        text.contains("no terms line; an asked question keeps the terms it was asked with; agent runs: adr ask adrdom/decisions/example.md"),
         "an asked-only question with no terms line is still re-asked: {}",
         text
     );
@@ -1893,11 +1908,13 @@ fn check_fails_an_answered_section_with_no_terms_line_by_restoring_or_supersedin
         text
     );
     assert!(
-        text.contains(&format!(
-            "agent restores the terms line from git (e.g. git checkout -- adrdom/decisions/example.md), or writes a question that supersedes {}",
-            question_id
-        )),
-        "an answered section's next move must be restore-or-supersede: {}",
+        text.contains("no terms line; an asked question keeps the terms it was asked with; agent restores the terms line from git"),
+        "an answered section's next move must restore the terms line: {}",
+        text
+    );
+    assert!(
+        text.contains(&format!("text changed since being answered; an answered question's text stays as it was answered; agent restores adrdom/decisions/example.md from git, or writes a question that supersedes {}", question_id)),
+        "{}",
         text
     );
     assert!(
@@ -1950,7 +1967,7 @@ fn check_passes_when_a_new_term_would_now_match_words_already_answered_in_text()
     let text = stdout(&out);
     let terms_failure_on_section = text
         .lines()
-        .any(|l| l.starts_with("terms:") && l.contains("Some question?"));
+        .any(|l| l.contains("an asked question keeps the terms it was asked with") && l.contains("Some question?"));
     assert!(!terms_failure_on_section, "{}", text);
 }
 
@@ -2004,7 +2021,7 @@ fn check_staged_reads_terms_from_the_index() {
         let out = adr(&dir, &["check", "--staged"], &[], "");
         assert!(!out.status.success(), "{}", stdout(&out));
         assert!(
-            stdout(&out).contains("terms: adrdom/terms.md: line 1: missing h1 \"# Terms\""),
+            stdout(&out).contains("adrdom/terms.md: line 1: missing h1 \"# Terms\"; the terms file holds one heading and term entries; agent rewrites the line"),
             "{}",
             stdout(&out)
         );
@@ -2028,7 +2045,7 @@ fn check_staged_reads_terms_from_the_index() {
 
         let out = adr(&dir, &["check", "--staged"], &[], "");
         assert!(
-            !stdout(&out).contains("terms: adrdom/terms.md is "),
+            !stdout(&out).contains("adrdom/terms.md is "),
             "{}",
             stdout(&out)
         );
@@ -2150,7 +2167,7 @@ fn check_staged_treats_a_staged_deleted_topic_file_as_gone() {
     let text = stdout(&out);
     assert!(!out.status.success(), "{}", text);
     assert!(
-        text.contains(&format!("ids: {} (\"3.1 Is this pass?\", answered) was removed from the plan", id))
+        text.contains(&format!("{} (\"3.1 Is this pass?\", answered) was removed with its file; a file leaves only with no live question in it; agent restores adrdom/decisions/example.md, then supersedes {}", id, id))
             && text.contains("owner runs: adr approve adrdom/decisions/example.md"),
         "a staged deletion must be read as the file being gone, at a commit: {}",
         text
@@ -2182,14 +2199,14 @@ fn check_staged_reads_a_newly_staged_test_files_tie_from_the_index() {
 
     let out = adr(&dir, &["check", "--staged"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
-    assert!(!stdout(&out).contains("untested:"), "{}", stdout(&out));
+    assert!(!stdout(&out).contains("no tracked file holds its tie"), "{}", stdout(&out));
 
     // Outside a commit, the working tree is read instead: the tie is gone
     // there, so plain `adr check` notes it untested.
     let out2 = adr(&dir, &["check"], &[], "");
     assert!(out2.status.success(), "{}", stdout(&out2));
     assert!(
-        stdout(&out2).contains(&format!("no tracked file holds \"adr: {}\"", id)),
+        stdout(&out2).contains(&format!("puts \"adr: {}\" in a test", id)),
         "{}",
         stdout(&out2)
     );
@@ -2224,7 +2241,7 @@ aliases: \n";
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains("terms: adrdom/terms.md: circular definition: alpha -> beta -> alpha"),
+        text.contains("adrdom/terms.md: circular definition: a cycle runs through alpha, beta and alpha; a definition does not lead back to itself; agent rewrites one of these definitions"),
         "{}",
         text
     );
@@ -2253,7 +2270,7 @@ aliases: \n";
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains("terms: adrdom/terms.md: circular definition: alpha -> beta -> alpha"),
+        text.contains("adrdom/terms.md: circular definition: a cycle runs through alpha, beta and alpha; a definition does not lead back to itself; agent rewrites one of these definitions"),
         "{}",
         text
     );
@@ -2317,7 +2334,7 @@ fn check_fails_a_test_tied_to_a_decision_that_was_later_superseded() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "check should fail: {}", stdout(&out));
     assert!(
-        line_with(&stdout(&out), &old_id, ": tied to a test and not a current decision"),
+        line_with(&stdout(&out), &old_id, " tied to a test and not a current decision"),
         "{}",
         stdout(&out)
     );
@@ -2346,7 +2363,7 @@ fn check_fails_a_test_tied_to_a_refused_decision() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "check should fail: {}", stdout(&out));
     assert!(
-        line_with(&stdout(&out), &id, ": tied to a test and not a current decision"),
+        line_with(&stdout(&out), &id, " tied to a test and not a current decision"),
         "{}",
         stdout(&out)
     );
@@ -2369,7 +2386,7 @@ fn check_fails_a_topic_file_it_cannot_read() {
     assert!(!out.status.success(), "{}", stdout(&out));
     assert!(
         stdout(&out).contains(
-            "parse: adrdom/decisions/broken.md: cannot be read: it holds no text the tool can read; \
+            "check: adrdom/decisions/broken.md: cannot be read: it holds no text the tool can read; \
 agent fixes the file so it can be read as text (e.g. its encoding)"
         ),
         "{}",
@@ -2404,7 +2421,7 @@ fn check_prints_what_failed_and_nothing_on_a_pass() {
     assert!(!failed.status.success());
     let lines: Vec<String> = stdout(&failed).lines().map(|l| l.to_string()).collect();
     assert_eq!(lines.len(), 1, "{:?}", lines);
-    assert!(lines[0].starts_with("parse: adrdom/decisions/broken.md: cannot be read"), "{:?}", lines);
+    assert!(lines[0].starts_with("check: adrdom/decisions/broken.md: cannot be read"), "{:?}", lines);
 }
 
 const TWO_QUESTIONS: &str = r#"# Example
@@ -2468,14 +2485,13 @@ fn check_an_untested_decision_is_a_note_whether_or_not_its_tier_is_open() {
     let text = stdout(&out);
     assert!(out.status.success(), "{}", text);
     assert!(
-        text.contains(&format!(
-            "untested: adrdom/decisions/example.md: \"Is this pass?\" is answered and no tracked file holds \"adr: {}\"; not yet: \"Is this pass?\" is answered and is built once \"Is that pass?\" is answered",
-            first
-        )),
+        text.contains(
+            "adrdom/decisions/example.md: Is this pass? is answered and no tracked file holds its tie; a current decision is reported until a test names it; not yet: \"Is this pass?\" is answered and is built once \"Is that pass?\" is answered"
+        ),
         "{}",
         text
     );
-    assert_eq!(text.lines().filter(|l| l.starts_with("untested:")).count(), 1, "{}", text);
+    assert_eq!(text.lines().filter(|l| l.contains("no tracked file holds its tie")).count(), 1, "{}", text);
     run_git(&dir, &["add", "-A"]);
     let staged = adr(&dir, &["check", "--staged"], &[], "");
     assert!(staged.status.success(), "{}", stdout(&staged));
@@ -2485,16 +2501,16 @@ fn check_an_untested_decision_is_a_note_whether_or_not_its_tier_is_open() {
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
     assert!(out.status.success(), "{}", text);
-    assert!(text.contains(&format!("no tracked file holds \"adr: {}\"", first)), "{}", text);
-    assert!(text.contains(&format!("no tracked file holds \"adr: {}\"", second)), "{}", text);
-    assert_eq!(text.lines().filter(|l| l.starts_with("untested:")).count(), 2, "{}", text);
+    assert!(text.contains(&format!("puts \"adr: {}\" in a test", first)), "{}", text);
+    assert!(text.contains(&format!("puts \"adr: {}\" in a test", second)), "{}", text);
+    assert_eq!(text.lines().filter(|l| l.contains("no tracked file holds its tie")).count(), 2, "{}", text);
     assert!(!text.contains("waiting:"), "{}", text);
 
     write_test_comment(&dir, &first);
     write_test_comment(&dir, &second);
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
-    assert!(!stdout(&out).contains("untested:"), "{}", stdout(&out));
+    assert!(!stdout(&out).contains("no tracked file holds its tie"), "{}", stdout(&out));
 }
 
 // adr: 3460d220-e523-448b-aeff-baa8051b7d06
@@ -2513,6 +2529,11 @@ fn check_an_untested_decision_is_a_note_beside_a_refused_sibling() {
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
     assert!(out.status.success(), "{}", text);
-    assert!(text.contains(&format!("no tracked file holds \"adr: {}\"", first)), "{}", text);
+    assert!(
+        text.contains("Is this pass? is answered and no tracked file holds its tie; a current decision is reported until a test names it; not yet:")
+            && text.contains("\"Is that pass?\" beside it is refused"),
+        "{}",
+        text
+    );
     assert!(!text.contains("waiting:"), "{}", text);
 }

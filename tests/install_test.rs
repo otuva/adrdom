@@ -591,8 +591,8 @@ fn a_commit_names_the_installed_files_it_lacks_as_not_staged() {
     let out = run_git(&dir, &["commit", "-q", "-m", "b"]);
     assert!(!out.status.success(), "the commit is refused");
     let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
-    assert!(text.contains("AGENTS.md not staged; agent runs: git add AGENTS.md"), "{}", text);
-    assert!(text.contains(".githooks/pre-commit not staged; agent runs: git add .githooks/pre-commit"), "{}", text);
+    assert!(text.contains("AGENTS.md not staged;") && text.contains("agent runs: git add AGENTS.md"), "{}", text);
+    assert!(text.contains(".githooks/pre-commit not staged;") && text.contains("agent runs: git add .githooks/pre-commit"), "{}", text);
     assert!(!text.contains("agent runs: adr install"), "{}", text);
 }
 

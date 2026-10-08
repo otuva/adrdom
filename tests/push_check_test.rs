@@ -182,7 +182,7 @@ fn c_a_force_push_that_drops_a_remote_ledger_row_is_refused() {
         "a force push that drops a remote ledger row must be refused by the pre-push hook"
     );
     let text = format!("{}{}", stdout(&forced), stderr(&forced));
-    assert!(text.contains("ledger:"), "{}", text);
+    assert!(text.contains("would drop ledger rows"), "{}", text);
     assert!(text.contains(DROPS_ROWS_TEXT), "{}", text);
 }
 
@@ -208,7 +208,7 @@ fn d_a_remote_sha_not_present_locally_fails_check_push() {
         "a remote sha this repo cannot read must fail check --push"
     );
     let text = stdout(&out);
-    assert!(text.contains("ledger:"), "{}", text);
+    assert!(text.contains("check: "), "{}", text);
     assert!(text.contains(REMOTE_UNREADABLE_TEXT), "{}", text);
 }
 
@@ -328,6 +328,6 @@ fn g_a_force_push_that_drops_a_remote_reader_row_is_refused() {
     let forced = run_git(&dir, &["push", "--force", "origin", &branch]);
     assert!(!forced.status.success(), "a push that drops a remote reader row must be refused");
     let text = format!("{}{}", stdout(&forced), stderr(&forced));
-    assert!(text.contains("reader:") && text.contains("would drop reader rows the remote's"), "{}", text);
-    assert!(!text.contains("ledger:"), "{}", text);
+    assert!(text.contains("would drop reader rows the remote's"), "{}", text);
+    assert!(!text.contains("would drop ledger rows"), "{}", text);
 }

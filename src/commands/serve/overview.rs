@@ -263,18 +263,16 @@ fn check_card(r: &Records, files: &[File], shown: &[String]) -> String {
     let fresh = |fs: Vec<Finding>| -> Vec<Line> {
         fs.into_iter().map(Line::Finding).filter(|l| !shown.contains(&out::text(l))).collect()
     };
-    let failures = fresh(report.failures);
-    let notes = fresh(report.notes);
-    if failures.is_empty() && notes.is_empty() {
+    // One group in the one order `adr check` prints: failures and notes are
+    // not told apart on the terminal, so they are not on the page.
+    let mut found: Vec<Line> =
+        report.stops.iter().map(|m| out::refusal(crate::rules::Command::Check, m)).collect();
+    found.extend(fresh(report.failures.into_iter().chain(report.notes).collect()));
+    if found.is_empty() {
         return String::new();
     }
     let mut s = String::from("<article class=\"topic check\">\n<h2>Check</h2>\n");
-    if !failures.is_empty() {
-        s.push_str(&format!("<div class=\"failures\">\n{}</div>\n", lines(&failures)));
-    }
-    if !notes.is_empty() {
-        s.push_str(&format!("<div class=\"notes\">\n{}</div>\n", lines(&notes)));
-    }
+    s.push_str(&format!("<div class=\"failures\">\n{}</div>\n", lines(&found)));
     s.push_str("</article>\n");
     s
 }

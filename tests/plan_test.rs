@@ -155,14 +155,14 @@ fn the_steps_in_order_from_headings_to_approval() {
     assert!(lines_wanted(&out).contains(&(H1.to_string(), "paint".to_string())), "{}", out);
     // Each neighbour on no line is a finding that carries the move.
     for h in [H1, H2] {
-        assert!(out.lines().any(|l| l.ends_with(&format!("; agent writes lines for \"{}\"", h))), "{}", out);
+        assert!(out.lines().any(|l| l.ends_with(&format!("; agent writes the missing line under \"{}\"", h))), "{}", out);
     }
     assert!(!out.contains("heading with its body"), "step 5 waits for the lines and the bodies: {}", out);
     assert!(!out.contains("neighbours,") && !out.contains(" read, "), "no counts: {}", out);
 
     // Approve refuses what is still missing, and names the move.
     let err = refused(&approve(&dir));
-    assert!(err.contains(&format!("is on no line; agent writes lines for \"{}\"", H1)), "{}", err);
+    assert!(err.contains(&format!("is on no line; every neighbour of a question is on a line; agent writes the missing line under \"{}\"", H1)), "{}", err);
 
     // Step 3: the lines. Step 4 has not come: no heading has a body.
     assert_eq!(write_lines(&dir, &out), 4);
@@ -323,7 +323,7 @@ fn a_heading_added_after_the_bodies_gets_its_neighbours_first() {
     assert!(has_line(&out, &format!("\"{}\": heading", h3)), "{}", out);
     assert!(!has_line(&out, &format!("\"{}\": heading", H1)), "{}", out);
     assert!(lines_wanted(&out).iter().any(|(h, _)| h == h3), "{}", out);
-    assert!(out.lines().any(|l| l.ends_with(&format!("; agent writes lines for \"{}\"", h3))), "{}", out);
+    assert!(out.lines().any(|l| l.ends_with(&format!("; agent writes the missing line under \"{}\"", h3))), "{}", out);
     // Approve refuses it too.
     assert!(refused(&approve(&dir)).contains(h3));
 
@@ -401,7 +401,7 @@ fn approve_refuses_a_neighbour_on_no_line_and_turns_the_names_into_identifiers()
     assert_eq!(wanted.len(), 2);
     write(&dir, &add_unrelated(&read(&dir), &wanted[1..]));
     let err = refused(&approve(&dir));
-    assert!(err.contains(&format!("\"{}\" is a neighbour of \"{}\" and is on no line; agent writes lines for \"{}\"", wanted[0].1, wanted[0].0, wanted[0].0)), "{}", err);
+    assert!(err.contains(&format!("\"{}\" is a neighbour of \"{}\" and is on no line; every neighbour of a question is on a line; agent writes the missing line under \"{}\"", wanted[0].1, wanted[0].0, wanted[0].0)), "{}", err);
     assert!(!err.contains("no reader rows"), "{}", err);
     // The refusal changed nothing.
     let held = read(&dir);
@@ -513,7 +513,7 @@ fn plan_shows_a_set_letter_the_target_lacks_and_does_not_say_ready() {
     let mut last = String::new();
     for _ in 0..4 {
         last = ok(&plan(&dir));
-        assert!(last.contains(&format!("names option D which \"{}\" does not have", H1)), "{}", last);
+        assert!(last.contains("under an answer set naming option D, which it does not have"), "{}", last);
         assert!(!last.contains("owner runs: adr approve"), "{}", last);
         let wanted = lines_wanted(&last);
         if wanted.is_empty() {

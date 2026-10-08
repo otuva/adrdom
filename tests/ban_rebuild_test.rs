@@ -375,7 +375,7 @@ fn w3_a_hash_the_ledger_calls_unbanned_but_put_back_in_the_file_is_banned_again(
     let stale_check = adr(&dir, &["check"], &[], "");
     assert!(!stale_check.status.success(), "expected check to refuse the stale file");
     assert!(
-        stdout(&stale_check).contains("in file, ledger says unbanned"),
+        stdout(&stale_check).contains("in the ban list, ledger says unbanned"),
         "{}",
         stdout(&stale_check)
     );
@@ -431,7 +431,7 @@ fn w5_ledger_says_banned_but_file_is_missing_it_gets_no_new_row_but_the_file_is_
     let stale_check = adr(&dir, &["check"], &[], "");
     assert!(!stale_check.status.success(), "expected check to refuse the missing entry");
     assert!(
-        stdout(&stale_check).contains("banned") && stdout(&stale_check).contains("missing"),
+        stdout(&stale_check).contains("in ledger, missing from the ban list"),
         "{}",
         stdout(&stale_check)
     );

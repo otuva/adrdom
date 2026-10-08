@@ -120,7 +120,7 @@ fn the_move_printed_by_a_refused_answer_leads_to_a_successful_answer() {
     let id1 = id_of(&a, Q1);
     let id4 = id_of(&a, Q4);
     let out = adr_owner(&dir, &["answer", &id_at_version(&dir, &id4), "A"], "");
-    assert_refused_naming(&out, &[Q7, "c.md", "agent adds them to the supersedes line and asks again"]);
+    assert_refused_naming(&out, &[Q7, "c.md", "agent adds adrdom/decisions/c.md", "to the supersedes line, then runs: adr ask adrdom/decisions/a.md"]);
 
     let c = std::fs::read_to_string(&a).unwrap();
     let edited = c.replace(

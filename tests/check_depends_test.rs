@@ -21,9 +21,8 @@ fn check_fails_a_tier_heading_line() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let text = stdout(&out);
-    assert!(text.contains("parse:"), "{}", text);
     assert!(
-        text.contains("tier heading, line 3; tiers are derived"),
+        text.contains("tier heading, line 3; tiers come only from the depends lines; agent removes the heading"),
         "{}",
         text
     );
@@ -42,8 +41,8 @@ fn check_fails_a_malformed_depends_line() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let text = stdout(&out);
-    assert!(text.contains("parse:"), "{}", text);
     assert!(text.contains("depends: bad set syntax, line 4"), "{}", text);
+    assert!(text.contains("; agent rewrites the depends line"), "{}", text);
 }
 
 const QUESTION_BODY: &str = "\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
@@ -61,7 +60,7 @@ fn check_fails_a_section_with_no_depends_line() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains("plan: adrdom/decisions/nodep.md: \"1.1 Does it have a line?\" has no depends line"),
+        text.contains("adrdom/decisions/nodep.md: \"1.1 Does it have a line?\" has no depends line; every question carries a depends line; agent writes the depends line"),
         "{}",
         text
     );
@@ -85,7 +84,7 @@ fn check_fails_a_skeleton_with_no_depends_line_too() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains("plan: adrdom/decisions/skeleton.md: \"1.1 Not written yet?\" has no depends line"),
+        text.contains("adrdom/decisions/skeleton.md: \"1.1 Not written yet?\" has no depends line; every question carries a depends line; agent writes the depends line"),
         "{}",
         text
     );
@@ -108,7 +107,7 @@ fn check_fails_a_depends_entry_that_resolves_no_term() {
     let text = stdout(&out);
     assert!(
         text.contains(
-            "plan: adrdom/decisions/example.md: \"1.1 Q?\" depends on \"widget\" which is no term; agent adds the term or names another"
+            "adrdom/decisions/example.md: \"1.1 Q?\" depends on \"widget\" which is no term; a depends entry naming a term names an existing one; agent adds the term, or names another"
         ),
         "{}",
         text
@@ -144,7 +143,7 @@ fn check_does_not_report_no_term_for_a_real_term_in_an_unapproved_terms_file() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     let text = stdout(&out);
-    assert!(text.contains("terms: adrdom/terms.md is new"), "{}", text);
+    assert!(text.contains("adrdom/terms.md is new; commands read only the approved terms file; owner runs: adr approve adrdom/terms.md"), "{}", text);
     assert!(!text.contains("no term"), "{}", text);
 }
 
@@ -165,7 +164,7 @@ fn check_fails_a_depends_entry_on_a_retired_term() {
     let text = stdout(&out);
     assert!(
         text.contains(
-            "plan: adrdom/decisions/example.md: \"1.1 Q?\" names the retired term \"widget\"; agent names another term"
+            "adrdom/decisions/example.md: \"1.1 Q?\" names the retired term \"widget\"; a depends entry names no retired term; agent rewrites the entry"
         ),
         "{}",
         text
@@ -206,7 +205,7 @@ fn check_fails_a_depends_entry_on_a_retired_term_by_id_while_open() {
     let text = stdout(&out);
     assert!(
         text.contains(&format!(
-            "plan: adrdom/decisions/example.md: \"1.1 Q?\" depends on the term \"widget\", which is retired; agent names a term that is not retired or removes the entry"
+            "adrdom/decisions/example.md: \"1.1 Q?\" depends on the term \"widget\", which is retired; a depends entry names no retired term; agent names a term that is not retired, or removes the entry"
         )),
         "{}",
         text
@@ -284,7 +283,7 @@ fn check_names_a_retired_term_under_an_answered_question_as_a_term() {
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
     assert!(
-        text.contains("plan: adrdom/decisions/notes.md: \"Is the tool keep tags?\" depends on the term \"tag\", which is retired; agent names a term that is not retired or removes the entry"),
+        text.contains("adrdom/decisions/notes.md: \"Is the tool keep tags?\" depends on the term \"tag\", which is retired; a depends entry names no retired term; agent names a term that is not retired, or removes the entry"),
         "{}",
         text
     );
@@ -307,7 +306,7 @@ fn check_fails_a_depends_entry_on_a_decision_that_is_not_current() {
     let text = stdout(&out);
     assert!(
         text.contains(&format!(
-            "plan: adrdom/decisions/example.md: \"1.1 Q?\" depends on {} which is not a current decision; agent names a current decision or removes the line",
+            "adrdom/decisions/example.md: \"1.1 Q?\" depends on {} which is not a current decision; a depends entry names a heading, term or current decision; agent names a current decision, or removes the entry",
             other_id
         )),
         "{}",
@@ -351,7 +350,7 @@ fn check_fails_a_dangling_depends_entry() {
     let text = stdout(&out);
     assert!(
         text.contains(
-            "plan: adrdom/decisions/example.md: \"1.1 Q?\" depends on \"2.2 Missing?\" which is no heading in this file and no current decision; agent names a heading of this file or a current decision"
+            "adrdom/decisions/example.md: \"1.1 Q?\" depends on \"2.2 Missing?\" which is no heading in this file and no current decision; a depends entry names a heading, term or current decision; agent rewrites the entry"
         ),
         "{}",
         text
@@ -372,13 +371,15 @@ fn check_fails_a_cycle() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains("plan: adrdom/decisions/example.md: cycle:"),
+        text.contains("adrdom/decisions/example.md: depends lines lead back to their own question: \"A?\", \"B?\""),
         "{}",
         text
     );
-    assert!(text.contains("\"A?\""), "{}", text);
-    assert!(text.contains("\"B?\""), "{}", text);
-    assert!(text.contains("; agent breaks it"), "{}", text);
+    assert!(
+        text.contains("depends lines never lead back to their own question; agent rewrites the depends lines"),
+        "{}",
+        text
+    );
 }
 
 #[test]
@@ -396,7 +397,7 @@ fn check_fails_a_self_dep() {
     let text = stdout(&out);
     assert!(
         text.contains(
-            "plan: adrdom/decisions/example.md: \"A?\" depends on itself; agent removes the line or names something else"
+            "adrdom/decisions/example.md: \"A?\" depends on itself; a question never stands on itself; agent removes the entry"
         ),
         "{}",
         text
@@ -423,7 +424,7 @@ fn check_fails_a_depends_set_naming_an_option_the_target_does_not_have() {
     let text = stdout(&out);
     assert!(
         text.contains(
-            "plan: adrdom/decisions/badset.md: \"B?\" depends on \"A?\" names option C which \"A?\" does not have"
+            "adrdom/decisions/badset.md: \"B?\" depends on \"A?\" under an answer set naming option C, which it does not have; an answer set names only options the target has; agent rewrites the answer set"
         ),
         "{}",
         text
@@ -466,7 +467,12 @@ fn check_fails_a_tier_over_the_cap() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains("plan: adrdom/decisions/cap.md: 5 questions would be put to the owner together, the most is 4"),
+        text.contains("adrdom/decisions/cap.md: 5 questions in one tier, the most is 4: "),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains("no tier holds more than four questions; agent rewrites the depends lines"),
         "{}",
         text
     );

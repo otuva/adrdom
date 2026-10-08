@@ -263,7 +263,7 @@ pub fn unrelated_refusals(
     terms_list: &[Term],
     cross: &HashMap<String, Vec<(String, String)>>,
     led: &Ledger,
-) -> Vec<String> {
+) -> Vec<msg::Said> {
     let mut out = Vec::new();
     for (i, sec) in rf.sections.iter().enumerate() {
         if sec.unrelated.is_empty() || !crate::status::question_status(led, sec).is_unasked() {
@@ -579,17 +579,17 @@ impl Planning {
 
     /// What approve refuses at the step of writing lines: each neighbour on
     /// no line. Needs neither the model nor the reader.
-    pub fn line_refusals(&self) -> Vec<String> {
+    pub fn line_refusals(&self) -> Vec<msg::Said> {
         self.questions.iter().flat_map(|q| self.lines_missing_of(q)).collect()
     }
 
     /// One finding per neighbour on no line: a neighbour read at both steps
     /// is named once.
-    fn lines_missing_of(&self, q: &Question) -> Vec<String> {
-        let mut out: Vec<String> = Vec::new();
+    fn lines_missing_of(&self, q: &Question) -> Vec<msg::Said> {
+        let mut out: Vec<msg::Said> = Vec::new();
         for n in q.heading_neighbours.iter().chain(&q.body_neighbours).filter(|n| !n.on_line) {
             let m = msg::plan_line_missing(&self.rel, &q.heading, n.kind.label(), &n.name);
-            if !out.contains(&m) {
+            if !out.iter().any(|o| o.found == m.found) {
                 out.push(m);
             }
         }
@@ -599,7 +599,7 @@ impl Planning {
     /// The rows missing at the step `adr plan` takes next: every heading's
     /// rows while one heading lacks them, else every body's. A body's rows
     /// wait on the heading step, as `next` reads the steps in order.
-    pub fn rows_missing_at_step(&self) -> Vec<String> {
+    pub fn rows_missing_at_step(&self) -> Vec<msg::Said> {
         if !self.missing_heading().is_empty() {
             return self
                 .questions

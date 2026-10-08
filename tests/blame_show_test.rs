@@ -14,7 +14,6 @@ fn commit_all(dir: &Path, message: &str) {
     );
 }
 
-// adr: 6addc2f4-ff23-4fc6-851e-7cd67063b9f8
 //
 // What `adr show` prints for a blame file (per "What does show print with a
 // file named?" and "Does show print what a file holds beyond its latest
@@ -80,7 +79,6 @@ fn show_marks_a_draft_blame_file_against_its_latest_approval() {
     assert!(text.contains("    1-1\tdropped: dead\n  - 2-2\tdropped: detail\n  + 2-2\tdropped: dead\n"), "{}", text);
 }
 
-// adr: 6addc2f4-ff23-4fc6-851e-7cd67063b9f8
 //
 // A `decision:` row naming a question that was approved but never asked
 // carries that question's status, not "answered".
@@ -107,7 +105,6 @@ fn show_tags_a_decision_row_naming_an_unasked_question_with_the_unasked_state() 
     assert!(text.contains("decision: Is this pass? [not asked]"), "{}", text);
 }
 
-// adr: 6addc2f4-ff23-4fc6-851e-7cd67063b9f8
 //
 // A `decision:` row naming a question that is asked but not yet answered
 // carries the status "asked".
@@ -181,8 +178,8 @@ fn a_blame_file_with_a_bad_header_and_one_with_a_bad_row_are_both_still_printed(
 
     assert!(text.contains("[new] adrdom/blame/a.md\n"), "{}", text);
     assert!(text.contains("[new] adrdom/blame/b.md\n"), "{}", text);
-    assert!(text.lines().any(|l| l.starts_with("blame: adrdom/blame/a.md:")), "{}", text);
-    assert!(text.lines().any(|l| l.starts_with("blame: adrdom/blame/b.md:")), "{}", text);
+    assert!(text.lines().any(|l| l.starts_with("adrdom/blame/a.md:")), "{}", text);
+    assert!(text.lines().any(|l| l.starts_with("adrdom/blame/b.md:")), "{}", text);
     // File B's good row still prints alongside its own shape error.
     assert!(text.contains("  + 2-2\tdropped: detail"), "{}", text);
 }
@@ -201,7 +198,6 @@ fn a_dropped_row_with_extra_spaces_after_the_prefix_prints_as_written() {
     assert!(!text.contains("dropped: dead 1"), "{}", text);
 }
 
-// adr: 6addc2f4-ff23-4fc6-851e-7cd67063b9f8
 //
 // A `dropped: copy of <heading>` row carries the status of the question it
 // names, as a `decision:` row does.
@@ -256,7 +252,7 @@ fn short_show_names_the_approval_a_blame_file_waits_for() {
     write_origin(&dir, "docs/x.md", "one\ntwo\nthree\n");
     let text = stdout(&adr(&dir, &["show"], &[], ""));
     assert!(
-        text.contains("blame: adrdom/blame/x.md: blob no longer matches docs/x.md"),
+        text.contains("adrdom/blame/x.md: blob no longer matches docs/x.md"),
         "{}",
         text
     );

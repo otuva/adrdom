@@ -115,7 +115,17 @@ fn ordered<'a>(a: &'a Dec, b: &'a Dec) -> (&'a Dec, &'a Dec) {
 }
 
 fn line_of(word: &str, first: &Dec, second: &Dec) -> String {
-    format!("read: {}: \"{}\" and \"{}\": {}", word, first.heading, second.heading, REASON)
+    let mv = if word == "depends" {
+        "not yet, nobody moves on a pair that depends"
+    } else {
+        "agent writes a question that supersedes one of the pair"
+    };
+    let protects = if word == "depends" {
+        "decisions that stand on each other are named"
+    } else {
+        "decisions that repeat or contradict are named"
+    };
+    format!("{}: \"{}\" and \"{}\": {}; {}; {}", word, first.heading, second.heading, REASON, protects, mv)
 }
 
 /// The move a same or inconsistent pair calls for, as `adr read` prints it.
@@ -268,7 +278,7 @@ fn marked_pairs_print_their_lines_in_the_order_of_the_words() {
     for w in ["same", "inconsistent", "depends"] {
         let mut g: Vec<String> = expected.iter().filter(|(x, _)| x == w).map(|(_, l)| l.clone()).collect();
         g.sort();
-        let mut got: Vec<String> = lines.iter().filter(|l| l.starts_with(&format!("read: {}: ", w))).map(|l| l.to_string()).collect();
+        let mut got: Vec<String> = lines.iter().filter(|l| l.starts_with(&format!("{}: ", w))).map(|l| l.to_string()).collect();
         got.sort();
         assert_eq!(got, g, "{}", out);
         want.extend(g);
@@ -276,10 +286,10 @@ fn marked_pairs_print_their_lines_in_the_order_of_the_words() {
     let printed: Vec<&str> = lines
         .iter()
         .copied()
-        .filter(|l| ["read: same: ", "read: inconsistent: ", "read: depends: "].iter().any(|p| l.starts_with(p)))
+        .filter(|l| ["same: ", "inconsistent: ", "depends: "].iter().any(|p| l.starts_with(p)))
         .collect();
     assert_eq!(printed.len(), want.len());
-    let rank = |l: &str| ["same", "inconsistent", "depends"].iter().position(|w| l.starts_with(&format!("read: {}: ", w))).unwrap();
+    let rank = |l: &str| ["same", "inconsistent", "depends"].iter().position(|w| l.starts_with(&format!("{}: ", w))).unwrap();
     assert!(printed.windows(2).all(|w| rank(w[0]) <= rank(w[1])), "{}", out);
 
     // The pairs, then the move they call for, and nothing else: no count
@@ -298,6 +308,7 @@ fn depends_alone_prints_no_next_move() {
     let (f, s) = ordered(&decs[0], &decs[1]);
     assert_eq!(out, format!("{}\n", line_of("depends", f, s)), "the pair and nothing else");
     assert!(!out.contains(SUPERSEDE_MOVE), "{}", out);
+    assert!(!out.contains("agent ") && !out.contains("owner runs:"), "no move is asked of anyone: {}", out);
 }
 
 #[test]
@@ -345,7 +356,7 @@ fn a_superseded_decision_drops_out_of_the_reading() {
     let first = read_ok(&dir);
     assert!(first.contains(&decs[0].heading), "{}", first);
     assert_eq!(set_rows(&dir).len(), 3);
-    assert_eq!(first.lines().filter(|l| l.starts_with("read: same: ")).count(), 3, "{}", first);
+    assert_eq!(first.lines().filter(|l| l.starts_with("same: ")).count(), 3, "{}", first);
 
     // A new answered question supersedes the first decision.
     let rel = "adrdom/decisions/topic-d.md";

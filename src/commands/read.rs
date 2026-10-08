@@ -18,7 +18,7 @@
 //! chunks as large as it reads at once, so a failure keeps what earlier
 //! chunks read and loses at most one wave. The
 //! model and the reader are loaded only here and in `adr plan`.
-use crate::rules::Rule;
+use crate::rules::Command;
 use crate::embed;
 use crate::index::{self, Rec};
 use crate::ledger;
@@ -27,7 +27,7 @@ use crate::out::{self, Line};
 use crate::reader::{self, Kind, Pair};
 use crate::record;
 use crate::repo;
-use crate::rules::Finding;
+use crate::rules::{Class, Finding};
 use crate::state;
 use std::collections::BTreeSet;
 
@@ -39,7 +39,7 @@ pub fn run() -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint(&[out::refusal(Rule::Read, &msg::not_a_repo("read", &[], Actor::Agent))]);
+            out::eprint(&[out::refusal(Command::Read, &msg::not_a_repo("read", &[], Actor::Agent))]);
             return 1;
         }
     };
@@ -49,7 +49,7 @@ pub fn run() -> i32 {
             0
         }
         Err(e) => {
-            out::eprint_stop(Rule::Read, &e);
+            out::eprint_stop(Command::Read, &e);
             1
         }
     }
@@ -103,7 +103,7 @@ fn read_all(root: &std::path::Path) -> Result<Vec<Line>, String> {
         }
     }
     // Marked pairs by (group, first id, second id, line).
-    let mut marked: Vec<(usize, &str, &str, String)> = Vec::new();
+    let mut marked: Vec<(usize, &str, &str, Finding)> = Vec::new();
     for (&(a, b), row) in ordered.iter().zip(&rows) {
         let group = match row.word.as_str() {
             "same" => 0,
@@ -111,11 +111,22 @@ fn read_all(root: &std::path::Path) -> Result<Vec<Line>, String> {
             "depends" => 2,
             _ => continue,
         };
-        let line = msg::read_pair(&row.word, heading_of(&decisions[a].text), heading_of(&decisions[b].text), &reader::flatten(&row.reason));
-        marked.push((group, &decisions[a].id, &decisions[b].id, line));
+        let next = if group < 2 {
+            "agent writes a question that supersedes one of the pair"
+        } else {
+            crate::moves::PAIR_WAIT
+        };
+        let said = msg::read_pair(
+            &row.word,
+            heading_of(&decisions[a].text),
+            heading_of(&decisions[b].text),
+            &reader::flatten(&row.reason),
+            next,
+        );
+        marked.push((group, &decisions[a].id, &decisions[b].id, Finding::said(Class::Reader, said)));
     }
-    marked.sort();
-    let mut out: Vec<Line> = marked.iter().map(|m| Line::Finding(Finding::new(Rule::Read, m.3.clone()))).collect();
+    marked.sort_by(|x, y| (x.0, x.1, x.2).cmp(&(y.0, y.1, y.2)));
+    let mut out: Vec<Line> = marked.iter().map(|m| Line::Finding(m.3.clone())).collect();
     if marked.iter().any(|m| m.0 < 2) {
         out.push(Line::Move(crate::moves::of_marked_pairs()));
     }

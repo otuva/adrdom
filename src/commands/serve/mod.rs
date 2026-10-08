@@ -10,7 +10,7 @@ mod overview;
 mod terms;
 mod words;
 
-use crate::rules::Rule;
+use crate::rules::Command;
 use crate::actions;
 use crate::msg::{self, Actor};
 use crate::out::{self, Line};
@@ -22,14 +22,14 @@ use tiny_http::{Header, Method, Request, Response, Server};
 
 pub fn run(port: u16) -> i32 {
     if !repo::owner_authorized() {
-        out::eprint_stop(Rule::Serve, &msg::owner_refusal("serve", &["--port", &port.to_string()]));
+        out::eprint_stop(Command::Serve, &msg::owner_refusal("serve", &["--port", &port.to_string()]));
         return 2;
     }
 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint_stop(Rule::Serve, &msg::not_a_repo("serve", &["--port", &port.to_string()], Actor::Owner));
+            out::eprint_stop(Command::Serve, &msg::not_a_repo("serve", &["--port", &port.to_string()], Actor::Owner));
             return 1;
         }
     };
@@ -37,7 +37,7 @@ pub fn run(port: u16) -> i32 {
     let server = match Server::http(("127.0.0.1", port)) {
         Ok(s) => s,
         Err(e) => {
-            out::eprint(&out::stop(Rule::Serve, &msg::bind_failed(port, e)));
+            out::eprint(&out::stop(Command::Serve, &msg::bind_failed(port, e)));
             return 1;
         }
     };
@@ -237,22 +237,22 @@ fn header(name: &str, value: &str) -> Header {
 // --- actions ---------------------------------------------------------------
 
 /// The lines an act prints: one per event it wrote, or the findings that
-/// stopped it, as the command `cmd` prints them in the terminal.
-fn act_lines(cmd: crate::rules::Rule, result: Result<actions::Outcome, String>) -> Vec<Line> {
+/// stopped it, as the terminal prints them.
+fn act_lines(result: Result<actions::Outcome, actions::Stops>) -> Vec<Line> {
     match result {
         Ok(o) => o
             .events
             .into_iter()
             .map(Line::Event)
-            .chain(out::stop(cmd, &o.input_findings.join("\n")))
+            .chain(o.input_findings)
             .collect(),
-        Err(e) => out::stop(cmd, &e),
+        Err(e) => e,
     }
 }
 
 fn handle_approve(root: &Path, form: &HashMap<String, String>) -> Vec<Line> {
     let file = form.get("file").cloned().unwrap_or_default();
-    act_lines(Rule::Approve, actions::do_approve(root, &root.join(&file)))
+    act_lines(actions::do_approve(root, &root.join(&file)))
 }
 
 fn handle_answer(root: &Path, form: &HashMap<String, String>) -> Vec<Line> {
@@ -267,7 +267,7 @@ fn handle_answer(root: &Path, form: &HashMap<String, String>) -> Vec<Line> {
 
     // The Refuse button posts `answer=refuse`; everything else is a letter.
     if value == "refuse" {
-        return act_lines(Rule::Answer, actions::do_refuse(root, &id, &version));
+        return act_lines(actions::do_refuse(root, &id, &version));
     }
     // Same letter parsing the CLI uses (`actions::parse_letter`), so a
     // lowercase or multi-character selection refuses the same way here as
@@ -275,15 +275,15 @@ fn handle_answer(root: &Path, form: &HashMap<String, String>) -> Vec<Line> {
     // all -- never happens from this page's own form) keeps its own
     // message, since there is nothing malformed to name.
     match actions::parse_letter(&value) {
-        Some(letter) => act_lines(Rule::Answer, actions::do_answer(root, &id, &version, letter)),
-        None if value.is_empty() => out::stop(Rule::Answer, &msg::missing_answer_selection(&id, &version)),
-        None => out::stop(Rule::Answer, &msg::invalid_letter(&value, &format!("{}@{}", id, version))),
+        Some(letter) => act_lines(actions::do_answer(root, &id, &version, letter)),
+        None if value.is_empty() => out::stop(Command::Answer, &msg::missing_answer_selection(&id, &version)),
+        None => out::stop(Command::Answer, &msg::invalid_letter(&value, &format!("{}@{}", id, version))),
     }
 }
 
 fn handle_unban(root: &Path, form: &HashMap<String, String>) -> Vec<Line> {
     let lines = form.get("lines").cloned().unwrap_or_default();
-    act_lines(Rule::Unban, actions::do_unban(root, &lines))
+    act_lines(actions::do_unban(root, &lines))
 }
 
 // --- small hand-rolled parsers/encoders (no extra crates) ---------------

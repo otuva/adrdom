@@ -245,7 +245,7 @@ fn every_page_shows_what_the_terminal_prints_at_each_status() {
     let id = extract_ids(&std::fs::read_to_string(dir.join(REL)).unwrap())[0].clone();
     assert!(adr_answer(&dir, &id, "A").status.success());
     let check = cli(&dir, &["check"], false, false);
-    assert!(check.iter().any(|l| l.starts_with("untested: ")), "{:?}", check);
+    assert!(check.iter().any(|l| l.contains("is answered and no tracked file holds its tie")), "{:?}", check);
     assert_page_is_terminal(&dir, &page);
     let overview = page.lines("/");
     for l in &check {

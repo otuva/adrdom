@@ -3,7 +3,7 @@
 // after a plan change struck it, blank lines and entries reordered, a
 // removed topic file, and identifiers in prose (per "Does show print what a
 // file holds beyond its latest approval?", bceceda8 A, and "What does show
-// print with a file named?", 6addc2f4 A).
+// print of the file named?", dce141e9 A).
 
 mod common;
 
@@ -151,7 +151,6 @@ fn a_terms_file_reordered_prints_its_change() {
     assert!(shown.lines().any(|l| l.starts_with("  - ")) && shown.lines().any(|l| l.starts_with("  + ")), "{}", shown);
 }
 
-// adr: 6addc2f4-ff23-4fc6-851e-7cd67063b9f8
 //
 // A line the change added that reads like a heading is printed with it;
 // only the question's own heading line is left to its status line.
@@ -164,7 +163,6 @@ fn an_added_line_that_reads_like_a_heading_is_printed() {
     assert!(shown.contains("  + ## Notes\n"), "{}", shown);
 }
 
-// adr: 6addc2f4-ff23-4fc6-851e-7cd67063b9f8
 //
 // An identifier in prose stays as the file holds it, the text approve
 // signs; only a reference line turns its identifiers back into words.
@@ -198,7 +196,6 @@ fn a_removed_topic_file_lists_its_decisions_and_their_letters() {
     assert!(form.contains("  Problem: the widget breaks.\n"), "{}", form);
 }
 
-// adr: 6addc2f4-ff23-4fc6-851e-7cd67063b9f8
 //
 // A terms file that exists and cannot be read is named in the listing and
 // in its file form, never skipped; an unreadable topic file's file form
@@ -208,7 +205,7 @@ fn an_unreadable_terms_or_topic_file_is_named() {
     let dir = widget_repo();
     std::fs::write(dir.join("adrdom/terms.md"), [0x23, 0x20, 0xff, 0xfe, 0x0a]).unwrap();
     let listing = show(&dir, &[]);
-    assert!(listing.contains("terms: adrdom/terms.md: cannot be read: "), "{}", listing);
+    assert!(listing.contains("show: adrdom/terms.md: cannot be read: "), "{}", listing);
     let form = show(&dir, &["adrdom/terms.md"]);
     assert!(form.contains("adrdom/terms.md: cannot be read: "), "{}", form);
     assert!(!form.contains("no such file"), "{}", form);

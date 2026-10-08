@@ -59,11 +59,33 @@ pub const CODE_STATE: &[&str] = &[
 /// the count it asks about, rather than whether the thing exists at all.
 pub const LOADED_OPENINGS: &[&str] = &["which", "where", "how many", "how much"];
 
-pub const PROVENANCE_WHAT: &str = "says who said it";
-pub const CODE_STATE_WHAT: &str = "states what the code does now";
-pub const DATE_WHAT: &str = "carries a date";
-pub const LOADED_OPENING_WHAT: &str = "opens assuming an answer";
-pub const JOIN_WHAT: &str = "joins two questions";
+/// The kind of a tell in a question's text: which rule the hit breaks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TellKind {
+    /// Says who said, chose or wanted it.
+    Provenance,
+    /// States what the code does now.
+    CodeState,
+    /// Carries a date.
+    Date,
+    /// A heading that opens assuming an answer.
+    LoadedOpening,
+    /// A heading that joins two questions.
+    Join,
+}
+
+/// The kind of a line over the length rule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LengthKind {
+    /// An option under a heading that opens with Does: it holds one word.
+    OneWordOption,
+    /// Any other option.
+    Option,
+    /// A Why line.
+    Why,
+    /// A Costs line.
+    Costs,
+}
 
 /// The most words an option, its Why line or its Costs line holds (per
 /// "What is the word limit of an option?").
@@ -122,21 +144,21 @@ pub fn find_date(line: &str) -> Option<&str> {
 
 /// The provenance, code-state and date tells in one line of text, at
 /// absolute line `i`: the one scan both prose and headings get.
-fn line_tells(i: usize, text: &str) -> Vec<(usize, String, &'static str)> {
+fn line_tells(i: usize, text: &str) -> Vec<(usize, String, TellKind)> {
     let mut out = Vec::new();
     let lw = words(text);
     for tell in PROVENANCE {
         if has_phrase(&lw, tell) {
-            out.push((i, (*tell).to_string(), PROVENANCE_WHAT));
+            out.push((i, (*tell).to_string(), TellKind::Provenance));
         }
     }
     for tell in CODE_STATE {
         if has_phrase(&lw, tell) {
-            out.push((i, (*tell).to_string(), CODE_STATE_WHAT));
+            out.push((i, (*tell).to_string(), TellKind::CodeState));
         }
     }
     if let Some(d) = find_date(text) {
-        out.push((i, d.to_string(), DATE_WHAT));
+        out.push((i, d.to_string(), TellKind::Date));
     }
     out
 }
@@ -146,7 +168,7 @@ fn line_tells(i: usize, text: &str) -> Vec<(usize, String, &'static str)> {
 /// what it does). Used for a section's body (`ask`, and through
 /// `rules::body_tell_refusals` `check`, `approve` and `plan`) and for the
 /// context prose (`approve`, `check`).
-pub fn prose_tells_in(lines: &[String], start: usize, end: usize) -> Vec<(usize, String, &'static str)> {
+pub fn prose_tells_in(lines: &[String], start: usize, end: usize) -> Vec<(usize, String, TellKind)> {
     let mut out = Vec::new();
     let end = end.min(lines.len());
     let start = start.min(end);
@@ -158,9 +180,6 @@ pub fn prose_tells_in(lines: &[String], start: usize, end: usize) -> Vec<(usize,
     }
     out
 }
-
-/// What a length hit says of an option under a heading that opens with Does.
-pub const ONE_WORD_RULE: &str = "a heading that opens with Does takes one";
 
 /// Words of a line, by the repository's one definition of a word.
 fn count_words(text: &str) -> usize {
@@ -181,22 +200,22 @@ fn opens_with_does(heading_text: &str) -> bool {
 /// Length refusals in `lines[start..end]` for the question headed
 /// `heading_text`: under a heading that opens with "Does" an option holds
 /// one word, and any other option, every Why line and every Costs line holds
-/// at most `WORD_LIMIT` words. Returns (absolute 0-based line, the count and
-/// limit, the line's kind). Only `ask` reads this, and only on a question
+/// at most `WORD_LIMIT` words. Returns (absolute 0-based line, the word
+/// count, the line's kind). Only `ask` reads this, and only on a question
 /// not yet answered, so answered text is never judged (per "Does the word
 /// limit read answered text?").
-pub fn length_tells(lines: &[String], start: usize, end: usize, heading_text: &str) -> Vec<(usize, String, String)> {
+pub fn length_tells(lines: &[String], start: usize, end: usize, heading_text: &str) -> Vec<(usize, usize, LengthKind)> {
     let mut out = Vec::new();
     let closed = opens_with_does(heading_text);
     let end = end.min(lines.len());
     for (i, line) in lines.iter().enumerate().take(end).skip(start) {
         let (kind, text) = if let Some((_, rest)) = crate::record::parse_option_line(line) {
-            ("option", rest)
+            (if closed { LengthKind::OneWordOption } else { LengthKind::Option }, rest)
         } else if let Some((d, v)) = crate::record::detail_line(line) {
             (
                 match d {
-                    crate::record::Detail::Why => "Why line",
-                    crate::record::Detail::Costs => "Costs line",
+                    crate::record::Detail::Why => LengthKind::Why,
+                    crate::record::Detail::Costs => LengthKind::Costs,
                 },
                 v.to_string(),
             )
@@ -204,12 +223,9 @@ pub fn length_tells(lines: &[String], start: usize, end: usize, heading_text: &s
             continue;
         };
         let n = count_words(&text);
-        if kind == "option" && closed {
-            if n != 1 {
-                out.push((i, format!("{} words, {}", n, ONE_WORD_RULE), kind.to_string()));
-            }
-        } else if n > WORD_LIMIT {
-            out.push((i, format!("{} words, the limit is {}", n, WORD_LIMIT), kind.to_string()));
+        let over = if kind == LengthKind::OneWordOption { n != 1 } else { n > WORD_LIMIT };
+        if over {
+            out.push((i, n, kind));
         }
     }
     out
@@ -219,17 +235,17 @@ pub fn length_tells(lines: &[String], start: usize, end: usize, heading_text: &s
 /// opening, "and"/"or" joining two questions, plus the same provenance/
 /// code-state/date scan the body gets. Same result shape as
 /// `prose_tells_in`, so both feed the same message formatter.
-pub fn heading_tells(line: usize, heading_text: &str) -> Vec<(usize, String, &'static str)> {
+pub fn heading_tells(line: usize, heading_text: &str) -> Vec<(usize, String, TellKind)> {
     let mut out = Vec::new();
     let hw = words(heading_text);
     for form in LOADED_OPENINGS {
         let fw = words(form);
         if hw.len() >= fw.len() && hw[..fw.len()] == fw[..] {
-            out.push((line, (*form).to_string(), LOADED_OPENING_WHAT));
+            out.push((line, (*form).to_string(), TellKind::LoadedOpening));
         }
     }
     if let Some(w) = hw.iter().find(|w| w.as_str() == "and" || w.as_str() == "or") {
-        out.push((line, w.clone(), JOIN_WHAT));
+        out.push((line, w.clone(), TellKind::Join));
     }
     out.extend(line_tells(line, heading_text));
     out
@@ -291,13 +307,13 @@ mod tests {
     #[test]
     fn heading_tells_loaded_opening() {
         let hits = heading_tells(0, "which store does the tool use");
-        assert!(hits.iter().any(|(_, phrase, what)| phrase == "which" && *what == LOADED_OPENING_WHAT));
+        assert!(hits.iter().any(|(_, phrase, what)| phrase == "which" && *what == TellKind::LoadedOpening));
     }
 
     #[test]
     fn heading_tells_join() {
         let hits = heading_tells(0, "does it store terms and definitions");
-        assert!(hits.iter().any(|(_, phrase, what)| phrase == "and" && *what == JOIN_WHAT));
+        assert!(hits.iter().any(|(_, phrase, what)| phrase == "and" && *what == TellKind::Join));
     }
 
     #[test]

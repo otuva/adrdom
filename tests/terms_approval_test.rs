@@ -81,7 +81,7 @@ fn check_fails_naming_the_owners_move_while_terms_is_unapproved() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     let text = stdout(&out);
-    assert!(text.contains("terms: adrdom/terms.md is new"), "{}", text);
+    assert!(text.contains("adrdom/terms.md is new"), "{}", text);
     assert!(text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
 }
 
