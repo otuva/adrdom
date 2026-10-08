@@ -313,7 +313,7 @@ fn ask_refuses_when_terms_md_is_missing() {
     assert!(!out.status.success());
     assert_eq!(
         stderr(&out).trim_end(),
-        "adrdom/terms.md missing; the terms file exists once a topic file does; agent writes it, owner runs: adr approve adrdom/terms.md"
+        "adrdom/terms.md missing; the terms file exists once a topic file does; agent writes adrdom/terms.md, owner runs: adr approve adrdom/terms.md"
     );
 
     // Nothing written.

@@ -20,7 +20,7 @@ pub(super) fn plural(n: usize, one: &str, many: &str) -> String {
 
 /// The lines as the page renders them, each through `out::html`.
 pub(super) fn lines(lines: &[Line]) -> String {
-    lines.iter().map(|l| format!("{}\n", out::html(l))).collect()
+    out::present(lines).into_iter().map(|l| format!("{}\n", out::html(l))).collect()
 }
 
 /// A status line as small badges: the status name (the version of an asked

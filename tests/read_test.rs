@@ -120,7 +120,12 @@ fn line_of(word: &str, first: &Dec, second: &Dec) -> String {
     } else {
         "agent writes a question that supersedes one of the pair"
     };
-    format!("{}: \"{}\" and \"{}\": {}; decisions that repeat or contradict are named; {}", word, first.heading, second.heading, REASON, mv)
+    let protects = if word == "depends" {
+        "decisions that stand on each other are named"
+    } else {
+        "decisions that repeat or contradict are named"
+    };
+    format!("{}: \"{}\" and \"{}\": {}; {}; {}", word, first.heading, second.heading, REASON, protects, mv)
 }
 
 /// The move a same or inconsistent pair calls for, as `adr read` prints it.

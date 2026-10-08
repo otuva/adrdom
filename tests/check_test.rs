@@ -1626,7 +1626,7 @@ fn check_fails_when_terms_missing_and_a_record_exists() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("adrdom/terms.md missing; the terms file exists once a topic file does; agent writes it, owner runs: adr approve adrdom/terms.md"),
+        stdout(&out).contains("adrdom/terms.md missing; the terms file exists once a topic file does; agent writes adrdom/terms.md, owner runs: adr approve adrdom/terms.md"),
         "{}",
         stdout(&out)
     );

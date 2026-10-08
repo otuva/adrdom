@@ -99,7 +99,7 @@ impl Move {
     pub fn next(&self) -> Option<Next> {
         Some(match &self.kind {
             MoveKind::PlanUnresolved => {
-                Next::all(vec![Next::agent_runs(Cmd::fixed("adr check")), Next::agent("clears what it names in the plan")])
+                Next::all(vec![Next::agent_runs(Cmd::fixed("adr check")), Next::agent("rewrites the headings and lines of the plan that adr check names")])
             }
             MoveKind::Plan { rel } => Next::agent_runs(command(&["adr", "plan", rel])),
             MoveKind::WriteLines { headings } => Next::agent(format!("writes lines for {}", quoted(headings))),
@@ -680,6 +680,8 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> (crate::msg:
     let mut found: Vec<Finding> = Vec::new();
     let mut agent: Vec<Move> = Vec::new();
     let mut owner: Option<Move> = None;
+    let mut unwritten: Vec<String> = Vec::new();
+    let mut asking: Vec<String> = Vec::new();
     let add = |report: Report, found: &mut Vec<Finding>, agent: &mut Vec<Move>, owner: &mut Option<Move>| {
         for f in &report.findings {
             if !found.iter().any(|g| g.text() == f.text()) {
@@ -722,10 +724,12 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> (crate::msg:
             }
             Waits::Unwritten { heading: h, report } => {
                 parts.push(format!("\"{}\" has no decision yet and is [{}]", h, QuestionStatus::NoBody.name()));
+                unwritten.push(h.clone());
                 add(report, &mut found, &mut agent, &mut owner);
             }
             Waits::Asking { heading: h, report } => {
                 parts.push(format!("\"{}\" has no decision yet", h));
+                asking.push(h.clone());
                 add(report, &mut found, &mut agent, &mut owner);
             }
             Waits::Unanswered { heading: h, answer: m } => {
@@ -757,7 +761,13 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> (crate::msg:
     }
     clauses.extend(owner.map(|m| m.clause_text()));
     if clauses.is_empty() {
-        clauses.push(Next::agent("clears the findings below").render());
+        // No move of the questions it waits on: the act on each of them.
+        if !unwritten.is_empty() {
+            clauses.push(Next::agent(format!("writes the body of {}", quoted(&unwritten))).render());
+        }
+        if !asking.is_empty() {
+            clauses.push(Next::agent(format!("rewrites {} as the findings below name", quoted(&asking))).render());
+        }
     }
     // What the rules find in the files it waits on is returned apart: each
     // finding prints whole on a line of its own after the refusal's line.
@@ -849,7 +859,7 @@ mod tests {
                 Move::new(MoveKind::Approve { path: "x.md".into() }),
             ],
         };
-        let tail = report.moves_tail(Next::agent("clears the findings below"));
+        let tail = report.moves_tail(Next::agent("restores x.md from git"));
         assert_eq!(tail, "agent runs: adr ask x.md, owner runs: adr approve x.md");
         assert!(!tail.contains('#'), "{}", tail);
     }

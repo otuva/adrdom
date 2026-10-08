@@ -786,11 +786,29 @@ pub const BAN_NOT_ON_USED_WORD: Rule = Rule {
     protects: "a ban never lands on a word the repository holds",
 };
 
-/// Decision: Does the tool print every pair the reader marks?
-pub const READER_MARKED_PAIR_NAMED: Rule = Rule {
-    name: "reader_marked_pair_named",
+/// Decision: Does the tool print every pair the reader marks? A pair the
+/// reader marks the same. The three pair rules stand in `ALL` in the order
+/// of the reader's words, so `adr read` prints same, inconsistent, depends.
+pub const READ_PAIR_SAME: Rule = Rule {
+    name: "read_pair_same",
     decisions: &["2db33118-82b4-4edf-a9cb-e92ac62738b9"],
     protects: "decisions that repeat or contradict are named",
+};
+
+/// Decision: Does the tool print every pair the reader marks? A pair the
+/// reader marks inconsistent.
+pub const READ_PAIR_INCONSISTENT: Rule = Rule {
+    name: "read_pair_inconsistent",
+    decisions: &["2db33118-82b4-4edf-a9cb-e92ac62738b9"],
+    protects: "decisions that repeat or contradict are named",
+};
+
+/// Decision: Does the tool print every pair the reader marks? A pair the
+/// reader marks as one depending on the other.
+pub const READ_PAIR_DEPENDS: Rule = Rule {
+    name: "read_pair_depends",
+    decisions: &["2db33118-82b4-4edf-a9cb-e92ac62738b9"],
+    protects: "decisions that stand on each other are named",
 };
 
 /// Decision: Does an owner command commit?
@@ -1035,13 +1053,6 @@ pub const GITIGNORE_MATCHES_INSTALL: Rule = Rule {
     protects: "the adrdom gitignore equals what install writes",
 };
 
-/// Decision: What does a blame file hold?
-pub const BLAME_ORIGIN_OUTSIDE_ADRDOM: Rule = Rule {
-    name: "blame_origin_outside_adrdom",
-    decisions: &["34f0202a-0be4-4049-94de-d3886f4f8ffc"],
-    protects: "a blame origin is a file outside adrdom",
-};
-
 /// Decision: Does a retired term hold its words?
 /// Decision: What does a blame row name?
 pub const BLAME_ROW_TERM_IS_LIVE: Rule = Rule {
@@ -1198,7 +1209,9 @@ pub const ALL: &[&Rule] = &[
     &ANSWERED_TERMS_LINE_TERM_IS_LIVE,
     &ANSWER_NEVER_REMOVES_CLOSED_QUESTION,
     &BAN_NOT_ON_USED_WORD,
-    &READER_MARKED_PAIR_NAMED,
+    &READ_PAIR_SAME,
+    &READ_PAIR_INCONSISTENT,
+    &READ_PAIR_DEPENDS,
     &ANSWER_LINE_HAS_ROW,
     &REFUSAL_LINE_HAS_ROW,
     &REFUSED_TEXT_FROZEN,
@@ -1232,7 +1245,6 @@ pub const ALL: &[&Rule] = &[
     &TERMS_FILE_SHAPE,
     &TERMS_FILE_EXISTS,
     &GITIGNORE_MATCHES_INSTALL,
-    &BLAME_ORIGIN_OUTSIDE_ADRDOM,
     &BLAME_ROW_TERM_IS_LIVE,
     &ASKED_TEXT_FROZEN,
     &ANSWER_ROW_HAS_ASKED_ROW,

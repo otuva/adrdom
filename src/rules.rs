@@ -160,6 +160,24 @@ impl Finding {
     }
 }
 
+/// The one order findings print in, under every command and on the page: by
+/// the file the finding is about (the records as a whole first), then the
+/// first question of the file it is about (the file as a whole first), then
+/// the rule's place in `rule::ALL`, then its text.
+pub fn finding_order(a: &Finding, b: &Finding) -> std::cmp::Ordering {
+    fn key(f: &Finding) -> (String, usize, usize, String) {
+        let file = match &f.subject {
+            Subject::Records => String::new(),
+            Subject::TermsFile => repo::TERMS_PATH.to_string(),
+            Subject::TopicFile(p) | Subject::BlameFile(p) | Subject::Directory(p) => p.clone(),
+        };
+        let question = f.sections.iter().min().map_or(0, |i| i + 1);
+        let rule = crate::rule::ALL.iter().position(|r| r.name == f.rule.name).unwrap_or(usize::MAX);
+        (file, question, rule, f.text())
+    }
+    key(a).cmp(&key(b))
+}
+
 /// Tags each finding of `fs` as about the topic file `rel`, a finding about
 /// the records left as it is.
 fn about_topic_file(fs: Vec<Finding>, rel: &str) -> Vec<Finding> {

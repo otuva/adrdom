@@ -290,6 +290,32 @@ pub fn stop(cmd: Command, stop: &str) -> Vec<Line> {
 /// process ended by a closed pipe (128 + 13).
 const READER_GONE: i32 = 141;
 
+/// The lines as every output shows them, the terminal's standard output and
+/// standard error and the page alike: each run of findings in the one order
+/// of `rules::finding_order`, and a finding or stop whose text an earlier
+/// line of the call already has left out.
+pub fn present(lines: &[Line]) -> Vec<&Line> {
+    let mut shown: Vec<&Line> = Vec::with_capacity(lines.len());
+    let mut i = 0;
+    while i < lines.len() {
+        if matches!(lines[i], Line::Finding(_)) {
+            let mut run: Vec<&Line> = lines[i..].iter().take_while(|l| matches!(l, Line::Finding(_))).collect();
+            i += run.len();
+            run.sort_by(|a, b| match (a, b) {
+                (Line::Finding(x), Line::Finding(y)) => crate::rules::finding_order(x, y),
+                _ => std::cmp::Ordering::Equal,
+            });
+            shown.extend(run);
+        } else {
+            shown.push(&lines[i]);
+            i += 1;
+        }
+    }
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    shown.retain(|l| !matches!(l, Line::Finding(_) | Line::Stop { .. }) || seen.insert(text(l)));
+    shown
+}
+
 /// Prints `lines` to standard output, one terminal line each. The reader
 /// gone (`adr show | head`) is no fault of the tool: the process ends
 /// without a word, with `READER_GONE`, so a pipeline that watches exit codes
@@ -300,14 +326,7 @@ const READER_GONE: i32 = 141;
 /// all reach their reader never passes.
 pub fn print(lines: &[Line]) {
     let mut out = std::io::stdout().lock();
-    // A finding that prints the same text as one above it prints once.
-    let mut findings: std::collections::HashSet<String> = std::collections::HashSet::new();
-    for l in lines {
-        if let Line::Finding(f) = l {
-            if !findings.insert(f.text()) {
-                continue;
-            }
-        }
+    for l in present(lines) {
         if let Err(e) = writeln!(out, "{}", text(l)) {
             unwritable(e);
         }
@@ -340,7 +359,7 @@ fn unwritable(e: std::io::Error) -> ! {
 /// Prints `lines` to standard error: the findings that stopped a command.
 pub fn eprint(lines: &[Line]) {
     let mut err = std::io::stderr().lock();
-    for l in lines {
+    for l in present(lines) {
         let _ = writeln!(err, "{}", text(l));
     }
 }

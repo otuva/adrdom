@@ -242,7 +242,7 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
                 if sec.is_skeleton {
                     msg::not_written(&sec.heading_text, &report)
                 } else if led.latest_asked(id).is_none() {
-                    msg::not_asked_yet(&sec.heading_text, &report)
+                    msg::not_asked_yet(&sec.heading_text, &rf.rel, &report)
                 } else {
                     msg::not_in_asked_state(&sec.heading_text, &report)
                 },
@@ -423,7 +423,7 @@ fn finish_answer(
                 msg::update_failed(
                     "ledger",
                     format!("{}; {} holds the answer line and could not be put back: {}", e, rf.rel, back),
-                    Next::agent(format!("fixes what the error names and removes the answer line from {}", rf.rel))
+                    Next::agent(format!("fixes the ledger and removes the answer line from {}", rf.rel))
                         .and_owner_runs(crate::moves::command(&["adr", "answer", &format!("{}@{}", id, version), given])),
                 ),
             ));

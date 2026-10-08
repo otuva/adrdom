@@ -27,6 +27,11 @@ pub enum Actor {
 /// taken from the records is quoted as a shell reads it and the command
 /// runs as printed (per "Does a refusal name the command that clears
 /// it?"); a clause with no command to run says what to do in words.
+/// The act of the fix helpers (`after_fix_agent_runs`, `after_fix_owner_runs`)
+/// before the failure that carries them names the thing; `Next::on` puts the
+/// thing in its place, so no printed move reads `fixes what the error names`.
+const FIX_THE_THING: &str = "fixes \u{1}";
+
 #[derive(Clone)]
 pub struct Next(Vec<(Actor, String)>);
 
@@ -69,6 +74,11 @@ impl Next {
     pub fn and_owner_runs(mut self, command: Cmd) -> Next {
         self.0.push((Actor::Owner, format!("runs: {}", command)));
         self
+    }
+
+    /// Names `thing` as what a generic fix clause (`FIX_THE_THING`) fixes.
+    pub fn on(self, thing: &str) -> Next {
+        Next(self.0.into_iter().map(|(a, t)| (a, t.replace(FIX_THE_THING, &format!("fixes {}", thing)))).collect())
     }
 
     pub fn render(&self) -> String {
@@ -132,37 +142,37 @@ fn refuse(what: String, next: Next) -> String {
 // command.
 
 pub fn write_failed(target: &str, e: impl Display, next: Next) -> String {
-    refuse(format!("failed to write {}: {}", target, e), next)
+    refuse(format!("failed to write {}: {}", target, e), next.on(target))
 }
 
 pub fn read_failed(target: &str, e: impl Display, next: Next) -> String {
-    refuse(format!("cannot read {}: {}", target, e), next)
+    refuse(format!("cannot read {}: {}", target, e), next.on(target))
 }
 
 pub fn update_failed(target: &str, e: impl Display, next: Next) -> String {
-    refuse(format!("failed to update {}: {}", target, e), next)
+    refuse(format!("failed to update {}: {}", target, e), next.on(target))
 }
 
 pub fn create_failed(target: &str, e: impl Display, next: Next) -> String {
-    refuse(format!("failed to create {}: {}", target, e), next)
+    refuse(format!("failed to create {}: {}", target, e), next.on(target))
 }
 
 pub fn remove_failed(target: &str, e: impl Display, next: Next) -> String {
-    refuse(format!("failed to remove {}: {}", target, e), next)
+    refuse(format!("failed to remove {}: {}", target, e), next.on(target))
 }
 
 /// `git config` did not take the change to `core.hooksPath`. `doing` is
 /// "set" or "unset".
 pub fn hooks_path_failed(doing: &str, next: Next) -> String {
-    refuse(format!("git config failed to {} core.hooksPath", doing), next)
+    refuse(format!("git config failed to {} core.hooksPath", doing), next.on("the git configuration of core.hooksPath"))
 }
 
 pub fn parse_failed(target: &str, e: impl Display, next: Next) -> String {
-    refuse(format!("{}: {}", target, e), next)
+    refuse(format!("{}: {}", target, e), next.on(target))
 }
 
 pub fn stdin_read_failed(next: Next) -> String {
-    refuse("failed to read stdin".to_string(), next)
+    refuse("failed to read stdin".to_string(), next.on("what is piped to adr"))
 }
 
 /// Standard output refused a line for a cause other than its reader going
@@ -226,7 +236,7 @@ pub fn terms_missing() -> Said {
     said(
         &crate::rule::TERMS_FILE_EXISTS,
         "adrdom/terms.md missing",
-        Next::agent("writes it").and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
+        Next::agent("writes adrdom/terms.md").and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
     )
 }
 
@@ -234,7 +244,7 @@ pub fn terms_missing() -> Said {
 /// of its shape rules) -- rare enough that the caller's own context decides
 /// who fixes it.
 pub fn terms_load_error(e: &str, next: Next) -> String {
-    refuse(format!("adrdom/terms.md: {}", e), next)
+    refuse(format!("adrdom/terms.md: {}", e), next.on("adrdom/terms.md"))
 }
 
 /// One of `adrdom/terms.md`'s shape errors (from `terms::parse`): always
@@ -830,8 +840,8 @@ pub fn not_in_asked_state(heading: &str, report: &crate::moves::Report) -> Strin
 /// A question with a body that no `ask` has put to the owner.
 /// `report`: what the rules find in the question's file and its moves
 /// (`moves::of_unasked_question_in`).
-pub fn not_asked_yet(heading: &str, report: &crate::moves::Report) -> String {
-    format!("\"{}\" is {}; {}", heading, crate::status::QuestionStatus::NotAsked.name(), report.moves_tail(Next::agent("clears the findings below")))
+pub fn not_asked_yet(heading: &str, rel: &str, report: &crate::moves::Report) -> String {
+    format!("\"{}\" is {}; {}", heading, crate::status::QuestionStatus::NotAsked.name(), report.moves_tail(Next::agent_runs(command(&["adr", "ask", rel]))))
 }
 
 /// An answer that would remove a question with no identifier.
@@ -871,7 +881,7 @@ pub fn drop_not_approved(heading: &str, rel: &str) -> Said {
 
 /// A question with no body yet: nothing to ask or answer.
 pub fn not_written(heading: &str, report: &crate::moves::Report) -> String {
-    format!("\"{}\" is [{}]; {}", heading, crate::status::QuestionStatus::NoBody.name(), report.moves_tail(Next::agent("clears the findings below")))
+    format!("\"{}\" is [{}]; {}", heading, crate::status::QuestionStatus::NoBody.name(), report.moves_tail(Next::agent(format!("writes the body of \"{}\"", heading))))
 }
 
 /// `adr answer <id> <letter>` with no `@<version>` (per "Does an answer
@@ -983,12 +993,12 @@ pub fn named(id: &str, name: Option<&str>) -> String {
 /// the refusal never names the owner's approve while approve would refuse
 /// (per "Does a command compute a move of its own?", aac5c313 A).
 pub fn plan_not_approved(rel: &str, status: FileStatus, report: &crate::moves::Report) -> Said {
-    said_raw(&crate::rule::PLAN_APPROVED_BEFORE_ASK, format!("{}: plan is {}", rel, status.name()), report.moves_tail(Next::agent("clears the findings below")))
+    said_raw(&crate::rule::PLAN_APPROVED_BEFORE_ASK, format!("{}: plan is {}", rel, status.name()), report.moves_tail(Next::owner_runs(command(&["adr", "approve", rel]))))
 }
 
 /// `plan_not_approved` for the prose above the first question.
 pub fn context_not_approved(rel: &str, status: FileStatus, report: &crate::moves::Report) -> Said {
-    said_raw(&crate::rule::PROSE_APPROVED_BEFORE_ASK, format!("{}: prose is {}", rel, status.name()), report.moves_tail(Next::agent("clears the findings below")))
+    said_raw(&crate::rule::PROSE_APPROVED_BEFORE_ASK, format!("{}: prose is {}", rel, status.name()), report.moves_tail(Next::owner_runs(command(&["adr", "approve", rel]))))
 }
 
 pub fn missing_answer_set(rel: &str, dependent: &str, target: &str) -> Said {
@@ -1115,7 +1125,12 @@ pub fn neighbour(kind: &str, name: &str, step: &str, word: &str, line: Option<&s
 
 /// One pair of current decisions the reader marked, as `adr read` prints it.
 pub fn read_pair(word: &str, first: &str, second: &str, reason: &str, next: &str) -> Said {
-    said_raw(&crate::rule::READER_MARKED_PAIR_NAMED, format!("{}: \"{}\" and \"{}\": {}", word, first, second, reason), next)
+    let rule = match word {
+        "same" => &crate::rule::READ_PAIR_SAME,
+        "inconsistent" => &crate::rule::READ_PAIR_INCONSISTENT,
+        _ => &crate::rule::READ_PAIR_DEPENDS,
+    };
+    said_raw(rule, format!("{}: \"{}\" and \"{}\": {}", word, first, second, reason), next)
 }
 
 pub fn ask_supersedes_not_current(rel: &str, heading: &str, old: &str, name: Option<&str>) -> Said {
@@ -1341,13 +1356,13 @@ pub fn in_use_at(location: &str, again: Cmd) -> Said {
 /// running it again (a file it cannot read or write): the agent fixes what
 /// the error names, then the owner runs `command`.
 pub fn after_fix_owner_runs(command: Cmd) -> Next {
-    Next::agent("fixes what the error names").and_owner_runs(command)
+    Next::agent(FIX_THE_THING).and_owner_runs(command)
 }
 
 /// The agent's move after a command of its own failed to read or write what
 /// the error names: fix that, then run `command` again.
 pub fn after_fix_agent_runs(command: Cmd) -> Next {
-    Next::agent_then_runs("fixes what the error names", command)
+    Next::agent_then_runs(FIX_THE_THING, command)
 }
 
 /// The agent's move on a topic file `cmd` could not read at `rel`: a path
@@ -1375,15 +1390,15 @@ pub fn fix_then(path: &str, so: &str, command: Cmd) -> Next {
 }
 
 pub fn settings_not_json_object(path: &str, next: Next) -> String {
-    refuse(format!("{} is not a JSON object", path), next)
+    refuse(format!("{} is not a JSON object", path), next.on(path))
 }
 
 pub fn settings_permissions_not_object(path: &str, next: Next) -> String {
-    refuse(format!("{}: permissions is not an object", path), next)
+    refuse(format!("{}: permissions is not an object", path), next.on(path))
 }
 
 pub fn settings_deny_not_array(path: &str, next: Next) -> String {
-    refuse(format!("{}: permissions.deny is not an array", path), next)
+    refuse(format!("{}: permissions.deny is not an array", path), next.on(path))
 }
 
 // --- check/*.rs --------------------------------------------------------
@@ -2579,7 +2594,7 @@ mod tests {
             stale_version("heading", "x.md"),
             already_closed("heading", crate::status::QuestionStatus::Withdrawn),
             already_closed("heading", crate::status::QuestionStatus::Superseded),
-            not_asked_yet("heading", &approve_x),
+            not_asked_yet("heading", "x.md", &approve_x),
             not_written("heading", &approve_x),
             dep_retired_term("x.md", "heading", "widget").text(),
             show_not_a_file_approve_takes("x.md"),
