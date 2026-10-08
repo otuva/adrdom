@@ -17,7 +17,8 @@ pub(super) fn render_next(r: &Records, last: &[Line], after: Option<&String>, sh
     let files = data::files(r, false);
     let all: Vec<&Q> = files.iter().flat_map(|f| f.qs.iter()).filter(|q| q.listed()).collect();
 
-    let Some(q) = pick_next(&all, after.map(String::as_str), show.map(String::as_str)) else {
+    let order: Vec<&Q> = files.iter().flat_map(|f| f.qs.iter()).collect();
+    let Some(q) = pick_next(&order, &all, after.map(String::as_str), show.map(String::as_str)) else {
         // An asked question `answer` would refuse waits on another: nothing
         // is wrong, but nothing can be answered yet either.
         let waiting = !all.is_empty();
@@ -149,16 +150,21 @@ pub(super) fn render_next(r: &Records, last: &[Line], after: Option<&String>, sh
   sync();
   document.addEventListener('keydown', function(e) {{
     if (e.altKey || e.ctrlKey || e.metaKey) return;
-    var tag = (document.activeElement && document.activeElement.tagName) || '';
-    if (tag === 'INPUT' || tag === 'TEXTAREA') {{
-      if (e.key === 'Enter' && form.querySelector('input[name=answer]:checked')) {{ form.requestSubmit(); }}
-      return;
-    }}
+    var el = document.activeElement;
+    var tag = (el && el.tagName) || '';
+    var type = ((el && el.type) || '').toLowerCase();
+    // Only a field that takes text swallows keys; a radio, a button and a
+    // link keep the letters and S.
+    if (tag === 'TEXTAREA' || tag === 'SELECT' || (tag === 'INPUT' && type !== 'radio' && type !== 'checkbox' && type !== 'button' && type !== 'submit')) return;
     var key = e.key.toUpperCase();
     if (key.length === 1 && key >= 'A' && key <= 'E') {{
       var radio = document.getElementById('opt-' + key);
       if (radio) {{ radio.checked = true; sync(); }}
     }} else if (key === 'ENTER') {{
+      // On a button, a link or a radio the browser's own Enter acts (Refuse
+      // refuses, Skip skips, a radio submits the form); only Enter on the
+      // page itself submits here.
+      if (tag === 'BUTTON' || tag === 'A' || tag === 'INPUT' || tag === 'SUMMARY') return;
       if (form.querySelector('input[name=answer]:checked')) {{ form.requestSubmit(); }}
     }} else if (key === 'S') {{
       window.location.href = '/next?after={id}';
@@ -266,19 +272,21 @@ fn option_details(rf: &record::RecordFile, sec: &Section) -> Vec<(char, Option<S
 }
 
 /// The question the page opens on: the one `show` names, else the first
-/// `answer` takes after `after` (forward in file order, then from the top;
-/// the skipped one comes last), else the first it takes.
-fn pick_next<'a>(all: &[&'a Q<'a>], after: Option<&str>, show: Option<&str>) -> Option<&'a Q<'a>> {
+/// `answer` takes after `after` (forward from its place in the file order,
+/// then from the top; the one skipped comes last, and the place of one just
+/// answered is its own, though it is no longer open), else the first it
+/// takes. `order` holds every question of the files, `all` the open ones.
+fn pick_next<'a>(order: &[&'a Q<'a>], all: &[&'a Q<'a>], after: Option<&str>, show: Option<&str>) -> Option<&'a Q<'a>> {
     if let Some(id) = show {
         if let Some(q) = all.iter().find(|q| q.id() == id) {
             return Some(q);
         }
     }
+    let takes = |q: &&&Q| q.listed() && q.answerable();
     if let Some(id) = after {
-        if let Some(pos) = all.iter().position(|q| q.id() == id) {
-            return all[pos + 1..].iter().chain(all[..=pos].iter()).find(|q| q.answerable()).copied();
+        if let Some(pos) = order.iter().position(|q| q.id() == id) {
+            return order[pos + 1..].iter().chain(order[..=pos].iter()).find(takes).copied();
         }
     }
-    all.iter().find(|q| q.answerable()).copied()
+    order.iter().find(takes).copied()
 }
-

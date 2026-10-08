@@ -1862,3 +1862,184 @@ fn decisions_page_lists_each_decision_with_its_status_and_tests() {
     assert!(page_lines(b).contains(&"[answered A] 1.1 What is the unit of authority called?".to_string()), "{}", b);
     assert!(b.contains("<span class=\"sentence\">The authoritative sentence is a decision.</span><span class=\"meta\">untested"), "{}", b);
 }
+
+// --- the review round: pick order, removed files, move ids, keys ---
+
+const THREE_FLAT: &str = r#"# Example
+
+### 1.1 What is the first unit called?
+depends: example
+
+Problem: names leaked into decisions.
+
+Standard: plain words.
+
+- A) The first thing is a decision.
+  Why: plainest word.
+  Costs: two nouns.
+- B) The first thing is a block.
+  Why: matches predecessors.
+  Costs: names a region.
+
+### 1.2 What is the second unit called?
+depends: example
+
+Problem: naming the second unit of a decision.
+
+Standard: plain words.
+
+- A) The second thing is a widget.
+  Why: reasons.
+  Costs: costs.
+- B) The second thing is a gadget.
+  Why: other reasons.
+  Costs: other costs.
+
+### 1.3 What is the third unit called?
+depends: example
+
+Problem: naming the third unit of a decision.
+
+Standard: plain words.
+
+- A) The third thing is a cog.
+  Why: reasons.
+  Costs: costs.
+- B) The third thing is a gear.
+  Why: other reasons.
+  Costs: other costs.
+"#;
+
+fn three_asked() -> (std::path::PathBuf, Vec<String>) {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_terms_with(&dir, &["decision", "example"]);
+    let record = write_record(&dir, "adrdom/decisions/example.md", THREE_FLAT);
+    approve_record(&dir, "adrdom/decisions/example.md");
+    let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(ask_out.status.success(), "ask failed: {}", stderr(&ask_out));
+    let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
+    (dir, ids)
+}
+
+/// The heading of the question the answer page is on.
+fn focus_heading(body: &str) -> String {
+    let h1 = body.split("<h1>").nth(1).expect("an h1").split("</h1>").next().unwrap();
+    unhtml(h1).trim().to_string()
+}
+
+// adr: 7857d633-2055-47eb-857f-cb70da9fa7ba
+//
+// Skip moves on in the order of the file and comes back to the one skipped
+// last; an answer moves on from the place of the question answered, though
+// that question is no longer open, so a question skipped earlier does not
+// come first.
+#[test]
+fn next_moves_on_from_the_place_of_the_question_and_a_skipped_one_comes_last() {
+    let (dir, ids) = three_asked();
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    assert!(focus_heading(&get(port, "/next", Some(&cookie)).body).contains("1.1 "));
+    // Skip walks the file order and wraps to the first last.
+    let after_1 = get(port, &format!("/next?after={}", ids[0]), Some(&cookie));
+    assert!(focus_heading(&after_1.body).contains("1.2 "), "{}", after_1.body);
+    let after_2 = get(port, &format!("/next?after={}", ids[1]), Some(&cookie));
+    assert!(focus_heading(&after_2.body).contains("1.3 "), "{}", after_2.body);
+    let after_3 = get(port, &format!("/next?after={}", ids[2]), Some(&cookie));
+    assert!(focus_heading(&after_3.body).contains("1.1 "), "{}", after_3.body);
+
+    // 1.1 skipped, 1.2 answered: the page goes on to 1.3, not back to 1.1.
+    let form = format!("id={}&v={}&answer=A&t={}", ids[1], current_version(&dir, &ids[1]), token);
+    let answered = post(port, "/answer", Some(&cookie), &form);
+    assert_eq!(answered.status, 302, "body: {}", answered.body);
+    let next = follow(port, &answered, &cookie);
+    assert!(focus_heading(&next.body).contains("1.3 "), "{}", next.body);
+
+    // The last in the file answered: the page wraps to the first open one.
+    let form = format!("id={}&v={}&answer=A&t={}", ids[2], current_version(&dir, &ids[2]), token);
+    let answered = post(port, "/answer", Some(&cookie), &form);
+    let next = follow(port, &answered, &cookie);
+    let _ = child.kill();
+    let _ = child.wait();
+    assert!(focus_heading(&next.body).contains("1.1 "), "{}", next.body);
+}
+
+// adr: 644b43ce-be10-4e9a-a7d5-71b27c51e365
+//
+// `/decisions` lists the current decisions of a topic file removed from
+// disk too, from its approved version, as `show` lists them.
+#[test]
+fn decisions_page_lists_the_decisions_of_a_removed_topic_file() {
+    let dir = two_asked();
+    let record = dir.join("adrdom/decisions/example.md");
+    let id = extract_ids(&std::fs::read_to_string(&record).unwrap())[0].clone();
+    assert!(adr_answer(&dir, &id, "A").status.success());
+    assert!(run_git(&dir, &["add", "-A"]).status.success());
+    let c = run_git(&dir, &["commit", "-q", "--no-verify", "-m", "chore: the example topic"]);
+    assert!(c.status.success(), "{}", String::from_utf8_lossy(&c.stderr));
+    std::fs::remove_file(&record).unwrap();
+
+    let shown = stdout(&adr(&dir, &["show"], &[], ""));
+    assert!(shown.contains("[removed]") && shown.contains("1.1 What is the unit of authority called?"), "{}", shown);
+
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let resp = get(port, "/decisions", Some(&format!("adr_t={}", token)));
+    let _ = child.kill();
+    let _ = child.wait();
+    let b = &resp.body;
+    assert!(b.contains("1 decision."), "{}", b);
+    assert!(page_lines(b).contains(&"[answered A] 1.1 What is the unit of authority called?".to_string()), "{}", b);
+    assert!(b.contains("The authoritative sentence is a decision."), "{}", b);
+}
+
+fn answer_script(body: &str) -> &str {
+    let from = body.find("<script>").expect("the answer page carries its script");
+    let to = body[from..].find("</script>").expect("script end");
+    &body[from..from + to]
+}
+
+// adr: 7857d633-2055-47eb-857f-cb70da9fa7ba
+//
+// The keys of the answer page, read off the script it emits: a letter and S
+// work while a radio, a button or a link holds focus (only a field that takes
+// text swallows keys); Enter submits from the page itself only, never from a
+// button or a link (Refuse refuses, Skip skips, natively) and not from a
+// radio, where the browser's own Enter submits the form once.
+#[test]
+fn answer_page_keys_leave_enter_to_buttons_links_and_radios() {
+    let dir = two_asked();
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let resp = get(port, "/next", Some(&format!("adr_t={}", token)));
+    let _ = child.kill();
+    let _ = child.wait();
+    let b = &resp.body;
+    let js = answer_script(b);
+
+    // The first option stays picked and the button names it.
+    assert!(b.contains("id=\"opt-A\" value=\"A\" required checked"), "{}", b);
+    assert!(b.contains("Answer <span id=\"answer-letter\">A</span>"), "{}", b);
+
+    // Only a text field swallows keys: neither INPUT as a whole nor a radio.
+    assert!(js.contains("tag === 'TEXTAREA'") && js.contains("type !== 'radio'"), "{}", js);
+    assert!(!js.contains("if (tag === 'INPUT' || tag === 'TEXTAREA')"), "{}", js);
+    // The letter and S branches sit apart from the focus rule on Enter, so
+    // they run with focus on a radio, a button or a link.
+    let enter = js.find("key === 'ENTER'").expect("an Enter branch");
+    let letters = js.find("key >= 'A'").expect("a letter branch");
+    let skip = js.find("key === 'S'").expect("an S branch");
+    assert!(letters < enter && enter < skip, "{}", js);
+    // Enter does nothing on a button, a link or a radio: the browser acts.
+    let enter_branch = &js[enter..skip];
+    for tag in ["'BUTTON'", "'A'", "'INPUT'"] {
+        assert!(enter_branch.contains(tag), "{}: {}", tag, enter_branch);
+    }
+    assert!(enter_branch.contains("return;"), "{}", enter_branch);
+    // requestSubmit appears once, in the Enter branch after that guard: a
+    // radio never submits twice.
+    assert_eq!(js.matches("requestSubmit").count(), 1, "{}", js);
+    assert!(enter_branch.find("return;").unwrap() < enter_branch.find("requestSubmit").unwrap(), "{}", enter_branch);
+}

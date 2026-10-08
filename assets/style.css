@@ -38,7 +38,7 @@ a:hover { text-decoration-color: currentColor; }
 q { quotes: "\201C" "\201D"; }
 
 .bar {
-  display: flex; align-items: baseline; gap: 1.4rem;
+  display: flex; align-items: baseline; gap: 1.2rem;
   max-width: 42rem; margin: 0 auto; padding: 1rem 1rem 0;
   font-size: 0.95rem; color: var(--muted);
 }
@@ -58,10 +58,9 @@ h2 { font-size: 1.35rem; line-height: 1.25; font-weight: 700; margin: 0 0 0.2rem
 
 .topic { border-top: 1px solid var(--rule); padding: 1.4rem 0 1.1rem; }
 .topic .path { margin: 0 0 0.6rem; font-size: 0.85rem; color: var(--muted); }
-.state { margin: 0.3rem 0; }
+.state { margin: 0.3rem 0; font-size: 0.92rem; }
 .state.waiting { color: var(--muted); }
 .state.done { color: var(--hold); }
-.state.failing { color: var(--refuse); }
 .inline { margin: 0.5rem 0 0.8rem; }
 .open-list { margin: 0.6rem 0 0.4rem; padding-left: 1.4rem; }
 .open-list li { margin: 0.2rem 0; }
@@ -73,9 +72,8 @@ details.answered dl { margin: 0.5rem 0 0; }
 details.answered dt { color: var(--muted); font-size: 0.95rem; }
 details.answered dd { margin: 0 0 0.6rem; color: var(--ink); }
 
-.failures { color: var(--refuse); padding-left: 1.2rem; margin: 0.4rem 0; }
-.failures li { margin: 0.15rem 0; }
-.notes { color: var(--muted); padding-left: 1.2rem; margin: 0.4rem 0; font-size: 0.95rem; }
+.failures { color: var(--refuse); padding-left: 0; margin: 0.4rem 0; }
+.notes { color: var(--muted); padding-left: 0; margin: 0.4rem 0; font-size: 0.95rem; }
 details.unban { margin-top: 2rem; color: var(--muted); font-size: 0.95rem; }
 details.unban form { margin-top: 0.6rem; }
 
@@ -107,7 +105,6 @@ dl.framing dd { margin: 0; }
 .option .text { display: flex; flex-direction: column; gap: 0.45rem; }
 .option .sentence { font-size: 1.12rem; line-height: 1.45; }
 dl.rationale { margin: 0; display: grid; grid-template-columns: 3.6rem 1fr; column-gap: 0.8rem; row-gap: 0.2rem; font-size: 0.97rem; color: var(--muted); }
-dl.rationale dt { }
 dl.rationale dd { margin: 0; }
 .option:has(input:checked) { box-shadow: inset 4px 0 0 var(--hold); background: var(--hold-soft); }
 .option:has(input:checked) .key { background: var(--hold); color: var(--paper); border-color: var(--hold); }
@@ -131,9 +128,7 @@ details.neighbours summary { cursor: pointer; }
 details.neighbours ul { padding-left: 1.2rem; margin: 0.3rem 0 0; }
 ul.refused-list { list-style: none; margin: 0.4rem 0; padding: 0; }
 ul.refused-list li { padding: 0.2rem 0; }
-.label.refused { color: var(--refuse); font-weight: 700; text-transform: uppercase; font-size: 0.78rem; letter-spacing: 0.03em; margin-right: 0.5rem; }
 .label.waiting { color: var(--muted); font-weight: 700; text-transform: uppercase; font-size: 0.78rem; letter-spacing: 0.03em; margin-right: 0.5rem; }
-.waits { color: var(--muted); font-size: 0.95rem; margin: 0.4rem 0 0.8rem; }
 .key-hint { color: var(--muted); font-size: 0.92rem; }
 kbd { font-family: inherit; font-size: 0.9em; padding: 0.05em 0.45em; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; background: var(--key); }
 
@@ -143,15 +138,6 @@ dl.decisions dd { margin: 0.1rem 0 0; }
 dl.decisions .sentence { display: block; font-size: 1.08rem; }
 dl.decisions .meta { display: block; color: var(--muted); font-size: 0.9rem; }
 
-.words { margin: 0 0 1.4rem; }
-.words h2 { font-size: 1.1rem; }
-.no-entry { color: var(--muted); font-size: 0.92rem; margin: 0.4rem 0 0; }
-
-dl.entries { margin: 0.6rem 0 0; }
-dl.entries dt { color: var(--ink); font-weight: 700; margin-top: 0.8rem; }
-dl.entries dd { margin: 0.1rem 0 0; }
-dl.entries .meta { display: block; color: var(--muted); font-size: 0.9rem; }
-.retired { color: var(--refuse); font-weight: 400; font-size: 0.85em; }
 
 textarea { width: 100%; font: inherit; font-size: 0.95rem; padding: 0.5em; background: var(--key); color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; }
 
@@ -167,16 +153,11 @@ textarea { width: 100%; font: inherit; font-size: 0.95rem; padding: 0.5em; backg
   .option, .primary, button { transition: background-color 120ms ease, box-shadow 120ms ease; }
 }
 /* --- redesign additions --- */
-.bar { gap: 1.2rem; }
 .summary-card { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 1rem; margin: 0.3rem 0 0; }
 .summary-card .count { font-size: 1.15rem; }
 .summary-card .muted { color: var(--muted); }
 .summary-card a.more { margin-left: auto; text-decoration: none; color: var(--hold); font-weight: 700; }
 .summary-card a.more:hover { text-decoration: underline; }
-.chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.35rem 0 0; }
-.chip { font-size: 0.8rem; line-height: 1.3; padding: 0.1em 0.55em; border: 1px solid var(--rule); border-radius: 999px; color: var(--muted); background: var(--key); white-space: nowrap; }
-.chip.warn { border-color: var(--refuse); color: var(--refuse); }
-.chip.use { border-color: var(--hold); color: var(--hold); }
 
 /* terms page */
 .lead .tools { display: flex; flex-wrap: wrap; gap: 0.8rem 1.2rem; align-items: center; margin: 0.6rem 0 0; }
@@ -192,8 +173,6 @@ input.filter:focus-visible { outline: 2px solid var(--hold); outline-offset: 1px
 .terms-list .use a { text-decoration: none; }
 .terms-list .use a:hover { text-decoration: underline; }
 .terms-list li.retired .name { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
-.terms-list .badge { display: inline-block; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; padding: 0.05em 0.5em; border-radius: 4px; margin-left: 0.4rem; vertical-align: middle; }
-.badge.retired { color: var(--refuse); border: 1px solid var(--refuse); text-decoration: none; }
 .no-match { color: var(--muted); margin: 1rem 0; }
 
 /* answer page: terms in text and aside */
@@ -217,26 +196,22 @@ input.filter:focus-visible { outline: 2px solid var(--hold); outline-offset: 1px
 }
 
 /* --- the lines the commands print, as the page shows them --- */
-.record, .status, .finding, .move, .event { margin: 0.2rem 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.record, .status, .finding { margin: 0.2rem 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .status .status-name { color: var(--muted); font-size: 0.85em; }
 .finding .rule { font-weight: 700; }
-.move { color: var(--muted); font-size: 0.92rem; }
+.move { margin: 0.2rem 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); font-size: 0.92rem; }
 .move.owner { color: var(--hold); }
-.event { margin: 0.1rem 0; }
+.event { margin: 0.1rem 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .banner p { margin: 0.15rem 0; }
-.failures, .notes { margin: 0.4rem 0; }
-.failures { padding-left: 0; }
-.notes { padding-left: 0; font-size: 0.95rem; }
-.failures .finding, .notes .finding { padding-left: 1.1rem; text-indent: -1.1rem; margin: 0.15rem 0; }
+.failures .finding { padding-left: 1.1rem; text-indent: -1.1rem; margin: 0.15rem 0; color: var(--refuse); }
+.notes .finding { padding-left: 1.1rem; text-indent: -1.1rem; margin: 0.15rem 0; color: var(--muted); }
 .failures .finding::before, .notes .finding::before { content: "\2022\00a0\00a0"; }
-.failures .finding { color: var(--refuse); }
-.notes .finding { color: var(--muted); }
 .topic .path .record { margin: 0 0 0.6rem; font-size: 0.85rem; font-weight: 400; color: var(--muted); }
 .state .status { margin: 0.3rem 0; }
 .state.waiting .status { color: var(--muted); }
 .state.done .status { color: var(--hold); }
 .state.done .status-name, .state.waiting .status-name { color: inherit; font-size: inherit; }
-.change { margin: 0.6rem 0 0.4rem; padding: 0.4rem 0 0.4rem 0.9rem; border-left: 3px solid var(--rule); color: var(--muted); font-size: 0.92rem; }
+.change { margin: 0.5rem 0; padding: 0.4rem 0; }
 .change .record { margin: 0.1rem 0; }
 .change .record.depth-1 { padding-left: 1rem; }
 .change .status { color: var(--ink); margin-top: 0.5rem; }
@@ -245,22 +220,19 @@ input.filter:focus-visible { outline: 2px solid var(--hold); outline-offset: 1px
 .unasked-list li { margin: 0.15rem 0; }
 .open-list li .status { display: inline; margin: 0; }
 .open-list li .move { margin: 0 0 0.25rem; font-size: 0.85rem; }
-.open-list li.current > a, .open-list li.current > .status { font-weight: 700; }
+.open-list li.current .st .subject { font-weight: 700; }
 .open-list li.current { list-style-position: outside; }
 .refused-list .status { display: inline; }
 .refused-list .move { margin: 0 0 0.3rem 1.2rem; font-size: 0.85rem; }
 details.answered dt .record, details.answered dd .record { margin: 0; }
-details.answered dd { margin: 0 0 0.6rem; }
 details.answered > .status { margin-left: 1.2rem; font-size: 0.92rem; }
 .lines { margin: 0.2rem 0 0.8rem; font-size: 0.92rem; color: var(--muted); }
 .lines .status { color: var(--ink); }
 .queue { margin: 2.2rem 0 0; padding-top: 1rem; border-top: 1px solid var(--rule); }
 .queue h2 { font-size: 1.05rem; margin: 0 0 0.4rem; color: var(--muted); }
-.entry-status .status { margin: 0.25rem 0 0; font-size: 0.8rem; color: var(--muted); }
 dl.decisions dt .status { margin: 0; }
 .lead .state { margin: 0.4rem 0 0; }
 .lead .move { margin: 0.4rem 0 0; }
-form.inline { margin: 0.5rem 0 0.8rem; }
 
 /* --- badges: statuses and the change as small labels --- */
 .st { display: inline; }
@@ -268,7 +240,7 @@ form.inline { margin: 0.5rem 0 0.8rem; }
 .badge.b-approved, .badge.b-answered { color: var(--hold); border-color: var(--hold); }
 .badge.b-new, .badge.b-changed, .badge.b-asked { color: var(--ink); border-color: var(--muted); }
 .badge.b-refused, .badge.b-removed { color: var(--refuse); border-color: var(--refuse); }
-.chip { display: inline-block; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; padding: 0.05em 0.5em; border-radius: 4px; border: 1px solid var(--hold); color: var(--hold); margin-right: 0.35rem; }
+.chip { display: inline-block; font-size: 0.72rem; line-height: 1.3; font-weight: 700; text-transform: uppercase; padding: 0.05em 0.5em; border-radius: 4px; border: 1px solid var(--hold); color: var(--hold); background: var(--key); white-space: nowrap; margin-right: 0.35rem; }
 .path.state { font-size: 0.9rem; color: var(--muted); margin: 0 0 0.6rem; }
 .path.state .subject { color: var(--muted); }
 .state .st .subject { margin-left: 0; }
@@ -278,8 +250,5 @@ form.inline { margin: 0.5rem 0 0.8rem; }
 .chgd summary { cursor: pointer; }
 .chgd .record { margin: 0.1rem 0; }
 .chgd .record.depth-1 { padding-left: 0.6rem; }
-.change { border-left: 0; padding-left: 0; margin: 0.5rem 0; color: inherit; font-size: inherit; }
 .open-list li .st, .refused-list li .st { display: inline; }
 .open-list li .st .subject a { text-decoration-color: var(--rule); }
-.open-list li .move { margin: 0 0 0.25rem; }
-.state { font-size: 0.92rem; }

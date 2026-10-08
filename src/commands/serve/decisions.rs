@@ -12,10 +12,19 @@ pub(super) fn render_decisions(r: &Records, last: &[Line]) -> String {
             .filter(|&i| status::question_status(&r.led, &rf.sections[i]) == QuestionStatus::Answered)
             .collect()
     };
-    let total: usize = r.topic_files.iter().map(|rf| answered(rf).len()).sum();
+    // The current decisions of a topic file removed from disk stand until a
+    // plan change supersedes them: read from its approved version, as `show`
+    // lists them after the topic files.
+    let removed: Vec<std::sync::Arc<crate::record::RecordFile>> = r
+        .removed_topic_files()
+        .iter()
+        .filter_map(|rel| crate::rules::latest_approved_version(&r.root, rel, &r.led))
+        .collect();
+    let files: Vec<&crate::record::RecordFile> = r.topic_files.iter().chain(removed.iter().map(|a| &**a)).collect();
+    let total: usize = files.iter().map(|rf| answered(rf).len()).sum();
     body.push_str("<header class=\"lead\">\n<h1>Current decisions</h1>\n");
     body.push_str(&format!("<p class=\"summary\">{}.</p>\n</header>\n", plural(total, "decision", "decisions")));
-    for rf in &r.topic_files {
+    for rf in files {
         let idx = answered(rf);
         if idx.is_empty() {
             continue;

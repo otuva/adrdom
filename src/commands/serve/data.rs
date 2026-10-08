@@ -12,6 +12,9 @@ use crate::status::{self, QuestionStatus};
 pub(super) struct File<'a> {
     pub rf: &'a RecordFile,
     pub report: Report,
+    /// The file's own judgement before the report's extras: what `check`
+    /// files for the file.
+    pub judged: Vec<crate::rules::Finding>,
     pub qs: Vec<Q<'a>>,
 }
 
@@ -56,7 +59,22 @@ impl Q<'_> {
     }
 }
 
-/// The headings of the questions a move names, for the moves that name some.
+/// Whether `m` names the question `sec`: by the identifier where the move
+/// carries one (the owner's answer, the build), else by the heading.
+fn names(m: &Move, sec: &Section) -> bool {
+    match &m.kind {
+        MoveKind::Answer { id, .. } | MoveKind::Build { id, .. } => sec.id.as_deref() == Some(id.as_str()),
+        _ => named(m).contains(&sec.heading_text.as_str()),
+    }
+}
+
+/// Whether `m` is one that names a question at all.
+fn names_a_question(m: &Move) -> bool {
+    matches!(m.kind, MoveKind::Answer { .. } | MoveKind::Build { .. }) || !named(m).is_empty()
+}
+
+/// The headings of the questions a move names, for the moves that name some
+/// by heading.
 fn named(m: &Move) -> Vec<&str> {
     match &m.kind {
         MoveKind::Answer { heading, .. } | MoveKind::AnswerWaits { heading, .. } | MoveKind::Refused { heading } => {
@@ -75,7 +93,11 @@ pub(super) fn files(r: &Records, once: bool) -> Vec<File<'_>> {
     r.topic_files
         .iter()
         .map(|rf| {
-            let report = if once { show::listed_report(r, rf, &mut printed) } else { show::topic_file_report(r, rf) };
+            let (report, judged) = if once {
+                show::listed_report_judged(r, rf, &mut printed)
+            } else {
+                show::topic_file_report_judged(r, rf)
+            };
             let qs = rf
                 .sections
                 .iter()
@@ -93,12 +115,12 @@ pub(super) fn files(r: &Records, once: bool) -> Vec<File<'_>> {
                     moves: report
                         .moves
                         .iter()
-                        .filter(|m| named(m).contains(&sec.heading_text.as_str()))
+                        .filter(|m| names(m, sec))
                         .cloned()
                         .collect(),
                 })
                 .collect();
-            File { rf, report, qs }
+            File { rf, report, judged, qs }
         })
         .collect()
 }
@@ -109,9 +131,50 @@ pub(super) fn unplaced<'a>(f: &'a File, placed: &dyn Fn(&Q) -> bool) -> Vec<&'a 
     f.report
         .moves
         .iter()
-        .filter(|m| {
-            let names = named(m);
-            names.is_empty() || !f.qs.iter().any(|q| names.contains(&q.heading()) && placed(q))
-        })
+        .filter(|m| !names_a_question(m) || !f.qs.iter().any(|q| names(m, q.sec) && placed(q)))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::record::Section;
+
+    fn section(id: &str, heading: &str) -> Section {
+        Section {
+            start: 0,
+            end: 0,
+            heading_text: heading.to_string(),
+            id: Some(id.to_string()),
+            supersedes: Vec::new(),
+            unrelated: Vec::new(),
+            depends: Vec::new(),
+            options: Vec::new(),
+            answer_line: None,
+            answer_value: None,
+            parse_errors: Vec::new(),
+            shape_errors: Vec::new(),
+            is_skeleton: false,
+            terms_line: None,
+        }
+    }
+
+    // A move that carries an identifier names the question with that
+    // identifier, whatever the heading; one that carries none names it by
+    // heading.
+    #[test]
+    fn a_move_with_an_identifier_names_its_question_by_it() {
+        let q = section("id-1", "Does it?");
+        let other = section("id-2", "Does it?");
+        let answer = |id: &str| Move::new(MoveKind::Answer { id: id.into(), version: "v".into(), heading: "Does it?".into() });
+        assert!(names(&answer("id-1"), &q));
+        assert!(!names(&answer("id-1"), &other), "the same heading is not the same question");
+        let build = |id: &str, heading: &str| Move::new(MoveKind::Build { heading: heading.into(), id: id.into() });
+        assert!(names(&build("id-2", "another heading"), &other));
+        assert!(!names(&build("id-2", "Does it?"), &q));
+        let waits = Move::new(MoveKind::AnswerWaits { heading: "Does it?".into(), on: Vec::new() });
+        assert!(names(&waits, &q) && names(&waits, &other), "by heading where the move has no identifier");
+        assert!(names_a_question(&answer("x")) && names_a_question(&waits));
+        assert!(!names_a_question(&Move::new(MoveKind::SupersedeMarkedPairs)));
+    }
 }

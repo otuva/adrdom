@@ -13,6 +13,7 @@ use crate::record::RecordFile;
 use crate::repo;
 use crate::rules::Finding;
 use crate::status::{FileStatus, QuestionStatus};
+use std::collections::HashMap;
 
 pub(super) fn render_index(r: &Records, last: &[Line], token: &str) -> String {
     let mut body = banner(last);
@@ -62,7 +63,7 @@ pub(super) fn render_index(r: &Records, last: &[Line], token: &str) -> String {
         body.push_str("</article>\n");
     }
 
-    body.push_str(&check_card(r, &shown));
+    body.push_str(&check_card(r, &files, &shown));
 
     body.push_str(&format!(
         "<details class=\"unban\"><summary>Unban a phrase</summary>\n<form method=\"post\" action=\"/unban\"><textarea name=\"lines\" rows=\"4\" placeholder=\"One phrase per line\"></textarea><input type=\"hidden\" name=\"t\" value=\"{}\"><button type=\"submit\">Unban</button></form>\n</details>\n",
@@ -95,7 +96,7 @@ fn topic_card(r: &Records, f: &File, token: &str, shown: &mut Vec<String>) -> St
         // Questions of the plan with no body or not asked yet, as the file
         // form prints their status lines (a question new since the file's
         // approval carries the mark of it).
-        let unasked: Vec<Line> = show::file_form(r, &rf.rel, Views::default())
+        let unasked: Vec<Line> = show::file_form_lines(r, &rf.rel, Views::default())
             .unwrap_or_default()
             .into_iter()
             .filter(|l| {
@@ -257,8 +258,8 @@ fn terms_card(r: &Records, token: &str, shown: &mut Vec<String>) -> Option<Strin
 }
 
 /// What `adr check` prints that no card above holds: failures, then notes.
-fn check_card(r: &Records, shown: &[String]) -> String {
-    let report = crate::commands::check::collect_with_tests(&r.root, &r.tests);
+fn check_card(r: &Records, files: &[File], shown: &[String]) -> String {
+    let report = crate::commands::check::collect_from(r, &files.iter().map(|f| f.judged.as_slice()).collect::<Vec<_>>());
     let fresh = |fs: Vec<Finding>| -> Vec<Line> {
         fs.into_iter().map(Line::Finding).filter(|l| !shown.contains(&out::text(l))).collect()
     };
@@ -299,7 +300,7 @@ pub(super) fn approve_block(r: &Records, path: &str, rf: Option<&RecordFile>, la
 /// heading, the neighbours of a question folded under it, and the lines of
 /// the change folded under "show the change".
 fn change_block(r: &Records, path: &str, rf: Option<&RecordFile>) -> String {
-    let Ok(all) = show::file_form(r, path, Views::default()) else { return String::new() };
+    let Ok(all) = show::file_form_lines(r, path, Views::default()) else { return String::new() };
     struct Group {
         head: Option<Line>,
         records: Vec<Line>,
@@ -347,6 +348,9 @@ fn change_block(r: &Records, path: &str, rf: Option<&RecordFile>) -> String {
     }
     groups.push(cur);
     let mut s = String::new();
+    // The neighbours of the file's questions, computed once, the first time
+    // a changed question needs them.
+    let neighbours_of_file = std::cell::OnceCell::new();
     for g in groups {
         if !g.keep || (g.head.is_none() && g.records.is_empty()) {
             continue;
@@ -364,9 +368,9 @@ fn change_block(r: &Records, path: &str, rf: Option<&RecordFile>) -> String {
         }
         s.push_str("\n");
         if let (Some(rf), Some(q)) = (rf, &g.question) {
-            let n = show::neighbours_of(r, rf, q);
-            if !n.is_empty() {
-                s.push_str(&neighbours(&n));
+            let map: &HashMap<String, Vec<String>> = neighbours_of_file.get_or_init(|| show::neighbours_map(r, rf));
+            if let Some(n) = map.get(q).filter(|n| !n.is_empty()) {
+                s.push_str(&neighbours(n));
             }
         }
         if !g.records.is_empty() {

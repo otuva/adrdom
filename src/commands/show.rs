@@ -50,7 +50,7 @@ pub(crate) struct Records {
     terms_unreadable: Option<String>,
     pub(crate) terms_list: Vec<Term>,
     pub(crate) topic_files: Vec<RecordFile>,
-    unreadable_topic_files: Vec<(String, String)>,
+    pub(crate) unreadable_topic_files: Vec<(String, String)>,
     blame_files: Vec<blame::BlameFile>,
     unreadable_blame_files: Vec<(String, String)>,
     pub(crate) tests: HashMap<String, Vec<String>>,
@@ -132,7 +132,7 @@ impl Records {
         })
     }
 
-    fn index(&self) -> &rules::RepoIndex {
+    pub(crate) fn index(&self) -> &rules::RepoIndex {
         self.index.get_or_init(|| rules::RepoIndex::new(&self.root, &self.topic_files, &self.terms_list, &self.led))
     }
 
@@ -249,7 +249,13 @@ pub(crate) fn decision_lines(rf: &RecordFile, led: &Ledger) -> Vec<Line> {
 /// the terms file (while that file's own lines stand) and a finding an
 /// earlier file printed (`printed`) are left out.
 pub(crate) fn listed_report(r: &Records, rf: &RecordFile, printed: &mut Vec<String>) -> Report {
-    let mut report = topic_file_report(r, rf);
+    listed_report_judged(r, rf, printed).0
+}
+
+/// `listed_report` and the file's own judgement, as `moves::of_topic_file_judged`
+/// returns it.
+pub(crate) fn listed_report_judged(r: &Records, rf: &RecordFile, printed: &mut Vec<String>) -> (Report, Vec<Finding>) {
+    let (mut report, judged) = topic_file_report_judged(r, rf);
     report.findings.retain(|f| {
         let text = f.text();
         if f.subject == rules::Subject::TermsFile && r.terms_file.is_some() || printed.contains(&text) {
@@ -258,7 +264,7 @@ pub(crate) fn listed_report(r: &Records, rf: &RecordFile, printed: &mut Vec<Stri
         printed.push(text);
         true
     });
-    report
+    (report, judged)
 }
 
 /// What the listing prints after the topic files: each removed topic file,
@@ -342,6 +348,20 @@ pub(crate) fn file_form(r: &Records, rel: &str, views: Views) -> Result<Vec<Line
         return Ok(removed_topic_file(r, rel));
     }
     Err(msg::show_not_a_file_approve_takes(rel))
+}
+
+/// The file form of a topic file or the terms file without its findings and
+/// moves, for a caller that holds the report already (the ui reads each file's
+/// report once); any other file as `file_form` prints it.
+pub(crate) fn file_form_lines(r: &Records, rel: &str, views: Views) -> Result<Vec<Line>, String> {
+    if rel == repo::TERMS_PATH {
+        if let Some(tf) = &r.terms_file {
+            return Ok(terms_file_lines(r, tf, views, status::terms_file_status(&r.led, tf)));
+        }
+    } else if let Some(rf) = r.topic_files.iter().find(|rf| rf.rel == rel) {
+        return Ok(topic_file_lines(r, rf, views));
+    }
+    file_form(r, rel, views)
 }
 
 /// The status line of a topic file, as every command that names its status
@@ -455,6 +475,14 @@ fn reference_and_body(lines: &[String]) -> (Vec<String>, Vec<String>) {
 /// every question, every question of the approved plan struck from it, then
 /// its moves.
 fn topic_file(r: &Records, rf: &RecordFile, views: Views) -> Vec<Line> {
+    let mut lines = topic_file_lines(r, rf, views);
+    lines.extend(out::report(&topic_file_report(r, rf)));
+    lines
+}
+
+/// A topic file in the file form without its findings and moves, for a
+/// caller that holds the file's report already.
+fn topic_file_lines(r: &Records, rf: &RecordFile, views: Views) -> Vec<Line> {
     let led = &r.led;
     let mut lines = vec![topic_file_status_line(led, rf)];
     let changes = approval::topic_file(&r.root, rf, led);
@@ -494,7 +522,6 @@ fn topic_file(r: &Records, rf: &RecordFile, views: Views) -> Vec<Line> {
         lines.push(change_status(&subject, Status::File(change.status), Some(change)));
         lines.extend(change_lines(change, Some(&format!("### {}", heading)), &r.names));
     }
-    lines.extend(out::report(&topic_file_report(r, rf)));
     lines
 }
 
@@ -654,6 +681,12 @@ fn removed_topic_file(r: &Records, rel: &str) -> Vec<Line> {
 /// entry approved and gone from the file, then its findings and moves.
 fn terms_file(r: &Records, tf: &TermsFile, views: Views) -> Vec<Line> {
     let (st, report) = terms_report(r, tf);
+    let mut lines = terms_file_lines(r, tf, views, st);
+    lines.extend(out::report(&report));
+    lines
+}
+
+fn terms_file_lines(r: &Records, tf: &TermsFile, views: Views, st: FileStatus) -> Vec<Line> {
     let mut lines = vec![file_status(repo::TERMS_PATH, st)];
     let changes = approval::terms_file(&r.root, tf, &r.led);
     if let Some(whole) = &changes.whole {
@@ -681,7 +714,6 @@ fn terms_file(r: &Records, tf: &TermsFile, views: Views) -> Vec<Line> {
         lines.push(change_status(name, Status::Term(status::TermStatus::Removed), Some(change)));
         lines.extend(change_lines(change, Some(&format!("## {}", name)), &r.names));
     }
-    lines.extend(out::report(&report));
     lines
 }
 
@@ -752,22 +784,32 @@ fn row_status(
     Some(status::question_status(&r.led, sec).name_with(sec.answer_letter()))
 }
 
-/// The neighbour lines `show --neighbours` prints under the question
-/// `heading` of `rf`, read the way it reads them.
-pub(crate) fn neighbours_of(r: &Records, rf: &RecordFile, heading: &str) -> Vec<String> {
+/// The neighbour lines `show --neighbours` prints under each question of
+/// `rf`, by heading, read the way it reads them: the file's neighbours are
+/// computed once and each heading is looked up in them.
+pub(crate) fn neighbours_map(r: &Records, rf: &RecordFile) -> HashMap<String, Vec<String>> {
     let shown = plan::load_shown_with(rf, &r.terms_list, &r.led, &r.index().planning);
     shown
         .questions
         .iter()
-        .find(|q| q.heading == heading)
-        .map(|q| plan::neighbour_lines(q).into_iter().map(|l| l.trim_start().to_string()).collect())
-        .unwrap_or_default()
+        .map(|q| (q.heading.clone(), plan::neighbour_lines(q).into_iter().map(|l| l.trim_start().to_string()).collect()))
+        .collect()
+}
+
+/// The neighbour lines `show --neighbours` prints under the question
+/// `heading` of `rf`.
+pub(crate) fn neighbours_of(r: &Records, rf: &RecordFile, heading: &str) -> Vec<String> {
+    neighbours_map(r, rf).remove(heading).unwrap_or_default()
 }
 
 // --- findings and moves -----------------------------------------------------
 
 pub(crate) fn topic_file_report(r: &Records, rf: &RecordFile) -> Report {
-    moves::of_topic_file_with(&r.root, rf, &r.topic_files, &r.terms_list, &r.led, &r.tests, r.index())
+    topic_file_report_judged(r, rf).0
+}
+
+pub(crate) fn topic_file_report_judged(r: &Records, rf: &RecordFile) -> (Report, Vec<Finding>) {
+    moves::of_topic_file_judged(&r.root, rf, &r.topic_files, &r.terms_list, &r.led, &r.tests, r.index())
 }
 
 fn removed_report(r: &Records, rel: &str) -> Report {

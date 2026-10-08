@@ -72,8 +72,6 @@ age
 agencies
 agency
 agenda
-agent
-agents
 ages
 ago
 agree
@@ -130,8 +128,6 @@ announcements
 annual
 anonymous
 another
-answer
-answers
 anti
 any
 anyone
@@ -155,8 +151,6 @@ applied
 apply
 approach
 appropriate
-approval
-approved
 approximately
 apr
 ar
@@ -179,8 +173,6 @@ artists
 arts
 as
 asian
-ask
-asked
 aspects
 assembly
 assessment
@@ -335,7 +327,6 @@ breakfast
 breaking
 breast
 bridge
-brief
 bring
 british
 broadband
@@ -447,7 +438,6 @@ charts
 chat
 cheap
 cheats
-check
 checkout
 chemical
 chemistry
@@ -642,7 +632,6 @@ cultural
 culture
 cup
 currency
-current
 currently
 curriculum
 custom
@@ -678,15 +667,12 @@ death
 debt
 dec
 decided
-decision
-decisions
 dedicated
 deep
 default
 defense
 define
 defined
-definition
 degree
 degrees
 delete
@@ -1353,9 +1339,7 @@ ink
 inn
 input
 inside
-install
 installation
-installed
 instance
 instant
 instead
@@ -1729,7 +1713,6 @@ motorola
 mount
 mountain
 mouse
-move
 moved
 movement
 movie
@@ -1859,9 +1842,7 @@ opinions
 opportunities
 opportunity
 optical
-option
 optional
-options
 or
 oral
 orange
@@ -1871,7 +1852,6 @@ orders
 organic
 organization
 organizations
-origin
 original
 originally
 os
@@ -1889,8 +1869,6 @@ overall
 overview
 own
 owned
-owner
-owners
 oz
 pa
 pacific
@@ -1992,10 +1970,8 @@ pink
 place
 placed
 places
-plan
 planet
 planning
-plans
 plant
 plants
 plastic
@@ -2154,8 +2130,6 @@ quantity
 quarter
 queen
 query
-question
-questions
 quick
 quickly
 quite
@@ -2184,8 +2158,6 @@ rd
 re
 reach
 read
-reader
-readers
 reading
 ready
 real
@@ -2571,7 +2543,6 @@ station
 stations
 statistics
 stats
-status
 stay
 steel
 step
@@ -2678,8 +2649,6 @@ temperature
 template
 ten
 tennis
-term
-terms
 test
 testing
 tests
@@ -2741,8 +2710,6 @@ took
 tool
 tools
 top
-topic
-topics
 toronto
 total
 totally

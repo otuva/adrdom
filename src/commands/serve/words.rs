@@ -65,7 +65,7 @@ pub(super) fn section_words(
         }
     }
 
-    let no_entry = no_entry_words(&text, &pairs);
+    let no_entry = no_entry_words(&text, &pairs, terms_list);
     (words, no_entry)
 }
 
@@ -138,7 +138,17 @@ fn is_common_word(w: &str) -> bool {
     false
 }
 
-fn no_entry_words(text: &str, pairs: &[(String, String)]) -> Vec<String> {
+/// The words of `text` that pair no term and are not common. A word that is
+/// a name or an alias form of a term is checked against the paired terms
+/// before the common-word list: paired, it is left out; unpaired, it is
+/// named, however common it is in English.
+fn no_entry_words(text: &str, pairs: &[(String, String)], terms_list: &[Term]) -> Vec<String> {
+    let term_forms: HashSet<String> = terms_list
+        .iter()
+        .filter(|t| !t.retired)
+        .flat_map(|t| std::iter::once(&t.name).chain(t.aliases.iter()))
+        .map(|f| f.to_lowercase())
+        .collect();
     let mut pair_words: HashSet<String> = HashSet::new();
     for (w, _) in pairs {
         for part in w.to_lowercase().split_whitespace() {
@@ -160,10 +170,13 @@ fn no_entry_words(text: &str, pairs: &[(String, String)]) -> Vec<String> {
             if w.chars().all(|c| c.is_ascii_digit()) {
                 continue;
             }
-            if is_common_word(&w) {
+            if term_forms.contains(&w) {
+                if !pair_words.contains(&w) {
+                    found.insert(w);
+                }
                 continue;
             }
-            if pair_words.contains(&w) {
+            if is_common_word(&w) || pair_words.contains(&w) {
                 continue;
             }
             found.insert(w);
@@ -183,6 +196,30 @@ mod word_tests {
         assert!(is_common_word("stays"), "stays -> stay");
         assert!(is_common_word("shapes"), "shapes -> shape");
         assert!(is_common_word("beside"), "beside is a plain base word");
+    }
+
+    #[test]
+    fn a_term_word_is_checked_against_the_paired_terms_before_the_common_words() {
+        let term = |name: &str, aliases: &[&str]| crate::terms::Term {
+            name: name.to_string(),
+            id: Some(format!("id-{}", name)),
+            definition: "d".to_string(),
+            aliases: aliases.iter().map(|a| a.to_string()).collect(),
+            retired: false,
+            start_line: 0,
+            id_line: None,
+            terms_line: None,
+            terms_line_idx: None,
+        };
+        let terms = vec![term("question", &["questions"])];
+        // Unpaired, a term word is named though English uses it every day.
+        assert_eq!(super::no_entry_words("A question here", &[], &terms), vec!["question".to_string()]);
+        assert_eq!(super::no_entry_words("Many questions here", &[], &terms), vec!["questions".to_string()]);
+        // Paired, it is left out.
+        let pairs = vec![("question".to_string(), "id-question".to_string())];
+        assert!(super::no_entry_words("A question here", &pairs, &terms).is_empty());
+        // A common word that is no term stays common.
+        assert!(super::no_entry_words("A thing here", &[], &terms).is_empty());
     }
 
     #[test]
