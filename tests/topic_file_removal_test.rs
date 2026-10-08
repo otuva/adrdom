@@ -37,15 +37,13 @@ fn setup(content: &str, ask: bool) -> (PathBuf, PathBuf) {
     (dir, record)
 }
 
-/// The agent's move is named; the owner's approve of the removed file, when
-/// a line names it at all, comes only after the agent's move, never on its
-/// own.
+/// The owner's approve of the removed file comes only after the agent's
+/// move, never on its own.
 fn assert_owner_follows_agent(text: &str) {
     let owner = format!("owner runs: adr approve {}", REL);
+    let at = text.find(&owner).unwrap_or_else(|| panic!("no owner command: {}", text));
     let agent = text.find("agent restores").unwrap_or_else(|| panic!("no agent move: {}", text));
-    if let Some(at) = text.find(&owner) {
-        assert!(agent < at, "owner's approve before the agent's move: {}", text);
-    }
+    assert!(agent < at, "owner's approve before the agent's move: {}", text);
 }
 
 fn approve_removal(dir: &Path) -> std::process::Output {
@@ -137,11 +135,11 @@ fn approve_refuses_the_removal_of_a_file_holding_a_current_decision() {
     // check and show name the agent's move, never the owner's refused approve.
     let out = adr(&dir, &["check"], &[], "");
     let text = format!("{}{}", stdout(&out), stderr(&out));
-    assert!(text.contains("is a current decision") && text.contains(&format!("agent restores {} from git", REL)), "{}", text);
+    assert!(text.contains("agent restores") && text.contains(&format!("supersedes {}", id)), "{}", text);
     assert_owner_follows_agent(&text);
     let out = adr(&dir, &["show"], &[], "");
     let text = stdout(&out);
-    assert!(text.contains("is a current decision") && text.contains(&format!("agent restores {} from git", REL)), "{}", text);
+    assert!(text.contains("agent restores") && text.contains(&format!("supersedes {}", id)), "{}", text);
     assert_owner_follows_agent(&text);
 
     let before = ledger(&dir);
@@ -150,7 +148,7 @@ fn approve_refuses_the_removal_of_a_file_holding_a_current_decision() {
     let err = stderr(&out);
     assert!(err.contains(&id) && err.contains("Only question?"), "{}", err);
     assert!(err.contains("agent restores"), "{}", err);
-    assert_owner_follows_agent(&err);
+    assert!(err.contains(&format!("owner runs: adr approve {}", REL)), "{}", err);
     assert_eq!(ledger(&dir), before);
 }
 
@@ -418,7 +416,7 @@ fn check_names_each_id_of_a_committed_deletion_once_with_the_removal_move() {
             .filter(|l| !l.starts_with("plan:") && l.split_once(": ").is_some_and(|(_, rest)| rest.starts_with(id.as_str())))
             .collect();
         assert_eq!(lines.len(), 1, "{} named {} times: {}", id, lines.len(), text);
-        assert!(lines[0].contains(&format!("agent restores {} from git", REL)), "{}", lines[0]);
+        assert!(lines[0].contains("agent restores") && lines[0].contains(&format!("owner runs: adr approve {}", REL)), "{}", lines[0]);
     }
 }
 

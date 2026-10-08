@@ -168,6 +168,9 @@ impl Move {
 /// turned into a move of its own: it carries its move.
 #[derive(Debug, Clone, Default)]
 pub struct Report {
+    /// What stopped the terms file's gate on its own input or files
+    /// (`rules::terms_gate`): a stop line, printed before the findings.
+    pub stops: Vec<crate::out::Line>,
     pub findings: Vec<Finding>,
     pub moves: Vec<Move>,
 }
@@ -185,12 +188,12 @@ impl Report {
     }
 }
 
-/// The tail of a finding whose only move is to wait for an answer
-/// elsewhere: nobody moves on it yet.
 /// The move of a pair of decisions the reader marks as depending on one
 /// another: nobody moves on it.
 pub const PAIR_WAIT: &str = "not yet, nobody moves on a pair that depends";
 
+/// The tail of a finding whose only move is to wait for an answer
+/// elsewhere: nobody moves on it yet.
 pub const WAIT_TAIL: &str = "; not yet, after it is answered";
 
 /// The clauses of the move `kind` names, for a refusal that stops in a state
@@ -320,7 +323,7 @@ pub fn removal_next(rel: &str, holds: &[RemovalHold]) -> Next {
 /// the move `removal_next` names), or, with none, the owner's approval.
 pub fn of_removed_topic_file(rel: &str, findings: Vec<Finding>) -> Report {
     let moves = if findings.is_empty() { vec![Move::new(MoveKind::Approve { path: rel.to_string() })] } else { Vec::new() };
-    Report { findings, moves }
+    Report { stops: Vec::new(), findings, moves }
 }
 
 /// Every move of the topic file `rf`, in the order they are taken: what is
@@ -459,11 +462,13 @@ pub fn of_unasked_question_in(j: &Judging, rf: &RecordFile, heading: &str, unwri
     let mut moves = of_unasked_question(rf, plan_ok, &findings, &planning, heading, unwritten);
     // The terms file's gate, as `of_topic_file_with` reads it.
     let gate = crate::rules::terms_gate(j.root, j.led, &rf.rel);
+    let mut stops = Vec::new();
     if !gate.is_empty() {
         moves.retain(|m| !matches!(m.kind, MoveKind::Approve { .. } | MoveKind::Ask { .. } | MoveKind::Answer { .. }));
-        findings.splice(0..0, gate);
+        findings.splice(0..0, gate.findings);
+        stops = gate.stops;
     }
-    Report { findings, moves }
+    Report { stops, findings, moves }
 }
 
 /// Every move of the topic file `rf` as loaded from disk: the approval of
@@ -529,9 +534,11 @@ pub fn of_topic_file_judged(
     // While adrdom/terms.md is not approved, approve, ask and answer stop on
     // it: its gate is the file's finding, and their moves wait on it.
     let gate = crate::rules::terms_gate(root, led, &rf.rel);
+    let mut stops = Vec::new();
     if !gate.is_empty() {
         moves.retain(|m| !matches!(m.kind, MoveKind::Approve { .. } | MoveKind::Ask { .. } | MoveKind::Answer { .. }));
-        findings.splice(0..0, gate);
+        findings.splice(0..0, gate.findings);
+        stops = gate.stops;
     }
     // A question asked and struck from the plan is cleared by the owner's
     // approve the moves above already name, so it joins the findings only
@@ -541,7 +548,7 @@ pub fn of_topic_file_judged(
     let sole = index.stale().len() == 1;
     let stale = index.stale().contains(&rf.rel);
     findings.extend(crate::rules::struck_asked(&rf.rel, stale, sole, all, led));
-    (Report { findings, moves }, judged)
+    (Report { stops, findings, moves }, judged)
 }
 
 /// The move of the answered decision `id`, section `i` of `rf`, that no
@@ -617,13 +624,14 @@ pub fn of_planning(rf: &RecordFile, p: &crate::plan::Planning) -> Vec<Move> {
 }
 
 /// The report of one blame file: its findings, and, for a draft with
-/// nothing left to clear, the owner's approval.
-pub fn of_blame_file(rel: &str, findings: Vec<Finding>, awaiting: bool) -> Report {
+/// nothing left to clear (no finding, no stop on reading its origin), the
+/// owner's approval.
+pub fn of_blame_file(rel: &str, stops: Vec<crate::out::Line>, findings: Vec<Finding>, awaiting: bool) -> Report {
     let mut moves = Vec::new();
-    if findings.is_empty() && awaiting {
+    if findings.is_empty() && stops.is_empty() && awaiting {
         moves.push(Move::new(MoveKind::Approve { path: rel.to_string() }));
     }
-    Report { findings, moves }
+    Report { stops, findings, moves }
 }
 
 /// The report of the terms file: the findings of the rules on it, and, for
@@ -634,7 +642,7 @@ pub fn of_terms_file(findings: Vec<Finding>, status: status::TermsFileStatus) ->
     if findings.is_empty() && status.awaits_approval() {
         moves.push(Move::new(MoveKind::Approve { path: crate::repo::TERMS_PATH.to_string() }));
     }
-    Report { findings, moves }
+    Report { stops: Vec::new(), findings, moves }
 }
 
 /// The move after a reading that marked a pair same or inconsistent.
@@ -825,6 +833,7 @@ mod tests {
     #[test]
     fn a_tail_of_clauses_holds_no_comment_before_a_later_clause() {
         let report = Report {
+            stops: Vec::new(),
             findings: Vec::new(),
             moves: vec![
                 Move::new(MoveKind::Ask { rel: "x.md".into(), headings: vec!["A?".into(), "B?".into()] }),
@@ -843,10 +852,11 @@ mod tests {
             "heading",
             "x.md",
             vec![
-                Waits::Asking { heading: "a".into(), report: Report { findings: Vec::new(), moves: vec![ask("a")] } },
+                Waits::Asking { heading: "a".into(), report: Report { stops: Vec::new(), findings: Vec::new(), moves: vec![ask("a")] } },
                 Waits::Asking {
                     heading: "b".into(),
                     report: Report {
+            stops: Vec::new(),
                         findings: Vec::new(),
                         moves: vec![ask("b"), Move::new(MoveKind::Approve { path: "x.md".into() })],
                     },

@@ -156,7 +156,7 @@ impl Finding {
     /// The finding as one line: what was found, what the rule protects, the
     /// move that clears it. The one rendering every command prints.
     pub fn text(&self) -> String {
-        format!("{}; {}; {}", self.found, self.rule.protects, self.next)
+        msg::finding_line(&self.found, self.rule, &self.next)
     }
 }
 
@@ -406,7 +406,7 @@ pub fn terms_refusals(
             let Some(target) = tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str()))
             else {
                 let word = dep.from_word.then_some(word.as_str());
-                refusals.push(terms_finding(msg::term_removed_but_carried(uuid, word, &label)));
+                refusals.push(terms_finding(msg::term_removed_but_carried(uuid, word, &label, dep.source.decision_ref())));
                 continue;
             };
             if target.retired {
@@ -417,7 +417,7 @@ pub fn terms_refusals(
                 // holds a retire of a term?"): the agent rewords the
                 // definition and the owner re-approves.
                 let user = match &dep.source {
-                    state::DependentSource::Decision { id, .. } => msg::RetiredUser::Decision(id),
+                    state::DependentSource::Decision { id, heading, .. } => msg::RetiredUser::Decision(id, heading),
                     state::DependentSource::Asked { rel, .. } => msg::RetiredUser::Asked(rel),
                     state::DependentSource::PlanHeading { rel, .. } => msg::RetiredUser::PlanHeading(rel),
                     state::DependentSource::Term { .. } => msg::RetiredUser::Definition,
@@ -451,7 +451,7 @@ pub fn terms_refusals(
                     // definition still carries the drifted word) is
                     // reworded by the agent and the owner re-approves, same
                     // as the retired case above.
-                    refusals.push(terms_finding(msg::word_moved_off_term(word, &target.name, &label)));
+                    refusals.push(terms_finding(msg::word_moved_off_term(word, &target.name, &label, dep.source.decision_id())));
                 }
             }
         }
@@ -505,8 +505,8 @@ fn length_found(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<(usize, msg::Sa
             continue;
         }
         let (s, e) = record::hash_range(&rf.lines, sec);
-        for (line, found, kind) in tells::length_tells(&rf.lines, s, e, &sec.heading_text) {
-            out.push((i, msg::too_long(rel, line, &sec.heading_text, &kind, &found)));
+        for (line, words, kind) in tells::length_tells(&rf.lines, s, e, &sec.heading_text) {
+            out.push((i, msg::too_long(rel, line, &sec.heading_text, kind, words)));
         }
     }
     out
@@ -1543,18 +1543,33 @@ pub fn judged_terms(tf: Option<&terms::TermsFile>) -> Vec<terms::Term> {
 /// approval?"): the gate `actions::require_terms` stops them on, as
 /// findings of the file, so `show` and `plan` name the move that clears it
 /// and no move those commands would refuse.
-pub fn terms_gate(root: &Path, led: &Ledger, rel: &str) -> Vec<Finding> {
-    match crate::actions::require_terms(root, led, rel, Command::Show) {
-        Ok(_) => Vec::new(),
-        // What stops a command on the terms file's own input or files is not a
-        // finding and is left to the command's own stop.
-        Err(lines) => lines
-            .into_iter()
-            .filter_map(|l| match l {
-                crate::out::Line::Finding(f) => Some(f.about(Subject::TermsFile)),
-                _ => None,
-            })
-            .collect(),
+pub fn terms_gate(root: &Path, led: &Ledger, rel: &str) -> TermsGate {
+    let mut gate = TermsGate::default();
+    if let Err(lines) = crate::actions::require_terms(root, led, rel, Command::Show) {
+        for l in lines {
+            match l {
+                crate::out::Line::Finding(f) => gate.findings.push(f.about(Subject::TermsFile)),
+                // What stopped the gate on the terms file's own input or
+                // files stays the stop line it is.
+                stop @ crate::out::Line::Stop { .. } => gate.stops.push(stop),
+                _ => {}
+            }
+        }
+    }
+    gate
+}
+
+/// What `terms_gate` found: the findings of the terms file and the stops on
+/// its own input or files.
+#[derive(Debug, Default)]
+pub struct TermsGate {
+    pub findings: Vec<Finding>,
+    pub stops: Vec<crate::out::Line>,
+}
+
+impl TermsGate {
+    pub fn is_empty(&self) -> bool {
+        self.findings.is_empty() && self.stops.is_empty()
     }
 }
 

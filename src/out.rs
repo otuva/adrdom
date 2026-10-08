@@ -170,6 +170,7 @@ pub fn report(r: &crate::moves::Report) -> Vec<Line> {
         .filter(is_build)
         .cloned()
         .map(Line::Move)
+        .chain(r.stops.iter().cloned())
         .chain(r.findings.iter().cloned().map(Line::Finding))
         .chain(r.moves.iter().filter(|m| !is_build(m)).cloned().map(Line::Move))
         .collect()

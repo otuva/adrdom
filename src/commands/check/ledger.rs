@@ -81,7 +81,7 @@ fn check_dropped(led: &Ledger, records: &[RecordFile], root: &Path) -> Vec<Failu
             [id] if record::is_uuid(id) => (id, None),
             [id, l] if record::is_uuid(id) && l.chars().count() == 1 => (id, l.chars().next()),
             _ => {
-                out.push(fail(msg::ledger_dropped_malformed(&row.id)));
+                out.push(fail(msg::ledger_dropped_malformed(&row.id, &row.detail)));
                 continue;
             }
         };

@@ -854,6 +854,7 @@ fn blame_report(r: &Records, bf: &blame::BlameFile) -> (FileStatus, Report) {
         &known_ids,
     );
     let findings = rules::judge_blame_file(&r.root, &fs, bf, r.blame_names());
-    (st, moves::of_blame_file(&bf.rel, findings, fs.awaiting))
+    let stops: Vec<Line> = fs.stops.iter().flat_map(|m| out::stop(crate::rules::Command::Show, m)).collect();
+    (st, moves::of_blame_file(&bf.rel, stops, findings, fs.awaiting))
 }
 

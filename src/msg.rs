@@ -100,8 +100,14 @@ pub struct Said {
 impl Said {
     /// The line the finding prints: `<found>; <protects>; <move>`.
     pub fn text(&self) -> String {
-        format!("{}; {}; {}", self.found, self.rule.protects, self.next)
+        finding_line(&self.found, self.rule, &self.next)
     }
+}
+
+/// The one line a finding prints, `Said::text` and `rules::Finding::text`
+/// alike: `<found>; <protects>; <move>`.
+pub fn finding_line(found: &str, rule: &crate::rule::Rule, next: &str) -> String {
+    format!("{}; {}; {}", found, rule.protects, next)
 }
 
 /// A finding of `rule`: `found` and the `next` move that clears it.
@@ -240,6 +246,8 @@ pub fn terms_shape_error(e: &str) -> Said {
         said(&crate::rule::WORD_NAMES_ONE_TERM, found, Next::agent("removes the word from one of the two entries"))
     } else if fault.starts_with("missing h1") || fault.starts_with("duplicate h1") || fault == "unknown line" {
         said(&crate::rule::TERMS_FILE_SHAPE, found, Next::agent("rewrites the line"))
+    } else if fault.starts_with("duplicate id ") {
+        said(&crate::rule::TERM_IDENTIFIER_IS_UNIQUE, found, Next::agent("rewrites the entry"))
     } else {
         said(&crate::rule::TERM_ENTRY_FIELDS, found, Next::agent("rewrites the entry"))
     }
@@ -332,14 +340,17 @@ pub fn circular_definition(names: &[String]) -> Said {
 /// `decision` is the dependent's id and heading when it is a current
 /// decision. Marking the term retired is not offered: a retire is held while
 /// the dependent stands (per "What holds a retire of a term?"), so the move
-/// is restoring the term as it was, then superseding the decision, named the
-/// way `term_retired_decision_next` names its move.
-pub fn term_removed_but_carried(uuid: &str, word: Option<&str>, source: &str) -> Said {
-    said(
-        &crate::rule::TERM_STAYS_WHILE_USED,
-        format!("adrdom/terms.md: term {} removed but used by {}", named(uuid, word), source),
-        Next::agent("restores the term in adrdom/terms.md").and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
-    )
+/// is restoring the term as it was, then superseding the decision, named
+/// by its identifier and heading (`named`).
+pub fn term_removed_but_carried(uuid: &str, word: Option<&str>, source: &str, decision: Option<(&str, &str)>) -> Said {
+    let next = match decision {
+        Some((id, heading)) => Next::agent(format!(
+            "restores the term in adrdom/terms.md, then supersedes {} with a new question",
+            named(id, Some(heading))
+        )),
+        None => Next::agent("restores the term in adrdom/terms.md").and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
+    };
+    said(&crate::rule::TERM_STAYS_WHILE_USED, format!("adrdom/terms.md: term {} removed but used by {}", named(uuid, word), source), next)
 }
 
 /// A dependent still names a term that is now retired. `next` differs by
@@ -351,20 +362,24 @@ pub fn term_removed_but_carried(uuid: &str, word: Option<&str>, source: &str) ->
 pub fn term_retired_but_carried(name: &str, source: &str, user: RetiredUser) -> Said {
     let found = format!("adrdom/terms.md: term \"{}\" retired but used by {}", name, source);
     match user {
-        RetiredUser::Decision(id) => said(
+        RetiredUser::Decision(id, heading) => said(
             &crate::rule::TERM_NOT_RETIRED_WHILE_NAMED,
             found,
-            Next::agent(format!("takes `retired: yes` off \"{}\", then supersedes {} with a new question", name, id)),
+            Next::agent(format!(
+                "takes `retired: yes` off \"{}\", then supersedes {} with a new question",
+                name,
+                named(id, Some(heading))
+            )),
         ),
         RetiredUser::Asked(rel) => said(
             &crate::rule::TERM_NOT_RETIRED_WHILE_NAMED,
             found,
-            Next::agent_then_runs("rewrites the question", command(&["adr", "ask", rel])),
+            Next::agent_then_runs("rewrites the question, or strikes it from the plan", command(&["adr", "ask", rel])),
         ),
         RetiredUser::PlanHeading(rel) => said(
             &crate::rule::TERM_NOT_RETIRED_WHILE_NAMED,
             found,
-            Next::agent("rewrites the heading").and_owner_runs(command(&["adr", "approve", rel])),
+            Next::agent("rewrites the heading, or strikes it from the plan").and_owner_runs(command(&["adr", "approve", rel])),
         ),
         RetiredUser::Definition => said(
             &crate::rule::DEFINITION_USES_LIVE_TERMS,
@@ -376,8 +391,8 @@ pub fn term_retired_but_carried(name: &str, source: &str, user: RetiredUser) -> 
 
 /// What still names a retired term, with the part of it a move needs.
 pub enum RetiredUser<'a> {
-    /// A current decision, by its identifier.
-    Decision(&'a str),
+    /// A current decision, by its identifier and heading.
+    Decision(&'a str, &'a str),
     /// An asked question, by its topic file.
     Asked(&'a str),
     /// A heading of an approved plan, by its topic file.
@@ -391,12 +406,20 @@ pub enum RetiredUser<'a> {
 /// A dependent's pairing (`word=uuid`) no longer resolves that word to
 /// that term at all -- the wording moved, without the term being retired
 /// or removed. `next` mirrors `term_retired_but_carried`'s split.
-pub fn word_moved_off_term(word: &str, term_name: &str, source: &str) -> Said {
+pub fn word_moved_off_term(word: &str, term_name: &str, source: &str, decision_id: Option<&str>) -> Said {
+    let next = match decision_id {
+        // A current decision is never re-asked: the wording in the terms
+        // file returns, or a new question supersedes the decision.
+        Some(id) => Next::agent(format!(
+            "restores the wording in adrdom/terms.md so \"{}\" still names \"{}\", or writes a question that supersedes {}",
+            word, term_name, id
+        )),
+        None => Next::agent("rewrites the definition").and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
+    };
     said(
         &crate::rule::WORD_STAYS_ON_TERM,
         format!("adrdom/terms.md: word \"{}\" no longer names term \"{}\", used by {}", word, term_name, source),
-        Next::agent(format!("restores the wording of \"{}\" in adrdom/terms.md", term_name))
-            .and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
+        next,
     )
 }
 
@@ -475,37 +498,34 @@ pub fn section_shape_error(rel: &str, heading: &str, e: &str) -> Said {
 
 /// One provenance/code-state/date/loaded-heading tell (per "Does the tool
 /// stop loaded phrases in a question?").
-pub fn tell(rel: &str, line: usize, label: &str, phrase: &str, what: &str) -> Said {
-    use crate::tells::{CODE_STATE_WHAT, DATE_WHAT, JOIN_WHAT, LOADED_OPENING_WHAT, PROVENANCE_WHAT};
+pub fn tell(rel: &str, line: usize, label: &str, phrase: &str, kind: crate::tells::TellKind) -> Said {
+    use crate::tells::TellKind;
     let at = format!("{}:{}: \"{}\": ", rel, line + 1, label);
-    let (r, found, mv) = if what == PROVENANCE_WHAT {
-        (&rule::TELL_NAMES_SPEAKER, format!("\"{}\" names who said it", phrase), "rewrites the line")
-    } else if what == CODE_STATE_WHAT {
-        (&rule::TELL_STATES_CODE_NOW, format!("\"{}\" states what the code does", phrase), "rewrites the line")
-    } else if what == DATE_WHAT {
-        (&rule::TELL_CARRIES_DATE, format!("\"{}\" is a date", phrase), "rewrites the line")
-    } else if what == LOADED_OPENING_WHAT {
-        (&rule::TELL_ASSUMES_ANSWER, format!("the heading opens with \"{}\"", phrase), "rewrites the heading")
-    } else {
-        debug_assert_eq!(what, JOIN_WHAT);
-        (&rule::TELL_JOINS_TWO_QUESTIONS, format!("the heading holds \"{}\"", phrase), "rewrites the heading")
+    let (r, found, mv) = match kind {
+        TellKind::Provenance => (&rule::TELL_NAMES_SPEAKER, format!("\"{}\" names who said it", phrase), "rewrites the line"),
+        TellKind::CodeState => (&rule::TELL_STATES_CODE_NOW, format!("\"{}\" states what the code does", phrase), "rewrites the line"),
+        TellKind::Date => (&rule::TELL_CARRIES_DATE, format!("\"{}\" is a date", phrase), "rewrites the line"),
+        TellKind::LoadedOpening => {
+            (&rule::TELL_ASSUMES_ANSWER, format!("the heading opens with \"{}\"", phrase), "rewrites the heading")
+        }
+        TellKind::Join => (&rule::TELL_JOINS_TWO_QUESTIONS, format!("the heading holds \"{}\"", phrase), "rewrites the heading"),
     };
     said(r, format!("{}{}", at, found), Next::agent(mv))
 }
 
 /// An option, Why line or Costs line over the length rule (per "Does ask
-/// refuse an option over a word limit?").
-pub fn too_long(rel: &str, line: usize, label: &str, kind: &str, found: &str) -> Said {
-    let n = found.split(' ').next().unwrap_or("");
+/// refuse an option over a word limit?"); `words` is the line's word count.
+pub fn too_long(rel: &str, line: usize, label: &str, kind: crate::tells::LengthKind, words: usize) -> Said {
+    use crate::tells::LengthKind;
     let (r, thing) = match kind {
-        "Why line" => (&rule::WHY_WORD_LIMIT, "Why line"),
-        "Costs line" => (&rule::COSTS_WORD_LIMIT, "Costs line"),
-        _ if found.ends_with(crate::tells::ONE_WORD_RULE) => (&rule::DOES_OPTION_IS_ONE_WORD, "option"),
-        _ => (&rule::OPTION_WORD_LIMIT, "option"),
+        LengthKind::Why => (&rule::WHY_WORD_LIMIT, "Why line"),
+        LengthKind::Costs => (&rule::COSTS_WORD_LIMIT, "Costs line"),
+        LengthKind::OneWordOption => (&rule::DOES_OPTION_IS_ONE_WORD, "option"),
+        LengthKind::Option => (&rule::OPTION_WORD_LIMIT, "option"),
     };
     said(
         r,
-        format!("{}:{}: \"{}\": the {} has {} words", rel, line + 1, label, thing, n),
+        format!("{}:{}: \"{}\": the {} has {} words", rel, line + 1, label, thing, words),
         Next::agent(format!("rewrites the {}", thing)),
     )
 }
@@ -543,7 +563,7 @@ pub fn dep_not_current_decision(rel: &str, heading: &str, id: &str, name: Option
     said(
         &rule::DEPENDS_ENTRY_RESOLVES,
         format!("{}: \"{}\" depends on {} which is not a current decision", rel, heading, named(id, name)),
-        Next::agent("rewrites the entry"),
+        Next::agent("names a current decision, or removes the entry"),
     )
 }
 
@@ -558,7 +578,7 @@ pub fn dep_retired_term_id(rel: &str, heading: &str, id: &str, name: Option<&str
             heading,
             name.map_or_else(|| id.to_string(), |n| format!("\"{}\"", n))
         ),
-        Next::agent("removes the entry"),
+        Next::agent("names a term that is not retired, or removes the entry"),
     )
 }
 
@@ -566,7 +586,7 @@ pub fn dep_no_term(rel: &str, heading: &str, text: &str) -> Said {
     said(
         &rule::DEPENDS_TERM_EXISTS,
         format!("{}: \"{}\" depends on \"{}\" which is no term", rel, heading, text),
-        Next::agent("rewrites the entry"),
+        Next::agent("adds the term, or names another"),
     )
 }
 
@@ -664,7 +684,12 @@ pub fn tier_cap_exceeded(rel: &str, open: &[String], answered: usize, cap: usize
             names
         )
     };
-    said(&rule::TIER_QUESTION_LIMIT, found, Next::agent("rewrites the depends lines of these questions"))
+    let next = if answered == 0 {
+        Next::agent("rewrites the depends lines of these questions, or splits the file")
+    } else {
+        Next::agent("rewrites the depends lines of these questions, or moves one to another file")
+    };
+    said(&rule::TIER_QUESTION_LIMIT, found, next)
 }
 
 // `derive_tiers`' three failure shapes (record::DeriveError), each with two
@@ -695,7 +720,7 @@ fn derive_what(rel: &str, e: &DeriveError) -> (&'static rule::Rule, String, Next
         DeriveError::SelfDep(h) => (
             &rule::QUESTION_NOT_ON_ITSELF,
             format!("{}: \"{}\" depends on itself", rel, h),
-            Next::agent("removes the entry"),
+            Next::agent("removes the entry, or rewrites it to name another question"),
         ),
         DeriveError::AmbiguousHeading { section, entry, files } => (
             &rule::DEPENDS_ENTRY_NAMES_ONE_DECISION,
@@ -726,7 +751,7 @@ pub fn dep_on_refused_in_other_file(rel: &str, section: &str, entry: &str, other
     said(
         &rule::DEPENDS_TARGET_IS_NOT_REFUSED,
         format!("{}: \"{}\" depends on \"{}\" ({}) which is refused", rel, section, entry, other_rel),
-        Next::agent("rewrites the entry"),
+        Next::agent("names another, or drops the entry"),
     )
 }
 
@@ -739,7 +764,7 @@ pub fn answered_id_missing(id: &str, heading: &str) -> Said {
     said(
         &crate::rule::ANSWERED_QUESTION_STAYS_IN_FILES,
         format!("id {} (\"{}\") is answered and current but missing from every topic file", id, heading),
-        Next::agent("restores the section from git"),
+        Next::agent("restores the section from git, or writes a question that supersedes it"),
     )
 }
 
@@ -1026,7 +1051,7 @@ pub fn unrelated_names_nothing(rel: &str, heading: &str, entry: &str) -> Said {
             "{}: \"{}\": the unrelated entry \"{}\" names no current decision, term or question of this file",
             rel, heading, entry
         ),
-        Next::agent("rewrites the entry"),
+        Next::agent("rewrites the entry, or removes it"),
     )
 }
 
@@ -1102,7 +1127,7 @@ pub fn ask_supersedes_not_current(rel: &str, heading: &str, old: &str, name: Opt
     said(
         &rule::SUPERSEDES_TARGET_IS_CURRENT,
         format!("{}: \"{}\": supersedes {}, which is not a current decision", rel, heading, target),
-        Next::agent("rewrites the supersedes entry"),
+        Next::agent("rewrites the supersedes entry, or removes it"),
     )
 }
 
@@ -1166,7 +1191,7 @@ pub fn stands_on_what_the_plan_supersedes(rel: &str, heading: &str, target: &str
     said(
         &rule::NO_QUESTION_ON_WHAT_PLAN_SUPERSEDES,
         format!("{}: \"{}\" stands on \"{}\", which \"{}\" supersedes", rel, heading, target, replacer),
-        Next::agent("rewrites the entry in its depends line"),
+        Next::agent(format!("makes it stand on \"{}\", or removes the entry from its depends line", replacer)),
     )
 }
 
@@ -1297,7 +1322,7 @@ pub fn no_terms_file_for_term(name: &str) -> String {
 }
 
 pub fn already_in_use() -> Said {
-    said(&crate::rule::BAN_NOT_ON_USED_WORD, "refusing: already in use", Next::agent("removes the word from the repository"))
+    said(&crate::rule::BAN_NOT_ON_USED_WORD, "refusing: already in use", Next::agent("removes the word from the repository, or bans a different word"))
 }
 
 /// One place a word `ban` was given already stands: its file and line,
@@ -1587,8 +1612,12 @@ pub fn banned_unbanned_but_in_file(hash_prefix: &str) -> Said {
 /// only asked (`ask` will write the line the next time it runs), or
 /// restoring the edit from git / superseding once it's answered (per "Does
 /// check fail an answered question whose text changed?").
-pub fn section_no_terms_line(rel: &str, heading: &str, answered: bool) -> Said {
-    let next = if answered { Next::agent("restores the terms line from git") } else { ask_again(rel) };
+pub fn section_no_terms_line(rel: &str, heading: &str, id: &str, answered: bool) -> Said {
+    let next = if answered {
+        Next::agent(format!("restores the terms line from git, or writes a question that supersedes {}", id))
+    } else {
+        ask_again(rel)
+    };
     said(&crate::rule::ASKED_QUESTION_HAS_TERMS_LINE, format!("{}: {}: no terms line", rel, heading), next)
 }
 
@@ -1605,8 +1634,12 @@ pub fn asked_terms_line_unreadable(rel: &str, heading: &str) -> Said {
 /// A section's `terms:` line is present but doesn't parse (per
 /// `terms::validate_pairs`'s `Malformed`). Same answered/asked split as
 /// `section_no_terms_line`.
-pub fn section_terms_line_malformed(rel: &str, heading: &str, answered: bool) -> Said {
-    let next = if answered { Next::agent("restores the terms line from git") } else { ask_again(rel) };
+pub fn section_terms_line_malformed(rel: &str, heading: &str, id: &str, answered: bool) -> Said {
+    let next = if answered {
+        Next::agent(format!("restores the terms line from git, or writes a question that supersedes {}", id))
+    } else {
+        ask_again(rel)
+    };
     said(&crate::rule::SECTION_TERMS_LINE_PARSES, format!("{}: {}: malformed terms line", rel, heading), next)
 }
 
@@ -1615,8 +1648,12 @@ pub fn section_terms_line_malformed(rel: &str, heading: &str, answered: bool) ->
 /// still be re-asked; an answered one is frozen, so the fix moves to
 /// restoring the term in `adrdom/terms.md` (mirrors `term_removed_but_carried`)
 /// or superseding the decision.
-pub fn section_term_not_found(rel: &str, heading: &str, word: &str, answered: bool) -> Said {
-    let next = if answered { Next::agent("restores the term in adrdom/terms.md") } else { ask_again(rel) };
+pub fn section_term_not_found(rel: &str, heading: &str, word: &str, id: &str, answered: bool) -> Said {
+    let next = if answered {
+        Next::agent(format!("restores the term in adrdom/terms.md, or writes a question that supersedes {}", id))
+    } else {
+        ask_again(rel)
+    };
     said(
         &crate::rule::ASKED_TERMS_LINE_TERM_EXISTS,
         format!("{}: {}: term {} not found", rel, heading, word),
@@ -1627,9 +1664,9 @@ pub fn section_term_not_found(rel: &str, heading: &str, word: &str, answered: bo
 /// A section's `terms:` line names a term that is now retired. Same split
 /// as `section_no_terms_line`/`section_term_not_found`; the answered fix
 /// mirrors `term_retired_but_carried`'s decision-dependent branch.
-pub fn section_term_retired(rel: &str, heading: &str, name: &str, answered: bool) -> Said {
+pub fn section_term_retired(rel: &str, heading: &str, name: &str, id: &str, answered: bool) -> Said {
     let next = if answered {
-        Next::agent("takes `retired: yes` off the term in adrdom/terms.md")
+        Next::agent(format!("takes `retired: yes` off the term in adrdom/terms.md, or writes a question that supersedes {}", id))
     } else {
         ask_again(rel)
     };
@@ -1844,10 +1881,10 @@ pub fn ledger_answered_without_asked(id: &str, heading: Option<&str>) -> Said {
 }
 
 /// A `dropped` row whose detail is neither `<id> <letter>` nor `<id>`.
-pub fn ledger_dropped_malformed(id: &str) -> Said {
+pub fn ledger_dropped_malformed(id: &str, detail: &str) -> Said {
     said(
         &crate::rule::LEDGER_DROPPED_ROW_NAMES_ITS_CAUSE,
-        format!("dropped row for {} has an unreadable detail", id),
+        format!("dropped row for {} has the detail \"{}\", not an identifier with a letter or an identifier", id, detail),
         Next::owner("restores the ledger from HEAD"),
     )
 }
@@ -1884,7 +1921,7 @@ pub fn ledger_dropped_still_in_file(id: &str, rel: &str) -> Said {
     said(
         &crate::rule::DROPPED_QUESTION_LEAVES_FILES,
         format!("{} has a dropped row but is still in {}", id, rel),
-        Next::agent("removes the question from the file"),
+        Next::agent("removes the question from the file, or the owner runs the answer again"),
     )
 }
 
@@ -2106,7 +2143,7 @@ pub fn blame_row_unknown_term(rel: &str, name: &str) -> Said {
     said(
         &crate::rule::BLAME_ROW_TERM_EXISTS,
         format!("{}: row names term \"{}\" which is no term", rel, name),
-        Next::agent("rewrites the row"),
+        Next::agent("adds the term to adrdom/terms.md, or rewrites the row"),
     )
 }
 
@@ -2451,6 +2488,7 @@ mod tests {
     fn every_refusal_names_its_next_move() {
         let e = "boom";
         let approve_x = crate::moves::Report {
+            stops: Vec::new(),
             findings: Vec::new(),
             moves: vec![crate::moves::Move::new(crate::moves::MoveKind::Approve { path: "x.md".to_string() })],
         };
@@ -2476,28 +2514,28 @@ mod tests {
             circular_definition(&["a".to_string(), "b".to_string()]).text(),
             terms_edit_too_wide(&["a".to_string(), "b".to_string()], true).text(),
             terms_edit_too_wide(&["a".to_string(), "b".to_string()], false).text(),
-            too_long("x.md", 3, "heading", "option", "21 words, the limit is 20").text(),
-            term_removed_but_carried("uuid-1", Some("word"), "term \"x\"").text(),
+            too_long("x.md", 3, "heading", crate::tells::LengthKind::Option, 21).text(),
+            term_removed_but_carried("uuid-1", Some("word"), "term \"x\"", None).text(),
             term_retired_but_carried("x", "term \"y\"", RetiredUser::Definition).text(),
-            term_retired_but_carried("x", "id-1: \"heading\"", RetiredUser::Decision("id-1")).text(),
+            term_retired_but_carried("x", "id-1: \"heading\"", RetiredUser::Decision("id-1", "heading")).text(),
             term_retired_but_carried("x", "x.md: \"heading\"", RetiredUser::Asked("x.md")).text(),
             term_retired_but_carried("x", "x.md: \"heading\"", RetiredUser::PlanHeading("x.md")).text(),
-            word_moved_off_term("word", "term", "id-1: \"heading\"").text(),
+            word_moved_off_term("word", "term", "id-1: \"heading\"", Some("id-1")).text(),
             definition_too_long("x", 3).text(),
             terms_banned_word(3, "").text(),
             shape_error("x.md", "missing h1").text(),
             section_shape_error("x.md", "heading", "stray line 4").text(),
-            tell("x.md", 3, "context", "claude", "says who said it").text(),
+            tell("x.md", 3, "context", "claude", crate::tells::TellKind::Provenance).text(),
             no_depends_line("x.md", "heading").text(),
             no_depends_line_bare("heading").text(),
-            section_no_terms_line("x.md", "heading", false).text(),
-            section_no_terms_line("x.md", "heading", true).text(),
-            section_terms_line_malformed("x.md", "heading", false).text(),
-            section_terms_line_malformed("x.md", "heading", true).text(),
-            section_term_not_found("x.md", "heading", "word", false).text(),
-            section_term_not_found("x.md", "heading", "word", true).text(),
-            section_term_retired("x.md", "heading", "term", false).text(),
-            section_term_retired("x.md", "heading", "term", true).text(),
+            section_no_terms_line("x.md", "heading", "id-1", false).text(),
+            section_no_terms_line("x.md", "heading", "id-1", true).text(),
+            section_terms_line_malformed("x.md", "heading", "id-1", false).text(),
+            section_terms_line_malformed("x.md", "heading", "id-1", true).text(),
+            section_term_not_found("x.md", "heading", "word", "id-1", false).text(),
+            section_term_not_found("x.md", "heading", "word", "id-1", true).text(),
+            section_term_retired("x.md", "heading", "term", "id-1", false).text(),
+            section_term_retired("x.md", "heading", "term", "id-1", true).text(),
             term_definition_term_not_found("term", "word").text(),
             term_definition_term_retired("term", "retired-term").text(),
             term_definition_terms_line_malformed("term").text(),
@@ -2579,6 +2617,7 @@ mod tests {
                 "x.md",
                 "heading",
                 &crate::moves::Report {
+                    stops: Vec::new(),
                     findings: Vec::new(),
                     moves: vec![crate::moves::Move::new(crate::moves::MoveKind::Ask {
                         rel: "x.md".into(),
@@ -2690,7 +2729,7 @@ mod tests {
             refused_text_changed("x.md", "H?").text(),
             asked_terms_line_unreadable("x.md", "H?").text(),
             install_file_not_staged(".githooks/pre-commit").text(),
-            ledger_dropped_malformed("id-1").text(),
+            ledger_dropped_malformed("id-1", "x y z").text(),
             ledger_dropped_without_cause("id-1", "id-2").text(),
             ledger_dropped_not_approved("id-1").text(),
             ledger_dropped_closed("id-1", "answered").text(),
@@ -2743,7 +2782,7 @@ mod tests {
     // (live), or write a question that supersedes the decision.
     #[test]
     fn section_term_not_found_answered_never_suggests_restoring_as_retired() {
-        let out = section_term_not_found("x.md", "heading", "word", true).text();
+        let out = section_term_not_found("x.md", "heading", "word", "id-1", true).text();
         assert!(!out.contains("retired"), "{}", out);
         assert!(out.contains("agent restores the term in adrdom/terms.md"), "{}", out);
     }
@@ -2779,6 +2818,60 @@ mod tests {
             "x.md: heading is answered and no tracked file holds its tie; a current decision is reported until a test names it; agent builds it"
         );
     }
+
+    // adr: 184b5bcb-fa72-436b-92cb-4d4605366c59
+    //
+    // A move that has two legitimate acts names both, and the one for a
+    // current decision names the question by identifier and heading.
+    #[test]
+    fn moves_keep_their_alternative_acts() {
+        let asked = term_retired_but_carried("x", "x.md: \"H?\"", RetiredUser::Asked("x.md")).text();
+        assert!(asked.contains("rewrites the question, or strikes it from the plan"), "{}", asked);
+        let heading = term_retired_but_carried("x", "x.md: \"H?\"", RetiredUser::PlanHeading("x.md")).text();
+        assert!(heading.contains("rewrites the heading, or strikes it from the plan"), "{}", heading);
+        let decision = term_retired_but_carried("x", "id-1", RetiredUser::Decision("id-1", "H?")).text();
+        assert!(decision.contains("supersedes id-1 (\"H?\") with a new question"), "{}", decision);
+        let removed = term_removed_but_carried("u", Some("w"), "id-1", Some(("id-1", "H?"))).text();
+        assert!(removed.contains("supersedes id-1 (\"H?\") with a new question"), "{}", removed);
+        let moved = word_moved_off_term("w", "t", "id-1", Some("id-1")).text();
+        assert!(moved.contains("or writes a question that supersedes id-1"), "{}", moved);
+        assert!(section_no_terms_line("x.md", "H?", "id-1", true).text().contains("or writes a question that supersedes id-1"));
+        assert!(dep_no_term("x.md", "H?", "w").text().contains("adds the term, or names another"));
+        assert!(dep_not_current_decision("x.md", "H?", "id-1", None).text().contains("or removes the entry"));
+    }
+
+    #[test]
+    fn dropped_malformed_row_prints_its_detail_and_a_removal_names_its_move() {
+        assert!(ledger_dropped_malformed("id-1", "x y z").text().contains("\"x y z\""));
+        let hold = crate::moves::RemovalHold {
+            id: "id-1".into(),
+            heading: "H?".into(),
+            status: crate::status::QuestionStatus::Answered,
+        };
+        let line = removal_holds_open("x.md", &hold).text();
+        assert_eq!(
+            line.split("; ").last().unwrap(),
+            crate::moves::removal_next("x.md", std::slice::from_ref(&hold)).render()
+        );
+    }
+
+    #[test]
+    fn a_duplicate_term_identifier_is_judged_by_its_own_rule() {
+        let said = terms_shape_error("line 9: duplicate id \"u\" (also used at line 3)");
+        assert_eq!(said.rule.name, "term_identifier_is_unique");
+        assert_eq!(terms_shape_error("line 4: duplicate field \"id\"").rule.name, "term_entry_fields");
+    }
+
+    #[test]
+    fn a_tell_and_a_length_hit_pick_their_rule_from_their_kind() {
+        use crate::tells::{LengthKind, TellKind};
+        assert_eq!(tell("x.md", 1, "H?", "said", TellKind::Provenance).rule.name, rule::TELL_NAMES_SPEAKER.name);
+        assert_eq!(tell("x.md", 1, "H?", "and", TellKind::Join).rule.name, rule::TELL_JOINS_TWO_QUESTIONS.name);
+        assert_eq!(too_long("x.md", 1, "H?", LengthKind::OneWordOption, 3).rule.name, rule::DOES_OPTION_IS_ONE_WORD.name);
+        assert_eq!(too_long("x.md", 1, "H?", LengthKind::Option, 30).rule.name, rule::OPTION_WORD_LIMIT.name);
+        assert_eq!(too_long("x.md", 1, "H?", LengthKind::Why, 30).rule.name, rule::WHY_WORD_LIMIT.name);
+        assert_eq!(too_long("x.md", 1, "H?", LengthKind::Costs, 30).rule.name, rule::COSTS_WORD_LIMIT.name);
+    }
 }
 
 /// `adr approve <path>` on a path the ledger never approved: the file was
@@ -2804,7 +2897,7 @@ pub fn removal_holds_open(rel: &str, hold: &crate::moves::RemovalHold) -> Said {
             named(&hold.id, Some(&hold.heading)),
             crate::moves::hold_words(hold.status)
         ),
-        Next::agent(format!("restores {} from git", rel)),
+        crate::moves::removal_next(rel, std::slice::from_ref(hold)),
     )
 }
 

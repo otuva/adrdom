@@ -113,7 +113,7 @@ fn approve_refuses_a_term_entry_that_resolves_to_nothing() {
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(
-        err.contains("\"1.1 Q?\" depends on \"nosuchterm\" which is no term; a depends entry naming a term names an existing one; agent rewrites the entry"),
+        err.contains("\"1.1 Q?\" depends on \"nosuchterm\" which is no term; a depends entry naming a term names an existing one; agent adds the term, or names another"),
         "{}",
         err
     );
@@ -164,7 +164,7 @@ fn approve_refuses_a_decision_entry_that_is_not_current() {
     let err = stderr(&out);
     assert!(
         err.contains(&format!(
-            "\"1.1 Q?\" depends on {} which is not a current decision; a depends entry names a heading, term or current decision; agent rewrites the entry",
+            "\"1.1 Q?\" depends on {} which is not a current decision; a depends entry names a heading, term or current decision; agent names a current decision, or removes the entry",
             uuid
         )),
         "{}",
@@ -1058,7 +1058,7 @@ fn a_depends_entry_naming_a_refused_question_of_another_file_says_so() {
     let r = adr_answer(&dir, &a_id, "refuse");
     assert!(r.status.success(), "{}{}", stdout(&r), stderr(&r));
 
-    let refused = "topic-b.md: \"Is the decision follow?\" depends on \"Is the decision hold?\" (adrdom/decisions/topic-a.md) which is refused; a question stands only on decisions in force; agent rewrites the entry";
+    let refused = "topic-b.md: \"Is the decision follow?\" depends on \"Is the decision hold?\" (adrdom/decisions/topic-a.md) which is refused; a question stands only on decisions in force; agent names another, or drops the entry";
     let out = adr_owner(&dir, &["approve", b.to_str().unwrap()], "");
     assert!(!out.status.success());
     assert!(stderr(&out).contains(refused), "{}", stderr(&out));

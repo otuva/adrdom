@@ -107,7 +107,7 @@ fn check_fails_a_depends_entry_that_resolves_no_term() {
     let text = stdout(&out);
     assert!(
         text.contains(
-            "adrdom/decisions/example.md: \"1.1 Q?\" depends on \"widget\" which is no term; a depends entry naming a term names an existing one; agent rewrites the entry"
+            "adrdom/decisions/example.md: \"1.1 Q?\" depends on \"widget\" which is no term; a depends entry naming a term names an existing one; agent adds the term, or names another"
         ),
         "{}",
         text
@@ -205,7 +205,7 @@ fn check_fails_a_depends_entry_on_a_retired_term_by_id_while_open() {
     let text = stdout(&out);
     assert!(
         text.contains(&format!(
-            "adrdom/decisions/example.md: \"1.1 Q?\" depends on the term \"widget\", which is retired; a depends entry names no retired term; agent removes the entry"
+            "adrdom/decisions/example.md: \"1.1 Q?\" depends on the term \"widget\", which is retired; a depends entry names no retired term; agent names a term that is not retired, or removes the entry"
         )),
         "{}",
         text
@@ -283,7 +283,7 @@ fn check_names_a_retired_term_under_an_answered_question_as_a_term() {
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
     assert!(
-        text.contains("adrdom/decisions/notes.md: \"Is the tool keep tags?\" depends on the term \"tag\", which is retired; a depends entry names no retired term; agent removes the entry"),
+        text.contains("adrdom/decisions/notes.md: \"Is the tool keep tags?\" depends on the term \"tag\", which is retired; a depends entry names no retired term; agent names a term that is not retired, or removes the entry"),
         "{}",
         text
     );
@@ -306,7 +306,7 @@ fn check_fails_a_depends_entry_on_a_decision_that_is_not_current() {
     let text = stdout(&out);
     assert!(
         text.contains(&format!(
-            "adrdom/decisions/example.md: \"1.1 Q?\" depends on {} which is not a current decision; a depends entry names a heading, term or current decision; agent rewrites the entry",
+            "adrdom/decisions/example.md: \"1.1 Q?\" depends on {} which is not a current decision; a depends entry names a heading, term or current decision; agent names a current decision, or removes the entry",
             other_id
         )),
         "{}",

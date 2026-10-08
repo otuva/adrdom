@@ -306,11 +306,13 @@ fn duplicate_word_errors(terms: &[Term]) -> Vec<String> {
                     let key = (word.clone(), a.min(b), a.max(b));
                     if reported.insert(key) {
                         errors.push(format!(
-                            "line {}: word \"{}\" used in both \"{}\" and \"{}\"",
+                            "line {}: word \"{}\" used in both \"{}\" (line {}) and \"{}\" (line {})",
                             terms[a].start_line.min(terms[b].start_line),
                             word,
                             terms[a].name,
+                            terms[a].start_line,
                             terms[b].name,
+                            terms[b].start_line,
                         ));
                     }
                 }

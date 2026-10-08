@@ -366,6 +366,13 @@ pub const TERM_ENTRY_FIELDS: Rule = Rule {
     protects: "every term has an identifier, name, definition and aliases",
 };
 
+/// Decision: What does a term hold?
+pub const TERM_IDENTIFIER_IS_UNIQUE: Rule = Rule {
+    name: "term_identifier_is_unique",
+    decisions: &["7c306235-6243-4d79-b9aa-08ed19662779"],
+    protects: "one identifier names one term",
+};
+
 /// Decision: Does a term word keep its plain sense in the records?
 pub const WORD_NAMES_ONE_TERM: Rule = Rule {
     name: "word_names_one_term",
@@ -1131,6 +1138,7 @@ pub const ALL: &[&Rule] = &[
     &HEADING_IN_ONE_FILE,
     &ONE_TERM_ENTRY_PER_APPROVAL,
     &TERM_ENTRY_FIELDS,
+    &TERM_IDENTIFIER_IS_UNIQUE,
     &WORD_NAMES_ONE_TERM,
     &DEFINITION_NOT_CIRCULAR,
     &DEFINITION_SENTENCE_LIMIT,

@@ -238,7 +238,7 @@ fn check_verifies_each_dropped_row() {
     fail_with(good_ledger.replace(&two_row, &bad_hash), None, "matches no approved row");
     // A detail of no known shape.
     let bad_detail = two_row.replace(&format!("{} B", g.one), "nonsense");
-    fail_with(good_ledger.replace(&two_row, &bad_detail), None, "has an unreadable detail");
+    fail_with(good_ledger.replace(&two_row, &bad_detail), None, "has the detail");
     // An id still in a topic file.
     let head_file = String::from_utf8_lossy(&run_git(&g.dir, &["show", &format!("HEAD:{}", REL)]).stdout).to_string();
     fail_with(good_ledger.clone(), Some(&head_file), "is still in");

@@ -965,8 +965,11 @@ fn approve_refuses_a_terms_edit_that_moves_a_word_off_a_term_carried_by_a_curren
         err
     );
     assert!(
-        err.contains("agent restores the wording of \"decision\" in adrdom/terms.md, owner runs: adr approve adrdom/terms.md"),
-        "an answered decision's next move must be a restore, never a re-ask: {}",
+        err.contains(&format!(
+            "agent restores the wording in adrdom/terms.md so \"choice\" still names \"decision\", or writes a question that supersedes {}",
+            id
+        )),
+        "an answered decision's next move must be restore-or-supersede, never re-ask: {}",
         err
     );
     assert!(!err.contains("re-asks"), "an answered decision can never be re-asked: {}", err);
@@ -1332,7 +1335,7 @@ fn approve_refuses_removing_a_term_carried_by_a_current_decision() {
     );
     assert!(err.contains("What is the decision?"), "{}", err);
     assert!(
-        err.contains("a term a decision uses stays in the terms file; agent restores the term in adrdom/terms.md, owner runs: adr approve adrdom/terms.md"),
+        err.contains(&format!("a term a decision uses stays in the terms file; agent restores the term in adrdom/terms.md, then supersedes {} (\"1.1 What is the decision?\") with a new question", id)),
         "{}",
         err
     );
@@ -1369,7 +1372,7 @@ fn approve_refuses_retiring_a_term_carried_by_a_current_decision() {
     );
     assert!(err.contains("What is the decision?"), "{}", err);
     assert!(
-        err.contains(&format!("no question names a retired term; agent takes `retired: yes` off")) && err.contains(&format!("then supersedes {} with a new question", id)),
+        err.contains(&format!("no question names a retired term; agent takes `retired: yes` off")) && err.contains(&format!("then supersedes {} (", id)),
         "{}",
         err
     );
@@ -1469,7 +1472,7 @@ fn approve_refuses_retiring_a_term_named_only_by_a_current_decisions_depends_lin
     assert!(err.contains("term \"flag\" retired but used by"), "{}", err);
     assert!(err.contains("What comes next?"), "{}", err);
     assert!(
-        err.contains(&format!("no question names a retired term; agent takes `retired: yes` off")) && err.contains(&format!("then supersedes {} with a new question", id)),
+        err.contains(&format!("no question names a retired term; agent takes `retired: yes` off")) && err.contains(&format!("then supersedes {} (", id)),
         "{}",
         err
     );
