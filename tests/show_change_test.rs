@@ -151,7 +151,6 @@ fn a_terms_file_reordered_prints_its_change() {
     assert!(shown.lines().any(|l| l.starts_with("  - ")) && shown.lines().any(|l| l.starts_with("  + ")), "{}", shown);
 }
 
-// adr: 6addc2f4-ff23-4fc6-851e-7cd67063b9f8
 //
 // A line the change added that reads like a heading is printed with it;
 // only the question's own heading line is left to its status line.
@@ -164,7 +163,6 @@ fn an_added_line_that_reads_like_a_heading_is_printed() {
     assert!(shown.contains("  + ## Notes\n"), "{}", shown);
 }
 
-// adr: 6addc2f4-ff23-4fc6-851e-7cd67063b9f8
 //
 // An identifier in prose stays as the file holds it, the text approve
 // signs; only a reference line turns its identifiers back into words.
@@ -198,7 +196,6 @@ fn a_removed_topic_file_lists_its_decisions_and_their_letters() {
     assert!(form.contains("  Problem: the widget breaks.\n"), "{}", form);
 }
 
-// adr: 6addc2f4-ff23-4fc6-851e-7cd67063b9f8
 //
 // A terms file that exists and cannot be read is named in the listing and
 // in its file form, never skipped; an unreadable topic file's file form

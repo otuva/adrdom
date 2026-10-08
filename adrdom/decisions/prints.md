@@ -230,6 +230,8 @@ Standard: a listing prints what the next move reads and takes a flag for the res
   Why: the whole file in one run, nothing under a flag.
   Costs: twenty names per question that no move reads, over half the output of a planned file.
 
+**Answer:** A
+
 ### What does a finding name?
 depends: ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, d904dc0d-231f-4e93-ac74-7babe888107d, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, f90dbd5b-8fbe-4899-8588-f8762795c2e2, b0e865b4-9204-4c55-9f5b-dcb755b3a03b, 48f4647d-8c81-4e8a-a936-6b32f5fb0699, fe14991d-9715-4ae0-9a23-d314a950d3b9, 848e1b76-9cfe-483b-94dd-094eb9b2f995, 069a6b4a-de35-45f3-8c6c-8e254bf40565, 3fc35d4f-90f3-4425-9dac-951a89631fdf, aac5c313-dedd-466b-a0c3-ead5e99ce913
 unrelated: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f, 7c306235-6243-4d79-b9aa-08ed19662779, 4319a653-6901-446c-94ab-6420ef472134, ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf, 38216d39-b064-4927-ab60-951a3c89e388, 6addc2f4-ff23-4fc6-851e-7cd67063b9f8, aef1b384-2b33-47a2-92a8-ec7f8fb258ef, adee66f2-c8ff-477f-8ac4-a497f694c912, c84a4bd9-fc2d-44f0-b333-172978f61544, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, c3127af2-4c96-48d5-a164-bac49a9a09ec, 6108b8b2-911e-443b-abe0-4c6f8b407384, 110f471d-ac4b-4cbb-aa7b-3f74ac442d78, dce141e9-7d2e-4b70-b317-9f3d70bf5a69
@@ -249,6 +251,8 @@ Standard: a compiler error names the rule a line breaks and leaves the fix to th
   Why: the shortest line, and the one the counter gives for free.
   Costs: the move names the counter, not the rule, and the fix that clears the counter can change the meaning.
 
+**Answer:** A
+
 ### Does a finding carry the identifier of the decision it judges?
 depends: ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, e877e4a9-2caf-4fe6-9f82-5476a2abb00b, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e2533580-1486-4dc9-8697-e6c53605fe72, 4319a653-6901-446c-94ab-6420ef472134, 751ef30c-6a2f-4936-bf9b-b9d487146e53, fe14991d-9715-4ae0-9a23-d314a950d3b9, 184b5bcb-fa72-436b-92cb-4d4605366c59=A|B, 7a1e7b81-0967-4ed2-8a8a-c7153056836f, c3127af2-4c96-48d5-a164-bac49a9a09ec
 unrelated: de5ed5b1-3a83-4403-8953-941cb7e94390, 946263aa-519a-47aa-b743-5cdcf52f5d35, 4b407ee1-1e64-4ca1-842b-69773fc0e48a, 2bae531b-c4df-48a0-89a0-3d52726741ea, 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, 14180eab-60a4-48d3-8efc-c1b23a96ce3a, 3460d220-e523-448b-aeff-baa8051b7d06, 6108b8b2-911e-443b-abe0-4c6f8b407384, c6da863d-5085-402f-815a-9bb832b4df7e, 7c306235-6243-4d79-b9aa-08ed19662779, dce141e9-7d2e-4b70-b317-9f3d70bf5a69
@@ -264,3 +268,5 @@ Standard: every diagnostic carries a stable code that documentation and tests ke
 - B) No.
   Why: the code names its rules as it likes; the record and the messages stay apart.
   Costs: a message with no decision behind it passes every gate and is caught at review alone.
+
+**Answer:** A

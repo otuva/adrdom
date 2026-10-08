@@ -95,7 +95,6 @@ not yet: \"{one}\" is answered and is built once \"{two}\" is answered\n",
     );
 }
 
-// adr: 6addc2f4-ff23-4fc6-851e-7cd67063b9f8
 //
 // With a file named: every question with its status and the lines it
 // carries; the body of the asked one alone; then the moves of that file.
@@ -124,7 +123,6 @@ not yet: \"{one}\" is answered and is built once \"{two}\" is answered\n",
     );
 }
 
-// adr: 6addc2f4-ff23-4fc6-851e-7cd67063b9f8
 //
 // adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
 //
