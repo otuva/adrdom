@@ -1,7 +1,7 @@
 use crate::commands::install::{
     self, CLAUDE_MD_IMPORT, CLAUDE_MD_MARKER, COMMIT_MSG_HOOK, PRE_COMMIT_HOOK, PRE_PUSH_HOOK,
 };
-use crate::rules::Rule;
+use crate::rules::Command;
 use crate::commands::deny_entries;
 use crate::msg::{self, Actor, Next};
 use crate::out::{self, Event};
@@ -23,14 +23,14 @@ fn removed(rel: &str) -> Event {
 /// leaving `adrdom/` itself untouched.
 pub fn run() -> i32 {
     if !repo::owner_authorized() {
-        out::eprint_stop(Rule::Uninstall, &msg::owner_refusal("uninstall", &[]));
+        out::eprint_stop(Command::Uninstall, &msg::owner_refusal("uninstall", &[]));
         return 2;
     }
 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint_stop(Rule::Uninstall, &msg::not_a_repo("uninstall", &[], Actor::Owner));
+            out::eprint_stop(Command::Uninstall, &msg::not_a_repo("uninstall", &[], Actor::Owner));
             return 1;
         }
     };
@@ -44,7 +44,7 @@ pub fn run() -> i32 {
     out::print_events(&events);
     match failed {
         Some(m) => {
-            out::eprint_stop(Rule::Uninstall, &m);
+            out::eprint_stop(Command::Uninstall, &m);
             1
         }
         None => 0,

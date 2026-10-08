@@ -63,7 +63,7 @@ fn finish_merge_commit(dir: &Path) {
 /// Distinctive text from `msg::ledger_merge_drops_rows`, searched for in
 /// `check`'s output rather than duplicated field-for-field (the crate has
 /// no lib target for tests to call the real formatter directly).
-const MERGE_DROPS_ROWS_TEXT: &str = "merge drops a branch's ledger rows";
+const MERGE_DROPS_ROWS_TEXT: &str = "merge drops a ledger row of a merged branch";
 
 /// Distinctive text from `msg::ledger_merge_parents_unreadable`.
 const PARENTS_UNREADABLE_TEXT: &str = "this merge commit's parents cannot be read";
@@ -203,8 +203,8 @@ fn b_merge_dropping_the_other_branchs_row_fails_staged() {
         "check --staged should refuse a merge that drops a branch's rows"
     );
     let text = stdout(&staged);
-    assert!(text.contains("ledger:"), "{}", text);
     assert!(text.contains(MERGE_DROPS_ROWS_TEXT), "{}", text);
+    assert!(text.contains("no ledger row is lost in a merge; owner adds the missing rows back from that branch"), "{}", text);
 }
 
 // adr: 1c27f2d6-ab62-4c5a-91b2-1488722f3c48
@@ -237,8 +237,8 @@ fn c_committed_merge_that_dropped_a_branchs_row_fails_plain_check() {
         "plain check should refuse a committed merge that dropped a branch's rows"
     );
     let text = stdout(&out);
-    assert!(text.contains("ledger:"), "{}", text);
     assert!(text.contains(MERGE_DROPS_ROWS_TEXT), "{}", text);
+    assert!(text.contains("no ledger row is lost in a merge; owner adds the missing rows back from that branch"), "{}", text);
 }
 
 /// A fresh, otherwise-empty directory to clone into: its own path, never a
@@ -314,8 +314,9 @@ fn d_a_shallow_clone_of_a_merge_commit_fails_until_deepened() {
         "check should refuse a shallow clone of a merge commit whose parents it cannot read"
     );
     let text = stdout(&shallow);
-    assert!(text.contains("ledger:"), "{}", text);
+    assert!(text.contains("check: "), "{}", text);
     assert!(text.contains(PARENTS_UNREADABLE_TEXT), "{}", text);
+    assert!(text.contains("the clone is too shallow; agent runs: git fetch --deepen=1"), "{}", text);
 
     let deepen = run_git(&clone_dir, &["fetch", "--deepen=1"]);
     assert!(deepen.status.success(), "git fetch --deepen=1 failed: {}", stderr(&deepen));
@@ -520,7 +521,7 @@ fn c_a_missing_or_changed_head_row_still_fails() {
 
     let clean = adr(&dir, &["check"], &[], "");
     assert!(
-        !stdout(&clean).contains("ledger:"),
+        !stdout(&clean).contains("past ledger rows stay byte for byte"),
         "unexpected ledger failure before tampering: {}",
         stdout(&clean)
     );
@@ -532,12 +533,12 @@ fn c_a_missing_or_changed_head_row_still_fails() {
     std::fs::write(&ledger_path, "").unwrap();
     let removed = adr(&dir, &["check"], &[], "");
     assert!(!removed.status.success());
-    assert!(stdout(&removed).contains("ledger:"), "{}", stdout(&removed));
+    assert!(stdout(&removed).contains("past ledger rows stay byte for byte"), "{}", stdout(&removed));
 
     // Restore, then change one byte in the middle of the row.
     let changed = committed.replace("some-detail", "some-detait");
     std::fs::write(&ledger_path, &changed).unwrap();
     let byte_changed = adr(&dir, &["check"], &[], "");
     assert!(!byte_changed.status.success());
-    assert!(stdout(&byte_changed).contains("ledger:"), "{}", stdout(&byte_changed));
+    assert!(stdout(&byte_changed).contains("past ledger rows stay byte for byte"), "{}", stdout(&byte_changed));
 }

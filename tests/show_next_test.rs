@@ -84,7 +84,7 @@ fn plan_for() -> String {
 
 fn lines_for(headings: &[&str]) -> String {
     let names: Vec<String> = headings.iter().map(|h| format!("\"{}\"", h)).collect();
-    format!("agent writes lines for {}", names.join(", "))
+    format!("agent writes the missing line under {}", names.join(", "))
 }
 
 /// Asserts `lines` are the findings of one planning step: one or more per
@@ -93,7 +93,7 @@ fn lines_for(headings: &[&str]) -> String {
 fn assert_each_names(lines: &[String], headings: &[&str], mv: impl Fn(&str) -> String) {
     assert!(!lines.is_empty(), "no finding");
     for l in lines {
-        assert!(l.starts_with(&format!("plan: {}: ", REL)), "{}", l);
+        assert!(l.starts_with(&format!("{}: ", REL)), "{}", l);
         assert!(headings.iter().any(|h| l.ends_with(&format!("; {}", mv(h)))), "{}", l);
     }
     for h in headings {
@@ -342,17 +342,16 @@ fn show_prints_the_refusal_of_a_plan_as_the_next_move() {
     std::fs::write(&path, text).unwrap();
 
     let refusal = format!(
-        "{}: 5 questions stand together, the most is 4: 4 answered, and \"Is the widget gate five hold?\"; \
-agent finds a question among the ones named that assumes the answer of another one and names that one on its depends line, \
-or moves it to another file when none does",
+        "{}: 5 questions in one tier, 4 answered, the most is 4: \"Is the widget gate five hold?\"; \
+no tier holds more than four questions; agent rewrites the depends lines of these questions",
         REL
     );
     let five = "Is the widget gate five hold?";
     assert_eq!(
         next(&dir),
         vec![
-            format!("plan: {}", refusal),
-            format!("plan: {}: \"{}\" has no reader rows for its heading; {}", REL, five, plan_for()),
+            refusal.clone(),
+            format!("{}: \"{}\" has no reader rows for its heading; each planning step rests on the reader's rows; {}", REL, five, plan_for()),
         ]
     );
 
@@ -364,10 +363,10 @@ or moves it to another file when none does",
     assert!(out.status.success());
     let plan_lines: Vec<String> = stdout(&out)
         .lines()
-        .filter(|l| l.starts_with("plan: "))
+        .filter(|l| l.starts_with(&format!("{}: ", REL)))
         .map(|l| l.to_string())
         .collect();
-    assert_eq!(plan_lines.first(), Some(&format!("plan: {}", refusal)), "{:?}", plan_lines);
+    assert_eq!(plan_lines.first(), Some(&refusal), "{:?}", plan_lines);
     assert!(plan_lines.iter().any(|l| l.contains("has no reader rows for its heading")), "{:?}", plan_lines);
 }
 
@@ -428,7 +427,7 @@ fn show_names_what_replaced_a_superseded_question() {
     assert!(!approved.status.success());
     assert!(
         stderr(&approved).contains(&format!(
-            "approve: {}: \"{}\": supersedes \"{}\", which is not a current decision; agent removes it from the supersedes line or names a current decision",
+            "{}: \"{}\": supersedes \"{}\", which is not a current decision; a question supersedes only a current decision; agent rewrites the supersedes entry",
             REL, THREE, ONE
         )),
         "{}",

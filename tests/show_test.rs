@@ -183,10 +183,10 @@ fn show_prints_each_status_and_the_lines_each_question_carries() {
     Costs: c.
 [refused] 2.2 Also depends?
   depends: 1.1 Root?=A
-plan: adrdom/decisions/tiered-topic.md: \"1.1 Root?\" has no depends line; agent writes what the question stands on
-plan: adrdom/decisions/tiered-topic.md: \"1.2 Unasked root?\" has no depends line; agent writes what the question stands on
-plan: adrdom/decisions/tiered-topic.md: \"1.3 Skeleton?\" has no depends line; agent writes what the question stands on
-plan_frozen: adrdom/decisions/tiered-topic.md: \"2.2 Also depends?\" is [refused] and its depends line was edited; agent removes the edit
+adrdom/decisions/tiered-topic.md: \"1.1 Root?\" has no depends line; every question carries a depends line; agent writes the depends line of \"1.1 Root?\"
+adrdom/decisions/tiered-topic.md: \"1.2 Unasked root?\" has no depends line; every question carries a depends line; agent writes the depends line of \"1.2 Unasked root?\"
+adrdom/decisions/tiered-topic.md: \"1.3 Skeleton?\" has no depends line; every question carries a depends line; agent writes the depends line of \"1.3 Skeleton?\"
+adrdom/decisions/tiered-topic.md: \"2.2 Also depends?\" is [refused] and its depends line was edited; an answered decision's depends line stays as approved; agent restores the line from git
 agent runs: adr plan adrdom/decisions/tiered-topic.md
 agent runs: adr ask adrdom/decisions/tiered-topic.md  # \"1.2 Unasked root?\"
 owner runs: adr answer aaaaaaaa-0000-4000-8000-000000000002@{V} <letter>  # \"2.1 Depends on root?\"
@@ -348,7 +348,7 @@ fn show_prints_no_guess_for_an_ambiguous_cross_file_heading_dependency() {
     let b_block = shown[b_start..b_end].trim_end();
     assert!(b_block.contains("  + depends: 1.1 Shared heading?"), "{}", shown);
     assert!(
-        b_block.contains("plan: adrdom/decisions/topic-b.md: \"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\" which is a current decision in more than one file: adrdom/decisions/topic-a.md, adrdom/decisions/topic-c.md; agent names it by id instead"),
+        b_block.contains("adrdom/decisions/topic-b.md: \"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\" which is a current decision in more than one file: adrdom/decisions/topic-a.md, adrdom/decisions/topic-c.md; a reference carries the identifier of what it names; agent writes the identifier of the one it means"),
         "an ambiguous cross-file dependency names the agent's move and no guess: {}",
         shown
     );

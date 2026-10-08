@@ -777,7 +777,7 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
     // whether the body is a skeleton.
     let mut option_shape_errors = Vec::new();
     if options.len() > 3 {
-        option_shape_errors.push(format!("{} options; at most three", options.len()));
+        option_shape_errors.push(format!("{} options, at most three", options.len()));
     }
 
     // Every option carries exactly one non-empty Why line and exactly one
@@ -901,7 +901,7 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
         // A skeleton heading (empty body) is exempt; a real body needs two
         // or three options.
         if scan.options.len() < 2 {
-            add(vec![format!("{} options; at least two", scan.options.len())]);
+            add(vec![format!("{} options, at least two", scan.options.len())]);
         }
     }
     add(scan.option_shape_errors);
@@ -977,7 +977,7 @@ fn analyze_shape(lines: &[String], sections: &[Section]) -> (Option<String>, (us
     let mut after_h2 = false;
     for (i, l) in lines.iter().enumerate() {
         if is_h2(l) {
-            shape_errors.push(format!("tier heading, line {}; tiers are derived", i + 1));
+            shape_errors.push(format!("tier heading, line {}", i + 1));
             after_h2 = true;
         } else if l.starts_with("### ") {
             after_h2 = false;
@@ -1710,7 +1710,7 @@ mod tests {
         assert!(rf.sections[0]
             .shape_errors
             .iter()
-            .any(|e| e == "4 options; at most three"));
+            .any(|e| e == "4 options, at most three"));
         let ok = rf_from(
             "# T\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n- C) Three.\n  Why: w.\n  Costs: c.\n",
         );
@@ -1725,7 +1725,7 @@ mod tests {
         assert!(rf.sections[0]
             .shape_errors
             .iter()
-            .any(|e| e == "1 options; at least two"));
+            .any(|e| e == "1 options, at least two"));
         assert!(rf.sections[0].parse_errors.is_empty(), "{:?}", rf.sections[0].parse_errors);
     }
 

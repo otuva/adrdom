@@ -186,7 +186,7 @@ fn ask_refuses_a_heading_added_after_approval_and_a_never_approved_file() {
     assert!(!moves.is_empty());
     let err = stderr(&out);
     let lines: Vec<&str> = err.lines().collect();
-    assert!(lines[0].starts_with("ask: adrdom/decisions/never.md: plan is new; "), "{}", err);
+    assert!(lines[0].starts_with("adrdom/decisions/never.md: plan is new; "), "{}", err);
     for m in &moves {
         assert!(lines.iter().any(|l| l.ends_with(m.as_str())), "ask lacks {:?}:\n{}", m, err);
     }
@@ -210,7 +210,7 @@ fn ask_refuses_a_heading_added_after_approval_and_a_never_approved_file() {
     // The new heading is not planned yet: the move is the agent's plan,
     // the same one `show` names, never the owner's approve.
     let err = stderr(&out);
-    assert!(err.starts_with("ask: adrdom/decisions/example.md: plan is changed; "), "{}", err);
+    assert!(err.starts_with("adrdom/decisions/example.md: plan is changed; "), "{}", err);
     for m in file_moves(&dir, "adrdom/decisions/example.md") {
         assert!(err.lines().any(|l| l.ends_with(m.as_str())), "ask lacks {:?}:\n{}", m, err);
     }
@@ -245,8 +245,8 @@ fn ask_refuses_a_question_with_one_option() {
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
     let err = stderr(&out);
-    assert!(err.contains("1 options; at least two"), "{}", err);
-    assert!(err.contains("agent fixes the topic file"), "{}", err);
+    assert!(err.contains("1 options, at least two"), "{}", err);
+    assert!(err.contains("agent rewrites the question"), "{}", err);
 
     let after = std::fs::read_to_string(&record).unwrap();
     assert_eq!(after, content, "ask must not modify the file when it refuses");
@@ -271,8 +271,8 @@ fn ask_refuses_a_question_with_four_options() {
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
     let err = stderr(&out);
-    assert!(err.contains("4 options; at most three"), "{}", err);
-    assert!(err.contains("agent fixes the topic file"), "{}", err);
+    assert!(err.contains("4 options, at most three"), "{}", err);
+    assert!(err.contains("agent rewrites the question"), "{}", err);
 
     let after = std::fs::read_to_string(&record).unwrap();
     assert_eq!(after, content, "ask must not modify the file when it refuses");
@@ -313,7 +313,7 @@ fn ask_refuses_when_terms_md_is_missing() {
     assert!(!out.status.success());
     assert_eq!(
         stderr(&out).trim_end(),
-        "ask: adrdom/terms.md missing; agent writes it, owner runs: adr approve adrdom/terms.md"
+        "adrdom/terms.md missing; the terms file exists once a topic file does; agent writes it, owner runs: adr approve adrdom/terms.md"
     );
 
     // Nothing written.
@@ -337,7 +337,7 @@ fn ask_refuses_on_a_terms_md_shape_error() {
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.starts_with("ask: adrdom/terms.md:"), "{}", err);
+    assert!(err.starts_with("adrdom/terms.md:"), "{}", err);
     assert!(err.contains("missing h1"), "{}", err);
 }
 

@@ -30,18 +30,35 @@ fn cases(tid: &str) -> Vec<(&'static str, String, &'static str)> {
     let long = "- A) Yes.\n  Why: one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twentyone.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n";
     let does2 = "- A) Yes indeed.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n";
     vec![
-        ("long why", format!("# Gate\n\n{}", q("Does the widget hold?", "widget", "the widget breaks.", long)), "limit is 20"),
+        ("long why", format!("# Gate\n\n{}", q("Does the widget hold?", "widget", "the widget breaks.", long)), "at most twenty words"),
         ("does option two words", format!("# Gate\n\n{}", q("Does the widget hold?", "widget", "the widget breaks.", does2)), "Does"),
         ("loaded phrase in body", format!("# Gate\n\n{}", q("Does the widget hold?", "widget", "the widget currently breaks.", OPTS)), "\"currently\""),
         ("loaded heading", format!("# Gate\n\n{}", q("Which widget holds?", "widget", "the widget breaks.", OPTS)), "\"which\""),
-        ("loaded prose", format!("# Gate\n\nAs decided in chat.\n\n{}", good()), "tells:"),
+        ("loaded prose", format!("# Gate\n\nAs decided in chat.\n\n{}", good()), "names who said it"),
         ("no term", format!("# Gate\n\n{}", q("Does the lid hold?", "widget", "the lid breaks.", OPTS)), "uses no term"),
         ("set on a term", format!("# Gate\n\n{}", q("Does the widget hold?", &format!("{}=A", tid), "the widget breaks.", OPTS)), "answer set"),
         ("set missing on a question", format!("# Gate\n\n{}\n{}", good(), q("Does the widget stay?", "Does the widget hold?", "the widget breaks.", OPTS)), "without an answer set"),
         ("missing depends line", format!("# Gate\n\n### Does the widget hold?\n\nProblem: the widget breaks.\n\nStandard: plain words.\n\n{}", OPTS), "has no depends line"),
         ("unresolved entry", format!("# Gate\n\n{}", q("Does the widget hold?", "nosuchterm", "the widget breaks.", OPTS)), "which is no term"),
-        ("cycle", format!("# Gate\n\n{}\n{}", q("Does the widget hold?", "Does the widget stay?=A", "the widget breaks.", OPTS), q("Does the widget stay?", "Does the widget hold?=A", "the widget breaks.", OPTS)), "cycle: "),
+        ("cycle", format!("# Gate\n\n{}\n{}", q("Does the widget hold?", "Does the widget stay?=A", "the widget breaks.", OPTS), q("Does the widget stay?", "Does the widget hold?=A", "the widget breaks.", OPTS)), "lead back to their own question"),
     ]
+}
+
+
+/// The words of the rule each shape fault of a case below breaks.
+fn shape_want(name: &str) -> &'static str {
+    match name {
+        "no decision sentence" | "two sentences" => "an option holds exactly one sentence",
+        "second depends line" | "second supersedes line" | "second unrelated line" | "second terms line" => "each reference line appears once, on one line",
+        "duplicate depends entry" => "a depends line names each thing once",
+        "duplicate id line" => "an identifier is assigned once, by the tool",
+        "second answer line" | "answer line not last" => "the answer line is the last line of a question",
+        "answer names a missing option" => "an answer names an option the question has",
+        "missing h1" | "second h1" | "text before h1" => "a topic file holds a heading, prose and questions only",
+        "tier heading" => "tiers come only from the depends lines",
+        "heading without a question mark" => "every third-level heading is a question ending in ?",
+        _ => panic!("no rule words for {}", name),
+    }
 }
 
 fn repo() -> std::path::PathBuf {
@@ -118,14 +135,14 @@ fn a_duplicate_heading_in_one_file_and_a_wrong_file_name_are_notes_in_a_draft() 
     write_record(&dir, REL, &two_same());
     let (ok, text) = check(&dir);
     assert!(ok, "{}", text);
-    assert!(text.contains("duplicate heading"), "{}", text);
+    assert!(text.contains("appears twice"), "{}", text);
 
     let dir = repo();
     write_record(&dir, "adrdom/decisions/other-name.md", &format!("# Gate\n\n{}", good()));
     let (ok, text) = check(&dir);
     assert!(ok, "{}", text);
     assert!(text.contains("other-name.md"), "{}", text);
-    assert!(text.contains("plan:"), "{}", text);
+    assert!(text.contains("file name does not match its topic"), "{}", text);
 }
 
 #[test]
@@ -135,7 +152,7 @@ fn a_duplicate_heading_in_one_file_and_a_wrong_file_name_fail_when_approved() {
     approve_via_ledger(&dir, REL, &two_same());
     let (ok, text) = check(&dir);
     assert!(!ok, "{}", text);
-    assert!(text.contains("duplicate heading"), "{}", text);
+    assert!(text.contains("appears twice"), "{}", text);
 
     let dir = repo();
     approve_via_ledger(&dir, "adrdom/decisions/other-name.md", &format!("# Gate\n\n{}", good()));
@@ -152,11 +169,11 @@ fn a_note_between_questions_is_a_note_in_a_draft_and_a_failure_when_approved() {
     write_record(&dir, REL, &content);
     let (ok, text) = check(&dir);
     assert!(ok, "{}", text);
-    assert!(text.contains("parse:"), "{}", text);
+    assert!(text.contains("stray line 17"), "{}", text);
     assert!(failures(&dir).is_empty());
     let dir = repo();
     approve_via_ledger(&dir, REL, &content);
-    assert!(failures(&dir).contains("parse:"), "{}", failures(&dir));
+    assert!(failures(&dir).contains("stray line 17"), "{}", failures(&dir));
 }
 
 #[test]
@@ -231,7 +248,7 @@ fn a_prose_finding_is_a_note_when_only_the_prose_awaits_approval() {
     write_record(&dir, REL, &format!("# Gate\n\nAs decided in chat.\n\n{}", good()));
     let (ok, text) = check(&dir);
     assert!(ok, "{}", text);
-    assert!(text.contains("tells:"), "{}", text);
+    assert!(text.contains("names who said it"), "{}", text);
     assert!(failures(&dir).is_empty());
 }
 
@@ -252,10 +269,10 @@ fn a_body_shape_finding_is_a_note_in_a_draft_and_a_failure_when_approved() {
         write_record(&dir, REL, &content);
         let (ok, text) = check(&dir);
         assert!(ok, "{}", text);
-        assert!(text.contains("parse:"), "{}", text);
+        assert!(text.contains("a question holds Problem, Standard and two or three options"), "{}", text);
         let dir = repo();
         approve_via_ledger(&dir, REL, &content);
-        assert!(failures(&dir).contains("parse:"), "{}", content);
+        assert!(failures(&dir).contains("a question holds Problem, Standard and two or three options"), "{}", content);
     }
 }
 
@@ -266,7 +283,7 @@ fn a_stray_line_is_a_note_in_a_draft_and_a_failure_when_approved() {
     let dir = repo();
     write_record(&dir, REL, &content);
     let (ok, text) = check(&dir);
-    assert!(ok && text.contains("parse:") && text.contains("stray line"), "{}", text);
+    assert!(ok && text.contains("stray line"), "{}", text);
     assert!(failures(&dir).is_empty());
     let dir = repo();
     approve_via_ledger(&dir, REL, &content);
@@ -308,11 +325,12 @@ fn plan_text_shape_findings_are_notes_in_a_draft_and_failures_when_approved() {
         write_record(&dir, REL, &content);
         let (ok, text) = check(&dir);
         assert!(ok, "{}: {}", name, text);
-        assert!(text.contains("parse:"), "{}: {}", name, text);
+        eprintln!("DBG {} => {}", name, text.lines().filter(|l| !l.contains("reader rows")).collect::<Vec<_>>().join(" || "));
+        assert!(text.contains(shape_want(name)), "{}: {}", name, text);
         assert!(failures(&dir).is_empty(), "{}: {}", name, failures(&dir));
         let dir = repo();
         approve_via_ledger(&dir, REL, &content);
-        assert!(failures(&dir).contains("parse:"), "{}: {}", name, failures(&dir));
+        assert!(failures(&dir).contains(shape_want(name)), "{}: {}", name, failures(&dir));
     }
 }
 
@@ -337,12 +355,12 @@ fn the_tools_own_lines_and_a_file_shape_fault_are_notes_in_a_draft_and_failures_
         write_record(&dir, REL, &content);
         let (ok, text) = check(&dir);
         assert!(ok, "{}: a draft fault is a note: {}", name, text);
-        assert!(text.contains("parse:"), "{}: {}", name, text);
+        assert!(text.contains(shape_want(name)), "{}: {}", name, text);
         assert!(failures(&dir).is_empty(), "{}: {}", name, failures(&dir));
         let dir = repo();
         approve_via_ledger(&dir, REL, &content);
         let failed = failures(&dir);
-        assert!(failed.contains("parse:"), "{}: an approved file fails: {}", name, failed);
+        assert!(failed.contains(shape_want(name)), "{}: an approved file fails: {}", name, failed);
     }
 }
 
@@ -418,7 +436,7 @@ fn a_cycle_through_a_question_that_cannot_change_stays_a_failure_in_a_draft_file
     let b = q("Does the widget fall?", "Does the widget stay?=A", "the widget breaks.", OPTS);
     write_record(&dir, REL, &format!("# Gate\n\n{}\n\n{}", a, b));
     let failed = failures(&dir);
-    assert!(failed.contains("cycle: "), "{}", failed);
+    assert!(failed.contains("lead back to their own question"), "{}", failed);
 }
 
 #[test]
@@ -436,9 +454,9 @@ fn a_finding_in_a_draft_question_is_a_note_though_an_answered_one_shares_its_hea
     assert!(!failed.contains("nosuchterm"), "{}", failed);
     // The duplicate heading is the draft question's fault, the one that
     // copies the heading of a decision: a note.
-    assert!(!failed.contains("duplicate heading"), "{}", failed);
+    assert!(!failed.contains("appears twice"), "{}", failed);
     let all = stdout(&adr(&dir, &["check"], &[], ""));
-    assert!(all.contains("nosuchterm") && all.contains("duplicate heading"), "{}", all);
+    assert!(all.contains("nosuchterm") && all.contains("appears twice"), "{}", all);
 }
 
 #[test]
@@ -457,7 +475,7 @@ fn a_duplicate_heading_between_two_questions_with_force_fails_even_in_a_draft_fi
     }
     write_record(&dir, REL, &format!("# Gate\n\n{}\n\n{}\n\n{}", texts[0], texts[1], q("Does the widget fall?", "widget", "the widget breaks.", OPTS)));
     let failed = failures(&dir);
-    assert!(failed.contains("duplicate heading"), "{}", failed);
+    assert!(failed.contains("appears twice"), "{}", failed);
 }
 
 #[test]

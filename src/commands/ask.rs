@@ -1,10 +1,10 @@
-use crate::rules::Rule;
+use crate::rules::{Class, Command, Finding};
 use crate::actions;
 use crate::depends;
 use crate::ledger;
 use crate::rules;
 use crate::msg::{self, Actor};
-use crate::out;
+use crate::out::{self, Line};
 use crate::view;
 use crate::record;
 use crate::repo;
@@ -17,7 +17,7 @@ pub fn run(given: PathBuf) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint_stop(Rule::Ask, &msg::not_a_repo("ask", &[&given.display().to_string()], Actor::Agent));
+            out::eprint_stop(Command::Ask, &msg::not_a_repo("ask", &[&given.display().to_string()], Actor::Agent));
             return 1;
         }
     };
@@ -28,7 +28,7 @@ pub fn run(given: PathBuf) -> i32 {
     let rel = match state::given_rel(&root, &given) {
         Some(rel) if crate::rules::is_topic_file_path(&rel) => rel,
         rel => {
-            out::eprint_stop(Rule::Ask, &msg::plan_not_a_topic_file(&rel.unwrap_or_else(|| given.display().to_string())));
+            out::eprint_stop(Command::Ask, &msg::plan_not_a_topic_file(&rel.unwrap_or_else(|| given.display().to_string())));
             return 1;
         }
     };
@@ -38,10 +38,10 @@ pub fn run(given: PathBuf) -> i32 {
     // not approved. These come before anything about the topic file itself is
     // even loaded, since none of them depend on it. Shared with `approve`
     // (`actions::require_terms`).
-    let tf = match actions::require_terms(&root, &led, &rel) {
+    let tf = match actions::require_terms(&root, &led, &rel, Command::Ask) {
         Ok(tf) => tf,
         Err(e) => {
-            out::eprint_stop(Rule::Ask, &e);
+            out::eprint(&e);
             return 1;
         }
     };
@@ -50,7 +50,7 @@ pub fn run(given: PathBuf) -> i32 {
     let mut rf = match record::load(&record_path) {
         Ok(rf) => rf,
         Err(e) => {
-            out::eprint_stop(Rule::Ask, &msg::read_failed(&rel, &e, msg::topic_file_unread("ask", &rel, &e)));
+            out::eprint_stop(Command::Ask, &msg::read_failed(&rel, &e, msg::topic_file_unread("ask", &rel, &e)));
             return 1;
         }
     };
@@ -106,7 +106,7 @@ pub fn run(given: PathBuf) -> i32 {
     // refusal that would otherwise fire first on an unapproved file.
     depends::normalize_cross_file_deps(&mut rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
     if let Some(err @ record::DeriveError::AmbiguousHeading { .. }) = &rf.derive_error {
-        out::eprint_stop(Rule::Ask, &msg::derive_error(&rel, err));
+        out::eprint(&[Line::Finding(Finding::said(Class::Plan, msg::derive_error(&rel, err)))]);
         return 1;
     }
 
@@ -128,15 +128,11 @@ pub fn run(given: PathBuf) -> i32 {
         rules::record_refusals(&rel, &rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &all_records, &replaced, &led);
     // A banned word in a question's text, the judgement show, plan and
     // approve read too (`rules::banned_in_questions`).
-    findings.extend(
-        rules::banned_in_questions(&root, &rel, &rf, &terms_list, &led)
-            .into_iter()
-            .map(|(i, m)| rules::Finding::new(Rule::Banned, m).in_section(i)),
-    );
+    findings.extend(rules::banned_in_questions(&root, &rel, &rf, &terms_list, &led));
     // Each printed as the finding it is, under its own rule, as `show` and
     // `check` print it.
     let shape: Vec<out::Line> =
-        findings.iter().filter(|r| r.rule == Rule::Parse).cloned().map(out::Line::Finding).collect();
+        findings.iter().filter(|r| r.class == Class::Parse).cloned().map(out::Line::Finding).collect();
     if !shape.is_empty() {
         out::eprint(&shape);
         return 1;
@@ -147,7 +143,7 @@ pub fn run(given: PathBuf) -> i32 {
     // question edited since, a line no row backs, two standing answers. The
     // findings and moves `check` fails the file on, named the same way.
     let closed: Vec<out::Line> =
-        findings.iter().filter(|f| f.rule == Rule::Answers).cloned().map(out::Line::Finding).collect();
+        findings.iter().filter(|f| f.class == Class::Answers).cloned().map(out::Line::Finding).collect();
     if !closed.is_empty() {
         out::eprint(&closed);
         return 1;
@@ -170,12 +166,18 @@ pub fn run(given: PathBuf) -> i32 {
     };
     if !state::plan_approved_hashes(&led, &rel, &raw_question_hashes) {
         let status = crate::status::plan_status(&led, &rel, false);
-        out::eprint_stop(Rule::Ask, &msg::plan_not_approved(&rel, status, &file_moves()));
+        let report = file_moves();
+        let mut lines = vec![Line::Finding(Finding::said(Class::Plan, msg::plan_not_approved(&rel, status, &report)))];
+        lines.extend(report.findings.into_iter().map(Line::Finding));
+        out::eprint(&lines);
         return 1;
     }
     if !state::context_approved_hash(&led, &rel, &raw_context_hash) {
         let status = crate::status::prose_status(&led, &rel, false);
-        out::eprint_stop(Rule::Ask, &msg::context_not_approved(&rel, status, &file_moves()));
+        let report = file_moves();
+        let mut lines = vec![Line::Finding(Finding::said(Class::Plan, msg::context_not_approved(&rel, status, &report)))];
+        lines.extend(report.findings.into_iter().map(Line::Finding));
+        out::eprint(&lines);
         return 1;
     }
 
@@ -191,7 +193,7 @@ pub fn run(given: PathBuf) -> i32 {
     // either command can move: point the owner at the topic file first, the
     // re-approval second.
     if let Some(f) = rules::derive_finding(&rel, &rf, &all_records, &led) {
-        out::eprint_stop(Rule::Ask, &f.message);
+        out::eprint(&[Line::Finding(f)]);
         return 1;
     }
 
@@ -200,7 +202,7 @@ pub fn run(given: PathBuf) -> i32 {
     // file-wide (mirrors approve's cap check, prefixed `ask:`). Dead
     // (refused/superseded/withdrawn) questions don't count.
     if let Some(f) = rules::cap_finding(&rel, &rf, &replaced, &led) {
-        out::eprint_stop(Rule::Ask, &f.message);
+        out::eprint(&[Line::Finding(f)]);
         return 1;
     }
 
@@ -214,7 +216,7 @@ pub fn run(given: PathBuf) -> i32 {
     // passed. They are gathered and printed together, and nothing is
     // written while there is one: a question with three faults is told all
     // three in one run.
-    let mut refusals: Vec<String> = Vec::new();
+    let mut refusals: Vec<Finding> = Vec::new();
 
     // Answer sets (per "Does a depends entry carry the answers it holds
     // under?"): before asking anything, every set on a heading dep must name
@@ -234,9 +236,7 @@ pub fn run(given: PathBuf) -> i32 {
         // so a candidate naming a target that is not current, leaving out a
         // decision standing on one, or standing on one refuses here.
         refusals.extend(
-            rules::supersedes_refusals(&rel, &rf, &cross_file_headings, &names, &all_records, &led, Some(i))
-                .into_iter()
-                .map(|r| r.message),
+            rules::supersedes_refusals(&rel, &rf, &cross_file_headings, &names, &all_records, &led, Some(i)),
         );
 
         // Every rule the question breaks (`rules::record_refusals`, the
@@ -246,17 +246,15 @@ pub fn run(given: PathBuf) -> i32 {
         // option over a word limit?", "Does ask refuse a question with no
         // term?"), and what its depends line stands on.
         for f in findings.iter().filter(|f| f.sections.contains(&i)) {
-            if !refusals.contains(&f.message) {
-                refusals.push(f.message.clone());
+            if !refusals.iter().any(|r| r.text() == f.text()) {
+                refusals.push(f.clone());
             }
         }
 
     }
 
     if !refusals.is_empty() {
-        for m in &refusals {
-            out::eprint_stop(Rule::Ask, m);
-        }
+        out::eprint(&refusals.into_iter().map(Line::Finding).collect::<Vec<_>>());
         return 1;
     }
 
@@ -272,8 +270,7 @@ pub fn run(given: PathBuf) -> i32 {
     // unaffected by a section growing or shrinking by one line. Every
     // candidate reaching this point paired at least one term (refusal 6
     // above), so the pairings are never empty here: ask never deletes a
-    // terms line, and a candidate section whose id line cannot be found is
-    // an error, not a silent skip.
+    // terms line.
     let mut terms_touched = false;
     for i in (0..rf.sections.len()).rev() {
         if !candidate[i] {
@@ -287,7 +284,7 @@ pub fn run(given: PathBuf) -> i32 {
             None => {
                 // Unreachable given refusal 6 above, but never silently
                 // drop a binding if it somehow happens.
-                out::eprint_stop(Rule::Ask, &msg::pairs_no_term_at_write(&rel, &sec.heading_text));
+                out::eprint(&[Line::Finding(Finding::said(Class::Terms, msg::pairs_no_term_at_write(&rel, &sec.heading_text)))]);
                 return 1;
             }
         };
@@ -298,16 +295,13 @@ pub fn run(given: PathBuf) -> i32 {
                     terms_touched = true;
                 }
             }
-            None => match find_prefixed_line(&rf.lines, sec.start, sec.end, "id: ") {
-                Some(idx) => {
+            None => {
+                // Approve gives every question its id line.
+                if let Some(idx) = find_prefixed_line(&rf.lines, sec.start, sec.end, "id: ") {
                     rf.lines.insert(idx + 1, new_line);
                     terms_touched = true;
                 }
-                None => {
-                    out::eprint_stop(Rule::Ask, &msg::no_id_line(&rel, &sec.heading_text));
-                    return 1;
-                }
-            },
+            }
         }
     }
     if terms_touched {
@@ -391,7 +385,7 @@ pub fn run(given: PathBuf) -> i32 {
             return 0;
         }
         if let Err(e) = record::save(&rf) {
-            out::eprint_stop(Rule::Ask, &msg::write_failed(&rel, e, again()));
+            out::eprint_stop(Command::Ask, &msg::write_failed(&rel, e, again()));
             return 1;
         }
         out::print_events(&[out::Event::FileWritten { path: rel.clone() }]);
@@ -399,14 +393,14 @@ pub fn run(given: PathBuf) -> i32 {
     }
 
     if let Err(e) = record::save(&rf) {
-        out::eprint_stop(Rule::Ask, &msg::write_failed(&rel, e, again()));
+        out::eprint_stop(Command::Ask, &msg::write_failed(&rel, e, again()));
         return 1;
     }
     if let Err(e) = ledger::append(&ledger_path, &new_rows) {
         if let Some(original) = &original {
             let _ = std::fs::write(&record_path, original);
         }
-        out::eprint_stop(Rule::Ask, &msg::update_failed("ledger", e, again()));
+        out::eprint_stop(Command::Ask, &msg::update_failed("ledger", e, again()));
         return 1;
     }
 
@@ -491,7 +485,7 @@ fn do_conflict_reask(
     strip_answer_line(&mut rf, idx);
 
     if let Err(e) = record::save(&rf) {
-        out::eprint_stop(Rule::Ask,
+        out::eprint_stop(Command::Ask,
             &msg::write_failed(
                 &state::rel_path(root, record_path),
                 e,
@@ -536,7 +530,7 @@ fn do_conflict_reask(
         if let Some(original) = &original {
             let _ = std::fs::write(record_path, original);
         }
-        out::eprint_stop(Rule::Ask, &msg::update_failed("ledger", e, msg::after_fix_agent_runs(crate::moves::command(&["adr", "ask", &state::rel_path(root, record_path)]))));
+        out::eprint_stop(Command::Ask, &msg::update_failed("ledger", e, msg::after_fix_agent_runs(crate::moves::command(&["adr", "ask", &state::rel_path(root, record_path)]))));
         return 1;
     }
 

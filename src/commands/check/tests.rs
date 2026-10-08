@@ -1,4 +1,4 @@
-use crate::rules::Rule;
+use crate::rules::Class;
 use super::Failure;
 use crate::ledger::Ledger;
 use crate::rules::{Finding, Subject};
@@ -103,7 +103,7 @@ pub(super) fn check_tests(
             crate::moves::of_untested(rf, i, id)
         };
         notes.push(
-            Finding::new(Rule::Untested, msg::untested(&rf.rel, &rf.sections[i].heading_text, id, &mv.text()))
+            Finding::said(Class::Untested, msg::untested(&rf.rel, &rf.sections[i].heading_text, &mv.text()))
                 .about(Subject::TopicFile(rf.rel.clone()))
                 .in_section(i),
         );
@@ -114,7 +114,7 @@ pub(super) fn check_tests(
     stale.sort();
     for (id, locations) in stale {
         let heading = place.get(id.as_str()).map(|&(rf, i)| rf.sections[i].heading_text.as_str());
-        out.push(Failure::new(Rule::Tested, msg::stale_test(id, heading, locations)));
+        out.push(Failure::said(Class::Tested, msg::stale_test(id, heading, locations)));
     }
 
     (out, notes)

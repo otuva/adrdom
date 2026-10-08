@@ -13,6 +13,9 @@ pub use crate::status::QuestionStatus;
 pub struct CheckReport {
     pub failures: Vec<crate::rules::Finding>,
     pub notes: Vec<crate::rules::Finding>,
+    /// What stopped `check` reading a file or a commit, apart from the
+    /// findings: each prints as `check: <what>; <move>`.
+    pub stops: Vec<String>,
 }
 
 

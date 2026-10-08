@@ -161,7 +161,7 @@ fn check_banned_scanner_names_the_term() {
     let text = stdout(&out);
     let hits: Vec<&str> = text
         .lines()
-        .filter(|l| l.starts_with("banned: notes.txt:1: banned word"))
+        .filter(|l| l.starts_with("notes.txt:1: banned word"))
         .collect();
     assert_eq!(hits.len(), 2, "expected one hit per word: {}", text);
     assert!(
@@ -172,7 +172,7 @@ fn check_banned_scanner_names_the_term() {
     assert!(
         hits
             .iter()
-            .any(|l| l.starts_with("banned: notes.txt:1: banned word;")),
+            .any(|l| l.starts_with("notes.txt:1: banned word;")),
         "{}",
         text
     );
@@ -205,12 +205,12 @@ fn check_fails_when_banned_file_and_ledger_disagree_both_ways() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains("banned: aaaaaaaaaaaa in ledger, missing from adrdom/state/banned.sha256"),
+        text.contains("aaaaaaaaaaaa in ledger, missing from the ban list"),
         "{}",
         text
     );
     assert!(
-        text.contains("banned: bbbbbbbbbbbb in file, no ledger row"),
+        text.contains("bbbbbbbbbbbb in the ban list, no ledger row"),
         "{}",
         text
     );

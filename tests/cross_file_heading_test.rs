@@ -48,7 +48,7 @@ fn approve_refuses_a_heading_that_stands_in_another_topic_file_and_writes_nothin
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     let err = stderr(&out);
-    assert!(err.contains(LINE) && err.contains("agent renames one of the headings"), "{}", err);
+    assert!(err.contains(LINE) && err.contains("agent rewrites one of the two sections"), "{}", err);
     assert_eq!(ledger(&dir), before, "a refused approve writes no row");
     assert!(!std::fs::read_to_string(&record).unwrap().contains("id: "), "a refused approve mints no id");
 

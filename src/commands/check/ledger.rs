@@ -1,4 +1,4 @@
-use crate::rules::Rule;
+use crate::rules::Class;
 use super::Failure;
 use crate::ledger::{Ledger, Row};
 use crate::msg;
@@ -23,13 +23,14 @@ pub(super) fn check_ledger(
     root: &Path,
     ledger_content: &str,
     since: Option<&str>,
+    stops: &mut Vec<String>,
 ) -> Vec<Failure> {
     let mut out = Vec::new();
     for (lineno, raw) in &led.malformed {
-        out.push(Failure::new(Rule::Ledger, msg::malformed_ledger_row(*lineno, raw)));
+        out.push(Failure::said(Class::Ledger, msg::malformed_ledger_row(*lineno, raw)));
     }
 
-    out.extend(check_held(root, repo::LEDGER_PATH, ledger_content, since, Rule::Ledger, &LEDGER_MSGS));
+    out.extend(check_held(root, repo::LEDGER_PATH, ledger_content, since, Class::Ledger, &LEDGER_MSGS, stops));
 
     out.extend(check_same_time_competition(led));
     out.extend(check_dropped(led, records, root));
@@ -41,7 +42,7 @@ pub(super) fn check_ledger(
                 .iter()
                 .any(|r| r.event == "asked" && r.id == row.id && r.hash == row.hash);
             if !has_match {
-                out.push(Failure::new(Rule::Ledger, msg::ledger_answered_without_asked(
+                out.push(Failure::said(Class::Ledger, msg::ledger_answered_without_asked(
                         &row.id,
                         led.latest_asked(&row.id).map(|r| r.detail.as_str()),
                     )));
@@ -63,7 +64,7 @@ pub(super) fn check_ledger(
 /// or the entry on the dropped question (dependent).
 fn check_dropped(led: &Ledger, records: &[RecordFile], root: &Path) -> Vec<Failure> {
     let mut out = Vec::new();
-    let fail = |message: String| Failure::new(Rule::Ledger, message);
+    let fail = |said: msg::Said| Failure::said(Class::Ledger, said);
     for (at, row) in led.rows.iter().enumerate().filter(|(_, r)| r.event == "dropped") {
         // Per "Does a decision change after it is answered?": a question
         // that was answered or refused is never removed. `led.rows` is
@@ -80,7 +81,7 @@ fn check_dropped(led: &Ledger, records: &[RecordFile], root: &Path) -> Vec<Failu
             [id] if record::is_uuid(id) => (id, None),
             [id, l] if record::is_uuid(id) && l.chars().count() == 1 => (id, l.chars().next()),
             _ => {
-                out.push(fail(msg::ledger_dropped_malformed(&row.id, &row.detail)));
+                out.push(fail(msg::ledger_dropped_malformed(&row.id)));
                 continue;
             }
         };
@@ -152,9 +153,9 @@ fn check_dropped(led: &Ledger, records: &[RecordFile], root: &Path) -> Vec<Failu
 /// The refusals of one held file: the ledger's and the reader file's differ
 /// in what they name, not in the rule.
 pub(super) struct HeldMsgs {
-    pub not_append_only: fn() -> String,
-    pub merge_drops_rows: fn() -> String,
-    pub since_drops_rows: fn(&str) -> String,
+    pub not_append_only: fn() -> msg::Said,
+    pub merge_drops_rows: fn() -> msg::Said,
+    pub since_drops_rows: fn(&str) -> msg::Said,
     /// Whether this file reports a merge parent or a `since` commit that
     /// cannot be read; the ledger reports it, and the reader file leaves it
     /// to that one report, since both hit the same commit.
@@ -183,8 +184,9 @@ pub(super) fn check_held(
     path: &str,
     content: &str,
     since: Option<&str>,
-    check: crate::rules::Rule,
+    class: Class,
     msgs: &HeldMsgs,
+    stops: &mut Vec<String>,
 ) -> Vec<Failure> {
     let ledger_content = content;
     let mut out = Vec::new();
@@ -208,7 +210,7 @@ pub(super) fn check_held(
     // test just below -- the same rule, just against a different ref.
     if let Some(head_content) = repo::git(root, &["show", &format!("HEAD:{}", path)]) {
         if lines_missing(&head_content, &present) {
-            out.push(Failure::new(check, (msgs.not_append_only)()));
+            out.push(Failure::said(class, (msgs.not_append_only)()));
         }
     }
 
@@ -236,7 +238,7 @@ pub(super) fn check_held(
     // passing.
     if repo::git(root, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_some() {
         if ref_ledger_has_rows_missing(root, path, "MERGE_HEAD", &present) {
-            out.push(Failure::new(check, (msgs.merge_drops_rows)()));
+            out.push(Failure::said(class, (msgs.merge_drops_rows)()));
         }
     } else {
         let parents = head_parents(root);
@@ -254,9 +256,9 @@ pub(super) fn check_held(
             }
             if unreadable && !msgs.report_unreadable {
             } else if unreadable {
-                out.push(Failure::new(check, msg::ledger_merge_parents_unreadable()));
+                stops.push(msg::ledger_merge_parents_unreadable());
             } else if drops {
-                out.push(Failure::new(check, (msgs.merge_drops_rows)()));
+                out.push(Failure::said(class, (msgs.merge_drops_rows)()));
             }
         }
     }
@@ -275,10 +277,10 @@ pub(super) fn check_held(
         if !repo::is_zero_sha(commit) {
             if !parent_object_present(root, commit) {
                 if msgs.report_unreadable {
-                    out.push(Failure::new(check, msg::ledger_since_unreadable(commit)));
+                    stops.push(msg::ledger_since_unreadable(commit));
                 }
             } else if ref_ledger_has_rows_missing(root, path, commit, &present) {
-                out.push(Failure::new(check, (msgs.since_drops_rows)(commit)));
+                out.push(Failure::said(class, (msgs.since_drops_rows)(commit)));
             }
         }
     }
@@ -414,7 +416,7 @@ fn check_same_time_competition(led: &Ledger) -> Vec<Failure> {
     subjects.sort();
     subjects
         .into_iter()
-        .map(|(time, subject)| Failure::new(Rule::Ledger, msg::ledger_same_time_competition(&time, &subject)))
+        .map(|(time, subject)| Failure::said(Class::Ledger, msg::ledger_same_time_competition(&time, &subject)))
         .collect()
 }
 

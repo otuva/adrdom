@@ -55,7 +55,7 @@ fn ledger_append_only_violation_is_detected_after_a_commit() {
     let out = adr(&dir, &["check"], &[], "");
     let out_text = stdout(&out);
     assert!(
-        !out_text.contains("ledger:"),
+        !out_text.contains("past ledger rows stay byte for byte"),
         "unexpected ledger failure before tampering: {}",
         out_text
     );
@@ -79,8 +79,7 @@ fn ledger_append_only_violation_is_detected_after_a_commit() {
     let out2 = adr(&dir, &["check"], &[], "");
     let out2_text = stdout(&out2);
     assert!(!out2.status.success());
-    assert!(out2_text.contains("ledger:"), "{}", out2_text);
-    assert!(out2_text.contains("missing or changed"), "{}", out2_text);
+    assert!(out2_text.contains("a row from HEAD's ledger is missing or changed; past ledger rows stay byte for byte; owner restores the missing or changed row from HEAD"), "{}", out2_text);
 }
 
 // adr: dfd32ef6-c2ac-40ef-b8b3-9c58732516b1
@@ -223,7 +222,7 @@ fn ledger_deleted_committed_row_fails_check_but_a_new_appended_row_still_passes(
 
     let clean_check = adr(&dir, &["check"], &[], "");
     assert!(
-        !stdout(&clean_check).contains("ledger:"),
+        !stdout(&clean_check).contains("past ledger rows stay byte for byte"),
         "unexpected ledger failure before deleting anything: {}",
         stdout(&clean_check)
     );
@@ -243,8 +242,7 @@ fn ledger_deleted_committed_row_fails_check_but_a_new_appended_row_still_passes(
     let deleted_check = adr(&dir, &["check"], &[], "");
     assert!(!deleted_check.status.success());
     let deleted_text = stdout(&deleted_check);
-    assert!(deleted_text.contains("ledger:"), "{}", deleted_text);
-    assert!(deleted_text.contains("missing or changed"), "{}", deleted_text);
+    assert!(deleted_text.contains("a row from HEAD's ledger is missing or changed; past ledger rows stay byte for byte; owner restores the missing or changed row from HEAD"), "{}", deleted_text);
 
     // Restore HEAD's content untouched and append a genuinely new row on
     // top: every HEAD row is still present, so the check must pass again.

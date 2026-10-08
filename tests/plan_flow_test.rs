@@ -205,7 +205,7 @@ fn plan_lifecycle_end_to_end() {
     assert!(!out.status.success(), "check should have failed: {}", stdout(&out));
     assert!(
         stdout(&out).contains(
-            "answers: adrdom/decisions/widget.md: \"1.2 Does the paint match the widget's color?\" answer set on \"1.1 What color is the widget?\" changed after ask; agent restores it, a change is a plan change"
+            "answer set on 1.1 What color is the widget? changed after ask; a depends entry's answer set stays as asked; agent restores the answer set from git"
         ),
         "{}",
         stdout(&out)

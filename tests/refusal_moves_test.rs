@@ -58,7 +58,7 @@ fn an_entry_on_an_unanswered_question_of_another_file_says_it_waits() {
     // turn it is (nobody's but the owner's, through alpha), not a move the
     // agent cannot make.
     let refusal = format!(
-        "{}: \"Is the widget beta hold?\" depends on \"Is the widget alpha hold?\" ({}) which is not answered yet; not yet, after it is answered",
+        "{}: \"Is the widget beta hold?\" depends on \"Is the widget alpha hold?\" ({}) which is not answered yet; a question stands only on decisions in force; not yet, after it is answered",
         B, A
     );
     let out = adr(&dir, &["check"], &[], "");
@@ -99,7 +99,7 @@ fn a_tie_in_a_file_named_outside_ascii_counts() {
     for args in [&["check"][..], &["check", "--staged"][..]] {
         let out = adr(&dir, args, &[], "");
         assert!(out.status.success(), "{:?}: {}", args, stdout(&out));
-        assert!(!stdout(&out).contains("untested:"), "{:?}: {}", args, stdout(&out));
+        assert!(!stdout(&out).contains("no tracked file holds its tie"), "{:?}: {}", args, stdout(&out));
     }
 }
 
@@ -141,11 +141,10 @@ fn the_cap_refusal_names_the_questions_and_the_move() {
     let path = write_record(&dir, rel, &plan("widget"));
 
     let refusal = format!(
-        "{}: 5 questions would be put to the owner together, the most is 4: \
+        "{}: 5 questions in one tier, the most is 4: \
 \"Is the widget one hold?\", \"Is the widget two hold?\", \"Is the widget three hold?\", \
 \"Is the widget four hold?\", \"{}\"; \
-agent finds a question among these that assumes the answer of another one and names that one on its depends line, \
-or splits the file when none does",
+no tier holds more than four questions; agent rewrites the depends lines of these questions",
         rel, FIFTH
     );
     let out = adr(&dir, &["check"], &[], "");
@@ -187,9 +186,8 @@ fn the_cap_refusal_names_only_the_questions_not_answered() {
     std::fs::write(&path, content).unwrap();
 
     let refusal = format!(
-        "{}: 5 questions stand together, the most is 4: 4 answered, and \"Is the widget five hold?\"; \
-agent finds a question among the ones named that assumes the answer of another one and names that one on its depends line, \
-or moves it to another file when none does",
+        "{}: 5 questions in one tier, 4 answered, the most is 4: \"Is the widget five hold?\"; \
+no tier holds more than four questions; agent rewrites the depends lines of these questions",
         rel
     );
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
@@ -227,8 +225,8 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(
         stdout(&out).contains(&format!(
-            "untested: {}: \"{}\" is answered and no tracked file holds \"adr: {}\"",
-            A, ALPHA, alpha
+            "{}: {} is answered and no tracked file holds its tie; a current decision is reported until a test names it; agent builds \"{}\" and puts \"adr: {}\" in a test that shows it",
+            A, ALPHA, ALPHA, alpha
         )),
         "{}",
         stdout(&out)
@@ -271,7 +269,7 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     let text = stdout(&out);
     assert!(
         text.contains(&format!(
-            "tested: {} (\"{}\"): tied to a test and not a current decision at tested.txt:1; agent removes",
+            "{} (\"{}\") tied to a test and not a current decision, at tested.txt:1; every test tie names a current decision; agent removes the tie comment from the test",
             alpha, ALPHA
         )),
         "{}",
@@ -290,7 +288,7 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     assert!(!out.status.success());
     assert!(
         stderr(&out).contains(&format!(
-            "approve: {}: \"Is the widget delta hold?\": supersedes {} (\"{}\"), which is not a current decision; agent removes it from the supersedes line or names a current decision",
+            "{}: \"Is the widget delta hold?\": supersedes {} (\"{}\"), which is not a current decision; a question supersedes only a current decision; agent rewrites the supersedes entry",
             A,
             alpha, ALPHA
         )),
@@ -366,7 +364,7 @@ fn a_settings_file_that_does_not_parse_names_its_fix_once() {
 
     let check = stdout(&adr(&dir, &["check"], &[], ""));
     let line = check.lines().find(|l| l.contains("settings.json")).unwrap_or_else(|| panic!("{}", check));
-    assert!(line.ends_with(fix), "check names another move: {}", line);
+    assert!(line.ends_with("agent rewrites the file, then runs: adr install --claude"), "check names another move: {}", line);
 
     let out = adr_owner(&dir, &["uninstall"], "");
     assert!(!out.status.success());
@@ -479,8 +477,9 @@ fn ask_and_plan_on_a_missing_topic_file_name_the_command_that_clears_it() {
 
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 //
-// A refusal of several lines names the command on every line: ask on a terms
-// file with two faulty entries prints each finding with `ask: ` in front.
+// A refusal of several lines names its move on every line: ask on a terms
+// file with two faulty entries prints each finding with its own agent move
+// and no command name in front.
 #[test]
 fn a_refusal_of_several_lines_names_the_command_on_every_line() {
     let dir = init_repo();
@@ -492,5 +491,5 @@ fn a_refusal_of_several_lines_names_the_command_on_every_line() {
     let err = stderr(&out);
     let lines: Vec<&str> = err.lines().collect();
     assert!(lines.len() >= 2, "{}", err);
-    assert!(lines.iter().all(|l| l.starts_with("ask: ") && !l.starts_with("ask: ask: ")), "{}", err);
+    assert!(lines.iter().all(|l| l.starts_with("adrdom/terms.md:") && l.contains("; agent ")), "{}", err);
 }

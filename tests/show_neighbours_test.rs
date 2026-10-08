@@ -203,12 +203,12 @@ fn the_next_lines_follow_the_planning_steps() {
     };
     ends(&next(&dir), &|_| format!("agent runs: adr plan {}", REL));
     assert!(adr(&dir, &["plan", p.to_str().unwrap()], &[], "").status.success());
-    ends(&next(&dir), &|h| format!("agent writes lines for \"{}\"", h));
+    ends(&next(&dir), &|h| format!("agent writes the missing line under \"{}\"", h));
     plan_record(&dir, REL);
     ends(&next(&dir), &|h| format!("agent writes the body of \"{}\"", h));
     // The bodies written over a file without the lines: the lines come first.
     write_topic(&dir);
-    ends(&next(&dir), &|h| format!("agent writes lines for \"{}\"", h));
+    ends(&next(&dir), &|h| format!("agent writes the missing line under \"{}\"", h));
     plan_record(&dir, REL);
     assert_eq!(next(&dir), vec![format!("owner runs: adr approve {}", REL)]);
 }

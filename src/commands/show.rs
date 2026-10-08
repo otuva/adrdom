@@ -10,7 +10,7 @@
 //! "Does a command print under a flag what it computes from the records?",
 //! 36dfbeaa A): `--neighbours`, `--dependents` and `--unrelated`. Every line goes through
 //! `out` (per "What does a command that writes nothing print?", 848e1b76 A).
-use crate::rules::Rule;
+use crate::rules::Command;
 use crate::approval::{self, Change, Side};
 use crate::blame;
 use crate::ledger::{self, Ledger};
@@ -120,7 +120,7 @@ impl Records {
     /// The finding on an adrdom/terms.md that exists and cannot be read.
     pub(crate) fn terms_unreadable_finding(&self) -> Option<Line> {
         let e = self.terms_unreadable.as_ref()?;
-        Some(Line::Finding(Finding::new(Rule::Terms, msg::file_unreadable(repo::TERMS_PATH, e))))
+        Some(out::refusal(Command::Show, &msg::file_unreadable(repo::TERMS_PATH, e)))
     }
 
     pub(crate) fn minted_terms(&self) -> Option<&TermsFile> {
@@ -174,7 +174,7 @@ pub fn run(record_arg: Option<PathBuf>, all: bool, views: Views) -> i32 {
     let Some(root) = repo::find_root() else {
         let args = show_args(record_arg.as_deref(), all, &views);
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
-        out::eprint(&[out::refusal(Rule::Show, &msg::not_a_repo("show", &args, Actor::Agent))]);
+        out::eprint(&[out::refusal(Command::Show, &msg::not_a_repo("show", &args, Actor::Agent))]);
         return 1;
     };
     let r = Records::load(root);
@@ -182,7 +182,7 @@ pub fn run(record_arg: Option<PathBuf>, all: bool, views: Views) -> i32 {
         Some(p) => match file_form(&r, &state::given_rel(&r.root, p).unwrap_or_else(|| p.display().to_string()), views) {
             Ok(lines) => lines,
             Err(refusal) => {
-                out::eprint(&[Line::Finding(Finding::new(Rule::Show, refusal))]);
+                out::eprint(&[out::refusal(Command::Show, &refusal)]);
                 return 1;
             }
         },
@@ -229,7 +229,7 @@ pub(crate) fn summary(r: &Records) -> Vec<Line> {
 pub(crate) fn unreadable_topic_lines(r: &Records) -> Vec<Line> {
     r.unreadable_topic_files
         .iter()
-        .map(|(rel, e)| Line::Finding(Finding::new(Rule::Parse, msg::topic_file_unreadable(rel, e))))
+        .map(|(rel, e)| out::refusal(Command::Show, &msg::topic_file_unreadable(rel, e)))
         .collect()
 }
 
@@ -294,7 +294,7 @@ pub(crate) fn rest(r: &Records) -> Vec<Line> {
         }
     }
     for (rel, _) in &r.unreadable_blame_files {
-        lines.push(Line::Finding(Finding::new(Rule::Blame, msg::blame_file_unreadable(rel))));
+        lines.push(out::refusal(Command::Show, &msg::blame_file_unreadable(rel)));
     }
     lines
 }
@@ -305,7 +305,7 @@ pub(crate) fn rest(r: &Records) -> Vec<Line> {
 fn whole(r: &Records, views: Views) -> Vec<Line> {
     let mut lines = Vec::new();
     for (rel, e) in &r.unreadable_topic_files {
-        lines.push(Line::Finding(Finding::new(Rule::Parse, msg::topic_file_unreadable(rel, e))));
+        lines.push(out::refusal(Command::Show, &msg::topic_file_unreadable(rel, e)));
     }
     for rf in &r.topic_files {
         lines.extend(topic_file(r, rf, views));
@@ -321,7 +321,7 @@ fn whole(r: &Records, views: Views) -> Vec<Line> {
         lines.extend(blame_file(r, bf));
     }
     for (rel, _) in &r.unreadable_blame_files {
-        lines.push(Line::Finding(Finding::new(Rule::Blame, msg::blame_file_unreadable(rel))));
+        lines.push(out::refusal(Command::Show, &msg::blame_file_unreadable(rel)));
     }
     lines
 }

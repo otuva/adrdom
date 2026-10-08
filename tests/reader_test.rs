@@ -56,7 +56,7 @@ fn reader_failures(dir: &Path, extra: &[&str]) -> Vec<String> {
     args.extend_from_slice(extra);
     stdout(&adr(dir, &args, &[], ""))
         .lines()
-        .filter(|l| l.starts_with("reader: "))
+        .filter(|l| l.contains("reader"))
         .map(String::from)
         .collect()
 }
@@ -161,7 +161,7 @@ fn a_merge_keeps_both_branches_rows_and_check_fails_one_that_drops_them() {
     git_ok(&dir, &["checkout", "-q", "-b", "drops"]);
     git_ok(&dir, &["merge", "-q", "--no-ff", "-s", "ours", "--no-edit", "b"]);
     let f = reader_failures(&dir, &[]);
-    assert!(f.iter().any(|l| l.contains("merge drops a branch's reader rows")), "{:?}", f);
+    assert!(f.iter().any(|l| l.contains("merge drops a reader row of a merged branch")), "{:?}", f);
 
     // The union rule keeps both sides' rows with no conflict.
     git_ok(&dir, &["checkout", "-q", "a"]);

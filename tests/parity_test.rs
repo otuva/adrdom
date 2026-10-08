@@ -81,7 +81,7 @@ fn parity_tell_in_heading() {
     let content = "# Example\n\nContext prose.\n\n### How many stores exist?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-    assert_parity_note(&dir, &record, "opens assuming an answer");
+    assert_parity_note(&dir, &record, "a heading opens without assuming an answer");
 }
 
 #[test]
@@ -100,7 +100,7 @@ fn parity_tier_over_cap() {
 ### 1.5 Q5?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-    assert_parity_note(&dir, &record, "5 questions would be put to the owner together, the most is 4");
+    assert_parity_note(&dir, &record, "5 questions in one tier, the most is 4");
 }
 
 // a depends list split across
@@ -116,7 +116,7 @@ fn parity_two_depends_lines() {
     let content = "# Example\n\n### 1.1 Q?\ndepends: decision\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-    assert_parity_note(&dir, &record, "second depends line");
+    assert_parity_note(&dir, &record, "depends second line, line 5");
 }
 
 // a supersedes list split
@@ -132,7 +132,7 @@ fn parity_two_supersedes_lines() {
     let content = "# Example\n\n### 1.1 Q?\ndepends: decision\nsupersedes: aaa\nsupersedes: bbb\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-    assert_parity_note(&dir, &record, "second supersedes line");
+    assert_parity_note(&dir, &record, "supersedes second line, line 6");
 }
 
 #[test]
@@ -200,7 +200,7 @@ fn parity_definition_over_two_sentences() {
     assert_parity(
         &dir,
         &terms,
-        "term \"decision\" definition has 3 sentences, more than two",
+        "term \"decision\" definition has 3 sentences; a definition holds one or two sentences",
     );
 }
 

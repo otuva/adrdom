@@ -17,10 +17,10 @@ pub(super) fn render_terms(r: &Records, last: &[Line], token: &str) -> String {
         // The finding `show` prints for a terms file that cannot be read.
         match r.terms_unreadable_finding() {
             Some(l) => body.push_str(&format!("{}\n", out::html(&l))),
-            None => body.push_str(&format!("{}\n", out::html(&Line::Finding(crate::rules::Finding::new(
-                crate::rules::Rule::Show,
-                crate::msg::read_failed(repo::TERMS_PATH, "no such file", crate::msg::Next::agent("names a file that exists")),
-            ))))),
+            None => body.push_str(&format!("{}\n", out::html(&out::refusal(
+                crate::rules::Command::Show,
+                &crate::msg::read_failed(repo::TERMS_PATH, "no such file", crate::msg::Next::agent("names a file that exists")),
+            )))),
         }
         body.push_str("</header>\n");
         return page("Terms", "/terms", &body, false);

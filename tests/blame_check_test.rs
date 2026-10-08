@@ -27,9 +27,8 @@ fn check_fails_when_the_origin_was_edited_after_approval() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let text = stdout(&out);
-    assert!(text.contains("blame:"), "{}", text);
-    assert!(text.contains("no longer matches"), "{}", text);
-    assert!(text.contains("docs/x.md"), "{}", text);
+    assert!(text.contains("adrdom/blame/x.md: blob no longer matches docs/x.md"), "{}", text);
+    assert!(text.contains("owner runs: adr approve adrdom/blame/x.md"), "{}", text);
 }
 
 // adr: 5fddeeb5-cf54-4550-a701-dd9e4a6a81d6
@@ -190,9 +189,8 @@ fn check_fails_when_the_origin_is_gone_with_an_open_decision_row() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let text = stdout(&out);
-    assert!(text.contains("blame:"), "{}", text);
-    assert!(text.contains("is missing"), "{}", text);
-    assert!(text.contains("docs/x.md"), "{}", text);
+    assert!(text.contains("adrdom/blame/x.md: origin docs/x.md is missing"), "{}", text);
+    assert!(text.contains("agent restores docs/x.md from git"), "{}", text);
 }
 
 // adr: 4bb5ef1b-da16-4206-a7d2-c7380c36a4cc
@@ -215,9 +213,8 @@ fn a_renamed_origin_counts_as_missing_and_names_the_old_path() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let text = stdout(&out);
-    assert!(text.contains("blame:"), "{}", text);
-    assert!(text.contains("is missing"), "{}", text);
-    assert!(text.contains("docs/x.md"), "{}", text);
+    assert!(text.contains("adrdom/blame/x.md: origin docs/x.md is missing"), "{}", text);
+    assert!(text.contains("agent restores docs/x.md from git"), "{}", text);
 }
 
 // adr: 4bb5ef1b-da16-4206-a7d2-c7380c36a4cc
@@ -322,9 +319,9 @@ fn check_fails_when_the_origin_is_gone_and_the_blame_file_is_unapproved() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let text = stdout(&out);
-    assert!(text.contains("blame:"), "{}", text);
-    assert!(text.contains("is missing"), "{}", text);
+    assert!(text.contains("adrdom/blame/x.md: origin docs/x.md is missing"), "{}", text);
     assert!(text.contains("approval"), "{}", text);
+    assert!(text.contains("agent restores docs/x.md from git"), "{}", text);
 }
 
 // --- an unapproved blame file is no line of check's ----------------------
@@ -391,11 +388,11 @@ fn check_notes_a_shape_error_in_a_blame_file_awaiting_approval() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
-    assert!(stdout(&out).contains("blame:"), "{}", stdout(&out));
+    assert!(stdout(&out).contains("adrdom/blame/bad.md: line 2"), "{}", stdout(&out));
     let approve = adr_owner(&dir, &["approve", "adrdom/blame/bad.md"], "");
     assert!(!approve.status.success(), "approve takes a blame file with a shape fault");
     for line in stderr(&approve).lines() {
-        let finding = line.strip_prefix("approve: ").unwrap_or(line);
+        let finding = line;
         assert!(stdout(&out).contains(finding), "approve refuses with {:?}, check prints:\n{}", finding, stdout(&out));
     }
 }
@@ -445,9 +442,8 @@ fn check_fails_naming_a_blame_file_that_cannot_be_read() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let text = stdout(&out);
-    assert!(text.contains("blame:"), "{}", text);
-    assert!(text.contains("adrdom/blame/binary.md"), "{}", text);
-    assert!(text.contains("cannot be read"), "{}", text);
+    assert!(text.contains("adrdom/blame/binary.md: cannot be read"), "{}", text);
+    assert!(text.contains("agent fixes the file"), "{}", text);
 }
 
 // adr: 4bb5ef1b-da16-4206-a7d2-c7380c36a4cc
@@ -513,7 +509,7 @@ fn check_and_show_resolve_a_blame_row_alike() {
     let show = adr(&dir, &["show", "adrdom/blame/x.md"], &[], "");
     assert!(show.status.success(), "{}", stderr(&show));
     let blame_lines = |text: &str| -> Vec<String> {
-        let mut v: Vec<String> = text.lines().filter(|l| l.starts_with("blame: ")).map(str::to_string).collect();
+        let mut v: Vec<String> = text.lines().filter(|l| l.starts_with("adrdom/blame/")).map(str::to_string).collect();
         v.sort();
         v
     };

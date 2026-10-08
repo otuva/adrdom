@@ -1,4 +1,4 @@
-use crate::rules::Rule;
+use crate::rules::Class;
 use super::Failure;
 use crate::rules::Finding;
 use crate::ledger::Ledger;
@@ -53,7 +53,7 @@ pub(super) fn check_ids(
     let sole = stale.len() == 1;
     for rel in &stale {
         for (id, heading, event) in crate::rules::struck_asked_ids(rel, sole, records, led) {
-            out.push(Failure::new(Rule::Ids, msg::removed_from_plan(&id, &heading, event, rel)));
+            out.push(Failure::said(Class::Ids, msg::removed_from_plan(&id, &heading, event, rel)));
             struck.insert(id);
         }
     }
@@ -109,17 +109,17 @@ pub(super) fn check_ids(
                 .latest_asked(&id)
                 .map(|r| r.detail.clone())
                 .unwrap_or_else(|| id.clone());
-            out.push(Failure::new(Rule::Ids, msg::removed_with_file(&id, &heading, event.unwrap_or("unknown"), crate::moves::removal_next(rel, holds))));
+            out.push(Failure::said(Class::Ids, msg::removed_with_file(&id, &heading, event.unwrap_or("unknown"), crate::moves::removal_next(rel, holds))));
             continue;
         }
         if struck.contains(&id) {
             continue;
         }
-        out.push(Failure::new(Rule::Ids, msg::ledger_id_not_found(&id, led.latest_asked(&id).map(|r| r.detail.as_str()))));
+        out.push(Failure::said(Class::Ids, msg::ledger_id_not_found(&id, led.latest_asked(&id).map(|r| r.detail.as_str()))));
     }
 
     for r in missing_answered {
-        out.push(Failure::new(Rule::Ids, r.message.clone()));
+        out.push(r.clone());
     }
 
     out

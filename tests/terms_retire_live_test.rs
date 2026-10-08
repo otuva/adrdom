@@ -83,8 +83,8 @@ fn assert_retire_refused(dir: &Path, terms: &Path, rows_before: usize, heading: 
     let err = stderr(&out);
     assert!(err.contains(heading), "stderr should name {:?}: {}", heading, err);
     assert!(
-        err.contains("takes `retired: yes` off \"decision\" in adrdom/terms.md"),
-        "stderr should name the un-retire: {}",
+        err.contains("term \"decision\" retired but used by") && err.contains("no question names a retired term"),
+        "stderr should name the retired term in use: {}",
         err
     );
     assert_eq!(terms_rows(dir), rows_before, "a refused retire writes no terms row");
@@ -178,7 +178,7 @@ fn retire_refused_when_an_asked_questions_terms_line_cannot_be_read() {
     assert!(!out.status.success(), "retire should have refused: {}{}", stdout(&out), stderr(&out));
     let err = stderr(&out);
     assert!(err.contains(H_DECISION), "stderr should name the question: {}", err);
-    assert!(err.contains("git checkout -- adrdom/decisions/example.md"), "{}", err);
+    assert!(err.contains("agent restores adrdom/decisions/example.md from git"), "{}", err);
     assert_eq!(terms_rows(&dir), rows, "a refused retire writes no terms row");
 }
 

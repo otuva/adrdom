@@ -1,4 +1,4 @@
-use crate::rules::Rule;
+use crate::rules::Class;
 use super::Failure;
 use crate::ledger::Ledger;
 use crate::msg;
@@ -26,7 +26,7 @@ pub(super) fn check_answers(
         // The rules on each question's answer or refusal, the judgement
         // approve, ask, show and plan read (`rules::closed_findings`).
         for f in crate::rules::closed_findings(&rf.rel, rf, led) {
-            out.push(Failure::new(Rule::Answers, f.message));
+            out.push(f);
         }
         // The file's report, judged once for every question of it edited
         // after asking: the moves a refusal's line names are the file's, the
@@ -54,7 +54,7 @@ pub(super) fn check_answers(
                             let j = crate::moves::Judging { root, all: as_loaded, terms_list, led, index };
                             crate::moves::of_unasked_question_in(&j, loaded, &sec.heading_text, false)
                         });
-                        out.push(Failure::new(Rule::Answers, msg::edited_after_asking(&rf.rel, &sec.heading_text, moves)));
+                        out.push(Failure::said(Class::Answers, msg::edited_after_asking(&rf.rel, &sec.heading_text, moves)));
                     }
                 }
             }
@@ -112,7 +112,7 @@ fn check_frozen_sets(
             None => record::sha256_hex(&format!("{}=", dep_id)),
         };
         if expected != row.hash {
-            out.push(Failure::new(Rule::Answers, msg::answer_set_changed(&rf.rel, &dep_heading, &sec.heading_text)));
+            out.push(Failure::said(Class::Answers, msg::answer_set_changed(&rf.rel, &dep_heading, &sec.heading_text)));
         }
     }
     out

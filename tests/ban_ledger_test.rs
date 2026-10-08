@@ -35,7 +35,7 @@ fn check_fails_when_a_hash_is_back_in_the_file_after_being_unbanned() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains("in file, ledger says unbanned"),
+        text.contains("in the ban list, ledger says unbanned"),
         "{}",
         text
     );

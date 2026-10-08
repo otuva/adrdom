@@ -48,7 +48,7 @@ fn check_approve_and_plan_find_a_loaded_phrase_in_a_body() {
     let (dir, rec) = unapproved(&question("Does the decision hold?", "the decision currently holds."));
     let (chk, apr, pln) = three(&dir, &rec, true);
     for out in [&chk, &apr, &pln] {
-        assert!(out.contains("\"currently\" states what the code does now"), "{}", out);
+        assert!(out.contains("\"currently\" states what the code does"), "{}", out);
     }
     assert!(apr.contains("agent rewrites the line"), "{}", apr);
     // The list is the tool's own (src/tells.rs): the repository carries no
@@ -141,7 +141,7 @@ fn check_approve_and_plan_find_a_set_on_a_term() {
     let rec = write_record(&dir, REL, &content);
     let (chk, apr, pln) = three(&dir, &rec, true);
     for out in [&chk, &apr, &pln] {
-        assert!(out.contains("depends on a term under an answer set, and a term has no options"), "{}", out);
+        assert!(out.contains("depends on a term under an answer set; an answer set names options, and a term has none"), "{}", out);
     }
     assert_eq!(apr.matches("under an answer set").count(), 1, "{}", apr);
 }

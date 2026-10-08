@@ -160,7 +160,7 @@ fn plan_line_kind(line: &str) -> Option<&'static str> {
         Some("read")
     } else if ["  decision \"", "  term \"", "  question \""].iter().any(|p| line.starts_with(p)) {
         Some("neighbour")
-    } else if line.starts_with(&format!("plan: {}: ", REL)) {
+    } else if line.starts_with(&format!("{}: ", REL)) {
         Some("finding")
     } else if is_move(line) {
         Some("move")
@@ -220,7 +220,7 @@ fn read_prints_the_marked_pairs_and_the_move_and_nothing_else() {
     let out = ok(&dir, &["read"]);
     let lines: Vec<&str> = out.lines().collect();
     assert_eq!(lines.len(), 2, "{}", out);
-    assert!(lines[0].starts_with("read: same: \""), "{}", out);
+    assert!(lines[0].starts_with("same: \""), "{}", out);
     assert_eq!(lines[1], "agent writes a question that supersedes one decision of each same or inconsistent pair");
 }
 

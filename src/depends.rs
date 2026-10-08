@@ -168,7 +168,7 @@ pub fn resolve_dep(
 /// `name` is what the identifier of a `NotCurrentDecision` names, when the
 /// caller can tell: a term's name, or the heading of a question in any
 /// state.
-pub fn dep_refusal_text(rel: &str, heading: &str, err: &DepError, name: Option<&str>) -> String {
+pub fn dep_refusal_text(rel: &str, heading: &str, err: &DepError, name: Option<&str>) -> msg::Said {
     match err {
         DepError::NotCurrentDecision(id) => msg::dep_not_current_decision(rel, heading, id, name),
         DepError::RetiredTermId(id) => msg::dep_retired_term_id(rel, heading, id, name),
@@ -448,7 +448,7 @@ pub fn bad_letters(
     dependent_heading: &str,
     target: &Section,
     letters: &[char],
-) -> Vec<String> {
+) -> Vec<msg::Said> {
     if target.options.is_empty() {
         return Vec::new();
     }
@@ -473,7 +473,7 @@ pub fn bad_letters_for_decision(
     records: &[RecordFile],
     id: &str,
     letters: &[char],
-) -> Vec<String> {
+) -> Vec<msg::Said> {
     let Some(target) = records
         .iter()
         .find_map(|rf| rf.sections.iter().find(|s| s.id.as_deref() == Some(id)))

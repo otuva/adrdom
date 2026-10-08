@@ -189,7 +189,7 @@ fn approve_refuses_a_set_on_an_entry_naming_an_answered_question() {
     assert!(!out.status.success());
     let err = stderr(&out);
     assert!(err.contains("answered, under an answer set"), "{}", err);
-    assert!(err.contains("agent removes the answer set") && err.contains("owner runs: adr approve"), "{}", err);
+    assert!(err.contains("agent removes the answer set from that entry") && err.contains("owner runs: adr approve"), "{}", err);
 
     let fixed = std::fs::read_to_string(dir.join(REL)).unwrap().replace("?=A", "?");
     std::fs::write(dir.join(REL), fixed).unwrap();
@@ -314,8 +314,8 @@ fn approve_refuses_a_set_on_an_entry_naming_a_term() {
     let out = approve(&dir);
     assert!(!out.status.success(), "{}", stdout(&out));
     let err = stderr(&out);
-    assert!(err.contains("a term has no options"), "{}", err);
-    assert!(err.contains("agent removes the answer set"), "{}", err);
+    assert!(err.contains("a term has none"), "{}", err);
+    assert!(err.contains("agent removes the answer set from that entry"), "{}", err);
     assert!(ledger_rows(&dir, "approved").is_empty());
 }
 
@@ -356,12 +356,12 @@ fn a_set_letter_the_target_lacks_is_reported_by_check_and_refused_by_approve() {
     let dir = setup(&file_of(&[Q1, &bad]));
     let out = adr(&dir, &["check"], &[], "");
     let all = format!("{}{}", stdout(&out), stderr(&out));
-    assert!(all.contains("names option D which \"1.1 First question?\" does not have"), "{}", all);
+    assert!(all.contains("under an answer set naming option D, which it does not have"), "{}", all);
 
     let out = approve(&dir);
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("names option D which"), "{}", err);
+    assert!(err.contains("naming option D, which it does not have"), "{}", err);
     assert!(ledger_rows(&dir, "approved").is_empty());
 
     let good = Q2.replace("depends: decision", "depends: 1.1 First question?=A|B");

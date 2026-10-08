@@ -43,7 +43,7 @@ fn refused_everywhere(dir: &std::path::Path, record: &std::path::Path, needle: &
 fn a_depends_list_continued_on_a_second_line_is_refused() {
     // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
     let (dir, record) = approved_then_edited(|d| format!("{d}\n{d}"));
-    refused_everywhere(&dir, &record, "second depends line");
+    refused_everywhere(&dir, &record, "depends second line");
 }
 
 #[test]
@@ -57,7 +57,7 @@ fn a_depends_list_continued_on_a_bare_following_line_is_refused() {
 fn a_supersedes_list_continued_on_a_second_line_is_refused() {
     // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
     let (dir, record) = approved_then_edited(|d| format!("{d}\nsupersedes: aaa\nsupersedes: bbb"));
-    refused_everywhere(&dir, &record, "second supersedes line");
+    refused_everywhere(&dir, &record, "supersedes second line");
 }
 
 #[test]

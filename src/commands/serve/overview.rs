@@ -263,7 +263,9 @@ fn check_card(r: &Records, files: &[File], shown: &[String]) -> String {
     let fresh = |fs: Vec<Finding>| -> Vec<Line> {
         fs.into_iter().map(Line::Finding).filter(|l| !shown.contains(&out::text(l))).collect()
     };
-    let failures = fresh(report.failures);
+    let mut failures: Vec<Line> =
+        report.stops.iter().map(|m| out::refusal(crate::rules::Command::Check, m)).collect();
+    failures.extend(fresh(report.failures));
     let notes = fresh(report.notes);
     if failures.is_empty() && notes.is_empty() {
         return String::new();

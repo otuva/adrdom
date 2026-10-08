@@ -167,7 +167,7 @@ fn install_writes_the_ignore_file_and_check_holds_it() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("install: adrdom/.gitignore is missing; agent runs: adr install"),
+        stdout(&out).contains("adrdom/.gitignore is missing; the adrdom gitignore equals what install writes; agent runs: adr install"),
         "{}",
         stdout(&out)
     );
@@ -179,7 +179,7 @@ fn install_writes_the_ignore_file_and_check_holds_it() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("install: adrdom/.gitignore differs from what install writes; agent runs: adr install"),
+        stdout(&out).contains("adrdom/.gitignore differs from what install writes; the adrdom gitignore equals what install writes; agent runs: adr install"),
         "{}",
         stdout(&out)
     );

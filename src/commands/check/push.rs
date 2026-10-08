@@ -7,8 +7,8 @@
 // this push's local sha; a push is not itself a commit to judge those
 // against).
 
-use crate::rules::Rule;
 use super::{stopped, Failure};
+use crate::rules::Class;
 use crate::msg::{self, Actor};
 use crate::out::{self, Line};
 use crate::repo;
@@ -36,12 +36,14 @@ pub fn run() -> i32 {
     }
 
     let mut failures: Vec<Failure> = Vec::new();
+    let mut stops: Vec<String> = Vec::new();
     for line in input.lines() {
-        failures.extend(check_one_ref(&root, line));
+        failures.extend(check_one_ref(&root, line, &mut stops));
     }
 
-    let failed = !failures.is_empty();
-    let lines: Vec<Line> = failures.into_iter().map(Line::Finding).collect();
+    let failed = !failures.is_empty() || !stops.is_empty();
+    let mut lines: Vec<Line> = stops.iter().map(|s| stopped(s.clone())).collect();
+    lines.extend(failures.into_iter().map(Line::Finding));
     out::print(&lines);
     if !failed {
         0
@@ -59,7 +61,7 @@ pub fn run() -> i32 {
 /// `check_ledger`'s HEAD/merge/`since` comparisons already share
 /// (`ledger::ref_ledger_has_rows_missing`'s sibling, `lines_missing`,
 /// against content this function reads itself).
-fn check_one_ref(root: &Path, line: &str) -> Vec<Failure> {
+fn check_one_ref(root: &Path, line: &str, stops: &mut Vec<String>) -> Vec<Failure> {
     let parts: Vec<&str> = line.split_whitespace().collect();
     if parts.len() != 4 {
         return Vec::new();
@@ -77,17 +79,18 @@ fn check_one_ref(root: &Path, line: &str) -> Vec<Failure> {
     }
 
     if !super::ledger::parent_object_present(root, remote_sha) {
-        return vec![Failure::new(Rule::Ledger, msg::ledger_push_remote_unreadable(remote_ref))];
+        stops.push(msg::ledger_push_remote_unreadable(remote_ref));
+        return Vec::new();
     }
 
     // The ledger and the reader file are held the same way ("Does check hold
     // the reader's file as it holds the ledger?", 26c5352f-3f82-4376-9dc2-8ccc0074d080).
     let mut out = Vec::new();
-    let files: [(&str, crate::rules::Rule, String); 2] = [
-        (repo::LEDGER_PATH, Rule::Ledger, msg::ledger_push_drops_rows(local_ref, remote_ref)),
-        (repo::READER_PATH, Rule::Reader, msg::reader_push_drops_rows(local_ref, remote_ref)),
+    let files: [(&str, Class, msg::Said); 2] = [
+        (repo::LEDGER_PATH, Class::Ledger, msg::ledger_push_drops_rows(local_ref, remote_ref)),
+        (repo::READER_PATH, Class::Reader, msg::reader_push_drops_rows(local_ref, remote_ref)),
     ];
-    for (path, check, message) in files {
+    for (path, class, said) in files {
         let Some(remote_content) = repo::git(root, &["show", &format!("{}:{}", remote_sha, path)]) else {
             // The remote commit holds no such file: nothing to compare.
             continue;
@@ -95,7 +98,7 @@ fn check_one_ref(root: &Path, line: &str) -> Vec<Failure> {
         let local_content = repo::git(root, &["show", &format!("{}:{}", local_sha, path)]).unwrap_or_default();
         let present: std::collections::HashSet<&str> = local_content.lines().collect();
         if super::ledger::lines_missing(&remote_content, &present) {
-            out.push(Failure::new(check, message));
+            out.push(Failure::said(class, said));
         }
     }
     out

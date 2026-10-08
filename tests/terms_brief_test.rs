@@ -123,7 +123,7 @@ fn check_fails_a_terms_brief_that_is_missing_or_differs() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains("terms: adrdom/state/terms-brief.md differs from adrdom/terms.md"),
+        text.contains("adrdom/state/terms-brief.md differs from adrdom/terms.md"),
         "{}",
         text
     );
@@ -133,7 +133,7 @@ fn check_fails_a_terms_brief_that_is_missing_or_differs() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     let text = stdout(&out);
-    assert!(text.contains("terms: adrdom/state/terms-brief.md missing"), "{}", text);
+    assert!(text.contains("adrdom/state/terms-brief.md missing"), "{}", text);
     assert!(text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
 }
 
@@ -160,7 +160,7 @@ fn check_at_a_commit_reads_the_staged_terms_brief() {
     let out = adr(&dir, &["check", "--staged"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     let text = stdout(&out);
-    assert!(text.contains("terms: adrdom/state/terms-brief.md not staged"), "{}", text);
+    assert!(text.contains("adrdom/state/terms-brief.md not staged"), "{}", text);
     assert!(text.contains("agent runs: git add adrdom/state/terms-brief.md"), "{}", text);
 
     run_git(&dir, &["add", BRIEF_PATH]);

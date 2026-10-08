@@ -205,7 +205,7 @@ fn an_unreadable_terms_or_topic_file_is_named() {
     let dir = widget_repo();
     std::fs::write(dir.join("adrdom/terms.md"), [0x23, 0x20, 0xff, 0xfe, 0x0a]).unwrap();
     let listing = show(&dir, &[]);
-    assert!(listing.contains("terms: adrdom/terms.md: cannot be read: "), "{}", listing);
+    assert!(listing.contains("show: adrdom/terms.md: cannot be read: "), "{}", listing);
     let form = show(&dir, &["adrdom/terms.md"]);
     assert!(form.contains("adrdom/terms.md: cannot be read: "), "{}", form);
     assert!(!form.contains("no such file"), "{}", form);

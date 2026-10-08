@@ -1,4 +1,4 @@
-use crate::rules::Rule;
+use crate::rules::Class;
 use super::Failure;
 use crate::ledger::Ledger;
 use crate::rules;
@@ -34,7 +34,7 @@ pub(super) fn check_terms(
 
     let Some(content) = source.read(root, repo::TERMS_PATH) else {
         if has_records {
-            out.push(Failure::new(Rule::Terms, msg::terms_missing()));
+            out.push(Failure::said(Class::Terms, msg::terms_missing()));
         }
         return out;
     };
@@ -78,14 +78,14 @@ pub(super) fn check_terms(
     // beside it.
     let refused = !refusals.is_empty() || !rules::terms_banned_hits(root, &minted, source).is_empty();
     for r in refusals {
-        out.push(Failure::new(Rule::Terms, r));
+        out.push(r);
     }
 
     if !approved || missing_ids {
         // The owner's move is named only when `approve` would take the
         // file: with a refusal above, the agent's move comes first.
         if !refused {
-            out.push(Failure::new(Rule::Terms, msg::terms_file_not_approved(crate::status::terms_file_status(led, &tf))));
+            out.push(Failure::said(Class::Terms, msg::terms_file_not_approved(crate::status::terms_file_status(led, &tf))));
         }
         return out;
     }
@@ -106,7 +106,7 @@ pub(super) fn check_terms(
     if !matches(source.read(root, repo::TERMS_BRIEF_PATH)) {
         let on_disk = *source == Source::Index
             && matches(Source::WorkingTree.read(root, repo::TERMS_BRIEF_PATH));
-        out.push(Failure::new(Rule::Terms, if on_disk {
+        out.push(Failure::said(Class::Terms, if on_disk {
                 msg::terms_brief_not_staged()
             } else if source.exists(root, repo::TERMS_BRIEF_PATH) {
                 msg::terms_brief_differs()
@@ -132,23 +132,21 @@ pub(super) fn check_terms(
             // functions below need this to pick a legal next move.
             let answered = st == Some("answered");
             let Some(tl) = sec.terms_line else {
-                out.push(Failure::new(Rule::Terms, msg::section_no_terms_line(&rel, &sec.heading_text, id, answered)));
+                out.push(Failure::said(Class::Terms, msg::section_no_terms_line(&rel, &sec.heading_text, answered)));
                 continue;
             };
             match terms::validate_pairs(rf.lines[tl].trim_end(), &tf) {
-                Err(_) => out.push(Failure::new(Rule::Terms, msg::section_terms_line_malformed(&rel, &sec.heading_text, id, answered))),
+                Err(_) => out.push(Failure::said(Class::Terms, msg::section_terms_line_malformed(&rel, &sec.heading_text, answered))),
                 Ok(problems) => {
                     for p in problems {
                         match p.kind {
-                            terms::ProblemKind::Gone => out.push(Failure::new(Rule::Terms, msg::section_term_not_found(
+                            terms::ProblemKind::Gone => out.push(Failure::said(Class::Terms, msg::section_term_not_found(
                                     &rel,
                                     &sec.heading_text,
-                                    &p.uuid,
                                     &p.word,
-                                    id,
                                     answered,
                                 ))),
-                            terms::ProblemKind::Retired(name) => out.push(Failure::new(Rule::Terms, msg::section_term_retired(&rel, &sec.heading_text, &name, id, answered))),
+                            terms::ProblemKind::Retired(name) => out.push(Failure::said(Class::Terms, msg::section_term_retired(&rel, &sec.heading_text, &name, answered))),
                         }
                     }
                 }
@@ -163,12 +161,12 @@ pub(super) fn check_terms(
         }
         let Some(tl) = &t.terms_line else { continue };
         match terms::validate_pairs(tl, &tf) {
-            Err(_) => out.push(Failure::new(Rule::Terms, msg::term_definition_terms_line_malformed(&t.name))),
+            Err(_) => out.push(Failure::said(Class::Terms, msg::term_definition_terms_line_malformed(&t.name))),
             Ok(problems) => {
                 for p in problems {
                     match p.kind {
-                        terms::ProblemKind::Gone => out.push(Failure::new(Rule::Terms, msg::term_definition_term_not_found(&t.name, &p.uuid, &p.word))),
-                        terms::ProblemKind::Retired(name) => out.push(Failure::new(Rule::Terms, msg::term_definition_term_retired(&t.name, &name))),
+                        terms::ProblemKind::Gone => out.push(Failure::said(Class::Terms, msg::term_definition_term_not_found(&t.name, &p.word))),
+                        terms::ProblemKind::Retired(name) => out.push(Failure::said(Class::Terms, msg::term_definition_term_retired(&t.name, &name))),
                     }
                 }
             }

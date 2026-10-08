@@ -1,4 +1,4 @@
-use crate::rules::Rule;
+use crate::rules::Command;
 use crate::actions;
 use crate::msg::{self, Actor};
 use crate::out;
@@ -7,21 +7,21 @@ use std::io::Read;
 
 pub fn run() -> i32 {
     if !repo::owner_authorized() {
-        out::eprint_stop(Rule::Unban, &msg::owner_refusal("unban", &[]));
+        out::eprint_stop(Command::Unban, &msg::owner_refusal("unban", &[]));
         return 2;
     }
 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint_stop(Rule::Unban, &msg::not_a_repo("unban", &[], Actor::Owner));
+            out::eprint_stop(Command::Unban, &msg::not_a_repo("unban", &[], Actor::Owner));
             return 1;
         }
     };
 
     let mut input = String::new();
     if std::io::stdin().read_to_string(&mut input).is_err() {
-        out::eprint_stop(Rule::Unban, &msg::stdin_read_failed(msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr unban"))));
+        out::eprint_stop(Command::Unban, &msg::stdin_read_failed(msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr unban"))));
         return 1;
     }
 
@@ -31,11 +31,11 @@ pub fn run() -> i32 {
     match actions::do_unban(&root, &input) {
         Ok(outcome) => {
             out::print_events(&outcome.events);
-            out::eprint(&out::stop(Rule::Unban, &outcome.input_findings.join("\n")));
+            out::eprint(&outcome.input_findings);
             0
         }
         Err(e) => {
-            out::eprint(&out::stop(Rule::Unban, &e));
+            out::eprint(&e);
             1
         }
     }
