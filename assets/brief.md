@@ -189,6 +189,9 @@ exists, and add it to git. The answers are committed as they are given.
 `adr check` reports each untested decision until a test names it; the build
 and its tests follow.
 
+Code that follows a decision may carry a comment `adr-code: <id>`, found by
+text search; it is never a test tie, and no rule judges it.
+
 Never write or edit `id:`, `terms:` or `**Answer:**` lines yourself.
 
 ## Reviewing a build

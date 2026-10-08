@@ -416,3 +416,24 @@ Standard: a limit on a set is judged on the set as the change leaves it.
   Costs: a full tier takes no replacement in its own file, so the replacement lands away from its subject.
 
 **Answer:** A
+
+### What does a comment in code carry to name a decision?
+depends: 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, e877e4a9-2caf-4fe6-9f82-5476a2abb00b, 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, f90dbd5b-8fbe-4899-8588-f8762795c2e2, 4319a653-6901-446c-94ab-6420ef472134, 751ef30c-6a2f-4936-bf9b-b9d487146e53, c3127af2-4c96-48d5-a164-bac49a9a09ec, 3460d220-e523-448b-aeff-baa8051b7d06
+unrelated: f53ac3b9-efde-427c-8027-19988aa8fda7, 946263aa-519a-47aa-b743-5cdcf52f5d35, 110f471d-ac4b-4cbb-aa7b-3f74ac442d78, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, 0487a1cf-eb61-4bf8-bd16-eed899d22d2c, aef1b384-2b33-47a2-92a8-ec7f8fb258ef, 2bae531b-c4df-48a0-89a0-3d52726741ea, 6108b8b2-911e-443b-abe0-4c6f8b407384, 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f, ece60954-56d4-4622-883e-265f3b997c9f, 05141f49-d9d2-407c-b60c-ebb195a05864
+id: 23d55c81-2224-487c-a579-298915957a79
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, checks=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, finding=ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862
+
+Problem: a comment adr: <id> is the test of a decision wherever it stands, so the same comment on the code that follows the decision clears the untested finding without a test.
+Standard: a code annotation names the requirement it implements and is distinct from the test that proves it.
+
+- A) A comment adr-code: <id>, found by text search, never a test tie, judged by no rule.
+  Why: an agent finds the code behind a decision with one search, and the comment can clear nothing.
+  Costs: a claim no gate checks; a stale or wrong comment is caught at review alone.
+- B) The same comment adr: <id> a test carries, counted as the test.
+  Why: one comment form for test and code.
+  Costs: a comment on code clears the untested finding, and a decision passes as tested with no test.
+- C) Nothing: code carries no decision name.
+  Why: the record names code through tests alone.
+  Costs: an agent building on a decision reads the code with no mark of what follows it.
+
+**Answer:** A
