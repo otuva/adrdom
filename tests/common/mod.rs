@@ -917,3 +917,100 @@ pub fn string_literals(line: &str) -> Vec<String> {
     }
     out
 }
+
+// --- the lines of a page --------------------------------------------------
+
+/// The lines a page shows as text, each as the words of the line a command
+/// prints: a `<p>` of the class record, status, finding, move or event, and a
+/// status shown as badges (`<span class="st">`) as `[name] subject`, the
+/// version of an asked question left off. Without the indent. The page's own
+/// words (headings, counts, links) are not lines.
+pub fn page_lines(body: &str) -> Vec<String> {
+    fn unhtml(s: &str) -> String {
+        let mut text = String::new();
+        let mut in_tag = false;
+        for c in s.chars() {
+            match c {
+                '<' => in_tag = true,
+                '>' => in_tag = false,
+                c if !in_tag => text.push(c),
+                _ => {}
+            }
+        }
+        text.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&")
+    }
+    let mut out = Vec::new();
+    let mut rest = body;
+    loop {
+        let p = rest.find("<p class=\"");
+        let b = rest.find("<span class=\"st\">");
+        match (p, b) {
+            (None, None) => break,
+            (Some(i), j) if j.map_or(true, |j| i < j) => {
+                let after = &rest[i..];
+                let class = after["<p class=\"".len()..].split('"').next().unwrap_or("");
+                let end = after.find("</p>").unwrap_or(after.len());
+                if ["record", "status", "finding", "move", "event"].contains(&class.split(' ').next().unwrap_or("")) {
+                    out.push(unhtml(&after[..end]).trim_start().to_string());
+                }
+                rest = &after[end..];
+            }
+            (_, Some(j)) => {
+                let after = &rest[j..];
+                let end = after.find("</span></span>").map(|e| e + "</span></span>".len()).unwrap_or(after.len());
+                let block = &after[..end];
+                let name_start = block.find("<span class=\"badge").unwrap();
+                let name_html = &block[name_start..];
+                let name = unhtml(&name_html[..name_html.find("</span>").unwrap()]);
+                let subject_at = block.find("<span class=\"subject\">").unwrap();
+                let subject = unhtml(&block[subject_at..]);
+                out.push(format!("[{}] {}", name, subject));
+                rest = &after[end..];
+            }
+            _ => unreachable!(),
+        }
+    }
+    out
+}
+
+/// A line a command prints as the page words it: the mark of a change and the
+/// version of an asked question left off a status line.
+pub fn page_words(line: &str) -> String {
+    let bare = line.strip_prefix("+ ").or_else(|| line.strip_prefix("- ")).unwrap_or(line);
+    if !bare.starts_with('[') {
+        return line.to_string();
+    }
+    match (bare.find(" @"), bare.find(']')) {
+        (Some(a), Some(b)) if a < b => format!("{}{}", &bare[..a], &bare[b..]),
+        _ => bare.to_string(),
+    }
+}
+
+/// Whether a line a command prints is the owner's move, which the page shows
+/// as a form or a link.
+pub fn is_owner_move(line: &str) -> bool {
+    line.starts_with("owner runs: ")
+}
+
+/// The owner's move `line` is on the body as what makes it: the link to the
+/// answer page of the question (or the answer form carrying its identifier
+/// and version), or the approve form naming the file.
+pub fn assert_owner_move_shown(line: &str, body: &str) {
+    if let Some(rest) = line.strip_prefix("owner runs: adr answer ") {
+        let (iv, _) = rest.split_once(' ').unwrap_or((rest, ""));
+        let (id, version) = iv.split_once('@').expect("id@version");
+        assert!(
+            body.contains(&format!("href=\"/next?show={}\"", id))
+                || (body.contains(&format!("name=\"id\" value=\"{}\"", id))
+                    && body.contains(&format!("name=\"v\" value=\"{}\"", version))),
+            "no link or form for {:?}: {}",
+            line,
+            body
+        );
+    } else if let Some(path) = line.strip_prefix("owner runs: adr approve ") {
+        assert!(body.contains(&format!("name=\"file\" value=\"{}\"", path)), "no approve form for {:?}: {}", line, body);
+    } else {
+        panic!("an owner move this test does not know: {:?}", line);
+    }
+}
+

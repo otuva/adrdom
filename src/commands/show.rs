@@ -44,11 +44,11 @@ pub struct Views {
 pub(crate) struct Records {
     pub(crate) root: PathBuf,
     pub(crate) led: Ledger,
-    terms_file: Option<TermsFile>,
+    pub(crate) terms_file: Option<TermsFile>,
     /// The error of an adrdom/terms.md that exists and cannot be read:
     /// named, never skipped in silence.
     terms_unreadable: Option<String>,
-    terms_list: Vec<Term>,
+    pub(crate) terms_list: Vec<Term>,
     pub(crate) topic_files: Vec<RecordFile>,
     unreadable_topic_files: Vec<(String, String)>,
     blame_files: Vec<blame::BlameFile>,
@@ -56,7 +56,7 @@ pub(crate) struct Records {
     pub(crate) tests: HashMap<String, Vec<String>>,
     /// Every question's heading and every term's name by its identifier:
     /// what turns an identifier on a line back into words.
-    names: HashMap<String, String>,
+    pub(crate) names: HashMap<String, String>,
     /// What the judgement of every topic file reads of the whole
     /// repository, read the first time a file is judged and kept for the
     /// rest (`rules::RepoIndex`).
@@ -116,12 +116,12 @@ impl Records {
     }
 
     /// The finding on an adrdom/terms.md that exists and cannot be read.
-    fn terms_unreadable_finding(&self) -> Option<Line> {
+    pub(crate) fn terms_unreadable_finding(&self) -> Option<Line> {
         let e = self.terms_unreadable.as_ref()?;
         Some(Line::Finding(Finding::new(Rule::Terms, msg::file_unreadable(repo::TERMS_PATH, e))))
     }
 
-    fn minted_terms(&self) -> Option<&TermsFile> {
+    pub(crate) fn minted_terms(&self) -> Option<&TermsFile> {
         self.minted_terms.get_or_init(|| self.terms_file.as_ref().map(terms::minted_copy)).as_ref()
     }
 
@@ -140,7 +140,7 @@ impl Records {
         rules::held_ids(&self.topic_files).into_iter().map(str::to_string).collect()
     }
 
-    fn removed_topic_files(&self) -> Vec<String> {
+    pub(crate) fn removed_topic_files(&self) -> Vec<String> {
         rules::removal_awaiting(&self.led, &|rel| self.root.join(rel).exists())
     }
 }
@@ -194,10 +194,7 @@ pub fn run(record_arg: Option<PathBuf>, all: bool, views: Views) -> i32 {
 /// topic file, and every move: of each topic file, each removed topic file,
 /// the terms file and each blame file.
 pub(crate) fn summary(r: &Records) -> Vec<Line> {
-    let mut lines = Vec::new();
-    for (rel, e) in &r.unreadable_topic_files {
-        lines.push(Line::Finding(Finding::new(Rule::Parse, msg::topic_file_unreadable(rel, e))));
-    }
+    let mut lines = unreadable_topic_lines(r);
     // The terms file first: while it waits for its approval, approve, ask
     // and answer stop on it in every topic file (per "Does the tool stop
     // while the terms file waits for approval?"), so its move comes before
@@ -215,35 +212,65 @@ pub(crate) fn summary(r: &Records) -> Vec<Line> {
     // the listing prints it once.
     let mut printed: Vec<String> = Vec::new();
     for rf in &r.topic_files {
-        lines.push(Line::Record { depth: 0, text: msg::show_topic(rf.topic.as_deref().unwrap_or(""), &rf.rel) });
-        for sec in rf.sections.iter().filter(|s| status::question_status(&r.led, s) == QuestionStatus::Answered) {
-            lines.push(Line::Record { depth: 1, text: sec.heading_text.clone() });
-            if let Some(s) = sec.chosen_sentence() {
-                lines.push(Line::Record { depth: 2, text: s.to_string() });
-            }
-        }
-        let mut report = topic_file_report(r, rf);
-        report.findings.retain(|f| {
-            let text = f.text();
-            if f.subject == rules::Subject::TermsFile && r.terms_file.is_some() || printed.contains(&text) {
-                return false;
-            }
-            printed.push(text);
-            true
-        });
-        lines.extend(out::report(&report));
+        lines.push(topic_heading(rf));
+        lines.extend(decision_lines(rf, &r.led));
+        lines.extend(out::report(&listed_report(r, rf, &mut printed)));
     }
+    lines.extend(rest(r));
+    lines
+}
+
+/// The findings of the topic files that cannot be read.
+pub(crate) fn unreadable_topic_lines(r: &Records) -> Vec<Line> {
+    r.unreadable_topic_files
+        .iter()
+        .map(|(rel, e)| Line::Finding(Finding::new(Rule::Parse, msg::topic_file_unreadable(rel, e))))
+        .collect()
+}
+
+/// The line that opens a topic file in the listing.
+pub(crate) fn topic_heading(rf: &RecordFile) -> Line {
+    Line::Record { depth: 0, text: msg::show_topic(rf.topic.as_deref().unwrap_or(""), &rf.rel) }
+}
+
+/// Every current decision of `rf` as its heading and the option picked.
+pub(crate) fn decision_lines(rf: &RecordFile, led: &Ledger) -> Vec<Line> {
+    let mut lines = Vec::new();
+    for sec in rf.sections.iter().filter(|s| status::question_status(led, s) == QuestionStatus::Answered) {
+        lines.push(Line::Record { depth: 1, text: sec.heading_text.clone() });
+        if let Some(s) = sec.chosen_sentence() {
+            lines.push(Line::Record { depth: 2, text: s.to_string() });
+        }
+    }
+    lines
+}
+
+/// The findings and moves of `rf` as the listing prints them: a finding on
+/// the terms file (while that file's own lines stand) and a finding an
+/// earlier file printed (`printed`) are left out.
+pub(crate) fn listed_report(r: &Records, rf: &RecordFile, printed: &mut Vec<String>) -> Report {
+    let mut report = topic_file_report(r, rf);
+    report.findings.retain(|f| {
+        let text = f.text();
+        if f.subject == rules::Subject::TermsFile && r.terms_file.is_some() || printed.contains(&text) {
+            return false;
+        }
+        printed.push(text);
+        true
+    });
+    report
+}
+
+/// What the listing prints after the topic files: each removed topic file,
+/// each blame file, and the blame files that cannot be read.
+pub(crate) fn rest(r: &Records) -> Vec<Line> {
+    let mut lines = Vec::new();
     for rel in r.removed_topic_files() {
         lines.push(file_status(&rel, FileStatus::Removed));
         // Its current decisions stand until a plan change supersedes them:
         // listed from its approved version, as every file's are.
         if let Some(old) = rules::latest_approved_version(&r.root, &rel, &r.led) {
-            for sec in old.sections.iter().filter(|s| status::question_status(&r.led, s) == QuestionStatus::Answered) {
-                lines.push(Line::Record { depth: 1, text: sec.heading_text.clone() });
-                if let Some(s) = sec.chosen_sentence() {
-                    lines.push(Line::Record { depth: 2, text: s.to_string() });
-                }
-            }
+            lines.extend(decision_lines(&old, &r.led));
         }
         lines.extend(out::report(&removed_report(r, &rel)));
     }
@@ -317,27 +344,6 @@ pub(crate) fn file_form(r: &Records, rel: &str, views: Views) -> Result<Vec<Line
     Err(msg::show_not_a_file_approve_takes(rel))
 }
 
-/// Every file approve takes, each as its status line and its path: the
-/// first line of its file form (each topic file, each removed topic file,
-/// the terms file, each blame file), read without the change beyond its
-/// approval.
-pub(crate) fn file_statuses(r: &Records) -> Vec<(String, Line)> {
-    let mut out: Vec<(String, Line)> = r
-        .topic_files
-        .iter()
-        .map(|rf| (rf.rel.clone(), file_status(&topic_subject(rf), status::topic_file_status(&r.led, rf))))
-        .collect();
-    out.extend(r.removed_topic_files().into_iter().map(|rel| (rel.clone(), file_status(&rel, FileStatus::Removed))));
-    if let Some(tf) = &r.terms_file {
-        out.push((repo::TERMS_PATH.to_string(), file_status(repo::TERMS_PATH, status::terms_file_status(&r.led, tf))));
-    }
-    for bf in &r.blame_files {
-        let st = status::blame_file_status(&r.led, &bf.rel, &record::join_lines(&bf.lines));
-        out.push((bf.rel.clone(), file_status(&bf.rel, st)));
-    }
-    out
-}
-
 /// The status line of a topic file, as every command that names its status
 /// prints it.
 pub(crate) fn topic_file_status_line(led: &Ledger, rf: &RecordFile) -> Line {
@@ -345,7 +351,7 @@ pub(crate) fn topic_file_status_line(led: &Ledger, rf: &RecordFile) -> Line {
 }
 
 /// A topic file as the status line names it: its topic and its path.
-fn topic_subject(rf: &RecordFile) -> String {
+pub(crate) fn topic_subject(rf: &RecordFile) -> String {
     match rf.topic.as_deref() {
         Some(t) if !t.is_empty() => format!("{} ({})", t, rf.rel),
         _ => rf.rel.clone(),
@@ -495,7 +501,7 @@ fn topic_file(r: &Records, rf: &RecordFile, views: Views) -> Vec<Line> {
 /// The status of a question as a status line names it: its status, the
 /// letter of an answer, the version of an asked question whose text stands
 /// as asked, or `changed since asked` for one edited since.
-fn question_status_of(led: &Ledger, rf: &RecordFile, sec: &Section) -> Status {
+pub(crate) fn question_status_of(led: &Ledger, rf: &RecordFile, sec: &Section) -> Status {
     let st = status::question_status_in(led, rf, sec);
     let version = (st == QuestionStatus::Asked).then(|| record::version_of(&rf.lines, sec));
     Status::Question { status: st, letter: answer_letter(led, sec), version }
@@ -603,7 +609,7 @@ fn stood_on_by(rf: &RecordFile, sec: &Section, all: &[RecordFile], led: &Ledger)
 /// What `--dependents` prints under a term entry, the view computed from the
 /// records it is (per "Does a command print under a flag what it computes
 /// from the records?", 36dfbeaa A).
-fn term_dependents(r: &Records, t: &Term) -> Vec<String> {
+pub(crate) fn term_dependents(r: &Records, t: &Term) -> Vec<String> {
     let names: Vec<String> = std::iter::once(&t.name).chain(&t.aliases).map(|n| n.trim().to_lowercase()).collect();
     let mut out = Vec::new();
     for rf in &r.topic_files {
@@ -746,9 +752,21 @@ fn row_status(
     Some(status::question_status(&r.led, sec).name_with(sec.answer_letter()))
 }
 
+/// The neighbour lines `show --neighbours` prints under the question
+/// `heading` of `rf`, read the way it reads them.
+pub(crate) fn neighbours_of(r: &Records, rf: &RecordFile, heading: &str) -> Vec<String> {
+    let shown = plan::load_shown_with(rf, &r.terms_list, &r.led, &r.index().planning);
+    shown
+        .questions
+        .iter()
+        .find(|q| q.heading == heading)
+        .map(|q| plan::neighbour_lines(q).into_iter().map(|l| l.trim_start().to_string()).collect())
+        .unwrap_or_default()
+}
+
 // --- findings and moves -----------------------------------------------------
 
-fn topic_file_report(r: &Records, rf: &RecordFile) -> Report {
+pub(crate) fn topic_file_report(r: &Records, rf: &RecordFile) -> Report {
     moves::of_topic_file_with(&r.root, rf, &r.topic_files, &r.terms_list, &r.led, &r.tests, r.index())
 }
 
@@ -758,7 +776,7 @@ fn removed_report(r: &Records, rel: &str) -> Report {
 
 /// The status of the terms file and its findings and moves
 /// (`moves::of_terms_file`), judged as `approve` judges it.
-fn terms_report(r: &Records, tf: &TermsFile) -> (FileStatus, Report) {
+pub(crate) fn terms_report(r: &Records, tf: &TermsFile) -> (FileStatus, Report) {
     let st = status::terms_file_status(&r.led, tf);
     let Some(minted) = r.minted_terms() else {
         return (st, Report::default());
