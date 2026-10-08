@@ -3,7 +3,7 @@
 // after a plan change struck it, blank lines and entries reordered, a
 // removed topic file, and identifiers in prose (per "Does show print what a
 // file holds beyond its latest approval?", bceceda8 A, and "What does show
-// print with a file named?", 6addc2f4 A).
+// print of the file named?", dce141e9 A).
 
 mod common;
 

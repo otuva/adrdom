@@ -81,13 +81,14 @@ runtime dependencies beyond `git` on `PATH`.
   (every file `adr approve` takes): each question, entry or row with its
   status (`no body`, `not asked`, `asked @<version>`, `answered <letter>`,
   `refused`, `superseded`, `withdrawn`, `dropped`; a file is `new`,
-  `changed`, `approved` or `removed`), the lines it carries, the body of an
+  `changed`, `approved` or `removed`), every depends and supersedes line, the body of an
   asked question, and what the file holds beyond its latest approval,
   marked `+` and `-` (a question new or struck as a whole carries the mark
   on its own line too); then the file's findings and moves. `--all` prints every such file
   that way; `--neighbours` adds each neighbour with the reader's word, and
   `--dependents` what stands on each question or term entry and what
-  replaced a question.
+  replaced a question; `--unrelated` adds the unrelated line of each
+  question.
 - `adr plan <topic_file>` — do the planning step the file is at (read its
   headings, then its bodies, against their nearest current decisions and
   terms) and print what it read, the findings on the file and its next

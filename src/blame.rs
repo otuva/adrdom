@@ -8,7 +8,7 @@
 //! `check` holds a blame file to its origin's blob and to the open
 //! decision rows an about-to-vanish origin still carries (5fddeeb5 A,
 //! 4bb5ef1b A -- `commands::check::blame`); `show` prints a blame file in
-//! the form every file approve takes is printed (6addc2f4 A, bceceda8 A --
+//! the form every file approve takes is printed (dce141e9 A, bceceda8 A --
 //! `commands::show`).
 use crate::ledger::Ledger;
 use crate::msg;

@@ -2,13 +2,13 @@
 //! current decision and every move (per "What does show print with no file
 //! named?", c84a4bd9 A). With a file approve takes -- a topic file, the
 //! terms file or a blame file -- every question, entry or row with its
-//! status, the lines it carries and the body of an asked question (per
-//! "What does show print with a file named?", 6addc2f4 A), with what the
+//! status, every depends and supersedes line and the body of an asked
+//! question (per "What does show print of the file named?", dce141e9 A), with what the
 //! file holds beyond its latest approval marked (per "Does show print what a
 //! file holds beyond its latest approval?", bceceda8 A), then the moves of
 //! that file. What it computes from the records comes under a flag (per
 //! "Does a command print under a flag what it computes from the records?",
-//! 36dfbeaa A): `--neighbours` and `--dependents`. Every line goes through
+//! 36dfbeaa A): `--neighbours`, `--dependents` and `--unrelated`. Every line goes through
 //! `out` (per "What does a command that writes nothing print?", 848e1b76 A).
 use crate::rules::Rule;
 use crate::approval::{self, Change, Side};
@@ -37,6 +37,8 @@ pub struct Views {
     /// What stands on each question or term entry, and what replaced a
     /// superseded question.
     pub dependents: bool,
+    /// The `unrelated:` line of each question, marked when changed.
+    pub unrelated: bool,
 }
 
 /// Everything `show` reads, loaded once; the page reads its lines from the
@@ -161,6 +163,9 @@ fn show_args(record_arg: Option<&std::path::Path>, all: bool, views: &Views) -> 
     }
     if views.dependents {
         args.push("--dependents".to_string());
+    }
+    if views.unrelated {
+        args.push("--unrelated".to_string());
     }
     args
 }
@@ -306,7 +311,7 @@ fn whole(r: &Records, views: Views) -> Vec<Line> {
         lines.extend(topic_file(r, rf, views));
     }
     for rel in r.removed_topic_files() {
-        lines.extend(removed_topic_file(r, &rel));
+        lines.extend(removed_topic_file(r, &rel, views));
     }
     lines.extend(r.terms_unreadable_finding());
     if let Some(tf) = &r.terms_file {
@@ -345,7 +350,7 @@ pub(crate) fn file_form(r: &Records, rel: &str, views: Views) -> Result<Vec<Line
         return Err(msg::blame_file_unreadable(rel));
     }
     if r.removed_topic_files().iter().any(|f| f == rel) {
-        return Ok(removed_topic_file(r, rel));
+        return Ok(removed_topic_file(r, rel, views));
     }
     Err(msg::show_not_a_file_approve_takes(rel))
 }
@@ -400,7 +405,7 @@ fn change_status(subject: &str, status: Status, change: Option<&Change>) -> Line
 /// names it, unless the heading itself changed. Every other line is
 /// printed, one that starts like a heading included. A changed part whose
 /// approved text no commit holds says so above its lines, all marked added.
-fn change_lines(change: &Change, own: Option<&str>, names: &HashMap<String, String>) -> Vec<Line> {
+fn change_lines(change: &Change, own: Option<&str>, names: &HashMap<String, String>, unrelated: bool) -> Vec<Line> {
     let prefix = own.and_then(|o| o.split_once(' ').map(|(p, _)| format!("{} ", p)));
     // The heading changed: a heading line gone and one come, both shown.
     let heading_changed = prefix.as_deref().is_some_and(|p| {
@@ -415,6 +420,7 @@ fn change_lines(change: &Change, own: Option<&str>, names: &HashMap<String, Stri
             .lines
             .iter()
             .filter(|l| heading_changed || own != Some(l.text.as_str()))
+            .filter(|l| unrelated || !l.text.starts_with("unrelated:"))
             .map(|l| Line::Record { depth: 1, text: reference_named(&l.marked(), &l.text, names) }),
     );
     out
@@ -488,7 +494,7 @@ fn topic_file_lines(r: &Records, rf: &RecordFile, views: Views) -> Vec<Line> {
     let changes = approval::topic_file(&r.root, rf, led);
     if let Some(prose) = &changes.prose {
         lines.push(change_status("prose", Status::File(prose.status), Some(prose)));
-        lines.extend(change_lines(prose, None, &r.names));
+        lines.extend(change_lines(prose, None, &r.names, true));
     }
     let shown = (views.neighbours).then(|| plan::load_shown_with(rf, &r.terms_list, led, &r.index().planning));
     for (i, sec) in rf.sections.iter().enumerate() {
@@ -496,8 +502,8 @@ fn topic_file_lines(r: &Records, rf: &RecordFile, views: Views) -> Vec<Line> {
         let change = changes.questions.get(i).and_then(Option::as_ref);
         lines.push(change_status(&sec.heading_text, question_status_of(led, rf, sec), change));
         match change {
-            Some(change) => lines.extend(change_lines(change, Some(&format!("### {}", sec.heading_text)), &r.names)),
-            None => lines.extend(reference_and_body_lines(&approval::question_lines(rf, sec), st, &r.names)),
+            Some(change) => lines.extend(change_lines(change, Some(&format!("### {}", sec.heading_text)), &r.names, views.unrelated)),
+            None => lines.extend(reference_and_body_lines(&approval::question_lines(rf, sec), st, &r.names, views.unrelated)),
         }
         if views.neighbours && matches!(st, QuestionStatus::NoBody | QuestionStatus::NotAsked | QuestionStatus::Asked) {
             if let Some(q) = shown.as_ref().and_then(|p| p.questions.iter().find(|q| q.heading == sec.heading_text)) {
@@ -520,7 +526,7 @@ fn topic_file_lines(r: &Records, rf: &RecordFile, views: Views) -> Vec<Line> {
         // commit holds: turned back into the heading its asked row carries.
         let subject = names_of(heading, &r.names);
         lines.push(change_status(&subject, Status::File(change.status), Some(change)));
-        lines.extend(change_lines(change, Some(&format!("### {}", heading)), &r.names));
+        lines.extend(change_lines(change, Some(&format!("### {}", heading)), &r.names, views.unrelated));
     }
     lines
 }
@@ -549,11 +555,12 @@ fn answer_letter(led: &Ledger, sec: &Section) -> Option<char> {
 /// A question's reference lines with identifiers turned back into words,
 /// and its body when it is asked: what the file form prints under a
 /// question approved as it stands.
-fn reference_and_body_lines(qlines: &[String], st: QuestionStatus, names: &HashMap<String, String>) -> Vec<Line> {
+fn reference_and_body_lines(qlines: &[String], st: QuestionStatus, names: &HashMap<String, String>, unrelated: bool) -> Vec<Line> {
     // The `id:` line is printed only as part of a change (what approve signs
     // beyond its latest approval), never in the listing of a question.
     let qlines: Vec<String> = qlines.iter().filter(|l| !l.starts_with("id: ")).cloned().collect();
     let (refs, body) = reference_and_body(&qlines);
+    let refs: Vec<String> = refs.into_iter().filter(|l| unrelated || !l.starts_with("unrelated:")).collect();
     let body = if st == QuestionStatus::Asked { body } else { Vec::new() };
     refs.iter()
         .map(|l| Line::Record { depth: 1, text: named(l, names) })
@@ -663,13 +670,13 @@ pub(crate) fn term_dependents(r: &Records, t: &Term) -> Vec<String> {
 /// its status, each question of its approved plan with the question's own
 /// status (per "Does a command name a status of its own?", f53ac3b9 A), and
 /// its move.
-fn removed_topic_file(r: &Records, rel: &str) -> Vec<Line> {
+fn removed_topic_file(r: &Records, rel: &str, views: Views) -> Vec<Line> {
     let mut lines = vec![file_status(rel, FileStatus::Removed)];
     if let Some(old) = rules::latest_approved_version(&r.root, rel, &r.led) {
         for sec in &old.sections {
             let st = status::question_status(&r.led, sec);
             lines.push(Line::Status { subject: sec.heading_text.clone(), status: question_status_of(&r.led, &old, sec), mark: None });
-            lines.extend(reference_and_body_lines(&approval::question_lines(&old, sec), st, &r.names));
+            lines.extend(reference_and_body_lines(&approval::question_lines(&old, sec), st, &r.names, views.unrelated));
         }
     }
     lines.extend(out::report(&removed_report(r, rel)));
@@ -690,12 +697,12 @@ fn terms_file_lines(r: &Records, tf: &TermsFile, views: Views, st: FileStatus) -
     let mut lines = vec![file_status(repo::TERMS_PATH, st)];
     let changes = approval::terms_file(&r.root, tf, &r.led);
     if let Some(whole) = &changes.whole {
-        lines.extend(change_lines(whole, None, &r.names));
+        lines.extend(change_lines(whole, None, &r.names, true));
     }
     for (t, change) in tf.terms.iter().zip(&changes.entries) {
         lines.push(change_status(&t.name, Status::Term(status::term_status(&r.led, tf, t)), change.as_ref()));
         match change {
-            Some(change) => lines.extend(change_lines(change, Some(&format!("## {}", t.name)), &r.names)),
+            Some(change) => lines.extend(change_lines(change, Some(&format!("## {}", t.name)), &r.names, true)),
             None => lines.extend(
                 approval::entry_lines(tf, t)
                     .into_iter()
@@ -712,7 +719,7 @@ fn terms_file_lines(r: &Records, tf: &TermsFile, views: Views, st: FileStatus) -
     }
     for (name, change) in &changes.gone {
         lines.push(change_status(name, Status::Term(status::TermStatus::Removed), Some(change)));
-        lines.extend(change_lines(change, Some(&format!("## {}", name)), &r.names));
+        lines.extend(change_lines(change, Some(&format!("## {}", name)), &r.names, true));
     }
     lines
 }
