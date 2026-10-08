@@ -5,7 +5,8 @@ questions in markdown topic files under `adrdom/decisions/`, answered only by th
 repository's owner, and recorded in an append-only ledger at
 `adrdom/state/ledger.tsv`; a separate check reports a current decision with no
 `adr: <uuid>` reference in the code as untested, in one line per decision, and
-fails a reference to a decision that is not current.
+fails a reference to a decision that is not current; an `adr-code: <uuid>`
+comment on code names a decision and is not counted as a test.
 
 ## Build
 

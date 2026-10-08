@@ -2537,3 +2537,57 @@ fn check_an_untested_decision_is_a_note_beside_a_refused_sibling() {
     );
     assert!(!text.contains("waiting:"), "{}", text);
 }
+
+// "A comment `adr-code: <id>`, found by text search, never a test tie,
+// judged by no rule": the scanner matches `adr: ` only, so the code comment
+// neither ties a decision nor is judged stale.
+// adr: 23d55c81-2224-487c-a579-298915957a79
+#[test]
+fn check_never_counts_an_adr_code_comment_as_a_tie() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let (_record, id) = answer_one_question(&dir);
+
+    std::fs::write(dir.join("code.txt"), format!("// adr-code: {}\n", id)).unwrap();
+    run_git(&dir, &["add", "code.txt"]);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains(&format!("puts \"adr: {}\" in a test", id)),
+        "an adr-code comment must not tie the decision: {}",
+        stdout(&out)
+    );
+}
+
+// adr: 23d55c81-2224-487c-a579-298915957a79
+#[test]
+fn check_judges_an_adr_code_comment_of_an_unknown_decision_by_no_rule() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let unknown = "99999999-9999-4999-8999-999999999999";
+    std::fs::write(dir.join("code.txt"), format!("// adr-code: {}\n", unknown)).unwrap();
+    run_git(&dir, &["add", "code.txt"]);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "{}", stdout(&out));
+    assert!(!stdout(&out).contains(unknown), "{}", stdout(&out));
+}
+
+// A test comment after an `adr-code:` comment on one line still counts.
+// adr: 23d55c81-2224-487c-a579-298915957a79
+#[test]
+fn check_counts_an_adr_tie_that_follows_an_adr_code_comment_on_one_line() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let (_record, id) = answer_one_question(&dir);
+    let other = "99999999-9999-4999-8999-999999999999";
+
+    std::fs::write(dir.join("both.txt"), format!("// adr-code: {} adr: {}\n", other, id)).unwrap();
+    run_git(&dir, &["add", "both.txt"]);
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "{}", stdout(&out));
+    assert!(!stdout(&out).contains(&format!("puts \"adr: {}\" in a test", id)), "{}", stdout(&out));
+    assert!(!stdout(&out).contains(other), "{}", stdout(&out));
+}
