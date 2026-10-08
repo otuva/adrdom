@@ -177,12 +177,11 @@ pub struct Report {
 
 impl Report {
     /// The moves alone, joined with `, `: the findings are printed apart,
-    /// each on its own line. With no move, each finding carries its own: the clause
-    /// says so.
-    pub fn moves_tail(&self) -> String {
+    /// each on its own line. With no move, `fallback` names the act.
+    pub fn moves_tail(&self, fallback: Next) -> String {
         if self.moves.is_empty() {
             debug_assert!(!self.findings.is_empty(), "a refusal names at least one move");
-            return Next::agent("makes the move each finding of the file names").render();
+            return fallback.render();
         }
         self.moves.iter().map(Move::clause_text).collect::<Vec<_>>().join(", ")
     }
@@ -758,7 +757,7 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> (crate::msg:
     }
     clauses.extend(owner.map(|m| m.clause_text()));
     if clauses.is_empty() {
-        clauses.push(Next::agent("makes the move each finding of the file names").render());
+        clauses.push(Next::agent("clears the findings below").render());
     }
     // What the rules find in the files it waits on is returned apart: each
     // finding prints whole on a line of its own after the refusal's line.
@@ -773,6 +772,16 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> (crate::msg:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // adr: 184b5bcb-fa72-436b-92cb-4d4605366c59
+    #[test]
+    fn a_report_with_no_move_names_the_fallback_act() {
+        let mut empty = Report::default();
+        empty.findings.push(Finding::new(&crate::rule::ASKED_TEXT_FROZEN, "f".into(), "agent m".into()));
+        assert_eq!(empty.moves_tail(Next::agent("restores x.md from git")), "agent restores x.md from git");
+        assert!(!crate::msg::edited_after_asking("x.md", "h", &empty).text().contains("each finding of the file names"));
+        assert!(crate::msg::edited_after_asking("x.md", "h", &empty).text().ends_with("agent restores x.md from git"));
+    }
 
     #[test]
     fn the_kind_fixes_who_moves() {
@@ -840,7 +849,7 @@ mod tests {
                 Move::new(MoveKind::Approve { path: "x.md".into() }),
             ],
         };
-        let tail = report.moves_tail();
+        let tail = report.moves_tail(Next::agent("clears the findings below"));
         assert_eq!(tail, "agent runs: adr ask x.md, owner runs: adr approve x.md");
         assert!(!tail.contains('#'), "{}", tail);
     }

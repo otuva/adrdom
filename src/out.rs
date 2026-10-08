@@ -300,7 +300,14 @@ const READER_GONE: i32 = 141;
 /// all reach their reader never passes.
 pub fn print(lines: &[Line]) {
     let mut out = std::io::stdout().lock();
+    // A finding that prints the same text as one above it prints once.
+    let mut findings: std::collections::HashSet<String> = std::collections::HashSet::new();
     for l in lines {
+        if let Line::Finding(f) = l {
+            if !findings.insert(f.text()) {
+                continue;
+            }
+        }
         if let Err(e) = writeln!(out, "{}", text(l)) {
             unwritable(e);
         }

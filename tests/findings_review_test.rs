@@ -96,3 +96,27 @@ fn the_terms_file_errors_name_both_entries_and_the_repeated_identifier_rule() {
     assert!(text.contains("one identifier names one term"), "{}", text);
     assert!(!text.contains("every term has an identifier, name, definition and aliases"), "{}", text);
 }
+
+// adr: 184b5bcb-fa72-436b-92cb-4d4605366c59
+//
+// A heading written twice in a topic file prints each finding once.
+#[test]
+fn identical_finding_lines_print_once() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    write_record(&dir, "adrdom/terms.md", TERMS_PASS);
+    approve_record(&dir, "adrdom/terms.md");
+    let twice = format!("{}\n{}", PASS_RECORD.replace("depends: pass\n", ""), PASS_RECORD.replace("# Example\n\n", "").replace("depends: pass\n", ""));
+    write_record(&dir, "adrdom/decisions/example.md", &twice);
+    for args in [vec!["check"], vec!["show", "adrdom/decisions/example.md"]] {
+        let out = adr(&dir, &args, &[], "");
+        let text = format!("{}{}", stdout(&out), stderr(&out));
+        let lines: Vec<&str> = text.lines().filter(|l| l.contains("has no depends line")).collect();
+        let mut uniq = lines.clone();
+        uniq.dedup();
+        assert!(!lines.is_empty(), "{:?}: {}", args, text);
+        for l in &lines {
+            assert_eq!(lines.iter().filter(|x| *x == l).count(), 1, "{:?}: {}", args, text);
+        }
+    }
+}

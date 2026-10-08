@@ -821,7 +821,7 @@ pub fn letter_not_an_option(letter: char, heading: &str, letters: &[char], id: &
 /// `report`: what the rules find in the question's file and its moves
 /// (`moves::of_unasked_question_in`).
 pub fn not_in_asked_state(heading: &str, report: &crate::moves::Report) -> String {
-    format!("\"{}\" is edited since it was asked; {}", heading, report.moves_tail())
+    format!("\"{}\" is edited since it was asked; {}", heading, report.moves_tail(Next::agent("restores the question from git")))
 }
 
 
@@ -831,7 +831,7 @@ pub fn not_in_asked_state(heading: &str, report: &crate::moves::Report) -> Strin
 /// `report`: what the rules find in the question's file and its moves
 /// (`moves::of_unasked_question_in`).
 pub fn not_asked_yet(heading: &str, report: &crate::moves::Report) -> String {
-    format!("\"{}\" is {}; {}", heading, crate::status::QuestionStatus::NotAsked.name(), report.moves_tail())
+    format!("\"{}\" is {}; {}", heading, crate::status::QuestionStatus::NotAsked.name(), report.moves_tail(Next::agent("clears the findings below")))
 }
 
 /// An answer that would remove a question with no identifier.
@@ -871,7 +871,7 @@ pub fn drop_not_approved(heading: &str, rel: &str) -> Said {
 
 /// A question with no body yet: nothing to ask or answer.
 pub fn not_written(heading: &str, report: &crate::moves::Report) -> String {
-    format!("\"{}\" is [{}]; {}", heading, crate::status::QuestionStatus::NoBody.name(), report.moves_tail())
+    format!("\"{}\" is [{}]; {}", heading, crate::status::QuestionStatus::NoBody.name(), report.moves_tail(Next::agent("clears the findings below")))
 }
 
 /// `adr answer <id> <letter>` with no `@<version>` (per "Does an answer
@@ -983,12 +983,12 @@ pub fn named(id: &str, name: Option<&str>) -> String {
 /// the refusal never names the owner's approve while approve would refuse
 /// (per "Does a command compute a move of its own?", aac5c313 A).
 pub fn plan_not_approved(rel: &str, status: FileStatus, report: &crate::moves::Report) -> Said {
-    said_raw(&crate::rule::PLAN_APPROVED_BEFORE_ASK, format!("{}: plan is {}", rel, status.name()), report.moves_tail())
+    said_raw(&crate::rule::PLAN_APPROVED_BEFORE_ASK, format!("{}: plan is {}", rel, status.name()), report.moves_tail(Next::agent("clears the findings below")))
 }
 
 /// `plan_not_approved` for the prose above the first question.
 pub fn context_not_approved(rel: &str, status: FileStatus, report: &crate::moves::Report) -> Said {
-    said_raw(&crate::rule::PROSE_APPROVED_BEFORE_ASK, format!("{}: prose is {}", rel, status.name()), report.moves_tail())
+    said_raw(&crate::rule::PROSE_APPROVED_BEFORE_ASK, format!("{}: prose is {}", rel, status.name()), report.moves_tail(Next::agent("clears the findings below")))
 }
 
 pub fn missing_answer_set(rel: &str, dependent: &str, target: &str) -> Said {
@@ -1526,7 +1526,7 @@ pub fn edited_after_asking(rel: &str, heading: &str, report: &crate::moves::Repo
     said_raw(
         &crate::rule::ASKED_TEXT_FROZEN,
         format!("{}: {}: edited after asking", rel, heading),
-        report.moves_tail(),
+        report.moves_tail(Next::agent(format!("restores {} from git", rel))),
     )
 }
 
