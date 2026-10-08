@@ -42,7 +42,21 @@ fn push_failures(out: &mut Vec<rules::Finding>, fs: Vec<Failure>) {
 /// Always runs the plain repo-wide scan (non-staged, no message file):
 /// `serve` has no commit to check "at", unlike `run`.
 pub fn collect_with_tests(root: &Path, tests: &HashMap<String, Vec<String>>) -> view::CheckReport {
-    build(root, false, None, None, Some(tests))
+    build(root, false, None, None, Some(tests), None)
+}
+
+/// The full check report for the owner's page from the records the request
+/// already loaded: the ledger, the topic files, the terms and what the
+/// planning shares are taken from `held`, so a request reads and indexes
+/// them once and the report is the one `check` prints.
+///
+/// `judged` holds each topic file's own judgement
+/// (`moves::of_topic_file_judged`) in the order of `held.topic_files`: the
+/// page computed it for the cards, and `check` files the same findings by
+/// rule, less the directory ones it reads off the directory itself, so a
+/// request judges each file once.
+pub(crate) fn collect_from(held: &crate::commands::show::Records, judged: &[&[rules::Finding]]) -> view::CheckReport {
+    build(&held.root, false, None, None, Some(&held.tests), Some((held, judged)))
 }
 
 /// Everything `check` reports, computed against `root`. `run` passes
@@ -57,6 +71,7 @@ fn build(
     message: Option<&Path>,
     since: Option<&str>,
     tests: Option<&HashMap<String, Vec<String>>>,
+    held: Option<(&crate::commands::show::Records, &[&[rules::Finding]])>,
 ) -> view::CheckReport {
     // Picked once per run and threaded through every category below (per
     // "Does check at a commit read the staged files?", 34e81f57 A): the
@@ -68,15 +83,28 @@ fn build(
 
     let ledger_rel = repo::LEDGER_PATH;
     let ledger_content = source.read(root, ledger_rel).unwrap_or_default();
-    let led = crate::ledger::parse(&ledger_content);
-
-    // A topic file that cannot be read is a failure: nothing in it is
-    // judged, and a pass would let it through with its decisions unread.
-    let (mut records, unreadable) = record::load_all_via(root, &source);
-    let unreadable_failures: Vec<rules::Finding> = unreadable
-        .into_iter()
-        .map(|(f, e)| rules::Finding::new(Rule::Parse, msg::topic_file_unreadable(&state::rel_path(root, &f), e)))
-        .collect();
+    let parsed_led;
+    let (led, mut records, unreadable_failures): (&Ledger, Vec<RecordFile>, Vec<rules::Finding>) = match held {
+        Some((h, _)) => (
+            &h.led,
+            h.topic_files.clone(),
+            h.unreadable_topic_files
+                .iter()
+                .map(|(rel, e)| rules::Finding::new(Rule::Parse, msg::topic_file_unreadable(rel, e)))
+                .collect::<Vec<_>>(),
+        ),
+        None => {
+            parsed_led = crate::ledger::parse(&ledger_content);
+            // A topic file that cannot be read is a failure: nothing in it is
+            // judged, and a pass would let it through with its decisions unread.
+            let (records, unreadable) = record::load_all_via(root, &source);
+            let unreadable_failures: Vec<rules::Finding> = unreadable
+                .into_iter()
+                .map(|(f, e)| rules::Finding::new(Rule::Parse, msg::topic_file_unreadable(&state::rel_path(root, &f), e)))
+                .collect();
+            (&parsed_led, records, unreadable_failures)
+        }
+    };
     let mut notes: Vec<rules::Finding> = Vec::new();
 
     // Terms minted in memory: a terms file that has never been
@@ -84,9 +112,12 @@ fn build(
     // resolves a term that has one. Computed once here, shared by every
     // category below that resolves a `depends:` entry, rather than each
     // reloading/minting its own copy.
-    let terms_list: Vec<terms_mod::Term> = state::load_terms_via(root, &source)
-        .map(|tf| terms_mod::minted_copy(&tf).terms)
-        .unwrap_or_default();
+    let terms_list: Vec<terms_mod::Term> = match held {
+        Some((h, _)) => h.terms_list.clone(),
+        None => state::load_terms_via(root, &source)
+            .map(|tf| terms_mod::minted_copy(&tf).terms)
+            .unwrap_or_default(),
+    };
     let phrase_lookup = terms_mod::phrase_lookup(&terms_list);
     // Every current decision's heading text, repo-wide (the cross-file gap
     // "Does a reference in a topic file carry the identifier of what it
@@ -152,8 +183,18 @@ fn build(
     // reader's rows, the heading indexes), read once for the run.
     // Built only when a file awaits approval: the planning rules judge no
     // other file (`rules::planning_rules_apply`).
-    let shared = (!awaiting.is_empty()).then(|| crate::plan::Shared::new_via(root, &records, &terms_list, &led, &source));
-    let per_record_findings: Vec<Vec<rules::Finding>> = records
+    let built = (held.is_none() && !awaiting.is_empty())
+        .then(|| crate::plan::Shared::new_via(root, &records, &terms_list, &led, &source));
+    let shared = match held {
+        Some((h, _)) if !awaiting.is_empty() => Some(&h.index().planning),
+        _ => built.as_ref(),
+    };
+    let per_record_findings: Vec<Vec<rules::Finding>> = match held {
+        Some((_, judged)) if judged.len() == records.len() => judged
+            .iter()
+            .map(|fs| fs.iter().filter(|f| !matches!(f.subject, rules::Subject::Directory(_))).cloned().collect())
+            .collect(),
+        _ => records
         .iter()
         .zip(&replaced_per_record)
         .map(|(rf, replaced)| {
@@ -169,12 +210,13 @@ fn build(
                 replaced,
                 led: &led,
                 planning: awaiting.contains(&rf.rel),
-                shared: shared.as_ref(),
+                shared,
                 directory: false,
             };
             topic_file_findings(&judge)
         })
-        .collect();
+        .collect(),
+    };
     let present_ids: std::collections::HashSet<String> =
         rules::held_ids(&records).into_iter().map(str::to_string).collect();
     let removed_files: Vec<(String, Vec<crate::moves::RemovalHold>)> =
@@ -306,7 +348,7 @@ pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: 
         out::print(&findings);
         return if findings.is_empty() { 0 } else { 1 };
     }
-    let report = build(&root, staged, message.as_deref(), since.as_deref(), None);
+    let report = build(&root, staged, message.as_deref(), since.as_deref(), None, None);
     let exit_code = if report.failures.is_empty() { 0 } else { 1 };
     let lines: Vec<Line> = report.failures.into_iter().chain(report.notes).map(Line::Finding).collect();
     out::print(&lines);

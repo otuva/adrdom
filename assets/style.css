@@ -38,7 +38,7 @@ a:hover { text-decoration-color: currentColor; }
 q { quotes: "\201C" "\201D"; }
 
 .bar {
-  display: flex; align-items: baseline; gap: 1.4rem;
+  display: flex; align-items: baseline; gap: 1.2rem;
   max-width: 42rem; margin: 0 auto; padding: 1rem 1rem 0;
   font-size: 0.95rem; color: var(--muted);
 }
@@ -49,7 +49,31 @@ q { quotes: "\201C" "\201D"; }
 h1 { font-size: 2.25rem; line-height: 1.15; font-weight: 700; margin: 1.6rem 0 0.6rem; letter-spacing: -0.01em; }
 h2 { font-size: 1.35rem; line-height: 1.25; font-weight: 700; margin: 0 0 0.2rem; }
 .lead .summary { font-size: 1.15rem; color: var(--muted); margin: 0 0 1rem; }
+.primary {
+  display: inline-block; text-decoration: none;
+  background: var(--hold); color: var(--paper);
+  padding: 0.55em 1.1em; border-radius: 4px; font-weight: 700;
+}
+.primary:hover { filter: brightness(1.08); }
+
+.topic { border-top: 1px solid var(--rule); padding: 1.4rem 0 1.1rem; }
+.topic .path { margin: 0 0 0.6rem; font-size: 0.85rem; color: var(--muted); }
+.state { margin: 0.3rem 0; font-size: 0.92rem; }
+.state.waiting { color: var(--muted); }
+.state.done { color: var(--hold); }
+.inline { margin: 0.5rem 0 0.8rem; }
+.open-list { margin: 0.6rem 0 0.4rem; padding-left: 1.4rem; }
+.open-list li { margin: 0.2rem 0; }
+.open-list a { text-decoration: none; }
+.open-list a:hover { text-decoration: underline; }
+details.answered { margin-top: 0.6rem; color: var(--muted); }
 details summary { cursor: pointer; }
+details.answered dl { margin: 0.5rem 0 0; }
+details.answered dt { color: var(--muted); font-size: 0.95rem; }
+details.answered dd { margin: 0 0 0.6rem; color: var(--ink); }
+
+.failures { color: var(--refuse); padding-left: 0; margin: 0.4rem 0; }
+.notes { color: var(--muted); padding-left: 0; margin: 0.4rem 0; font-size: 0.95rem; }
 details.unban { margin-top: 2rem; color: var(--muted); font-size: 0.95rem; }
 details.unban form { margin-top: 0.6rem; }
 
@@ -59,44 +83,172 @@ details.unban form { margin-top: 0.6rem; }
 }
 .banner.refused { border-left-color: var(--refuse); background: var(--refuse-soft); }
 
+.focus .where { margin: 1.4rem 0 0; color: var(--muted); font-size: 0.95rem; }
+.focus h1 { font-size: 2.6rem; margin-top: 0.3rem; }
+dl.framing { margin: 1.2rem 0 1.8rem; display: grid; grid-template-columns: 6rem 1fr; column-gap: 1rem; row-gap: 0.5rem; }
+dl.framing dt { color: var(--muted); }
+dl.framing dd { margin: 0; }
+
+.options { display: flex; flex-direction: column; margin: 0 0 1.4rem; border-top: 1px solid var(--rule); }
+.option {
+  display: grid; grid-template-columns: 3.2rem 1fr; column-gap: 1rem;
+  padding: 1rem 0.6rem 1rem 0.6rem; border-bottom: 1px solid var(--rule);
+  cursor: pointer; position: relative;
+}
+.option input { position: absolute; opacity: 0; width: 0; height: 0; }
+.option .key {
+  align-self: start; justify-self: start;
+  width: 2.6rem; height: 2.6rem; display: grid; place-items: center;
+  font-weight: 700; font-size: 1.25rem;
+  background: var(--key); border: 1px solid var(--rule); border-bottom-width: 3px; border-radius: 6px;
+}
+.option .text { display: flex; flex-direction: column; gap: 0.45rem; }
+.option .sentence { font-size: 1.12rem; line-height: 1.45; }
+dl.rationale { margin: 0; display: grid; grid-template-columns: 3.6rem 1fr; column-gap: 0.8rem; row-gap: 0.2rem; font-size: 0.97rem; color: var(--muted); }
+dl.rationale dd { margin: 0; }
+.option:has(input:checked) { box-shadow: inset 4px 0 0 var(--hold); background: var(--hold-soft); }
+.option:has(input:checked) .key { background: var(--hold); color: var(--paper); border-color: var(--hold); }
+.option:has(input:focus-visible) { outline: 2px solid var(--hold); outline-offset: 2px; }
+
 .act { display: flex; align-items: center; gap: 1.2rem; margin: 0 0 0.6rem; }
 button {
   font: inherit; font-weight: 700; font-size: 1.05rem;
   padding: 0.55em 1.2em; border-radius: 4px; cursor: pointer;
   background: var(--key); color: var(--ink); border: 1px solid var(--muted);
 }
+button.answer { background: var(--hold); color: var(--paper); border-color: var(--hold); min-width: 7.5rem; }
+button.refuse { background: var(--paper); color: var(--refuse); border-color: var(--refuse); }
 button:hover { filter: brightness(1.08); }
 button:focus-visible { outline: 2px solid var(--hold); outline-offset: 2px; }
+.skip { color: var(--muted); }
+.stands-on { color: var(--muted); font-size: 0.92rem; margin: -0.3rem 0 0.8rem; }
+.neighbours { color: var(--muted); font-size: 0.92rem; margin: -0.3rem 0 0.8rem; padding-left: 1.2rem; }
+details.neighbours { padding-left: 0; }
+details.neighbours summary { cursor: pointer; }
+details.neighbours ul { padding-left: 1.2rem; margin: 0.3rem 0 0; }
+ul.refused-list { list-style: none; margin: 0.4rem 0; padding: 0; }
+ul.refused-list li { padding: 0.2rem 0; }
+.label.waiting { color: var(--muted); font-weight: 700; text-transform: uppercase; font-size: 0.78rem; letter-spacing: 0.03em; margin-right: 0.5rem; }
+.key-hint { color: var(--muted); font-size: 0.92rem; }
 kbd { font-family: inherit; font-size: 0.9em; padding: 0.05em 0.45em; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; background: var(--key); }
+
+dl.decisions { margin: 0.6rem 0 0; }
+dl.decisions dt { color: var(--muted); margin-top: 0.8rem; }
+dl.decisions dd { margin: 0.1rem 0 0; }
+dl.decisions .sentence { display: block; font-size: 1.08rem; }
+dl.decisions .meta { display: block; color: var(--muted); font-size: 0.9rem; }
+
 
 textarea { width: 100%; font: inherit; font-size: 0.95rem; padding: 0.5em; background: var(--key); color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; }
 
 @media (max-width: 600px) {
   body { font-size: 17px; }
-  h1{ font-size: 1.9rem; }
+  h1, .focus h1 { font-size: 1.9rem; }
+  dl.framing { grid-template-columns: 1fr; row-gap: 0.1rem; }
+  dl.framing dt { margin-top: 0.5rem; }
+  .option { grid-template-columns: 2.6rem 1fr; padding-left: 0.2rem; padding-right: 0.2rem; }
+  .option .key { width: 2.2rem; height: 2.2rem; font-size: 1.05rem; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  button{ transition: background-color 120ms ease, box-shadow 120ms ease; }
+  .option, .primary, button { transition: background-color 120ms ease, box-shadow 120ms ease; }
 }
-.bar { gap: 1.2rem; }
+/* --- redesign additions --- */
+.summary-card { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 1rem; margin: 0.3rem 0 0; }
+.summary-card .count { font-size: 1.15rem; }
+.summary-card .muted { color: var(--muted); }
+.summary-card a.more { margin-left: auto; text-decoration: none; color: var(--hold); font-weight: 700; }
+.summary-card a.more:hover { text-decoration: underline; }
 
+/* terms page */
+.lead .tools { display: flex; flex-wrap: wrap; gap: 0.8rem 1.2rem; align-items: center; margin: 0.6rem 0 0; }
+input.filter { flex: 1 1 14rem; font: inherit; font-size: 1rem; padding: 0.5em 0.8em; border: 1px solid var(--rule); border-radius: 6px; background: var(--key); color: var(--ink); }
+input.filter:focus-visible { outline: 2px solid var(--hold); outline-offset: 1px; }
+.terms-list { list-style: none; margin: 1.2rem 0 0; padding: 0; border-top: 1px solid var(--rule); }
+.terms-list li { display: grid; grid-template-columns: 9rem 1fr; column-gap: 1.2rem; padding: 0.85rem 0; border-bottom: 1px solid var(--rule); }
+.terms-list li[hidden] { display: none; }
+.terms-list .name { font-weight: 700; }
+.terms-list .name .forms { display: block; font-weight: 400; font-size: 0.85rem; color: var(--muted); margin-top: 0.15rem; }
+.terms-list .def { margin: 0; }
+.terms-list .use { margin: 0.25rem 0 0; font-size: 0.85rem; color: var(--muted); }
+.terms-list .use a { text-decoration: none; }
+.terms-list .use a:hover { text-decoration: underline; }
+.terms-list li.retired .name { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+.no-match { color: var(--muted); margin: 1rem 0; }
+
+/* answer page: terms in text and aside */
+.focus { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 2.5rem; }
+.focus > * { grid-column: 1; }
+.t { text-decoration: underline dotted var(--muted); text-decoration-thickness: 1px; text-underline-offset: 0.2em; cursor: help; }
+.t:hover { text-decoration-color: var(--hold); }
+.tq { margin: 1.2rem 0 1.4rem; padding: 0.8rem 1rem; border: 1px solid var(--rule); border-radius: 8px; background: var(--key); font-size: 0.92rem; line-height: 1.45; }
+.tq h2 { font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0 0 0.5rem; font-weight: 700; }
+.tq dl { margin: 0; display: grid; grid-template-columns: auto 1fr; column-gap: 0.8rem; row-gap: 0.45rem; }
+.tq dt { font-weight: 700; white-space: nowrap; }
+.tq dt .forms { display: block; font-weight: 400; color: var(--muted); font-size: 0.8rem; }
+.tq dd { margin: 0; }
+.tq .none { margin: 0.7rem 0 0; padding-top: 0.6rem; border-top: 1px solid var(--rule); color: var(--muted); }
+.tq .none b { font-weight: 700; color: var(--muted); }
 @media (min-width: 1180px) {
   main.wide { max-width: 64rem; }
   body.wide .bar { max-width: 64rem; }
+  .focus { grid-template-columns: minmax(0, 42rem) 18rem; }
+  .focus .tq { grid-column: 2; grid-row: 1 / span 6; align-self: start; position: sticky; top: 1rem; margin-top: 4.6rem; }
 }
 
-/* One element per line a command prints (out::html): the same words as the
-   terminal, each kind in its own class. */
-.record, .status, .finding, .move, .event { margin: 0.15rem 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.record.depth-0 { font-weight: 700; margin-top: 1.2rem; }
-.record.depth-1 { padding-left: 1.2rem; }
-.record.depth-2 { padding-left: 2.4rem; color: var(--muted); }
-.status .status-name { color: var(--muted); }
-.finding { color: var(--refuse); }
-.move.owner { color: var(--hold); font-weight: 700; }
-.move.agent, .move.not-yet { color: var(--muted); }
-.change { border-left: 3px solid var(--rule); padding-left: 0.8rem; margin: 0.6rem 0; }
-.question { border-top: 1px solid var(--rule); padding: 0.8rem 0; }
-form.act { flex-wrap: wrap; gap: 0.8rem; margin: 0.4rem 0 1rem; }
-.letter { cursor: pointer; }
-section.findings, section.files { border-top: 1px solid var(--rule); margin-top: 1.4rem; padding-top: 0.8rem; }
+/* --- the lines the commands print, as the page shows them --- */
+.record, .status, .finding { margin: 0.2rem 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.status .status-name { color: var(--muted); font-size: 0.85em; }
+.finding .rule { font-weight: 700; }
+.move { margin: 0.2rem 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); font-size: 0.92rem; }
+.move.owner { color: var(--hold); }
+.event { margin: 0.1rem 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.banner p { margin: 0.15rem 0; }
+.failures .finding { padding-left: 1.1rem; text-indent: -1.1rem; margin: 0.15rem 0; color: var(--refuse); }
+.notes .finding { padding-left: 1.1rem; text-indent: -1.1rem; margin: 0.15rem 0; color: var(--muted); }
+.failures .finding::before, .notes .finding::before { content: "\2022\00a0\00a0"; }
+.topic .path .record { margin: 0 0 0.6rem; font-size: 0.85rem; font-weight: 400; color: var(--muted); }
+.state .status { margin: 0.3rem 0; }
+.state.waiting .status { color: var(--muted); }
+.state.done .status { color: var(--hold); }
+.state.done .status-name, .state.waiting .status-name { color: inherit; font-size: inherit; }
+.change { margin: 0.5rem 0; padding: 0.4rem 0; }
+.change .record { margin: 0.1rem 0; }
+.change .record.depth-1 { padding-left: 1rem; }
+.change .status { color: var(--ink); margin-top: 0.5rem; }
+.change .neighbours, .change details.neighbours { margin: 0.1rem 0 0.3rem 1rem; }
+.unasked-list { list-style: none; margin: 0.4rem 0; padding: 0; }
+.unasked-list li { margin: 0.15rem 0; }
+.open-list li .status { display: inline; margin: 0; }
+.open-list li .move { margin: 0 0 0.25rem; font-size: 0.85rem; }
+.open-list li.current .st .subject { font-weight: 700; }
+.open-list li.current { list-style-position: outside; }
+.refused-list .status { display: inline; }
+.refused-list .move { margin: 0 0 0.3rem 1.2rem; font-size: 0.85rem; }
+details.answered dt .record, details.answered dd .record { margin: 0; }
+details.answered > .status { margin-left: 1.2rem; font-size: 0.92rem; }
+.lines { margin: 0.2rem 0 0.8rem; font-size: 0.92rem; color: var(--muted); }
+.lines .status { color: var(--ink); }
+.queue { margin: 2.2rem 0 0; padding-top: 1rem; border-top: 1px solid var(--rule); }
+.queue h2 { font-size: 1.05rem; margin: 0 0 0.4rem; color: var(--muted); }
+dl.decisions dt .status { margin: 0; }
+.lead .state { margin: 0.4rem 0 0; }
+.lead .move { margin: 0.4rem 0 0; }
+
+/* --- badges: statuses and the change as small labels --- */
+.st { display: inline; }
+.badge { display: inline-block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; padding: 0.05em 0.5em; border-radius: 4px; border: 1px solid var(--rule); color: var(--muted); background: var(--key); vertical-align: 0.1em; margin-right: 0.35rem; white-space: nowrap; }
+.badge.b-approved, .badge.b-answered { color: var(--hold); border-color: var(--hold); }
+.badge.b-new, .badge.b-changed, .badge.b-asked { color: var(--ink); border-color: var(--muted); }
+.badge.b-refused, .badge.b-removed { color: var(--refuse); border-color: var(--refuse); }
+.chip { display: inline-block; font-size: 0.72rem; line-height: 1.3; font-weight: 700; text-transform: uppercase; padding: 0.05em 0.5em; border-radius: 4px; border: 1px solid var(--hold); color: var(--hold); background: var(--key); white-space: nowrap; margin-right: 0.35rem; }
+.path.state { font-size: 0.9rem; color: var(--muted); margin: 0 0 0.6rem; }
+.path.state .subject { color: var(--muted); }
+.state .st .subject { margin-left: 0; }
+.chg { margin: 0.35rem 0; }
+.chg .subject { color: var(--ink); }
+.chgd { margin: 0.2rem 0 0.4rem 1.2rem; font-size: 0.88rem; color: var(--muted); }
+.chgd summary { cursor: pointer; }
+.chgd .record { margin: 0.1rem 0; }
+.chgd .record.depth-1 { padding-left: 0.6rem; }
+.open-list li .st, .refused-list li .st { display: inline; }
+.open-list li .st .subject a { text-decoration-color: var(--rule); }
