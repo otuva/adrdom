@@ -1,71 +1,11 @@
-//! Shared page chrome: escaping, pluralization, the banner, and the page
-//! frame every route renders through.
+//! Shared page chrome: escaping and the page frame every route renders
+//! through.
 
 const STYLE: &str = include_str!("../../../assets/style.css");
 
+/// The page's one escaper: `out::esc`, the one every line renders through.
 pub(super) fn esc(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            '\'' => out.push_str("&#39;"),
-            _ => out.push(c),
-        }
-    }
-    out
-}
-
-pub(super) fn plural(n: usize, one: &str, many: &str) -> String {
-    if n == 1 {
-        format!("1 {}", one)
-    } else {
-        format!("{} {}", n, many)
-    }
-}
-
-/// The neighbour lines of a question, folded under a summary that counts
-/// them; a line that is not a neighbour stays outside the fold.
-pub(super) fn neighbours_html(lines: &[String]) -> String {
-    let (folded, plain): (Vec<&str>, Vec<&str>) = lines
-        .iter()
-        .map(|l| l.trim())
-        .partition(|l| l.starts_with("neighbour: "));
-    let mut out = String::new();
-    if !folded.is_empty() {
-        out.push_str(&format!(
-            "<details class=\"neighbours\"><summary>{}</summary><ul>",
-            plural(folded.len(), "neighbour", "neighbours")
-        ));
-        for l in &folded {
-            out.push_str(&format!("<li>{}</li>", esc(l)));
-        }
-        out.push_str("</ul></details>\n");
-    }
-    if !plain.is_empty() {
-        out.push_str("<ul class=\"neighbours\">");
-        for l in &plain {
-            out.push_str(&format!("<li>{}</li>", esc(l)));
-        }
-        out.push_str("</ul>\n");
-    }
-    out
-}
-
-pub(super) fn banner_html(m: Option<&String>) -> String {
-    match m {
-        Some(text) if !text.is_empty() => {
-            let refused = text.contains("refusing") || text.contains("failed");
-            format!(
-                "<p class=\"banner{}\">{}</p>\n",
-                if refused { " refused" } else { "" },
-                esc(text)
-            )
-        }
-        _ => String::new(),
-    }
+    crate::out::esc(s)
 }
 
 pub(super) fn forbidden_page() -> String {
@@ -89,14 +29,13 @@ pub(super) fn page(title: &str, current: &str, body: &str, wide: bool) -> String
     };
     let wide_class = if wide { " class=\"wide\"" } else { "" };
     format!(
-        "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>{title}</title><style>{style}</style></head><body{wide_class}>\n<nav class=\"bar\"><span class=\"mark\">adr</span>{home}{next}{decisions}{terms}</nav>\n<main{wide_class}>\n{body}</main>\n</body></html>\n",
+        "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>{title}</title><style>{style}</style></head><body{wide_class}>\n<nav class=\"bar\"><span class=\"mark\">adr</span>{home}{next}{terms}</nav>\n<main{wide_class}>\n{body}</main>\n</body></html>\n",
         title = esc(title),
         style = STYLE,
         wide_class = wide_class,
-        home = nav("/", "Overview"),
-        next = nav("/next", "Answer"),
-        decisions = nav("/decisions", "Decisions"),
-        terms = nav("/terms", "Terms"),
+        home = nav("/", "adr show"),
+        next = nav("/next", "asked"),
+        terms = nav("/terms", "adrdom/terms.md"),
         body = body
     )
 }

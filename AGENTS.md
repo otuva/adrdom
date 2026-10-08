@@ -18,8 +18,10 @@ path, and some agents load the file from it at the start of a session:
 ## What is next
 
 Run `adr show`. It prints every current decision, its heading and under it
-the answer the owner picked, and under each topic file the lines of `next`:
-one line for each move, opening with who makes it.
+the answer the owner picked, and after the decisions of each topic file its
+findings and its moves. A finding opens with the rule it breaks and ends
+with the move that clears it; a move is one line, opening with who makes
+it.
 
 - A line that opens with `agent` is yours. A line with `builds` in it is for
   an agent that did not write the question. Make these moves in the order
@@ -30,10 +32,15 @@ one line for each move, opening with who makes it.
 - A line that opens with `not yet` names something whose turn has not come.
   Leave it.
 
-`adr show <topic file>` prints every question of that file: what each one
-stands on, what stands on it, and what took the place of one that was
-replaced. Read it before you write a question into that file. Each question
-opens with where it stands, in brackets:
+`adr show <file>` takes every file `adr approve` takes: a topic file, the
+terms file, a blame file. For a topic file it prints every question, the
+lines it carries, and the body of a question that waits for the owner's
+answer; what the file holds beyond its latest approval is printed marked,
+`+` for a line added and `-` for a line gone, and a question new or struck
+as a whole carries the mark on its own line too; then the findings and the
+moves of the file. `adr show --dependents <file>` also prints what stands
+on each question or term entry and what took the place of a question that
+was replaced. Each question opens with where it stands, in brackets:
 
 - `[no body]`: a heading of the plan, its body not written.
 - `[not asked]`: the body is written, `adr ask` has not run on it.
@@ -46,7 +53,7 @@ opens with where it stands, in brackets:
 
 ## Before you build anything
 
-1. Read every current decision in `adr show`. Build a decision when `next`
+1. Read every current decision in `adr show`. Build a decision when a move
    names it, and not before. Never build a decision whose question you wrote:
    another agent builds it.
 2. If no current decision covers what you are about to build, do not build
@@ -58,7 +65,7 @@ opens with where it stands, in brackets:
 
 The plan is made in six steps, each on the record of the one before. Run
 `adr plan <file>` at each step: it reads the file, does the step the file is
-at, and prints what it did and the next move.
+at, and prints what it read, what it found and the next move.
 
 **1. Write the headings.** A topic file, `adrdom/decisions/<topic>.md`, holds
 the questions on one subject: one `# <Topic>` line, a few lines of prose,
@@ -104,7 +111,7 @@ the `id:` line under that heading in its topic file.
 ```
 ### Does the pre-commit hook run the tests?
 depends: hook, Does check read staged files only?
-unrelated: Does a hook print what check prints on a pass?
+unrelated: Does check print a line that names no move?
 ```
 
 **4. Walk each question, then write its body.** Write the body of every
@@ -150,7 +157,8 @@ the ten nearest current decisions and term definitions, with the reader's
 word: same, consistent, inconsistent, depends or unrelated; and the nearest
 other questions of this file, with same, depends or unrelated. Write a line
 for each new neighbour. A heading or a body changed after its step is read
-again: run `adr plan <file>` until it says the file is ready.
+again: run `adr plan <file>` until the move it prints is the owner's
+`adr approve`.
 
 **6. Ask approval.** Say the plan is ready, post
 `owner runs: adr approve <file>` and stop. The owner reads headings, lines
@@ -159,16 +167,17 @@ approving, or write the plan itself and approve it the same way. After
 approval every heading has an `id:` line and the entries of its lines are
 ids.
 
-**Then run `adr ask <file>`.** It asks the questions, or prints in one run
-everything that stops it, each line with the move that clears it. Make every
-move before you run it again. Commit, post your lean for each question in
-chat, post the `owner runs: adr answer ...` lines that `next` prints, and
-stop. The owner puts a letter, or the word `refuse`, in place of `<letter>`.
-When the answer is not in a question's answer set, the answer removes that
-question and every question standing on it from the file.
+**Then run `adr ask <file>`.** It asks the questions and prints one line
+for each question it asked, or prints in one run everything that stops it,
+each line with the move that clears it. Make every move before you run it
+again. Commit, post your lean for each question in chat, post the
+`owner runs: adr answer ...` lines `adr show` prints, and stop. The owner
+puts a letter, or the word `refuse`, in place of `<letter>`. When the
+answer is not in a question's answer set, the answer removes that question
+and every question standing on it from the file.
 
 **After the answer.** If you wrote the question, stop: another agent builds
-its decision from the record alone. Build the decisions `next` names. Tie
+its decision from the record alone. Build the decisions the moves name. Tie
 each one to a test: put a comment `adr: <id>` inside a test, outside
 `adrdom/`, that shows the code follows the decision. Write the test if none
 exists, and add it to git. The answers are committed as they are given.

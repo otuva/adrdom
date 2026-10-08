@@ -1,88 +1,96 @@
 use crate::commands::install::{
     self, CLAUDE_MD_IMPORT, CLAUDE_MD_MARKER, COMMIT_MSG_HOOK, PRE_COMMIT_HOOK, PRE_PUSH_HOOK,
 };
+use crate::rules::Rule;
 use crate::commands::deny_entries;
 use crate::msg::{self, Actor, Next};
+use crate::out::{self, Event};
 use crate::repo;
 use std::fs;
 use std::path::Path;
 
-/// The owner's next move on any I/O failure while uninstalling: fix the
-/// underlying problem, then run uninstall again.
-fn retry() -> Next {
-    Next::owner_runs("adr uninstall")
+/// The event of the file at `rel` edited in place.
+fn written(rel: &str) -> Event {
+    Event::FileWritten { path: rel.to_string() }
+}
+
+/// The event of the file or directory at `rel` removed.
+fn removed(rel: &str) -> Event {
+    Event::FileRemoved { path: rel.to_string() }
 }
 
 /// Owner-only: removes everything `adr install` wrote outside `adrdom/`,
 /// leaving `adrdom/` itself untouched.
 pub fn run() -> i32 {
     if !repo::owner_authorized() {
-        eprintln!("{}", msg::owner_refusal("uninstall", ""));
+        out::eprint_stop(Rule::Uninstall, &msg::owner_refusal("uninstall", &[]));
         return 2;
     }
 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("uninstall", "", Actor::Owner));
+            out::eprint_stop(Rule::Uninstall, &msg::not_a_repo("uninstall", &[], Actor::Owner));
             return 1;
         }
     };
 
-    // What was removed is printed on a failure too: the run that failed
-    // is the only one that can say it, the next one finds it gone.
-    let mut messages = Vec::new();
-    let failed = remove_all(&root, &mut messages).err();
-
-    if failed.is_none() {
-        println!("{}", msg::uninstalled_at(root.display()));
-    }
-    for m in &messages {
-        println!("{}", m);
-    }
+    // One line per file removed or edited, or the failure that stopped it
+    // (per "What does a command that writes print?", 069a6b4a A). What was
+    // removed is printed on a failure too: the run that failed is the only
+    // one that can say it, the next one finds it gone.
+    let mut events = Vec::new();
+    let failed = remove_all(&root, &mut events).err();
+    out::print_events(&events);
     match failed {
         Some(m) => {
-            eprintln!("uninstall: {}", m);
+            out::eprint_stop(Rule::Uninstall, &m);
             1
         }
         None => 0,
     }
 }
 
-/// Every removal in order, stopping at the first that fails; `messages`
-/// holds a line for each thing removed or left up to that point.
-fn remove_all(root: &Path, messages: &mut Vec<String>) -> Result<(), String> {
-    if let Some(m) = remove_agents_md_section(root)
-        .map_err(|e| msg::update_failed("AGENTS.md", e, retry()))?
-    {
-        messages.push(m);
+/// Every removal in order, stopping at the first that fails; `events`
+/// holds one event for each file removed or edited up to that point.
+fn remove_all(root: &Path, events: &mut Vec<Event>) -> Result<(), String> {
+    events.extend(remove_agents_md_section(root).map_err(|e| msg::update_failed("AGENTS.md", e, msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr uninstall"))))?);
+    events.extend(remove_claude_md_import(root).map_err(|e| msg::update_failed("CLAUDE.md", e, msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr uninstall"))))?);
+    remove_hooks(root, events)?;
+    remove_settings_deny(root, events)?;
+    remove_codex_rules(root, events)
+}
+
+/// The text of `path`, `None` when it is not there. A file that is there
+/// and cannot be read as text is a failure, named, never skipped: what
+/// install wrote into it would stay without a word.
+fn read_if_present(path: &Path) -> Result<Option<String>, String> {
+    match fs::read_to_string(path) {
+        Ok(c) => Ok(Some(c)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.to_string()),
     }
-    if let Some(m) = remove_claude_md_import(root)
-        .map_err(|e| msg::update_failed("CLAUDE.md", e, retry()))?
-    {
-        messages.push(m);
-    }
-    remove_hooks(root, messages)?;
-    messages.extend(
-        remove_settings_deny(root)
-            .map_err(|e| msg::update_failed(".claude/settings.json", e, retry()))?,
-    );
-    remove_codex_rules(root, messages)
 }
 
 /// Removes the marked brief section from AGENTS.md, plus the one blank
 /// line right before it if there is one. Deletes the file entirely when
 /// nothing but whitespace remains.
-fn remove_agents_md_section(root: &Path) -> Result<Option<String>, String> {
+fn remove_agents_md_section(root: &Path) -> Result<Option<Event>, String> {
     let path = root.join("AGENTS.md");
-    let existing = match fs::read_to_string(&path) {
-        Ok(c) => c,
-        Err(_) => return Ok(None),
+    let Some(existing) = read_if_present(&path)? else {
+        return Ok(None);
     };
     let parts: Vec<&str> = existing.split('\n').collect();
     let Some((begin, end)) = install::find_markers(&parts) else {
         return Ok(None);
     };
+    // Each piece leaves only while it still matches what install wrote (per
+    // "Does uninstall belong to the owner?"): a section edited by hand is
+    // left, compared the way check compares it.
+    let brief_lines: Vec<&str> = install::BRIEF.lines().collect();
+    if !crate::text::lines_match_trimmed(&parts[begin + 1..end], &brief_lines) {
+        return Ok(None);
+    }
 
     let remove_from = if begin > 0 && parts[begin - 1].is_empty() {
         begin - 1
@@ -97,10 +105,10 @@ fn remove_agents_md_section(root: &Path) -> Result<Option<String>, String> {
 
     if new_content.trim().is_empty() {
         fs::remove_file(&path).map_err(|e| e.to_string())?;
-        return Ok(Some(msg::agents_md_removed_whole()));
+        return Ok(Some(removed("AGENTS.md")));
     }
     fs::write(&path, &new_content).map_err(|e| e.to_string())?;
-    Ok(Some(msg::agents_md_section_removed()))
+    Ok(Some(written("AGENTS.md")))
 }
 
 /// Removes the marker comment line and the `@AGENTS.md` line right after
@@ -113,11 +121,10 @@ fn remove_agents_md_section(root: &Path) -> Result<Option<String>, String> {
 /// exactly, because install's blank-line insertion collapses those cases
 /// to the same on-disk text. A bare `@AGENTS.md` line with no marker
 /// above it is the owner's own and is left alone.
-fn remove_claude_md_import(root: &Path) -> Result<Option<String>, String> {
+fn remove_claude_md_import(root: &Path) -> Result<Option<Event>, String> {
     let path = root.join("CLAUDE.md");
-    let existing = match fs::read_to_string(&path) {
-        Ok(c) => c,
-        Err(_) => return Ok(None),
+    let Some(existing) = read_if_present(&path)? else {
+        return Ok(None);
     };
     let parts: Vec<&str> = existing.split('\n').collect();
     let Some(marker_idx) = parts.iter().position(|l| *l == CLAUDE_MD_MARKER) else {
@@ -140,46 +147,45 @@ fn remove_claude_md_import(root: &Path) -> Result<Option<String>, String> {
 
     if new_content.trim().is_empty() {
         fs::remove_file(&path).map_err(|e| e.to_string())?;
-        return Ok(Some(msg::claude_md_deleted()));
+        return Ok(Some(removed("CLAUDE.md")));
     }
 
     fs::write(&path, &new_content).map_err(|e| e.to_string())?;
-    Ok(Some(msg::claude_md_import_removed()))
+    Ok(Some(written("CLAUDE.md")))
 }
 
 /// Deletes the three hooks only when their content still matches exactly
 /// what `adr install` writes, removes `.githooks` once empty, and unsets
-/// `core.hooksPath` only when it's still `.githooks`.
-fn remove_hooks(root: &Path, messages: &mut Vec<String>) -> Result<(), String> {
+/// `core.hooksPath` only when it's still `.githooks`. A hook that is not
+/// what this build of install writes (an owner's edit, or the hook of
+/// another version) is left, and so is `.githooks` around it.
+fn remove_hooks(root: &Path, events: &mut Vec<Event>) -> Result<(), String> {
     let hooks = root.join(".githooks");
 
-    for (name, written) in [
+    for (name, content_written) in [
         ("pre-commit", PRE_COMMIT_HOOK),
         ("commit-msg", COMMIT_MSG_HOOK),
         ("pre-push", PRE_PUSH_HOOK),
     ] {
         let path = hooks.join(name);
-        if let Ok(content) = fs::read_to_string(&path) {
-            if content == written {
-                remove(&path, fs::remove_file(&path))?;
-                messages.push(msg::hook_removed(name));
-            } else {
-                // Not what this build of install writes: an owner's edit,
-                // or the hook of another version. Left, and said.
-                messages.push(msg::hook_left(name));
-            }
+        if fs::read_to_string(&path).is_ok_and(|content| content == content_written) {
+            remove(&path, fs::remove_file(&path))?;
+            events.push(removed(&format!(".githooks/{}", name)));
         }
     }
     if remove(&hooks, remove_dir_when_empty(&hooks))? {
-        messages.push(msg::githooks_dir_removed());
+        events.push(removed(".githooks"));
     }
 
+    // Unset only once every hook install wrote is gone: a hook left (one
+    // edited by hand) keeps running where git looks for it. The change of
+    // git's configuration is printed as the write it is.
     if let Some(val) = repo::git(root, &["config", "core.hooksPath"]) {
-        if val.trim() == ".githooks" {
+        if val.trim() == ".githooks" && !hooks.exists() {
             if repo::git(root, &["config", "--unset", "core.hooksPath"]).is_none() {
-                return Err(msg::hooks_path_failed("unset", retry()));
+                return Err(msg::hooks_path_failed("unset", msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr uninstall"))));
             }
-            messages.push(msg::hooks_path_unset());
+            events.push(Event::ConfigUnset { key: "core.hooksPath".to_string() });
         }
     }
 
@@ -188,7 +194,7 @@ fn remove_hooks(root: &Path, messages: &mut Vec<String>) -> Result<(), String> {
 
 /// The refusal for a removal that failed, naming what was not removed.
 fn remove<T>(path: &Path, done: std::io::Result<T>) -> Result<T, String> {
-    done.map_err(|e| msg::remove_failed(&path.display().to_string(), e, retry()))
+    done.map_err(|e| msg::remove_failed(&path.display().to_string(), e, msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr uninstall"))))
 }
 
 /// Removes `dir` when it holds nothing; true when it was removed. A
@@ -208,22 +214,20 @@ fn remove_dir_when_empty(dir: &Path) -> std::io::Result<bool> {
 /// exactly what `adr install --codex` writes, then removes `.codex/rules`
 /// once empty, and `.codex` once that is empty too. Leaves an
 /// owner-edited or foreign file alone (mirrors `remove_hooks`).
-fn remove_codex_rules(root: &Path, messages: &mut Vec<String>) -> Result<(), String> {
+fn remove_codex_rules(root: &Path, events: &mut Vec<Event>) -> Result<(), String> {
     let rules_dir = root.join(".codex/rules");
     let rules_path = rules_dir.join("adrdom.rules");
     let codex_dir = root.join(".codex");
 
-    if let Ok(content) = fs::read_to_string(&rules_path) {
-        if content == install::codex_rules_content() {
-            remove(&rules_path, fs::remove_file(&rules_path))?;
-            messages.push(msg::codex_rules_removed());
-        }
+    if fs::read_to_string(&rules_path).is_ok_and(|content| content == install::codex_rules_content()) {
+        remove(&rules_path, fs::remove_file(&rules_path))?;
+        events.push(removed(".codex/rules/adrdom.rules"));
     }
     if remove(&rules_dir, remove_dir_when_empty(&rules_dir))? {
-        messages.push(msg::codex_rules_dir_removed());
+        events.push(removed(".codex/rules"));
     }
     if remove(&codex_dir, remove_dir_when_empty(&codex_dir))? {
-        messages.push(msg::codex_dir_removed());
+        events.push(removed(".codex"));
     }
 
     Ok(())
@@ -233,21 +237,26 @@ fn remove_codex_rules(root: &Path, messages: &mut Vec<String>) -> Result<(), Str
 /// `permissions.deny`, leaving every other key and entry untouched. Deletes
 /// the file when nothing but what install wrote remains (an empty
 /// `permissions.deny` and no other key anywhere), then removes `.claude`
-/// once that leaves it empty. Does nothing when the file doesn't exist.
-fn remove_settings_deny(root: &Path) -> Result<Vec<String>, String> {
+/// once that leaves it empty. Does nothing when the file doesn't exist. A
+/// failure is the whole refusal, its move named once.
+fn remove_settings_deny(root: &Path, events: &mut Vec<Event>) -> Result<(), String> {
+    const REL: &str = ".claude/settings.json";
+    let failed = |e: String| msg::update_failed(REL, e, msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr uninstall")));
     let dir = root.join(".claude");
     let path = dir.join("settings.json");
     if !path.exists() {
-        return Ok(Vec::new());
+        return Ok(());
     }
-    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let content = fs::read_to_string(&path).map_err(|e| failed(e.to_string()))?;
     if content.trim().is_empty() {
-        return Ok(Vec::new());
+        return Ok(());
     }
     let mut value: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| msg::parse_failed(&path.display().to_string(), e, retry()))?;
+        .map_err(|e| {
+            msg::parse_failed(REL, e, Next::agent(format!("fixes {} so it parses as JSON", REL)).and_owner_runs(crate::moves::Cmd::fixed("adr uninstall")))
+        })?;
 
-    let mut messages = Vec::new();
+    let mut any_removed = false;
     if let Some(deny) = value
         .get_mut("permissions")
         .and_then(|p| p.get_mut("deny"))
@@ -256,30 +265,29 @@ fn remove_settings_deny(root: &Path) -> Result<Vec<String>, String> {
         for entry in deny_entries() {
             let before = deny.len();
             deny.retain(|v| v.as_str() != Some(entry.as_str()));
-            if deny.len() != before {
-                messages.push(msg::deny_entry_removed(&entry));
-            }
+            any_removed |= deny.len() != before;
         }
     }
 
-    if messages.is_empty() {
-        return Ok(messages);
+    if !any_removed {
+        return Ok(());
     }
 
     if settings_holds_only_deny(&value) {
-        fs::remove_file(&path).map_err(|e| e.to_string())?;
-        messages.push(msg::settings_json_deleted());
-        if remove_dir_when_empty(&dir).map_err(|e| format!("{}: {}", dir.display(), e))? {
-            messages.push(msg::claude_dir_removed());
+        fs::remove_file(&path).map_err(|e| failed(e.to_string()))?;
+        // Printed whatever follows: the file is gone.
+        events.push(removed(REL));
+        if remove_dir_when_empty(&dir).map_err(|e| msg::remove_failed(".claude", e, msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr uninstall"))))? {
+            events.push(removed(".claude"));
         }
-        return Ok(messages);
+        return Ok(());
     }
 
-    let mut pretty = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
+    let mut pretty = serde_json::to_string_pretty(&value).map_err(|e| failed(e.to_string()))?;
     pretty.push('\n');
-    fs::write(&path, pretty).map_err(|e| e.to_string())?;
-
-    Ok(messages)
+    fs::write(&path, pretty).map_err(|e| failed(e.to_string()))?;
+    events.push(written(REL));
+    Ok(())
 }
 
 /// True when `value` holds nothing but the shape install writes: a top

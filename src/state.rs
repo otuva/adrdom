@@ -21,6 +21,50 @@ pub fn rel_path(root: &Path, path: &Path) -> String {
     parts.join("/")
 }
 
+/// A path a command was given, from the repository root: read the way the
+/// shell that ran the command reads it (relative to the current directory
+/// unless absolute, `.` and `..` resolved), `None` when it lies outside the
+/// repository. What `show`, `plan`, `ask` and `approve` read a path
+/// argument by, so `cd adrdom/decisions && adr ask gate.md` names the file
+/// every other spelling names.
+pub fn given_rel(root: &Path, file: &Path) -> Option<String> {
+    let abs = if file.is_absolute() {
+        file.to_path_buf()
+    } else {
+        std::env::current_dir().map(|d| d.join(file)).unwrap_or_else(|_| root.join(file))
+    };
+    let normal = lexical(&abs);
+    let root_abs = lexical(&std::path::Path::new(std::path::MAIN_SEPARATOR_STR).join(root));
+    // A root reached through a link (the current directory canonical, the
+    // root as found, or the other way round) still holds its files.
+    let inside = normal.strip_prefix(&root_abs).ok().map(Path::to_path_buf).or_else(|| {
+        let canon_root = std::fs::canonicalize(root).ok()?;
+        let canon_parent = abs.parent().and_then(|p| std::fs::canonicalize(p).ok())?;
+        let canon = canon_parent.join(abs.file_name()?);
+        canon.strip_prefix(&canon_root).ok().map(Path::to_path_buf)
+    })?;
+    Some(rel_path(Path::new(""), &inside))
+}
+
+/// `path` with `.` dropped and `..` resolved against the component before
+/// it, text only.
+fn lexical(path: &Path) -> std::path::PathBuf {
+    let mut parts: Vec<std::ffi::OsString> = Vec::new();
+    for comp in path.components() {
+        match comp {
+            Component::ParentDir => {
+                parts.pop();
+            }
+            Component::CurDir => {}
+            Component::Normal(p) => parts.push(p.to_os_string()),
+            Component::RootDir | Component::Prefix(_) => parts.clear(),
+        }
+    }
+    let mut normal = std::path::PathBuf::from(std::path::MAIN_SEPARATOR_STR);
+    normal.extend(parts);
+    normal
+}
+
 /// True when `hash` matches the latest ledger row for `event`/`rel`: the
 /// comparison `plan_approved`/`context_approved` make, factored out so a
 /// caller that already holds the hash -- computed from the file exactly as
@@ -260,18 +304,13 @@ pub fn terms_edit_entries(led: &Ledger, tf: &TermsFile) -> Vec<String> {
     if terms_approved(led, tf) {
         return Vec::new();
     }
-    let catch_up = !led.rows.iter().any(|r| r.event == "term")
-        && led.latest_for_path("terms", crate::repo::TERMS_PATH).is_some();
-    let mut out: Vec<String> = Vec::new();
-    for t in &tf.terms {
-        let differs = match t.id.as_deref().and_then(|id| led.latest_for_id("term", id)) {
-            Some(r) => r.hash != terms::term_hash(t),
-            None => !catch_up,
-        };
-        if differs {
-            out.push(t.name.clone());
-        }
-    }
+    use crate::status::TermStatus;
+    let mut out: Vec<String> = tf
+        .terms
+        .iter()
+        .filter(|t| matches!(crate::status::term_status(led, tf, t), TermStatus::New | TermStatus::Changed))
+        .map(|t| t.name.clone())
+        .collect();
     out.extend(removed_terms(led, tf).into_iter().map(|(_, name)| name));
     out
 }
@@ -555,15 +594,11 @@ pub fn is_current(led: &Ledger, id: &str) -> bool {
 /// The one shared "is this section frozen" test `approve` and `check` both
 /// use.
 pub fn is_frozen(led: &Ledger, sec: &Section) -> bool {
-    sec.id
-        .as_ref()
-        .map(|id| {
-            matches!(
-                led.latest_state(id).map(|r| r.event.as_str()),
-                Some("answered") | Some("refused") | Some("superseded")
-            )
-        })
-        .unwrap_or(false)
+    use crate::status::QuestionStatus;
+    matches!(
+        crate::status::question_status(led, sec),
+        QuestionStatus::Answered | QuestionStatus::Refused | QuestionStatus::Superseded
+    )
 }
 
 /// True when `sec`'s latest ledger state is `refused`, `superseded`, or
@@ -572,18 +607,11 @@ pub fn is_frozen(led: &Ledger, sec: &Section) -> bool {
 /// question no longer stands in the file -- so it no longer holds its tier
 /// for the cap (per "Does the tool cap the questions in a tier?").
 /// `answered` is still live for this purpose (only
-/// `is_frozen`'s edit-lock treats it as closed); a section with no id yet,
-/// or none of those three states, is live.
+/// `is_frozen`'s edit-lock treats it as closed); a section with no id yet
+/// is live. A `dropped` question is out of play too
+/// (`QuestionStatus::is_dead`).
 pub fn is_dead(led: &Ledger, sec: &Section) -> bool {
-    sec.id
-        .as_ref()
-        .map(|id| {
-            matches!(
-                led.latest_state(id).map(|r| r.event.as_str()),
-                Some("refused") | Some("superseded") | Some("withdrawn")
-            )
-        })
-        .unwrap_or(false)
+    crate::status::question_status(led, sec).is_dead()
 }
 
 /// True when `sec` is named on the supersedes line of a question not
@@ -592,28 +620,6 @@ pub fn is_dead(led: &Ledger, sec: &Section) -> bool {
 /// answered.
 fn is_replaced(sec: &Section, replaced: &std::collections::HashSet<String>) -> bool {
     sec.id.as_ref().is_some_and(|id| replaced.contains(id))
-}
-
-/// `tiers` (index-aligned with `rf.sections`, as `rf.tiers` is) with every
-/// dead section's entry (`is_dead`) left out: the tier cap (per "Does the
-/// tool cap the questions in a tier?") counts
-/// only live questions, while everything else a tier holds -- derivation,
-/// a refused question holding its tier until the plan changes -- still
-/// reads `rf.tiers` whole. The one place that filters before counting, so
-/// `record::over_cap`/`record::tier_sizes` (which take a plain tier list
-/// and have no ledger access) stay ignorant of ledger state.
-pub fn live_tiers(
-    led: &Ledger,
-    rf: &RecordFile,
-    tiers: &[usize],
-    replaced: &std::collections::HashSet<String>,
-) -> Vec<usize> {
-    rf.sections
-        .iter()
-        .zip(tiers)
-        .filter(|(sec, _)| !is_dead(led, sec) && !is_replaced(sec, replaced))
-        .map(|(_, &t)| t)
-        .collect()
 }
 
 /// True when the latest ledger state of `id` is `asked` and that row holds
@@ -672,15 +678,6 @@ pub fn over_cap_headings(
     Some((open, answered))
 }
 
-/// `done` (per "Does a topic file close?"): a file is done once its plan
-/// and context are approved and every section carries a letter answer.
-/// `plan_ok`/`ctx_ok` are supplied by the caller (`check`'s `file_approval`
-/// reads them off a hash captured before any in-memory normalize pass,
-/// `view`'s off the working tree the same way) rather than recomputed here.
-pub fn file_done(rf: &RecordFile, plan_ok: bool, ctx_ok: bool) -> bool {
-    plan_ok && ctx_ok && rf.sections.iter().all(|s| s.answer_letter().is_some())
-}
-
 /// True when `sec` has no letter answer yet: no `**Answer:** <letter>`
 /// line at all (per "Does a topic file close?" and "Does the owner answer
 /// a question with a refusal?") -- a skeleton with nothing written, an
@@ -709,43 +706,6 @@ pub fn unresolved_sibling(rf: &RecordFile, i: usize) -> Option<&Section> {
             .map(|(_, s)| s)
     };
     find(false).or_else(|| find(true))
-}
-
-/// The lowest derived tier (per "Does the tool derive tiers from the
-/// depends lines?") holding an unresolved section (`tier_unresolved`; a
-/// skeleton heading with no answer keeps its tier open exactly as a
-/// refused or still-open question does), or `None` when tier derivation
-/// failed (`rf.tiers` is `None`) or every section is resolved. What the
-/// page's overview names as the open tier, and what its `waits_on` reads.
-pub fn open_tier(rf: &RecordFile) -> Option<usize> {
-    rf.sections
-        .iter()
-        .enumerate()
-        .filter(|(_, s)| tier_unresolved(s))
-        .filter_map(|(i, _)| rf.tier_of(i))
-        .min()
-}
-
-/// The section in tier `t` of `rf` the overview names as what the open tier
-/// waits on, by file order: the first non-skeleton unresolved section,
-/// or, when the tier holds nothing but a skeleton, the first skeleton in
-/// it instead (naming a heading with nothing written yet is still more
-/// informative than naming nothing) -- so the overview
-/// always has something to name once `open_tier` returns `Some`. `None`
-/// only when tier `t` holds no section at all.
-pub fn tier_blocker(rf: &RecordFile, t: usize) -> Option<&Section> {
-    let in_tier = |i: &usize| rf.tier_of(*i) == Some(t);
-    rf.sections
-        .iter()
-        .enumerate()
-        .find(|(i, s)| !s.is_skeleton && tier_unresolved(s) && in_tier(i))
-        .or_else(|| {
-            rf.sections
-                .iter()
-                .enumerate()
-                .find(|(i, s)| s.is_skeleton && in_tier(i))
-        })
-        .map(|(_, s)| s)
 }
 
 /// What holds question `i` of a file back from `answer` (per "Does answer

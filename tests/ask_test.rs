@@ -60,7 +60,7 @@ fn ask_reasks_on_edit() {
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "ask failed: {}", stderr(&out));
     assert!(
-        stdout(&out).contains("re-asked"),
+        stdout(&out).starts_with("asked: \""),
         "expected a re-ask in output: {}",
         stdout(&out)
     );
@@ -179,10 +179,17 @@ fn ask_refuses_a_heading_added_after_approval_and_a_never_approved_file() {
         "ask should refuse an unapproved file: {}",
         stdout(&out)
     );
-    assert_eq!(
-        stderr(&out).trim_end(),
-        "ask: adrdom/decisions/never.md: plan not approved; owner runs: adr approve adrdom/decisions/never.md"
-    );
+    // Its move is the one `show` names for the file (aac5c313): here the
+    // file's name is the finding to clear before approve would take it.
+    // Each finding stands on a line of its own, as show prints it.
+    let moves = file_moves(&dir, "adrdom/decisions/never.md");
+    assert!(!moves.is_empty());
+    let err = stderr(&out);
+    let lines: Vec<&str> = err.lines().collect();
+    assert!(lines[0].starts_with("ask: adrdom/decisions/never.md: plan is new; "), "{}", err);
+    for m in &moves {
+        assert!(lines.iter().any(|l| l.ends_with(m.as_str())), "ask lacks {:?}:\n{}", m, err);
+    }
 
     // A heading added after approval: the owner approved only 1.1, then the
     // agent appends 1.2 without asking the owner to re-approve.
@@ -200,10 +207,14 @@ fn ask_refuses_a_heading_added_after_approval_and_a_never_approved_file() {
         "ask should refuse a heading outside the approved plan: {}",
         stdout(&out)
     );
-    assert_eq!(
-        stderr(&out).trim_end(),
-        "ask: adrdom/decisions/example.md: plan not approved; owner runs: adr approve adrdom/decisions/example.md"
-    );
+    // The new heading is not planned yet: the move is the agent's plan,
+    // the same one `show` names, never the owner's approve.
+    let err = stderr(&out);
+    assert!(err.starts_with("ask: adrdom/decisions/example.md: plan is changed; "), "{}", err);
+    for m in file_moves(&dir, "adrdom/decisions/example.md") {
+        assert!(err.lines().any(|l| l.ends_with(m.as_str())), "ask lacks {:?}:\n{}", m, err);
+    }
+    assert!(stderr(&out).contains("agent runs: adr plan adrdom/decisions/example.md"), "{}", stderr(&out));
 
     // Nothing written: no id minted for the new heading, no ledger row.
     let after = std::fs::read_to_string(&record).unwrap();
@@ -605,7 +616,7 @@ fn ask_refuses_a_depends_entry_that_no_longer_resolves_or_is_missing_after_appro
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
     assert!(
-        stderr(&out).contains("plan not approved"),
+        stderr(&out).contains("plan is changed"),
         "{}",
         stderr(&out)
     );
@@ -630,7 +641,7 @@ fn ask_refuses_a_depends_entry_that_no_longer_resolves_or_is_missing_after_appro
     let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out2.status.success(), "ask should have refused: {}", stdout(&out2));
     assert!(
-        stderr(&out2).contains("plan not approved"),
+        stderr(&out2).contains("plan is changed"),
         "{}",
         stderr(&out2)
     );

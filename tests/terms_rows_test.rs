@@ -109,14 +109,15 @@ fn edited_definition_writes_one_row_and_names_the_live_questions() {
     std::fs::write(&terms, TERMS_DECISION_EDITED).unwrap();
     let out = approve_terms(&dir, &terms);
     assert!(out.status.success(), "{}", stderr(&out));
+    // One line per row written, the edited term's row and the terms row,
+    // and one for the terms brief its edit rewrote (per "What does a
+    // command that writes print?", 069a6b4a A).
     let text = stdout(&out);
-    let line = text
-        .lines()
-        .find(|l| l.contains("term \"decision\" changed"))
-        .unwrap_or_else(|| panic!("no changed line: {}", text));
-    assert!(line.contains(&format!("\"{}\"", H_ONE)), "{}", line);
-    assert!(line.contains(&format!("\"{}\"", H_TWO)), "{}", line);
-    assert!(!text.contains("term \"verdict\""), "{}", text);
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), 3, "{}", text);
+    assert!(lines.contains(&"written: adrdom/state/terms-brief.md"), "{}", text);
+    assert!(lines.contains(&"approved: term \"decision\""), "{}", text);
+    assert!(lines.contains(&"approved: adrdom/terms.md"), "{}", text);
     assert_eq!(rows_of(&dir, "term").len(), before + 1);
     assert_eq!(rows_of(&dir, "terms").len(), terms_before + 1);
 }
@@ -128,7 +129,8 @@ fn approve_with_nothing_changed_writes_no_term_row() {
     let before = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let out = approve_terms(&dir, &terms);
     assert!(out.status.success(), "{}", stderr(&out));
-    assert!(stdout(&out).contains("already approved"), "{}", stdout(&out));
+    // No row written, so nothing printed.
+    assert_eq!(stdout(&out), "", "{}", stdout(&out));
     assert_eq!(std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap(), before);
 }
 
@@ -140,7 +142,7 @@ fn a_passing_retire_writes_a_term_row_with_the_new_hash() {
     std::fs::write(&terms, TERMS_VERDICT_RETIRED).unwrap();
     let out = approve_terms(&dir, &terms);
     assert!(out.status.success(), "{}", stderr(&out));
-    assert!(stdout(&out).contains("term \"verdict\" changed; named by no question"), "{}", stdout(&out));
+    assert!(stdout(&out).lines().any(|l| l == "approved: term \"verdict\""), "{}", stdout(&out));
     let rows = rows_of(&dir, "term");
     assert_eq!(rows.len(), old.len() + 1);
     let last = rows

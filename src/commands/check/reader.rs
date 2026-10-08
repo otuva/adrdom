@@ -1,3 +1,4 @@
+use crate::rules::Rule;
 use super::ledger::{check_held, READER_MSGS};
 use super::Failure;
 use crate::msg;
@@ -15,11 +16,8 @@ pub(super) fn check_reader(root: &Path, source: &Source, since: Option<&str>) ->
     let mut out: Vec<Failure> = reader::parse(&content)
         .malformed
         .iter()
-        .map(|(lineno, raw)| Failure {
-            check: "reader".to_string(),
-            message: msg::malformed_reader_row(*lineno, raw),
-        })
+        .map(|(lineno, raw)| Failure::new(Rule::Reader, msg::malformed_reader_row(*lineno, raw)))
         .collect();
-    out.extend(check_held(root, repo::READER_PATH, &content, since, "reader", &READER_MSGS));
+    out.extend(check_held(root, repo::READER_PATH, &content, since, Rule::Reader, &READER_MSGS));
     out
 }

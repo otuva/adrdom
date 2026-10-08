@@ -45,16 +45,19 @@ fn setup() -> (PathBuf, PathBuf) {
     (dir, path)
 }
 
-/// The lines `show` prints under "next" for the one topic file.
+/// The moves `show` prints for the one topic file: every line that is not
+/// the file's topic line, a status line or a decision under it.
 fn next(dir: &Path) -> Vec<String> {
     let out = adr(dir, &["show"], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
-    stdout(&out)
+    moves_in(&stdout(&out))
+}
+
+fn moves_in(shown: &str) -> Vec<String> {
+    shown
         .lines()
-        .skip_while(|l| *l != "next")
-        .skip(1)
-        .take_while(|l| l.starts_with("  "))
-        .map(|l| l.trim().to_string())
+        .filter(|l| !l.starts_with(' ') && !l.starts_with("# ") && !l.starts_with(['[', '+', '-']))
+        .map(str::to_string)
         .collect()
 }
 
@@ -64,9 +67,15 @@ fn id_of(path: &Path, heading: &str) -> String {
     extract_ids(&text[at..])[0].clone()
 }
 
+/// The agent's ask as one clause of a refusal: the command alone, with no
+/// `#` comment after it.
+fn ask_clause() -> String {
+    format!("agent runs: adr ask {}", REL)
+}
+
 fn ask_for(headings: &[&str]) -> String {
     let names: Vec<String> = headings.iter().map(|h| format!("\"{}\"", h)).collect();
-    format!("agent runs adr ask {}  # {}", REL, names.join(", "))
+    format!("agent runs: adr ask {}  # {}", REL, names.join(", "))
 }
 
 fn plan_for() -> String {
@@ -76,6 +85,20 @@ fn plan_for() -> String {
 fn lines_for(headings: &[&str]) -> String {
     let names: Vec<String> = headings.iter().map(|h| format!("\"{}\"", h)).collect();
     format!("agent writes lines for {}", names.join(", "))
+}
+
+/// Asserts `lines` are the findings of one planning step: one or more per
+/// heading of `headings`, each a `plan:` finding about its heading that
+/// ends with the move `mv` names for it.
+fn assert_each_names(lines: &[String], headings: &[&str], mv: impl Fn(&str) -> String) {
+    assert!(!lines.is_empty(), "no finding");
+    for l in lines {
+        assert!(l.starts_with(&format!("plan: {}: ", REL)), "{}", l);
+        assert!(headings.iter().any(|h| l.ends_with(&format!("; {}", mv(h)))), "{}", l);
+    }
+    for h in headings {
+        assert!(lines.iter().any(|l| l.contains(&format!("\"{}\"", h))), "no finding for {}: {:?}", h, lines);
+    }
 }
 
 fn answer_for(dir: &Path, id: &str, heading: &str) -> String {
@@ -109,9 +132,11 @@ fn show_names_the_next_move_at_every_step() {
     // A plan that waits for its approval follows the planning steps: the
     // agent plans it, writes the lines of what it read, and only then does
     // the owner approve.
-    assert_eq!(next(&dir), vec![plan_for()]);
+    // Each step's findings carry the step's move (per "Does a command
+    // compute a move of its own?", aac5c313 A): one per question.
+    assert_each_names(&next(&dir), &[ONE, TWO, THREE], |_| plan_for());
     assert!(adr(&dir, &["plan", p], &[], "").status.success());
-    assert_eq!(next(&dir), vec![lines_for(&[ONE, TWO, THREE])]);
+    assert_each_names(&next(&dir), &[ONE, TWO, THREE], |h| lines_for(&[h]));
     plan_record(&dir, REL);
     assert_eq!(next(&dir), vec![format!("owner runs: adr approve {}", REL)]);
 
@@ -132,14 +157,12 @@ fn show_names_the_next_move_at_every_step() {
     ];
     assert_eq!(next(&dir), waiting);
 
-    // `ask` with nothing to ask names the same moves.
+    // `ask` with nothing to ask writes nothing and prints nothing (per
+    // "What does a command that writes print?", 069a6b4a A): the moves are
+    // show's.
     let again = adr(&dir, &["ask", p], &[], "");
     assert!(again.status.success());
-    let said = stdout(&again);
-    assert!(said.contains("nothing to ask in"), "{}", said);
-    for line in &waiting {
-        assert!(said.contains(&format!("  {}", line)), "{}", said);
-    }
+    assert_eq!(stdout(&again), "", "{}", stdout(&again));
 
     // A body edited after it was asked: the owner approves the edit, then
     // the move is the agent's, to ask it again.
@@ -150,9 +173,10 @@ fn show_names_the_next_move_at_every_step() {
         next(&dir),
         vec![ask_for(&[ONE]), answer_for(&dir, &two, TWO), waits(THREE, TWO)]
     );
-    // Its line in the listing carries no version for the owner to use.
+    // Its line in the listing names it changed since asked, and carries no
+    // version for the owner to use.
     let shown = stdout(&adr(&dir, &["show", "--all"], &[], ""));
-    assert!(shown.contains(&format!("  [asked] {}\n", ONE)), "{}", shown);
+    assert!(shown.contains(&format!("\n[changed since asked] {}\n", ONE)), "{}", shown);
     assert!(adr(&dir, &["ask", p], &[], "").status.success());
     assert_eq!(
         next(&dir),
@@ -323,18 +347,28 @@ agent finds a question among the ones named that assumes the answer of another o
 or moves it to another file when none does",
         REL
     );
-    assert_eq!(next(&dir), vec![format!("agent clears: {}", refusal)]);
+    let five = "Is the widget gate five hold?";
+    assert_eq!(
+        next(&dir),
+        vec![
+            format!("plan: {}", refusal),
+            format!("plan: {}: \"{}\" has no reader rows for its heading; {}", REL, five, plan_for()),
+        ]
+    );
 
     let out = adr(&dir, &["check"], &[], "");
     // The edited file awaits approval again: check prints the refusal as a
-    // note (912f4f3b-1213-435a-af0d-7617017fcff4).
+    // note (912f4f3b-1213-435a-af0d-7617017fcff4), beside what else approve
+    // refuses in it (fe14991d): the planning step the file is at, its new
+    // heading not yet read, is one more note.
     assert!(out.status.success());
     let plan_lines: Vec<String> = stdout(&out)
         .lines()
-        .filter(|l| l.starts_with("plan: ") && !l.contains("awaiting approval") && !l.contains("new or changed"))
+        .filter(|l| l.starts_with("plan: "))
         .map(|l| l.to_string())
         .collect();
-    assert_eq!(plan_lines, vec![format!("plan: {}", refusal)]);
+    assert_eq!(plan_lines.first(), Some(&format!("plan: {}", refusal)), "{:?}", plan_lines);
+    assert!(plan_lines.iter().any(|l| l.contains("has no reader rows for its heading")), "{:?}", plan_lines);
 }
 
 // adr: f4f667ad-8714-4e65-897b-c7002e423c28
@@ -374,10 +408,12 @@ fn show_names_what_replaced_a_superseded_question() {
     assert!(asked.status.success(), "{}", stderr(&asked));
     assert!(adr_answer(&dir, &two, "A").status.success());
 
-    let shown = stdout(&adr(&dir, &["show", "--all"], &[], ""));
+    // What replaced a superseded question is computed from the records:
+    // it comes under its flag.
+    let shown = stdout(&adr(&dir, &["show", "--all", "--dependents"], &[], ""));
     let expected = format!(
-        "  [superseded] {one}\n    stands on: widget\n    replaced by: {two}\n  \
-[answered A] {two}\n    stands on: widget\n    supersedes: {one}\n",
+        "[superseded] {one}\n  depends: widget\n  replaced by: {two}\n\
+[answered A] {two}\n  depends: widget\n  supersedes: {one}\n",
         one = ONE,
         two = TWO
     );
@@ -402,7 +438,7 @@ fn show_names_what_replaced_a_superseded_question() {
 
 // adr: f8d92841-aef7-4cd7-bd94-0e07c03e4cb6
 //
-// Every question answered and tied to a test: show prints no "next" at all.
+// Every question answered and tied to a test: show prints no move at all.
 #[test]
 fn show_prints_no_next_when_nothing_is_left() {
     let dir = init_repo();
@@ -416,15 +452,19 @@ fn show_prints_no_next_when_nothing_is_left() {
     write_test_comment(&dir, &one);
 
     let out = adr(&dir, &["show"], &[], "");
-    assert!(!stdout(&out).lines().any(|l| l == "next"), "{}", stdout(&out));
+    let moves: Vec<&str> = stdout(&out)
+        .lines()
+        .filter(|l| l.starts_with("agent ") || l.starts_with("owner runs:") || l.starts_with("not yet"))
+        .map(|_| "")
+        .collect();
+    assert!(moves.is_empty(), "no move is left: {}", stdout(&out));
 }
 
-// adr: 75075c78-fe3c-4fd8-8a33-29a5913d9d34
 //
 // With no topic file and no flag show prints the short listing: each
-// current decision as its heading and its answer, the next moves, and how
-// to read the rest. With a topic file, or with --all, it prints the whole
-// listing, the tiers among it ("show and the page print the tiers").
+// current decision as its heading and its answer, and the moves. With a
+// topic file it prints the file form: each question with its status, its
+// lines and the body of an asked one; --all prints that for every file.
 #[test]
 fn show_is_short_until_it_is_asked_for_the_whole() {
     let dir = init_repo();
@@ -450,8 +490,7 @@ fn show_is_short_until_it_is_asked_for_the_whole() {
     assert_eq!(
         short,
         format!(
-            "# Gate ({rel})\n  {one}\n    Yes the widget holds.\nnext\n  owner runs: adr answer {id}@{version} <letter>  # \"{three}\"\n\
-adr show <topic file> prints every question of one file with what it stands on; adr show --all prints all of them\n",
+            "# Gate ({rel})\n  {one}\n    Yes the widget holds.\nowner runs: adr answer {id}@{version} <letter>  # \"{three}\"\n",
             rel = REL,
             one = ONE,
             three = THREE,
@@ -461,16 +500,19 @@ adr show <topic file> prints every question of one file with what it stands on; 
     );
 
     let whole = format!(
-        "# Gate ({rel})\ntier 1\n  [answered A] {one}\n    stands on: widget\n    stood on by: {three}\n    Yes the widget holds.\n\
-tier 2\n  [asked @{version}] {three}\n    stands on: widget, {one}=A\n    neighbour: term \"widget\": heading: unrelated, body: unrelated; depends\nnext\n  owner runs: adr answer {id}@{version} <letter>  # \"{three}\"\n",
+        "[approved] Gate ({rel})\n[answered A] {one}\n  depends: widget\n  unrelated: {three}\n\
+[asked @{version}] {three}\n  depends: widget, {one}=A\n  Problem: the widget breaks.\n  Standard: plain words.\n  \
+- A) Yes the widget holds.\n    Why: reasons.\n    Costs: costs.\n  \
+- B) No the widget does not hold.\n    Why: other reasons.\n    Costs: other costs.\n\
+owner runs: adr answer {id}@{version} <letter>  # \"{three}\"\n",
         rel = REL,
         one = ONE,
         three = THREE,
         id = three,
         version = version
     );
-    assert_eq!(stdout(&adr(&dir, &["show", "--all"], &[], "")), whole);
     assert_eq!(stdout(&adr(&dir, &["show", p], &[], "")), whole);
+    assert!(stdout(&adr(&dir, &["show", "--all"], &[], "")).starts_with(&whole));
 }
 
 // adr: cd83e277-ebf0-4458-a77a-c526ab4cfeca
@@ -517,7 +559,7 @@ fn show_and_answer_agree_on_whether_the_asked_text_stands() {
     // gives the owner nothing to run.
     assert_eq!(
         stderr(&refused).trim_end(),
-        format!("answer: \"{}\" is edited since it was asked; agent runs adr ask {}", TWO, REL)
+        format!("answer: \"{}\" is edited since it was asked; {}", TWO, ask_clause())
     );
 
     // The unedited question is still answerable.
@@ -539,7 +581,7 @@ fn answer_on_a_question_never_asked_names_the_ask() {
     assert!(!out.status.success());
     assert_eq!(
         stderr(&out).trim_end(),
-        format!("answer: \"{}\" is not asked yet; agent runs adr ask {}", ONE, REL)
+        format!("answer: \"{}\" is not asked; {}", ONE, ask_clause())
     );
 
     // Asked, edited and asked again: the version read is old, the tool holds
@@ -563,19 +605,21 @@ fn answer_on_a_question_never_asked_names_the_ask() {
 
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 //
-// `show <file>` on a file that is no topic file says so and names the
-// folder, instead of sending the agent to fix a topic file.
+// `show <file>` on a file approve does not take says so and names the
+// files it takes, instead of sending the agent to fix a topic file; the
+// terms file is one approve takes, so show prints it.
 #[test]
-fn show_refuses_a_file_that_is_not_a_topic_file() {
+fn show_refuses_a_file_approve_does_not_take() {
     let (dir, _path) = setup();
     approve_record(&dir, REL);
-    for rel in ["adrdom/terms.md", "README.md"] {
-        std::fs::write(dir.join("README.md"), "# Readme\n").unwrap();
-        let out = adr(&dir, &["show", rel], &[], "");
-        assert!(!out.status.success());
-        assert_eq!(
-            stderr(&out).trim_end(),
-            format!("show: {} is not a topic file; agent names a file under adrdom/decisions", rel)
-        );
-    }
+    std::fs::write(dir.join("README.md"), "# Readme\n").unwrap();
+    let out = adr(&dir, &["show", "README.md"], &[], "");
+    assert!(!out.status.success());
+    assert_eq!(
+        stderr(&out).trim_end(),
+        "show: README.md is not a file approve takes; agent names a topic file under adrdom/decisions, adrdom/terms.md or a blame file under adrdom/blame"
+    );
+    let terms = adr(&dir, &["show", "adrdom/terms.md"], &[], "");
+    assert!(terms.status.success(), "{}", stderr(&terms));
+    assert!(stdout(&terms).starts_with("[approved] adrdom/terms.md\n"), "{}", stdout(&terms));
 }

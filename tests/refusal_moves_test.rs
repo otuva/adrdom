@@ -99,7 +99,7 @@ fn a_tie_in_a_file_named_outside_ascii_counts() {
     for args in [&["check"][..], &["check", "--staged"][..]] {
         let out = adr(&dir, args, &[], "");
         assert!(out.status.success(), "{:?}: {}", args, stdout(&out));
-        assert!(stdout(&out).contains("tested: 1"), "{:?}: {}", args, stdout(&out));
+        assert!(!stdout(&out).contains("untested:"), "{:?}: {}", args, stdout(&out));
     }
 }
 
@@ -227,7 +227,7 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(
         stdout(&out).contains(&format!(
-            "untested: {}: \"{}\"; no tracked file holds \"adr: {}\"",
+            "untested: {}: \"{}\" is answered and no tracked file holds \"adr: {}\"",
             A, ALPHA, alpha
         )),
         "{}",
@@ -244,12 +244,12 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     );
     write_test_comment(&dir, &beta);
 
-    // Under alpha, show names the question of the other file that stands
-    // on it: what would lose its ground with alpha.
-    let shown = stdout(&adr(&dir, &["show", "--all"], &[], ""));
+    // Under alpha, show names under its flag the question of the other file
+    // that stands on it: what would lose its ground with alpha.
+    let shown = stdout(&adr(&dir, &["show", "--all", "--dependents"], &[], ""));
     assert!(
         shown.contains(&format!(
-            "  [answered A] {}\n    stands on: widget\n    stood on by: {} ({})\n",
+            "[answered A] {}\n  depends: widget\n  dependents: {} ({})\n",
             ALPHA, BETA, B
         )),
         "{}",
@@ -314,18 +314,183 @@ fn show_ends_without_a_word_when_its_reader_goes_away() {
     }
     write_record(&dir, A, &plan);
 
-    let mut child = Command::new(adr_bin())
+    // The reading end is closed before the tool starts, so its first print
+    // meets the closed pipe whatever the timing.
+    let (reader, writer) = std::io::pipe().unwrap();
+    drop(reader);
+    let out = Command::new(adr_bin())
         .current_dir(&dir)
         .arg("show")
-        .stdout(Stdio::piped())
+        .stdout(writer)
         .stderr(Stdio::piped())
-        .spawn()
+        .output()
         .unwrap();
-    // The reading end is closed before the tool has read a file, so its
-    // first print meets the closed pipe.
-    drop(child.stdout.take());
-    let out = child.wait_with_output().unwrap();
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(err.is_empty(), "{}", err);
     assert_eq!(out.status.code(), Some(141), "{:?}", out.status);
+}
+
+/// The clauses of a refusal's move, split at `, ` and `; `: no clause may
+/// come twice, and none may be the command that just failed by itself.
+fn assert_one_clearing_move(line: &str, failed: &str) {
+    let (_, mv) = line.split_once("; ").unwrap_or_else(|| panic!("a refusal with no move: {}", line));
+    // Clauses are joined by "; " and, as `Next` renders them, by ", " before
+    // the next actor's clause.
+    let joined = mv.replace(", agent ", "\u{0}agent ").replace(", owner ", "\u{0}owner ").replace(", not yet", "\u{0}not yet");
+    let clauses: Vec<&str> = joined.split(['\n', '\u{0}']).flat_map(|l| l.split("; ")).collect();
+    for (i, c) in clauses.iter().enumerate() {
+        assert!(!clauses[..i].contains(c), "a clause named twice: {}", line);
+    }
+    assert_ne!(mv.trim(), format!("owner runs: {}", failed), "the move is the failed command: {}", line);
+    assert_ne!(mv.trim(), format!("agent runs: {}", failed), "the move is the failed command: {}", line);
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// A settings file install cannot read names the fix once, in install's
+// refusal and in check's finding alike; uninstall names the fix and its own
+// run once.
+#[test]
+fn a_settings_file_that_does_not_parse_names_its_fix_once() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    std::fs::write(dir.join(".claude/settings.json"), "{ not json").unwrap();
+
+    let out = adr(&dir, &["install", "--claude"], &[], "");
+    assert!(!out.status.success());
+    let err = stderr(&out);
+    let fix = "agent fixes .claude/settings.json so it parses as JSON, then runs: adr install --claude";
+    assert!(err.contains(fix), "{}", err);
+    assert_eq!(err.matches("agent ").count(), 1, "{}", err);
+    assert_one_clearing_move(err.trim_end(), "adr install --claude");
+
+    let check = stdout(&adr(&dir, &["check"], &[], ""));
+    let line = check.lines().find(|l| l.contains("settings.json")).unwrap_or_else(|| panic!("{}", check));
+    assert!(line.ends_with(fix), "check names another move: {}", line);
+
+    let out = adr_owner(&dir, &["uninstall"], "");
+    assert!(!out.status.success());
+    let err = stderr(&out);
+    assert!(err.contains("agent fixes .claude/settings.json so it parses as JSON, owner runs: adr uninstall"), "{}", err);
+    assert_eq!(err.matches("owner runs: adr uninstall").count(), 1, "{}", err);
+    assert_one_clearing_move(err.trim_end(), "adr uninstall");
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// Outside a git repository every command names the step that clears it,
+// changing into one, ahead of the command, and nothing twice.
+#[test]
+fn outside_a_repository_every_command_names_the_step_that_clears_it() {
+    let outside = OutsideDir::new("outside-moves");
+    let outside = outside.path();
+    // Every command, with the arguments and flags it was run with: the move
+    // names that same command line to run again, the command's name leads
+    // the line once.
+    for (args, owner) in [
+        (vec!["approve", "x.md"], true),
+        (vec!["answer", "id@abcd1234", "A"], true),
+        (vec!["unban"], true),
+        (vec!["uninstall"], true),
+        (vec!["serve", "--port", "0"], true),
+        (vec!["show"], false),
+        (vec!["show", "x.md"], false),
+        (vec!["show", "--all", "--neighbours", "--dependents"], false),
+        (vec!["check"], false),
+        (vec!["check", "--staged"], false),
+        (vec!["check", "--message", "m.txt"], false),
+        (vec!["check", "--since", "abc123"], false),
+        (vec!["check", "--push"], false),
+        (vec!["ask", "x.md"], false),
+        (vec!["plan", "x.md"], false),
+        (vec!["read"], false),
+        (vec!["install"], false),
+        (vec!["install", "--claude"], false),
+        (vec!["install", "--claude", "--codex"], false),
+        (vec!["ban"], false),
+        (vec!["ban", "--term", "widget"], false),
+        (vec!["ban", "--term", "answer set"], false),
+        (vec!["ban", "--rebuild"], false),
+    ] {
+        let out = if owner { adr_owner(outside, &args, "") } else { adr(outside, &args, &[], "") };
+        assert!(!out.status.success(), "{:?}", args);
+        let err = stderr(&out);
+        let line = err.trim_end();
+        assert!(line.contains("not inside a git repository; "), "{:?}: {}", args, err);
+        // The move is the command line as given, so it runs as printed: an
+        // argument of several words is quoted.
+        let quoted: Vec<String> =
+            args.iter().map(|a| if a.contains(' ') { format!("'{}'", a) } else { a.to_string() }).collect();
+        let command = format!("adr {}", quoted.join(" "));
+        assert!(line.ends_with(&format!("changes into a git repository and runs: {}", command)), "{:?}: {}", args, err);
+        assert!(line.starts_with(&format!("{}: not inside", args[0])), "{:?}: {}", args, err);
+        assert_one_clearing_move(line, &command);
+    }
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// An owner command refused to an agent names the command line the owner
+// runs, as it can be run: serve with its port.
+#[test]
+fn an_owner_refusal_names_the_command_as_it_can_be_run() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    for (args, command) in [
+        (vec!["serve", "--port", "8123"], "adr serve --port 8123"),
+        (vec!["unban"], "adr unban"),
+    ] {
+        let out = adr(&dir, &args, &[], "");
+        assert_eq!(out.status.code(), Some(2), "{:?}", args);
+        let err = stderr(&out);
+        let line = err.trim_end();
+        // The owner running it is what clears an agent's refusal here, so the
+        // move is the command itself, named once.
+        assert!(line.ends_with(&format!("; owner runs: {}", command)), "{:?}: {}", args, err);
+        assert_eq!(line.matches("owner runs:").count(), 1, "{:?}: {}", args, err);
+    }
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// ask and plan on a topic file that does not exist say, in words, what to
+// give the command (the file meant is not known, so no command line is
+// printed that would not run as printed), once.
+#[test]
+fn ask_and_plan_on_a_missing_topic_file_name_the_command_that_clears_it() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let missing = dir.join("adrdom/decisions/nofile.md");
+    for cmd in ["ask", "plan"] {
+        let out = adr(&dir, &[cmd, missing.to_str().unwrap()], &[], "");
+        assert!(!out.status.success(), "{}: refused", cmd);
+        let err = stderr(&out);
+        let line = err.lines().next().unwrap_or_default();
+        assert!(
+            line.ends_with(&format!("agent gives adr {} a topic file under adrdom/decisions that exists", cmd)),
+            "{}: {}",
+            cmd,
+            err
+        );
+        assert_one_clearing_move(line, &format!("adr {}", cmd));
+    }
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+//
+// A refusal of several lines names the command on every line: ask on a terms
+// file with two faulty entries prints each finding with `ask: ` in front.
+#[test]
+fn a_refusal_of_several_lines_names_the_command_on_every_line() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    std::fs::write(dir.join("adrdom/terms.md"), "# Terms\n\n## widget\naliases: widgets\n\n## gadget\naliases: gadgets\n").unwrap();
+    let rec = write_record(&dir, "adrdom/decisions/x.md", "# X\n\n### Does the widget run?\n");
+    let out = adr(&dir, &["ask", rec.to_str().unwrap()], &[], "");
+    assert!(!out.status.success());
+    let err = stderr(&out);
+    let lines: Vec<&str> = err.lines().collect();
+    assert!(lines.len() >= 2, "{}", err);
+    assert!(lines.iter().all(|l| l.starts_with("ask: ") && !l.starts_with("ask: ask: ")), "{}", err);
 }

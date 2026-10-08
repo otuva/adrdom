@@ -28,7 +28,9 @@ runtime dependencies beyond `git` on `PATH`.
   import to an existing CLAUDE.md), and merges a set of deny entries into
   `.claude/settings.json`'s `permissions.deny`. `adr install --codex`
   additionally writes `.codex/rules/adrdom.rules`, forbidding the owner's
-  commands under Codex's project rules. Not owner-only.
+  commands under Codex's project rules; Codex enforces project rules only
+  for a project the owner has marked trusted, so the guard holds only
+  there. Not owner-only.
 - `adr uninstall` — owner-only. Removes everything `adr install` wrote
   outside `adrdom/`: the marked brief section from AGENTS.md (deleting the
   file if nothing else is in it), the AGENTS.md import it added to
@@ -72,18 +74,43 @@ runtime dependencies beyond `git` on `PATH`.
   their tokens) from the ban list.
 - `adr ban` — read lines from stdin and ban them (and their tokens) from
   ever appearing in the repository or a commit message.
-- `adr show [topic_file]` — print each topic's derived tiers and, under each,
-  every question's state (`skeleton`, `unasked`, `open`, `answered <letter>`,
-  `refused`, `superseded`, `withdrawn`), what it stands on, and for an
-  answered question the chosen sentence.
+- `adr show [file]` — with no file, print every current decision (its
+  heading and the option picked), every finding (its rule, then the finding
+  with the move that clears it) and every move, one line each, a move
+  opening with who makes it. With a topic file, `adrdom/terms.md` or a blame file
+  (every file `adr approve` takes): each question, entry or row with its
+  status (`no body`, `not asked`, `asked @<version>`, `answered <letter>`,
+  `refused`, `superseded`, `withdrawn`, `dropped`; a file is `new`,
+  `changed`, `approved` or `removed`), the lines it carries, the body of an
+  asked question, and what the file holds beyond its latest approval,
+  marked `+` and `-` (a question new or struck as a whole carries the mark
+  on its own line too); then the file's findings and moves. `--all` prints every such file
+  that way; `--neighbours` adds each neighbour with the reader's word, and
+  `--dependents` what stands on each question or term entry and what
+  replaced a question.
+- `adr plan <topic_file>` — do the planning step the file is at (read its
+  headings, then its bodies, against their nearest current decisions and
+  terms) and print what it read, the findings on the file and its next
+  move.
 - `adr serve [--port N]` — owner-only. Serve the owner's page on
   `127.0.0.1` (default port 7357), gated by a per-start token printed to
   stdout; shows status, open questions, decisions, and a `/terms` page
   listing every term, with forms to approve, answer, and unban.
-- `adr check [--staged] [--message <path>]` — run every governance check,
+- `adr check [--staged | --message <path>]` — run every governance check,
   including failing outright while `adrdom/terms.md` differs from its
   latest approval; used by `.githooks/pre-commit` and
-  `.githooks/commit-msg`.
+  `.githooks/commit-msg`. Prints only findings, each with the move that
+  clears it (an untested current decision is one), and nothing when it
+  finds none. A finding on a file awaiting approval is a note and fails
+  nothing. `--message` reads the commit message for banned words alone,
+  the staged files being judged by the pre-commit hook; at a merge, which
+  git commits with no pre-commit hook, it judges the staged files too.
+
+A command that writes prints one line per ledger row it appends, and one
+per file it writes that no such row covers, or on standard error the
+findings that stopped it. A command that writes nothing prints what it
+read, statuses, findings and moves. The page `adr serve` serves renders
+the same lines.
 
 `adr answer`, `adr approve`, `adr unban`, `adr serve`, and `adr uninstall`
 refuse to run unless invoked interactively by a human (a real TTY on

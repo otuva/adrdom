@@ -32,7 +32,7 @@ enum Command {
         /// The topic file, adrdom/decisions/<topic>.md.
         topic_file: PathBuf,
     },
-    /// Plan a topic file: bring the neighbours of its headings and of its questions with their bodies, name the lines still to write, or say it is ready for approval.
+    /// Plan a topic file: bring the neighbours of its headings and of its questions with their bodies, name the lines still to write, and print the move that follows: the owner's approve once the plan is ready.
     Plan {
         /// The topic file, adrdom/decisions/<topic>.md.
         topic_file: PathBuf,
@@ -51,13 +51,20 @@ enum Command {
         /// The letter of the option picked, or the word refuse.
         letter: String,
     },
-    /// Print the current decisions and what is next; with a topic file or --all, every question.
+    /// Print every current decision and every move; with a file approve takes or --all, every question, entry or row.
+    #[command(group(clap::ArgGroup::new("whole").args(["topic_file", "all"]).multiple(true)))]
     Show {
-        /// Print every question of this topic file, with its state and what it stands on.
+        /// A topic file, adrdom/terms.md, or a blame file under adrdom/blame: every question, entry or row with its status, what is beyond its latest approval marked, and its moves.
         topic_file: Option<PathBuf>,
-        /// Print every question of every topic file, and the blame files.
-        #[arg(long)]
+        /// Print every file approve takes, each as with a file named.
+        #[arg(long, conflicts_with = "topic_file")]
         all: bool,
+        /// With a file or --all: each neighbour of a question not yet answered, with the reader's word and the agent's line.
+        #[arg(long, requires = "whole")]
+        neighbours: bool,
+        /// With a file or --all: what depends on each question or term entry, and what replaced a superseded question.
+        #[arg(long, requires = "whole")]
+        dependents: bool,
     },
     /// Read lines from stdin and ban them (and their tokens) from the repo.
     Ban {
@@ -84,12 +91,9 @@ enum Command {
         /// Judge the files as they are staged for the commit, not as they are on disk.
         #[arg(long, conflicts_with = "push")]
         staged: bool,
-        /// Judge the staged files and look for banned words in this commit message file.
-        #[arg(long, conflicts_with = "push")]
+        /// What the commit-msg hook runs: look for banned words in this commit message file; at a merge, judge the staged files too. Takes neither --staged nor --since.
+        #[arg(long, conflicts_with_all = ["push", "staged", "since"])]
         message: Option<PathBuf>,
-        /// Print what failed and nothing else.
-        #[arg(long)]
-        quiet: bool,
         /// Also fail when a line of the ledger as it was at <commit> is missing from the ledger now.
         #[arg(long, conflicts_with = "push")]
         since: Option<String>,
@@ -99,32 +103,7 @@ enum Command {
     },
 }
 
-/// The exit code of a command whose reader went away, as a shell reports a
-/// process ended by a closed pipe (128 + 13).
-const READER_GONE: i32 = 141;
-
-/// `adr show | head` closes the pipe while the tool still prints, and a
-/// print to a closed pipe panics. That is no fault of the tool: the process
-/// ends without a word, with `READER_GONE`, so a pipeline that watches exit
-/// codes never reads it as a pass. Every other panic is printed as before.
-fn end_quietly_when_the_reader_is_gone() {
-    let default_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        let payload = info.payload();
-        let text = payload
-            .downcast_ref::<String>()
-            .map(String::as_str)
-            .or_else(|| payload.downcast_ref::<&str>().copied())
-            .unwrap_or("");
-        if text.starts_with("failed printing to std") && text.contains("Broken pipe") {
-            std::process::exit(READER_GONE);
-        }
-        default_hook(info);
-    }));
-}
-
 fn main() {
-    end_quietly_when_the_reader_is_gone();
     let shown: &'static str = Box::leak(
         adr::msg::version_shown(VERSION, cfg!(feature = "owner-bypass")).into_boxed_str(),
     );
@@ -138,13 +117,13 @@ fn main() {
         Command::Read => commands::read::run(),
         Command::Approve { file } => commands::approve::run(file),
         Command::Answer { id, letter } => commands::answer::run(id, letter),
-        Command::Show { topic_file, all } => commands::show::run(topic_file, all),
+        Command::Show { topic_file, all, neighbours, dependents } => {
+            commands::show::run(topic_file, all, commands::show::Views { neighbours, dependents })
+        }
         Command::Ban { term, rebuild } => commands::ban::run(term, rebuild),
         Command::Unban => commands::unban::run(),
         Command::Serve { port } => commands::serve::run(port),
-        Command::Check { staged, message, quiet, since, push } => {
-            commands::check::run(staged, message, since, push, quiet)
-        }
+        Command::Check { staged, message, since, push } => commands::check::run(staged, message, since, push),
     };
     std::process::exit(code);
 }

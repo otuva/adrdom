@@ -1,3 +1,4 @@
+use crate::rules::Rule;
 use super::Failure;
 use crate::banned;
 use crate::ledger::Ledger;
@@ -13,10 +14,7 @@ pub(super) fn check_banned(root: &Path, staged: bool, message: Option<&Path>, so
     // the commit would pass with its message unread.
     if let Some(msg_path) = message {
         if let Err(e) = std::fs::read_to_string(msg_path) {
-            out.push(Failure {
-                check: "banned".to_string(),
-                message: msg::message_file_unreadable(&msg_path.display().to_string(), e),
-            });
+            out.push(Failure::new(Rule::Banned, msg::message_file_unreadable(&msg_path.display().to_string(), e)));
         }
     }
     let entries = read_banned_entries(root, source);
@@ -30,10 +28,7 @@ pub(super) fn check_banned(root: &Path, staged: bool, message: Option<&Path>, so
     for (name, content) in collect_targets(root, staged, message) {
         for hit in banned::hits(&content, &hash_map, terms_list) {
             let suffix = msg::term_suffix(hit.term.as_deref());
-            out.push(Failure {
-                check: "banned".to_string(),
-                message: msg::banned_word_at(&msg::location(&name, hit.line), &suffix),
-            });
+            out.push(Failure::new(Rule::Banned, msg::banned_word_at(&msg::location(&name, hit.line), &suffix)));
         }
     }
     out
@@ -74,10 +69,7 @@ pub(super) fn check_banned_ledger(led: &Ledger, root: &Path, source: &Source) ->
         .collect();
     missing_from_file.sort();
     for h in missing_from_file {
-        out.push(Failure {
-            check: "banned".to_string(),
-            message: msg::banned_missing_from_file(hash_prefix(h)),
-        });
+        out.push(Failure::new(Rule::Banned, msg::banned_missing_from_file(hash_prefix(h))));
     }
 
     let mut missing_from_ledger: Vec<&String> = file_hashes
@@ -86,10 +78,7 @@ pub(super) fn check_banned_ledger(led: &Ledger, root: &Path, source: &Source) ->
         .collect();
     missing_from_ledger.sort();
     for h in missing_from_ledger {
-        out.push(Failure {
-            check: "banned".to_string(),
-            message: msg::banned_missing_from_ledger(hash_prefix(h)),
-        });
+        out.push(Failure::new(Rule::Banned, msg::banned_missing_from_ledger(hash_prefix(h))));
     }
 
     let mut unbanned_but_in_file: Vec<&String> = file_hashes
@@ -98,10 +87,7 @@ pub(super) fn check_banned_ledger(led: &Ledger, root: &Path, source: &Source) ->
         .collect();
     unbanned_but_in_file.sort();
     for h in unbanned_but_in_file {
-        out.push(Failure {
-            check: "banned".to_string(),
-            message: msg::banned_unbanned_but_in_file(hash_prefix(h)),
-        });
+        out.push(Failure::new(Rule::Banned, msg::banned_unbanned_but_in_file(hash_prefix(h))));
     }
 
     out

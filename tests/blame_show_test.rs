@@ -1,25 +1,33 @@
 mod common;
 
 use common::*;
+use std::path::Path;
 
-// adr: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
+fn commit_all(dir: &Path, message: &str) {
+    run_git(dir, &["add", "-A"]);
+    let out = run_git(dir, &["commit", "-q", "-m", message]);
+    assert!(
+        out.status.success(),
+        "commit failed: {}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+// adr: 6addc2f4-ff23-4fc6-851e-7cd67063b9f8
 //
-// "show prints, after the topic sections, one section per blame file: the
-// origin path, approved or awaiting approval, the row count per
-// destination kind ..., every dropped row with its range and reason ...,
-// and every decision row with its range, the heading text and the
-// question's state" plus "under each decision ... a line `from: <origin
-// path> (<n> rows)`".
+// What `adr show` prints for a blame file (per "What does show print with a
+// file named?" and "Does show print what a file holds beyond its latest
+// approval?"): its status, its origin and every row as it carries it, a row
+// naming a question with that question's status; a draft's lines marked
+// against its latest approval; no count per destination and no line under a
+// decision naming the origins that fed it (a view computed from the records).
 #[test]
-fn show_prints_the_blame_file_counts_dropped_rows_and_the_from_line() {
-    let (dir, id1, _id2) = blame_setup();
+fn show_prints_a_blame_file_with_its_status_origin_and_rows() {
+    let (dir, _id1, _id2) = blame_setup();
     std::fs::create_dir_all(dir.join("docs")).unwrap();
     std::fs::write(dir.join("docs/other.md"), "some other origin\n").unwrap();
-    let blob = write_origin(
-        &dir,
-        "docs/x.md",
-        "line 1\nline 2\nline 3\nline 4\nline 5\n",
-    );
+    let blob = write_origin(&dir, "docs/x.md", "line 1\nline 2\nline 3\nline 4\nline 5\n");
     let rows = "1-1\tdecision: Is this pass?\n\
 2-2\tterm: pass\n\
 3-3\tdropped: dead\n\
@@ -29,63 +37,53 @@ fn show_prints_the_blame_file_counts_dropped_rows_and_the_from_line() {
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
 
-    let out = adr(&dir, &["show", "--all"], &[], "");
+    let out = adr(&dir, &["show", "adrdom/blame/x.md"], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
-
-    // The blame section itself.
-    assert!(text.contains("blame: adrdom/blame/x.md"), "{}", text);
-    assert!(text.contains("docs/x.md"), "{}", text);
-    assert!(text.contains("approved"), "{}", text);
-    assert!(text.contains("decision 1"), "{}", text);
-    assert!(text.contains("term 1"), "{}", text);
-    assert!(text.contains("dropped: dead 1"), "{}", text);
-    assert!(text.contains("dropped: detail 1"), "{}", text);
-    assert!(text.contains("dropped: copy 1"), "{}", text);
-    // Dropped rows, with reason.
-    assert!(text.contains("dropped: dead"), "{}", text);
-    assert!(text.contains("dropped: detail"), "{}", text);
-    assert!(text.contains("dropped: copy of docs/other.md"), "{}", text);
-    // The decision row: heading text and question state.
-    assert!(text.contains("Is this pass?"), "{}", text);
-    assert!(text.contains("answered"), "{}", text);
-
-    // Under the topic decision itself.
-    assert!(
-        text.contains("from: docs/x.md (1 row)"),
-        "{}",
-        text
+    assert_eq!(
+        text,
+        "[approved] adrdom/blame/x.md\n  origin: docs/x.md\n  1-1\tdecision: Is this pass? [answered A]\n  \
+2-2\tterm: pass\n  3-3\tdropped: dead\n  4-4\tdropped: detail\n  5-5\tdropped: copy of docs/other.md\n"
     );
-    let _ = id1;
+
+    let all = stdout(&adr(&dir, &["show", "--all"], &[], ""));
+    assert!(all.contains(&text), "{}", all);
+    assert!(!all.contains("from: "), "{}", all);
+    assert!(!all.contains("decision 1"), "{}", all);
 }
 
-// adr: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
-//
-// A blame file still a draft shows "awaiting approval" rather than
-// "approved".
+// A blame file never approved is new, every line of it marked; one approved
+// and then edited is changed, the rows it lost and gained marked.
 #[test]
-fn show_prints_awaiting_approval_for_a_draft_blame_file() {
+fn show_marks_a_draft_blame_file_against_its_latest_approval() {
     let (dir, _id1, _id2) = blame_setup();
     let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
-    write_blame_file(
+    let path = write_blame_file(
         &dir,
         "adrdom/blame/x.md",
         "docs/x.md",
         &blob,
         "1-1\tdropped: dead\n2-2\tdropped: detail\n",
     );
-    // Never approved.
+    let text = stdout(&adr(&dir, &["show", "adrdom/blame/x.md"], &[], ""));
+    assert!(text.starts_with("[new] adrdom/blame/x.md\n"), "{}", text);
+    assert!(text.contains("  + 1-1\tdropped: dead\n  + 2-2\tdropped: detail\n"), "{}", text);
+    assert!(text.ends_with("owner runs: adr approve adrdom/blame/x.md\n"), "{}", text);
 
-    let out = adr(&dir, &["show", "--all"], &[], "");
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
-    let text = stdout(&out);
-    assert!(text.contains("awaiting approval"), "{}", text);
+    commit_all(&dir, "approve the blame file");
+    let content = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(&path, content.replace("2-2\tdropped: detail", "2-2\tdropped: dead")).unwrap();
+    let text = stdout(&adr(&dir, &["show", "adrdom/blame/x.md"], &[], ""));
+    assert!(text.starts_with("[changed] adrdom/blame/x.md\n"), "{}", text);
+    assert!(text.contains("    1-1\tdropped: dead\n  - 2-2\tdropped: detail\n  + 2-2\tdropped: dead\n"), "{}", text);
 }
 
-// adr: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
+// adr: 6addc2f4-ff23-4fc6-851e-7cd67063b9f8
 //
 // A `decision:` row naming a question that was approved but never asked
-// prints the "unasked" state, not "answered".
+// carries that question's status, not "answered".
 #[test]
 fn show_tags_a_decision_row_naming_an_unasked_question_with_the_unasked_state() {
     let dir = init_repo();
@@ -109,12 +107,12 @@ fn show_tags_a_decision_row_naming_an_unasked_question_with_the_unasked_state() 
     assert!(text.contains("decision: Is this pass? [not asked]"), "{}", text);
 }
 
-// adr: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
+// adr: 6addc2f4-ff23-4fc6-851e-7cd67063b9f8
 //
 // A `decision:` row naming a question that is asked but not yet answered
-// prints the "open" state.
+// carries the status "asked".
 #[test]
-fn show_tags_a_decision_row_naming_an_asked_unanswered_question_with_the_open_state() {
+fn show_tags_a_decision_row_naming_an_asked_unanswered_question_with_the_asked_state() {
     let (dir, _id1, id2) = blame_setup();
     let blob = write_origin(&dir, "docs/x.md", "one\n");
     let rows = format!("1-1\tdecision: {}\n", id2);
@@ -128,24 +126,14 @@ fn show_tags_a_decision_row_naming_an_asked_unanswered_question_with_the_open_st
     assert!(text.contains("decision: Is this also pass? [asked]"), "{}", text);
 }
 
-// adr: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
-//
-// Two blame files, two different origins, both holding a `decision:` row
-// naming the same answered question: `show` prints both `# blame:`
-// sections and, under that decision, one `from:` line per origin with its
-// own row count.
+// Two blame files: `show --all` prints each in the file form, and `show`
+// with one of them prints that one alone.
 #[test]
-fn show_prints_a_from_line_per_origin_for_two_blame_files_naming_the_same_decision() {
-    let (dir, id1, _id2) = blame_setup();
+fn show_prints_each_blame_file_and_one_alone_when_it_is_named() {
+    let (dir, _id1, _id2) = blame_setup();
 
     let blob_a = write_origin(&dir, "docs/a.md", "one\n");
-    let path_a = write_blame_file(
-        &dir,
-        "adrdom/blame/a.md",
-        "docs/a.md",
-        &blob_a,
-        "1-1\tdecision: Is this pass?\n",
-    );
+    let path_a = write_blame_file(&dir, "adrdom/blame/a.md", "docs/a.md", &blob_a, "1-1\tdecision: Is this pass?\n");
     let out = adr_owner(&dir, &["approve", path_a.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
 
@@ -155,24 +143,19 @@ fn show_prints_a_from_line_per_origin_for_two_blame_files_naming_the_same_decisi
     let out = adr_owner(&dir, &["approve", path_b.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
 
-    let out = adr(&dir, &["show", "--all"], &[], "");
-    assert!(out.status.success(), "{}", stderr(&out));
-    let text = stdout(&out);
+    let text = stdout(&adr(&dir, &["show", "--all"], &[], ""));
+    assert!(text.contains("[approved] adrdom/blame/a.md\n"), "{}", text);
+    assert!(text.contains("[approved] adrdom/blame/b.md\n"), "{}", text);
 
-    assert!(text.contains("# blame: adrdom/blame/a.md"), "{}", text);
-    assert!(text.contains("# blame: adrdom/blame/b.md"), "{}", text);
-    assert!(text.contains("from: docs/a.md (1 row)"), "{}", text);
-    assert!(text.contains("from: docs/b.md (2 rows)"), "{}", text);
-    let _ = id1;
+    let one = stdout(&adr(&dir, &["show", "adrdom/blame/a.md"], &[], ""));
+    assert!(!one.contains("adrdom/blame/b.md"), "{}", one);
+    // A topic file named alone prints no blame file.
+    let topic = stdout(&adr(&dir, &["show", "adrdom/decisions/example.md"], &[], ""));
+    assert!(!topic.contains("blame"), "{}", topic);
 }
 
-// adr: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
-//
-// A blame file with a shape error is still printed (7b05f8df A: "each
-// blame file"): a bad header (no "origin: ..." on line 1) prints only its
-// `# blame:` line and a `  shape: ` line; a valid header with one
-// malformed row (no tab) alongside a good one prints its `# blame:` line,
-// a `  shape: ` line, and its good rows.
+// A blame file with a shape error is still printed: its status, the lines it
+// carries, and the agent's move on each shape error.
 #[test]
 fn a_blame_file_with_a_bad_header_and_one_with_a_bad_row_are_both_still_printed() {
     let dir = init_repo();
@@ -196,41 +179,32 @@ fn a_blame_file_with_a_bad_header_and_one_with_a_bad_row_are_both_still_printed(
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
 
-    assert!(text.contains("# blame: adrdom/blame/a.md"), "{}", text);
-    assert!(text.contains("# blame: adrdom/blame/b.md"), "{}", text);
-    assert!(
-        text.lines().any(|l| l.starts_with("  shape: ")),
-        "{}",
-        text
-    );
+    assert!(text.contains("[new] adrdom/blame/a.md\n"), "{}", text);
+    assert!(text.contains("[new] adrdom/blame/b.md\n"), "{}", text);
+    assert!(text.lines().any(|l| l.starts_with("blame: adrdom/blame/a.md:")), "{}", text);
+    assert!(text.lines().any(|l| l.starts_with("blame: adrdom/blame/b.md:")), "{}", text);
     // File B's good row still prints alongside its own shape error.
-    assert!(text.contains("dropped: detail"), "{}", text);
+    assert!(text.contains("  + 2-2\tdropped: detail"), "{}", text);
 }
 
-// adr: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
-//
-// A draft row `dropped:  dead` (two spaces after the prefix) is counted in
-// the counts line as `dropped: dead 1` and printed as a dropped row with
-// reason `dead`, the same as the canonical single-spaced form.
+// A draft row `dropped:  dead` (two spaces after the prefix) prints as the
+// file carries it, and no count of rows per destination.
 #[test]
-fn a_dropped_row_with_extra_spaces_after_the_prefix_is_counted_and_printed_as_dead() {
+fn a_dropped_row_with_extra_spaces_after_the_prefix_prints_as_written() {
     let (dir, _id1, _id2) = blame_setup();
     let blob = write_origin(&dir, "docs/x.md", "one\n");
     let rows = "1-1\tdropped:  dead\n"; // two spaces after "dropped:"
     write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
-    // Never approved: show renders a draft file's rows as written.
 
-    let out = adr(&dir, &["show", "--all"], &[], "");
-    assert!(out.status.success(), "{}", stderr(&out));
-    let text = stdout(&out);
-    assert!(text.contains("dropped: dead 1"), "{}", text);
-    assert!(text.contains("1\tdropped: dead"), "{}", text);
+    let text = stdout(&adr(&dir, &["show", "adrdom/blame/x.md"], &[], ""));
+    assert!(text.contains("  + 1-1\tdropped:  dead\n"), "{}", text);
+    assert!(!text.contains("dropped: dead 1"), "{}", text);
 }
 
-// adr: 7b05f8df-09a5-404e-a0f0-3dd8824d1d15
+// adr: 6addc2f4-ff23-4fc6-851e-7cd67063b9f8
 //
-// The owner's follow-up: a `dropped: copy of <heading>` row earns the
-// same `[state]` tag a `decision:` row gets, e.g. `[answered A]`.
+// A `dropped: copy of <heading>` row carries the status of the question it
+// names, as a `decision:` row does.
 #[test]
 fn show_tags_a_copy_of_heading_row_with_the_targets_state() {
     let (dir, id1, _id2) = blame_setup();
@@ -245,18 +219,13 @@ fn show_tags_a_copy_of_heading_row_with_the_targets_state() {
     let out = adr(&dir, &["show", "--all"], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
-    assert!(
-        text.contains("dropped: copy of Is this pass? [answered A]"),
-        "{}",
-        text
-    );
+    assert!(text.contains("dropped: copy of Is this pass? [answered A]"), "{}", text);
 }
 
-// adr: 75075c78-fe3c-4fd8-8a33-29a5913d9d34
-//
-// "the next lines of every blame file" join the short listing: a blame file
-// awaiting approval names the owner's command, and once the owner approves
-// it the line is gone. A blame file with nothing to do prints nothing.
+// The moves of every blame file join the listing with no file named: a blame
+// file awaiting approval names the owner's command, and once the owner
+// approves it the line is gone. A blame file with nothing to do prints
+// nothing.
 #[test]
 fn short_show_names_the_approval_a_blame_file_waits_for() {
     let (dir, _id1, _id2) = blame_setup();
@@ -273,7 +242,7 @@ fn short_show_names_the_approval_a_blame_file_waits_for() {
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
     assert!(
-        text.contains("# blame: adrdom/blame/x.md\nnext\n  owner runs: adr approve adrdom/blame/x.md\n"),
+        text.contains("[new] adrdom/blame/x.md\nowner runs: adr approve adrdom/blame/x.md\n"),
         "{}",
         text
     );
@@ -287,7 +256,7 @@ fn short_show_names_the_approval_a_blame_file_waits_for() {
     write_origin(&dir, "docs/x.md", "one\ntwo\nthree\n");
     let text = stdout(&adr(&dir, &["show"], &[], ""));
     assert!(
-        text.contains("agent clears: adrdom/blame/x.md: blob no longer matches docs/x.md"),
+        text.contains("blame: adrdom/blame/x.md: blob no longer matches docs/x.md"),
         "{}",
         text
     );

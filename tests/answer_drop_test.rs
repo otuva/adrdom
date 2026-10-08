@@ -119,7 +119,7 @@ fn answer_removes_the_question_and_its_dependents_and_the_file_stays_approved() 
     // Four was asked with the others in the first run; nothing is left to ask.
     let asked = adr(&g.dir, &["ask", g.path.to_str().unwrap()], &[], "");
     assert!(asked.status.success(), "{}", stderr(&asked));
-    assert!(stdout(&asked).contains("nothing to ask"), "{}", stdout(&asked));
+    assert!(stdout(&asked).is_empty(), "{}", stdout(&asked));
 }
 
 // adr: 462e22c6-8b23-4061-9a2a-bbf8691fce60
@@ -295,7 +295,11 @@ fn a_drop_before_the_latest_approval_is_not_put_back() {
 
     let (ok, report) = check_text(&dir);
     assert!(ok, "{}", report);
-    assert!(!report.contains("awaiting approval"), "{}", report);
+    // The file stands at its latest approval: show names it approved, with
+    // no owner approve move.
+    let shown = stdout(&adr(&dir, &["show", REL], &[], ""));
+    assert!(shown.starts_with("[approved] "), "{}", shown);
+    assert!(!shown.contains("owner runs: adr approve"), "{}", shown);
 }
 
 /// Two questions in a file: Two stands on One=A. Both asked and committed.

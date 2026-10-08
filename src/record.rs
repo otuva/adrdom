@@ -858,6 +858,12 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
     if scan.id_count > 1 {
         parse_errors.push("duplicate id line".to_string());
     }
+    // An identifier is a value the tool assigns (a uuid, per the term
+    // "identifier"): an `id:` line holding anything else was written by
+    // hand, and nothing reads it as the question's identifier.
+    if let Some(id) = scan.id.as_deref().filter(|id| !is_uuid(id.trim())) {
+        parse_errors.push(format!("id line holds {:?}, which is no identifier the tool assigns", id));
+    }
     if let Some(v) = &scan.answer_value {
         let v = v.trim();
         let valid = v == "refused"
@@ -1171,33 +1177,6 @@ pub const VERSION_LEN: usize = 8;
 /// against.
 pub fn version_of(lines: &[String], sec: &Section) -> String {
     section_hash(lines, sec)[..VERSION_LEN].to_string()
-}
-
-/// For each option in `sec`, its letter plus the `  Why: ` and `  Costs: `
-/// lines immediately following it (up to the next non-blank, non-matching
-/// line — typically the next option, the answer line, or the section end).
-pub fn option_details(lines: &[String], sec: &Section) -> Vec<(char, Option<String>, Option<String>)> {
-    let mut out = Vec::new();
-    for opt in &sec.options {
-        let mut why = None;
-        let mut costs = None;
-        for line in &lines[(opt.line + 1).min(lines.len())..sec.end.min(lines.len())] {
-            if let Some((kind, v)) = detail_line(line) {
-                match kind {
-                    Detail::Why if why.is_none() => why = Some(v.trim().to_string()),
-                    Detail::Costs if costs.is_none() => costs = Some(v.trim().to_string()),
-                    _ => {}
-                }
-                continue;
-            }
-            if line.trim().is_empty() {
-                continue;
-            }
-            break;
-        }
-        out.push((opt.letter, why, costs));
-    }
-    out
 }
 
 /// The cap on how many live questions one derived tier may hold. A different

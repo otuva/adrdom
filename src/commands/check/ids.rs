@@ -1,5 +1,6 @@
+use crate::rules::Rule;
 use super::Failure;
-use crate::actions::Refusal;
+use crate::rules::Finding;
 use crate::ledger::Ledger;
 use crate::msg;
 use crate::record::RecordFile;
@@ -9,45 +10,20 @@ use std::collections::{HashMap, HashSet};
 pub(super) fn check_ids(
     records: &[RecordFile],
     led: &Ledger,
-    missing_answered: &[Refusal],
+    missing_answered: &[Finding],
     raw_hashes: &HashMap<String, (Vec<String>, String)>,
-    removed: &[(String, Vec<msg::RemovalHold>)],
+    removed: &[(String, Vec<crate::moves::RemovalHold>)],
 ) -> Vec<Failure> {
     let mut out = Vec::new();
-    let mut seen: HashMap<String, String> = HashMap::new();
-    for rf in records {
-        for sec in &rf.sections {
-            // Skeleton headings never fail anything, including ids.
-            if sec.is_skeleton {
-                continue;
-            }
-            match &sec.id {
-                // A heading with no id is a question of a file awaiting
-                // approval (per "Does check fail a topic file awaiting
-                // approval?"): approve gives it one, and the file is counted
-                // as awaiting, never failed.
-                None => {}
-                Some(id) => {
-                    if let Some(prev) = seen.get(id) {
-                        out.push(Failure {
-                            check: "ids".to_string(),
-                            message: msg::duplicate_id(id, prev, &rf.rel, &sec.heading_text),
-                        });
-                    } else {
-                        seen.insert(
-                            id.clone(),
-                            format!("{}:{}", rf.rel, sec.heading_text),
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    let mut ledger_ids: HashSet<String> = HashSet::new();
+    // Every identifier a topic file holds.
+    let held: HashSet<&str> =
+        records.iter().flat_map(|rf| rf.sections.iter().filter(|s| !s.is_skeleton).filter_map(|s| s.id.as_deref())).collect();
+    // In ledger order, each once: two runs print the same lines in the
+    // same order.
+    let mut ledger_ids: Vec<String> = Vec::new();
     for row in &led.rows {
-        if (row.event == "asked" || row.event == "answered") && row.id != "-" {
-            ledger_ids.insert(row.id.clone());
+        if (row.event == "asked" || row.event == "answered") && row.id != "-" && !ledger_ids.contains(&row.id) {
+            ledger_ids.push(row.id.clone());
         }
     }
 
@@ -61,22 +37,29 @@ pub(super) fn check_ids(
     // recompute the plan hash from the by-then-normalized `rf`: approval
     // state must always be read off the file exactly as it sits on disk
     // (per "...").
-    let stale: Vec<(usize, &str)> = records
+    let stale: Vec<&str> = records
         .iter()
         .filter(|rf| {
             let plan_h: &[String] = raw_hashes.get(&rf.rel).map(|(p, _)| p.as_slice()).unwrap_or_default();
             !state::plan_approved_hashes(led, &rf.rel, plan_h)
         })
-        .filter_map(|rf| {
-            led.rows
-                .iter()
-                .rposition(|r| r.event == "approved" && r.detail == rf.rel)
-                .map(|pos| (pos, rf.rel.as_str()))
-        })
+        .filter(|rf| led.latest_for_path("approved", &rf.rel).is_some())
+        .map(|rf| rf.rel.as_str())
         .collect();
 
+    // A question asked in a file awaiting approval and struck from its
+    // plan: the one judgement show and plan print too (`rules::struck_asked`).
+    let mut struck: HashSet<String> = HashSet::new();
+    let sole = stale.len() == 1;
+    for rel in &stale {
+        for (id, heading, event) in crate::rules::struck_asked_ids(rel, sole, records, led) {
+            out.push(Failure::new(Rule::Ids, msg::removed_from_plan(&id, &heading, event, rel)));
+            struck.insert(id);
+        }
+    }
+
     for id in ledger_ids {
-        if seen.contains_key(&id) {
+        if held.contains(id.as_str()) {
             continue;
         }
         let event = led.latest_state(&id).map(|r| r.event.as_str());
@@ -112,17 +95,11 @@ pub(super) fn check_ids(
             continue;
         }
 
-        // asked / refused, missing from every current topic file: when a
-        // file that was once approved now has a stale, still unapproved
-        // plan, the heading was very likely just edited out of it, so say
-        // what happened and point at the fix instead of the bare "not
-        // found" line. Name the file only when exactly one such file
-        // exists; with more than one, which one dropped this id can't be
-        // told apart, so nothing is named. A file that was never approved
-        // at all names nothing here -- there is no earlier approved plan
-        // for this id to have dropped out of.
-        // The file the id was approved in is gone, its removal awaiting
-        // approval: name that file, the same line a struck heading earns.
+        // asked / refused, missing from every current topic file. The file
+        // the id was approved in is gone, its removal awaiting approval:
+        // name that file's removal move. Struck from the plan of a file
+        // still there and awaiting approval: reported above, once. Else the
+        // id is not found anywhere.
         if let Some((rel, holds)) = led
             .latest_for_id("approved", &id)
             .map(|r| r.detail.as_str())
@@ -132,52 +109,17 @@ pub(super) fn check_ids(
                 .latest_asked(&id)
                 .map(|r| r.detail.clone())
                 .unwrap_or_else(|| id.clone());
-            out.push(Failure {
-                check: "ids".to_string(),
-                message: msg::removed_with_file(&id, &heading, event.unwrap_or("unknown"), msg::removal_move(rel, holds)),
-            });
+            out.push(Failure::new(Rule::Ids, msg::removed_with_file(&id, &heading, event.unwrap_or("unknown"), crate::moves::removal_next(rel, holds))));
             continue;
         }
-        if !stale.is_empty() {
-            let heading = led
-                .latest_asked(&id)
-                .map(|r| r.detail.clone())
-                .unwrap_or_else(|| id.clone());
-            let removed_file = match stale.as_slice() {
-                [(_, rel)] => Some(*rel),
-                _ => None,
-            };
-            out.push(Failure {
-                check: "ids".to_string(),
-                message: msg::removed_from_plan(&id, &heading, event.unwrap_or("unknown"), removed_file),
-            });
+        if struck.contains(&id) {
             continue;
         }
-        out.push(Failure {
-            check: "ids".to_string(),
-            message: msg::ledger_id_not_found(&id, led.latest_asked(&id).map(|r| r.detail.as_str())),
-        });
+        out.push(Failure::new(Rule::Ids, msg::ledger_id_not_found(&id, led.latest_asked(&id).map(|r| r.detail.as_str()))));
     }
 
     for r in missing_answered {
-        out.push(Failure {
-            check: "ids".to_string(),
-            message: r.message.clone(),
-        });
-    }
-
-    for rf in records {
-        for sec in &rf.sections {
-            let Some(id) = &sec.id else { continue };
-            if let Some(row) = led.latest_state(id) {
-                if row.event == "withdrawn" {
-                    out.push(Failure {
-                        check: "ids".to_string(),
-                        message: msg::withdrawn_id_present(id, &sec.heading_text, &rf.rel),
-                    });
-                }
-            }
-        }
+        out.push(Failure::new(Rule::Ids, r.message.clone()));
     }
 
     out

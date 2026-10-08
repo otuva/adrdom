@@ -1,12 +1,12 @@
+use crate::rules::Rule;
 use super::Failure;
-use crate::actions;
 use crate::ledger::Ledger;
+use crate::rules;
 use crate::msg;
 use crate::record::{self, RecordFile};
 use crate::repo::{self, Source};
 use crate::state::{self, rel_path};
 use crate::terms;
-use std::collections::HashSet;
 use std::path::Path;
 
 /// `terms`: shape/approval failures on `adrdom/terms.md` (read through
@@ -21,26 +21,22 @@ use std::path::Path;
 /// asked/answered section's terms line, and every non-retired term's own
 /// terms line, is checked for an existing, non-retired uuid on each pair --
 /// never by re-resolving the underlying text. Circular definitions fail.
-/// Returns the failures and any notes ("paired by nothing").
+/// Returns the failures.
 pub(super) fn check_terms(
     root: &Path,
     records: &[RecordFile],
     led: &Ledger,
     source: &Source,
     approved_plans: &std::collections::HashSet<String>,
-) -> (Vec<Failure>, Vec<String>) {
+) -> Vec<Failure> {
     let mut out = Vec::new();
-    let mut notes = Vec::new();
     let has_records = !repo::list_decision_files_via(root, source).is_empty();
 
     let Some(content) = source.read(root, repo::TERMS_PATH) else {
         if has_records {
-            out.push(Failure {
-                check: "terms".to_string(),
-                message: msg::terms_missing(),
-            });
+            out.push(Failure::new(Rule::Terms, msg::terms_missing()));
         }
-        return (out, notes);
+        return out;
     };
 
     let lines = record::split_lines(&content);
@@ -60,7 +56,7 @@ pub(super) fn check_terms(
     // from its latest approval?" and "Does the owner approve the terms file
     // as a whole?"): an unapproved (or shape-broken-on-ids) terms.md fails
     // outright. Nothing below the gate -- section terms-line, term
-    // terms-line, "paired by nothing" -- runs while it does, since all of
+    // terms-line -- runs while it does, since all of
     // it reads the file as approved.
     //
     // Shared with approve: every shape, circular-definition,
@@ -76,25 +72,22 @@ pub(super) fn check_terms(
     // twice (once prefixed `banned:`, once prefixed `terms:`).
     let minted = terms::minted_copy(&tf);
     let (refusals, _pairs) =
-        actions::terms_refusals(root, records, &minted, led, source, false, approved_plans);
-    let refused = !refusals.is_empty();
+        rules::terms_refusals(root, records, &minted, led, source, false, approved_plans);
+    // A banned word in the file is printed by `check_banned`; approve
+    // refuses on it all the same, so the owner's approve is not named
+    // beside it.
+    let refused = !refusals.is_empty() || !rules::terms_banned_hits(root, &minted, source).is_empty();
     for r in refusals {
-        out.push(Failure {
-            check: "terms".to_string(),
-            message: r,
-        });
+        out.push(Failure::new(Rule::Terms, r));
     }
 
     if !approved || missing_ids {
         // The owner's move is named only when `approve` would take the
         // file: with a refusal above, the agent's move comes first.
         if !refused {
-            out.push(Failure {
-                check: "terms".to_string(),
-                message: msg::terms_file_not_approved(),
-            });
+            out.push(Failure::new(Rule::Terms, msg::terms_file_not_approved(crate::status::terms_file_status(led, &tf))));
         }
-        return (out, notes);
+        return out;
     }
 
     // Per "Does check hold the terms brief to the terms file?" (ec3f875c
@@ -113,16 +106,13 @@ pub(super) fn check_terms(
     if !matches(source.read(root, repo::TERMS_BRIEF_PATH)) {
         let on_disk = *source == Source::Index
             && matches(Source::WorkingTree.read(root, repo::TERMS_BRIEF_PATH));
-        out.push(Failure {
-            check: "terms".to_string(),
-            message: if on_disk {
+        out.push(Failure::new(Rule::Terms, if on_disk {
                 msg::terms_brief_not_staged()
             } else if source.exists(root, repo::TERMS_BRIEF_PATH) {
                 msg::terms_brief_differs()
             } else {
                 msg::terms_brief_missing()
-            },
-        });
+            }));
     }
 
     // Every asked/answered section: must have a terms line; each uuid on
@@ -142,35 +132,23 @@ pub(super) fn check_terms(
             // functions below need this to pick a legal next move.
             let answered = st == Some("answered");
             let Some(tl) = sec.terms_line else {
-                out.push(Failure {
-                    check: "terms".to_string(),
-                    message: msg::section_no_terms_line(&rel, &sec.heading_text, id, answered),
-                });
+                out.push(Failure::new(Rule::Terms, msg::section_no_terms_line(&rel, &sec.heading_text, id, answered)));
                 continue;
             };
             match terms::validate_pairs(rf.lines[tl].trim_end(), &tf) {
-                Err(_) => out.push(Failure {
-                    check: "terms".to_string(),
-                    message: msg::section_terms_line_malformed(&rel, &sec.heading_text, id, answered),
-                }),
+                Err(_) => out.push(Failure::new(Rule::Terms, msg::section_terms_line_malformed(&rel, &sec.heading_text, id, answered))),
                 Ok(problems) => {
                     for p in problems {
                         match p.kind {
-                            terms::ProblemKind::Gone => out.push(Failure {
-                                check: "terms".to_string(),
-                                message: msg::section_term_not_found(
+                            terms::ProblemKind::Gone => out.push(Failure::new(Rule::Terms, msg::section_term_not_found(
                                     &rel,
                                     &sec.heading_text,
                                     &p.uuid,
                                     &p.word,
                                     id,
                                     answered,
-                                ),
-                            }),
-                            terms::ProblemKind::Retired(name) => out.push(Failure {
-                                check: "terms".to_string(),
-                                message: msg::section_term_retired(&rel, &sec.heading_text, &name, id, answered),
-                            }),
+                                ))),
+                            terms::ProblemKind::Retired(name) => out.push(Failure::new(Rule::Terms, msg::section_term_retired(&rel, &sec.heading_text, &name, id, answered))),
                         }
                     }
                 }
@@ -185,47 +163,17 @@ pub(super) fn check_terms(
         }
         let Some(tl) = &t.terms_line else { continue };
         match terms::validate_pairs(tl, &tf) {
-            Err(_) => out.push(Failure {
-                check: "terms".to_string(),
-                message: msg::term_definition_terms_line_malformed(&t.name),
-            }),
+            Err(_) => out.push(Failure::new(Rule::Terms, msg::term_definition_terms_line_malformed(&t.name))),
             Ok(problems) => {
                 for p in problems {
                     match p.kind {
-                        terms::ProblemKind::Gone => out.push(Failure {
-                            check: "terms".to_string(),
-                            message: msg::term_definition_term_not_found(&t.name, &p.uuid, &p.word),
-                        }),
-                        terms::ProblemKind::Retired(name) => out.push(Failure {
-                            check: "terms".to_string(),
-                            message: msg::term_definition_term_retired(&t.name, &name),
-                        }),
+                        terms::ProblemKind::Gone => out.push(Failure::new(Rule::Terms, msg::term_definition_term_not_found(&t.name, &p.uuid, &p.word))),
+                        terms::ProblemKind::Retired(name) => out.push(Failure::new(Rule::Terms, msg::term_definition_term_retired(&t.name, &name))),
                     }
                 }
             }
         }
     }
 
-    // Note (never a failure): every non-retired term that no current
-    // decision's terms line, and no non-retired term's own terms line,
-    // pairs against (the narrower, non-transitive reach: no `depends:`
-    // ids, since a bare `depends:` entry is not a "pairing").
-    let used: HashSet<String> = state::dependent_entries(records, led, &tf, false, true)
-        .into_iter()
-        .flat_map(|dep| dep.pairs.into_iter().map(|(_, uuid)| uuid))
-        .collect();
-    let mut unused: Vec<String> = tf
-        .terms
-        .iter()
-        .filter(|t| !t.retired)
-        .filter(|t| t.id.as_ref().map(|id| !used.contains(id)).unwrap_or(true))
-        .map(|t| t.name.clone())
-        .collect();
-    unused.sort();
-    if !unused.is_empty() {
-        notes.push(msg::terms_unpaired(unused.len(), &unused.join(", ")));
-    }
-
-    (out, notes)
+    out
 }
-

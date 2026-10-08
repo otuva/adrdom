@@ -101,26 +101,6 @@ fn check_passes_a_refusal_line_with_its_matching_row() {
     );
 }
 
-#[test]
-fn check_done_excludes_a_refused_file() {
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_minimal_terms(&dir, "widget");
-    let content = refusable_content(Some("refused"));
-    write_record(&dir, "adrdom/decisions/example.md", &content);
-    approve_via_ledger(&dir, "adrdom/decisions/example.md", &content);
-    let hash = mirror_section_hash(&refusable_section(None));
-    append_ledger_row(&dir, "refused", REFUSABLE_ID, &hash, "1.1 Q?");
-
-    let out = adr(&dir, &["check"], &[], "");
-    let text = stdout(&out);
-    assert!(
-        !text.contains("done: adrdom/decisions/example.md"),
-        "a refused section must not count as done: {}",
-        text
-    );
-}
-
 // adr: b782664f-7465-4e1e-99e0-13f6dd2de774
 //
 // "a refused question closes with no decision and no test (check does not

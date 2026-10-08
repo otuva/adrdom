@@ -136,7 +136,7 @@ pub fn rank(query: &[f32], vecs: &[Vec<f32>], keep: impl Fn(usize) -> bool, n: u
 /// records: a caller that ranks texts of its own against each other passes
 /// them as `extra`.
 pub fn refresh(root: &Path, emb: &dyn Embedder, recs: &[Rec], extra: &[String]) -> Result<Vectors, String> {
-    let retry = || msg::Next::agent("fixes the directory and retries");
+    let retry = || msg::fix_then_same_command("the cache directory the error names");
     let dir = root.join(repo::CACHE_DIR);
     fs::create_dir_all(&dir).map_err(|e| msg::create_failed(repo::CACHE_DIR, e, retry()))?;
     let mut have = read(root, emb.name());

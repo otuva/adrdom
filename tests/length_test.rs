@@ -158,8 +158,9 @@ fn the_word_limit_does_not_read_an_answered_question() {
     let section = text[start..end].trim_end().to_string();
     let id = extract_ids(&section)[0].clone();
     let hash = mirror_section_hash(&section);
-    append_ledger_row(&dir, "asked", &id, &hash, "-");
-    append_ledger_row(&dir, "answered", &id, &hash, "A");
+    // The answer comes after the ask, as answer writes it.
+    append_ledger_row_at(&dir, "asked", &id, &hash, "-", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(&dir, "answered", &id, &hash, "A", "2024-01-01T00:00:01Z");
     let with_answer = format!("{}\n\n**Answer:** A\n{}", &text[..end].trim_end(), &text[end..]);
     std::fs::write(&rec, with_answer).unwrap();
 

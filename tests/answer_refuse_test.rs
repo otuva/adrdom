@@ -71,7 +71,7 @@ fn answer_refuse_writes_the_line_and_the_refused_row() {
     assert!(out.status.success(), "refuse failed: {}", stderr(&out));
     assert_eq!(
         stdout(&out).trim_end(),
-        "answer: refused \"1.1 What color is the widget?\"; agent re-plans, owner runs: adr approve adrdom/decisions/example.md"
+        "refused: \"1.1 What color is the widget?\""
     );
 
     let after = std::fs::read_to_string(&record).unwrap();
@@ -151,7 +151,7 @@ fn answer_refuse_twice_gives_the_already_refused_message() {
 }
 
 #[test]
-fn answer_refuse_ignores_supersedes_with_a_printed_note_and_writes_no_superseded_row() {
+fn answer_refuse_prints_only_the_refused_line_and_writes_no_superseded_row() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -190,12 +190,10 @@ fn answer_refuse_ignores_supersedes_with_a_printed_note_and_writes_no_superseded
 
     let out = adr_answer(&dir, &new_id, "refuse");
     assert!(out.status.success(), "refuse failed: {}", stderr(&out));
+    // One line, the refused row: nothing is superseded, so nothing else is
+    // written or printed.
     let printed = stdout(&out);
-    assert!(
-        printed.contains("supersedes ignored on a refused question"),
-        "{}",
-        printed
-    );
+    assert_eq!(printed.trim_end(), "refused: \"1.2 What color is the second widget?\"", "{}", printed);
 
     // Q1 must still be current: no `superseded` row for it.
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();

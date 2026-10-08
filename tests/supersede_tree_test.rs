@@ -233,3 +233,28 @@ fn check_prints_the_tree_refusal_once_for_an_approved_unasked_replacement_whose_
         all
     );
 }
+
+// adr: 36dfbeaa-698d-4a57-b3b0-d425348e14a5
+//
+// A decision several newer decisions supersede (per "Does one decision
+// supersede several?": several newer decisions may name the same older
+// one) is shown replaced by each of them, in the order they were answered.
+#[test]
+fn a_decision_superseded_by_two_names_both_under_dependents() {
+    let dir = setup();
+    with_q1(&dir);
+    let b = write_record(
+        &dir,
+        &rel("b"),
+        &format!("# B\n{}{}", sec(Q4, "widget", Some(Q1), true), sec(Q5, "widget", Some(Q1), true)),
+    );
+    approve_ok(&dir, "b");
+    let out = adr(&dir, &["ask", b.to_str().unwrap()], &[], "");
+    assert!(out.status.success(), "ask b failed: {}", stderr(&out));
+    for h in [Q4, Q5] {
+        let out = adr_answer(&dir, &id_of(&b, h), "A");
+        assert!(out.status.success(), "answer {} failed: {}", h, stderr(&out));
+    }
+    let shown = stdout(&adr(&dir, &["show", "--dependents", &rel("a")], &[], ""));
+    assert!(shown.contains(&format!("replaced by: {}, {}", Q4, Q5)), "{}", shown);
+}

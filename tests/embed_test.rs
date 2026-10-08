@@ -159,7 +159,7 @@ fn install_writes_the_ignore_file_and_check_holds_it() {
     assert_eq!(std::fs::read_to_string(dir.join(IGNORE_PATH)).unwrap(), "cache/\n");
     // A second install leaves it as it is.
     let again = adr(&dir, &["install"], &[], "");
-    assert!(stdout(&again).contains("install: adrdom/.gitignore: already up to date"), "{}", stdout(&again));
+    assert!(!stdout(&again).contains("adrdom/.gitignore"), "{}", stdout(&again));
     assert!(adr(&dir, &["check"], &[], "").status.success());
 
     // Missing fails, and install clears it.

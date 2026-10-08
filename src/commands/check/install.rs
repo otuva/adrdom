@@ -1,7 +1,11 @@
+use crate::rules::Rule;
 use super::Failure;
 use crate::msg;
 use crate::repo::{self, Source};
 use std::path::Path;
+
+const SETTINGS: &str = ".claude/settings.json";
+const CODEX_RULES: &str = ".codex/rules/adrdom.rules";
 
 /// Read through `source` -- the index when `check` is judging a commit,
 /// the working tree otherwise (per "Does check at a commit read the
@@ -12,8 +16,34 @@ use std::path::Path;
 /// is staged" (an agent-side classifier refusing to let an agent stage
 /// these itself is environment friction outside this tool, not a reason
 /// for `check` to treat them differently from any other judged file).
+///
+/// At a commit, a file whose staged copy fails while the working tree holds
+/// what install writes is named once as not staged, with `git add` as its
+/// move: running install again would write nothing, so naming install there
+/// names a move that clears nothing.
 pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
+    let staged = judge(root, source);
+    if !matches!(source, Source::Index) {
+        return staged.into_iter().map(|(_, f)| f).collect();
+    }
+    let on_disk: Vec<&'static str> = judge(root, &Source::WorkingTree).into_iter().map(|(p, _)| p).collect();
     let mut out = Vec::new();
+    let mut named: Vec<&'static str> = Vec::new();
+    for (path, f) in staged {
+        if on_disk.contains(&path) {
+            out.push(f);
+        } else if !named.contains(&path) {
+            named.push(path);
+            out.push(Failure::new(Rule::Install, msg::install_file_not_staged(path)));
+        }
+    }
+    out
+}
+
+/// Every file install writes that `source` does not hold as install writes
+/// it, each with the path it is about.
+fn judge(root: &Path, source: &Source) -> Vec<(&'static str, Failure)> {
+    let mut out: Vec<(&'static str, Failure)> = Vec::new();
 
     // The git hooks are checked unconditionally, the same as AGENTS.md
     // below (6ef9eca6-fd8b-4211-aae7-00b37a2a9245 A, extended by the owner
@@ -49,32 +79,20 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
     match source.read(root, repo::GITATTRIBUTES_PATH) {
         Some(content) => {
             if content != crate::commands::install::GITATTRIBUTES_CONTENT {
-                out.push(Failure {
-                    check: "install".to_string(),
-                    message: msg::gitattributes_differs(),
-                });
+                out.push((repo::GITATTRIBUTES_PATH, Failure::new(Rule::Install, msg::gitattributes_differs())));
             }
         }
-        None => out.push(Failure {
-            check: "install".to_string(),
-            message: msg::gitattributes_missing(),
-        }),
+        None => out.push((repo::GITATTRIBUTES_PATH, Failure::new(Rule::Install, msg::gitattributes_missing()))),
     }
 
     // The rule that keeps the index out of git, held like the file above.
     match source.read(root, repo::GITIGNORE_PATH) {
         Some(content) => {
             if content != crate::commands::install::GITIGNORE_CONTENT {
-                out.push(Failure {
-                    check: "install".to_string(),
-                    message: msg::gitignore_differs(),
-                });
+                out.push((repo::GITIGNORE_PATH, Failure::new(Rule::Install, msg::gitignore_differs())));
             }
         }
-        None => out.push(Failure {
-            check: "install".to_string(),
-            message: msg::gitignore_missing(),
-        }),
+        None => out.push((repo::GITIGNORE_PATH, Failure::new(Rule::Install, msg::gitignore_missing()))),
     }
 
     // AGENTS.md is checked unconditionally; CLAUDE.md's import is checked
@@ -91,22 +109,13 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
                     let brief_lines: Vec<&str> = crate::commands::install::BRIEF.lines().collect();
                     let matches = crate::text::lines_match_trimmed(section, &brief_lines);
                     if !matches {
-                        out.push(Failure {
-                            check: "install".to_string(),
-                            message: msg::agents_md_stale(),
-                        });
+                        out.push(("AGENTS.md", Failure::new(Rule::Install, msg::agents_md_stale())));
                     }
                 }
-                None => out.push(Failure {
-                    check: "install".to_string(),
-                    message: msg::agents_md_missing_brief(),
-                }),
+                None => out.push(("AGENTS.md", Failure::new(Rule::Install, msg::agents_md_missing_brief()))),
             }
         }
-        None => out.push(Failure {
-            check: "install".to_string(),
-            message: msg::agents_md_missing_brief(),
-        }),
+        None => out.push(("AGENTS.md", Failure::new(Rule::Install, msg::agents_md_missing_brief()))),
     }
 
     if source.is_dir(root, ".claude") {
@@ -115,17 +124,14 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
                 .lines()
                 .any(|l| l == crate::commands::install::CLAUDE_MD_IMPORT)
             {
-                out.push(Failure {
-                    check: "install".to_string(),
-                    message: msg::claude_md_missing_import(),
-                });
+                out.push(("CLAUDE.md", Failure::new(Rule::Install, msg::claude_md_missing_import())));
             }
         }
 
         let content = source.read(root, ".claude/settings.json").unwrap_or_default();
         if content.trim().is_empty() {
             for entry in crate::commands::deny_entries() {
-                out.push(missing_deny_entry(&entry));
+                out.push((SETTINGS, missing_deny_entry(&entry)));
             }
         } else {
             match serde_json::from_str::<serde_json::Value>(&content) {
@@ -138,14 +144,11 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
                         .unwrap_or_default();
                     for entry in crate::commands::deny_entries() {
                         if !deny.contains(&entry.as_str()) {
-                            out.push(missing_deny_entry(&entry));
+                            out.push((SETTINGS, missing_deny_entry(&entry)));
                         }
                     }
                 }
-                Err(_) => out.push(Failure {
-                    check: "install".to_string(),
-                    message: msg::settings_unparseable(&root.join(".claude/settings.json").display().to_string()),
-                }),
+                Err(_) => out.push((SETTINGS, Failure::new(Rule::Install, msg::settings_unparseable(&root.join(".claude/settings.json").display().to_string())))),
             }
         }
     }
@@ -157,16 +160,10 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
         match source.read(root, ".codex/rules/adrdom.rules") {
             Some(content) => {
                 if content != crate::commands::install::codex_rules_content() {
-                    out.push(Failure {
-                        check: "install".to_string(),
-                        message: msg::codex_rules_stale(),
-                    });
+                    out.push((CODEX_RULES, Failure::new(Rule::Install, msg::codex_rules_stale())));
                 }
             }
-            None => out.push(Failure {
-                check: "install".to_string(),
-                message: msg::codex_rules_missing(),
-            }),
+            None => out.push((CODEX_RULES, Failure::new(Rule::Install, msg::codex_rules_missing()))),
         }
     }
 
@@ -179,36 +176,21 @@ pub(super) fn check_install(root: &Path, source: &Source) -> Vec<Failure> {
 /// already up to date, so `install` and `check` can never disagree about
 /// whether a hook file is current -- and pushes a failure when the file is
 /// missing or differs.
-fn check_hook(out: &mut Vec<Failure>, root: &Path, source: &Source, path: &str, content: &str) {
+fn check_hook(out: &mut Vec<(&'static str, Failure)>, root: &Path, source: &Source, path: &'static str, content: &str) {
     match source.read(root, path) {
         Some(existing) => {
-            let existing_lines: Vec<&str> = existing.split('\n').collect();
-            let want_lines: Vec<&str> = content.split('\n').collect();
-            let matches = crate::text::lines_match_trimmed(&existing_lines, &want_lines);
-            if !matches {
-                out.push(Failure {
-                    check: "install".to_string(),
-                    message: msg::hook_differs(path),
-                });
+            if !crate::commands::install::hook_is_current(&existing, content) {
+                out.push((path, Failure::new(Rule::Install, msg::hook_differs(path))));
             } else if !crate::repo::hook_is_executable(&root.join(path)) {
                 // Git runs the working-tree file, and only when it is
                 // executable: a current hook it would skip is no hook.
-                out.push(Failure {
-                    check: "install".to_string(),
-                    message: msg::hook_not_executable(path),
-                });
+                out.push((path, Failure::new(Rule::Install, msg::hook_not_executable(path))));
             }
         }
-        None => out.push(Failure {
-            check: "install".to_string(),
-            message: msg::hook_missing(path),
-        }),
+        None => out.push((path, Failure::new(Rule::Install, msg::hook_missing(path)))),
     }
 }
 
 fn missing_deny_entry(entry: &str) -> Failure {
-    Failure {
-        check: "install".to_string(),
-        message: msg::missing_deny_entry(entry),
-    }
+    Failure::new(Rule::Install, msg::missing_deny_entry(entry))
 }

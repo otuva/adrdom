@@ -19,7 +19,9 @@ fn unban_removes_hash_and_writes_row() {
 
     let out = adr_owner(&dir, &["unban"], "forbiddenword\n");
     assert!(out.status.success(), "unban failed: {}", stderr(&out));
-    assert!(stdout(&out).contains("unban: removed"));
+    // One line for the one unbanned row (per "What does a command that
+    // writes print?", 069a6b4a A).
+    assert_eq!(stdout(&out), "unbanned: a word\n", "{}", stdout(&out));
 
     let banned_after =
         std::fs::read_to_string(dir.join("adrdom/state/banned.sha256")).unwrap();
@@ -38,13 +40,16 @@ fn unban_removes_hash_and_writes_row() {
 }
 
 #[test]
-fn unban_reports_nothing_to_remove() {
+fn unban_of_a_word_not_banned_writes_no_row_and_says_so() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let out = adr_owner(&dir, &["unban"], "neverbanned\n");
     assert!(out.status.success(), "unban failed: {}", stderr(&out));
-    assert!(stdout(&out).contains("unban: nothing to remove"));
+    // No row written, so nothing printed on standard output; the word given
+    // that was not banned is a finding on the input, on standard error.
+    assert_eq!(stdout(&out), "", "{}", stdout(&out));
+    assert!(stderr(&out).contains("not banned"), "{}", stderr(&out));
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(!ledger.lines().any(|l| l.contains("\tunbanned\t")));

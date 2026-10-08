@@ -85,8 +85,6 @@ impl LineKind {
 #[derive(Debug, Clone)]
 pub struct Neighbour {
     pub kind: NKind,
-    /// The reader file's neighbour column: an identifier, or `text:<sha>`.
-    pub key: String,
     /// The decision's heading, the term's name, or the question's heading.
     pub name: String,
     pub word: String,
@@ -133,12 +131,6 @@ pub enum NextMove {
     WriteBodies(Vec<String>),
     /// Every record is there: the owner approves.
     Ready,
-}
-
-/// Whether `sec` is a question not yet asked: no `asked` row names it, and
-/// no row of a later state (answered, refused, superseded, withdrawn) does.
-pub fn is_unasked(led: &Ledger, sec: &Section) -> bool {
-    sec.id.as_deref().map_or(true, |id| led.latest_asked(id).is_none() && led.latest_state(id).is_none())
 }
 
 /// What an entry of a line names.
@@ -228,6 +220,14 @@ pub fn unrelated_entries(
     let mut i = 0;
     while i < pieces.len() {
         let mut chosen = i + 1;
+        // An identifier holds no comma: it is an entry of its own, and no
+        // longer join is tried (a line approve wrote holds identifiers
+        // alone, so it costs one look per entry, not one per pair).
+        if record::is_uuid(pieces[i].trim()) {
+            out.push(pieces[i].clone());
+            i = chosen;
+            continue;
+        }
         for j in (i + 2..=pieces.len()).rev() {
             if names_something(&pieces[i..j].join(", ")) {
                 chosen = j;
@@ -266,7 +266,7 @@ pub fn unrelated_refusals(
 ) -> Vec<String> {
     let mut out = Vec::new();
     for (i, sec) in rf.sections.iter().enumerate() {
-        if sec.unrelated.is_empty() || !is_unasked(led, sec) {
+        if sec.unrelated.is_empty() || !crate::status::question_status(led, sec).is_unasked() {
             continue;
         }
         for e in section_unrelated_entries(i, rf, terms_list, cross, led) {
@@ -365,77 +365,101 @@ pub fn load(
     terms_list: &[Term],
     led: &Ledger,
 ) -> Planning {
-    load_inner(root, rf, all, terms_list, led, false).0
+    load_with(rf, terms_list, led, &Shared::new(root, all, terms_list, led))
 }
 
-/// `load` with the questions that are asked and wait for their answer too:
-/// what show and the page print their neighbours from ("Does show print the
-/// neighbours of a question with the reader's word?",
-/// 97c679f6-e8e6-4970-b547-940477753d7d A). Never used for the next move.
-pub fn load_shown(
-    root: &Path,
-    rf: &RecordFile,
-    all: &[RecordFile],
-    terms_list: &[Term],
-    led: &Ledger,
-) -> Planning {
-    load_inner(root, rf, all, terms_list, led, true).1
+/// `load` with what every file of a run shares already read (`Shared`):
+/// what a command that plans or judges many files calls once per file.
+pub fn load_with(rf: &RecordFile, terms_list: &[Term], led: &Ledger, shared: &Shared) -> Planning {
+    load_inner(rf, terms_list, led, shared, false)
 }
 
-/// `load` and `load_shown` together, from one read of the reader file and
-/// one pass over the records: what show prints and the next move it reads
-/// off the same file.
-pub fn load_both(
-    root: &Path,
-    rf: &RecordFile,
-    all: &[RecordFile],
-    terms_list: &[Term],
-    led: &Ledger,
-) -> (Planning, Planning) {
-    load_inner(root, rf, all, terms_list, led, true)
+/// The planning state shown under `show --neighbours`: `load_with`, the
+/// questions that wait for the owner's answer included, with what the run
+/// shares already read (`Shared`).
+pub fn load_shown_with(rf: &RecordFile, terms_list: &[Term], led: &Ledger, shared: &Shared) -> Planning {
+    load_inner(rf, terms_list, led, shared, true)
 }
 
 fn is_waiting(led: &Ledger, sec: &Section) -> bool {
     sec.id.as_deref().and_then(|id| led.latest_state(id)).is_some_and(|r| r.event == "asked")
 }
 
-fn load_inner(
-    root: &Path,
-    rf: &RecordFile,
-    all: &[RecordFile],
-    terms_list: &[Term],
-    led: &Ledger,
-    both: bool,
-) -> (Planning, Planning) {
-    let phrase_lookup = terms::phrase_lookup(terms_list);
-    let cross = depends::cross_file_heading_index(all, led);
-    let headings = decision_headings(all);
-    let rows = reader::read_file(root).rows;
-    // A row counts only when it was written with the prompt and the model
-    // that would read its pair now; a row from another prompt or model is
-    // kept apart, and its kind at that hash is read again.
-    let mut by_hash: HashMap<&str, Vec<&reader::Row>> = HashMap::new();
-    let mut stale: HashSet<(&str, Kind)> = HashSet::new();
-    let current: HashMap<Kind, String> = [Kind::Heading, Kind::Body, Kind::Plan].into_iter().map(|k| (k, k.prompt_hash())).collect();
-    for r in &rows {
-        let kinds = [row_kind(Kind::Heading, &r.neighbour), row_kind(Kind::Body, &r.neighbour)];
-        if r.model == reader::MODEL && kinds.iter().any(|k| current[k] == r.prompt_hash) {
-            by_hash.entry(r.text_hash.as_str()).or_default().push(r);
-        } else {
-            for k in kinds {
-                stale.insert((r.text_hash.as_str(), k));
+/// What the planning of every topic file of a run reads of the whole
+/// repository, read once: the term phrases, the decision headings of every
+/// topic file, the reader's rows by the hash of the text they read, and
+/// whether the pool of neighbours is empty.
+pub struct Shared {
+    pub(crate) phrase_lookup: HashMap<String, String>,
+    pub(crate) cross: HashMap<String, Vec<(String, String)>>,
+    pub(crate) headings: HashMap<String, String>,
+    rows: std::sync::Arc<Vec<reader::Row>>,
+    /// Each text hash's rows written with the prompt and model that would
+    /// read the pair now, by index into `rows`.
+    by_hash: HashMap<String, Vec<usize>>,
+    /// The kinds read at a hash by a row of another prompt or model.
+    stale: HashMap<Kind, HashSet<String>>,
+    current: HashMap<Kind, String>,
+    pool_empty: bool,
+}
+
+impl Shared {
+    pub fn new(root: &Path, all: &[RecordFile], terms_list: &[Term], led: &Ledger) -> Shared {
+        Shared::new_via(root, all, terms_list, led, &crate::repo::Source::WorkingTree)
+    }
+
+    /// `new` with the reader's rows as `source` holds them.
+    pub fn new_via(root: &Path, all: &[RecordFile], terms_list: &[Term], led: &Ledger, source: &crate::repo::Source) -> Shared {
+        let rows = reader::rows_via(root, source);
+        // A row counts only when it was written with the prompt and the
+        // model that would read its pair now; a row from another prompt or
+        // model is kept apart, and its kind at that hash is read again.
+        let mut by_hash: HashMap<String, Vec<usize>> = HashMap::new();
+        let mut stale: HashMap<Kind, HashSet<String>> = HashMap::new();
+        let current: HashMap<Kind, String> =
+            [Kind::Heading, Kind::Body, Kind::Plan].into_iter().map(|k| (k, k.prompt_hash())).collect();
+        for (i, r) in rows.iter().enumerate() {
+            let kinds = [row_kind(Kind::Heading, &r.neighbour), row_kind(Kind::Body, &r.neighbour)];
+            if r.model == reader::MODEL && kinds.iter().any(|k| current[k] == r.prompt_hash) {
+                by_hash.entry(r.text_hash.clone()).or_default().push(i);
+            } else {
+                for k in kinds {
+                    stale.entry(k).or_default().insert(r.text_hash.clone());
+                }
             }
         }
+        Shared {
+            phrase_lookup: terms::phrase_lookup(terms_list),
+            cross: depends::cross_file_heading_index(all, led),
+            headings: decision_headings(all),
+            rows,
+            by_hash,
+            stale,
+            current,
+            pool_empty: pool_is_empty(all, led, terms_list),
+        }
     }
+}
+
+fn load_inner(
+    rf: &RecordFile,
+    terms_list: &[Term],
+    led: &Ledger,
+    shared: &Shared,
+    with_asked: bool,
+) -> Planning {
+    let Shared { phrase_lookup, cross, headings, rows, by_hash, stale, current, pool_empty } = shared;
+    let pool_empty = *pool_empty;
+    // Borrowed from the shared index: no copy per lookup.
+    let rows_at = |hash: &str| by_hash.get(hash).map(|is| is.iter().map(|&i| &rows[i]));
     // Rows of a kind at a hash, none of them current.
     let is_stale = |hash: &str, kind: Kind| -> bool {
-        stale.contains(&(hash, kind))
-            && !by_hash.get(hash).is_some_and(|rs| rs.iter().any(|r| current[&kind] == r.prompt_hash))
+        stale.get(&kind).is_some_and(|hs| hs.contains(hash))
+            && !rows_at(hash).is_some_and(|mut rs| rs.any(|r| current[&kind] == r.prompt_hash))
     };
-    let pool_empty = pool_is_empty(all, led, terms_list);
     let build = |with_asked: bool| -> Planning {
     let unasked: Vec<usize> = (0..rf.sections.len())
-        .filter(|&i| is_unasked(led, &rf.sections[i]) || (with_asked && is_waiting(led, &rf.sections[i])))
+        .filter(|&i| crate::status::question_status(led, &rf.sections[i]).is_unasked() || (with_asked && is_waiting(led, &rf.sections[i])))
         .collect();
     let mut by_body: HashMap<String, usize> = HashMap::new();
     for &i in &unasked {
@@ -444,7 +468,7 @@ fn load_inner(
         }
     }
     let neighbours = |hash: &str, targets: &HashMap<Target, LineKind>| -> Option<Vec<Neighbour>> {
-        let rs = by_hash.get(hash)?;
+        let rs = rows_at(hash)?;
         // The latest row for a neighbour is the one that counts.
         let mut order: Vec<&str> = Vec::new();
         let mut last: HashMap<&str, &reader::Row> = HashMap::new();
@@ -456,12 +480,11 @@ fn load_inner(
         let mut out = Vec::new();
         for key in order {
             let r = last[key];
-            let Some((kind, name, target)) = describe(key, rf, &by_body, terms_list, &headings, led) else {
+            let Some((kind, name, target)) = describe(key, rf, &by_body, terms_list, headings, led) else {
                 continue;
             };
             out.push(Neighbour {
                 kind,
-                key: key.to_string(),
                 name,
                 word: r.word.clone(),
                 reason: r.reason.clone(),
@@ -474,7 +497,7 @@ fn load_inner(
     let mut questions = Vec::new();
     for &i in &unasked {
         let sec = &rf.sections[i];
-        let targets = line_targets(i, rf, terms_list, &phrase_lookup, &cross, led);
+        let targets = line_targets(i, rf, terms_list, phrase_lookup, cross, led);
         let heading_hash = record::heading_hash(sec);
         let h_rows = neighbours(&heading_hash, &targets);
         let heading_done = (h_rows.is_some() && !is_stale(&heading_hash, Kind::Heading)) || pool_empty;
@@ -489,7 +512,7 @@ fn load_inner(
         questions.push(Question {
             idx: i,
             heading: sec.heading_text.clone(),
-            asked: !is_unasked(led, sec),
+            asked: !crate::status::question_status(led, sec).is_unasked(),
             heading_hash,
             has_body,
             body_hash,
@@ -501,9 +524,7 @@ fn load_inner(
     }
     Planning { rel: rf.rel.clone(), questions }
     };
-    let plain = build(false);
-    let shown = if both { build(true) } else { Planning { rel: rf.rel.clone(), questions: Vec::new() } };
-    (plain, shown)
+    build(with_asked)
 }
 
 impl Planning {
@@ -556,61 +577,72 @@ impl Planning {
         NextMove::Ready
     }
 
-    /// What approve refuses: a question with no rows at its heading hash or
-    /// its body hash, and each neighbour on no line. A question with no
-    /// body is refused for that elsewhere. Needs neither the model nor the
-    /// reader.
-    pub fn approve_refusals(&self) -> Vec<String> {
-        let rel = &self.rel;
-        let mut out = Vec::new();
-        for q in &self.questions {
-            if !q.heading_done {
-                out.push(msg::plan_rows_missing(rel, &q.heading, "heading"));
-            }
-            if q.has_body && !q.body_done {
-                out.push(msg::plan_rows_missing(rel, &q.heading, "heading with its body"));
-            }
-            for n in q.heading_neighbours.iter().chain(&q.body_neighbours).filter(|n| !n.on_line) {
-                out.push(msg::plan_line_missing(rel, &q.heading, n.kind.label(), &n.name));
+    /// What approve refuses at the step of writing lines: each neighbour on
+    /// no line. Needs neither the model nor the reader.
+    pub fn line_refusals(&self) -> Vec<String> {
+        self.questions.iter().flat_map(|q| self.lines_missing_of(q)).collect()
+    }
+
+    /// One finding per neighbour on no line: a neighbour read at both steps
+    /// is named once.
+    fn lines_missing_of(&self, q: &Question) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        for n in q.heading_neighbours.iter().chain(&q.body_neighbours).filter(|n| !n.on_line) {
+            let m = msg::plan_line_missing(&self.rel, &q.heading, n.kind.label(), &n.name);
+            if !out.contains(&m) {
+                out.push(m);
             }
         }
         out
     }
+
+    /// The rows missing at the step `adr plan` takes next: every heading's
+    /// rows while one heading lacks them, else every body's. A body's rows
+    /// wait on the heading step, as `next` reads the steps in order.
+    pub fn rows_missing_at_step(&self) -> Vec<String> {
+        if !self.missing_heading().is_empty() {
+            return self
+                .questions
+                .iter()
+                .filter(|q| !q.heading_done)
+                .map(|q| msg::plan_rows_missing(&self.rel, &q.heading, "heading"))
+                .collect();
+        }
+        self.questions
+            .iter()
+            .filter(|q| q.has_body && !q.body_done)
+            .map(|q| msg::plan_rows_missing(&self.rel, &q.heading, "heading with its body"))
+            .collect()
+    }
 }
 
-/// The lines show and the page print under an open question: one line for
-/// each neighbour on record at either step, carrying the reader's word of
-/// each step it is on record at and the agent's line; and, for a question
-/// not yet asked that has no records, one line saying so. Nothing for an
+/// The lines `show --neighbours` prints under an open question: each
+/// neighbour on record at the heading step, then at the body step, each
+/// with the reader's word, the agent's line and the reader's reason; and,
+/// for a question not yet asked that has no records, one line saying so. Nothing for an
 /// asked question with no records (planned before the records existed).
-pub fn neighbour_lines(rel: &str, q: &Question) -> Vec<String> {
-    let mut merged: Vec<(&Neighbour, Option<&str>, Option<&str>)> = Vec::new();
-    for n in &q.heading_neighbours {
-        merged.push((n, Some(n.word.as_str()), None));
-    }
-    for n in &q.body_neighbours {
-        match merged.iter_mut().find(|(m, _, _)| m.key == n.key) {
-            Some(m) => m.2 = Some(n.word.as_str()),
-            None => merged.push((n, None, Some(n.word.as_str()))),
-        }
-    }
-    let mut out: Vec<String> = merged
-        .iter()
-        .map(|(n, h, b)| {
-            let mut words = Vec::new();
-            if let Some(h) = h {
-                words.push(("heading", *h));
-            }
-            if let Some(b) = b {
-                words.push(("body", *b));
-            }
-            msg::show_neighbour(n.kind.label(), &n.name, &words, n.line.map(LineKind::label))
-        })
-        .collect();
-    if !q.asked && (!q.heading_done || (q.has_body && !q.body_done)) {
-        out.push(msg::show_no_records(rel));
+pub fn neighbour_lines(q: &Question) -> Vec<String> {
+    let mut out = neighbour_lines_at(q, Step::Heading);
+    out.extend(neighbour_lines_at(q, Step::Body));
+    if out.is_empty() && !q.asked {
+        out.push(msg::show_no_records());
     }
     out
+}
+
+/// The neighbours of `q` read at `step`, one line each, by the one
+/// renderer of a neighbour (`msg::neighbour`): what `adr plan` prints for
+/// the step it read, and `adr show --neighbours` for both steps.
+pub fn neighbour_lines_at(q: &Question, step: Step) -> Vec<String> {
+    let (label, ns) = match step {
+        Step::Heading => ("heading", &q.heading_neighbours),
+        Step::Body => ("body", &q.body_neighbours),
+    };
+    ns.iter()
+        .map(|n| {
+            msg::neighbour(n.kind.label(), &n.name, label, &n.word, n.line.map(LineKind::label), &reader::flatten(&n.reason))
+        })
+        .collect()
 }
 
 /// The text a heading is read as: the heading alone.

@@ -42,7 +42,7 @@ fn approve_resolves_every_destination_kind_and_writes_one_row() {
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "approve failed: {}", stderr(&out));
-    assert!(stdout(&out).contains("blame approved"), "{}", stdout(&out));
+    assert_eq!(stdout(&out).trim_end(), "approved: adrdom/blame/x.md", "{}", stdout(&out));
 
     let saved = std::fs::read_to_string(&path).unwrap();
     assert!(saved.contains(&format!("decision: {}", id1)), "{}", saved);
@@ -80,25 +80,23 @@ fn approving_again_with_no_change_writes_no_new_row() {
 
     let out1 = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out1.status.success(), "{}", stderr(&out1));
-    assert!(stdout(&out1).contains("blame approved"));
+    assert_eq!(stdout(&out1).trim_end(), "approved: adrdom/blame/x.md");
     assert_eq!(blame_row_count(&dir), 1);
 
+    // No row written, so nothing printed (per "What does a command that
+    // writes print?", 069a6b4a A).
     let out2 = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out2.status.success(), "{}", stderr(&out2));
-    assert!(stdout(&out2).contains("blame unchanged"), "{}", stdout(&out2));
+    assert_eq!(stdout(&out2), "", "{}", stdout(&out2));
     assert_eq!(blame_row_count(&dir), 1, "no second row should be written");
-    assert!(
-        !stdout(&out2).contains("rows rewritten"),
-        "nothing was written to the file: {}",
-        stdout(&out2)
-    );
 }
 
 // A row put back to the heading after the approval is written to its
-// identifier again; the approval stands, and the line says the file was
-// written.
+// identifier again; the approval stands, and no ledger row is written, so
+// the file it rewrote is the one line approve prints (per "What does a
+// command that writes print?", 069a6b4a A).
 #[test]
-fn approving_again_says_when_it_rewrote_the_rows() {
+fn approving_again_rewrites_the_rows_and_writes_no_row() {
     let (dir, id1, _id2) = setup();
     let blob = write_origin(&dir, "docs/x.md", "line 1\n");
     let rows = "1-1\tdecision: Is this pass?\n";
@@ -111,10 +109,7 @@ fn approving_again_says_when_it_rewrote_the_rows() {
     std::fs::write(&path, &as_written).unwrap();
     let out2 = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out2.status.success(), "{}", stderr(&out2));
-    assert_eq!(
-        stdout(&out2).trim_end(),
-        "approve: adrdom/blame/x.md: rows rewritten in the form approve writes; blame unchanged"
-    );
+    assert_eq!(stdout(&out2), "written: adrdom/blame/x.md\n", "{}", stdout(&out2));
     assert_eq!(blame_row_count(&dir), 1, "no second row should be written");
     let saved = std::fs::read_to_string(&path).unwrap();
     assert!(saved.contains(&format!("decision: {}", id1)), "{}", saved);
@@ -321,8 +316,14 @@ fn a_blob_that_differs_from_the_origin_at_its_path_refuses() {
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("blob does not match the content of docs/drift.md"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("blob no longer matches docs/drift.md"), "{}", stderr(&out));
     assert_eq!(blame_row_count(&dir), 0);
+    // One judgement: check names the same finding with the same move.
+    let refused = stderr(&out).lines().map(|l| l.trim_start_matches("approve: ").to_string()).collect::<Vec<_>>();
+    let checked = stdout(&adr(&dir, &["check"], &[], ""));
+    for r in &refused {
+        assert!(checked.contains(r.as_str()), "check lacks {:?}:\n{}", r, checked);
+    }
 }
 
 // --- origin term: a path must be a regular file outside adrdom ----------
@@ -605,7 +606,7 @@ fn a_present_non_utf8_origin_refuses_and_writes_nothing() {
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("cannot read"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("cannot be read as text"), "{}", stderr(&out));
     assert_eq!(blame_row_count(&dir), 0);
     assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
 }

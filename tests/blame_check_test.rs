@@ -152,8 +152,10 @@ fn check_staged_reads_the_blame_file_from_the_index_not_the_working_tree() {
     // Restore the good file on disk; only the index still holds the bad shape.
     std::fs::write(&path, &good).unwrap();
 
+    // A shape fault in a blame file awaiting approval is a note
+    // (fe14991d, 05141f49): printed, failing nothing.
     let staged_out = adr(&dir, &["check", "--staged"], &[], "");
-    assert!(!staged_out.status.success());
+    assert!(staged_out.status.success(), "{}", stdout(&staged_out));
     assert!(stdout(&staged_out).contains("not a row"), "{}", stdout(&staged_out));
 
     let plain_out = adr(&dir, &["check"], &[], "");
@@ -325,15 +327,15 @@ fn check_fails_when_the_origin_is_gone_and_the_blame_file_is_unapproved() {
     assert!(text.contains("approval"), "{}", text);
 }
 
-// --- 9c3cc17e A: an unapproved blame file is a count, never a stop ------
+// --- an unapproved blame file is no line of check's ----------------------
 
-// adr: 9c3cc17e-33f4-4855-b761-f8f82381cdca
 //
-// "check reports a blame file awaiting approval as a count line ... and
-// passes": a draft blame file (its origin still present) never fails
-// `check`, only earns a count note.
+// A draft blame file with no fault (its origin still present) never fails
+// `check`, and its status is no line of check's: its move is in `adr show`
+// (3fc35d4f).
 #[test]
-fn check_passes_on_an_unapproved_blame_file_with_a_count_note() {
+fn check_passes_an_unapproved_blame_file_and_prints_nothing_of_it() {
+    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
     let (dir, _id1, _id2) = blame_setup();
     let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
     let rows = "1-1\tdropped: dead\n2-2\tdropped: detail\n";
@@ -342,15 +344,9 @@ fn check_passes_on_an_unapproved_blame_file_with_a_count_note() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "check should pass: {}", stdout(&out));
-    let text = stdout(&out);
-    assert!(
-        text.contains("blame: 1 file(s) awaiting approval: adrdom/blame/x.md"),
-        "{}",
-        text
-    );
+    assert!(!stdout(&out).contains("adrdom/blame/x.md"), "{}", stdout(&out));
 }
 
-// adr: 9c3cc17e-33f4-4855-b761-f8f82381cdca
 //
 // "ask, answer ... must not read blame files at all": with an unapproved
 // blame file present, `ask` and `answer` on an ordinary topic file still
@@ -382,24 +378,35 @@ fn ask_and_answer_ignore_an_unapproved_blame_file() {
     assert!(out.status.success(), "answer should ignore blame files: {}", stderr(&out));
 }
 
-// A blame file's own shape error is always a failure, draft or not.
+// A blame file's shape error on a file awaiting approval: approve refuses
+// it, and check reports the same line, as a note (05141f49).
 #[test]
-fn check_fails_a_blame_file_with_a_shape_error() {
+fn check_notes_a_shape_error_in_a_blame_file_awaiting_approval() {
+    // adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
+    // The origin is there: the shape fault is the file's only finding.
+    write_origin(&dir, "docs/x.md", "one\n");
     write_blame_file(&dir, "adrdom/blame/bad.md", "docs/x.md", "not-a-blob", "1-1\tdropped: dead\n");
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
+    assert!(out.status.success(), "{}", stdout(&out));
     assert!(stdout(&out).contains("blame:"), "{}", stdout(&out));
+    let approve = adr_owner(&dir, &["approve", "adrdom/blame/bad.md"], "");
+    assert!(!approve.status.success(), "approve takes a blame file with a shape fault");
+    for line in stderr(&approve).lines() {
+        let finding = line.strip_prefix("approve: ").unwrap_or(line);
+        assert!(stdout(&out).contains(finding), "approve refuses with {:?}, check prints:\n{}", finding, stdout(&out));
+    }
 }
 
 // adr: 34f0202a-0be4-4049-94de-d3886f4f8ffc
 //
 // A draft blame file naming a directory as its origin: `check` prints the
-// shape failure (the "origin" term: "a prose file outside adrdom"), never
-// the missing-origin message -- a directory is never "missing", it is
-// just never a valid origin at all.
+// fault of its header (the "origin" term: "a prose file outside adrdom"),
+// never the missing-origin message -- a directory is never "missing", it
+// is just never a valid origin at all. On a draft it is a note like every
+// shape fault (05141f49), on an approved file a failure.
 #[test]
 fn check_prints_the_shape_failure_not_missing_origin_for_a_directory() {
     let dir = init_repo();
@@ -412,10 +419,10 @@ fn check_prints_the_shape_failure_not_missing_origin_for_a_directory() {
         "0".repeat(40).as_str(),
         "1-1\tdropped: dead\n",
     );
-    // Never approved.
+    // Never approved: a note.
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
+    assert!(out.status.success(), "{}", stdout(&out));
     let text = stdout(&out);
     assert!(text.contains("is not a regular file outside adrdom"), "{}", text);
     assert!(!text.contains("is missing"), "{}", text);
@@ -484,4 +491,43 @@ fn check_fails_a_present_unreadable_origin_as_its_own_failure() {
     let text = stdout(&out);
     assert!(text.contains("exists but cannot be read"), "{}", text);
     assert!(!text.contains("is missing"), "{}", text);
+}
+
+// adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
+//
+// A blame row resolves against the topic files as they are written, in
+// check as in show, with a topic file present whose depends line names a
+// decision of another file by its heading (an entry check's normalize pass
+// rewrites): a `decision:` row naming that decision resolves in both, and a
+// row naming no question gets the one finding both print.
+#[test]
+fn check_and_show_resolve_a_blame_row_alike() {
+    let (dir, _id1, _id2) = blame_setup();
+    let other = "# Other\n\n### Does the other rule pass?\ndepends: pass, Is this pass?\n\nProblem: p.\n\nStandard: s.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n";
+    write_record(&dir, "adrdom/decisions/other.md", other);
+    let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
+    let rows = "1-1\tdecision: Is this pass?\n2-2\tdecision: Is nothing here at all?\n";
+    write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, rows);
+
+    let check = adr(&dir, &["check"], &[], "");
+    let show = adr(&dir, &["show", "adrdom/blame/x.md"], &[], "");
+    assert!(show.status.success(), "{}", stderr(&show));
+    let blame_lines = |text: &str| -> Vec<String> {
+        let mut v: Vec<String> = text.lines().filter(|l| l.starts_with("blame: ")).map(str::to_string).collect();
+        v.sort();
+        v
+    };
+    let from_check = blame_lines(&stdout(&check));
+    let from_show = blame_lines(&stdout(&show));
+    assert!(
+        from_check.iter().any(|l| l.contains("Is nothing here at all?")),
+        "check names the row with no question: {}",
+        stdout(&check)
+    );
+    assert!(!from_check.iter().any(|l| l.contains("Is this pass?")), "{}", stdout(&check));
+    assert_eq!(from_check, from_show, "check:\n{}\nshow:\n{}", stdout(&check), stdout(&show));
+    // approve refuses the file on that same finding.
+    let approve = adr_owner(&dir, &["approve", "adrdom/blame/x.md"], "");
+    assert!(!approve.status.success(), "approve takes a row naming no question");
+    assert!(stderr(&approve).contains("Is nothing here at all?"), "{}", stderr(&approve));
 }

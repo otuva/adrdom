@@ -236,7 +236,6 @@ fn install_without_flags_writes_only_githooks_and_agents_md_brief() {
 // --- git hooks -----------------------------------------------------------
 
 // adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
-// adr: 154e4b9a-c811-4a84-a522-598914eb39f1
 // install refreshes an existing hook whose content differs from what it
 // writes, and leaves an already-current hook untouched (byte-identical
 // second run) -- the same missing/stale/current shape as AGENTS.md.
@@ -246,7 +245,7 @@ fn install_rewrites_a_stale_hook_and_leaves_a_current_one_untouched() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let commit_msg = std::fs::read_to_string(dir.join(".githooks/commit-msg")).unwrap();
-    assert!(commit_msg.contains("--quiet"), "{}", commit_msg);
+    assert_eq!(commit_msg, "#!/bin/sh\nadr check --message \"$1\"\nexit $?\n");
     let first = std::fs::read(dir.join(".githooks/pre-commit")).unwrap();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let second = std::fs::read(dir.join(".githooks/pre-commit")).unwrap();
@@ -259,12 +258,11 @@ fn install_rewrites_a_stale_hook_and_leaves_a_current_one_untouched() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     assert_eq!(
         std::fs::read_to_string(dir.join(".githooks/pre-commit")).unwrap(),
-        "#!/bin/sh\nadr check --staged --quiet\nexit $?\n",
+        "#!/bin/sh\nadr check --staged\nexit $?\n",
         "install must rewrite a hook whose content differs from what it writes"
     );
 }
 
-// adr: 154e4b9a-c811-4a84-a522-598914eb39f1
 // install's "already up to date" and check's "hook differs" both compare a
 // hook's on-disk content to what install writes; a hook that differs only
 // by trailing whitespace on one line must read the same way on both sides,
@@ -276,14 +274,14 @@ fn install_and_check_agree_a_hook_with_trailing_whitespace_is_current() {
 
     std::fs::write(
         dir.join(".githooks/pre-commit"),
-        "#!/bin/sh \nadr check --staged --quiet\nexit $?\n",
+        "#!/bin/sh \nadr check --staged\nexit $?\n",
     )
     .unwrap();
 
     let out = adr(&dir, &["install"], &[], "");
     assert!(out.status.success());
     assert!(
-        stdout(&out).contains("install: .githooks/pre-commit: already up to date"),
+        !stdout(&out).contains(".githooks/pre-commit"),
         "install must not rewrite a hook that differs only by trailing whitespace: {}",
         stdout(&out)
     );
@@ -490,7 +488,7 @@ fn install_codex_writes_rules_file_and_is_idempotent() {
     let out = adr(&dir, &["install", "--codex"], &[], "");
     assert!(out.status.success(), "install failed: {}", stderr(&out));
     assert!(
-        stdout(&out).contains("Codex enforces project rules only for a project marked trusted"),
+        stdout(&out).lines().any(|l| l == "written: .codex/rules/adrdom.rules"),
         "{}",
         stdout(&out)
     );
@@ -508,6 +506,7 @@ fn install_codex_writes_rules_file_and_is_idempotent() {
 
     let out2 = adr(&dir, &["install", "--codex"], &[], "");
     assert!(out2.status.success(), "second install failed: {}", stderr(&out2));
+    assert_eq!(stdout(&out2), "", "a second install writes nothing: {}", stdout(&out2));
     let rules_after = std::fs::read_to_string(dir.join(".codex/rules/adrdom.rules")).unwrap();
     assert_eq!(rules, rules_after, "second install --codex must not change the file");
 }
@@ -558,6 +557,43 @@ fn uninstall_leaves_an_owner_edited_codex_rules_file_alone() {
         "owner edited\n",
         "uninstall must not remove a rules file it didn't write"
     );
+}
+
+// adr: 292359a4-0512-465b-b6a7-79838e66e5a5
+// The brief section of AGENTS.md follows the same rule: edited by hand, it
+// stays, and uninstall prints nothing for it.
+#[test]
+fn uninstall_leaves_a_hand_edited_brief_section_alone() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let path = dir.join("AGENTS.md");
+    let text = std::fs::read_to_string(&path).unwrap();
+    let edited = text.replacen("## What is next", "## What is next, edited by hand", 1);
+    assert_ne!(edited, text);
+    std::fs::write(&path, &edited).unwrap();
+
+    let out = adr_owner(&dir, &["uninstall"], "");
+    assert!(out.status.success(), "uninstall failed: {}", stderr(&out));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), edited);
+    assert!(!stdout(&out).contains("AGENTS.md"), "{}", stdout(&out));
+}
+
+// adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
+// Right after install, a commit that stages none of what install wrote is
+// refused; each file is named not staged, with `git add` as the move that
+// clears it, never `adr install`, which would write nothing.
+#[test]
+fn a_commit_names_the_installed_files_it_lacks_as_not_staged() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    std::fs::write(dir.join("b.txt"), "b\n").unwrap();
+    run_git(&dir, &["add", "b.txt"]);
+    let out = run_git(&dir, &["commit", "-q", "-m", "b"]);
+    assert!(!out.status.success(), "the commit is refused");
+    let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    assert!(text.contains("AGENTS.md not staged; agent runs: git add AGENTS.md"), "{}", text);
+    assert!(text.contains(".githooks/pre-commit not staged; agent runs: git add .githooks/pre-commit"), "{}", text);
+    assert!(!text.contains("agent runs: adr install"), "{}", text);
 }
 
 // --- uninstall -------------------------------------------------------------
@@ -785,4 +821,42 @@ fn uninstall_is_idempotent() {
 
     assert!(dir.join("adrdom/decisions").is_dir());
     assert!(dir.join("adrdom/state/ledger.tsv").is_file());
+}
+
+// adr: 069a6b4a-de35-45f3-8c6c-8e254bf40565
+//
+// "What does a command that writes print?" A: the event it wrote, one line
+// each, and nothing else. install writes files and no ledger row, so it
+// prints one line per file it writes; a second run writes nothing and
+// prints nothing.
+#[test]
+fn install_prints_one_line_per_file_written_and_nothing_else() {
+    let dir = init_repo();
+    let out = adr(&dir, &["install", "--claude", "--codex"], &[], "");
+    assert!(out.status.success(), "install failed: {}", stderr(&out));
+    let text = stdout(&out);
+    assert!(!text.is_empty());
+    for line in text.lines() {
+        // git's configuration set is a write of its own, one line.
+        if line == "set: core.hooksPath .githooks" {
+            continue;
+        }
+        let path = line
+            .strip_prefix("written: ")
+            .unwrap_or_else(|| panic!("a line that names no file written: {:?} in {}", line, text));
+        assert!(dir.join(path).is_file(), "{} is not a file: {}", path, text);
+    }
+    assert!(text.lines().any(|l| l == "set: core.hooksPath .githooks"), "{}", text);
+    let paths: std::collections::HashSet<&str> = text.lines().collect();
+    assert_eq!(paths.len(), text.lines().count(), "a file printed twice: {}", text);
+    // And every file install left in the repository has its line.
+    let status = run_git(&dir, &["status", "--porcelain", "-uall"]);
+    for line in String::from_utf8_lossy(&status.stdout).lines() {
+        let path = line[3..].trim();
+        assert!(paths.contains(format!("written: {}", path).as_str()), "{} was written with no line: {}", path, text);
+    }
+
+    let again = adr(&dir, &["install", "--claude", "--codex"], &[], "");
+    assert!(again.status.success(), "{}", stderr(&again));
+    assert_eq!(stdout(&again), "", "{}", stdout(&again));
 }

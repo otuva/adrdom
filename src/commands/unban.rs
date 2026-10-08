@@ -1,38 +1,41 @@
+use crate::rules::Rule;
 use crate::actions;
-use crate::msg::{self, Actor, Next};
+use crate::msg::{self, Actor};
+use crate::out;
 use crate::repo;
 use std::io::Read;
 
 pub fn run() -> i32 {
     if !repo::owner_authorized() {
-        eprintln!("{}", msg::owner_refusal("unban", ""));
+        out::eprint_stop(Rule::Unban, &msg::owner_refusal("unban", &[]));
         return 2;
     }
 
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            eprintln!("{}", msg::not_a_repo("unban", "", Actor::Owner));
+            out::eprint_stop(Rule::Unban, &msg::not_a_repo("unban", &[], Actor::Owner));
             return 1;
         }
     };
 
     let mut input = String::new();
     if std::io::stdin().read_to_string(&mut input).is_err() {
-        eprintln!(
-            "unban: {}",
-            msg::stdin_read_failed(Next::owner_runs("adr unban"))
-        );
+        out::eprint_stop(Rule::Unban, &msg::stdin_read_failed(msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr unban"))));
         return 1;
     }
 
+    // One line per `unbanned` row, and on standard error the finding on
+    // the words given that were not banned (per "What does a command that
+    // writes print?", 069a6b4a A).
     match actions::do_unban(&root, &input) {
         Ok(outcome) => {
-            println!("unban: {}", outcome.summary);
+            out::print_events(&outcome.events);
+            out::eprint(&out::stop(Rule::Unban, &outcome.input_findings.join("\n")));
             0
         }
         Err(e) => {
-            eprintln!("unban: {}", e);
+            out::eprint(&out::stop(Rule::Unban, &e));
             1
         }
     }
