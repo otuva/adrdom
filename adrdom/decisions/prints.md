@@ -212,3 +212,49 @@ Standard: one view model, two renderings.
   Costs: two sets of lines to hold right, and a line on the page with no decision behind it.
 
 **Answer:** A
+
+### What does show print of the file named?
+depends: status, question, term, topic file, terms file, blame, ask, Does the ui perform every owner act?, Does show print what a file holds beyond its latest approval?, Does a command print under a flag what it computes from the records?, What does a command that writes nothing print?, What does a blame row name?, Does a reference in a topic file carry the identifier of what it names?, Does an answer carry the version of the question the owner read?, What does a blame file hold?, Does a command name a status of its own?
+supersedes: What does show print with a file named?
+unrelated: What does show print with no file named?, Does the ui show what the terminal prints?, What does a command that writes print?, Does check print a line that names no move?, Does every ledger row carry the tool version?, Does the tool take the order of ledger rows from their time?, Does a refused question stay in its topic file?, What does a finding name?, Does a finding carry the identifier of the decision it judges?
+
+Problem: show with a topic file prints the unrelated line of every question, twenty names each and over half the output, and no move reads that line after approval.
+Standard: a listing prints what the next move reads and takes a flag for the rest.
+
+- A) Every question, entry or row with its status, every depends and supersedes line, and the body of an asked question.
+  Why: every printed line is read for a move: the owner approves on the lines and answers on the bodies.
+  Costs: the unrelated line, changed or not, comes under a flag named for it.
+- B) Every question, entry or row with its status, every line it carries and the body of an asked question.
+  Why: the whole file in one run, nothing under a flag.
+  Costs: twenty names per question that no move reads, over half the output of a planned file.
+
+### What does a finding name?
+depends: finding, move, decision, check, agent, Does a refusal name the command that clears it?, Does the owner override a stop in the tool?, Does a command refuse what check passes?, What does a command that writes nothing print?, What does a command that writes print?, Does check print a line that names no move?, Does a command compute a move of its own?
+unrelated: Does a reference in a topic file carry the identifier of what it names?, What does a term hold?, What does a test carry to name its decision?, What does a depends line name?, What does a blame row name?, What does show print with a file named?, depends, Does the brief name the terms brief?, What does show print with no file named?, Does a supersedes line name every current decision standing on its target?, Does the agent build what no current decision covers?, Does check read the words of an answered question again?, Does a finding carry the identifier of the decision it judges?, What does show print of the file named?
+
+Problem: a finding names the number it measured and the act that lowers the number; the one who reads it clears the number, and the meaning the rule protects changes.
+Standard: a compiler error names the rule a line breaks and leaves the fix to the writer.
+
+- A) What the rule protects, in plain words, what it found, and the move as an act, not a diagnosis.
+  Why: the one who reads it sees what the rule protects and rewrites; the tool never guesses the cause.
+  Costs: the rule's words are the writer's, not the record's, and review alone holds them to it.
+- B) The decision it judges by heading, what it found, and the move.
+  Why: the record itself names the rule, in the words the owner answered.
+  Costs: a terminal in any repository prints the headings and identifiers of this tool's own record.
+- C) What it measured and the act that clears the measurement.
+  Why: the shortest line, and the one the counter gives for free.
+  Costs: the move names the counter, not the rule, and the fix that clears the counter can change the meaning.
+
+### Does a finding carry the identifier of the decision it judges?
+depends: finding, identifier, decision, check, current, What does a test carry to name its decision?, Does check fail a test that names a decision that is not current?, Does a command refuse what check passes?, What does a finding name?=A|B, Does a question keep its identifier when its heading is reworded?, Does the agent build what no current decision covers?
+unrelated: Does every sentence of the brief come from a decision?, Does a depends entry on a question in its file carry an answer set?, Does the tool read a pair of decisions in both directions?, supersede, Does a reference in a topic file carry the identifier of what it names?, Does a supersedes line name every current decision standing on its target?, Does the cap count a decision that an open question supersedes?, What does check do with an untested current decision?, Does check read the words of an answered question again?, Does a term carry its own banned words?, What does a term hold?, What does show print of the file named?
+
+Problem: a finding is tagged with a name the code picks, tells, plan, ids; nothing ties a message to the decision it judges, and a message with no decision behind it is written like the rest.
+Standard: every diagnostic carries a stable code that documentation and tests key on.
+
+- A) Yes.
+  Why: a finding with no current decision behind it cannot be built; one test holds every finding to its decision.
+  Costs: the identifier stays in the code and the test, never on the line; a superseded decision re-tags its findings.
+- B) No.
+  Why: the code names its rules as it likes; the record and the messages stay apart.
+  Costs: a message with no decision behind it passes every gate and is caught at review alone.
