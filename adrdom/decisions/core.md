@@ -435,3 +435,5 @@ Standard: a code annotation names the requirement it implements and is distinct 
 - C) Nothing: code carries no decision name.
   Why: the record names code through tests alone.
   Costs: an agent building on a decision reads the code with no mark of what follows it.
+
+**Answer:** A
