@@ -2572,6 +2572,14 @@ fn check_judges_an_adr_code_comment_of_an_unknown_decision_by_no_rule() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
     assert!(!stdout(&out).contains(unknown), "{}", stdout(&out));
+
+    // The same identifier in a test comment is judged: check fails it.
+    std::fs::write(dir.join("code.txt"), format!("// adr: {}\n", unknown)).unwrap();
+    run_git(&dir, &["add", "code.txt"]);
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success(), "{}", stdout(&out));
+    let all = format!("{}{}", stdout(&out), String::from_utf8_lossy(&out.stderr));
+    assert!(all.contains(unknown), "{}", all);
 }
 
 // A test comment after an `adr-code:` comment on one line still counts.
