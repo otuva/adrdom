@@ -35,9 +35,10 @@ pub fn run(given: PathBuf) -> i32 {
     let record_path = root.join(&rel);
     // Asking a topic file that loads makes the session a planner (6c406624),
     // whatever the run finds after (the terms refusals below included). A
-    // file that is missing or unreadable marks nothing; the load below
-    // reports it.
-    if record::load(&record_path).is_ok() {
+    // file that is missing or unreadable marks nothing; it is reported after
+    // the terms refusals.
+    let loaded = record::load(&record_path);
+    if loaded.is_ok() {
         if let Err(e) = crate::session::mark_planner(&root) {
             out::eprint_stop(Command::Ask, &msg::write_failed(repo::ROLES_PATH, &e, msg::Next::owner("repairs or removes the file")));
             return 1;
@@ -57,7 +58,7 @@ pub fn run(given: PathBuf) -> i32 {
     };
     let terms_list: Vec<terms::Term> = tf.terms.clone();
 
-    let mut rf = match record::load(&record_path) {
+    let mut rf = match loaded {
         Ok(rf) => rf,
         Err(e) => {
             out::eprint_stop(Command::Ask, &msg::read_failed(&rel, &e, msg::topic_file_unread("ask", &rel, &e)));
