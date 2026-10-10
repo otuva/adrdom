@@ -2277,7 +2277,6 @@ aliases: \n";
     assert!(!text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
 }
 
-// adr: 751ef30c-6a2f-4936-bf9b-b9d487146e53
 // "Does check fail a test that names a decision that is not current?" (751ef30c A): yes -- a tie to a
 // decision whose latest ledger state is no longer `answered` is stale, and
 // the agent's move is to remove the tag or point it at the current
@@ -2340,7 +2339,6 @@ fn check_fails_a_test_tied_to_a_decision_that_was_later_superseded() {
     );
 }
 
-// adr: 751ef30c-6a2f-4936-bf9b-b9d487146e53
 // The other way a tie goes stale (751ef30c A): the question it names was
 // answered with a refusal, never a lettered decision, so it never becomes
 // current at all -- a tie to it is stale from the moment it is written.
@@ -2541,7 +2539,7 @@ fn check_an_untested_decision_is_a_note_beside_a_refused_sibling() {
 // "A comment `adr-code: <id>`, found by text search, never a test tie,
 // judged by no rule": the scanner matches `adr: ` only, so the code comment
 // neither ties a decision nor is judged stale.
-// adr: 23d55c81-2224-487c-a579-298915957a79
+// adr: 1259323f-cdec-4101-9d47-a165a286089f
 #[test]
 fn check_never_counts_an_adr_code_comment_as_a_tie() {
     let dir = init_repo();
@@ -2560,7 +2558,7 @@ fn check_never_counts_an_adr_code_comment_as_a_tie() {
     );
 }
 
-// adr: 23d55c81-2224-487c-a579-298915957a79
+// adr: 1259323f-cdec-4101-9d47-a165a286089f
 #[test]
 fn check_judges_an_adr_code_comment_of_an_unknown_decision_by_no_rule() {
     let dir = init_repo();
@@ -2583,7 +2581,7 @@ fn check_judges_an_adr_code_comment_of_an_unknown_decision_by_no_rule() {
 }
 
 // A test comment after an `adr-code:` comment on one line still counts.
-// adr: 23d55c81-2224-487c-a579-298915957a79
+// adr: 1259323f-cdec-4101-9d47-a165a286089f
 #[test]
 fn check_counts_an_adr_tie_that_follows_an_adr_code_comment_on_one_line() {
     let dir = init_repo();

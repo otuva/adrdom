@@ -22,6 +22,8 @@ Standard: a process identifies its caller by a credential the caller's runtime s
   Why: a value git carries with the commit.
   Costs: one author for every session on a machine, and no author at a command.
 
+**Answer:** A
+
 ### What makes a session a planner?
 depends: 3aedf314-f25f-49cb-b7b3-d2302e4543ca, 3afef03f-9017-4638-9759-e010d44d536b, 94677ed8-eaf6-46e2-bc71-7392fa0805bf, 3c8d4c9c-abca-4faa-b7c1-aae39951376c, e53b805c-9272-4b89-985d-61426fb5fa48=*, 9ba58b6a-bc85-44a5-a720-d8e7a6ff7b31, 46fc51ff-66b9-4841-a953-ae0d4c2fc424
 unrelated: d3be71e4-ce7b-43b0-86a8-e86868521f99, 0a742360-83c2-479d-b858-4bea646c9b36, 21cdad59-4f0c-42a5-b4f3-6af946637df3, 3dba486c-a399-4ce3-a794-e38c4f733403, c3127af2-4c96-48d5-a164-bac49a9a09ec, 23d53545-c238-48cc-ae5e-21a2c7aab83e, 4838baa4-a5df-49e7-929c-ed63b5adaf4e, 2381d759-f85f-484e-9031-fadbe6ea045a, 1cec44fc-2685-42f8-9742-7facabb52251, 1ee664a1-cac0-4917-9e46-8199a387d235, 1259323f-cdec-4101-9d47-a165a286089f, de1c5329-e448-45eb-b14c-88b8654447a4, 8d3337b9-6fb3-4756-80f1-b388fe81d856, 8081c82d-e5c6-485b-a302-07d586f1a01b, db07a54d-4d80-4035-a9ef-eabcc0c872b3, 8f81dee1-9c19-447d-baa8-d7d0af691db8, 6b3d8e59-e145-49e1-860d-a79d753d745c, f8d92841-aef7-4cd7-bd94-0e07c03e4cb6, 98d5d389-8315-41da-9970-666e31f3a94d, ae63df95-0643-4108-af65-1e7a0009d631, ec0b9293-916e-4ced-a3d7-3b862ab7b069
@@ -40,6 +42,8 @@ Standard: a role is assigned at the first act that belongs to it, by the system 
 - C) Running plan, ask or read.
   Why: every act that writes the reader's word marks the session.
   Costs: a session that reads neighbours for a review becomes a planner.
+
+**Answer:** A
 
 ### What does check do with a test that names a decision that is not current?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, e2533580-1486-4dc9-8697-e6c53605fe72, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, c49997ee-10e7-48e0-b66b-43f8b09758a6, 6c406624-b874-4697-9a44-91941019b7d1=*, 4319a653-6901-446c-94ab-6420ef472134, 3460d220-e523-448b-aeff-baa8051b7d06
@@ -61,6 +65,8 @@ Standard: a stale traceability link is a finding assigned to the owner of the co
   Why: the planner commits the answer; the builder cannot commit past a stale tie.
   Costs: two outcomes of one finding by who runs check.
 
+**Answer:** A
+
 ### Does the ledger hold the planners?
 depends: e18b82d8-5271-4385-bbab-2b89e5da278f, 3aedf314-f25f-49cb-b7b3-d2302e4543ca, e53b805c-9272-4b89-985d-61426fb5fa48=*, 6c406624-b874-4697-9a44-91941019b7d1=*, f3e64c4e-21ab-442f-8c40-6060591e2b77, 16a71892-b348-4b9b-82c5-a9d375187bd3
 unrelated: d3be71e4-ce7b-43b0-86a8-e86868521f99, bf6697e3-8832-4b90-b036-8fecedb55406, cd83e277-ebf0-4458-a77a-c526ab4cfeca, 06b7e003-4d9f-427a-a798-c1af97865411, 26c5352f-3f82-4376-9dc2-8ccc0074d080, a26876ba-5789-4d05-965e-853d00d9edd2, 3dba486c-a399-4ce3-a794-e38c4f733403, f422c5db-13d0-4ff7-9e43-b68ab44a7cb9, 385a57d5-5f76-454a-ae5d-9b0d6f5c1492, 2381d759-f85f-484e-9031-fadbe6ea045a, 1ee664a1-cac0-4917-9e46-8199a387d235, 1259323f-cdec-4101-9d47-a165a286089f, de1c5329-e448-45eb-b14c-88b8654447a4, 8d3337b9-6fb3-4756-80f1-b388fe81d856, 8081c82d-e5c6-485b-a302-07d586f1a01b, db07a54d-4d80-4035-a9ef-eabcc0c872b3, 8f81dee1-9c19-447d-baa8-d7d0af691db8, dfd32ef6-c2ac-40ef-b8b3-9c58732516b1, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c, 99619e27-19b6-47ef-83b9-c79ac30ee2f0, db56a285-946f-48b1-b073-bb1e90192185
@@ -76,6 +82,8 @@ Standard: per-machine runtime state stays out of version control.
 - B) Yes.
   Why: one record; a planner's role reaches every clone.
   Costs: a new ledger event, a row per session, and a role that means nothing off its machine.
+
+**Answer:** A
 
 
 ### What ends a session's planner role?
@@ -93,6 +101,8 @@ Standard: a role bound to a process ends with the process.
 - B) The approval of the plan the session wrote: it then builds topics it did not ask.
   Why: a session plans once and builds elsewhere after.
   Costs: the hook must tell one topic's build from another's, and a commit names no decision.
+
+**Answer:** A
 
 ### What does a comment in code carry to name the decision it follows?
 depends: 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, e877e4a9-2caf-4fe6-9f82-5476a2abb00b, 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, f90dbd5b-8fbe-4899-8588-f8762795c2e2, 4319a653-6901-446c-94ab-6420ef472134, 3460d220-e523-448b-aeff-baa8051b7d06, 2381d759-f85f-484e-9031-fadbe6ea045a=*
@@ -113,6 +123,8 @@ Standard: a code annotation names the requirement it implements and is distinct 
   Why: the record names code through tests alone.
   Costs: an agent building on a decision reads the code with no mark of what follows it.
 
+**Answer:** A
+
 ### Does a finding name the identifier of the decision it judges?
 depends: ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, e877e4a9-2caf-4fe6-9f82-5476a2abb00b, e2533580-1486-4dc9-8697-e6c53605fe72, 2bae531b-c4df-48a0-89a0-3d52726741ea, 4319a653-6901-446c-94ab-6420ef472134, 184b5bcb-fa72-436b-92cb-4d4605366c59, 2381d759-f85f-484e-9031-fadbe6ea045a=*
 unrelated: 946263aa-519a-47aa-b743-5cdcf52f5d35, 7a1e7b81-0967-4ed2-8a8a-c7153056836f, 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, c6da863d-5085-402f-815a-9bb832b4df7e, 751ef30c-6a2f-4936-bf9b-b9d487146e53, 6108b8b2-911e-443b-abe0-4c6f8b407384, de5ed5b1-3a83-4403-8953-941cb7e94390, c3127af2-4c96-48d5-a164-bac49a9a09ec, 14180eab-60a4-48d3-8efc-c1b23a96ce3a, 4b407ee1-1e64-4ca1-842b-69773fc0e48a, 7c306235-6243-4d79-b9aa-08ed19662779, 3460d220-e523-448b-aeff-baa8051b7d06, 110f471d-ac4b-4cbb-aa7b-3f74ac442d78, ee27fd4c-89b7-411f-a3e4-2535c49b6d1b, 125ee772-d011-4dab-b53e-97a09ec03198, 23d55c81-2224-487c-a579-298915957a79, e53b805c-9272-4b89-985d-61426fb5fa48, 6c406624-b874-4697-9a44-91941019b7d1, 1cec44fc-2685-42f8-9742-7facabb52251, 1ee664a1-cac0-4917-9e46-8199a387d235, 1259323f-cdec-4101-9d47-a165a286089f, 8d3337b9-6fb3-4756-80f1-b388fe81d856, 8081c82d-e5c6-485b-a302-07d586f1a01b, db07a54d-4d80-4035-a9ef-eabcc0c872b3, 8f81dee1-9c19-447d-baa8-d7d0af691db8, d2851ea1-fcb6-476a-b321-c813a594d5e5
@@ -129,6 +141,8 @@ Standard: every diagnostic carries a stable code that documentation and tests ke
   Why: the code names its rules as it likes; the record and the messages stay apart.
   Costs: a message with no decision behind it passes every gate and is caught at review alone.
 
+**Answer:** A
+
 ### Does the tool mark a builder?
 depends: c49997ee-10e7-48e0-b66b-43f8b09758a6, 3aedf314-f25f-49cb-b7b3-d2302e4543ca, e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, b36113a1-1384-4e4c-a798-8399f4181366, 6c406624-b874-4697-9a44-91941019b7d1=*, 1ee664a1-cac0-4917-9e46-8199a387d235=*, c3127af2-4c96-48d5-a164-bac49a9a09ec, 3c8d4c9c-abca-4faa-b7c1-aae39951376c
 unrelated: 99619e27-19b6-47ef-83b9-c79ac30ee2f0, 0d977e39-a657-4596-8eca-8ceb335f3081, 125ee772-d011-4dab-b53e-97a09ec03198, 48f4647d-8c81-4e8a-a936-6b32f5fb0699, 4838baa4-a5df-49e7-929c-ed63b5adaf4e, 98d5d389-8315-41da-9970-666e31f3a94d, 2db33118-82b4-4edf-a9cb-e92ac62738b9, aa475aa3-05b2-429a-b33a-46b1dcb52049, 7127ab1e-c313-4c51-9134-c09d551682cf, e53b805c-9272-4b89-985d-61426fb5fa48, 2381d759-f85f-484e-9031-fadbe6ea045a, 1cec44fc-2685-42f8-9742-7facabb52251, 1259323f-cdec-4101-9d47-a165a286089f, de1c5329-e448-45eb-b14c-88b8654447a4, 8081c82d-e5c6-485b-a302-07d586f1a01b, db07a54d-4d80-4035-a9ef-eabcc0c872b3, 8f81dee1-9c19-447d-baa8-d7d0af691db8, dfd32ef6-c2ac-40ef-b8b3-9c58732516b1, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c, db56a285-946f-48b1-b073-bb1e90192185, 4f925b13-ad16-48b8-acd1-3e30d6e308b6, f8d92841-aef7-4cd7-bd94-0e07c03e4cb6, 23d53545-c238-48cc-ae5e-21a2c7aab83e, e879fe72-ec07-48cd-9902-2b158aaae726, 05141f49-d9d2-407c-b60c-ebb195a05864, b782664f-7465-4e1e-99e0-13f6dd2de774
@@ -144,6 +158,8 @@ Standard: a gate is placed where no other gate stands.
 - B) Yes.
   Why: the first commit outside adrdom marks the session, and plan and ask refuse it after.
   Costs: a second mark, a hook that writes, and a read in plan and ask, before gates the owner holds anyway.
+
+**Answer:** A
 
 
 ### Does a command stop when the environment gives no session identifier?
@@ -162,6 +178,8 @@ Standard: an optional credential is absent, not invalid; absence takes the open 
   Why: every session that plans is known; none plans unseen.
   Costs: the owner, every test and the push check run no command, and the hook stops the owner's commits.
 
+**Answer:** A
+
 
 ### Does check fail a planner's commit that reaches outside adrdom?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 3aedf314-f25f-49cb-b7b3-d2302e4543ca, e53b805c-9272-4b89-985d-61426fb5fa48=A, 6c406624-b874-4697-9a44-91941019b7d1=*, 1ee664a1-cac0-4917-9e46-8199a387d235=*, 1cec44fc-2685-42f8-9742-7facabb52251=*, 8081c82d-e5c6-485b-a302-07d586f1a01b=*, 9ba58b6a-bc85-44a5-a720-d8e7a6ff7b31, 98d5d389-8315-41da-9970-666e31f3a94d, 4f925b13-ad16-48b8-acd1-3e30d6e308b6
@@ -178,6 +196,8 @@ Standard: a policy on changes is enforced at the commit hook, where a change is 
 - B) No.
   Why: the brief alone holds the rule, as it holds every rule on the agent's conduct.
   Costs: the rule stays unenforced; the asking agent builds its decision with nothing in the way.
+
+**Answer:** A
 
 ### What does the tool print for a build move in a planner's session?
 depends: d904dc0d-231f-4e93-ac74-7babe888107d, 3aedf314-f25f-49cb-b7b3-d2302e4543ca, c49997ee-10e7-48e0-b66b-43f8b09758a6, 6c406624-b874-4697-9a44-91941019b7d1=*, db07a54d-4d80-4035-a9ef-eabcc0c872b3=A, c84a4bd9-fc2d-44f0-b333-172978f61544, a6f41dee-2381-421a-bcc4-b14af243209b, aac5c313-dedd-466b-a0c3-ead5e99ce913
@@ -197,3 +217,5 @@ Standard: a listing tells the reader which items are theirs before they act.
 - C) No build move.
   Why: the planner sees its own moves alone.
   Costs: the planner cannot read what waits on a builder, and check hides untested decisions from it.
+
+**Answer:** A

@@ -52,7 +52,7 @@ fn holds_uuid(s: &str) -> bool {
 // Rules with no decision yet fail here until their decision is answered.
 #[test]
 fn every_rule_comes_from_current_decisions() {
-    // adr: 110f471d-ac4b-4cbb-aa7b-3f74ac442d78
+    // adr: de1c5329-e448-45eb-b14c-88b8654447a4
     let root = manifest();
     let records = adr::record::load_all(&root);
     let led = adr::ledger::read(&root.join(adr::repo::LEDGER_PATH));
@@ -81,7 +81,7 @@ fn every_rule_comes_from_current_decisions() {
 // from a rule constant alone: no call that builds one passes anything else.
 #[test]
 fn every_finding_is_built_from_a_rule_constant() {
-    // adr: 110f471d-ac4b-4cbb-aa7b-3f74ac442d78
+    // adr: de1c5329-e448-45eb-b14c-88b8654447a4
     let source = std::fs::read_to_string(manifest().join("src/rule.rs")).unwrap();
     let declared: BTreeSet<String> = source
         .lines()
