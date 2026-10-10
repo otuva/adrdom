@@ -2187,7 +2187,12 @@ pub fn blame_row_value_error(rel: &str, e: &str) -> Said {
 /// An id line that holds no identifier, or sits below the header: the tool
 /// writes the identifier of a blame file, at approval, as line 3.
 pub fn blame_id_error(rel: &str, e: &str) -> Said {
-    said(&crate::rule::BLAME_ID_ASSIGNED_BY_TOOL, format!("{}: {}", rel, e), Next::agent("removes the id line it wrote"))
+    // `e` opens with the line it found, as "line N: ...".
+    let next = match e.strip_prefix("line ").and_then(|r| r.split(':').next()).filter(|n| n.parse::<usize>().is_ok()) {
+        Some(n) => Next::agent(format!("removes the id line, line {}", n)),
+        None => Next::agent("removes the id line"),
+    };
+    said(&crate::rule::BLAME_ID_ASSIGNED_BY_TOOL, format!("{}: {}", rel, e), next)
 }
 
 /// `rel` was approved and has no id line now: the identifier its approval

@@ -677,7 +677,7 @@ pub fn do_approve(root: &Path, file: &Path) -> Result<Outcome, Stops> {
 
     if rel == crate::repo::TERMS_PATH {
         do_approve_terms(root, file, &led, &ledger_path)
-    } else if rel.starts_with(&format!("{}/", crate::repo::BLAME_DIR)) {
+    } else if rules::is_blame_file_path(&rel) {
         do_approve_blame(root, file, &rel, &led, &ledger_path)
     } else if is_topic_file_path(&rel) && !file.exists() {
         do_approve_removal(root, &rel, &led, &ledger_path)
@@ -858,6 +858,10 @@ fn do_approve_blame(
             version: crate::version::VERSION.to_string(),
         };
         ledger::append(ledger_path, std::slice::from_ref(&row)).map_err(|e| {
+            // The id line was written above: put the bytes read at the start back.
+            if minted {
+                let _ = std::fs::write(&bf.path, &content);
+            }
             stop(Command::Approve, msg::update_failed(
                 "ledger",
                 e,

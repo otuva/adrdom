@@ -59,7 +59,7 @@ pub(crate) struct Records {
     pub(crate) topic_files: Vec<RecordFile>,
     pub(crate) unreadable_topic_files: Vec<(String, String)>,
     blame: blame::Index,
-    unreadable_blame_files: Vec<(String, String)>,
+    pub(crate) unreadable_blame_files: Vec<(String, String)>,
     pub(crate) tests: HashMap<String, Vec<String>>,
     /// Every question's heading, every term's name and every blame file's
     /// name by its identifier: what turns an identifier on a line back into
@@ -110,7 +110,7 @@ impl Records {
         for e in blame.entries() {
             let Some(id) = e.id() else { continue };
             if blame.keeper_of(id).is_some_and(|k| k.rel() == e.rel()) {
-                names.entry(id.to_string()).or_insert_with(|| e.name.clone());
+                names.entry(id.to_ascii_lowercase()).or_insert_with(|| e.name.clone());
             }
         }
         Records {
@@ -470,7 +470,7 @@ fn named(line: &str, names: &HashMap<String, String>) -> String {
             let bounded = !line[..i].ends_with(|c: char| c.is_ascii_hexdigit())
                 && !line[i + LEN..].starts_with(|c: char| c.is_ascii_hexdigit());
             if bounded && record::is_uuid(cand) {
-                if let Some(name) = names.get(cand) {
+                if let Some(name) = names.get(&cand.to_ascii_lowercase()) {
                     out.push_str(name);
                     i += LEN;
                     continue;

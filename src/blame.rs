@@ -373,10 +373,11 @@ impl Index {
         Index { entries, blame_rows }
     }
 
-    /// The identifier of the latest `blame` row for `rel` (`-` in a row of an
-    /// older ledger), `None` when the file has no approval.
+    /// The identifier of the latest `blame` row for `rel`; `None` when the
+    /// file has no approval, or when its latest row is one of an older ledger
+    /// (identifier `-`): approved, with no identifier assigned yet.
     pub fn approved_id(&self, rel: &str) -> Option<&str> {
-        self.blame_rows.iter().rfind(|(path, _)| path == rel).map(|(_, id)| id.as_str())
+        self.blame_rows.iter().rfind(|(path, _)| path == rel).map(|(_, id)| id.as_str()).filter(|id| *id != "-")
     }
 
     /// True when some `blame` row, for any path, holds `id`.
@@ -533,8 +534,10 @@ pub fn file_state(
     // An approved file keeps the identifier its approval gave: approve writes
     // one only for a file never approved (d2851ea1 A). A faulty id line is
     // an id line, and its own finding says what is wrong with it.
-    if status == FileStatus::Changed && bf.id.is_none() && !bf.shape_errors.iter().any(|e| e.kind == ShapeKind::Id) {
-        st.findings.push(about(msg::blame_id_line_gone(rel, index.approved_id(rel).unwrap_or_default())));
+    if let (FileStatus::Changed, None, Some(approved)) = (status, &bf.id, index.approved_id(rel)) {
+        if !bf.shape_errors.iter().any(|e| e.kind == ShapeKind::Id) {
+            st.findings.push(about(msg::blame_id_line_gone(rel, approved)));
+        }
     }
     // The tool wrote the id line and the ledger holds what it wrote: an id
     // line no `blame` row holds was written by hand, and an approved file

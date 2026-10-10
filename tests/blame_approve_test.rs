@@ -275,7 +275,7 @@ fn a_hand_written_id_line_that_is_no_identifier_refuses() {
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
-    let line = "adrdom/blame/x.md: line 3: id line holds \"not-an-identifier\", which is no identifier the tool assigns; the tool assigns a blame file's identifier; agent removes the id line it wrote";
+    let line = "adrdom/blame/x.md: line 3: id line holds \"not-an-identifier\", which is no identifier the tool assigns; the tool assigns a blame file's identifier; agent removes the id line, line 3";
     assert!(refusal_lines(&out, "approve: ").contains(&line.to_string()), "{}", stderr(&out));
     assert_eq!(blame_row_count(&dir), 0);
     assert_eq!(std::fs::read_to_string(&path).unwrap(), content, "nothing written on refusal");
@@ -301,7 +301,7 @@ fn an_id_line_below_the_header_refuses() {
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success());
-    let line = "adrdom/blame/x.md: line 5: id line below the header; the tool assigns a blame file's identifier; agent removes the id line it wrote";
+    let line = "adrdom/blame/x.md: line 5: id line below the header; the tool assigns a blame file's identifier; agent removes the id line, line 5";
     assert!(refusal_lines(&out, "approve: ").contains(&line.to_string()), "{}", stderr(&out));
     assert_eq!(blame_row_count(&dir), 0);
     assert_eq!(std::fs::read_to_string(&path).unwrap(), content, "nothing written on refusal");
@@ -906,4 +906,40 @@ fn a_hand_written_id_on_a_never_approved_file_is_a_finding_and_approve_refuses()
     assert_eq!(refusal_lines(&out, "approve: "), vec![line.to_string()], "{}", stderr(&out));
     assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
     assert_eq!(blame_row_count(&dir), 0);
+}
+
+// adr: d2851ea1-fcb6-476a-b321-c813a594d5e5
+//
+// A `blame` row an older build wrote holds `-` for the identifier: the file
+// is approved with no identifier assigned yet, so check asks for no id line
+// to be written back and the next approve mints one as for a first approval.
+#[test]
+fn a_blame_row_with_no_identifier_counts_as_approved_with_none_assigned() {
+    let dir = setup();
+    let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
+    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-1\tdecision\n2-2\tdetail\n");
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    let old_id = id_line_of(&path);
+
+    // The ledger as an older build left it: `-` where the identifier stands.
+    let ledger = dir.join("adrdom/state/ledger.tsv");
+    let text = std::fs::read_to_string(&ledger).unwrap().replace(&old_id, "-");
+    std::fs::write(&ledger, text).unwrap();
+    // The file as that build left it: no id line, then an edit.
+    let approved = std::fs::read_to_string(&path).unwrap();
+    let edited = approved
+        .replacen(&format!("id: {}\n", old_id), "", 1)
+        .replace("2-2\tdetail", "2-2\tdecision");
+    std::fs::write(&path, edited).unwrap();
+
+    let checked = adr(&dir, &["check"], &[], "");
+    assert!(!stdout(&checked).contains("id line"), "{}", stdout(&checked));
+
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    let new_id = id_line_of(&path);
+    assert!(record::is_uuid(&new_id), "{}", new_id);
+    let checked = adr(&dir, &["check"], &[], "");
+    assert!(!stdout(&checked).contains("blame/x.md"), "{}", stdout(&checked));
 }
