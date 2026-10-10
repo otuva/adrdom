@@ -21,9 +21,8 @@ pub(super) fn check_reader(root: &Path, source: &Source, since: Option<&str>) ->
         .iter()
         .map(|(lineno, raw)| Failure::said(Class::Reader, msg::malformed_reader_row(*lineno, raw)))
         .collect();
-    let present: HashSet<&str> = content.lines().collect();
-    let identities: HashSet<Identity> = parsed.rows.iter().map(identity).collect();
-    let edited_at = |refname: &str| ref_has_edited_row(root, repo::READER_PATH, refname, &present, &identities);
+    let judged = Side::of(&[content.as_str()]);
+    let edited_at = |refname: &str| ref_has_edited_row(root, repo::READER_PATH, refname, &judged);
 
     let head_edited = edited_at("HEAD");
     if head_edited {
@@ -50,7 +49,8 @@ pub(super) fn check_reader(root: &Path, source: &Source, since: Option<&str>) ->
             .iter()
             .map(|r| repo::git(root, &["show", &format!("{}:{}", r, repo::READER_PATH)]).unwrap_or_default())
             .collect();
-        if merge_edits_row(&content, &contents) {
+        let parents: Vec<&str> = contents.iter().map(|c| c.as_str()).collect();
+        if Side::of(&parents).edited_in(&content) {
             out.push(Failure::said(Class::Reader, msg::reader_merge_row_edited()));
         }
     }
@@ -71,40 +71,40 @@ fn identity(r: &Row) -> Identity {
     (r.time.clone(), r.text_hash.clone(), r.neighbour.clone(), r.prompt_hash.clone(), r.model.clone())
 }
 
-/// Whether `other_content` holds a row whose line is not in `present`
-/// byte for byte but whose identity is that of a row of the judged file: the
-/// row was edited. A row gone whole is no edit.
-pub(super) fn rows_edited(other_content: &str, present: &HashSet<&str>, identities: &HashSet<Identity>) -> bool {
-    other_content
-        .lines()
-        .filter(|l| !l.is_empty() && !present.contains(l))
-        .filter_map(reader::parse_row)
-        .any(|r| identities.contains(&identity(&r)))
+/// The lines of one side of a comparison and the identities of its rows.
+/// For a judged file the other side is a ref's copy; at a merge the judged
+/// file is the one side and the union of the parents' lines the other.
+struct Side<'a> {
+    lines: HashSet<&'a str>,
+    identities: HashSet<Identity>,
 }
 
-fn ref_has_edited_row(root: &Path, path: &str, refname: &str, present: &HashSet<&str>, identities: &HashSet<Identity>) -> bool {
+impl<'a> Side<'a> {
+    fn of(contents: &[&'a str]) -> Side<'a> {
+        let lines: HashSet<&str> = contents.iter().flat_map(|c| c.lines()).collect();
+        let identities = lines.iter().filter_map(|l| reader::parse_row(l)).map(|r| identity(&r)).collect();
+        Side { lines, identities }
+    }
+
+    /// Whether `from` holds a row whose line is not on this side byte for
+    /// byte but whose identity is that of a row of this side: the row was
+    /// edited. A row gone whole is no edit.
+    fn edited_in(&self, from: &str) -> bool {
+        from.lines()
+            .filter(|l| !l.is_empty() && !self.lines.contains(l))
+            .filter_map(reader::parse_row)
+            .any(|r| self.identities.contains(&identity(&r)))
+    }
+}
+
+fn ref_has_edited_row(root: &Path, path: &str, refname: &str, judged: &Side) -> bool {
     let Some(other) = repo::git(root, &["show", &format!("{}:{}", refname, path)]) else {
         return false;
     };
-    rows_edited(&other, present, identities)
+    judged.edited_in(&other)
 }
 
-/// The merge test, judged from the judged file's lines: a line byte-identical
-/// to a line of any parent is no edit; a line that is byte-identical to none
-/// but shares its identity with a row of some parent is an edit.
-fn merge_edits_row(content: &str, parents: &[String]) -> bool {
-    let lines: HashSet<&str> = parents.iter().flat_map(|c| c.lines()).collect();
-    let identities: HashSet<Identity> = parents.iter().flat_map(|c| c.lines()).filter_map(reader::parse_row).map(|r| identity(&r)).collect();
-    content
-        .lines()
-        .filter(|l| !l.is_empty() && !lines.contains(l))
-        .filter_map(reader::parse_row)
-        .any(|r| identities.contains(&identity(&r)))
-}
-
-/// The same test for a push: the remote's copy against the local one.
+/// The push test: the remote's copy against the local one.
 pub(super) fn push_edits_row(remote_content: &str, local_content: &str) -> bool {
-    let present: HashSet<&str> = local_content.lines().collect();
-    let identities: HashSet<Identity> = reader::parse(local_content).rows.iter().map(identity).collect();
-    rows_edited(remote_content, &present, &identities)
+    Side::of(&[local_content]).edited_in(remote_content)
 }

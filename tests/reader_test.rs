@@ -548,3 +548,21 @@ fn concurrent_appends_with_drops_lose_no_row() {
     let stray: Vec<_> = std::fs::read_dir(state).unwrap().filter_map(|e| e.ok()).filter(|e| e.file_name().to_string_lossy().ends_with(".tmp")).collect();
     assert!(stray.is_empty());
 }
+
+// adr: 90714223-52e3-4bb9-b0b4-2a8b87d74145
+#[test]
+fn an_append_removes_the_temporary_files_a_killed_rewrite_left() {
+    let (dir, _rf) = repo_with_records();
+    let stale = dir.join("adrdom/state/reader.tsv.00000000-0000-0000-0000-000000000000.tmp");
+    std::fs::write(&stale, "half a rewrite").unwrap();
+    reader::append(&dir, &[live_row("Does W?", "id-1", "same", 1)]).unwrap();
+    assert!(!stale.exists());
+    // Also when the append rewrites the file.
+    std::fs::write(&stale, "half a rewrite").unwrap();
+    let gone = live_row("Does a question that was struck?", "id-1", "same", 1);
+    let mut f = std::fs::OpenOptions::new().append(true).open(reader_path(&dir)).unwrap();
+    std::io::Write::write_all(&mut f, format!("{}\n", reader::row_line(&gone)).as_bytes()).unwrap();
+    drop(f);
+    reader::append(&dir, &[live_row("Does W?", "id-2", "same", 2)]).unwrap();
+    assert!(!stale.exists());
+}

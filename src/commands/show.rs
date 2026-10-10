@@ -265,7 +265,7 @@ pub(crate) fn unreadable_topic_lines(r: &Records) -> Vec<Line> {
 
 /// The line that opens a topic file in the listing.
 pub(crate) fn topic_heading(rf: &RecordFile) -> Line {
-    Line::Record { depth: 0, text: msg::show_topic(rf.topic.as_deref().unwrap_or(""), &rf.rel) }
+    Line::Topic { text: msg::show_topic(rf.topic.as_deref().unwrap_or(""), &rf.rel) }
 }
 
 /// Every current decision of `rf` as its heading and the option picked.
@@ -532,7 +532,8 @@ fn topic_file_lines(r: &Records, rf: &RecordFile, views: Views) -> Vec<Line> {
         lines.extend(change_lines(prose, None, &r.names, true));
     }
     let shown = (views.neighbours).then(|| plan::load_shown_with(rf, &r.terms_list, led, &r.index().planning));
-    let by_body = plan::BodyIndex::of(rf);
+    // Built on the first question that reads the reader's words.
+    let by_body = std::cell::OnceCell::new();
     for (i, sec) in rf.sections.iter().enumerate() {
         let st = status::question_status(led, sec);
         let change = changes.questions.get(i).and_then(Option::as_ref);
@@ -548,7 +549,7 @@ fn topic_file_lines(r: &Records, rf: &RecordFile, views: Views) -> Vec<Line> {
             )),
         }
         if views.reader || !is_answered(st) {
-            lines.extend(reader_lines(r, rf, i, views.reader, &by_body));
+            lines.extend(reader_lines(r, rf, i, views.reader, by_body.get_or_init(|| plan::BodyIndex::of(rf))));
         }
         if views.neighbours && matches!(st, QuestionStatus::NoBody | QuestionStatus::NotAsked | QuestionStatus::Asked) {
             if let Some(q) = shown.as_ref().and_then(|p| p.questions.iter().find(|q| q.heading == sec.heading_text)) {

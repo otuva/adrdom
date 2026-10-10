@@ -142,6 +142,9 @@ pub enum Line {
     /// Text the command read from the records, at a depth under what holds
     /// it (a decision's heading at 1, its picked option at 2).
     Record { depth: usize, text: String },
+    /// A topic's heading line in a listing of every topic:
+    /// `# <topic> (<path>)`. It reads as a `Record` at depth 0 does.
+    Topic { text: String },
     /// A thing in the records and its status; `mark` is the side of a
     /// change beyond its latest approval the thing is on as a whole: a thing
     /// new since that approval (`Added`) or struck from it (`Removed`), the
@@ -186,6 +189,7 @@ pub fn report(r: &crate::moves::Report) -> Vec<Line> {
 pub fn text(line: &Line) -> String {
     visible(&match line {
         Line::Record { depth, text } => format!("{}{}", INDENT.repeat(*depth), text),
+        Line::Topic { text } => text.clone(),
         Line::Status { subject, status, mark } => format!("{}[{}] {}", mark_of(*mark), status.name(), subject),
         Line::Word { word, name } => format!("{}[{}] {}", INDENT, word, name),
         Line::Finding(f) => f.text(),
@@ -223,6 +227,7 @@ pub fn html(line: &Line) -> String {
         Line::Record { depth, text } => {
             format!("<p class=\"record depth-{}\">{}</p>", depth, esc(text))
         }
+        Line::Topic { text } => format!("<p class=\"record depth-0\">{}</p>", esc(text)),
         Line::Status { subject, status, mark } => format!(
             "<p class=\"status\">{}<span class=\"status-name s-{}\">[{}]</span> {}</p>",
             esc(mark_of(*mark)),
@@ -389,7 +394,7 @@ pub enum Group {
 impl Group {
     fn of(line: &Line) -> Group {
         match line {
-            Line::Record { .. } | Line::Status { .. } | Line::Word { .. } => Group::Questions,
+            Line::Record { .. } | Line::Topic { .. } | Line::Status { .. } | Line::Word { .. } => Group::Questions,
             Line::Finding(_) | Line::Stop { .. } => Group::Findings,
             Line::Move(_) => Group::Moves,
             Line::Event(_) => Group::Events,
@@ -428,11 +433,6 @@ pub fn groups<'a>(lines: &[&'a Line]) -> Vec<(Group, Vec<&'a Line>)> {
         }
     }
     out
-}
-
-/// A topic's heading line in a listing of every topic: `# <topic> (<path>)`.
-fn is_topic_header(line: &Line) -> bool {
-    matches!(line, Line::Record { depth: 0, text } if text.starts_with("# "))
 }
 
 const RESET: &str = "\u{1b}[0m";
@@ -475,7 +475,7 @@ fn status_colour(status: &Status) -> Option<&'static str> {
 fn painted(line: &Line) -> String {
     let t = text(line);
     match line {
-        Line::Record { depth: 0, .. } if is_topic_header(line) => sgr(BOLD, &t),
+        Line::Topic { .. } => sgr(BOLD, &t),
         Line::Record { .. } => t,
         Line::Status { status, mark, .. } => {
             let Some(code) = status_colour(status) else { return t };
@@ -534,7 +534,10 @@ fn render_after(lines: &[Line], style: Style, last: &mut Option<Group>) -> Vec<S
             }
         }
         for l in run {
-            if is_topic_header(l) && !out.is_empty() && !out.last().is_some_and(|s| s.is_empty()) {
+            // A topic heading is set off by a blank line, also when it opens
+            // a call that continues the stream's group.
+            let apart = if out.is_empty() { continued } else { !out.last().is_some_and(|s| s.is_empty()) };
+            if matches!(l, Line::Topic { .. }) && apart {
                 out.push(String::new());
             }
             out.push(paint(l));
@@ -714,7 +717,7 @@ mod tests {
 
     fn sample() -> Vec<Line> {
         vec![
-            Line::Record { depth: 0, text: "# Example (x.md)".to_string() },
+            Line::Topic { text: "# Example (x.md)".to_string() },
             Line::Status {
                 subject: "Does it?".to_string(),
                 status: Status::Question { status: QuestionStatus::Answered, letter: Some('A'), version: None },
@@ -723,7 +726,7 @@ mod tests {
             Line::Word { word: "inconsistent".to_string(), name: "Does it not?".to_string() },
             Line::Finding(Finding::new(&crate::rule::TOPIC_FILE_SHAPE, "x.md: a fault".to_string(), "agent rewrites the file".to_string())),
             Line::Move(Move::new(MoveKind::Approve { path: "x.md".to_string() })),
-            Line::Record { depth: 0, text: "# Other (y.md)".to_string() },
+            Line::Topic { text: "# Other (y.md)".to_string() },
             Line::Event(Event::Asked { heading: "Does it?".to_string() }),
         ]
     }
@@ -803,6 +806,14 @@ mod tests {
         assert_eq!(got[0], "");
         assert_eq!(got.len(), 2);
         assert_eq!(render_after(&stop("c"), shaped, &mut last), vec!["", "Findings", "show: c"]);
+        // A topic heading that opens a continuing call is set off by a blank
+        // line; one that opens a stream is not.
+        let rec = [Line::Record { depth: 1, text: "x".to_string() }];
+        let top = [Line::Topic { text: "# T (t.md)".to_string() }];
+        let mut q = None;
+        assert_eq!(render_after(&top, shaped, &mut q), vec!["# T (t.md)"]);
+        assert_eq!(render_after(&rec, shaped, &mut q), vec!["  x"]);
+        assert_eq!(render_after(&top, shaped, &mut q), vec!["", "# T (t.md)"]);
         // Piped output ignores the state.
         let mut none = None;
         assert_eq!(render_after(&stop("a"), Style::PLAIN, &mut none), vec!["show: a"]);

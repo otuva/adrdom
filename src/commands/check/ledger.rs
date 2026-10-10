@@ -30,7 +30,7 @@ pub(super) fn check_ledger(
         out.push(Failure::said(Class::Ledger, msg::malformed_ledger_row(*lineno, raw)));
     }
 
-    out.extend(check_held(root, repo::LEDGER_PATH, ledger_content, since, Class::Ledger, &LEDGER_MSGS, stops));
+    out.extend(check_held(root, repo::LEDGER_PATH, ledger_content, since, Class::Ledger, stops));
 
     out.extend(check_same_time_competition(led));
     out.extend(check_dropped(led, records, root));
@@ -150,25 +150,6 @@ fn check_dropped(led: &Ledger, records: &[RecordFile], root: &Path) -> Vec<Failu
     out
 }
 
-/// The refusals of the ledger's held rows. (The reader's file has its own
-/// rule: `reader::check_reader`.)
-pub(super) struct HeldMsgs {
-    pub not_append_only: fn() -> msg::Said,
-    pub merge_drops_rows: fn() -> msg::Said,
-    pub since_drops_rows: fn(&str) -> msg::Said,
-    /// Whether a merge parent or a `since` commit that cannot be read is
-    /// reported; the ledger reports it, and the reader's file leaves it to
-    /// that one report, since both hit the same commit.
-    pub report_unreadable: bool,
-}
-
-const LEDGER_MSGS: HeldMsgs = HeldMsgs {
-    not_append_only: msg::ledger_not_append_only,
-    merge_drops_rows: msg::ledger_merge_drops_rows,
-    since_drops_rows: msg::ledger_since_drops_rows,
-    report_unreadable: true,
-};
-
 /// The rows of the file at `path` (judged as `content`) that HEAD, the
 /// other side of a merge and `since` hold must all still be there, byte for
 /// byte: the ledger's rule.
@@ -178,7 +159,6 @@ pub(super) fn check_held(
     content: &str,
     since: Option<&str>,
     class: Class,
-    msgs: &HeldMsgs,
     stops: &mut Vec<String>,
 ) -> Vec<Failure> {
     let ledger_content = content;
@@ -203,7 +183,7 @@ pub(super) fn check_held(
     // test just below -- the same rule, just against a different ref.
     if let Some(head_content) = repo::git(root, &["show", &format!("HEAD:{}", path)]) {
         if lines_missing(&head_content, &present) {
-            out.push(Failure::said(class, (msgs.not_append_only)()));
+            out.push(Failure::said(class, msg::ledger_not_append_only()));
         }
     }
 
@@ -231,7 +211,7 @@ pub(super) fn check_held(
     // passing.
     if repo::git(root, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_some() {
         if ref_ledger_has_rows_missing(root, path, "MERGE_HEAD", &present) {
-            out.push(Failure::said(class, (msgs.merge_drops_rows)()));
+            out.push(Failure::said(class, msg::ledger_merge_drops_rows()));
         }
     } else {
         let parents = head_parents(root);
@@ -247,11 +227,10 @@ pub(super) fn check_held(
                     drops = true;
                 }
             }
-            if unreadable && !msgs.report_unreadable {
-            } else if unreadable {
+            if unreadable {
                 stops.push(msg::ledger_merge_parents_unreadable());
             } else if drops {
-                out.push(Failure::said(class, (msgs.merge_drops_rows)()));
+                out.push(Failure::said(class, msg::ledger_merge_drops_rows()));
             }
         }
     }
@@ -269,11 +248,9 @@ pub(super) fn check_held(
     if let Some(commit) = since {
         if !repo::is_zero_sha(commit) {
             if !parent_object_present(root, commit) {
-                if msgs.report_unreadable {
-                    stops.push(msg::ledger_since_unreadable(commit));
-                }
+                stops.push(msg::ledger_since_unreadable(commit));
             } else if ref_ledger_has_rows_missing(root, path, commit, &present) {
-                out.push(Failure::said(class, (msgs.since_drops_rows)(commit)));
+                out.push(Failure::said(class, msg::ledger_since_drops_rows(commit)));
             }
         }
     }

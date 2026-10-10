@@ -270,6 +270,11 @@ pub fn rows_via(root: &Path, source: &repo::Source) -> std::sync::Arc<Vec<Row>> 
 /// The texts and the neighbours the records hold, the ones a row of the
 /// reader file may still name.
 pub struct Live {
+    root: PathBuf,
+    sets: std::sync::OnceLock<LiveSets>,
+}
+
+struct LiveSets {
     texts: HashSet<String>,
     neighbours: HashSet<String>,
     /// Whether every topic file and the terms file loaded. A text is not
@@ -279,13 +284,17 @@ pub struct Live {
 }
 
 impl Live {
-    /// Read once for a command run: the working tree's topic files and
-    /// terms file. A text is the hash of a heading, of a heading with its
+    /// Read at most once for a command run, and only when an append has
+    /// rows to write: the working tree's topic files and terms file. A text is the hash of a heading, of a heading with its
     /// body, or of an answered question's heading and picked option (what
     /// `adr read` gives the reader). A neighbour is the id of a question,
     /// the id (or name) of a term, retired or not, or `text:` and the hash
     /// of a question's heading and body.
     pub fn of(root: &Path) -> Live {
+        Live { root: root.to_path_buf(), sets: std::sync::OnceLock::new() }
+    }
+
+    fn load(root: &Path) -> LiveSets {
         let mut texts = HashSet::new();
         let mut neighbours = HashSet::new();
         let (records, load_errors) = crate::record::load_all_via(root, &repo::Source::WorkingTree);
@@ -313,11 +322,12 @@ impl Live {
             crate::state::TermsLoad::Missing => {}
             crate::state::TermsLoad::LoadError(_) => complete = false,
         }
-        Live { texts, neighbours, complete }
+        LiveSets { texts, neighbours, complete }
     }
 
     fn holds(&self, r: &Row) -> bool {
-        !self.complete || self.texts.contains(&r.text_hash) && self.neighbours.contains(&r.neighbour)
+        let s = self.sets.get_or_init(|| Live::load(&self.root));
+        !s.complete || s.texts.contains(&r.text_hash) && s.neighbours.contains(&r.neighbour)
     }
 }
 
@@ -350,7 +360,8 @@ pub fn append_live(root: &Path, rows: &[Row], live: &Live) -> Result<(), String>
     }
     // Lock the file, then check the path still names the locked file: a
     // rewrite by another session renames a new file over it.
-    let mut handle = loop {
+    let mut handle = None;
+    for _ in 0..LOCK_TRIES {
         let h = std::fs::OpenOptions::new()
             .create(true)
             .read(true)
@@ -359,9 +370,19 @@ pub fn append_live(root: &Path, rows: &[Row], live: &Live) -> Result<(), String>
             .map_err(msg::reader_write_failed)?;
         h.lock().map_err(msg::reader_write_failed)?;
         if same_file(&h, &path) {
-            break h;
+            handle = Some(h);
+            break;
         }
+    }
+    let Some(mut handle) = handle else {
+        return Err(msg::reader_write_failed(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "the reader file kept changing under the lock",
+        )));
     };
+    // Under the lock no other writer is mid-rewrite, so a temporary file a
+    // killed process left is stale.
+    remove_stale_tmp(&path);
     let mut old = String::new();
     // Bytes that are no text read as empty and so are never dropped.
     if handle.read_to_string(&mut old).is_err() {
@@ -388,6 +409,23 @@ pub fn append_live(root: &Path, rows: &[Row], live: &Live) -> Result<(), String>
         return Err(msg::reader_write_failed(e));
     }
     Ok(())
+}
+
+/// How many times `append_live` reopens the reader file when a rewrite by
+/// another session renames a new file over it, before it gives up.
+const LOCK_TRIES: usize = 50;
+
+/// Removes every `reader.tsv.*.tmp` beside the reader file `path`.
+fn remove_stale_tmp(path: &Path) {
+    let Some(dir) = path.parent() else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for e in entries.flatten() {
+        let name = e.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with("reader.tsv.") && name.ends_with(".tmp") {
+            let _ = std::fs::remove_file(e.path());
+        }
+    }
 }
 
 /// Whether `path` still names the file `handle` holds open.
