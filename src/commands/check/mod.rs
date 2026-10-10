@@ -6,6 +6,7 @@ mod install;
 mod ledger;
 mod parse;
 mod plan;
+mod planner;
 mod push;
 mod reader;
 mod terms;
@@ -277,8 +278,10 @@ fn build(
     let (blame_failures, blame_notes) = blame::check_blame(root, &source, blame_index, &blame_unreadable, &mut stops);
     push_failures(&mut failures, blame_failures);
     notes.extend(blame_notes);
-    let (test_failures, untested) = tests::check_tests(root, &records, &led, tests, &source);
-    push_failures(&mut failures, test_failures);
+    if staged || message.is_some() {
+        push_failures(&mut failures, planner::check_commit(root));
+    }
+    let untested = tests::check_tests(root, &records, &led, tests, &source, crate::session::role(root));
     let (tells_failures, tells_notes) = parse::check_rule(Class::Tells, &records, &per_record_findings, &awaiting, &led);
     push_failures(&mut failures, tells_failures);
     push_failures(&mut notes, tells_notes);

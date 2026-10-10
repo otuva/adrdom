@@ -165,7 +165,7 @@ fn assert_finding_shape(command: &str, line: &str, headings: &[String]) {
     assert_eq!(parts[parts.len() - 2], rule.protects, "{}: the protects words sit between found and move: {}", command, line);
     let mv = parts[parts.len() - 1];
     assert!(
-        mv.starts_with("agent ") || mv.starts_with("owner ") || mv.starts_with("not yet"),
+        mv.starts_with("agent ") || mv.starts_with("builder ") || mv.starts_with("owner ") || mv.starts_with("not yet"),
         "{}: the last part is no move: {}",
         command,
         line

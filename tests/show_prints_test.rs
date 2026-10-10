@@ -345,7 +345,7 @@ fn show_refuses_a_file_and_all_together() {
 fn show_into_a_full_device_does_not_pass() {
     let (dir, _) = asked();
     let full = std::fs::OpenOptions::new().write(true).open("/dev/full").unwrap();
-    let out = std::process::Command::new(adr_bin())
+    let out = scrubbed(std::process::Command::new(adr_bin()))
         .args(["show", "--all"])
         .current_dir(&dir)
         .env("ADR_FAKE_MODEL", "1")

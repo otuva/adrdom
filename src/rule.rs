@@ -723,11 +723,11 @@ pub const DECISION_HAS_TEST_TIE: Rule = Rule {
     protects: "a current decision is reported until a test names it",
 };
 
-/// Decision: Does check fail a test that names a decision that is not current?
+/// Decision: What does check do with a test that names a decision that is not current?
 pub const TEST_TIE_NAMES_CURRENT_DECISION: Rule = Rule {
     name: "test_tie_names_current_decision",
-    decisions: &["751ef30c-6a2f-4936-bf9b-b9d487146e53"],
-    protects: "every test tie names a current decision",
+    decisions: &["2381d759-f85f-484e-9031-fadbe6ea045a"],
+    protects: "a test tie names the decision in force",
 };
 
 /// Decision: Does check read the words of an answered question again?
@@ -1068,6 +1068,13 @@ pub const LEDGER_IDENTIFIER_IN_A_FILE: Rule = Rule {
     protects: "every ledger identifier names a question in a topic file",
 };
 
+/// Decision: Does check fail a planner's commit that reaches outside adrdom?
+pub const PLANNER_COMMIT_STAYS_IN_ADRDOM: Rule = Rule {
+    name: "planner_commit_stays_in_adrdom",
+    decisions: &["db07a54d-4d80-4035-a9ef-eabcc0c872b3"],
+    protects: "a planner's commit holds only files under adrdom",
+};
+
 /// Every rule, for the test that holds each to its decisions.
 pub const ALL: &[&Rule] = &[
     &TOPIC_FILE_SHAPE,
@@ -1218,4 +1225,5 @@ pub const ALL: &[&Rule] = &[
     &DROPPED_ROW_HAS_CAUSE,
     &DROPPED_ROW_NAMES_GROUND,
     &LEDGER_IDENTIFIER_IN_A_FILE,
+    &PLANNER_COMMIT_STAYS_IN_ADRDOM,
 ];
