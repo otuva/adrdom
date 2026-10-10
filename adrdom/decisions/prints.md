@@ -292,3 +292,65 @@ Standard: a listing prints what the next move reads and takes a flag for the res
   Costs: the owner approves lines and answers bodies without seeing them.
 
 **Answer:** A
+
+### What does show print of the reader's word on a question?
+depends: reader, question, neighbour, What does show print of a file under adrdom?, Does a command print under a flag what it computes from the records?, Does the tool print every pair the reader marks?, What does the reader say about a neighbour of a question with its body?, What does the tool keep of the reader's word?
+unrelated: Does an answer carry the version of the question the owner read?, Does the word limit read the text of an answered question?, Does check read the words of an answered question again?, What does answer write for a removed question?, Does show print what a file holds beyond its latest approval?, answer set, Does approve withdraw an asked question struck from the plan?, Does the agent build what no current decision covers?, Does the tool stop while the terms file waits for approval?, Does the ui perform every owner act?, What does check do with a fault on a file awaiting approval?, Does show print the reference lines of an answered question?, Does the tool colour what it prints to a terminal?, What does the tool add to the shape of what it prints to a terminal?, Does the agent write the plan?
+
+Problem: the owner approves a plan reading the agent's lines, and the reader's word on those lines, inconsistent or same, is printed to the agent alone.
+Standard: a review listing shows a disputed item beside the item, and the full analysis on request.
+
+- A) Under the question, [inconsistent] or [same] with the neighbour when no supersedes line names it; every word under --reader.
+  Why: the owner sees a disputed line beside the line before approving; the rest stays out of the plain listing.
+  Costs: a view with no move on its line; show reads the reader's file for each question.
+- B) Every word under --reader, nothing in the plain listing.
+  Why: the plain listing stays the agent's lines and the moves.
+  Costs: the owner runs the flag before each approval, or approves a disputed line unseen.
+- C) Nothing: the reader's word is read in plan's output alone.
+  Why: no new line form.
+  Costs: the owner never sees the reader's word; the agent's line stands alone at approval.
+
+### Does show print the reference lines of an answered question?
+depends: depends, answered, What does show print of a file under adrdom?
+unrelated: Does a depends entry on a question in its file carry an answer set?, Does an answer carry the version of the question the owner read?, What does the tool derive the tiers from?, What does a depends line name?, Does the word limit read the text of an answered question?, Does check read the words of an answered question again?, Does answer remove a question whose answer set lacks the answer?, Does answer take a question standing on a question with no decision?, answer set, Does a supersedes line name every current decision standing on its target?, Does show print what a file holds beyond its latest approval?, What does show print with no file named?, What does show print of the reader's word on a question?, Does the tool colour what it prints to a terminal?, What does the tool add to the shape of what it prints to a terminal?, Does a command print under a flag what it computes from the records?, Does a reference line hold its list on one line?, Does check print a line that names no move?, Does the ui show what the terminal prints?, Does the word limit hold for an option's Why line?, Does a reference in a topic file carry the identifier of what it names?
+
+Problem: the depends, supersedes and blame lines of every answered question fill half of show's listing of a file, and no move on an answered question reads them.
+Standard: a listing prints what the next step reads; what stands behind a closed item is shown on request.
+
+- A) No.
+  Why: the lines of an unanswered question are what approve reads; those of an answered one print under --dependents.
+  Costs: an agent after an answered question's lines runs --dependents or reads the file.
+- B) Yes.
+  Why: every line of every question in one listing.
+  Costs: lines no move reads make most of the listing of a settled file.
+
+### Does the tool colour what it prints to a terminal?
+depends: owner, agent, What does a command that writes nothing print?, What does a command that writes print?, Does the ui show what the terminal prints?
+unrelated: Does the tool print every pair the reader marks?, Does a command print under a flag what it computes from the records?, What does show print with no file named?, Does check print a line that names no move?, What does show print of a file under adrdom?, Does a command name a status of its own?, Does show print what a file holds beyond its latest approval?, Does an answer carry the version of the question the owner read?, Does the reader's word stop a command?, What does an owner command look for before it runs?, Does show print the reference lines of an answered question?, What does show print of the reader's word on a question?, What does the tool add to the shape of what it prints to a terminal?
+
+Problem: statuses, findings and moves print in one shade, and the owner reads a disputed line, a refusal and a settled question alike.
+Standard: a command colours its output when standard output is a terminal, prints plain when piped, and honours NO_COLOR.
+
+- A) Yes.
+  Why: the owner's eye finds the line to act on; an agent and the tests read piped output, plain.
+  Costs: a palette per line kind, a terminal check before every print, and the page's own rendering of it.
+- B) No.
+  Why: one output everywhere; nothing to check.
+  Costs: the owner reads every listing in one shade.
+
+### What does the tool add to the shape of what it prints to a terminal?
+depends: owner, agent, What does a command that writes nothing print?, What does a command that writes print?, Does the ui show what the terminal prints?, What does show print with no file named?, What does show print of a file under adrdom?, Does the tool colour what it prints to a terminal?=*
+unrelated: Does a command print under a flag what it computes from the records?, Does the tool print every pair the reader marks?, embedding index, embedding model, What does the tool keep of the reader's word?, Does show print what a file holds beyond its latest approval?, Does a reference line hold its list on one line?, Does check print a line that names no move?, Does install write outside adrdom?, Does the tool take the order of ledger rows from their time?, Does show print the reference lines of an answered question?, What does show print of the reader's word on a question?, What does check do with a fault on a file awaiting approval?
+
+Problem: every line prints at one indent with no break between the questions, the findings and the moves, and a listing of a file runs on as one block.
+Standard: a listing groups its lines, with a blank line between groups and a header per group, as git status does; piped output stays one line per item.
+
+- A) Blank lines and headers between questions, findings and moves on a terminal; piped output one line per item.
+  Why: the groups read apart, coloured or not; a line per item stays for the agent and the tests.
+  Costs: a header per group, a terminal check before every listing, and the page's own rendering of the groups.
+- B) Nothing.
+  Why: one output on a terminal and in a pipe.
+  Costs: the owner reads a file's listing as one block.
+- C) Tables: columns aligned per group with a header row, on a terminal; piped output one line per item.
+  Why: statuses and headings line up.
+  Costs: column widths per group, wrapping of long headings, and a second form of every line.

@@ -355,3 +355,35 @@ Standard: a review surface shows the evidence beside the judgment.
   Costs: the owner reads hashes and identifiers in a tab-separated file, or trusts the agent's line unseen.
 
 **Answer:** A
+
+### Does the reader's file keep a row whose text is gone from the records?
+depends: reader, neighbour, What does the tool keep of the reader's word?
+unrelated: Does the tool take the order of ledger rows from their time?, Does check fail a ledger row that was edited?, Does check fail a ledger whose rows changed place?, Does show print what a file holds beyond its latest approval?, Does a reference line hold its list on one line?, What does a ledger row hold?, Does check print a line that names no move?, Does the word limit read the text of an answered question?, Does check at a merge look for the ledger rows of both branches?, Does check fail an answered question whose text changed?, Does check hold the merge rule install writes for the ledger?, Does every ledger row carry the tool version?, Does check hold the reader's file as it holds the ledger?, Does a question keep its identifier when its heading is reworded?, What does check hold of the reader's file?
+
+Problem: the file grows by a row for every reading of a text since edited away, and a row nothing can look up again is weight on every read.
+Standard: a cache keyed by content hash is pruned of entries whose key no longer resolves; the record of events is kept elsewhere.
+
+- A) No.
+  Why: when it appends, the tool drops each row whose text or neighbour is gone from the records; git keeps them.
+  Costs: a merge brings a dropped row back from the other branch until the next append drops it again.
+- B) Yes.
+  Why: every reading ever made stays; the file is a record like the ledger.
+  Costs: a row per edited draft text for ever, read on every command.
+
+### What does check hold of the reader's file?
+depends: check, reader, Does the reader's file keep a row whose text is gone from the records?=*, What does the tool keep of the reader's word?
+unrelated: Does check at a commit read the staged files?, Does check hold the files install writes?, Does check hold the terms brief to the terms file?, Does check read the words of an answered question again?, Does show print what a file holds beyond its latest approval?, Does the reader's word stop a command?, What does check do with a fault on a file awaiting approval?, What does show print of a file under adrdom?, Does a question keep its identifier when its heading is reworded?, Does check fail a ledger row that was edited?, Does check fail a ledger whose rows changed place?, Does the tool take the order of ledger rows from their time?, What does a blame file hold of its origin?, What does a ledger row hold?
+supersedes: Does check hold the reader's file as it holds the ledger?
+
+Problem: a file the tool writes and the agent may edit is a file the agent will edit; a rule that holds every row at HEAD byte for byte holds a row the tool itself drops.
+Standard: a machine-written cache is verified for shape and against edits; removal is the writer's act.
+
+- A) Every row at HEAD stays byte for byte or is gone whole; no row is edited or added by hand.
+  Why: a hand-edited row never passes as the reader's word; the tool's own drop passes.
+  Costs: a row deleted by hand passes as a drop; a hand-written row is caught by its shape alone.
+- B) Every row at HEAD stays byte for byte.
+  Why: the file is held like the ledger.
+  Costs: the tool cannot drop a row, so the file keeps every reading ever made.
+- C) The shape of each row alone.
+  Why: nothing to compare with history.
+  Costs: a row edited by hand passes as the reader's word.
