@@ -904,6 +904,35 @@ pub fn standing_rulings(led: &Ledger, id: &str) -> Option<Vec<Ruling>> {
     Some(rulings)
 }
 
+/// The current decisions that took the place of `id`: follows the `superseded`
+/// rows (detail: the superseding id) through every chain and keeps the ends
+/// whose latest state is `answered`. Empty when none is current.
+pub fn current_successors(led: &Ledger, id: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut stack = vec![id.to_string()];
+    while let Some(at) = stack.pop() {
+        if !seen.insert(at.clone()) {
+            continue;
+        }
+        match led.latest_state(&at).map(|r| r.event.as_str()) {
+            Some("answered") => {
+                if at != id && !out.contains(&at) {
+                    out.push(at);
+                }
+            }
+            Some("superseded") => {
+                let mut next: Vec<String> =
+                    led.rows.iter().filter(|r| r.event == "superseded" && r.id == at).map(|r| r.detail.clone()).collect();
+                next.reverse();
+                stack.extend(next);
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
 /// The first two distinct standing rulings for `id`
 /// (e3200081-9995-4bbe-983f-2f430dc341e7, rule 3), in the order their rows
 /// appear in the ledger -- `Some` exactly when the question is in conflict:

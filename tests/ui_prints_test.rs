@@ -58,7 +58,7 @@ struct Page {
 
 impl Page {
     fn start(dir: &Path) -> Page {
-        let mut child = Command::new(adr_bin())
+        let mut child = scrubbed(Command::new(adr_bin()))
             .current_dir(dir)
             .args(["serve", "--port", "0"])
             .env_remove("CLAUDECODE")

@@ -2277,15 +2277,16 @@ aliases: \n";
     assert!(!text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
 }
 
-// "Does check fail a test that names a decision that is not current?" (751ef30c A): yes -- a tie to a
-// decision whose latest ledger state is no longer `answered` is stale, and
-// the agent's move is to remove the tag or point it at the current
-// decision. A later decision superseding the first is one way a tie goes
-// stale: `old_id` was genuinely current (and tested) when the tie was
+// "What does check do with a test that names a decision that is not current?"
+// (2381d759 A): a tie to a decision whose latest ledger state is no longer
+// `answered` is reported as a finding whose move is to point it at the
+// current decision, and fails nothing. A later decision superseding the
+// first is one way a tie goes stale: `old_id` was genuinely current (and tested) when the tie was
 // written, then a second, real decision named `supersedes: <old_id>` and
 // took it out of force.
 #[test]
-fn check_fails_a_test_tied_to_a_decision_that_was_later_superseded() {
+// adr: 2381d759-f85f-484e-9031-fadbe6ea045a
+fn check_reports_a_test_tied_to_a_decision_that_was_later_superseded() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "authority");
@@ -2331,7 +2332,7 @@ fn check_fails_a_test_tied_to_a_decision_that_was_later_superseded() {
     assert!(adr_answer(&dir, &new_id, "A").status.success());
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success(), "check should fail: {}", stdout(&out));
+    assert!(out.status.success(), "check should not fail: {}", stdout(&out));
     assert!(
         line_with(&stdout(&out), &old_id, " tied to a test and not a current decision"),
         "{}",
@@ -2339,11 +2340,12 @@ fn check_fails_a_test_tied_to_a_decision_that_was_later_superseded() {
     );
 }
 
-// The other way a tie goes stale (751ef30c A): the question it names was
+// The other way a tie goes stale (2381d759 A): the question it names was
 // answered with a refusal, never a lettered decision, so it never becomes
-// current at all -- a tie to it is stale from the moment it is written.
+// current at all -- a tie to it is reported from the moment it is written.
 #[test]
-fn check_fails_a_test_tied_to_a_refused_decision() {
+// adr: 2381d759-f85f-484e-9031-fadbe6ea045a
+fn check_reports_a_test_tied_to_a_refused_decision() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -2359,7 +2361,7 @@ fn check_fails_a_test_tied_to_a_refused_decision() {
     write_test_comment(&dir, &id);
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success(), "check should fail: {}", stdout(&out));
+    assert!(out.status.success(), "check should not fail: {}", stdout(&out));
     assert!(
         line_with(&stdout(&out), &id, " tied to a test and not a current decision"),
         "{}",
@@ -2571,11 +2573,12 @@ fn check_judges_an_adr_code_comment_of_an_unknown_decision_by_no_rule() {
     assert!(out.status.success(), "{}", stdout(&out));
     assert!(!stdout(&out).contains(unknown), "{}", stdout(&out));
 
-    // The same identifier in a test comment is judged: check fails it.
+    // The same identifier in a test comment is judged: check reports it,
+    // and fails nothing (2381d759).
     std::fs::write(dir.join("code.txt"), format!("// adr: {}\n", unknown)).unwrap();
     run_git(&dir, &["add", "code.txt"]);
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success(), "{}", stdout(&out));
+    assert!(out.status.success(), "{}", stdout(&out));
     let all = format!("{}{}", stdout(&out), String::from_utf8_lossy(&out.stderr));
     assert!(all.contains(unknown), "{}", all);
 }

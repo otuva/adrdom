@@ -63,8 +63,9 @@ pub(crate) const GITATTRIBUTES_CONTENT: &str = "state/ledger.tsv merge=union\nst
 
 /// `adrdom/.gitignore`'s whole content: the index and the model files under
 /// `adrdom/cache` stay out of git ("Does git track a file the tool can get
-/// again without the owner?").
-pub(crate) const GITIGNORE_CONTENT: &str = "cache/\n";
+/// again without the owner?"), and so does the roles file, which is
+/// untracked (1cec44fc).
+pub(crate) const GITIGNORE_CONTENT: &str = "cache/\nstate/roles.tsv\n";
 
 /// `.codex/rules/adrdom.rules`'s content: one `prefix_rule` block per
 /// `OWNER_COMMANDS` entry (`commands::OWNER_COMMANDS`), `decision =

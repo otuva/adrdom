@@ -124,10 +124,7 @@ pub(crate) fn collect_targets(
         return out;
     }
     if staged {
-        if let Some(list) = repo::git_paths(
-            root,
-            &["diff", "--cached", "--name-only", "--diff-filter=d"],
-        ) {
+        if let Some(list) = repo::staged_paths(root, false) {
             for path in &list {
                 if skip_path(path) {
                     continue;
