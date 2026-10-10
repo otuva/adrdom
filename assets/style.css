@@ -8,6 +8,7 @@
   --hold: #1e6b47;
   --hold-soft: rgba(30, 107, 71, 0.10);
   --refuse: #a32a22;
+  --wait: #8a6100;
   --refuse-soft: rgba(163, 42, 34, 0.08);
   --key: #ffffff;
 }
@@ -20,6 +21,7 @@
     --hold: #5cc394;
     --hold-soft: rgba(92, 195, 148, 0.12);
     --refuse: #e0665c;
+    --wait: #d9a93c;
     --refuse-soft: rgba(224, 102, 92, 0.12);
     --key: #1f2226;
   }
@@ -257,3 +259,19 @@ dl.decisions dt .status { margin: 0; }
 .chgd .record.depth-1 { padding-left: 0.6rem; }
 .open-list li .st, .refused-list li .st { display: inline; }
 .open-list li .st .subject a { text-decoration-color: var(--rule); }
+
+/* --- the groups of lines, as the terminal heads them --- */
+.group > h3 { margin: 0.8rem 0 0.2rem; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.failures .group > h3, .notes .group > h3 { margin-top: 0.2rem; }
+.status .status-name.s-answered, .status .status-name.s-approved { color: var(--hold); }
+.status .status-name.s-refused, .status .status-name.s-removed, .status .status-name.s-retired { color: var(--refuse); }
+.status .status-name.s-superseded, .status .status-name.s-withdrawn, .status .status-name.s-dropped { opacity: 0.6; }
+.event { color: var(--hold); }
+.word.word-consistent, .word.word-depends, .word.word-unrelated { opacity: 0.75; }
+.status .status-name.s-asked, .status .status-name.s-changed, .status .status-name.s-new { color: var(--wait); }
+.finding { color: var(--wait); }
+.finding.stop { color: var(--refuse); }
+.word.word-inconsistent { color: var(--refuse); }
+.word.word-same { color: var(--wait); }
+.move.owner { font-weight: 700; }
+.move.not-yet { opacity: 0.7; }

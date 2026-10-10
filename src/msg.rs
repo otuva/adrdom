@@ -1317,6 +1317,17 @@ pub fn pairs_no_term_at_write(rel: &str, heading: &str) -> Said {
 
 use crate::status::FileStatus;
 
+/// The header of a group of findings on a terminal (per "What does the tool
+/// add to the shape of what it prints to a terminal?", f3c9e736 A).
+pub fn group_findings() -> String {
+    "Findings".to_string()
+}
+
+/// The header of a group of moves on a terminal.
+pub fn group_moves() -> String {
+    "Moves".to_string()
+}
+
 pub fn show_topic(topic: &str, rel: &str) -> String {
     if topic.is_empty() {
         return format!("# ({})", rel);
