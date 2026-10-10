@@ -355,15 +355,17 @@ fn colour_forbidden() -> bool {
     std::env::var_os("NO_COLOR").is_some_and(|v| !v.is_empty()) || std::env::var("TERM").is_ok_and(|t| t == "dumb")
 }
 
-/// The style of standard output, decided once per process: shaped when it is
-/// a terminal, coloured when it is a terminal and colour is not forbidden.
+/// The style of a stream: shaped when it is a terminal, coloured when it is
+/// a terminal and colour is not forbidden.
+fn style_for(is_terminal: bool) -> Style {
+    Style { colour: is_terminal && !colour_forbidden(), shape: is_terminal }
+}
+
+/// The style of standard output, decided once per process.
 fn stdout_style() -> Style {
     use std::io::IsTerminal;
     static STYLE: std::sync::OnceLock<Style> = std::sync::OnceLock::new();
-    *STYLE.get_or_init(|| {
-        let tty = std::io::stdout().is_terminal();
-        Style { colour: tty && !colour_forbidden(), shape: tty }
-    })
+    *STYLE.get_or_init(|| style_for(std::io::stdout().is_terminal()))
 }
 
 /// The style of standard error: dressed as standard output is (a refusal is
@@ -372,10 +374,7 @@ fn stdout_style() -> Style {
 fn stderr_style() -> Style {
     use std::io::IsTerminal;
     static STYLE: std::sync::OnceLock<Style> = std::sync::OnceLock::new();
-    *STYLE.get_or_init(|| {
-        let tty = std::io::stderr().is_terminal();
-        Style { colour: tty && !colour_forbidden(), shape: tty }
-    })
+    *STYLE.get_or_init(|| style_for(std::io::stderr().is_terminal()))
 }
 
 /// The groups of a listing: a maximal run of one kind of line.
@@ -509,6 +508,15 @@ fn painted(line: &Line) -> String {
 /// line is the empty string). With `Style::PLAIN` these are exactly the
 /// `text` of each presented line.
 pub fn render_lines(lines: &[Line], style: Style) -> Vec<String> {
+    render_after(lines, style, &mut None)
+}
+
+/// Like `render_lines` for a call that follows earlier calls on the same
+/// stream: `last` is the group the stream's latest line was in. A first group
+/// equal to it continues it, with no blank line and no header; any other
+/// first group starts as a later group does. `last` is left at the group of
+/// the final line rendered. Not used without shape.
+fn render_after(lines: &[Line], style: Style, last: &mut Option<Group>) -> Vec<String> {
     let shown = present(lines);
     let paint = |l: &Line| if style.colour { painted(l) } else { text(l) };
     if !style.shape {
@@ -516,11 +524,14 @@ pub fn render_lines(lines: &[Line], style: Style) -> Vec<String> {
     }
     let mut out: Vec<String> = Vec::new();
     for (group, run) in groups(&shown) {
-        if !out.is_empty() {
+        let continued = out.is_empty() && *last == Some(group);
+        if !continued && (!out.is_empty() || last.is_some()) {
             out.push(String::new());
         }
-        if let Some(h) = group.header() {
-            out.push(if style.colour { sgr(BOLD, &h) } else { h });
+        if !continued {
+            if let Some(h) = group.header() {
+                out.push(if style.colour { sgr(BOLD, &h) } else { h });
+            }
         }
         for l in run {
             if is_topic_header(l) && !out.is_empty() && !out.last().is_some_and(|s| s.is_empty()) {
@@ -528,8 +539,18 @@ pub fn render_lines(lines: &[Line], style: Style) -> Vec<String> {
             }
             out.push(paint(l));
         }
+        *last = Some(group);
     }
     out
+}
+
+/// The group last written to each stream by this process, for a terminal.
+static LAST_STDOUT: std::sync::Mutex<Option<Group>> = std::sync::Mutex::new(None);
+static LAST_STDERR: std::sync::Mutex<Option<Group>> = std::sync::Mutex::new(None);
+
+fn render_stream(lines: &[Line], style: Style, last: &std::sync::Mutex<Option<Group>>) -> Vec<String> {
+    let mut g = last.lock().unwrap_or_else(|e| e.into_inner());
+    render_after(lines, style, &mut g)
 }
 
 /// `render_lines` joined by newlines, each line ended by one.
@@ -548,7 +569,7 @@ pub fn render(lines: &[Line], style: Style) -> String {
 /// all reach their reader never passes.
 pub fn print(lines: &[Line]) {
     let mut out = std::io::stdout().lock();
-    for l in render_lines(lines, stdout_style()) {
+    for l in render_stream(lines, stdout_style(), &LAST_STDOUT) {
         if let Err(e) = writeln!(out, "{}", l) {
             unwritable(e);
         }
@@ -582,7 +603,7 @@ fn unwritable(e: std::io::Error) -> ! {
 /// dressed on a terminal as standard output is (`stderr_style`).
 pub fn eprint(lines: &[Line]) {
     let mut err = std::io::stderr().lock();
-    for l in render_lines(lines, stderr_style()) {
+    for l in render_stream(lines, stderr_style(), &LAST_STDERR) {
         let _ = writeln!(err, "{}", l);
     }
 }
@@ -764,5 +785,27 @@ mod tests {
         let events = shaped.iter().position(|l| l.starts_with("asked:")).unwrap();
         assert_eq!(shaped[events - 1], "");
         assert_eq!(shaped.iter().filter(|l| !l.is_empty()).filter(|l| *l != "Findings" && *l != "Moves").cloned().collect::<Vec<_>>(), plain);
+    }
+
+    // adr: f3c9e736-157c-4197-b49e-19e3674e4e0c
+    //
+    // A later call on a terminal stream continues the group the stream
+    // ended in, and starts another group with a blank line and its header.
+    #[test]
+    fn a_later_call_continues_or_starts_a_group_on_one_stream() {
+        let shaped = Style { colour: false, shape: true };
+        let stop = |t: &str| [Line::Stop { command: Command::Show, text: t.to_string() }];
+        let mut last = None;
+        assert_eq!(render_after(&stop("a"), shaped, &mut last), vec!["Findings", "show: a"]);
+        assert_eq!(render_after(&stop("b"), shaped, &mut last), vec!["show: b"]);
+        let ev = [Line::Event(Event::TermsApproved)];
+        let got = render_after(&ev, shaped, &mut last);
+        assert_eq!(got[0], "");
+        assert_eq!(got.len(), 2);
+        assert_eq!(render_after(&stop("c"), shaped, &mut last), vec!["", "Findings", "show: c"]);
+        // Piped output ignores the state.
+        let mut none = None;
+        assert_eq!(render_after(&stop("a"), Style::PLAIN, &mut none), vec!["show: a"]);
+        assert_eq!(none, None);
     }
 }

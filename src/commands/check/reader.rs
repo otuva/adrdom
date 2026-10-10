@@ -13,8 +13,7 @@ use std::path::Path;
 /// byte or is gone whole; no row is edited or added by hand. A malformed row
 /// fails; a line new to every comparison point is judged by its shape alone.
 /// A missing file is fine: a fresh repository has no rows.
-pub(super) fn check_reader(root: &Path, source: &Source, since: Option<&str>, stops: &mut Vec<String>) -> Vec<Failure> {
-    let _ = stops;
+pub(super) fn check_reader(root: &Path, source: &Source, since: Option<&str>) -> Vec<Failure> {
     let content = source.read(root, repo::READER_PATH).unwrap_or_default();
     let parsed = reader::parse(&content);
     let mut out: Vec<Failure> = parsed

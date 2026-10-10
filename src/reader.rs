@@ -335,8 +335,10 @@ pub fn append(root: &Path, rows: &[Row]) -> Result<(), String> {
 }
 
 /// Like `append`, against the live sets a command read once for its run.
+/// The whole read-filter-write runs under an exclusive lock on the reader
+/// file, so a session that appends or rewrites at the same time loses no row.
 pub fn append_live(root: &Path, rows: &[Row], live: &Live) -> Result<(), String> {
-    use std::io::Write;
+    use std::io::{Read, Write};
     if rows.is_empty() {
         return Ok(());
     }
@@ -346,15 +348,32 @@ pub fn append_live(root: &Path, rows: &[Row], live: &Live) -> Result<(), String>
         text.push_str(&row_line(r));
         text.push('\n');
     }
-    let old = std::fs::read_to_string(&path).unwrap_or_default();
+    // Lock the file, then check the path still names the locked file: a
+    // rewrite by another session renames a new file over it.
+    let mut handle = loop {
+        let h = std::fs::OpenOptions::new()
+            .create(true)
+            .read(true)
+            .append(true)
+            .open(&path)
+            .map_err(msg::reader_write_failed)?;
+        h.lock().map_err(msg::reader_write_failed)?;
+        if same_file(&h, &path) {
+            break h;
+        }
+    };
+    let mut old = String::new();
+    // Bytes that are no text read as empty and so are never dropped.
+    if handle.read_to_string(&mut old).is_err() {
+        old.clear();
+    }
     // A file that does not end in a newline would glue its last line to the
     // first new row.
     let lead = if !old.is_empty() && !old.ends_with('\n') { "\n" } else { "" };
     let kept: Vec<&str> = old.lines().filter(|l| parse_row(l).map_or(true, |r| live.holds(&r))).collect();
     if kept.len() == old.lines().count() {
         let text = format!("{}{}", lead, text);
-        let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&path).map_err(msg::reader_write_failed)?;
-        return f.write_all(text.as_bytes()).map_err(msg::reader_write_failed);
+        return handle.write_all(text.as_bytes()).map_err(msg::reader_write_failed);
     }
     let mut all = String::new();
     for l in kept {
@@ -362,12 +381,28 @@ pub fn append_live(root: &Path, rows: &[Row], live: &Live) -> Result<(), String>
         all.push('\n');
     }
     all.push_str(&text);
-    let tmp = path.with_file_name(format!(".reader.tsv.{}", uuid::Uuid::new_v4()));
-    std::fs::write(&tmp, all).map_err(msg::reader_write_failed)?;
-    std::fs::rename(&tmp, &path).map_err(|e| {
+    let tmp = path.with_file_name(format!("reader.tsv.{}.tmp", uuid::Uuid::new_v4()));
+    let done = std::fs::write(&tmp, all).and_then(|_| std::fs::rename(&tmp, &path));
+    if let Err(e) = done {
         let _ = std::fs::remove_file(&tmp);
-        msg::reader_write_failed(e)
-    })
+        return Err(msg::reader_write_failed(e));
+    }
+    Ok(())
+}
+
+/// Whether `path` still names the file `handle` holds open.
+#[cfg(unix)]
+fn same_file(handle: &std::fs::File, path: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    match (handle.metadata(), std::fs::metadata(path)) {
+        (Ok(a), Ok(b)) => a.dev() == b.dev() && a.ino() == b.ino(),
+        _ => false,
+    }
+}
+
+#[cfg(not(unix))]
+fn same_file(_handle: &std::fs::File, _path: &Path) -> bool {
+    true
 }
 
 /// The reason and the word of a reply: the last non-empty line is the word,

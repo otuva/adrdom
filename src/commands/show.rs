@@ -532,6 +532,7 @@ fn topic_file_lines(r: &Records, rf: &RecordFile, views: Views) -> Vec<Line> {
         lines.extend(change_lines(prose, None, &r.names, true));
     }
     let shown = (views.neighbours).then(|| plan::load_shown_with(rf, &r.terms_list, led, &r.index().planning));
+    let by_body = plan::BodyIndex::of(rf);
     for (i, sec) in rf.sections.iter().enumerate() {
         let st = status::question_status(led, sec);
         let change = changes.questions.get(i).and_then(Option::as_ref);
@@ -547,7 +548,7 @@ fn topic_file_lines(r: &Records, rf: &RecordFile, views: Views) -> Vec<Line> {
             )),
         }
         if views.reader || !is_answered(st) {
-            lines.extend(reader_lines(r, rf, i, views.reader));
+            lines.extend(reader_lines(r, rf, i, views.reader, &by_body));
         }
         if views.neighbours && matches!(st, QuestionStatus::NoBody | QuestionStatus::NotAsked | QuestionStatus::Asked) {
             if let Some(q) = shown.as_ref().and_then(|p| p.questions.iter().find(|q| q.heading == sec.heading_text)) {
@@ -635,8 +636,8 @@ fn is_answered(st: QuestionStatus) -> bool {
 /// question's `supersedes:` line does not name (per "What does show print of
 /// the reader's word on a question?", 332ff0c7 A). A view: no move stands on
 /// a line.
-fn reader_lines(r: &Records, rf: &RecordFile, idx: usize, all: bool) -> Vec<Line> {
-    let words = r.index().planning.reader_words(rf, idx, &r.terms_list, &r.led);
+fn reader_lines(r: &Records, rf: &RecordFile, idx: usize, all: bool, by_body: &plan::BodyIndex) -> Vec<Line> {
+    let words = r.index().planning.reader_words(rf, idx, &r.terms_list, &r.led, by_body);
     let mut lines = Vec::new();
     for w in words {
         if all {

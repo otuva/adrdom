@@ -87,21 +87,20 @@ fn check_one_ref(root: &Path, line: &str, stops: &mut Vec<String>) -> Vec<Failur
     // byte or gone whole ("What does check hold of the reader's file?",
     // abb6faed-96f7-406d-8384-002ee81bb157).
     let mut out = Vec::new();
-    for (path, class) in [(repo::LEDGER_PATH, Class::Ledger), (repo::READER_PATH, Class::Reader)] {
-        let Some(remote_content) = repo::git(root, &["show", &format!("{}:{}", remote_sha, path)]) else {
-            // The remote commit holds no such file: nothing to compare.
-            continue;
-        };
-        let local_content = repo::git(root, &["show", &format!("{}:{}", local_sha, path)]).unwrap_or_default();
-        if class == Class::Reader {
-            if super::reader::push_edits_row(&remote_content, &local_content) {
-                out.push(Failure::said(class, msg::reader_push_row_edited(local_ref, remote_ref)));
-            }
-            continue;
-        }
+    // The ledger's drop rule.
+    if let Some(remote_content) = repo::git(root, &["show", &format!("{}:{}", remote_sha, repo::LEDGER_PATH)]) {
+        let local_content = repo::git(root, &["show", &format!("{}:{}", local_sha, repo::LEDGER_PATH)]).unwrap_or_default();
         let present: std::collections::HashSet<&str> = local_content.lines().collect();
         if super::ledger::lines_missing(&remote_content, &present) {
-            out.push(Failure::said(class, msg::ledger_push_drops_rows(local_ref, remote_ref)));
+            out.push(Failure::said(Class::Ledger, msg::ledger_push_drops_rows(local_ref, remote_ref)));
+        }
+    }
+    // The reader's edit rule. A remote commit that holds no such file has
+    // nothing to compare.
+    if let Some(remote_content) = repo::git(root, &["show", &format!("{}:{}", remote_sha, repo::READER_PATH)]) {
+        let local_content = repo::git(root, &["show", &format!("{}:{}", local_sha, repo::READER_PATH)]).unwrap_or_default();
+        if super::reader::push_edits_row(&remote_content, &local_content) {
+            out.push(Failure::said(Class::Reader, msg::reader_push_row_edited(local_ref, remote_ref)));
         }
     }
     out

@@ -328,13 +328,13 @@ fn decision_headings(all: &[RecordFile]) -> HashMap<String, String> {
 fn describe(
     key: &str,
     rf: &RecordFile,
-    by_body: &HashMap<String, usize>,
+    by_body: &dyn Fn(&str) -> Option<usize>,
     terms_list: &[Term],
     headings: &HashMap<String, String>,
     led: &Ledger,
 ) -> Option<(NKind, String, Target)> {
     if let Some(h) = key.strip_prefix("text:") {
-        let i = *by_body.get(h)?;
+        let i = by_body(h)?;
         return Some((NKind::Question, rf.sections[i].heading_text.clone(), Target::Question(i)));
     }
     if let Some(t) = terms_list.iter().find(|t| t.id.as_deref().unwrap_or(&t.name) == key) {
@@ -454,13 +454,27 @@ pub struct ReaderWord {
     pub on_supersedes: bool,
 }
 
+/// The sections of one file with a body, by the hash of the body, in file
+/// order. Built once per file for `Shared::reader_words`.
+pub struct BodyIndex(HashMap<String, Vec<usize>>);
+
+impl BodyIndex {
+    pub fn of(rf: &RecordFile) -> BodyIndex {
+        let mut m: HashMap<String, Vec<usize>> = HashMap::new();
+        for (j, sec) in rf.sections.iter().enumerate().filter(|(_, s)| !s.is_skeleton) {
+            m.entry(record::body_hash(rf, sec)).or_default().push(j);
+        }
+        BodyIndex(m)
+    }
+}
+
 impl Shared {
     /// Every word the reader gave on the question at `idx` of `rf`, whatever
     /// its status: its rows are those at the hash of its body, or of its
     /// heading when it has none, written with the prompt and model that
     /// would read the pair now, the latest row for each neighbour. A
     /// neighbour that names nothing now is left out.
-    pub fn reader_words(&self, rf: &RecordFile, idx: usize, terms_list: &[Term], led: &Ledger) -> Vec<ReaderWord> {
+    pub fn reader_words(&self, rf: &RecordFile, idx: usize, terms_list: &[Term], led: &Ledger, by_body: &BodyIndex) -> Vec<ReaderWord> {
         let sec = &rf.sections[idx];
         let hash = if sec.is_skeleton { record::heading_hash(sec) } else { record::body_hash(rf, sec) };
         let Some(at) = self.by_hash.get(&hash) else { return Vec::new() };
@@ -472,15 +486,12 @@ impl Shared {
                 order.push(r.neighbour.as_str());
             }
         }
-        let mut by_body: HashMap<String, usize> = HashMap::new();
-        for (j, other) in rf.sections.iter().enumerate().filter(|&(j, o)| j != idx && !o.is_skeleton) {
-            by_body.entry(record::body_hash(rf, other)).or_insert(j);
-        }
+        let lookup = |h: &str| by_body.0.get(h).and_then(|js| js.iter().copied().find(|&j| j != idx));
         let targets = line_targets(idx, rf, terms_list, &self.phrase_lookup, &self.cross, led);
         let mut out = Vec::new();
         for key in order {
             let r = last[key];
-            let Some((_, name, target)) = describe(key, rf, &by_body, terms_list, &self.headings, led) else { continue };
+            let Some((_, name, target)) = describe(key, rf, &lookup, terms_list, &self.headings, led) else { continue };
             out.push(ReaderWord {
                 name,
                 word: r.word.clone(),
@@ -531,7 +542,7 @@ fn load_inner(
         let mut out = Vec::new();
         for key in order {
             let r = last[key];
-            let Some((kind, name, target)) = describe(key, rf, &by_body, terms_list, headings, led) else {
+            let Some((kind, name, target)) = describe(key, rf, &|h| by_body.get(h).copied(), terms_list, headings, led) else {
                 continue;
             };
             out.push(Neighbour {

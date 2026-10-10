@@ -202,20 +202,29 @@ input.filter:focus-visible { outline: 2px solid var(--hold); outline-offset: 1px
 .record, .status, .finding { margin: 0.2rem 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .status .status-name { color: var(--muted); font-size: 0.85em; }
 .finding .rule { font-weight: 700; }
+.finding { color: var(--wait); }
 .move { margin: 0.2rem 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); font-size: 0.92rem; }
 .move.owner { color: var(--hold); font-weight: 700; }
 .word { margin: 0.1rem 0 0.1rem 1rem; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); }
 .word.word-inconsistent .word-name, .word.word-same .word-name { font-weight: 700; }
-.event { margin: 0.1rem 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.word.word-consistent, .word.word-depends, .word.word-unrelated { opacity: 0.75; }
+.word.word-inconsistent { color: var(--refuse); }
+.word.word-same { color: var(--wait); }
+.event { margin: 0.1rem 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--hold); }
 .banner p { margin: 0.15rem 0; }
 .failures .finding { padding-left: 1.1rem; text-indent: -1.1rem; margin: 0.15rem 0; color: var(--refuse); }
 .notes .finding { padding-left: 1.1rem; text-indent: -1.1rem; margin: 0.15rem 0; color: var(--muted); }
+.finding.stop { color: var(--refuse); }
 .failures .finding::before, .notes .finding::before { content: "\2022\00a0\00a0"; }
 .topic .path .record { margin: 0 0 0.6rem; font-size: 0.85rem; font-weight: 400; color: var(--muted); }
 .state .status { margin: 0.3rem 0; }
 .state.waiting .status { color: var(--muted); }
 .state.done .status { color: var(--hold); }
 .state.done .status-name, .state.waiting .status-name { color: inherit; font-size: inherit; }
+.status .status-name.s-answered, .status .status-name.s-approved { color: var(--hold); }
+.status .status-name.s-refused, .status .status-name.s-removed, .status .status-name.s-retired { color: var(--refuse); }
+.status .status-name.s-superseded, .status .status-name.s-withdrawn, .status .status-name.s-dropped { opacity: 0.6; }
+.status .status-name.s-asked, .status .status-name.s-changed, .status .status-name.s-new { color: var(--wait); }
 .change { margin: 0.5rem 0; padding: 0.4rem 0; }
 .change .record { margin: 0.1rem 0; }
 .change .record.depth-1 { padding-left: 1rem; }
@@ -261,14 +270,4 @@ dl.decisions dt .status { margin: 0; }
 /* --- the groups of lines, as the terminal heads them --- */
 .group > h3 { margin: 0.8rem 0 0.2rem; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
 .failures .group > h3, .notes .group > h3 { margin-top: 0.2rem; }
-.status .status-name.s-answered, .status .status-name.s-approved { color: var(--hold); }
-.status .status-name.s-refused, .status .status-name.s-removed, .status .status-name.s-retired { color: var(--refuse); }
-.status .status-name.s-superseded, .status .status-name.s-withdrawn, .status .status-name.s-dropped { opacity: 0.6; }
-.event { color: var(--hold); }
-.word.word-consistent, .word.word-depends, .word.word-unrelated { opacity: 0.75; }
-.status .status-name.s-asked, .status .status-name.s-changed, .status .status-name.s-new { color: var(--wait); }
-.finding { color: var(--wait); }
-.finding.stop { color: var(--refuse); }
-.word.word-inconsistent { color: var(--refuse); }
-.word.word-same { color: var(--wait); }
 .move.not-yet { opacity: 0.7; }

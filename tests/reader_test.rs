@@ -512,3 +512,39 @@ fn an_append_starts_a_new_line_when_the_file_does_not_end_with_one() {
     assert_eq!(std::fs::read_to_string(reader_path(&dir)).unwrap(), want);
     assert_eq!(reader::read_file(&dir).rows.len(), 2);
 }
+
+// adr: 90714223-52e3-4bb9-b0b4-2a8b87d74145
+#[test]
+fn concurrent_appends_with_drops_lose_no_row() {
+    use std::io::Write;
+    let (dir, _rf) = repo_with_records();
+    let threads = 4;
+    let each = 25;
+    std::thread::scope(|s| {
+        for t in 0..threads {
+            let dir = &dir;
+            s.spawn(move || {
+                for i in 0..each {
+                    // A row whose text is gone, so the next append rewrites the file.
+                    let mut gone = live_row("Does a question that was struck?", "id-1", "same", 1);
+                    gone.reason = format!("gone t{} i{}", t, i);
+                    let mut f = std::fs::OpenOptions::new().append(true).open(reader_path(dir)).unwrap();
+                    f.write_all(format!("{}\n", reader::row_line(&gone)).as_bytes()).unwrap();
+                    drop(f);
+                    let mut live = live_row("Does W?", "id-1", "same", 1);
+                    live.reason = format!("live t{} i{}", t, i);
+                    reader::append(dir, &[live]).unwrap();
+                }
+            });
+        }
+    });
+    let got = std::fs::read_to_string(reader_path(&dir)).unwrap();
+    for t in 0..threads {
+        for i in 0..each {
+            assert!(got.contains(&format!("live t{} i{}", t, i)), "row t{} i{} lost", t, i);
+        }
+    }
+    let state = dir.join("adrdom/state");
+    let stray: Vec<_> = std::fs::read_dir(state).unwrap().filter_map(|e| e.ok()).filter(|e| e.file_name().to_string_lossy().ends_with(".tmp")).collect();
+    assert!(stray.is_empty());
+}
