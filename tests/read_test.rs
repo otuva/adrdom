@@ -222,7 +222,7 @@ fn a_commit_never_runs_the_reader() {
     run_git(&dir, &["add", "-A"]);
     let bin_dir = adr_bin().parent().unwrap().to_path_buf();
     let path = format!("{}:{}", bin_dir.display(), std::env::var("PATH").unwrap_or_default());
-    let out = std::process::Command::new("git")
+    let out = scrubbed(std::process::Command::new("git"))
         .current_dir(&dir)
         .args(["commit", "-q", "-m", "chore: commit with no model and no reader"])
         .env("PATH", path)

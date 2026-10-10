@@ -234,3 +234,21 @@ aliases: moves
 id: ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862
 definition: The report of one rule that one thing in the records breaks.
 aliases: findings
+
+## session
+id: 3afef03f-9017-4638-9759-e010d44d536b
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2
+definition: One run of an agent, from open to close.
+aliases: sessions
+
+## planner
+id: 3aedf314-f25f-49cb-b7b3-d2302e4543ca
+terms: plans=94677ed8-eaf6-46e2-bc71-7392fa0805bf, session=3afef03f-9017-4638-9759-e010d44d536b
+definition: A session that makes plans.
+aliases: planners
+
+## builder
+id: c49997ee-10e7-48e0-b66b-43f8b09758a6
+terms: decisions=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, session=3afef03f-9017-4638-9759-e010d44d536b
+definition: A session that builds decisions.
+aliases: builders

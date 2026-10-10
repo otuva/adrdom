@@ -5,8 +5,9 @@ questions in markdown topic files under `adrdom/decisions/`, answered only by th
 repository's owner, and recorded in an append-only ledger at
 `adrdom/state/ledger.tsv`; a separate check reports a current decision with no
 `adr: <uuid>` reference in the code as untested, in one line per decision, and
-fails a reference to a decision that is not current; an `adr-code: <uuid>`
-comment on code names a decision and is not counted as a test.
+reports a reference to a decision that is not current without failing; an
+`adr-code: <uuid>` comment on code names a decision and is not counted as a
+test.
 
 ## Build
 
@@ -114,6 +115,16 @@ runtime dependencies beyond `git` on `PATH`.
   nothing. `--message` reads the commit message for banned words alone,
   the staged files being judged by the pre-commit hook; at a merge, which
   git commits with no pre-commit hook, it judges the staged files too.
+  At a commit in a planner's session it fails every staged path outside
+  `adrdom/`.
+
+A session is one run of an agent, known by the identifier its agent
+program sets in the environment (`CLAUDE_CODE_SESSION_ID`). `adr plan` and
+`adr ask` on a topic file make the session a planner: the identifier and
+the word `planner` go to `adrdom/state/roles.tsv`, which git does not
+track; the mark prints no line. In a
+planner's session every build move opens with `builder` in place of
+`agent`. With no identifier in the environment nothing of this applies.
 
 A command that writes prints one line per ledger row it appends, and one
 per file it writes that no such row covers, or on standard error the

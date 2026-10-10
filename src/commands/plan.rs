@@ -70,6 +70,14 @@ pub fn run(file: PathBuf) -> i32 {
             return 1;
         }
     };
+    // Planning a topic file that loads makes the session a planner
+    // (6c406624), whatever the run finds after.
+    if let Err(e) = crate::session::mark_planner(&root) {
+        out::eprint(&[out::refusal(Command::Plan,
+            &msg::write_failed(repo::ROLES_PATH, &e, msg::Next::owner("repairs or removes the file")),
+        )]);
+        return 1;
+    }
     rf.rel = rel;
     match plan_file(&root, &rf) {
         Ok(lines) => {

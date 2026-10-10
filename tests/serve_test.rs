@@ -36,7 +36,7 @@ impl Drop for Served {
 /// caller reads its `open:` line off stdout.
 fn spawn_owner(dir: &Path, args: &[&str]) -> Served {
     Served(
-        Command::new(adr_bin())
+        scrubbed(Command::new(adr_bin()))
             .current_dir(dir)
             .args(args)
             .env_remove("CLAUDECODE")
@@ -684,7 +684,7 @@ fn serve_refuses_without_an_interactive_terminal() {
     // 9.2 A: the owner gate is stdin being a TTY, not an env var. A
     // non-interactive stdin (Stdio::null() here) refuses regardless.
     let dir = setup_repo_with_open_question();
-    let out = Command::new(adr_bin())
+    let out = scrubbed(Command::new(adr_bin()))
         .current_dir(&dir)
         .args(["serve", "--port", "0"])
         .env_remove("CLAUDECODE")

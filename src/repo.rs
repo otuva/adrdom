@@ -11,6 +11,11 @@ pub const DECISIONS_DIR: &str = "adrdom/decisions";
 pub const STATE_DIR: &str = "adrdom/state";
 /// The append-only ledger of every act (`ask`, `answer`, `approve`, ...).
 pub const LEDGER_PATH: &str = "adrdom/state/ledger.tsv";
+/// The roles file: an untracked file holding one `<identifier>\t<word>` line
+/// for each session that took a role ("Does the ledger hold the planners?",
+/// 1cec44fc: no; an untracked file under adrdom/state holds the identifier
+/// and the word). `install`'s gitignore keeps it out of git.
+pub const ROLES_PATH: &str = "adrdom/state/roles.tsv";
 /// The reader's file: one row for each word the reader gave on a pair of
 /// texts (`reader::Row`). Held by `check` the way the ledger is.
 pub const READER_PATH: &str = "adrdom/state/reader.tsv";
@@ -41,7 +46,8 @@ pub const BAN_LIST: &str = "adrdom/state/banned.sha256";
 pub const GITATTRIBUTES_PATH: &str = "adrdom/.gitattributes";
 
 /// Where `adr install` writes the rule that keeps the index and the model out
-/// of git ("Does git track a file the tool can get again without the owner?").
+/// of git ("Does git track a file the tool can get again without the owner?")
+/// and the roles file too (1cec44fc).
 /// Its content is `commands::install::GITIGNORE_CONTENT`; `check`'s `install`
 /// check reads this path the same way it reads `GITATTRIBUTES_PATH`.
 pub const GITIGNORE_PATH: &str = "adrdom/.gitignore";
@@ -151,6 +157,19 @@ fn index_link_paths(listing: &[u8]) -> std::collections::HashSet<String> {
             meta.starts_with("120000 ").then(|| name.to_string())
         })
         .collect()
+}
+
+/// The paths staged for the next commit, one entry per path, renames shown
+/// as a delete and an add; those deleted in the index are left out unless
+/// `with_deleted`.
+pub fn staged_paths(root: &Path, with_deleted: bool) -> Option<Vec<String>> {
+    // No env is cleared: git honours an inherited GIT_INDEX_FILE, as the
+    // hooks run it.
+    let mut args = vec!["diff", "--cached", "--name-only", "--no-renames"];
+    if !with_deleted {
+        args.push("--diff-filter=d");
+    }
+    git_paths(root, &args)
 }
 
 /// The paths a git listing command prints (`ls-files`, `diff --name-only`),

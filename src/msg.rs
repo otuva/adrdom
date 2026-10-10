@@ -18,6 +18,8 @@ use std::fmt::Display;
 pub enum Actor {
     Agent,
     Owner,
+    /// The agent of a planner's session, when it takes a build move.
+    Builder,
 }
 
 /// One or more next-move clauses, joined with `, `. `Next::agent(..)`
@@ -39,6 +41,11 @@ impl Next {
     /// `agent <action>`: an action in words, no command line in it.
     pub fn agent(action: impl Into<String>) -> Next {
         Next(vec![(Actor::Agent, action.into())])
+    }
+
+    /// `builder <action>`: the build move in a planner's session.
+    pub fn builder(action: impl Into<String>) -> Next {
+        Next(vec![(Actor::Builder, action.into())])
     }
 
     /// `agent runs: <command>`.
@@ -88,6 +95,7 @@ impl Next {
                 let who = match actor {
                     Actor::Agent => "agent",
                     Actor::Owner => "owner",
+                    Actor::Builder => "builder",
                 };
                 format!("{} {}", who, action)
             })
@@ -182,7 +190,7 @@ pub fn stdin_read_failed(next: Next) -> String {
 pub fn stdout_write_failed(e: impl Display, actor: Actor, again: Cmd) -> String {
     let fix = "frees the place standard output goes to";
     let next = match actor {
-        Actor::Agent => Next::agent_then_runs(fix, again),
+        Actor::Agent | Actor::Builder => Next::agent_then_runs(fix, again),
         Actor::Owner => Next::owner_then_runs(fix, again),
     };
     refuse(format!("output: standard output cannot be written: {}", e), next)
@@ -213,7 +221,7 @@ pub fn not_a_repo(cmd: &str, args: &[&str], actor: Actor) -> String {
     // first: the command itself is run again from inside a repository.
     let step = format!("changes into a git repository and runs: {}", command);
     let next = match actor {
-        Actor::Agent => Next::agent(step),
+        Actor::Agent | Actor::Builder => Next::agent(step),
         Actor::Owner => Next(vec![(Actor::Owner, step)]),
     };
     refuse(format!("{}: not inside a git repository", cmd), next)
@@ -2089,17 +2097,18 @@ pub fn ledger_same_time_competition(time: &str, subject: &str) -> Said {
     )
 }
 
-/// `locations` are the `path:line` places the tag was found at.
-pub fn stale_test(id: &str, heading: Option<&str>, locations: &[String]) -> Said {
+/// `locations` are the `path:line` places the tag was found at; `mv` is the
+/// retie move (`moves::MoveKind::Retie`) that clears it.
+pub fn stale_test(id: &str, heading: Option<&str>, locations: &[String], mv: &str) -> Said {
     let at = if locations.is_empty() {
         String::new()
     } else {
         format!(", at {}", locations.join(", "))
     };
-    said(
+    said_raw(
         &crate::rule::TEST_TIE_NAMES_CURRENT_DECISION,
         format!("{} tied to a test and not a current decision{}", named(id, heading), at),
-        Next::agent("removes the tie comment from the test, or points it at the current decision"),
+        mv,
     )
 }
 
@@ -2735,7 +2744,7 @@ mod tests {
             ledger_since_drops_rows("abc123").text(),
             ledger_since_unreadable("abc123"),
             ledger_same_time_competition("2024-01-01T00:00:00Z", "id id-1").text(),
-            stale_test("id-1", None, &["x.rs:3".to_string()]).text(),
+            stale_test("id-1", None, &["x.rs:3".to_string()], "agent removes the tie comment from the test").text(),
             duplicate_heading_in_file("heading", "x.md").text(),
             duplicate_heading_across_files("heading", "x.md", "y.md").text(),
             bad_topic_file_name("adrdom/decisions/Bad_Name.md", "adrdom/decisions/bad-name.md").text(),
@@ -3014,3 +3023,34 @@ pub fn removal_holds_open(rel: &str, hold: &crate::moves::RemovalHold) -> Said {
 }
 
 
+
+/// A commit in a planner's session that stages paths outside adrdom: the
+/// first `named` paths, then "and N more".
+pub fn planner_commit_outside(paths: &[String], named: usize) -> Said {
+    let shown = paths.iter().take(named).cloned().collect::<Vec<_>>().join(", ");
+    let rest = paths.len().saturating_sub(named);
+    let more = if rest > 0 { format!(" and {} more", rest) } else { String::new() };
+    said(
+        &crate::rule::PLANNER_COMMIT_STAYS_IN_ADRDOM,
+        format!("this planner's commit stages {}{} outside adrdom", shown, more),
+        Next::builder("commits those paths, and this commit keeps adrdom only"),
+    )
+}
+
+/// The roles file of a session with an identifier cannot be read, at a commit.
+pub fn planner_roles_unreadable(path: &str, err: &std::io::Error) -> Said {
+    said(
+        &crate::rule::PLANNER_COMMIT_STAYS_IN_ADRDOM,
+        format!("{} cannot be read: {}; the role of this session is unknown", path, err),
+        Next::owner("repairs or removes the file"),
+    )
+}
+
+/// The staged paths of a planner's commit could not be read from git.
+pub fn planner_staged_unreadable() -> Said {
+    said(
+        &crate::rule::PLANNER_COMMIT_STAYS_IN_ADRDOM,
+        "the staged paths of this planner's commit could not be read from git",
+        Next::agent("fixes the git repository, then commits again"),
+    )
+}

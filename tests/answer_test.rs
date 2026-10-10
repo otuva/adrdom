@@ -1337,7 +1337,7 @@ fn owner_commands_refuse_without_a_tty_and_run_with_one() {
             record.to_str().unwrap()
         );
         let run = || {
-            std::process::Command::new("script")
+            scrubbed(std::process::Command::new("script"))
                 .current_dir(&dir)
                 .args(["-q", "-e", "-c", &cmd, "/dev/null"])
                 .output()

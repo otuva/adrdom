@@ -1,5 +1,4 @@
 use crate::rules::Class;
-use super::Failure;
 use crate::ledger::Ledger;
 use crate::rules::{Finding, Subject};
 use crate::msg;
@@ -51,8 +50,8 @@ pub(super) fn check_tests(
     led: &Ledger,
     tests: Option<&HashMap<String, Vec<String>>>,
     source: &Source,
-) -> (Vec<Failure>, Vec<Finding>) {
-    let mut out = Vec::new();
+    role: crate::session::Role,
+) -> Vec<Finding> {
     let mut notes = Vec::new();
 
     let current: HashSet<String> = records
@@ -100,7 +99,7 @@ pub(super) fn check_tests(
         let mv = if rf.tiers.is_none() {
             crate::moves::Move::new(crate::moves::MoveKind::BuildWaitsTiers { heading: rf.sections[i].heading_text.clone() })
         } else {
-            crate::moves::of_untested(rf, i, id)
+            crate::moves::of_untested(rf, i, id, role)
         };
         notes.push(
             Finding::said(Class::Untested, msg::untested(&rf.rel, &rf.sections[i].heading_text, &mv.text()))
@@ -114,9 +113,16 @@ pub(super) fn check_tests(
     stale.sort();
     for (id, locations) in stale {
         let heading = place.get(id.as_str()).map(|&(rf, i)| rf.sections[i].heading_text.as_str());
-        out.push(Failure::said(Class::Tested, msg::stale_test(id, heading, locations)));
+        // The tie moves to the current decisions that took the decision's
+        // place, or goes when none did (2381d759): a note, never a failure.
+        let to: Vec<(String, String)> = crate::state::current_successors(led, id)
+            .into_iter()
+            .filter_map(|n| place.get(n.as_str()).map(|&(rf, i)| (rf.sections[i].heading_text.clone(), n.clone())))
+            .collect();
+        let mv = crate::moves::Move::new(crate::moves::MoveKind::Retie { to }).in_session(role);
+        notes.push(Finding::said(Class::Tested, msg::stale_test(id, heading, locations, &mv.clause_text())));
     }
 
-    (out, notes)
+    notes
 }
 

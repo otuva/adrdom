@@ -106,9 +106,9 @@ fn check_passes_a_refusal_line_with_its_matching_row() {
 // "a refused question closes with no decision and no test (check does not
 // demand a tie for it)": `check` never reports the refused id as
 // `untested`, even though nothing ties to it -- and a tie somebody wrote
-// anyway is reported `stale`, since there is no decision left to test.
+// anyway is reported (2381d759): there is no decision left to test.
 #[test]
-fn check_a_refused_id_is_never_untested_but_a_tie_to_it_is_stale() {
+fn check_a_refused_id_is_never_untested_but_a_tie_to_it_is_reported() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
@@ -129,8 +129,8 @@ fn check_a_refused_id_is_never_untested_but_a_tie_to_it_is_stale() {
     );
     assert!(
         line_with(&text, &REFUSABLE_ID, " tied to a test and not a current decision")
-            && text.contains("every test tie names a current decision; agent removes the tie comment from the test"),
-        "a tie to a refused id must be stale: {}",
+            && text.contains("a test tie names the decision in force; agent removes the tie comment from the test"),
+        "a tie to a refused id must be reported: {}",
         text
     );
 }

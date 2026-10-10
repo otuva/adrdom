@@ -16,6 +16,8 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mover {
     Agent,
+    /// The agent in a planner's session, for a build move (8f81dee1).
+    Builder,
     Owner,
     NotYet,
 }
@@ -52,6 +54,10 @@ pub enum MoveKind {
     Refused { heading: String },
     /// The agent builds a decision and ties a test to it.
     Build { heading: String, id: String },
+    /// The agent moves a test's tie from a decision that is not current to
+    /// the current decisions (heading, id) that took its place, or removes it
+    /// when none did (2381d759).
+    Retie { to: Vec<(String, String)> },
     /// An answered decision built once the question beside it is answered.
     BuildWaits { heading: String, beside: String },
     /// An answered decision built once the plan changes: the question
@@ -68,15 +74,37 @@ pub enum MoveKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Move {
     pub kind: MoveKind,
+    /// The role of the session the move is computed in: a build move prints
+    /// with builder in place of agent in a planner's session.
+    pub session: crate::session::Role,
 }
 
 impl Move {
     pub fn new(kind: MoveKind) -> Move {
-        Move { kind }
+        Move { kind, session: crate::session::Role::Plain }
     }
 
-    /// Who takes the move, fixed by its kind.
+    /// The move as computed in a session of `session`.
+    pub fn in_session(mut self, session: crate::session::Role) -> Move {
+        self.session = session;
+        self
+    }
+
+    /// A build move's words open with the mover `actor` names: builder in a
+    /// planner's session, agent in any other.
+    fn build_mover(&self, action: String) -> Next {
+        match self.actor() {
+            Mover::Builder => Next::builder(action),
+            _ => Next::agent(action),
+        }
+    }
+
+    /// Who takes the move, fixed by its kind (and, for a build, the role of
+    /// the session).
     pub fn actor(&self) -> Mover {
+        if matches!(self.kind, MoveKind::Build { .. } | MoveKind::Retie { .. }) && self.session == crate::session::Role::Planner {
+            return Mover::Builder;
+        }
         match &self.kind {
             MoveKind::Approve { .. } | MoveKind::Answer { .. } => Mover::Owner,
             MoveKind::AnswerWaits { .. }
@@ -90,6 +118,7 @@ impl Move {
             | MoveKind::Ask { .. }
             | MoveKind::Refused { .. }
             | MoveKind::Build { .. }
+            | MoveKind::Retie { .. }
             | MoveKind::SupersedeMarkedPairs => Mover::Agent,
         }
     }
@@ -114,7 +143,18 @@ impl Move {
                 heading
             )),
             MoveKind::Build { heading, id } => {
-                Next::agent(format!("builds \"{}\" and puts \"adr: {}\" in a test that shows it", heading, id))
+                let action = format!("builds \"{}\" and puts \"adr: {}\" in a test that shows it", heading, id);
+                self.build_mover(action)
+            }
+            MoveKind::Retie { to } => {
+                let action = if to.is_empty() {
+                    "removes the tie comment from the test".to_string()
+                } else {
+                    let list: Vec<String> =
+                        to.iter().map(|(h, id)| format!("\"{}\" (\"adr: {}\")", h, id)).collect();
+                    format!("moves the tie to the current decision {}", list.join(" and "))
+                };
+                self.build_mover(action)
             }
             MoveKind::SupersedeMarkedPairs => {
                 Next::agent("writes a question that supersedes one decision of each same or inconsistent pair")
@@ -347,6 +387,7 @@ pub fn of_topic_file(
     findings: &[Finding],
     tests: &HashMap<String, Vec<String>>,
     planning: &crate::plan::Planning,
+    role: crate::session::Role,
 ) -> Vec<Move> {
     if rf.tiers.is_none() {
         if findings.is_empty() {
@@ -404,7 +445,7 @@ pub fn of_topic_file(
                 if state::conflicting_rulings(led, id).is_some() {
                     continue;
                 }
-                let m = of_untested(rf, i, id);
+                let m = of_untested(rf, i, id, role);
                 match m.kind {
                     MoveKind::Build { .. } => build.push(m),
                     _ => build_waits.push(m),
@@ -533,7 +574,7 @@ pub fn of_topic_file_judged(
     // planning moves wait on them.
     let mut findings = findings;
     findings.extend(index.records().iter().cloned());
-    let mut moves = of_topic_file(&rf, led, plan_ok, &findings, tests, &planning);
+    let mut moves = of_topic_file(&rf, led, plan_ok, &findings, tests, &planning, crate::session::role(root));
     // While adrdom/terms.md is not approved, approve, ask and answer stop on
     // it: its gate is the file's finding, and their moves wait on it.
     let gate = crate::rules::terms_gate(root, led, &rf.rel);
@@ -560,7 +601,7 @@ pub fn of_topic_file_judged(
 /// on a decision before its tier is fully answered?"). The same move
 /// `of_topic_file` names for it; what `check` prints beside an untested
 /// decision.
-pub fn of_untested(rf: &RecordFile, i: usize, id: &str) -> Move {
+pub fn of_untested(rf: &RecordFile, i: usize, id: &str, role: crate::session::Role) -> Move {
     let heading = rf.sections[i].heading_text.clone();
     // A question beside it that still waits for an answer is named ahead of
     // a refused one: the refused one has its own line, and the answer is
@@ -570,7 +611,7 @@ pub fn of_untested(rf: &RecordFile, i: usize, id: &str) -> Move {
             Move::new(MoveKind::BuildWaitsRefused { heading, beside: s.heading_text.clone() })
         }
         Some(s) => Move::new(MoveKind::BuildWaits { heading, beside: s.heading_text.clone() }),
-        None => Move::new(MoveKind::Build { heading, id: id.to_string() }),
+        None => Move::new(MoveKind::Build { heading, id: id.to_string() }).in_session(role),
     }
 }
 
@@ -862,6 +903,12 @@ mod tests {
         assert_eq!(Move::new(MoveKind::Plan { rel: "x.md".into() }).actor(), Mover::Agent);
         assert_eq!(Move::new(MoveKind::BuildWaits { heading: "h".into(), beside: "b".into() }).actor(), Mover::NotYet);
         assert_eq!(of_removed_topic_file("x.md", Vec::new()).moves[0].actor(), Mover::Owner);
+        let build = || Move::new(MoveKind::Build { heading: "h".into(), id: "i".into() });
+        assert_eq!(build().actor(), Mover::Agent);
+        assert!(build().text().starts_with("agent builds"));
+        let b = build().in_session(crate::session::Role::Planner);
+        assert_eq!(b.actor(), Mover::Builder);
+        assert!(b.text().starts_with("builder builds"), "{}", b.text());
     }
 
     // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
