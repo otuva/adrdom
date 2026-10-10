@@ -272,9 +272,11 @@ Standard: every diagnostic carries a stable code that documentation and tests ke
 **Answer:** A
 
 ### What does show print of a file under adrdom?
-depends: move, status, Does a command print under a flag what it computes from the records?, Does show print what a file holds beyond its latest approval?
-supersedes: What does show print of the file named?
-unrelated: What does show print with no file named?, What does the tool keep of the reader's word?, Does the tool keep everything it owns under one directory?, Does the ui show what the terminal prints?, terms brief, topic file, ledger, Does check print a line that names no move?, What does check do with a fault on a file awaiting approval?, Does an answer carry the version of the question the owner read?, What does a test carry to name its decision?
+depends: d904dc0d-231f-4e93-ac74-7babe888107d, 209081f4-864f-4ef6-8909-65da87f135e5, 36dfbeaa-698d-4a57-b3b0-d425348e14a5, bceceda8-133a-4c9b-b439-b5c1a4414a02
+supersedes: dce141e9-7d2e-4b70-b317-9f3d70bf5a69
+unrelated: c84a4bd9-fc2d-44f0-b333-172978f61544, 08a1b488-32fc-4dc7-b4b3-93a6e768725f, 16a71892-b348-4b9b-82c5-a9d375187bd3, 7857d633-2055-47eb-857f-cb70da9fa7ba, 7d44030a-3589-4f29-aaa6-12fa09908ab8, 08193e75-dd89-4857-8e9f-b19e1a9e75e6, e18b82d8-5271-4385-bbab-2b89e5da278f, 3fc35d4f-90f3-4425-9dac-951a89631fdf, 05141f49-d9d2-407c-b60c-ebb195a05864, 11be073c-ce91-44d8-833a-ef0b5e0b1672, 4319a653-6901-446c-94ab-6420ef472134
+id: a6f41dee-2381-421a-bcc4-b14af243209b
+terms: answers=b36113a1-1384-4e4c-a798-8399f4181366, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approves=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, asked=3c8d4c9c-abca-4faa-b7c1-aae39951376c, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, move=d904dc0d-231f-4e93-ac74-7babe888107d, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, status=209081f4-864f-4ef6-8909-65da87f135e5
 
 Problem: show exists so that the one who runs it reads what their next move on the file needs, whatever kind of file it is.
 Standard: a listing prints what the next move reads and takes a flag for the rest.
