@@ -69,7 +69,9 @@ fn role_of(root: &Path, id: &str) -> std::io::Result<Role> {
     let line = format!("{}\t{}", id, PLANNER_WORD);
     let found = match std::fs::read(root.join(crate::repo::ROLES_PATH)) {
         Ok(bytes) => {
-            if bytes.split(|b| *b == b'\n').any(|l| l == line.as_bytes()) { Role::Planner } else { Role::Plain }
+            // A line edited to CRLF still reads.
+            let held = bytes.split(|b| *b == b'\n').any(|l| l.strip_suffix(b"\r").unwrap_or(l) == line.as_bytes());
+            if held { Role::Planner } else { Role::Plain }
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Role::Plain,
         Err(e) => return Err(e),

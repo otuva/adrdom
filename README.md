@@ -122,7 +122,7 @@ A session is one run of an agent, known by the identifier its agent
 program sets in the environment (`CLAUDE_CODE_SESSION_ID`). `adr plan` and
 `adr ask` on a topic file make the session a planner: the identifier and
 the word `planner` go to `adrdom/state/roles.tsv`, which git does not
-track. In a
+track; the mark prints no line. In a
 planner's session every build move opens with `builder` in place of
 `agent`. With no identifier in the environment nothing of this applies.
 

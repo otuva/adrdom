@@ -154,3 +154,13 @@ fn a_planner_line_beside_invalid_utf8_still_counts() {
     run_git(&dir, &["add", "src/x.rs"]);
     assert_refused_naming(&commit(&dir, Some(PLANNER)), "src/x.rs");
 }
+
+#[test]
+fn a_planner_line_edited_to_crlf_still_counts() {
+    // adr: db07a54d-4d80-4035-a9ef-eabcc0c872b3
+    let dir = planner_repo();
+    std::fs::write(dir.join("adrdom/state/roles.tsv"), format!("{}\tplanner\r\n", PLANNER)).unwrap();
+    std::fs::write(dir.join("src/x.rs"), "fn x() {}\n").unwrap();
+    run_git(&dir, &["add", "src/x.rs"]);
+    assert_refused_naming(&commit(&dir, Some(PLANNER)), "src/x.rs");
+}

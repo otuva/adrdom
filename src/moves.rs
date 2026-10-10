@@ -92,6 +92,15 @@ impl Move {
 
     /// Who takes the move, fixed by its kind (and, for a build, the role of
     /// the session).
+    /// A build move's words open with the mover `actor` names: builder in a
+    /// planner's session, agent in any other.
+    fn build_mover(&self, action: String) -> Next {
+        match self.actor() {
+            Mover::Builder => Next::builder(action),
+            _ => Next::agent(action),
+        }
+    }
+
     pub fn actor(&self) -> Mover {
         if matches!(self.kind, MoveKind::Build { .. } | MoveKind::Retie { .. }) && self.session == crate::session::Role::Planner {
             return Mover::Builder;
@@ -135,10 +144,7 @@ impl Move {
             )),
             MoveKind::Build { heading, id } => {
                 let action = format!("builds \"{}\" and puts \"adr: {}\" in a test that shows it", heading, id);
-                match self.session {
-                    crate::session::Role::Planner => Next::builder(action),
-                    crate::session::Role::Plain => Next::agent(action),
-                }
+                self.build_mover(action)
             }
             MoveKind::Retie { to } => {
                 let action = if to.is_empty() {
@@ -148,10 +154,7 @@ impl Move {
                         to.iter().map(|(h, id)| format!("\"{}\" (\"adr: {}\")", h, id)).collect();
                     format!("moves the tie to the current decision {}", list.join(" and "))
                 };
-                match self.session {
-                    crate::session::Role::Planner => Next::builder(action),
-                    crate::session::Role::Plain => Next::agent(action),
-                }
+                self.build_mover(action)
             }
             MoveKind::SupersedeMarkedPairs => {
                 Next::agent("writes a question that supersedes one decision of each same or inconsistent pair")
