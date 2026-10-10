@@ -1,6 +1,3 @@
-// adr: b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051
-// adr: f3c9e736-157c-4197-b49e-19e3674e4e0c
-//
 // "Does the tool colour what it prints to a terminal?" A and "What does the
 // tool add to the shape of what it prints to a terminal?" A: the built
 // binary run under a pseudo-terminal colours its lines and groups them with
@@ -78,6 +75,8 @@ fn piped(dir: &Path, args: &[&str]) -> String {
 
 #[test]
 fn a_terminal_gets_colour_and_groups_and_a_pipe_gets_plain_lines() {
+    // adr: b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051
+    // adr: f3c9e736-157c-4197-b49e-19e3674e4e0c
     if !script_present() {
         eprintln!("skipped: `script` is not installed");
         return;
@@ -115,4 +114,7 @@ fn a_terminal_gets_colour_and_groups_and_a_pipe_gets_plain_lines() {
     assert_eq!(check.lines().next(), Some("Findings"), "{:?}", check);
     let show = on_terminal(&dir, &["show"], &[("NO_COLOR", "1")]);
     assert!(show.lines().any(|l| l == "Moves"), "{:?}", show);
+    // A refusal on standard error is shaped like any findings group.
+    let refusal = on_terminal(&dir, &["show", "adrdom/decisions/nosuch.md"], &[("NO_COLOR", "1")]);
+    assert_eq!(refusal.lines().next(), Some("Findings"), "{:?}", refusal);
 }

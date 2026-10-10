@@ -131,10 +131,10 @@ fn show_prints_the_unrelated_line_only_under_its_flag() {
     let plain = show(&dir, &[REL]);
     assert!(plain.contains("  depends: widget\n"), "{}", plain);
     assert!(!plain.contains("unrelated:"), "{}", plain);
-    // The first question is answered: its reference lines come under
-    // --dependents, its unrelated line under --unrelated as well.
+    // The first question is answered: its depends line comes under
+    // --dependents, its unrelated line under --unrelated alone.
     let flagged = show(&dir, &[REL, "--unrelated"]);
-    assert!(!flagged.contains(&format!("  unrelated: {}\n", TWO)), "{}", flagged);
+    assert!(flagged.contains(&format!("] {}\n  unrelated: {}\n", ONE, TWO)), "{}", flagged);
     let flagged = show(&dir, &[REL, "--unrelated", "--dependents"]);
     assert!(flagged.contains(&format!("  unrelated: {}\n", TWO)), "{}", flagged);
 
@@ -466,4 +466,28 @@ fn show_prints_no_reference_lines_of_an_answered_question_unless_dependents() {
     }
     assert!(shown.contains(&format!("  supersedes: {}\n", c)), "{}", shown);
     assert!(shown.contains(&format!("  replaced by: {}\n", d)), "{}", shown);
+}
+
+// adr: 83190b10-8060-47c1-8194-f6a5c4f0d703
+//
+// `--unrelated` alone prints the unrelated line of every question, answered
+// or not; the depends line of an answered question still needs --dependents.
+#[test]
+fn unrelated_prints_the_unrelated_line_of_an_answered_question() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let (a, b) = ("Is the widget gate picked?", "Is the widget gate waiting?");
+    let with_unrelated = format!("### {}\ndepends: widget\nunrelated: {}\n{}\n", a, b, BODY);
+    let path = write_record(&dir, REL, &format!("# Gate\n\n{}{}", with_unrelated, q(b)));
+    approve_record(&dir, REL);
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr_answer(&dir, &id_of(&path, a), "A").status.success());
+
+    let plain = show(&dir, &[REL]);
+    assert!(!plain.contains("unrelated:"), "{}", plain);
+    let shown = show(&dir, &[REL, "--unrelated"]);
+    let after_a: Vec<&str> = shown.lines().skip_while(|l| !l.ends_with(&format!("] {}", a))).skip(1).take(1).collect();
+    assert_eq!(after_a, vec![format!("  unrelated: {}", b)], "{}", shown);
+    assert!(!shown.contains(&format!("] {}\n  depends:", a)), "{}", shown);
 }

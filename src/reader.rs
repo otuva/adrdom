@@ -272,6 +272,10 @@ pub fn rows_via(root: &Path, source: &repo::Source) -> std::sync::Arc<Vec<Row>> 
 pub struct Live {
     texts: HashSet<String>,
     neighbours: HashSet<String>,
+    /// Whether every topic file and the terms file loaded. A text is not
+    /// gone from records that could not be read, so nothing is dropped
+    /// against sets that are not complete.
+    complete: bool,
 }
 
 impl Live {
@@ -284,7 +288,9 @@ impl Live {
     pub fn of(root: &Path) -> Live {
         let mut texts = HashSet::new();
         let mut neighbours = HashSet::new();
-        for rf in crate::record::load_all(root) {
+        let (records, load_errors) = crate::record::load_all_via(root, &repo::Source::WorkingTree);
+        let mut complete = load_errors.is_empty();
+        for rf in records {
             for sec in &rf.sections {
                 texts.insert(crate::record::heading_hash(sec));
                 let body = crate::record::body_hash(&rf, sec);
@@ -298,16 +304,20 @@ impl Live {
                 }
             }
         }
-        if let Some(tf) = crate::state::load_terms(root) {
-            for t in &tf.terms {
-                neighbours.insert(t.id.clone().unwrap_or_else(|| t.name.clone()));
+        match crate::state::load_terms_checked(root) {
+            crate::state::TermsLoad::Ok(tf) => {
+                for t in &tf.terms {
+                    neighbours.insert(t.id.clone().unwrap_or_else(|| t.name.clone()));
+                }
             }
+            crate::state::TermsLoad::Missing => {}
+            crate::state::TermsLoad::LoadError(_) => complete = false,
         }
-        Live { texts, neighbours }
+        Live { texts, neighbours, complete }
     }
 
     fn holds(&self, r: &Row) -> bool {
-        self.texts.contains(&r.text_hash) && self.neighbours.contains(&r.neighbour)
+        !self.complete || self.texts.contains(&r.text_hash) && self.neighbours.contains(&r.neighbour)
     }
 }
 
@@ -337,8 +347,12 @@ pub fn append_live(root: &Path, rows: &[Row], live: &Live) -> Result<(), String>
         text.push('\n');
     }
     let old = std::fs::read_to_string(&path).unwrap_or_default();
+    // A file that does not end in a newline would glue its last line to the
+    // first new row.
+    let lead = if !old.is_empty() && !old.ends_with('\n') { "\n" } else { "" };
     let kept: Vec<&str> = old.lines().filter(|l| parse_row(l).map_or(true, |r| live.holds(&r))).collect();
     if kept.len() == old.lines().count() {
+        let text = format!("{}{}", lead, text);
         let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&path).map_err(msg::reader_write_failed)?;
         return f.write_all(text.as_bytes()).map_err(msg::reader_write_failed);
     }

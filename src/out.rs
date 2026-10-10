@@ -366,12 +366,16 @@ fn stdout_style() -> Style {
     })
 }
 
-/// The style of standard error: colour only (a refusal is one group of
-/// findings and gets no header).
+/// The style of standard error: dressed as standard output is (a refusal is
+/// a group of findings like any other, so on a terminal it opens with the
+/// findings header).
 fn stderr_style() -> Style {
     use std::io::IsTerminal;
     static STYLE: std::sync::OnceLock<Style> = std::sync::OnceLock::new();
-    *STYLE.get_or_init(|| Style { colour: std::io::stderr().is_terminal() && !colour_forbidden(), shape: false })
+    *STYLE.get_or_init(|| {
+        let tty = std::io::stderr().is_terminal();
+        Style { colour: tty && !colour_forbidden(), shape: tty }
+    })
 }
 
 /// The groups of a listing: a maximal run of one kind of line.
@@ -575,7 +579,7 @@ fn unwritable(e: std::io::Error) -> ! {
 }
 
 /// Prints `lines` to standard error: the findings that stopped a command,
-/// coloured on a terminal and in one group, so with no header.
+/// dressed on a terminal as standard output is (`stderr_style`).
 pub fn eprint(lines: &[Line]) {
     let mut err = std::io::stderr().lock();
     for l in render_lines(lines, stderr_style()) {
@@ -727,6 +731,17 @@ mod tests {
         let off: Vec<String> = render_lines(&sample(), Style::PLAIN);
         assert_eq!(off, present(&sample()).into_iter().map(text).collect::<Vec<_>>());
         assert!(off.iter().all(|l| !l.contains('\u{1b}')));
+    }
+
+    // adr: f3c9e736-157c-4197-b49e-19e3674e4e0c
+    //
+    // A refusal on standard error is a findings group: with shape on it
+    // opens with the findings header.
+    #[test]
+    fn a_shaped_refusal_opens_with_the_findings_header() {
+        let stop = [Line::Stop { command: Command::Show, text: "no".to_string() }];
+        assert_eq!(render_lines(&stop, Style { colour: false, shape: true }), vec!["Findings".to_string(), "show: no".to_string()]);
+        assert_eq!(render_lines(&stop, Style::PLAIN), vec!["show: no".to_string()]);
     }
 
     // adr: f3c9e736-157c-4197-b49e-19e3674e4e0c

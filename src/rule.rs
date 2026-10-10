@@ -685,7 +685,7 @@ pub const MERGE_LEAVES_READER_ROWS_UNEDITED: Rule = Rule {
 pub const PUSH_LEAVES_READER_ROWS_UNEDITED: Rule = Rule {
     name: "push_leaves_reader_rows_unedited",
     decisions: &["abb6faed-96f7-406d-8384-002ee81bb157"],
-    protects: "no reader row the remote holds is changed by a push",
+    protects: "a push changes no reader row the remote holds",
 };
 
 /// Decision: What does check hold of the reader's file?

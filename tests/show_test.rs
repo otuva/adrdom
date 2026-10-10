@@ -127,9 +127,10 @@ Standard: s4.\n\n\
 //
 // "show prints no decision" for a refused question: the refused one carries
 // `**Answer:** refused`, and the expected output below lists it as
-// `[refused] 2.2 Also depends?` with its depends line and nothing else.
+// `[refused] 2.2 Also depends?` and nothing else: the reference lines of an answered question are hidden.
 //
 // adr: b782664f-7465-4e1e-99e0-13f6dd2de774
+// adr: 83190b10-8060-47c1-8194-f6a5c4f0d703
 #[test]
 fn show_prints_each_status_and_the_lines_each_question_carries() {
     let dir = init_repo();
@@ -182,7 +183,6 @@ fn show_prints_each_status_and_the_lines_each_question_carries() {
     Why: w.
     Costs: c.
 [refused] 2.2 Also depends?
-  depends: 1.1 Root?=A
 adrdom/decisions/tiered-topic.md: \"1.1 Root?\" has no depends line; every question carries a depends line; agent writes the depends line of \"1.1 Root?\"
 adrdom/decisions/tiered-topic.md: \"1.2 Unasked root?\" has no depends line; every question carries a depends line; agent writes the depends line of \"1.2 Unasked root?\"
 adrdom/decisions/tiered-topic.md: \"1.3 Skeleton?\" has no depends line; every question carries a depends line; agent writes the depends line of \"1.3 Skeleton?\"

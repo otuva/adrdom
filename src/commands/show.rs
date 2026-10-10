@@ -601,7 +601,8 @@ fn answer_letter(led: &Ledger, sec: &Section) -> Option<char> {
 /// question approved as it stands.
 /// `show_refs` is whether the reference lines print: those of an answered
 /// question do not, unless `--dependents` asks (per "Does show print the
-/// reference lines of an answered question?", 83190b10 A).
+/// reference lines of an answered question?", 83190b10 A). `--unrelated`
+/// prints the `unrelated:` line of every question, answered or not.
 fn reference_and_body_lines(
     qlines: &[String],
     st: QuestionStatus,
@@ -614,7 +615,7 @@ fn reference_and_body_lines(
     let qlines: Vec<String> = qlines.iter().filter(|l| !l.starts_with("id: ")).cloned().collect();
     let (refs, body) = reference_and_body(&qlines);
     let refs: Vec<String> =
-        refs.into_iter().filter(|l| unrelated || !l.starts_with("unrelated:")).filter(|_| show_refs).collect();
+        refs.into_iter().filter(|l| if l.starts_with("unrelated:") { unrelated } else { show_refs }).collect();
     let body = if st == QuestionStatus::Asked { body } else { Vec::new() };
     refs.iter()
         .map(|l| Line::Record { depth: 1, text: named(l, names) })

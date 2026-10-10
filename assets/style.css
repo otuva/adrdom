@@ -203,10 +203,8 @@ input.filter:focus-visible { outline: 2px solid var(--hold); outline-offset: 1px
 .status .status-name { color: var(--muted); font-size: 0.85em; }
 .finding .rule { font-weight: 700; }
 .move { margin: 0.2rem 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); font-size: 0.92rem; }
-.move.owner { color: var(--hold); }
+.move.owner { color: var(--hold); font-weight: 700; }
 .word { margin: 0.1rem 0 0.1rem 1rem; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); }
-.word.word-inconsistent { color: var(--refuse); }
-.word.word-same { color: var(--ink); }
 .word.word-inconsistent .word-name, .word.word-same .word-name { font-weight: 700; }
 .event { margin: 0.1rem 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .banner p { margin: 0.15rem 0; }
@@ -273,5 +271,4 @@ dl.decisions dt .status { margin: 0; }
 .finding.stop { color: var(--refuse); }
 .word.word-inconsistent { color: var(--refuse); }
 .word.word-same { color: var(--wait); }
-.move.owner { font-weight: 700; }
 .move.not-yet { opacity: 0.7; }

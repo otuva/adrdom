@@ -161,15 +161,37 @@ fn a_merge_keeps_both_branches_rows_and_check_fails_one_that_edits_them() {
     reader::append(&dir, &[row("depends", 2)]).unwrap();
     commit_all(&dir, "b row");
 
-    // A merge whose file holds b's row with another word fails.
+    // A merge that keeps the first parent's rows byte for byte passes, though
+    // branch b holds row 2 with another word.
+    git_ok(&dir, &["checkout", "-q", "a"]);
+    git_ok(&dir, &["checkout", "-q", "-b", "keeps"]);
+    git_ok(&dir, &["merge", "-q", "--no-ff", "-s", "ours", "--no-edit", "b"]);
+    assert_eq!(reader_failures(&dir, &[]), Vec::<String>::new());
+
+    // A merge whose file holds a line that no parent holds byte for byte, with
+    // the identity of a row of a parent, fails.
     git_ok(&dir, &["checkout", "-q", "a"]);
     git_ok(&dir, &["checkout", "-q", "-b", "edits"]);
-    git_ok(&dir, &["merge", "-q", "--no-ff", "-s", "ours", "--no-edit", "b"]);
+    git_ok(&dir, &["merge", "-q", "--no-ff", "--no-commit", "-s", "ours", "b"]);
+    let edited = format!("{}\n{}\n", reader::row_line(&row("same", 1)), reader::row_line(&row("unrelated", 2)));
+    std::fs::write(reader_path(&dir), edited).unwrap();
+    commit_all(&dir, "merge b with row 2 edited");
     let f = reader_failures(&dir, &[]);
     assert!(f.iter().any(|l| l.contains("merge edits a reader row of a merged branch")), "{:?}", f);
 
-    // A merge that drops branch b's row whole passes.
+    // A plain staged edit during a pending merge prints one finding, not two.
     git_ok(&dir, &["checkout", "-q", "a"]);
+    git_ok(&dir, &["checkout", "-q", "-b", "pending"]);
+    git_ok(&dir, &["merge", "-q", "--no-ff", "--no-commit", "-s", "ours", "b"]);
+    std::fs::write(reader_path(&dir), format!("{}\n", reader::row_line(&row("unrelated", 2)))).unwrap();
+    git_ok(&dir, &["add", "-A"]);
+    let f = reader_failures(&dir, &[]);
+    assert_eq!(f.iter().filter(|l| l.contains("edited by hand")).count(), 1, "{:?}", f);
+    assert!(!f.iter().any(|l| l.contains("merge edits a reader row")), "{:?}", f);
+    git_ok(&dir, &["merge", "--abort"]);
+
+    // A merge that drops branch b's row whole passes.
+    git_ok(&dir, &["checkout", "-q", "-f", "a"]);
     git_ok(&dir, &["checkout", "-q", "-b", "drops"]);
     std::fs::write(reader_path(&dir), format!("{}\n", reader::row_line(&row("same", 1)))).unwrap();
     commit_all(&dir, "a without its second row");
@@ -462,4 +484,31 @@ fn without_the_reader_the_call_stops_with_a_message_and_writes_nothing() {
     // Every other command runs without it.
     let out = adr(&dir, &["check"], &[("ADR_NO_READER", "1")], "");
     assert!(!stdout(&out).contains("reader:"), "{}", stdout(&out));
+}
+
+// adr: 90714223-52e3-4bb9-b0b4-2a8b87d74145
+#[test]
+fn an_append_drops_nothing_when_a_topic_file_cannot_be_read() {
+    let (dir, _rf) = repo_with_records();
+    let old = live_row("Does a question that was struck?", "id-1", "same", 1);
+    std::fs::write(reader_path(&dir), format!("{}\n", reader::row_line(&old))).unwrap();
+    // Invalid UTF-8: the records cannot read this file, so no text is gone.
+    std::fs::write(dir.join("adrdom/decisions/broken.md"), [0xff, 0xfe, 0x23, 0x20, 0x0a]).unwrap();
+    let new = live_row("Does W?", "id-2", "same", 2);
+    reader::append(&dir, &[new.clone()]).unwrap();
+    let want = format!("{}\n{}\n", reader::row_line(&old), reader::row_line(&new));
+    assert_eq!(std::fs::read_to_string(reader_path(&dir)).unwrap(), want);
+}
+
+// adr: 90714223-52e3-4bb9-b0b4-2a8b87d74145
+#[test]
+fn an_append_starts_a_new_line_when_the_file_does_not_end_with_one() {
+    let (dir, _rf) = repo_with_records();
+    let first = live_row("Does W?", "id-1", "same", 1);
+    let second = live_row("Does W?", "id-2", "same", 2);
+    std::fs::write(reader_path(&dir), reader::row_line(&first)).unwrap();
+    reader::append(&dir, &[second.clone()]).unwrap();
+    let want = format!("{}\n{}\n", reader::row_line(&first), reader::row_line(&second));
+    assert_eq!(std::fs::read_to_string(reader_path(&dir)).unwrap(), want);
+    assert_eq!(reader::read_file(&dir).rows.len(), 2);
 }

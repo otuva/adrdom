@@ -26,24 +26,33 @@ pub(super) fn check_reader(root: &Path, source: &Source, since: Option<&str>, st
     let identities: HashSet<Identity> = parsed.rows.iter().map(identity).collect();
     let edited_at = |refname: &str| ref_has_edited_row(root, repo::READER_PATH, refname, &present, &identities);
 
-    if edited_at("HEAD") {
+    let head_edited = edited_at("HEAD");
+    if head_edited {
         out.push(Failure::said(Class::Reader, msg::reader_row_edited()));
     }
 
-    // A line byte-identical to a row of any parent is fine; a pending merge
-    // names its other side in MERGE_HEAD, a merge commit names its parents.
-    if repo::git(root, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_some() {
-        if edited_at("MERGE_HEAD") {
-            out.push(Failure::said(Class::Reader, msg::reader_merge_row_edited()));
-        }
+    // At a merge, a line byte-identical to a row of any parent (HEAD
+    // included) is no edit; a pending merge names its other side in
+    // MERGE_HEAD, a merge commit names its parents. The merge finding adds
+    // nothing when the HEAD finding was printed for the same edit.
+    let merged: Vec<String> = if repo::git(root, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_some() {
+        vec!["HEAD".to_string(), "MERGE_HEAD".to_string()]
     } else {
         let parents = head_parents(root);
         if parents.len() >= 2 {
             // A parent whose commit object is missing is the ledger's report.
-            let edited = parents.iter().filter(|sha| parent_object_present(root, sha)).any(|sha| edited_at(sha));
-            if edited {
-                out.push(Failure::said(Class::Reader, msg::reader_merge_row_edited()));
-            }
+            parents.into_iter().filter(|sha| parent_object_present(root, sha)).collect()
+        } else {
+            Vec::new()
+        }
+    };
+    if !head_edited && !merged.is_empty() {
+        let contents: Vec<String> = merged
+            .iter()
+            .map(|r| repo::git(root, &["show", &format!("{}:{}", r, repo::READER_PATH)]).unwrap_or_default())
+            .collect();
+        if merge_edits_row(&content, &contents) {
+            out.push(Failure::said(Class::Reader, msg::reader_merge_row_edited()));
         }
     }
 
@@ -79,6 +88,19 @@ fn ref_has_edited_row(root: &Path, path: &str, refname: &str, present: &HashSet<
         return false;
     };
     rows_edited(&other, present, identities)
+}
+
+/// The merge test, judged from the judged file's lines: a line byte-identical
+/// to a line of any parent is no edit; a line that is byte-identical to none
+/// but shares its identity with a row of some parent is an edit.
+fn merge_edits_row(content: &str, parents: &[String]) -> bool {
+    let lines: HashSet<&str> = parents.iter().flat_map(|c| c.lines()).collect();
+    let identities: HashSet<Identity> = parents.iter().flat_map(|c| c.lines()).filter_map(reader::parse_row).map(|r| identity(&r)).collect();
+    content
+        .lines()
+        .filter(|l| !l.is_empty() && !lines.contains(l))
+        .filter_map(reader::parse_row)
+        .any(|r| identities.contains(&identity(&r)))
 }
 
 /// The same test for a push: the remote's copy against the local one.
