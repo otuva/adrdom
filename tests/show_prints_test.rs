@@ -108,7 +108,7 @@ fn show_with_a_file_prints_each_question_its_lines_and_an_asked_body() {
         shown,
         format!(
             "[approved] Gate ({rel})\n\
-[answered A] {one}\n  depends: widget\n\
+[answered A] {one}\n\
 [asked @{version}] {two}\n  depends: widget\n  Problem: the widget breaks.\n  Standard: plain words.\n  \
 - A) Yes the widget holds.\n    Why: reasons.\n    Costs: costs.\n  \
 - B) No the widget does not hold.\n    Why: other reasons.\n    Costs: other costs.\n\
@@ -131,7 +131,11 @@ fn show_prints_the_unrelated_line_only_under_its_flag() {
     let plain = show(&dir, &[REL]);
     assert!(plain.contains("  depends: widget\n"), "{}", plain);
     assert!(!plain.contains("unrelated:"), "{}", plain);
+    // The first question is answered: its reference lines come under
+    // --dependents, its unrelated line under --unrelated as well.
     let flagged = show(&dir, &[REL, "--unrelated"]);
+    assert!(!flagged.contains(&format!("  unrelated: {}\n", TWO)), "{}", flagged);
+    let flagged = show(&dir, &[REL, "--unrelated", "--dependents"]);
     assert!(flagged.contains(&format!("  unrelated: {}\n", TWO)), "{}", flagged);
 
     // Edit the unrelated line of the first question: plain show keeps the
@@ -255,6 +259,11 @@ fn a_view_computed_from_the_records_comes_under_its_flag() {
     }
     let all = show(&dir, &["--all"]);
     assert!(!all.contains("neighbour") && !all.contains("dependents:"), "{}", all);
+    // The one carve-out (per "What does show print of the reader's word on
+    // a question?", 332ff0c7 A): a reader's word line, inconsistent or same.
+    for l in plain.lines().filter(|l| l.trim_start().starts_with('[') && l.starts_with(' ')) {
+        assert!(l.starts_with("  [inconsistent] ") || l.starts_with("  [same] "), "{}", plain);
+    }
 
     let neighbours = show(&dir, &[REL, "--neighbours"]);
     assert!(neighbours.contains("  term \"widget\": heading "), "{}", neighbours);
@@ -406,4 +415,55 @@ fn the_decisions_standing_on_a_term_come_under_the_dependents_flag() {
     // ONE is answered, a current decision; TWO is asked, not yet one.
     assert!(entry.contains(&format!("  dependents: {} ({})\n", ONE, REL)), "{}", dependents);
     assert!(!entry.contains(TWO), "{}", dependents);
+}
+
+// adr: 83190b10-8060-47c1-8194-f6a5c4f0d703
+//
+// The reference lines of an answered question (picked, refused or
+// superseded) stay out of show's listing of a file; --dependents prints
+// them; a question not answered keeps them.
+#[test]
+fn show_prints_no_reference_lines_of_an_answered_question_unless_dependents() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let (a, b, c, d, e) = (
+        "Is the widget gate picked?",
+        "Is the widget gate refused?",
+        "Is the widget gate replaced?",
+        "Is the widget gate the replacement?",
+        "Is the widget gate waiting?",
+    );
+    let path = write_record(&dir, REL, &format!("# Gate\n\n{}{}{}", q(a), q(b), q(c)));
+    approve_record(&dir, REL);
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr_answer(&dir, &id_of(&path, a), "A").status.success());
+    assert!(adr_answer(&dir, &id_of(&path, b), "refuse").status.success());
+    assert!(adr_answer(&dir, &id_of(&path, c), "A").status.success());
+    let c_id = id_of(&path, c);
+    let mut text = std::fs::read_to_string(&path).unwrap();
+    text.push_str(&format!("### {}\ndepends: widget\nsupersedes: {}\n{}\n", d, c_id, BODY));
+    text.push_str(&q(e));
+    std::fs::write(&path, text).unwrap();
+    approve_record(&dir, REL);
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr_answer(&dir, &id_of(&path, d), "A").status.success());
+
+    let first_line_after = |shown: &str, heading: &str| -> String {
+        shown.lines().skip_while(|l| !l.ends_with(&format!("] {}", heading))).nth(1).unwrap_or("").to_string()
+    };
+    let plain = show(&dir, &[REL]);
+    for h in [a, b, c, d] {
+        assert!(!first_line_after(&plain, h).starts_with("  depends:"), "{}: {}", h, plain);
+    }
+    assert!(plain.contains(&format!("[superseded] {}", c)) && plain.contains(&format!("[refused] {}", b)), "{}", plain);
+    assert!(!plain.contains("supersedes:"), "{}", plain);
+    assert_eq!(first_line_after(&plain, e), "  depends: widget", "{}", plain);
+
+    let shown = show(&dir, &[REL, "--dependents"]);
+    for h in [a, b, c, d] {
+        assert!(first_line_after(&shown, h).starts_with("  depends:"), "{}: {}", h, shown);
+    }
+    assert!(shown.contains(&format!("  supersedes: {}\n", c)), "{}", shown);
+    assert!(shown.contains(&format!("  replaced by: {}\n", d)), "{}", shown);
 }

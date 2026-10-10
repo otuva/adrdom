@@ -302,6 +302,8 @@ fn change_block(r: &Records, path: &str, rf: Option<&RecordFile>) -> String {
     struct Group {
         head: Option<Line>,
         records: Vec<Line>,
+        /// The reader's words under the question, shown beside it.
+        words: Vec<Line>,
         keep: bool,
         question: Option<String>,
     }
@@ -309,7 +311,7 @@ fn change_block(r: &Records, path: &str, rf: Option<&RecordFile>) -> String {
     let mut first = true;
     // Lines before the first status line after the file's own: the file's
     // change as a whole.
-    let mut cur = Group { head: None, records: Vec::new(), keep: false, question: None };
+    let mut cur = Group { head: None, records: Vec::new(), words: Vec::new(), keep: false, question: None };
     for l in all {
         match l {
             Line::Move(_) | Line::Finding(_) => {}
@@ -319,7 +321,7 @@ fn change_block(r: &Records, path: &str, rf: Option<&RecordFile>) -> String {
                     first = false;
                     continue;
                 }
-                groups.push(std::mem::replace(&mut cur, Group { head: None, records: Vec::new(), keep: false, question: None }));
+                groups.push(std::mem::replace(&mut cur, Group { head: None, records: Vec::new(), words: Vec::new(), keep: false, question: None }));
                 cur.keep = mark.is_some()
                     || match status {
                         Status::Question { status, .. } => {
@@ -341,6 +343,7 @@ fn change_block(r: &Records, path: &str, rf: Option<&RecordFile>) -> String {
                 }
                 cur.records.push(l.clone());
             }
+            Line::Word { .. } => cur.words.push(l),
             other => cur.records.push(other),
         }
     }
@@ -370,6 +373,9 @@ fn change_block(r: &Records, path: &str, rf: Option<&RecordFile>) -> String {
             if let Some(n) = map.get(q).filter(|n| !n.is_empty()) {
                 s.push_str(&neighbours(n));
             }
+        }
+        if !g.words.is_empty() {
+            s.push_str(&lines(&g.words));
         }
         if !g.records.is_empty() {
             s.push_str(&format!("<details class=\"chgd\"><summary>show the change</summary>\n{}</details>\n", lines(&g.records)));

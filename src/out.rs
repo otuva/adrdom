@@ -148,6 +148,11 @@ pub enum Line {
     /// marks of a diff (per "Does show print what a file holds beyond its
     /// latest approval?", bceceda8 A).
     Status { subject: String, status: Status, mark: Option<Side> },
+    /// The reader's word on a neighbour of a question, one line under the
+    /// question (per "What does show print of the reader's word on a
+    /// question?", 332ff0c7 A). A view: no move stands on it. The reader's
+    /// words are not statuses (a closed list), so the line is no `Status`.
+    Word { word: String, name: String },
     /// A rule one thing in the records breaks: found, what the rule
     /// protects, the move.
     Finding(Finding),
@@ -182,6 +187,7 @@ pub fn text(line: &Line) -> String {
     visible(&match line {
         Line::Record { depth, text } => format!("{}{}", INDENT.repeat(*depth), text),
         Line::Status { subject, status, mark } => format!("{}[{}] {}", mark_of(*mark), status.name(), subject),
+        Line::Word { word, name } => format!("{}[{}] {}", INDENT, word, name),
         Line::Finding(f) => f.text(),
         Line::Stop { command, text } => format!("{}: {}", command, text),
         Line::Move(m) => m.text(),
@@ -223,6 +229,10 @@ pub fn html(line: &Line) -> String {
             esc(&status.name()),
             esc(subject)
         ),
+        Line::Word { word, name } => {
+            let class: String = word.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect();
+            format!("<p class=\"word word-{}\"><span class=\"word-name\">[{}]</span> {}</p>", class, esc(word), esc(name))
+        }
         Line::Finding(f) => format!("<p class=\"finding\">{}</p>", esc(&f.text())),
         Line::Stop { command, text } => {
             format!("<p class=\"finding\"><span class=\"rule\">{}:</span> {}</p>", esc(command.as_str()), esc(text))
@@ -418,6 +428,7 @@ mod tests {
                 status: Status::Question { status: QuestionStatus::Asked, letter: None, version: Some("ab12".into()) },
                 mark: Some(Side::Added),
             },
+            Line::Word { word: "inconsistent".to_string(), name: "Does <it>?".to_string() },
             Line::Finding(Finding::new(&crate::rule::TOPIC_FILE_SHAPE, "x.md: a <fault>".to_string(), "agent rewrites the file".to_string())),
             Line::Stop { command: Command::Show, text: "x.md is not a file; agent names one".to_string() },
             Line::Move(Move::new(MoveKind::Approve { path: "x.md".to_string() })),

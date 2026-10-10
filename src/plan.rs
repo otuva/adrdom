@@ -441,6 +441,57 @@ impl Shared {
     }
 }
 
+/// One word the reader gave on a neighbour of a question's current text,
+/// as `show` prints it.
+#[derive(Debug, Clone)]
+pub struct ReaderWord {
+    /// What the neighbour is called: a decision's heading, a term's name or
+    /// a sibling question's heading.
+    pub name: String,
+    pub word: String,
+    pub reason: String,
+    /// The question's `supersedes:` line names the neighbour.
+    pub on_supersedes: bool,
+}
+
+impl Shared {
+    /// Every word the reader gave on the question at `idx` of `rf`, whatever
+    /// its status: its rows are those at the hash of its body, or of its
+    /// heading when it has none, written with the prompt and model that
+    /// would read the pair now, the latest row for each neighbour. A
+    /// neighbour that names nothing now is left out.
+    pub fn reader_words(&self, rf: &RecordFile, idx: usize, terms_list: &[Term], led: &Ledger) -> Vec<ReaderWord> {
+        let sec = &rf.sections[idx];
+        let hash = if sec.is_skeleton { record::heading_hash(sec) } else { record::body_hash(rf, sec) };
+        let Some(at) = self.by_hash.get(&hash) else { return Vec::new() };
+        let mut order: Vec<&str> = Vec::new();
+        let mut last: HashMap<&str, &reader::Row> = HashMap::new();
+        for &i in at {
+            let r = &self.rows[i];
+            if last.insert(r.neighbour.as_str(), r).is_none() {
+                order.push(r.neighbour.as_str());
+            }
+        }
+        let mut by_body: HashMap<String, usize> = HashMap::new();
+        for (j, other) in rf.sections.iter().enumerate().filter(|&(j, o)| j != idx && !o.is_skeleton) {
+            by_body.entry(record::body_hash(rf, other)).or_insert(j);
+        }
+        let targets = line_targets(idx, rf, terms_list, &self.phrase_lookup, &self.cross, led);
+        let mut out = Vec::new();
+        for key in order {
+            let r = last[key];
+            let Some((_, name, target)) = describe(key, rf, &by_body, terms_list, &self.headings, led) else { continue };
+            out.push(ReaderWord {
+                name,
+                word: r.word.clone(),
+                reason: r.reason.clone(),
+                on_supersedes: matches!(targets.get(&target), Some(LineKind::Supersedes)),
+            });
+        }
+        out
+    }
+}
+
 fn load_inner(
     rf: &RecordFile,
     terms_list: &[Term],
