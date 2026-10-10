@@ -269,8 +269,8 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     let text = stdout(&out);
     assert!(
         text.contains(&format!(
-            "{} (\"{}\") tied to a test and not a current decision, at tested.txt:1; every test tie names a current decision; agent removes the tie comment from the test",
-            alpha, ALPHA
+            "{} (\"{}\") tied to a test and not a current decision, at tested.txt:1; a test tie names the decision in force; agent moves the tie to the current decision \"{}\" (\"adr: {}\")",
+            alpha, ALPHA, GAMMA, gamma
         )),
         "{}",
         text
@@ -316,7 +316,7 @@ fn show_ends_without_a_word_when_its_reader_goes_away() {
     // meets the closed pipe whatever the timing.
     let (reader, writer) = std::io::pipe().unwrap();
     drop(reader);
-    let out = Command::new(adr_bin())
+    let out = scrubbed(Command::new(adr_bin()))
         .current_dir(&dir)
         .arg("show")
         .stdout(writer)

@@ -246,6 +246,7 @@ fn mark_of(mark: Option<Side>) -> &'static str {
 fn mover_class(m: &Move) -> &'static str {
     match m.actor() {
         crate::moves::Mover::Agent => "agent",
+        crate::moves::Mover::Builder => "builder",
         crate::moves::Mover::Owner => "owner",
         crate::moves::Mover::NotYet => "not-yet",
     }

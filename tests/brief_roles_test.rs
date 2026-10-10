@@ -23,3 +23,21 @@ fn the_brief_has_a_review_name_a_decision_for_each_behaviour() {
         b
     );
 }
+
+// adr: 6c406624-b874-4697-9a44-91941019b7d1
+// adr: db07a54d-4d80-4035-a9ef-eabcc0c872b3
+// adr: 8f81dee1-9c19-447d-baa8-d7d0af691db8
+#[test]
+fn the_brief_tells_a_planner_what_the_tool_holds_it_from() {
+    let b = flat();
+    assert!(b.contains("A session that runs `adr plan` or `adr ask` on a topic file is a planner until the session ends."), "{}", b);
+    assert!(b.contains("In a planner's session every build move opens with `builder`, and check refuses a commit that holds a path outside `adrdom/`: a builder commits it."), "{}", b);
+    assert!(b.contains("A line that opens with `builder` is for a builder, another session. Leave it."), "{}", b);
+}
+
+// adr: 2381d759-f85f-484e-9031-fadbe6ea045a
+#[test]
+fn the_brief_has_the_builder_move_a_tie_that_names_a_decision_not_current() {
+    let b = flat();
+    assert!(b.contains("It reports a test whose `adr: <id>` names a decision that is not current, and fails nothing: the builder points the tie at the decision that took its place, or removes it."), "{}", b);
+}

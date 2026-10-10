@@ -126,15 +126,32 @@ fn sweep_dead_test_repos() {
 /// `adr`) find this build rather than some other `adr` that might already
 /// be on the machine's PATH.
 pub fn run_git(dir: &Path, args: &[&str]) -> Output {
+    run_git_as(dir, args, None)
+}
+
+/// `run_git` in the session `session` of an agent program: the session
+/// variable is set when `Some`, and never inherited from the shell that runs
+/// the tests.
+pub fn run_git_as(dir: &Path, args: &[&str], session: Option<&str>) -> Output {
     let bin_dir = adr_bin().parent().unwrap().to_path_buf();
     let old_path = std::env::var("PATH").unwrap_or_default();
     let new_path = format!("{}:{}", bin_dir.display(), old_path);
-    Command::new("git")
-        .current_dir(dir)
-        .args(args)
-        .env("PATH", new_path)
-        .output()
-        .expect("git should run")
+    let mut cmd = scrubbed(Command::new("git"));
+    cmd.current_dir(dir).args(args).env("PATH", new_path);
+    if let Some(id) = session {
+        cmd.env(adr::session::SESSION_VARS[0], id);
+    }
+    cmd.output().expect("git should run")
+}
+
+/// `cmd` without the variables an agent program sets for its session: a
+/// test run inside such a session must not give the child its identifier.
+#[allow(dead_code)]
+pub fn scrubbed(mut cmd: Command) -> Command {
+    for name in adr::session::SESSION_VARS {
+        cmd.env_remove(name);
+    }
+    cmd
 }
 
 /// Runs `adr <args>` in `dir` with the given extra env vars and stdin.
@@ -143,7 +160,13 @@ pub fn run_git(dir: &Path, args: &[&str]) -> Output {
 /// ADR_OWNER_BYPASS=1 (and the binary was built with the owner-bypass
 /// feature, which `cargo test --features owner-bypass` provides).
 pub fn adr(dir: &Path, args: &[&str], envs: &[(&str, &str)], stdin: &str) -> Output {
-    let mut cmd = Command::new(adr_bin());
+    adr_as(dir, args, envs, None, stdin)
+}
+
+/// `adr` in the session `session` of an agent program: the session variable
+/// is set when `Some`, and never inherited from the shell that runs the tests.
+pub fn adr_as(dir: &Path, args: &[&str], envs: &[(&str, &str)], session: Option<&str>, stdin: &str) -> Output {
+    let mut cmd = scrubbed(Command::new(adr_bin()));
     cmd.current_dir(dir)
         .args(args)
         .env_remove("CLAUDECODE")
@@ -157,6 +180,9 @@ pub fn adr(dir: &Path, args: &[&str], envs: &[(&str, &str)], stdin: &str) -> Out
         // Tests never download the embedding model: the fake one answers.
         // It has an effect only in a build with the `fake-model` feature.
         .env("ADR_FAKE_MODEL", "1");
+    if let Some(id) = session {
+        cmd.env(adr::session::SESSION_VARS[0], id);
+    }
     for (k, v) in envs {
         cmd.env(k, v);
     }

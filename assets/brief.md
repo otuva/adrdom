@@ -26,6 +26,8 @@ it.
   an agent that did not write the question. Make these moves in the order
   printed. When such a line ends with `owner runs: ...`, make your move,
   then post that command in chat and stop.
+- A line that opens with `builder` is for a builder, another session. Leave
+  it.
 - A line that opens with `owner runs:` is the owner's. Post the command in
   chat and stop.
 - A line that opens with `not yet` names something whose turn has not come.
@@ -62,9 +64,16 @@ opens with where it stands, in brackets:
 1. Read every current decision in `adr show`. Build a decision when a move
    names it, and not before. Never build a decision whose question you wrote:
    another agent builds it.
-2. If no current decision covers what you are about to build, do not build
+2. A session that runs `adr plan` or `adr ask` on a topic file is a planner
+   until the session ends. The tool keeps the session's identifier, read from
+   the environment the agent program sets, in an untracked file under
+   `adrdom/state`. In a planner's session every build move opens with
+   `builder`, and check refuses a commit that holds a path outside `adrdom/`:
+   a builder commits it. With no session identifier in the environment, none
+   of this applies.
+3. If no current decision covers what you are about to build, do not build
    it. Write the question (below) and stop until the owner answers.
-3. If a current decision looks wrong, say so in chat and stop. Never edit an
+4. If a current decision looks wrong, say so in chat and stop. Never edit an
    answered question and never work around a decision.
 
 ## Asking a question
@@ -190,7 +199,9 @@ each one to a test: put a comment `adr: <id>` inside a test, outside
 `adrdom/`, that shows the code follows the decision. Write the test if none
 exists, and add it to git. The answers are committed as they are given.
 `adr check` reports each untested decision until a test names it; the build
-and its tests follow.
+and its tests follow. It reports a test whose `adr: <id>` names a decision
+that is not current, and fails nothing: the builder points the tie at the
+decision that took its place, or removes it.
 
 Code that follows a decision may carry a comment `adr-code: <id>`, found by
 text search; it is never a test tie, and no rule judges it.

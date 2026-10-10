@@ -39,3 +39,6 @@
 - status (statuses): The position a thing in the records is at, one of a closed set the tool holds.
 - move (moves): The step a thing in the records takes next from the status it is in, and who takes it.
 - finding (findings): The report of one rule that one thing in the records breaks.
+- session (sessions): One run of an agent, from open to close.
+- planner (planners): A session that makes plans.
+- builder (builders): A session that builds decisions.
