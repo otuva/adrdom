@@ -52,6 +52,54 @@ impl Dep {
     }
 }
 
+/// One entry of a `blame:` line (per "What does a question carry of the blame
+/// file it came from?"): the name of a blame file, or its identifier once
+/// approve has turned it, and the row ranges of that file the question was
+/// born from, each `<from>-<to>` with `from >= 1` and `to >= from`. An entry
+/// is split from the right: the trailing run of range tokens is its ranges,
+/// what stands before them its name, and the first token is always the name,
+/// so a missing range leaves a name alone. Nothing resolves here: record.rs has no
+/// blame files.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlameEntry {
+    pub file: String,
+    pub ranges: Vec<(usize, usize)>,
+}
+
+impl BlameEntry {
+    /// The entry written as `text`, already split from its line at the commas.
+    pub fn parse(text: &str) -> BlameEntry {
+        let tokens: Vec<&str> = text.split_whitespace().collect();
+        // The first token is always the name, even when it reads as a range
+        // (a blame file may be called `10-14`).
+        let name_len = tokens.iter().rposition(|t| range_token(t).is_none()).map_or(0, |i| i + 1);
+        let name_len = name_len.max(tokens.len().min(1));
+        BlameEntry {
+            file: tokens[..name_len].join(" "),
+            ranges: tokens[name_len..].iter().filter_map(|t| range_token(t)).collect(),
+        }
+    }
+
+    /// The entry as a line writes it, single spaces between its parts:
+    /// what a finding quotes.
+    pub fn written(&self) -> String {
+        let ranges = self.ranges.iter().map(|(from, to)| format!("{}-{}", from, to));
+        std::iter::once(self.file.clone()).filter(|f| !f.is_empty()).chain(ranges).collect::<Vec<_>>().join(" ")
+    }
+}
+
+/// `<from>-<to>` in digits alone, `from >= 1` and `to >= from`: the range of
+/// a `blame:` entry and of a row of a blame file alike.
+pub(crate) fn range_token(token: &str) -> Option<(usize, usize)> {
+    let (from, to) = token.split_once('-')?;
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    if !digits(from) || !digits(to) {
+        return None;
+    }
+    let (from, to) = (from.parse::<usize>().ok()?, to.parse::<usize>().ok()?);
+    (from >= 1 && to >= from).then_some((from, to))
+}
+
 /// Why `derive_tiers` could not assign every section a tier.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DeriveError {
@@ -91,6 +139,9 @@ pub struct Section {
     /// `unrelated: ` entries, comma-separated in the source, in file order
     /// ("Does every neighbour get a line under its heading?").
     pub unrelated: Vec<String>,
+    /// `blame: ` entries, comma-separated in the source, in file order (per
+    /// "What does a question carry of the blame file it came from?").
+    pub blame: Vec<BlameEntry>,
     /// `depends: ` entries, in file order (8.3/8.4).
     pub depends: Vec<Dep>,
     pub options: Vec<OptionRec>,
@@ -570,12 +621,14 @@ struct BodyScan {
     id_count: usize,
     supersedes: Vec<String>,
     unrelated: Vec<String>,
+    blame: Vec<BlameEntry>,
     depends: Vec<Dep>,
     depends_errors: Vec<String>,
-    /// "supersedes: second supersedes line, line N" / "terms: second terms
-    /// line, line N": a82db5b7 holds every reference list on one line, so
-    /// a second line of either is refused, the same as a second depends
-    /// line, rather than silently ignored.
+    /// "supersedes: second supersedes line, line N" / "unrelated: second
+    /// unrelated line, line N" / "blame: second blame line, line N":
+    /// a82db5b7 holds every reference list on one line, so a second line of
+    /// any is refused, the same as a second depends line, rather than
+    /// silently ignored.
     reference_line_errors: Vec<String>,
     /// "terms: second terms line, line N": the tool writes that line.
     terms_errors: Vec<String>,
@@ -609,6 +662,8 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
     let mut supersedes_line_seen = false;
     let mut unrelated: Vec<String> = Vec::new();
     let mut unrelated_line_seen = false;
+    let mut blame: Vec<BlameEntry> = Vec::new();
+    let mut blame_line_seen = false;
     let mut terms_line = None;
     let mut options: Vec<OptionRec> = Vec::new();
     let mut answer_line = None;
@@ -698,6 +753,15 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
                 .collect();
+            continue;
+        }
+        if let Some(v) = kv(line, "blame") {
+            if blame_line_seen {
+                reference_line_errors.push(format!("blame: second blame line, line {}", j + 1));
+                continue;
+            }
+            blame_line_seen = true;
+            blame = v.split(',').map(str::trim).filter(|s| !s.is_empty()).map(BlameEntry::parse).collect();
             continue;
         }
         if kv(line, "terms").is_some() {
@@ -800,6 +864,7 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
         id_count,
         supersedes,
         unrelated,
+        blame,
         depends,
         depends_errors,
         reference_line_errors,
@@ -819,7 +884,9 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
 
 /// A heading whose body holds only blank lines, `depends:` lines, a
 /// `supersedes:` line (part of the plan, per "Does approve turn the
-/// supersedes line into identifiers?"), and an `id:` line (per "What does a depends line name?" and "Does a reference
+/// supersedes line into identifiers?"), an `unrelated:` line, a `blame:`
+/// line (per "What does a question carry of the blame file it came from?"),
+/// and an `id:` line (per "What does a depends line name?" and "Does a reference
 /// in a topic file carry the identifier of what it names?"): needs no id
 /// of its own to stay a skeleton, but `approve` gives every heading an id,
 /// skeletons included,
@@ -841,6 +908,7 @@ fn is_skeleton_range(lines: &[String], start: usize, end: usize) -> bool {
             || is_bare_depends_line(t)
             || t.starts_with("supersedes: ")
             || t.starts_with("unrelated: ")
+            || t.starts_with("blame: ")
             || t.starts_with("id: ")
     })
 }
@@ -921,6 +989,7 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
         id: scan.id,
         supersedes: scan.supersedes,
         unrelated: scan.unrelated,
+        blame: scan.blame,
         depends: scan.depends,
         options: scan.options,
         answer_line: scan.answer_line,
@@ -995,13 +1064,14 @@ fn analyze_shape(lines: &[String], sections: &[Section]) -> (Option<String>, (us
 
 /// sha256 of one question's own text (per "Does approve hash each question
 /// on its own?"): its heading line, its `depends:` line with the answer sets
-/// as written, its `supersedes:` line, an `unrelated:` line, and its body
-/// (Problem, Standard, options, Why, Costs), each line trimmed at its end,
-/// joined with `\n`. The `id:` line is part of it (swapping ids would re-point every
-/// depends entry naming them); the lines the tool writes after that (`terms:`,
-/// the `**Answer:**` line) and blank lines are left out, so asking or answering
-/// a question never moves its hash (approve has already written the id). Read on the text as it stands, so call
-/// it on the file after approve turned names into ids.
+/// as written, its `supersedes:` line, an `unrelated:` line, a `blame:` line,
+/// and its body (Problem, Standard, options, Why, Costs), each line trimmed
+/// at its end, joined with `\n`. The `id:` line is part of it (swapping ids
+/// would re-point every depends entry naming them); the lines the tool writes
+/// after that (`terms:`, the `**Answer:**` line) and blank lines are left
+/// out, so asking or answering a question never moves its hash (approve has
+/// already written the id). Read on the text as it stands, so call it on the
+/// file after approve turned names into ids.
 pub fn question_hash(rf: &RecordFile, sec: &Section) -> String {
     let (s, e) = hash_range(&rf.lines, sec);
     let text = rf.lines[s..e]
@@ -1032,9 +1102,9 @@ pub fn heading_hash(sec: &Section) -> String {
 /// A question's heading and its body, as the reader is given them: the
 /// heading text, then the Problem, Standard, options, Why and Costs lines,
 /// each trimmed at its end, joined with `\n`. The `depends:`,
-/// `supersedes:`, `unrelated:`, `id:` and `terms:` lines, the `**Answer:**`
-/// line and blank lines are left out, so a line the agent writes after the
-/// reader ran never moves it.
+/// `supersedes:`, `unrelated:`, `blame:`, `id:` and `terms:` lines, the
+/// `**Answer:**` line and blank lines are left out, so a line the agent
+/// writes after the reader ran never moves it.
 pub fn body_text(rf: &RecordFile, sec: &Section) -> String {
     let (s, e) = hash_range(&rf.lines, sec);
     let mut parts: Vec<&str> = vec![sec.heading_text.as_str()];
@@ -1045,6 +1115,7 @@ pub fn body_text(rf: &RecordFile, sec: &Section) -> String {
             || t.trim() == "depends:"
             || t.starts_with("supersedes: ")
             || t.starts_with("unrelated: ")
+            || t.starts_with("blame: ")
             || t.starts_with("id: ")
             || t.starts_with("terms: ")
             || t.starts_with("**Answer:**")
@@ -1975,6 +2046,90 @@ mod tests {
         assert!(body_text(&rf, &rf.sections[0]).starts_with("Q?\nProblem: p.\nStandard: s.\n- A) x."));
         let twice = rf_from(&text.replace("id: new-id", "unrelated: c\nid: new-id"));
         assert!(twice.sections[0].shape_errors.iter().any(|e| e.contains("second unrelated line")));
+    }
+
+    fn entry(text: &str) -> (String, Vec<(usize, usize)>) {
+        let e = BlameEntry::parse(text);
+        (e.file, e.ranges)
+    }
+
+    // adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+    // A blame entry is split from the right: the trailing run of range
+    // tokens is its ranges, what stands before them its name.
+    #[test]
+    fn a_blame_entry_is_a_name_and_its_row_ranges() {
+        assert_eq!(entry("old-file 10-14"), ("old-file".to_string(), vec![(10, 14)]));
+        assert_eq!(entry("old-file 10-14 31-35 3-3"), ("old-file".to_string(), vec![(10, 14), (31, 35), (3, 3)]));
+        assert_eq!(entry("sub/other   3-9"), ("sub/other".to_string(), vec![(3, 9)]));
+        let id = "672201dd-8f22-4dc3-8b21-a73eb7606e83";
+        assert_eq!(entry(&format!("{} 1-2", id)), (id.to_string(), vec![(1, 2)]));
+    }
+
+    // adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+    #[test]
+    fn a_blame_entry_may_lack_its_ranges_or_its_name() {
+        assert_eq!(entry("old-file"), ("old-file".to_string(), vec![]));
+        // The first token is always the name, even when it reads as a range.
+        assert_eq!(entry("10-14 31-35"), ("10-14".to_string(), vec![(31, 35)]));
+        assert_eq!(entry("10-14"), ("10-14".to_string(), vec![]));
+        // A token that is no range (`5-3`, `0-2`, `1-x`, `+1-2`) is part of the name.
+        for bad in ["5-3", "0-2", "1-x", "+1-2", "1-2-3"] {
+            let text = format!("old-file {}", bad);
+            assert_eq!(entry(&text), (text.clone(), vec![]), "{}", bad);
+        }
+        assert_eq!(entry("old-file 5-3 1-2"), ("old-file 5-3".to_string(), vec![(1, 2)]));
+    }
+
+    // adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+    #[test]
+    fn a_blame_entry_is_quoted_as_the_line_writes_it() {
+        for text in ["old-file 10-14 31-35", "old-file", "10-14"] {
+            assert_eq!(BlameEntry::parse(text).written(), text);
+        }
+        assert_eq!(BlameEntry::parse("old-file   10-14").written(), "old-file 10-14");
+    }
+
+    // adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+    // The line reads in file order, comma separated; the question hash covers
+    // it like the depends line, the body hash and the reader never see it.
+    #[test]
+    fn blame_line_parses_is_in_the_question_hash_and_not_in_the_body_hash() {
+        let text = "# Topic\n\n### Q?\ndepends: widget\nblame: old-file 10-14 31-35, sub/other 3-9\nid: new-id\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+        let rf = rf_from(text);
+        let sec = &rf.sections[0];
+        assert_eq!(
+            sec.blame,
+            vec![
+                BlameEntry { file: "old-file".to_string(), ranges: vec![(10, 14), (31, 35)] },
+                BlameEntry { file: "sub/other".to_string(), ranges: vec![(3, 9)] },
+            ]
+        );
+        assert!(rf.shape_errors.is_empty() && sec.shape_errors.is_empty(), "{:?}", sec.shape_errors);
+        let other = rf_from(&text.replace("sub/other 3-9", "sub/other 3-8"));
+        assert_ne!(question_hash(&rf, sec), question_hash(&other, &other.sections[0]));
+        let without = rf_from(&text.replace("blame: old-file 10-14 31-35, sub/other 3-9\n", ""));
+        assert_ne!(question_hash(&rf, sec), question_hash(&without, &without.sections[0]));
+        assert_eq!(body_hash(&rf, sec), body_hash(&without, &without.sections[0]));
+        assert_eq!(body_text(&rf, sec), body_text(&without, &without.sections[0]));
+        assert!(!body_text(&rf, sec).contains("blame"));
+        let twice = rf_from(&text.replace("id: new-id", "blame: other 1-1\nid: new-id"));
+        assert_eq!(twice.sections[0].blame, sec.blame, "the first line is the one read");
+        assert!(twice.sections[0].shape_errors.iter().any(|e| e == "blame: second blame line, line 6"), "{:?}", twice.sections[0].shape_errors);
+    }
+
+    // adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+    // A heading with a depends line and a blame line still has no body.
+    #[test]
+    fn a_heading_with_a_depends_and_a_blame_line_is_a_skeleton() {
+        let rf = rf_from("# Topic\n\n### Q?\ndepends: widget\nblame: old-file 1-2\n\n### R?\nblame: old-file 3-4\ndepends: widget\nid: 11111111-1111-1111-1111-111111111111\n");
+        for sec in &rf.sections {
+            assert!(sec.is_skeleton, "{:?}", sec);
+            assert!(sec.shape_errors.is_empty(), "{:?}", sec.shape_errors);
+        }
+        assert_eq!(rf.sections[1].blame.len(), 1);
+        let typo = rf_from("# Topic\n\n### Q?\ndepends: widget\nblame:old-file 1-2\n");
+        assert!(!typo.sections[0].is_skeleton);
+        assert!(typo.sections[0].blame.is_empty());
     }
 
     // adr: a82db5b7-969c-44e9-9eec-876ead7099d3

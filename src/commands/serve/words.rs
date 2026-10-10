@@ -159,7 +159,7 @@ fn no_entry_words(text: &str, pairs: &[(String, String)], terms_list: &[Term]) -
     let stripped = strip_uuid_tokens(text);
     let mut found: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for line in stripped.split('\n') {
-        if crate::tells::starts_with_any(line, &[crate::tells::ID_PREFIX, crate::tells::SUPERSEDES_PREFIX, crate::tells::UNRELATED_PREFIX]) {
+        if crate::tells::starts_with_any(line, &[crate::tells::ID_PREFIX, crate::tells::SUPERSEDES_PREFIX, crate::tells::UNRELATED_PREFIX, crate::tells::BLAME_PREFIX]) {
             continue;
         }
         for tok in crate::text::word_runs(line) {

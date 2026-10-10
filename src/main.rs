@@ -51,10 +51,10 @@ enum Command {
         /// The letter of the option picked, or the word refuse.
         letter: String,
     },
-    /// Print every current decision and every move; with a file approve takes or --all, every question, entry or row.
+    /// Print every current decision and every move; with a file approve takes or --all, every question or entry with its status (a blame file: its origin and rows).
     #[command(group(clap::ArgGroup::new("whole").args(["topic_file", "all"]).multiple(true)))]
     Show {
-        /// A topic file, adrdom/terms.md, or a blame file under adrdom/blame: every question, entry or row with its status, every depends and supersedes line, the body of an asked question, what is beyond its latest approval marked, and its moves.
+        /// A topic file, adrdom/terms.md, or a blame file under adrdom/blame: every question or entry with its status (a blame file: its origin and rows), every depends and supersedes line, the body of an asked question, what is beyond its latest approval marked, and its moves.
         topic_file: Option<PathBuf>,
         /// Print every file approve takes, each as with a file named.
         #[arg(long, conflicts_with = "topic_file")]
@@ -68,6 +68,9 @@ enum Command {
         /// With a file or --all: the unrelated line of each question, marked when changed.
         #[arg(long, requires = "whole")]
         unrelated: bool,
+        /// With a file or --all: for a blame file, how many of its decision rows a question names and how many none names.
+        #[arg(long, requires = "whole")]
+        questions: bool,
     },
     /// Read lines from stdin and ban them (and their tokens) from the repo.
     Ban {
@@ -120,8 +123,8 @@ fn main() {
         Command::Read => commands::read::run(),
         Command::Approve { file } => commands::approve::run(file),
         Command::Answer { id, letter } => commands::answer::run(id, letter),
-        Command::Show { topic_file, all, neighbours, dependents, unrelated } => {
-            commands::show::run(topic_file, all, commands::show::Views { neighbours, dependents, unrelated })
+        Command::Show { topic_file, all, neighbours, dependents, unrelated, questions } => {
+            commands::show::run(topic_file, all, commands::show::Views { neighbours, dependents, unrelated, questions })
         }
         Command::Ban { term, rebuild } => commands::ban::run(term, rebuild),
         Command::Unban => commands::unban::run(),

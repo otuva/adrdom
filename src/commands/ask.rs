@@ -121,11 +121,24 @@ pub fn run(given: PathBuf) -> i32 {
         &led,
     );
     let replaced = depends::replaced_ids(&replaced_base, &rf, &cross_file_headings, &led);
+    // The blame files the `blame:` lines are judged against, off the working
+    // tree like the topic files.
+    let (blame_index, _) = crate::blame::Index::read(&root, &repo::Source::WorkingTree, &led);
     // Every rule the file breaks, judged once (`rules::record_refusals`, the
     // judgement `approve` and `check` read): ask refuses on the parse
     // findings first, then on what is found in the questions it asks.
-    let mut findings =
-        rules::record_refusals(&rel, &rf, &terms_list, &phrase_lookup, &cross_file_headings, &names, &all_records, &replaced, &led);
+    let mut findings = rules::record_refusals(
+        &rel,
+        &rf,
+        &terms_list,
+        &phrase_lookup,
+        &cross_file_headings,
+        &names,
+        &all_records,
+        &replaced,
+        &blame_index,
+        &led,
+    );
     // A banned word in a question's text, the judgement show, plan and
     // approve read too (`rules::banned_in_questions`).
     findings.extend(rules::banned_in_questions(&root, &rel, &rf, &terms_list, &led));

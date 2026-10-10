@@ -189,6 +189,9 @@ fn build(
         Some((h, _)) if !awaiting.is_empty() => Some(&h.index().planning),
         _ => built.as_ref(),
     };
+    // Every blame file, read once through the run's source: the `blame:`
+    // lines are judged against it, and `check_blame` judges the files.
+    let (blame_index, blame_unreadable) = crate::blame::Index::read(root, &source, &led);
     let per_record_findings: Vec<Vec<rules::Finding>> = match held {
         Some((_, judged)) if judged.len() == records.len() => judged
             .iter()
@@ -208,6 +211,7 @@ fn build(
                 cross_file_headings: &cross_file_headings,
                 names: &names,
                 replaced,
+                blame: &blame_index,
                 led: &led,
                 planning: awaiting.contains(&rf.rel),
                 shared,
@@ -263,7 +267,7 @@ fn build(
     push_failures(&mut failures, plan_failures);
     push_failures(&mut notes, plan_notes);
     push_failures(&mut failures, terms::check_terms(root, &records, &led, &source, &approved_rels));
-    let (blame_failures, blame_notes) = blame::check_blame(root, &source, &records, &as_loaded, &terms_list, &led, &mut stops);
+    let (blame_failures, blame_notes) = blame::check_blame(root, &source, &blame_index, &blame_unreadable, &mut stops);
     push_failures(&mut failures, blame_failures);
     notes.extend(blame_notes);
     let (test_failures, untested) = tests::check_tests(root, &records, &led, tests, &source);

@@ -109,7 +109,7 @@ pub fn question_status_in(led: &Ledger, rf: &RecordFile, sec: &Section) -> Quest
 /// The status of the question `id` from its latest state row, `None` when it
 /// has none (never asked: whether it has a body is read off its section,
 /// `question_status`). What a reader with an identifier and no section
-/// reads, a blame row or a removed file.
+/// reads, a removed file.
 pub fn question_status_of_id(led: &Ledger, id: &str) -> Option<QuestionStatus> {
     match led.latest_state(id)?.event.as_str() {
         "asked" => Some(QuestionStatus::Asked),

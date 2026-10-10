@@ -209,6 +209,20 @@ pub const SUPERSEDES_ENTRY_NAMES_ONE_DECISION: Rule = Rule {
     protects: "a reference carries the identifier of what it names",
 };
 
+/// Decision: What does a question carry of the blame file it came from?
+pub const BLAME_LINE_NAMES_APPROVED_FILE: Rule = Rule {
+    name: "blame_line_names_approved_file",
+    decisions: &["672201dd-8f22-4dc3-8b21-a73eb7606e83"],
+    protects: "a blame line names an approved blame file",
+};
+
+/// Decision: What does a question carry of the blame file it came from?
+pub const BLAME_LINE_NAMES_ROW_RANGES: Rule = Rule {
+    name: "blame_line_names_row_ranges",
+    decisions: &["672201dd-8f22-4dc3-8b21-a73eb7606e83"],
+    protects: "a blame line names row ranges of its blame file",
+};
+
 /// Decision: Does a banned word pass when it is only quoted?
 pub const BANNED_WORD_ABSENT_FROM_RECORDS: Rule = Rule {
     name: "banned_word_absent_from_records",
@@ -443,11 +457,18 @@ pub const STAGED_FILES_ARE_JUDGED_FILES: Rule = Rule {
     protects: "a commit carries the files check judged",
 };
 
-/// Decision: What does a blame file hold?
+/// Decision: What does a blame file hold of its origin?
 pub const BLAME_FILE_SHAPE: Rule = Rule {
     name: "blame_file_shape",
-    decisions: &["34f0202a-0be4-4049-94de-d3886f4f8ffc"],
+    decisions: &["d2851ea1-fcb6-476a-b321-c813a594d5e5"],
     protects: "a blame file can be checked against its origin",
+};
+
+/// Decision: What does a blame file hold of its origin?
+pub const BLAME_ROW_SAYS_DECISION_OR_DETAIL: Rule = Rule {
+    name: "blame_row_says_decision_or_detail",
+    decisions: &["d2851ea1-fcb6-476a-b321-c813a594d5e5"],
+    protects: "a blame row says decision or detail",
 };
 
 /// Decision: Does a blame file cover its whole origin?
@@ -457,81 +478,39 @@ pub const BLAME_COVERS_ORIGIN: Rule = Rule {
     protects: "every line of the origin has a row",
 };
 
-/// Decision: What does a blame row name?
-pub const BLAME_ROW_HEADING_EXISTS: Rule = Rule {
-    name: "blame_row_heading_exists",
-    decisions: &["38216d39-b064-4927-ab60-951a3c89e388"],
-    protects: "a blame row names a heading that exists",
-};
-
-/// Decision: What does a blame row name?
-pub const BLAME_ROW_HEADING_IS_ONE: Rule = Rule {
-    name: "blame_row_heading_is_one",
-    decisions: &["38216d39-b064-4927-ab60-951a3c89e388"],
-    protects: "a blame row names one question",
-};
-
-/// Decision: What does a blame row name?
-pub const BLAME_ROW_TERM_EXISTS: Rule = Rule {
-    name: "blame_row_term_exists",
-    decisions: &["38216d39-b064-4927-ab60-951a3c89e388"],
-    protects: "a blame row names a term that exists",
-};
-
-/// Decision: What does a blame row name?
-pub const BLAME_ROW_TOPIC_FILE_EXISTS: Rule = Rule {
-    name: "blame_row_topic_file_exists",
-    decisions: &["38216d39-b064-4927-ab60-951a3c89e388"],
-    protects: "a prose row names a topic file that exists",
-};
-
-/// Decision: What does a blame row name?
-pub const BLAME_ROW_COPY_TARGET_EXISTS: Rule = Rule {
-    name: "blame_row_copy_target_exists",
-    decisions: &["38216d39-b064-4927-ab60-951a3c89e388"],
-    protects: "a copy row names a file with a blame file",
-};
-
-/// Decision: What does a blame row name?
-pub const BLAME_COPY_TARGET_IS_ORIGIN_FILE: Rule = Rule {
-    name: "blame_copy_target_is_origin_file",
-    decisions: &["38216d39-b064-4927-ab60-951a3c89e388"],
-    protects: "a copy row names a file outside adrdom",
-};
-
-/// Decision: What does a blame file hold?
+/// Decision: What does a blame file hold of its origin?
 pub const BLAME_ORIGIN_IS_A_FILE: Rule = Rule {
     name: "blame_origin_is_a_file",
-    decisions: &["34f0202a-0be4-4049-94de-d3886f4f8ffc"],
+    decisions: &["d2851ea1-fcb6-476a-b321-c813a594d5e5"],
     protects: "an origin is a regular file outside adrdom",
 };
 
-/// Decision: What does a blame row name?
-pub const BLAME_COPY_NOT_OWN_ORIGIN: Rule = Rule {
-    name: "blame_copy_not_own_origin",
-    decisions: &["38216d39-b064-4927-ab60-951a3c89e388"],
-    protects: "a copy row names another origin, never its own",
-};
-
-/// Decision: What does a blame row name?
-pub const BLAME_ROW_DESTINATION_KNOWN: Rule = Rule {
-    name: "blame_row_destination_known",
-    decisions: &["38216d39-b064-4927-ab60-951a3c89e388"],
-    protects: "a blame row names one of the allowed destinations",
-};
-
-/// Decision: Does check hold a blame file to its origin?
+/// Decision: What does check do when an origin differs from its blame file's blob identifier?
 pub const BLAME_BLOB_MATCHES_ORIGIN: Rule = Rule {
     name: "blame_blob_matches_origin",
-    decisions: &["5fddeeb5-cf54-4550-a701-dd9e4a6a81d6"],
+    decisions: &["6f6e7f4a-d733-4f3a-99f9-6a47fec5db70"],
     protects: "a blame file matches the current origin",
 };
 
-/// Decision: Does an origin leave the repository while its blame file has an open row?
-pub const BLAME_ORIGIN_STAYS_WHILE_OPEN: Rule = Rule {
-    name: "blame_origin_stays_while_open",
-    decisions: &["4bb5ef1b-da16-4206-a7d2-c7380c36a4cc"],
-    protects: "an origin stays while any row it fed is open",
+/// Decision: What does check do when an origin is absent?
+pub const BLAME_ORIGIN_STAYS_UNTIL_APPROVED: Rule = Rule {
+    name: "blame_origin_stays_until_approved",
+    decisions: &["0c3d498a-c540-47f3-8384-050fc044c109"],
+    protects: "an origin stays until its blame file is approved",
+};
+
+/// Decision: What does a blame file hold of its origin?
+pub const BLAME_ID_ASSIGNED_BY_TOOL: Rule = Rule {
+    name: "blame_id_assigned_by_tool",
+    decisions: &["d2851ea1-fcb6-476a-b321-c813a594d5e5", "7a1e7b81-0967-4ed2-8a8a-c7153056836f"],
+    protects: "the tool assigns a blame file's identifier",
+};
+
+/// Decision: What does a blame file hold of its origin?
+pub const BLAME_ID_NAMES_ONE_FILE: Rule = Rule {
+    name: "blame_id_names_one_file",
+    decisions: &["d2851ea1-fcb6-476a-b321-c813a594d5e5", "7a1e7b81-0967-4ed2-8a8a-c7153056836f"],
+    protects: "one identifier names one blame file",
 };
 
 /// Decision: Does ask pair the whole question to terms?
@@ -834,10 +813,10 @@ pub const REFUSED_TEXT_FROZEN: Rule = Rule {
     protects: "a refused question keeps the text it was refused with",
 };
 
-/// Decision: What does a blame file hold?
+/// Decision: Does a blame file cover its whole origin?
 pub const BLAME_ROW_RANGE_WITHIN_ORIGIN: Rule = Rule {
     name: "blame_row_range_within_origin",
-    decisions: &["34f0202a-0be4-4049-94de-d3886f4f8ffc"],
+    decisions: &["5c399a14-1e5c-48eb-b502-b57524c01c24"],
     protects: "a blame row names only lines the origin has",
 };
 
@@ -1053,14 +1032,6 @@ pub const GITIGNORE_MATCHES_INSTALL: Rule = Rule {
     protects: "the adrdom gitignore equals what install writes",
 };
 
-/// Decision: Does a retired term hold its words?
-/// Decision: What does a blame row name?
-pub const BLAME_ROW_TERM_IS_LIVE: Rule = Rule {
-    name: "blame_row_term_is_live",
-    decisions: &["5577f646-a9d4-4785-9193-2317b9aa502d", "38216d39-b064-4927-ab60-951a3c89e388"],
-    protects: "a blame row names a term that is not retired",
-};
-
 /// Decision: Does an answer carry the version of the question the owner read?
 pub const ASKED_TEXT_FROZEN: Rule = Rule {
     name: "asked_text_frozen",
@@ -1127,6 +1098,8 @@ pub const ALL: &[&Rule] = &[
     &SUPERSEDES_TARGET_IS_CURRENT,
     &SUPERSEDES_NAMES_DEPENDENTS,
     &SUPERSEDES_ENTRY_NAMES_ONE_DECISION,
+    &BLAME_LINE_NAMES_APPROVED_FILE,
+    &BLAME_LINE_NAMES_ROW_RANGES,
     &BANNED_WORD_ABSENT_FROM_RECORDS,
     &QUESTION_PAIRS_TO_TERM,
     &PLAN_APPROVED_BEFORE_ASK,
@@ -1161,18 +1134,13 @@ pub const ALL: &[&Rule] = &[
     &TERMS_BRIEF_MATCHES_TERMS,
     &STAGED_FILES_ARE_JUDGED_FILES,
     &BLAME_FILE_SHAPE,
+    &BLAME_ROW_SAYS_DECISION_OR_DETAIL,
     &BLAME_COVERS_ORIGIN,
-    &BLAME_ROW_HEADING_EXISTS,
-    &BLAME_ROW_HEADING_IS_ONE,
-    &BLAME_ROW_TERM_EXISTS,
-    &BLAME_ROW_TOPIC_FILE_EXISTS,
-    &BLAME_ROW_COPY_TARGET_EXISTS,
-    &BLAME_COPY_TARGET_IS_ORIGIN_FILE,
     &BLAME_ORIGIN_IS_A_FILE,
-    &BLAME_COPY_NOT_OWN_ORIGIN,
-    &BLAME_ROW_DESTINATION_KNOWN,
     &BLAME_BLOB_MATCHES_ORIGIN,
-    &BLAME_ORIGIN_STAYS_WHILE_OPEN,
+    &BLAME_ORIGIN_STAYS_UNTIL_APPROVED,
+    &BLAME_ID_ASSIGNED_BY_TOOL,
+    &BLAME_ID_NAMES_ONE_FILE,
     &ASKED_QUESTION_HAS_TERMS_LINE,
     &ASKED_TERMS_LINE_TERM_EXISTS,
     &ASKED_TERMS_LINE_TERM_IS_LIVE,
@@ -1245,7 +1213,6 @@ pub const ALL: &[&Rule] = &[
     &TERMS_FILE_SHAPE,
     &TERMS_FILE_EXISTS,
     &GITIGNORE_MATCHES_INSTALL,
-    &BLAME_ROW_TERM_IS_LIVE,
     &ASKED_TEXT_FROZEN,
     &ANSWER_ROW_HAS_ASKED_ROW,
     &DROPPED_ROW_HAS_CAUSE,

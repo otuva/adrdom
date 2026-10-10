@@ -171,8 +171,8 @@ pub fn terms_approved(led: &Ledger, tf: &TermsFile) -> bool {
 /// hashes to the latest `blame` ledger row for `rel` (per "Does the owner
 /// approve a blame file?", e879fe72 A: "a blame file that differs from its
 /// latest approval is a draft"). Hashed the same way `crate::blame::file_hash`
-/// hashes the rewritten lines `do_approve_blame` is about to write, so a
-/// file freshly approved always reads back as approved.
+/// hashes the lines, id line included, `do_approve_blame` is about to write,
+/// so a file freshly approved always reads back as approved.
 pub fn blame_approved(led: &Ledger, rel: &str, content: &str) -> bool {
     let lines = record::split_lines(content);
     let hash = crate::blame::file_hash(&lines);
@@ -930,8 +930,9 @@ pub fn conflicting_rulings(led: &Ledger, id: &str) -> Option<(Ruling, Ruling)> {
 /// through the hash end, see `record::hash_range`) with the `terms:` line
 /// itself left out (so re-resolving never matches against a term's own
 /// previous resolution rather than the prose that produced it), and with
-/// `id:`, `depends:`, and `supersedes:` lines left out too, since those hold
-/// ids and references, not prose, once a plan is approved.
+/// `id:`, `depends:`, `supersedes:`, `unrelated:` and `blame:` lines left out
+/// too, since those hold ids and references, not prose, once a plan is
+/// approved.
 pub fn section_text_excluding_terms_line(lines: &[String], sec: &Section) -> String {
     let (s, e) = record::hash_range(lines, sec);
     lines[s..e]
@@ -949,6 +950,7 @@ pub fn section_text_excluding_terms_line(lines: &[String], sec: &Section) -> Str
                     crate::tells::DEPENDS_PREFIX,
                     crate::tells::SUPERSEDES_PREFIX,
                     crate::tells::UNRELATED_PREFIX,
+                    crate::tells::BLAME_PREFIX,
                 ],
             )
         })
@@ -984,7 +986,7 @@ mod tests {
     // computes for that content is.
     #[test]
     fn blame_approved_compares_the_latest_blame_row_hash() {
-        let content = "origin: docs/x.md\nblob: 0000000000000000000000000000000000000000\n\n1-1\tdropped: dead\n";
+        let content = "origin: docs/x.md\nblob: 0000000000000000000000000000000000000000\n\n1-1\tdetail\n";
         let led = Ledger { rows: vec![], malformed: vec![] };
         assert!(!blame_approved(&led, "adrdom/blame/x.md", content));
 
@@ -1003,6 +1005,22 @@ mod tests {
         assert!(blame_approved(&led, "adrdom/blame/x.md", content));
         assert!(!blame_approved(&led, "adrdom/blame/other.md", content));
         assert!(!blame_approved(&led, "adrdom/blame/x.md", "different content\n"));
+    }
+
+    // adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+    //
+    // The text a question is paired to terms from, and the banned-word scan
+    // reads, holds the question's words: the reference lines (a blame file's
+    // name among them) and the `terms:` line are left out.
+    #[test]
+    fn the_text_read_for_terms_leaves_out_every_reference_line() {
+        let content = "# T\n\n### Does the widget hold?\ndepends: widget\nunrelated: a, b\nblame: widgetnotes 1-2\nid: 11111111-1111-4111-8111-111111111111\nterms: widget=22222222-2222-4222-8222-222222222222\n\nProblem: p.\n\nStandard: s.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n";
+        let rf = record::build(PathBuf::from("t.md"), "t.md".to_string(), record::split_lines(content));
+        let text = section_text_excluding_terms_line(&rf.lines, &rf.sections[0]);
+        assert!(text.starts_with("### Does the widget hold?\n\nProblem: p."), "{}", text);
+        for left_out in ["depends:", "unrelated:", "blame:", "widgetnotes", "id:", "terms:"] {
+            assert!(!text.contains(left_out), "{} in {}", left_out, text);
+        }
     }
 
     // adr: e3200081-9995-4bbe-983f-2f430dc341e7

@@ -96,13 +96,18 @@ pub const TERMS_PREFIX: &str = "terms: ";
 pub const DEPENDS_PREFIX: &str = "depends: ";
 pub const SUPERSEDES_PREFIX: &str = "supersedes: ";
 pub const UNRELATED_PREFIX: &str = "unrelated: ";
+/// A blame file's name is no word of the question: no tell and no word
+/// count reads a `blame:` line (per "What does a question carry of the blame
+/// file it came from?").
+pub const BLAME_PREFIX: &str = "blame: ";
 pub const ANSWER_PREFIX: &str = "**Answer:**";
 
 /// Every prefix a line the tool writes can start with. `is_tool_line`
-/// checks all six; a caller that wants only some of them (e.g.
+/// checks all seven; a caller that wants only some of them (e.g.
 /// id/supersedes, or id/depends/supersedes without the terms line) calls
 /// `starts_with_any` with its own subset of these constants instead.
-pub const TOOL_LINE_PREFIXES: &[&str] = &[ID_PREFIX, TERMS_PREFIX, DEPENDS_PREFIX, SUPERSEDES_PREFIX, UNRELATED_PREFIX, ANSWER_PREFIX];
+pub const TOOL_LINE_PREFIXES: &[&str] =
+    &[ID_PREFIX, TERMS_PREFIX, DEPENDS_PREFIX, SUPERSEDES_PREFIX, UNRELATED_PREFIX, BLAME_PREFIX, ANSWER_PREFIX];
 
 /// True when `line`, trimmed of leading whitespace, starts with any of
 /// `prefixes` (each an exact prefix, e.g. `tells::ID_PREFIX`).
@@ -291,6 +296,7 @@ mod tests {
             "depends: term",
             "terms: x=1",
             "supersedes: y",
+            "blame: claude-notes 1-2",
             "**Answer:** A",
             "Problem: claude already built it",
         ]
@@ -301,7 +307,7 @@ mod tests {
         // Only the last line is prose; it carries two tells (provenance +
         // code-state).
         assert_eq!(hits.len(), 2);
-        assert!(hits.iter().all(|(i, _, _)| *i == 7));
+        assert!(hits.iter().all(|(i, _, _)| *i == 8));
     }
 
     #[test]
