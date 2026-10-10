@@ -1,6 +1,6 @@
 # Blame
 
-How the text of an origin enters the records so that every line of it is accounted for: a blame file under adrdom/blame holds, for one origin, its line ranges and what each range went to. The map is the proof; git keeps the text. Agents write and verify the map, the owner approves it.
+How the text of an origin enters the records so that every line of it is accounted for: a blame file under adrdom/blame holds, for one origin, its line ranges and whether each holds a decision, and a question names the ranges it came from. Git keeps the text. Agents write the blame file, the owner approves it, and planning follows on its own.
 
 ### What does a blame file hold?
 depends: 108053a8-c2c3-4561-874c-2f573a5409f2, ecb18413-cb3e-437e-9444-3cdd406ed67d
@@ -161,3 +161,91 @@ Standard: a reconciliation report gives totals per disposition and lists the exc
   Costs: the summary the owner approves on does not exist.
 
 **Answer:** A
+
+### What does a blame file hold of its origin?
+depends: blame, origin, identifier, Does the owner approve a blame file?, Does a blame file cover its whole origin?
+supersedes: What does a blame file hold?, What does a blame row name?, Does check hold a blame file to its origin?, Does an origin leave the repository while its blame file has an open row?, What does show print of the file named?
+unrelated: Does show print what a file holds beyond its latest approval?, What does check do with a fault on a file awaiting approval?, What does answer write for a removed question?, What does a question carry of the blame file it came from?, What does check do with a decision row that no question names?, What does check do when an origin differs from its blame file's blob identifier?, What does check do when an origin is absent?, Does a finding carry the identifier of the decision it judges?, Does a supersedes line name every current decision standing on its target?
+
+Problem: the records need, before any question is written, an approved account of which lines of an origin hold a decision.
+Standard: an intermediate representation carries one classification per unit and no reference to what is built from it later.
+
+- A) Path, blob identifier, an identifier line approve writes, one row per line range saying decision or detail, no text copied.
+  Why: decision marks a range the owner settles by picking an option, detail every other range; the file closes before planning.
+  Costs: whether a decision is in the records, or contradicts one, is found in planning, not in the row.
+- B) Path, blob identifier, and one row per line range naming where it went: question, term, topic file or a drop.
+  Why: every row resolves to a record the tool can find.
+  Costs: a row needs its question first, so the file waits for planning and the owner approves last.
+- C) Path, blob identifier, identifier line, one row per range saying decision or detail and, for a decision, its heading.
+  Why: the file carries both the classification and the link.
+  Costs: the approved file changes after planning, and the owner approves it twice.
+
+### What does a question carry of the blame file it came from?
+depends: blame, question, identifier, What does a blame file hold of its origin?=A, Does the owner approve a blame file?, Does a reference in a topic file carry the identifier of what it names?, origin
+unrelated: Does check hold a blame file to its origin?, Does an origin leave the repository while its blame file has an open row?, What does a blame file hold?, What does show print of the file named?, Does a depends entry on a question in its file carry an answer set?, What does a blame row name?, What does ask put to the owner in one run?, topic, Does a blame file cover its whole origin?, Does check fail a ledger row that was edited?, Does every ledger row carry the tool version?, What does answer write for a removed question?, What does check do with a decision row that no question names?, What does check do when an origin differs from its blame file's blob identifier?, What does check do when an origin is absent?, Does check fail a ledger whose rows changed place?
+
+Problem: the records need to read, from a question, which lines of which origin it came from, without a change to the approved blame file.
+Standard: traceability runs from the derived artifact to its source by a stable identifier and a location.
+
+- A) One blame line naming each blame file by identifier and the rows, by their ranges, the question itself came from.
+  Why: the agent writes the file's name, approve turns it into the identifier; a question from no origin carries none.
+  Costs: a line under the heading, approved with the plan and judged then, like a depends entry; never after.
+- B) Nothing: the blame file's rows name the questions.
+  Why: one file holds the whole map.
+  Costs: the approved blame file changes after every plan, and the owner approves it again.
+- C) Nothing on either side: the ledger records which blame file was open when the question was asked.
+  Why: no line to write.
+  Costs: a question from two files, or a file with many questions, cannot be distinguished.
+
+### What does check do with a decision row that no question names?
+depends: check, decision, finding, What does a blame file hold of its origin?=A, What does a question carry of the blame file it came from?=A, Does a command print under a flag what it computes from the records?
+unrelated: Does check print a line that names no move?, What does check do with an untested current decision?, Does check fail a ledger whose rows changed place?, What does a comment in code carry to name a decision?, Does a finding carry the identifier of the decision it judges?, Does check fail a test that names a decision that is not current?, What does show print with no file named?, Does check fail a ledger row that was edited?, What does a test carry to name its decision?, What does check do with a fault on a file awaiting approval?, Does the agent build what no current decision covers?, Does an origin leave the repository while its blame file has an open row?, Does check hold a blame file to its origin?, What does check do when an origin differs from its blame file's blob identifier?, What does check do when an origin is absent?, Does a blame file cover its whole origin?
+
+Problem: the records need to show which decision rows reached a question without making planning answer to the blame file.
+Standard: traceability is reported as coverage, a count the reviewer reads, not a gate on the build.
+
+- A) Nothing: show of the blame file counts, under a flag, its decision rows with a question and those with none.
+  Why: a row's value is a first reading that planning may merge, drop or overturn; the owner reads the count.
+  Costs: a decision row forgotten in planning stops nothing.
+- B) Reports a finding for each such row.
+  Why: every decision row ends in a question or a finding.
+  Costs: a row planning rightly merged or dropped as a copy is a finding until someone rewrites the blame file.
+- C) Nothing, and nothing is counted.
+  Why: the blame file and the plan never meet.
+  Costs: whether an origin's decisions reached the records is read by hand.
+
+### What does check do when an origin differs from its blame file's blob identifier?
+depends: check, origin, identifier, What does a blame file hold of its origin?=*, What does check do with a fault on a file awaiting approval?, Does the owner approve a blame file?
+supersedes: Does check hold a blame file to its origin?
+unrelated: What does a blame file hold?, Does an origin leave the repository while its blame file has an open row?, Does check fail a ledger row that was edited?, Does check hold the files install writes?, Does check fail a ledger whose rows changed place?, Does check hold the reader's file as it holds the ledger?, Does check fail a topic file awaiting approval?, Does check hold the merge rule install writes for the ledger?, Does a blame file cover its whole origin?, What does a question carry of the blame file it came from?, What does check do with a decision row that no question names?, What does check do when an origin is absent?
+
+Problem: the records need a blame file to hold to the text it was approved against.
+Standard: a derived artifact records a content hash of its source and is checked against it.
+
+- A) Fails on an approved blame file, until the rows and blob identifier are rewritten and the owner approves again.
+  Why: a stale blame file never passes as approved; on a file awaiting approval the fault is a note.
+  Costs: one edited line of the origin costs an owner approval.
+- B) Reports the mismatch and passes.
+  Why: an origin changes freely while its blame file is written.
+  Costs: a stale blame file passes the hook.
+- C) Nothing: the blob identifier is written once and never compared.
+  Why: the simplest file.
+  Costs: the blame file drifts from its origin and nothing says so.
+
+### What does check do when an origin is absent?
+depends: check, origin, What does a blame file hold of its origin?=A, What does check do when an origin differs from its blame file's blob identifier?=*, What does check do with a fault on a file awaiting approval?, Does the owner approve a blame file?
+supersedes: Does an origin leave the repository while its blame file has an open row?
+unrelated: Does check hold a blame file to its origin?, Does check fail a ledger whose rows changed place?, Does a command refuse what check passes?, Does check fail a test that names a decision that is not current?, Does check print a line that names no move?, Does check fail a ledger row that was edited?, Does check fail a question answered with two different options?, Does check fail a topic file awaiting approval?, What does a blame file hold?, Does a blame file cover its whole origin?, Does check at a commit read the staged files?, Does check hold the merge rule install writes for the ledger?, Does check read the words of an answered question again?, Does git track a file the tool can get again without the owner?, What does a question carry of the blame file it came from?, What does check do with a decision row that no question names?
+
+Problem: the records need to say when an origin's text may leave the working tree, and who takes it out.
+Standard: a source is retired after its replacement is verified, and the owner of the source retires it, not the tool.
+
+- A) Nothing while the blame file is approved; a finding while it is not.
+  Why: the approved blame file is the threshold; the owner deletes the origin and git keeps the text.
+  Costs: an open question's text is read from git.
+- B) A finding until every question the blame file's rows fed is answered.
+  Why: the text stays until every decision it fed is current.
+  Costs: rows name no question, so the rule has nothing to hold, and one open question keeps a whole origin.
+- C) A finding always.
+  Why: the blame file and the text always sit together.
+  Costs: migrated text never leaves the working tree.

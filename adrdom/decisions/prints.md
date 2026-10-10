@@ -270,3 +270,21 @@ Standard: every diagnostic carries a stable code that documentation and tests ke
   Costs: a message with no decision behind it passes every gate and is caught at review alone.
 
 **Answer:** A
+
+### What does show print of a file under adrdom?
+depends: move, status, Does a command print under a flag what it computes from the records?, Does show print what a file holds beyond its latest approval?
+supersedes: What does show print of the file named?
+unrelated: What does show print with no file named?, What does the tool keep of the reader's word?, Does the tool keep everything it owns under one directory?, Does the ui show what the terminal prints?, terms brief, topic file, ledger, Does check print a line that names no move?, What does check do with a fault on a file awaiting approval?, Does an answer carry the version of the question the owner read?, What does a test carry to name its decision?
+
+Problem: show exists so that the one who runs it reads what their next move on the file needs, whatever kind of file it is.
+Standard: a listing prints what the next move reads and takes a flag for the rest.
+
+- A) What the next move on the file reads, and the rest under a flag.
+  Why: a question with its status, the lines approve reads, an asked body; a new line or file kind changes nothing.
+  Costs: which lines a move reads is derived from that move's decision, not listed in this one.
+- B) Everything the file holds, with the status of each thing.
+  Why: the whole file in one run, nothing under a flag.
+  Costs: twenty unrelated names per question that no move reads, over half the output.
+- C) Each thing's status only, and every line and body under a flag.
+  Why: the shortest listing.
+  Costs: the owner approves lines and answers bodies without seeing them.

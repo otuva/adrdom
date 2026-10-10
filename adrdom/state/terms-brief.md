@@ -28,7 +28,7 @@
 - refusal (refuse, refuses, refused, refusing): The owner's ruling that a question cannot be settled as asked.
 - answer set (answer sets): The letters of a question's options under which a question standing on it is asked.
 - origin (origins): A prose file outside adrdom whose text the records take in.
-- blame (blame file, blame files): A file holding, for one origin, its line ranges and what each range went to in the records.
+- blame (blame file, blame files, blame line, blame lines): The tie between an origin's lines and the decisions they hold.
 - terms brief (terms briefs): The file under adrdom/state holding the name, aliases and definition of every term that is not retired, one term per line.
 - brief (briefs): The file at the root of a repository that tells an agent how to work in it.
 - embedding (embeddings): A list of numbers the tool computes from a text, so that two texts on one subject give two near lists.
