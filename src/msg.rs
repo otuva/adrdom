@@ -491,7 +491,7 @@ pub fn section_shape_error(rel: &str, heading: &str, e: &str) -> Said {
             Next::agent("removes the lines after the answer line"),
         );
     }
-    for kind in ["depends", "supersedes", "unrelated", "terms"] {
+    for kind in ["depends", "supersedes", "unrelated", "blame", "terms"] {
         let Some(rest) = e.strip_prefix(&format!("{}: ", kind)) else { continue };
         if rest.starts_with("second ") {
             let n = e.rsplit(' ').next().unwrap_or("");
@@ -604,7 +604,8 @@ pub fn dep_no_term(rel: &str, heading: &str, text: &str) -> Said {
 /// `show` names a path approve does not take (per "Does show print what a
 /// file holds beyond its latest approval?": show takes every file approve
 /// takes).
-/// `plan` names a path that is no topic file: it plans topic files alone.
+/// `ask` names a path that is no topic file: it asks the questions of topic
+/// files alone.
 pub fn plan_not_a_topic_file(rel: &str) -> String {
     refuse(
         format!("{} is not a topic file", rel),
@@ -1080,6 +1081,57 @@ pub fn unrelated_ambiguous(rel: &str, heading: &str, entry: &str, files: &[Strin
     )
 }
 
+// --- the blame line of a question -------------------------------------------
+// One line under a heading naming the approved blame file and the row ranges
+// the question was born from (per "What does a question carry of the blame
+// file it came from?"), judged by `rules::blame_line_refusals`.
+
+/// A `blame:` entry that names no row range (`entry` as the line writes it):
+/// a name alone.
+pub fn blame_entry_without_range(rel: &str, heading: &str, entry: &str) -> Said {
+    blame_entry_incomplete(rel, heading, entry, "row range")
+}
+
+fn blame_entry_incomplete(rel: &str, heading: &str, entry: &str, lacks: &str) -> Said {
+    said(
+        &rule::BLAME_LINE_NAMES_ROW_RANGES,
+        format!("{}: \"{}\": the blame entry \"{}\" names no {}", rel, heading, entry, lacks),
+        Next::agent("writes the name of a blame file and the ranges of its rows"),
+    )
+}
+
+/// A `blame:` entry whose name or identifier is no blame file.
+pub fn blame_names_no_file(rel: &str, heading: &str, name: &str) -> Said {
+    said(
+        &rule::BLAME_LINE_NAMES_APPROVED_FILE,
+        format!("{}: \"{}\": the blame entry \"{}\" names no blame file", rel, heading, name),
+        Next::agent("writes the path of a blame file under adrdom/blame without .md, or removes the entry"),
+    )
+}
+
+/// A `blame:` entry names the blame file `blame_rel`, which awaits its
+/// approval (`status` is new or changed): the line waits for it.
+pub fn blame_file_awaits_approval(rel: &str, heading: &str, blame_rel: &str, status: FileStatus) -> Said {
+    said_raw(
+        &rule::BLAME_LINE_NAMES_APPROVED_FILE,
+        format!("{}: \"{}\": the blame line names {}, which is {}", rel, heading, blame_rel, status.name()),
+        crate::moves::APPROVAL_WAIT_TAIL.trim_start_matches("; "),
+    )
+}
+
+/// A `blame:` entry names a range that is the range of no row of the blame
+/// file `blame_rel`.
+pub fn blame_range_of_no_row(rel: &str, heading: &str, blame_rel: &str, from: usize, to: usize) -> Said {
+    said(
+        &rule::BLAME_LINE_NAMES_ROW_RANGES,
+        format!(
+            "{}: \"{}\": the blame line names {}-{}, the range of no row of {}",
+            rel, heading, from, to, blame_rel
+        ),
+        Next::agent("writes the range of a row of that blame file, or removes the range"),
+    )
+}
+
 /// A question not yet asked has no rows of the reader at one of its hashes
 /// (`what` is `heading` or `heading with its body`).
 pub fn plan_rows_missing(rel: &str, heading: &str, what: &str) -> Said {
@@ -1275,6 +1327,13 @@ pub fn show_question_of(heading: &str, rel: &str) -> String {
 /// computed here a second time.
 pub fn show_no_records() -> String {
     "neighbours: no reader records yet".to_string()
+}
+
+/// After the rows of a blame file under `show --questions`: how many of its
+/// `decision` rows a question names and how many none names (per "Does check
+/// report a decision row that no question names?", ee27fd4c A).
+pub fn show_decision_rows(with: usize, without: usize) -> String {
+    format!("decision rows: {} with a question, {} with none", with, without)
 }
 
 /// Above the lines of a changed part whose approved text no commit holds:
@@ -2106,12 +2165,78 @@ pub fn topic_unnameable(rel: &str, topic: &str) -> Said {
 }
 
 // --- adrdom/blame/*.md (blame files) --------------------------------------
-// Shared by `blame::do_approve_blame`'s refusal collection (per "What does
-// a blame file hold?", "Does a blame file cover its whole origin?", "What
-// does a blame row name?", "Does the owner approve a blame file?").
+// Shared by `blame::file_state` and the rules on a blame file (per "What
+// does a blame file hold of its origin?", "Does a blame file cover its whole
+// origin?"), read by `approve`, `check` and `show` alike.
 
+/// A fault of the structure of a blame file: a header line missing, the
+/// blank line after the header, a line that is no row.
 pub fn blame_shape_error(rel: &str, e: &str) -> Said {
     said(&crate::rule::BLAME_FILE_SHAPE, format!("{}: {}", rel, e), Next::agent("rewrites the blame file"))
+}
+
+/// A row whose value is neither `decision` nor `detail`.
+pub fn blame_row_value_error(rel: &str, e: &str) -> Said {
+    said(
+        &crate::rule::BLAME_ROW_SAYS_DECISION_OR_DETAIL,
+        format!("{}: {}", rel, e),
+        Next::agent("writes decision or detail after the tab"),
+    )
+}
+
+/// An id line that holds no identifier, or sits below the header: the tool
+/// writes the identifier of a blame file, at approval, as line 3.
+pub fn blame_id_error(rel: &str, e: &str, approved: Option<&str>) -> Said {
+    // `e` opens with the line it found, as "line N: ...". A file with an
+    // approval gets its approved id line back instead.
+    let next = match approved {
+        Some(id) => Next::agent(format!("writes back the id line \"id: {}\"", id)),
+        None => match e.strip_prefix("line ").and_then(|r| r.split(':').next()).filter(|n| n.parse::<usize>().is_ok()) {
+        Some(n) => Next::agent(format!("removes the id line, line {}", n)),
+        None => Next::agent("removes the id line"),
+        },
+    };
+    said(&crate::rule::BLAME_ID_ASSIGNED_BY_TOOL, format!("{}: {}", rel, e), next)
+}
+
+/// `rel` was approved and has no id line now: the identifier its approval
+/// gave is gone, and approve does not assign another.
+pub fn blame_id_line_gone(rel: &str, id: &str) -> Said {
+    said(
+        &crate::rule::BLAME_ID_ASSIGNED_BY_TOOL,
+        format!("{}: the id line of its approval is gone", rel),
+        Next::agent(format!("writes back the id line \"id: {}\"", id)),
+    )
+}
+
+/// The id line of `rel` holds an identifier no `blame` ledger row holds: the
+/// tool did not write it.
+pub fn blame_id_not_written(rel: &str) -> Said {
+    said(
+        &crate::rule::BLAME_ID_ASSIGNED_BY_TOOL,
+        format!("{}: its id line holds an identifier the tool did not write", rel),
+        Next::agent("removes the id line"),
+    )
+}
+
+/// `rel` was approved and its id line differs from the identifier its
+/// approval gave (`written`).
+pub fn blame_id_edited(rel: &str, written: &str) -> Said {
+    said(
+        &crate::rule::BLAME_ID_ASSIGNED_BY_TOOL,
+        format!("{}: its id line differs from the identifier of its approval", rel),
+        Next::agent(format!("writes back the id line \"id: {}\"", written)),
+    )
+}
+
+/// The id line of `rel` holds the identifier of another blame file
+/// (`other_rel`, the one that keeps it): a copy of that file.
+pub fn blame_id_shared(rel: &str, other_rel: &str) -> Said {
+    said(
+        &crate::rule::BLAME_ID_NAMES_ONE_FILE,
+        format!("{}: its id line holds the identifier of {}", rel, other_rel),
+        Next::agent(format!("removes the id line from {}", rel)),
+    )
 }
 
 fn range_text(start: usize, end: usize) -> String {
@@ -2126,7 +2251,7 @@ pub fn blame_coverage_gap(rel: &str, start: usize, end: usize) -> Said {
     said(
         &crate::rule::BLAME_COVERS_ORIGIN,
         format!("{}: line(s) {} of the origin are covered by no row", rel, range_text(start, end)),
-        Next::agent(format!("adds a row for lines {}", range_text(start, end))),
+        Next::agent(format!("adds a row for {} {}", if start == end { "line" } else { "lines" }, range_text(start, end))),
     )
 }
 
@@ -2138,99 +2263,25 @@ pub fn blame_range_beyond(rel: &str, start: usize, end: usize, n: usize) -> Said
     )
 }
 
-pub fn blame_row_unknown_heading(rel: &str, text: &str) -> Said {
+/// The origin line names a path under `repo::ADRDOM_DIR`, or one that exists
+/// but is not a regular file (per the "origin" term: "a prose file outside
+/// adrdom whose text the records take in"). `blame::valid_origin_path` is
+/// the one place `approve`, `check` and `show` read this rule from.
+pub fn blame_bad_origin_path(rel: &str, path: &str) -> Said {
     said(
-        &crate::rule::BLAME_ROW_HEADING_EXISTS,
-        format!("{}: row names heading \"{}\" which is no question in any topic file", rel, text),
-        Next::agent("rewrites the row"),
-    )
-}
-
-pub fn blame_row_ambiguous_heading(rel: &str, text: &str, files: &[String]) -> Said {
-    said(
-        &crate::rule::BLAME_ROW_HEADING_IS_ONE,
-        format!("{}: row names heading \"{}\" which is a question in more than one file: {}", rel, text, files.join(", ")),
-        Next::agent("writes the identifier of the one it means"),
-    )
-}
-
-pub fn blame_row_unknown_term(rel: &str, name: &str) -> Said {
-    said(
-        &crate::rule::BLAME_ROW_TERM_EXISTS,
-        format!("{}: row names term \"{}\" which is no term", rel, name),
-        Next::agent("adds the term to adrdom/terms.md, or rewrites the row"),
-    )
-}
-
-pub fn blame_row_retired_term(rel: &str, name: &str) -> Said {
-    said(
-        &crate::rule::BLAME_ROW_TERM_IS_LIVE,
-        format!("{}: row names term \"{}\" which is retired", rel, name),
-        Next::agent("rewrites the row"),
-    )
-}
-
-pub fn blame_row_missing_prose_stem(rel: &str, stem: &str) -> Said {
-    said(
-        &crate::rule::BLAME_ROW_TOPIC_FILE_EXISTS,
-        format!("{}: row names topic file \"{}\" which does not exist", rel, stem),
-        Next::agent("rewrites the row"),
-    )
-}
-
-/// `path` had no trailing `?`, so it was read as a copy-of-origin path
-/// (per "What does a blame row name?"), not a heading -- the extra clause
-/// tells the agent that a heading is the other way to spell this row, in
-/// case the missing `?` was the actual mistake.
-pub fn blame_row_copy_path_missing(rel: &str, path: &str) -> Said {
-    said(
-        &crate::rule::BLAME_ROW_COPY_TARGET_EXISTS,
-        format!("{}: row's copy target \"{}\" is no file in the working tree and has no blame file of its own", rel, path),
-        Next::agent("rewrites the row"),
-    )
-}
-
-/// The origin line, or a `dropped: copy of <path>` row, names a path
-/// under `repo::ADRDOM_DIR`, or one that exists but is not a regular file
-/// (per the "origin" term: "a prose file outside adrdom whose text the
-/// records take in"). Shared by the origin line itself (34f0202a A) and a
-/// copy-of path (38216d39 A) -- `blame::valid_origin_path` is the one
-/// place both `approve` and `check` read this rule from.
-pub fn blame_bad_origin_path(rel: &str, path: &str, copy_target: bool) -> Said {
-    let found = format!("{}: \"{}\" is not a regular file outside adrdom", rel, path);
-    if copy_target {
-        said(&crate::rule::BLAME_COPY_TARGET_IS_ORIGIN_FILE, found, Next::agent("rewrites the row"))
-    } else {
-        said(&crate::rule::BLAME_ORIGIN_IS_A_FILE, found, Next::agent("rewrites the origin line"))
-    }
-}
-
-/// A `dropped: copy of <path>` row names the origin its own blame file
-/// maps (per "What does a blame row name?": a copy is of a question or of
-/// another origin).
-pub fn blame_row_copy_of_own_origin(rel: &str, start: usize, end: usize, path: &str) -> Said {
-    said(
-        &crate::rule::BLAME_COPY_NOT_OWN_ORIGIN,
-        format!("{}: row {}: copy target \"{}\" is this blame file's own origin", rel, range_text(start, end), path),
-        Next::agent("rewrites the row"),
-    )
-}
-
-pub fn blame_row_unknown_destination(rel: &str, start: usize, end: usize, text: &str) -> Said {
-    said(
-        &crate::rule::BLAME_ROW_DESTINATION_KNOWN,
-        format!("{}: row {}: \"{}\": blame row names no known destination", rel, range_text(start, end), text),
-        Next::agent("rewrites the row"),
+        &crate::rule::BLAME_ORIGIN_IS_A_FILE,
+        format!("{}: \"{}\" is not a regular file outside adrdom", rel, path),
+        Next::agent("rewrites the origin line"),
     )
 }
 
 // --- commands/check/blame.rs -----------------------------------------------
-// Shared by `check`'s `blame` category (per "Does check hold a blame file
-// to its origin?", 5fddeeb5 A; "Does an origin leave the repository while
-// its blame file has an open row?", 4bb5ef1b A).
+// Shared by `check`'s `blame` category (per "What does check do when an origin
+// differs from its blame file's blob identifier?", 6f6e7f4a A; "What does
+// check do when an origin is absent?", 0c3d498a A).
 
 /// `git hash-object`'s own blob sha for `origin`'s current content no
-/// longer matches the blame file's `blob:` line (5fddeeb5 A). A missing
+/// longer matches the blame file's `blob:` line (6f6e7f4a A). A missing
 /// origin is never reported here -- that is `blame_origin_missing`.
 pub fn blame_blob_mismatch(rel: &str, origin: &str) -> Said {
     said(
@@ -2240,29 +2291,22 @@ pub fn blame_blob_mismatch(rel: &str, origin: &str) -> Said {
     )
 }
 
-/// `origin` is missing while `rel` still holds it hostage: either the
-/// blame file itself is a draft (`"the blame file's own approval"` in
-/// `open`), or a `decision:` row it carries is not yet answered (4bb5ef1b
-/// A). `open` is sorted, deduped, and always non-empty when this is
-/// called.
-pub fn blame_origin_missing(rel: &str, origin: &str, open: &[String]) -> Said {
+/// `origin` is missing while the blame file `rel` awaits approval (`status`,
+/// new or changed): an origin stays until its blame file is approved
+/// (0c3d498a A). Once the file is approved the origin may go, and nothing
+/// is reported.
+pub fn blame_origin_missing(rel: &str, origin: &str, status: FileStatus) -> Said {
     said(
-        &crate::rule::BLAME_ORIGIN_STAYS_WHILE_OPEN,
-        format!(
-            "{}: origin {} is missing while {} {} still open",
-            rel,
-            origin,
-            open.join(", "),
-            if open.len() == 1 { "is" } else { "are" }
-        ),
+        &crate::rule::BLAME_ORIGIN_STAYS_UNTIL_APPROVED,
+        format!("{}: origin {} is missing while the blame file is {}", rel, origin, status.name()),
         Next::agent(format!("restores {} from git", origin)),
     )
 }
 
 /// A blame file itself (`rel`) could not be read as text at all (per "Does
-/// check hold a blame file to its origin?", 5fddeeb5 A: fail-open here
-/// means never silently skipping the file). Distinct from `blame_shape_error`
-/// -- there is no content to have a shape at all.
+/// check compare a blame file's blob identifier with its origin?", 6f6e7f4a
+/// A: fail-open here means never silently skipping the file). Distinct from
+/// `blame_shape_error` -- there is no content to have a shape at all.
 pub fn blame_file_unreadable(rel: &str) -> String {
     refuse(
         format!("{}: cannot be read as text", rel),
@@ -2271,7 +2315,7 @@ pub fn blame_file_unreadable(rel: &str) -> String {
 }
 
 /// `git hash-object --stdin` itself failed on `origin`'s current content
-/// (5fddeeb5 A: the blob comparison must fail closed, never silently pass
+/// (6f6e7f4a A: the blob comparison must fail closed, never silently pass
 /// when git could not be asked at all).
 pub fn blame_hash_failed(rel: &str, origin: &str) -> String {
     refuse(
@@ -2281,7 +2325,7 @@ pub fn blame_hash_failed(rel: &str, origin: &str) -> String {
 }
 
 /// `origin` sits at its path (per `Source::exists`) but its content could
-/// not be read as text (4bb5ef1b A: distinct from the origin being
+/// not be read as text (0c3d498a A: distinct from the origin being
 /// missing outright -- a present, unreadable origin is its own failure,
 /// never routed through the missing-origin branch).
 pub fn blame_origin_unreadable(rel: &str, origin: &str) -> String {
@@ -2669,6 +2713,9 @@ mod tests {
             reader_missing(),
             unrelated_names_nothing("x.md", "Does X?", "Y").text(),
             unrelated_ambiguous("x.md", "Does X?", "Y", &["a.md".to_string(), "b.md".to_string()]).text(),
+            blame_entry_without_range("x.md", "Does X?", "notes").text(),
+            blame_names_no_file("x.md", "Does X?", "notes").text(),
+            blame_range_of_no_row("x.md", "Does X?", "adrdom/blame/notes.md", 3, 4).text(),
             plan_rows_missing("x.md", "Does X?", "heading").text(),
             plan_line_missing("x.md", "Does X?", "term", "widget").text(),
             reader_failed("id-1", "no answer"),
@@ -2697,19 +2744,18 @@ mod tests {
             bind_failed(7357, e),
             missing_answer_selection("id-1", "abcd1234"),
             blame_shape_error("adrdom/blame/x.md", "line 1: missing \"origin: <path>\"").text(),
+            blame_row_value_error("adrdom/blame/x.md", "line 4: row value \"term: pass\" is neither decision nor detail").text(),
+            blame_id_error("adrdom/blame/x.md", "line 3: id line holds \"x\", which is no identifier the tool assigns", None).text(),
+            blame_id_line_gone("adrdom/blame/x.md", "11111111-1111-4111-8111-111111111111").text(),
+            blame_id_not_written("adrdom/blame/x.md").text(),
+            blame_id_edited("adrdom/blame/x.md", "11111111-1111-4111-8111-111111111111").text(),
+            blame_id_shared("adrdom/blame/x.md", "adrdom/blame/y.md").text(),
             blame_coverage_gap("adrdom/blame/x.md", 3, 5).text(),
             blame_range_beyond("adrdom/blame/x.md", 1, 10, 5).text(),
-            blame_row_unknown_heading("adrdom/blame/x.md", "Does X?").text(),
-            blame_row_ambiguous_heading("adrdom/blame/x.md", "Does X?", &["a.md".to_string(), "b.md".to_string()]).text(),
-            blame_row_unknown_term("adrdom/blame/x.md", "widget").text(),
-            blame_row_retired_term("adrdom/blame/x.md", "widget").text(),
-            blame_row_missing_prose_stem("adrdom/blame/x.md", "no-such-topic").text(),
-            blame_row_copy_path_missing("adrdom/blame/x.md", "docs/gone.md").text(),
-            blame_row_unknown_destination("adrdom/blame/x.md", 1, 1, "free text").text(),
             blame_blob_mismatch("adrdom/blame/x.md", "docs/x.md").text(),
-            blame_origin_missing("adrdom/blame/x.md", "docs/x.md", &["Does X?".to_string()]).text(),
-            blame_bad_origin_path("adrdom/blame/x.md", "adrdom/blame/notes.md", false).text(),
-            blame_bad_origin_path("adrdom/blame/x.md", "adrdom/blame/notes.md", true).text(),
+            blame_origin_missing("adrdom/blame/x.md", "docs/x.md", FileStatus::New).text(),
+            blame_origin_missing("adrdom/blame/x.md", "docs/x.md", FileStatus::Changed).text(),
+            blame_bad_origin_path("adrdom/blame/x.md", "adrdom/blame/notes.md").text(),
             blame_file_unreadable("adrdom/blame/x.md"),
             blame_hash_failed("adrdom/blame/x.md", "docs/x.md"),
             blame_origin_unreadable("adrdom/blame/x.md", "docs/x.md"),
@@ -2752,7 +2798,6 @@ mod tests {
             ledger_dropped_text_differs("id-1").text(),
             ledger_dropped_set_holds_letter("id-1", "A").text(),
             ledger_dropped_not_standing_on("id-1", "id-2").text(),
-            blame_row_copy_of_own_origin("adrdom/blame/x.md", 1, 3, "docs/x.md").text(),
             unban_not_banned(2),
             message_file_unreadable("m.txt", e),
         ];
@@ -2784,6 +2829,58 @@ mod tests {
                 assert!(!command.contains(prose), "{:?} after the command: {}", prose, o);
             }
         }
+    }
+
+    // adr: ee27fd4c-89b7-411f-a3e4-2535c49b6d1b
+    //
+    // The words of the count `show --questions` prints.
+    #[test]
+    fn the_count_of_decision_rows_reads_word_for_word() {
+        assert_eq!(show_decision_rows(1, 2), "decision rows: 1 with a question, 2 with none");
+    }
+
+    // adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+    //
+    // The five findings of a blame line, word for word: each ends in a move,
+    // and the one that waits for a blame file's approval names the status of
+    // the file by its name in status.rs and ends in the tail moves.rs holds.
+    #[test]
+    fn the_blame_line_findings_read_as_the_decision_words_them() {
+        let (r, h) = ("x.md", "Does X?");
+        let ranges = "a blame line names row ranges of its blame file";
+        let file = "a blame line names an approved blame file";
+        assert_eq!(
+            blame_entry_without_range(r, h, "notes").text(),
+            format!("x.md: \"Does X?\": the blame entry \"notes\" names no row range; {}; agent writes the name of a blame file and the ranges of its rows", ranges)
+        );
+        assert_eq!(
+            blame_names_no_file(r, h, "notes").text(),
+            format!("x.md: \"Does X?\": the blame entry \"notes\" names no blame file; {}; agent writes the path of a blame file under adrdom/blame without .md, or removes the entry", file)
+        );
+        for status in [FileStatus::New, FileStatus::Changed] {
+            assert_eq!(
+                blame_file_awaits_approval(r, h, "adrdom/blame/notes.md", status).text(),
+                format!(
+                    "x.md: \"Does X?\": the blame line names adrdom/blame/notes.md, which is {}; {}{}",
+                    status.name(),
+                    file,
+                    crate::moves::APPROVAL_WAIT_TAIL
+                )
+            );
+        }
+        assert_eq!(
+            blame_range_of_no_row(r, h, "adrdom/blame/notes.md", 3, 3).text(),
+            format!("x.md: \"Does X?\": the blame line names 3-3, the range of no row of adrdom/blame/notes.md; {}; agent writes the range of a row of that blame file, or removes the range", ranges)
+        );
+    }
+
+    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
+    #[test]
+    fn a_second_blame_line_is_a_reference_line_given_twice() {
+        assert_eq!(
+            section_shape_error("x.md", "Does X?", "blame: second blame line, line 6").text(),
+            "x.md: \"Does X?\": blame second line, line 6; each reference line appears once, on one line; agent rewrites the blame line"
+        );
     }
 
     // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b

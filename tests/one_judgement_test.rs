@@ -35,7 +35,7 @@ fn a_path_or_an_id_from_the_records_never_runs_as_shell() {
     let dir = repo();
     asked_gate(&dir);
     let blob = write_origin(&dir, "docs/old.md", "one\ntwo\n");
-    write_blame_file(&dir, "adrdom/blame/a$(touch PWNED).md", "docs/old.md", &blob, "1-2\tdropped: dead\n");
+    write_blame_file(&dir, "adrdom/blame/a$(touch PWNED).md", "docs/old.md", &blob, "1-2\tdetail\n");
     let shown = stdout(&adr(&dir, &["show"], &[], ""));
     let mv = shown.lines().find(|l| l.contains("adr approve adrdom/blame/") || l.contains("adr approve 'adrdom/blame/"));
     assert_eq!(mv, Some("owner runs: adr approve 'adrdom/blame/a$(touch PWNED).md'"), "{}", shown);
@@ -276,25 +276,4 @@ fn check_at_a_commit_reads_the_staged_reader_rows() {
     assert!(staged.contains("has no reader rows"), "{}", staged);
     let plain = stdout(&adr(&dir, &["check"], &[], ""));
     assert!(!plain.contains("has no reader rows"), "{}", plain);
-}
-
-// adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
-//
-// A blame row naming a term the terms file has not been given an id for
-// yet: approve stops on the terms file, as topic-file approve does, and
-// writes no identifier the terms file does not hold.
-#[test]
-fn blame_approve_waits_for_the_terms_file_a_row_names() {
-    let dir = repo();
-    let terms = dir.join("adrdom/terms.md");
-    let mut t = std::fs::read_to_string(&terms).unwrap();
-    t.push_str("\n## gizmo\ndefinition: A fixture term for tests.\naliases: \n");
-    std::fs::write(&terms, &t).unwrap();
-    let blob = write_origin(&dir, "docs/old.md", "one\ntwo\n");
-    let path = write_blame_file(&dir, "adrdom/blame/old.md", "docs/old.md", &blob, "1-2\tterm: gizmo\n");
-    let before = std::fs::read_to_string(&path).unwrap();
-    let out = adr(&dir, &["approve", path.to_str().unwrap()], &[("ADR_OWNER_BYPASS", "1")], "");
-    assert!(!out.status.success(), "{}", stdout(&out));
-    assert!(stderr(&out).contains("owner runs: adr approve adrdom/terms.md"), "{}", stderr(&out));
-    assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
 }

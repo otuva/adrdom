@@ -195,6 +195,10 @@ pub const PAIR_WAIT: &str = "not yet, nobody moves on a pair that depends";
 /// elsewhere: nobody moves on it yet.
 pub const WAIT_TAIL: &str = "; not yet, after it is answered";
 
+/// The tail of a finding whose only move is to wait for the approval of a
+/// file elsewhere: nobody moves on it yet.
+pub const APPROVAL_WAIT_TAIL: &str = "; not yet, after it is approved";
+
 /// The clauses of the move `kind` names, for a refusal that stops in a state
 /// whose move this module computes: the refusal names the same move every
 /// command names for that state (per "Does a command compute a move of its
@@ -622,13 +626,23 @@ pub fn of_planning(rf: &RecordFile, p: &crate::plan::Planning) -> Vec<Move> {
     }
 }
 
-/// The report of one blame file: its findings, and, for a draft with
-/// nothing left to clear (no finding, no stop on reading its origin), the
-/// owner's approval.
-pub fn of_blame_file(rel: &str, stops: Vec<crate::out::Line>, findings: Vec<Finding>, awaiting: bool) -> Report {
+/// The report of the blame file `e` of `index`, read against its origin in
+/// the working tree: its findings, and, for a draft with nothing left to
+/// clear (no finding, no stop on reading its origin), the owner's approval.
+/// The one report `show` prints for a blame file; `cmd` leads each line of a
+/// stop.
+pub fn of_blame_file(
+    root: &std::path::Path,
+    e: &crate::blame::Entry,
+    index: &crate::blame::Index,
+    cmd: crate::rules::Command,
+) -> Report {
+    let st = crate::blame::file_state(root, &crate::repo::Source::WorkingTree, &e.file, e.status, index);
+    let findings = crate::rules::judge_blame_file(&st, &e.file);
+    let stops: Vec<crate::out::Line> = st.stops.iter().flat_map(|m| crate::out::stop(cmd, m)).collect();
     let mut moves = Vec::new();
-    if findings.is_empty() && stops.is_empty() && awaiting {
-        moves.push(Move::new(MoveKind::Approve { path: rel.to_string() }));
+    if findings.is_empty() && stops.is_empty() && e.status.awaits_approval() {
+        moves.push(Move::new(MoveKind::Approve { path: e.rel().to_string() }));
     }
     Report { stops, findings, moves }
 }
@@ -791,6 +805,55 @@ mod tests {
         assert_eq!(empty.moves_tail(Next::agent("restores x.md from git")), "agent restores x.md from git");
         assert!(!crate::msg::edited_after_asking("x.md", "h", &empty).text().contains("each finding of the file names"));
         assert!(crate::msg::edited_after_asking("x.md", "h", &empty).text().ends_with("agent restores x.md from git"));
+    }
+
+    // adr: 848e1b76-9cfe-483b-94dd-094eb9b2f995
+    //
+    // A blame file's report is read once for `show`: a draft with
+    // nothing to clear is the owner's approve, a draft with a finding has
+    // none, and a file approved has no move at all, its origin gone or not.
+    #[test]
+    fn the_report_of_a_blame_file_is_the_owners_approve_only_for_a_clean_draft() {
+        use crate::blame::{self, Index};
+        use crate::ledger::{Ledger, Row as LedgerRow};
+        use crate::rules::Command;
+        let root = std::env::temp_dir().join(format!("adr-moves-blame-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(root.join("docs")).unwrap();
+        std::fs::write(root.join("docs/x.md"), "one\ntwo\n").unwrap();
+        let blob = crate::repo::git_hash_object_stdin(&root, "one\ntwo\n").unwrap();
+        let file = |rel: &str, origin: &str, rows: &str| {
+            let text = format!("origin: {}\nblob: {}\n\n{}", origin, blob, rows);
+            blame::parse(root.join(rel), rel.to_string(), record::split_lines(&text))
+        };
+        let report = |bf: blame::BlameFile, approved: bool| {
+            let led = Ledger {
+                rows: approved
+                    .then(|| LedgerRow {
+                        time: "2024-01-01T00:00:00Z".to_string(),
+                        event: "blame".to_string(),
+                        id: bf.id.clone().unwrap_or_else(|| "-".to_string()),
+                        hash: blame::file_hash(&bf.lines),
+                        detail: bf.rel.clone(),
+                        version: "0.1.0".to_string(),
+                    })
+                    .into_iter()
+                    .collect(),
+                malformed: vec![],
+            };
+            let index = Index::of(vec![bf], &led);
+            of_blame_file(&root, &index.entries()[0], &index, Command::Show)
+        };
+        let clean = report(file("adrdom/blame/a.md", "docs/x.md", "1-2\tdecision\n"), false);
+        assert!(clean.findings.is_empty() && clean.stops.is_empty());
+        assert_eq!(clean.moves, vec![Move::new(MoveKind::Approve { path: "adrdom/blame/a.md".into() })]);
+        let bad_row = report(file("adrdom/blame/a.md", "docs/x.md", "1-2\tmaybe\n"), false);
+        assert_eq!(bad_row.findings.len(), 1);
+        assert!(bad_row.moves.is_empty());
+        let approved = report(file("adrdom/blame/a.md", "docs/x.md", "1-2\tdecision\n"), true);
+        assert!(approved.findings.is_empty() && approved.moves.is_empty());
+        let gone = report(file("adrdom/blame/a.md", "docs/gone.md", "1-2\tdecision\n"), true);
+        assert!(gone.findings.is_empty() && gone.stops.is_empty() && gone.moves.is_empty());
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

@@ -179,22 +179,24 @@ fn what_approve_refuses_of_a_removed_file_check_reports_with_the_same_move() {
 #[test]
 fn what_approve_refuses_of_a_blame_draft_check_reports_with_the_same_move() {
     // adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
-    let (dir, _, _) = blame_setup();
+    // A row in the old form (it names a question) is a row whose value is
+    // neither word: a shape fault of the draft.
+    let dir = blame_setup();
     let blob = write_origin(&dir, "docs/old.md", "one\ntwo\n");
     let blame = write_blame_file(&dir, "adrdom/blame/old.md", "docs/old.md", &blob, "1-2\tdecision: Is there no such thing?\n");
     let out = approve(&dir, &blame);
     let (ok, _, _) = check(&dir);
     assert!(ok, "a draft blame file's finding is a note");
-    assert_check_reports(&dir, &refusals(&out, "approve: "), "blame row naming no question");
+    assert_check_reports(&dir, &refusals(&out, "approve: "), "blame row in the old form");
 }
 
 #[test]
 fn a_blame_draft_with_a_shape_fault_is_a_note() {
     // adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
-    let (dir, _, _) = blame_setup();
+    let dir = blame_setup();
     // The origin is there: the shape fault is the file's only finding.
     write_origin(&dir, "docs/old.md", "one\ntwo\n");
-    write_record(&dir, "adrdom/blame/old.md", "origin: docs/old.md\n\n1-2\tdropped: dead\n");
+    write_record(&dir, "adrdom/blame/old.md", "origin: docs/old.md\n\n1-2\tdetail\n");
     let out = approve(&dir, &dir.join("adrdom/blame/old.md"));
     let (ok, text, _) = check(&dir);
     assert!(ok, "a shape fault on a draft blame file is a note: {}", text);

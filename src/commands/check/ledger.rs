@@ -403,7 +403,7 @@ fn check_same_time_competition(led: &Ledger) -> Vec<Failure> {
 
     let mut by_path: HashMap<(&str, &str), Vec<&Row>> = HashMap::new();
     for r in &led.rows {
-        if r.id == "-" && COMPETING_PATH_EVENTS.contains(&r.event.as_str()) {
+        if (r.id == "-" || r.event == "blame") && COMPETING_PATH_EVENTS.contains(&r.event.as_str()) {
             by_path.entry((r.event.as_str(), r.detail.as_str())).or_default().push(r);
         }
     }

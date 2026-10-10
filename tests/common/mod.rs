@@ -468,13 +468,7 @@ pub const BLAME_TERMS: &str = "# Terms\n\
 ## pass\n\
 id: 11111111-1111-1111-1111-111111111111\n\
 definition: Whether something is accepted.\n\
-aliases: \n\
-\n\
-## gone\n\
-id: 22222222-2222-2222-2222-222222222222\n\
-definition: A retired fixture term.\n\
-aliases: \n\
-retired: yes\n";
+aliases: \n";
 
 pub const BLAME_TOPIC: &str = r#"# Example
 
@@ -507,11 +501,10 @@ Standard: clear yes or no.
   Costs: other costs.
 "#;
 
-/// A repo with `pass`/`gone` (retired) terms approved, and `BLAME_TOPIC`
-/// approved with both headings minted an id: "Is this pass?" answered A
-/// (current), "Is this also pass?" only asked (not current). Returns
-/// (dir, id of "Is this pass?", id of "Is this also pass?").
-pub fn blame_setup() -> (PathBuf, String, String) {
+/// A repo with the term `pass` approved, and `BLAME_TOPIC` approved with both
+/// headings minted an id: "Is this pass?" answered A (current), "Is this also
+/// pass?" only asked (not current). Returns the repository.
+pub fn blame_setup() -> PathBuf {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_terms_via_ledger(&dir, BLAME_TERMS);
@@ -523,14 +516,14 @@ pub fn blame_setup() -> (PathBuf, String, String) {
     let content = std::fs::read_to_string(&record).unwrap();
     let ids = extract_ids(&content);
     assert_eq!(ids.len(), 2, "{}", content);
-    let (id1, id2) = (ids[0].clone(), ids[1].clone());
+    let id1 = ids[0].clone();
     let out = adr_answer(&dir, &id1, "A");
     assert!(out.status.success(), "answer failed: {}", stderr(&out));
     // The fixture's own current decision needs a tie for `check`'s
     // `tested` category, same as any other answered question in a repo
     // `adr check` judges.
     write_test_comment(&dir, &id1);
-    (dir, id1, id2)
+    dir
 }
 
 /// Writes `content` to `rel` under `dir` and returns the git blob sha
@@ -557,6 +550,41 @@ pub fn blame_row_count(dir: &Path) -> usize {
 pub fn write_blame_file(dir: &Path, rel: &str, origin: &str, blob: &str, rows: &str) -> PathBuf {
     let content = format!("origin: {}\nblob: {}\n\n{}", origin, blob, rows);
     write_record(dir, rel, &content)
+}
+
+/// Writes the origin `origin_rel` and a blame file `adrdom/blame/<name>.md`
+/// over it with `rows`; the blame file is not approved.
+pub fn blame_file(dir: &Path, name: &str, origin_rel: &str, origin_text: &str, rows: &str) -> PathBuf {
+    let blob = write_origin(dir, origin_rel, origin_text);
+    write_blame_file(dir, &format!("adrdom/blame/{}.md", name), origin_rel, &blob, rows)
+}
+
+/// `blame_file`, approved by the owner.
+pub fn approved_blame_file(dir: &Path, name: &str, origin_rel: &str, origin_text: &str, rows: &str) -> PathBuf {
+    let path = blame_file(dir, name, origin_rel, origin_text, rows);
+    let out = adr_owner(dir, &["approve", path.to_str().unwrap()], "");
+    assert!(out.status.success(), "approve of the blame file {} failed: {}", name, stderr(&out));
+    path
+}
+
+/// The identifier approve wrote on line 3 of a blame file.
+pub fn id_line_of(path: &Path) -> String {
+    let text = std::fs::read_to_string(path).unwrap();
+    let id = text
+        .lines()
+        .nth(2)
+        .and_then(|l| l.strip_prefix("id: "))
+        .unwrap_or_else(|| panic!("line 3 is no id line:\n{}", text));
+    id.trim().to_string()
+}
+
+/// The topic file of one question that stands on the term `widget`, with
+/// `lines` (each ending in a newline) directly under its depends line: where
+/// a case puts a `blame:` line.
+pub fn gate_topic(heading: &str, lines: &str) -> String {
+    let question =
+        gate_question(heading, "the widget breaks.").replacen("depends: widget\n", &format!("depends: widget\n{}", lines), 1);
+    format!("# Gate\n\nThe gate.\n\n{}", question)
 }
 
 // --- Plan/context approval, without depending on `adr approve` -----------

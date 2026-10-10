@@ -394,6 +394,7 @@ fn outside_a_repository_every_command_names_the_step_that_clears_it() {
         (vec!["show"], false),
         (vec!["show", "x.md"], false),
         (vec!["show", "--all", "--neighbours", "--dependents"], false),
+        (vec!["show", "x.md", "--questions"], false),
         (vec!["check"], false),
         (vec!["check", "--staged"], false),
         (vec!["check", "--message", "m.txt"], false),

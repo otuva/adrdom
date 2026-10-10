@@ -16,9 +16,10 @@ pub const LEDGER_PATH: &str = "adrdom/state/ledger.tsv";
 pub const READER_PATH: &str = "adrdom/state/reader.tsv";
 /// The repo's own terms file.
 /// Where blame files live, relative to the repo root (per "What does a
-/// blame file hold?", 34f0202a A): one `<stem>.md` per origin, holding its
-/// line ranges and what each range went to. `do_approve` dispatches a path
-/// under here the same way it dispatches `TERMS_PATH`, by prefix.
+/// blame file hold of its origin?", d2851ea1 A): one `<name>.md` per origin,
+/// holding its line ranges and whether each holds a decision or only detail.
+/// `do_approve` dispatches a path under here the same way it dispatches
+/// `TERMS_PATH`, by prefix.
 pub const BLAME_DIR: &str = "adrdom/blame";
 
 pub const TERMS_PATH: &str = "adrdom/terms.md";
@@ -103,7 +104,8 @@ fn git_bytes(root: &Path, args: &[&str]) -> Option<Vec<u8>> {
 
 /// Every path the index holds, read once per repository for the process:
 /// what `Source::Index` answers `exists` and `is_dir` from, so a run that
-/// asks of many paths (a blame file's copy rows at a commit) asks git once.
+/// asks of many paths (the origin of each blame file, the removed topic
+/// files at a commit) asks git once.
 fn index_files(root: &Path) -> std::sync::Arc<std::collections::HashSet<String>> {
     use std::collections::{HashMap, HashSet};
     use std::sync::{Arc, Mutex, OnceLock};
@@ -119,6 +121,36 @@ fn index_files(root: &Path) -> std::sync::Arc<std::collections::HashSet<String>>
     let set: Arc<HashSet<String>> = Arc::new(paths.into_iter().collect());
     map.lock().unwrap_or_else(|e| e.into_inner()).insert(root.to_path_buf(), set.clone());
     set
+}
+
+/// Every path the index holds with mode 120000 (a symbolic link), read once
+/// per repository for the process, the same way as `index_files`.
+fn index_links(root: &Path) -> std::sync::Arc<std::collections::HashSet<String>> {
+    use std::collections::{HashMap, HashSet};
+    use std::sync::{Arc, Mutex, OnceLock};
+    static LINKS: OnceLock<Mutex<HashMap<std::path::PathBuf, Arc<HashSet<String>>>>> = OnceLock::new();
+    let map = LINKS.get_or_init(Default::default);
+    if let Some(found) = map.lock().unwrap_or_else(|e| e.into_inner()).get(root) {
+        return found.clone();
+    }
+    let Some(listing) = git_bytes(root, &["ls-files", "-s", "-z"]) else {
+        // Not kept: a failure to run git is asked again.
+        return Arc::new(HashSet::new());
+    };
+    let set: Arc<HashSet<String>> = Arc::new(index_link_paths(&listing));
+    map.lock().unwrap_or_else(|e| e.into_inner()).insert(root.to_path_buf(), set.clone());
+    set
+}
+
+/// The paths with mode 120000 in `git ls-files -s -z` output `listing`.
+fn index_link_paths(listing: &[u8]) -> std::collections::HashSet<String> {
+    String::from_utf8_lossy(listing)
+        .split('\0')
+        .filter_map(|entry| {
+            let (meta, name) = entry.split_once('\t')?;
+            meta.starts_with("120000 ").then(|| name.to_string())
+        })
+        .collect()
 }
 
 /// The paths a git listing command prints (`ls-files`, `diff --name-only`),
@@ -147,11 +179,23 @@ pub fn git_paths(root: &Path, args: &[&str]) -> Option<Vec<String>> {
 /// files?"), rather than only ever hashing whatever sits in the working
 /// tree right now. `None` on any failure to run git.
 pub fn git_hash_object_stdin(root: &Path, content: &str) -> Option<String> {
+    git_hash_object_with(root, content, &["--stdin"])
+}
+
+/// Like `git_hash_object_stdin`, but the way git stores the file at `path`
+/// from the working tree: the repository's filters for that path (line
+/// ending conversion) are applied to `content` first.
+pub fn git_hash_object_filtered(root: &Path, content: &str, path: &str) -> Option<String> {
+    git_hash_object_with(root, content, &["--stdin", "--path", path])
+}
+
+fn git_hash_object_with(root: &Path, content: &str, extra: &[&str]) -> Option<String> {
     use std::io::Write;
     use std::process::Stdio;
     let mut child = Command::new("git")
         .current_dir(root)
-        .args(["hash-object", "--stdin"])
+        .arg("hash-object")
+        .args(extra)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -293,7 +337,6 @@ mod git_hash_object_stdin_tests {
     use super::git_hash_object_stdin;
     use std::path::Path;
 
-    // adr: 5fddeeb5-cf54-4550-a701-dd9e4a6a81d6
     //
     // "the blob comparison must fail closed": `check`'s `blame` category
     // treats `None` from this function as a failure, never a silent pass.
@@ -385,6 +428,29 @@ impl Source {
                 index_files(root).iter().any(|p| p.starts_with(&prefix))
             }
         }
+    }
+
+    /// Whether `rel` (a path relative to `root`), or any directory on the
+    /// way to it, is a symbolic link. The working tree answers from the
+    /// file system, the index from the mode of its entry (120000).
+    pub fn is_symlink(&self, root: &Path, rel: &str) -> bool {
+        let mut prefix = String::new();
+        for part in rel.split('/').filter(|p| !p.is_empty()) {
+            if !prefix.is_empty() {
+                prefix.push('/');
+            }
+            prefix.push_str(part);
+            let link = match self {
+                Source::WorkingTree => {
+                    root.join(&prefix).symlink_metadata().is_ok_and(|m| m.file_type().is_symlink())
+                }
+                Source::Index => index_links(root).contains(&prefix),
+            };
+            if link {
+                return true;
+            }
+        }
+        false
     }
 
     /// Every file path (relative to `root`, forward slashes) this source

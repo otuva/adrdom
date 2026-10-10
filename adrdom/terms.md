@@ -174,9 +174,9 @@ aliases: origins
 
 ## blame
 id: 108053a8-c2c3-4561-874c-2f573a5409f2
-terms: origin=ecb18413-cb3e-437e-9444-3cdd406ed67d
-definition: A file holding, for one origin, its line ranges and what each range went to in the records.
-aliases: blame file, blame files
+terms: decisions=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, origin=ecb18413-cb3e-437e-9444-3cdd406ed67d
+definition: The tie between an origin's lines and the decisions they hold.
+aliases: blame file, blame files, blame line, blame lines
 
 ## terms brief
 id: 7d44030a-3589-4f29-aaa6-12fa09908ab8

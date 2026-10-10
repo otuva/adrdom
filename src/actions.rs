@@ -677,7 +677,7 @@ pub fn do_approve(root: &Path, file: &Path) -> Result<Outcome, Stops> {
 
     if rel == crate::repo::TERMS_PATH {
         do_approve_terms(root, file, &led, &ledger_path)
-    } else if rel.starts_with(&format!("{}/", crate::repo::BLAME_DIR)) {
+    } else if rules::is_blame_file_path(&rel) {
         do_approve_blame(root, file, &rel, &led, &ledger_path)
     } else if is_topic_file_path(&rel) && !file.exists() {
         do_approve_removal(root, &rel, &led, &ledger_path)
@@ -762,15 +762,26 @@ fn do_approve_removal(root: &Path, rel: &str, led: &Ledger, ledger_path: &Path) 
     Ok(Outcome::of_rows(&rows, &HashMap::new()))
 }
 
-/// `adrdom/blame/<stem>.md` (per "Does the owner approve a blame file?",
-/// e879fe72 A): parse the fixed shape, read the origin's content at the
-/// blob the file names, check that the rows' ranges cover it with no gap
-/// (5c399a14 A), resolve every row's destination against the closed set
-/// (38216d39 A) -- collecting every refusal at once, nothing written to
-/// disk on any of them, the same contract `do_approve_record` keeps -- then
-/// rewrite every row to its canonical (id-bearing, where the set names one)
-/// form, save, and write one `blame` ledger row over the saved content's
-/// hash unless it already matches the latest one for this path.
+/// `content` with `id_line` added as its third line, every other byte kept
+/// and the new line ended as the second line is (`\r\n` or `\n`). `None`
+/// when `content` has no second line ending to insert after.
+fn insert_id_line(content: &str, id_line: &str) -> Option<String> {
+    let first = content.find('\n')?;
+    let second = first + 1 + content[first + 1..].find('\n')?;
+    let eol = if content[..second].ends_with('\r') { "\r\n" } else { "\n" };
+    let at = second + 1;
+    Some(format!("{}{}{}{}", &content[..at], id_line, eol, &content[at..]))
+}
+
+/// `adrdom/blame/<name>.md` (per "Does the owner approve a blame file?",
+/// e879fe72 A): parse the fixed shape, read the origin's content at the blob
+/// the file names, check that the rows' ranges cover it with no gap (5c399a14
+/// A) -- collecting every refusal at once, nothing written to disk on any of
+/// them, the same contract `do_approve_record` keeps -- then, for a file with
+/// no id line, write the identifier the tool assigns as line 3 (d2851ea1 A;
+/// no row is rewritten), and write one `blame` ledger row over the hash of
+/// the file as written unless it already matches the latest one for this
+/// path.
 fn do_approve_blame(
     root: &Path,
     file: &Path,
@@ -787,27 +798,15 @@ fn do_approve_blame(
     })?;
     let bf = blame::parse(file.to_path_buf(), rel.to_string(), record::split_lines(&content));
 
-    // A row that names a term resolves it against the approved terms file,
-    // and approve writes that term's identifier into the row: the same
-    // gate topic-file approve applies (`require_terms`), so no identifier
-    // is written that the terms file has not been given yet.
-    let names_a_term = bf.rows.iter().any(|r| r.dest.trim_start().starts_with("term:"));
-    if names_a_term {
-        require_terms(root, led, rel, Command::Approve)?;
-    }
-
     // One judgement of the file against its origin, the one `check` and
     // `show` read (`blame::file_state`, `rules::judge_blame_file`): approve
     // refuses on what they report, with the same moves (per "Does a command
     // refuse what check passes?", fe14991d A).
     let source = repo::Source::WorkingTree;
-    let (records, _) = record::load_all_via(root, &source);
-    let (any_headings, known_ids) = blame::heading_ids(&records);
-    let st = blame::file_state(root, &source, &bf, &content, &records, led, &any_headings, &known_ids);
-    let terms_list: Vec<terms::Term> =
-        state::load_terms(root).map(|tf| terms::minted_copy(&tf).terms).unwrap_or_default();
-    let names = rules::BlameNames::of(root, &source, &records, terms_list);
-    let refusals = findings_of(rules::judge_blame_file(root, &st, &bf, &names));
+    let status = crate::status::blame_file_status(led, rel, &content);
+    let (index, _) = blame::Index::read(root, &source, led);
+    let st = blame::file_state(root, &source, &bf, status, &index);
+    let refusals = findings_of(rules::judge_blame_file(&st, &bf));
     if !refusals.is_empty() {
         return Err(refusals);
     }
@@ -816,43 +815,46 @@ fn do_approve_blame(
     if !st.stops.is_empty() {
         return Err(st.stops.iter().flat_map(|m| stop(Command::Approve, m)).collect());
     }
-    // The origin is gone and nothing holds it (`file_state` names an open
-    // row or the file's own approval otherwise): the file stands at its
-    // approval, and there is nothing to approve.
-    let Some(origin) = st.origin_content.as_ref().and(bf.origin.as_deref()) else {
+    // The origin is gone and the file is approved (`file_state` names it
+    // while the file awaits approval): the file stands at its approval, and
+    // there is nothing to approve.
+    if st.origin_content.is_none() {
         return Ok(Outcome::of_rows(&[], &HashMap::new()));
-    };
-    let (_, resolved) = rules::judge_blame_destinations_in(root, &bf, origin, &names);
-
-    let mut work_lines = bf.lines.clone();
-    for (row, r) in bf.rows.iter().zip(resolved.iter()) {
-        work_lines[row.line_idx] = format!("{}-{}\t{}", row.start, row.end, r.canonical());
     }
 
-    // Written only when a row changed, so the line below can say whether
-    // the file on disk was touched.
-    let rewritten = work_lines != bf.lines;
-    if rewritten {
-        std::fs::write(&bf.path, record::join_lines(&work_lines)).map_err(|e| {
+    // The identifier goes where the blank line after the header stands; a
+    // file without shape faults has that blank line as its line 3.
+    let mut work_lines = bf.lines.clone();
+    let minted = bf.id.is_none();
+    let mut file_id = bf.id.clone().unwrap_or_default();
+    let mut written: Option<String> = None;
+    if minted {
+        file_id = Uuid::new_v4().to_string();
+        let id_line = format!("id: {}", file_id);
+        work_lines.insert(2, id_line.clone());
+        // Only the id line is added to the bytes on disk, with the line
+        // ending of the line above it (d2851ea1 A).
+        written = Some(insert_id_line(&content, &id_line).ok_or_else(|| {
             stop(Command::Approve, msg::write_failed(
                 &file.display().to_string(),
-                e,
+                "no second line to insert the id line after",
                 msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
             ))
-        })?;
+        })?);
     }
 
     let new_hash = blame::file_hash(&work_lines);
-    let unchanged = led.latest_for_path("blame", rel).map(|r| r.hash.as_str()) == Some(new_hash.as_str());
+    let unchanged = led.latest_blame(rel).map(|r| r.hash.as_str()) == Some(new_hash.as_str());
 
-    // No row, no line: a rewrite of the rows into the form approve writes
-    // over a hash the ledger already holds is no event.
+    // No row, no line: a hash the ledger already holds is no event. The row
+    // is appended before the id line is written: a death between the two
+    // leaves a row whose id line is missing, which check names precisely.
     let mut rows: Vec<ledger::Row> = Vec::new();
     if !unchanged {
         let row = ledger::Row {
             time: ledger::write_time(led),
             event: "blame".to_string(),
-            id: "-".to_string(),
+            id: file_id,
             hash: new_hash,
             detail: rel.to_string(),
             version: crate::version::VERSION.to_string(),
@@ -866,15 +868,17 @@ fn do_approve_blame(
         })?;
         rows.push(row);
     }
-
-    let mut outcome = Outcome::of_rows(&rows, &HashMap::new());
-    // A file written that no row of this run covers is an event of its own:
-    // the rows rewritten into the form approve writes, over a hash the
-    // ledger already holds.
-    if rewritten && rows.is_empty() {
-        outcome.events.push(crate::out::Event::FileWritten { path: rel.to_string() });
+    if let Some(written) = written {
+        std::fs::write(&bf.path, written).map_err(|e| {
+            stop(Command::Approve, msg::write_failed(
+                &file.display().to_string(),
+                e,
+                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+            ))
+        })?;
     }
-    Ok(outcome)
+
+    Ok(Outcome::of_rows(&rows, &HashMap::new()))
 }
 
 
@@ -1053,7 +1057,8 @@ fn do_approve_terms(
 
 
 /// Inserts a freshly minted id directly after each skeleton section's
-/// `depends:` line (or its `supersedes:` line, directly under it) (per "Does a reference in a topic file carry the
+/// `depends:` line (or its `supersedes:`, `unrelated:` or `blame:` line,
+/// directly under it) (per "Does a reference in a topic file carry the
 /// identifier of what it names?"; no blank padding, the same bare
 /// single-line insert `ask` uses for `terms:` after `id:`). Every section
 /// here has already passed `record_refusals`'s "has no depends line"
@@ -1069,13 +1074,12 @@ fn insert_missing_ids(rf: &RecordFile, mut work_lines: Vec<String>) -> Result<Ve
                 .find(|&j| work_lines[j].starts_with("depends: "))
                 .ok_or_else(|| finding(Class::Plan, msg::no_depends_line_bare(&sec.heading_text)))?;
             // The plan lines come first, then the id: after the
-            // `supersedes:` and `unrelated:` lines when the heading has
-            // them (directly under `depends:`), else after `depends:`.
+            // `supersedes:`, `unrelated:` and `blame:` lines when the heading
+            // has them (directly under `depends:`), else after `depends:`.
             let mut after = depends_idx;
-            while work_lines
-                .get(after + 1)
-                .is_some_and(|l| l.starts_with("supersedes: ") || l.starts_with("unrelated: "))
-            {
+            while work_lines.get(after + 1).is_some_and(|l| {
+                l.starts_with("supersedes: ") || l.starts_with("unrelated: ") || l.starts_with("blame: ")
+            }) {
                 after += 1;
             }
             let new_id = Uuid::new_v4().to_string();
@@ -1179,6 +1183,9 @@ fn do_approve_record(
         led,
     );
     let replaced = depends::replaced_ids(&replaced_base, &rf, &cross_file_headings, led);
+    // Every blame file, read off the working tree like the topic files: the
+    // `blame:` lines are judged against it and turned to identifiers by it.
+    let (blame_index, _) = blame::Index::read(root, &repo::Source::WorkingTree, led);
     // Every rule this file breaks, judged once (`rules::judge_topic_file`,
     // the judgement `check` reads too), and the rules on the records as a
     // whole (`rules::judge_records`): collected, not returned at the first,
@@ -1194,6 +1201,7 @@ fn do_approve_record(
         cross_file_headings: &cross_file_headings,
         names: &names,
         replaced: &replaced,
+        blame: &blame_index,
         led,
         planning,
         shared: None,
@@ -1330,6 +1338,31 @@ fn do_approve_record(
             }
         }
         work_rf.lines[j] = format!("unrelated: {}", ids.join(", "));
+    }
+    // The `blame:` line holds identifiers too (per "What does a question
+    // carry of the blame file it came from?"): each name becomes the
+    // identifier on the blame file's id line, the ranges as written. Only a
+    // question whose text can still change is turned; an asked question that
+    // stands as asked, an answered one and the rest keep their line.
+    for (i, sec) in sections_snapshot.iter().enumerate() {
+        if sec.blame.is_empty() || !crate::status::open_to_ask_text(led, &rf, &rf.sections[i]) {
+            continue;
+        }
+        let Some(j) = (sec.start + 1..sec.end).find(|&j| work_rf.lines[j].starts_with("blame: ")) else {
+            continue;
+        };
+        let entries: Vec<String> = sec
+            .blame
+            .iter()
+            .map(|e| {
+                let file = blame_index.named(&e.file).and_then(|b| b.id()).unwrap_or(&e.file);
+                std::iter::once(file.to_string())
+                    .chain(e.ranges.iter().map(|(from, to)| format!("{}-{}", from, to)))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            })
+            .collect();
+        work_rf.lines[j] = format!("blame: {}", entries.join(", "));
     }
     // Reparse once more so `plan_hash`/`context_hash` and everything below
     // sees the file exactly as it will be written.

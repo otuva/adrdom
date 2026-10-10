@@ -2,8 +2,8 @@
 // edges: a part whose approved text no commit holds, a question put back
 // after a plan change struck it, blank lines and entries reordered, a
 // removed topic file, and identifiers in prose (per "Does show print what a
-// file holds beyond its latest approval?", bceceda8 A, and "What does show
-// print of the file named?", dce141e9 A).
+// file holds beyond its latest approval?", bceceda8 A, and "What does a
+// command that writes nothing print?", 848e1b76 A).
 
 mod common;
 
@@ -217,17 +217,20 @@ fn an_unreadable_terms_or_topic_file_is_named() {
 }
 
 // adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+// adr: d2851ea1-fcb6-476a-b321-c813a594d5e5
 //
-// A blame file's change names, after each row that names a question, that
-// question's status: the owner reading it before approve sees which rows
-// name an open question.
+// A blame file's change prints each row as the file carries it, `decision`
+// or `detail`, marked, with no status after it: a row names no question.
 #[test]
-fn a_blame_draft_names_the_status_of_each_question_a_row_names() {
-    let (dir, _, _) = blame_setup();
+fn a_blame_draft_prints_each_row_as_written_with_no_status() {
+    let dir = blame_setup();
     let blob = write_origin(&dir, "docs/old.md", "one\ntwo\n");
-    write_blame_file(&dir, "adrdom/blame/old.md", "docs/old.md", &blob, "1-1\tdecision: Is this also pass?\n2-2\tdropped: dead\n");
+    write_blame_file(&dir, "adrdom/blame/old.md", "docs/old.md", &blob, "1-1\tdecision\n2-2\tdetail\n");
     let shown = show(&dir, &["adrdom/blame/old.md"]);
-    assert!(shown.contains("+ 1-1\tdecision: Is this also pass? ["), "{}", shown);
+    assert!(shown.contains("  + 1-1\tdecision\n  + 2-2\tdetail\n"), "{}", shown);
+    for row in shown.lines().filter(|l| l.contains("1-1\t") || l.contains("2-2\t")) {
+        assert!(!row.contains('['), "{}", row);
+    }
 }
 
 // adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
@@ -294,9 +297,9 @@ fn a_blank_line_added_at_the_end_of_a_file_is_marked() {
     assert!(shown.starts_with("[changed] adrdom/terms.md\n"), "{}", shown);
     assert!(shown.lines().any(|l| l.trim() == "+" || l.trim() == "-"), "{}", shown);
 
-    let (dir, _, _) = blame_setup();
+    let dir = blame_setup();
     let blob = write_origin(&dir, "docs/old.md", "one\n");
-    let blame = write_blame_file(&dir, "adrdom/blame/old.md", "docs/old.md", &blob, "1-1\tdropped: dead\n");
+    let blame = write_blame_file(&dir, "adrdom/blame/old.md", "docs/old.md", &blob, "1-1\tdetail\n");
     assert!(adr(&dir, &["approve", blame.to_str().unwrap()], &[("ADR_OWNER_BYPASS", "1")], "").status.success());
     commit_all(&dir);
     let text = std::fs::read_to_string(&blame).unwrap();

@@ -204,12 +204,17 @@ pub(crate) fn is_topic_file_path(rel: &str) -> bool {
     rel.strip_prefix(&format!("{}/", repo::DECISIONS_DIR)).is_some_and(|name| name.ends_with(".md"))
 }
 
+/// A path of the shape of a blame file: `adrdom/blame/<name>.md`, nested
+/// paths too (`blame::Index` lists the same files).
+pub(crate) fn is_blame_file_path(rel: &str) -> bool {
+    rel.strip_prefix(&format!("{}/", repo::BLAME_DIR)).is_some_and(|name| name.ends_with(".md"))
+}
+
 /// Whether `rel` (a path from the repository root) names a file approve
 /// takes: a topic file under adrdom/decisions, adrdom/terms.md, or a blame
 /// file under adrdom/blame.
 pub fn approve_takes(rel: &str) -> bool {
-    let md_under = |dir: &str| rel.strip_prefix(&format!("{}/", dir)).is_some_and(|name| name.ends_with(".md"));
-    rel == repo::TERMS_PATH || md_under(repo::DECISIONS_DIR) || md_under(repo::BLAME_DIR)
+    rel == repo::TERMS_PATH || is_topic_file_path(rel) || is_blame_file_path(rel)
 }
 
 /// The plan hash of a file with no question; the same value the context
@@ -786,6 +791,7 @@ pub fn record_refusals(
     names: &HashMap<String, String>,
     all: &[RecordFile],
     replaced: &std::collections::HashSet<String>,
+    blame: &crate::blame::Index,
     led: &Ledger,
 ) -> Vec<Finding> {
     let mut out: Vec<Finding> = parse_findings(rel, rf);
@@ -906,6 +912,56 @@ pub fn record_refusals(
         out.push(Finding::said(Class::Plan, said));
     }
 
+    out.extend(blame_line_refusals(rel, rf, blame, led));
+
+    out
+}
+
+/// Every refusal the `blame:` lines of `rf` earn (per "What does a question
+/// carry of the blame file it came from?", 672201dd A), category `plan`,
+/// judged for each question whose text can still change
+/// (`status::open_to_ask_text`): an asked question that stands as asked, an
+/// answered one and the rest are not judged again when their blame file
+/// changes. For each entry, in line order: it names a blame file and row
+/// ranges; the name or identifier is a blame file of `blame`; that file is
+/// approved; each range is the range of a row of it, a `decision` row or a
+/// `detail` row alike. A fault of the first two stops the judgement of its
+/// entry, and the ranges of a file not yet approved wait for it. A repeated
+/// entry or range earns its finding once, and is no fault of its own.
+pub fn blame_line_refusals(rel: &str, rf: &RecordFile, blame: &crate::blame::Index, led: &Ledger) -> Vec<Finding> {
+    let mut out = Vec::new();
+    for (i, sec) in rf.sections.iter().enumerate() {
+        if sec.blame.is_empty() || !status::open_to_ask_text(led, rf, sec) {
+            continue;
+        }
+        let heading = sec.heading_text.as_str();
+        let mut found: Vec<msg::Said> = Vec::new();
+        for entry in &sec.blame {
+            let written = entry.written();
+            let faults: Vec<msg::Said> = if entry.ranges.is_empty() {
+                vec![msg::blame_entry_without_range(rel, heading, &written)]
+            } else {
+                match blame.named(&entry.file) {
+                    None => vec![msg::blame_names_no_file(rel, heading, &entry.file)],
+                    Some(file) if file.status != status::FileStatus::Approved => {
+                        vec![msg::blame_file_awaits_approval(rel, heading, file.rel(), file.status)]
+                    }
+                    Some(file) => entry
+                        .ranges
+                        .iter()
+                        .filter(|&&(from, to)| !file.rows().iter().any(|r| r.start == from && r.end == to))
+                        .map(|&(from, to)| msg::blame_range_of_no_row(rel, heading, file.rel(), from, to))
+                        .collect(),
+                }
+            };
+            for fault in faults {
+                if !found.iter().any(|f| f.found == fault.found) {
+                    found.push(fault);
+                }
+            }
+        }
+        out.extend(found.into_iter().map(|said| Finding::said(Class::Plan, said).in_section(i)));
+    }
     out
 }
 
@@ -1274,6 +1330,9 @@ pub struct TopicFileJudge<'a> {
     pub cross_file_headings: &'a HashMap<String, Vec<(String, String)>>,
     pub names: &'a HashMap<String, String>,
     pub replaced: &'a HashSet<String>,
+    /// Every blame file the `blame:` lines are judged against, read through
+    /// the same `repo::Source` as the topic files of the run.
+    pub blame: &'a crate::blame::Index,
     pub led: &'a Ledger,
     /// Whether the planning rules judge the file (`planning_rules_apply`,
     /// read off the file as written, before the normalize pass).
@@ -1319,6 +1378,7 @@ pub fn judge_topic_file(j: &TopicFileJudge) -> Vec<Finding> {
             j.names,
             j.all,
             j.replaced,
+            j.blame,
             led,
         ),
         rel,
@@ -1463,10 +1523,12 @@ fn planning_steps(
 /// What the judgement of every topic file of a run reads of the whole
 /// repository, read once per run rather than once per file: the planning
 /// records (`plan::Shared`, with the term phrases and the heading indexes),
-/// what the approved plans' supersedes lines replace, and the files whose
-/// plan differs from an approval.
+/// what the approved plans' supersedes lines replace, the files whose plan
+/// differs from an approval and the blame files.
 pub struct RepoIndex {
     pub planning: crate::plan::Shared,
+    /// Every blame file, the `blame:` lines' side of the judgement.
+    pub blame: crate::blame::Index,
     base: HashSet<String>,
     stale: Vec<String>,
     records: Vec<Finding>,
@@ -1479,11 +1541,25 @@ impl RepoIndex {
 
     /// `new` with the reader's rows as `source` holds them.
     pub fn new_via(root: &Path, all: &[RecordFile], terms_list: &[terms::Term], led: &Ledger, source: &repo::Source) -> RepoIndex {
+        let (blame, _) = crate::blame::Index::read(root, source, led);
+        RepoIndex::new_with_blame(root, all, terms_list, led, source, blame)
+    }
+
+    /// `new_via` with the blame index the caller already holds, read from the
+    /// same rows as `source`, instead of reading it again.
+    pub fn new_with_blame(
+        root: &Path,
+        all: &[RecordFile],
+        terms_list: &[terms::Term],
+        led: &Ledger,
+        source: &repo::Source,
+        blame: crate::blame::Index,
+    ) -> RepoIndex {
         let planning = crate::plan::Shared::new_via(root, all, terms_list, led, source);
         let base = depends::replaced_base(all, &depends::approved_plan_rels(all, led), &planning.cross, led);
         let stale = stale_files(all, led).into_iter().map(str::to_string).collect();
         let records = judge_records(all, led);
-        RepoIndex { planning, base, stale, records }
+        RepoIndex { planning, blame, base, stale, records }
     }
 
     /// The rules on the topic files as a whole (`judge_records`).
@@ -1521,6 +1597,7 @@ pub fn judge_topic_file_in(
         cross_file_headings: &shared.cross,
         names: &shared.headings,
         replaced: &replaced,
+        blame: &index.blame,
         led,
         planning: planning_rules_apply(led, &rf, &rf.rel),
         shared: Some(shared),
@@ -1683,113 +1760,14 @@ pub fn judge_blame_coverage(bf: &crate::blame::BlameFile, n: usize) -> Vec<Findi
     out
 }
 
-/// The names every row of every blame file resolves against (per "What does
-/// a blame row name?"), read once through `source`, the same tree the
-/// caller judges: `check --staged` resolves against the staged files.
-pub struct BlameNames {
-    any_headings: HashMap<String, Vec<(String, String)>>,
-    known_heading_ids: HashSet<String>,
-    terms_list: Vec<terms::Term>,
-    phrase_lookup: HashMap<String, String>,
-    decision_stems: HashSet<String>,
-    known_origins: HashSet<String>,
-    source: repo::Source,
-}
-
-impl BlameNames {
-    pub fn read(root: &Path, source: &repo::Source) -> BlameNames {
-        let (all_records, _) = record::load_all_via(root, source);
-        let terms_list: Vec<terms::Term> =
-            state::load_terms_via(root, source).map(|tf| terms::minted_copy(&tf).terms).unwrap_or_default();
-        BlameNames::of(root, source, &all_records, terms_list)
-    }
-
-    /// `read` from the topic files and terms the caller already holds, read
-    /// through the same `source`: `terms_list` is the terms file's minted
-    /// copy (`terms::minted_copy`), so an entry with no id yet resolves.
-    pub fn of(root: &Path, source: &repo::Source, records: &[RecordFile], terms_list: Vec<terms::Term>) -> BlameNames {
-        let (any_headings, known_heading_ids) = crate::blame::heading_ids(records);
-        let phrase_lookup = terms::phrase_lookup(&terms_list);
-        let decision_stems: HashSet<String> = repo::list_decision_files_via(root, source)
-            .iter()
-            .filter_map(|p| p.file_stem().and_then(|s| s.to_str()).map(str::to_string))
-            .collect();
-        BlameNames {
-            any_headings,
-            known_heading_ids,
-            terms_list,
-            phrase_lookup,
-            decision_stems,
-            known_origins: crate::blame::known_origins_via(root, source),
-            source: *source,
-        }
-    }
-}
-
-/// The destination rule of a blame file (per "What does a blame row
-/// name?"): each row whose destination is not one of the closed set, and,
-/// for the rows that resolve, what each resolves to, in row order. `origin`
-/// is the file's `origin:` path.
-pub fn judge_blame_destinations(
-    root: &Path,
-    source: &repo::Source,
-    bf: &crate::blame::BlameFile,
-    origin: &str,
-) -> (Vec<Finding>, Vec<crate::blame::Resolved>) {
-    judge_blame_destinations_in(root, bf, origin, &BlameNames::read(root, source))
-}
-
-/// `judge_blame_destinations` with the names read once for the run.
-pub fn judge_blame_destinations_in(
-    root: &Path,
-    bf: &crate::blame::BlameFile,
-    origin: &str,
-    names: &BlameNames,
-) -> (Vec<Finding>, Vec<crate::blame::Resolved>) {
-    use crate::blame;
-    let ctx = blame::ResolveCtx {
-        any_headings: &names.any_headings,
-        known_heading_ids: &names.known_heading_ids,
-        terms_list: names.terms_list.as_slice(),
-        phrase_lookup: &names.phrase_lookup,
-        source: names.source,
-        decision_stems: &names.decision_stems,
-        known_origins: &names.known_origins,
-        own_origin: origin.to_string(),
-        root: root.to_path_buf(),
-    };
-    let mut findings = Vec::new();
-    let mut resolved = Vec::new();
-    for row in &bf.rows {
-        match blame::resolve_destination(&row.dest, &ctx) {
-            Ok(r) => resolved.push(r),
-            Err(e) => findings.push(
-                Finding::said(Class::Blame, blame::dest_refusal_text(&bf.rel, row, &e))
-                    .about(Subject::BlameFile(bf.rel.clone())),
-            ),
-        }
-    }
-    (findings, resolved)
-}
-
 /// Every rule one blame file breaks, read off its state against its origin
-/// (`blame::file_state`): the failures of the state, then, when the origin
-/// could be read, coverage and destinations. What `show` names the moves of
-/// a blame file from; `approve` reads the coverage and destination rules
-/// through the same two functions. `names` is what the rows resolve
-/// against, read once for the run (`BlameNames::read`).
-pub fn judge_blame_file(
-    root: &Path,
-    st: &crate::blame::FileState,
-    bf: &crate::blame::BlameFile,
-    names: &BlameNames,
-) -> Vec<Finding> {
-    let mut out: Vec<Finding> = st.shape.iter().chain(&st.failures).cloned().collect();
+/// (`blame::file_state`): the findings of the state, then, when the origin
+/// could be read, coverage. What `approve` refuses on, `check` prints and
+/// `show` names the moves of a blame file from.
+pub fn judge_blame_file(st: &crate::blame::FileState, bf: &crate::blame::BlameFile) -> Vec<Finding> {
+    let mut out = st.findings.clone();
     if let Some(c) = &st.origin_content {
         out.extend(judge_blame_coverage(bf, c.lines().count()));
-        if let Some(origin) = &bf.origin {
-            out.extend(judge_blame_destinations_in(root, bf, origin, names).0);
-        }
     }
     out
 }
