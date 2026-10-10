@@ -53,8 +53,9 @@ pub(crate) const PRE_PUSH_HOOK: &str = "#!/bin/sh\nadr check --push\nexit $?\n";
 /// `adrdom/.gitattributes`'s whole content (Decision 7,
 /// db56a285-946f-48b1-b073-bb1e90192185): the one merge rule that keeps
 /// both branches' rows at a merge for the ledger, and a second one for the
-/// reader's file ("Does check hold the reader's file as it holds the
-/// ledger?", 26c5352f-3f82-4376-9dc2-8ccc0074d080). The ban list gets no
+/// reader's file ("Does the reader's file keep a row whose text is gone from
+/// the records?", 90714223-52e3-4bb9-b0b4-2a8b87d74145: a merge brings a
+/// dropped row back until the next append drops it again). The ban list gets no
 /// such rule -- a merge conflict there is left for the owner to resolve,
 /// same as any other file `install` doesn't cover. `check`'s `install`
 /// check compares the file on disk against this text the same way it

@@ -146,6 +146,8 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
     let mut read = Vec::new();
     let e = env(root);
     let led = ledger::read(&root.join(repo::LEDGER_PATH));
+    // Read once for the run: `adr plan` writes no topic file or terms file.
+    let live = reader::Live::of(root);
 
     // The neighbours of each heading with no rows.
     let mut pl = planning(root, rf, &e, &led);
@@ -154,7 +156,7 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
         let queries: Vec<String> = todo.iter().map(|&i| plan::heading_text(&rf.sections[i])).collect();
         let near = index::nearest(root, &led, &queries, index::NEIGHBOURS).map_err(stop)?;
         for (&i, n) in todo.iter().zip(&near) {
-            reader::read(root, &plan::heading_pairs(&rf.sections[i], n)).map_err(stop)?;
+            reader::read_live(root, &plan::heading_pairs(&rf.sections[i], n), &live).map_err(stop)?;
         }
         pl = planning(root, rf, &e, &led);
         did(&pl, &todo, Step::Heading, &mut read);
@@ -179,7 +181,7 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
                 }
                 _ => Vec::new(),
             };
-            reader::read(root, &plan::body_pairs(rf, i, n, &own)).map_err(stop)?;
+            reader::read_live(root, &plan::body_pairs(rf, i, n, &own), &live).map_err(stop)?;
         }
         pl = planning(root, rf, &e, &led);
         did(&pl, &todo, Step::Body, &mut read);

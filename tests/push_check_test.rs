@@ -306,9 +306,9 @@ fn e_an_all_zero_remote_sha_and_an_all_zero_local_sha_both_pass() {
     );
 }
 
-// adr: 26c5352f-3f82-4376-9dc2-8ccc0074d080
+// adr: abb6faed-96f7-406d-8384-002ee81bb157
 #[test]
-fn g_a_force_push_that_drops_a_remote_reader_row_is_refused() {
+fn g_a_force_push_that_edits_a_remote_reader_row_is_refused_and_one_that_drops_it_passes() {
     let (dir, _remote, branch) = new_repo_with_remote();
 
     let row = "2026-10-05T10:00:00Z\t".to_string()
@@ -316,18 +316,25 @@ fn g_a_force_push_that_drops_a_remote_reader_row_is_refused() {
         + "\t62e50382-db1b-4649-9f26-7f44c379d6fe\tsame\tA reason.\t"
         + &"b".repeat(64)
         + "\tclaude-sonnet-5-5\t0.1.0\n";
-    std::fs::write(dir.join("adrdom/state/reader.tsv"), row).unwrap();
+    std::fs::write(dir.join("adrdom/state/reader.tsv"), &row).unwrap();
     commit_all(&dir, "a reader row");
     let push = git_ok(&dir, &["push", "origin", &branch]);
     assert!(push.status.success(), "{}", stderr(&push));
 
+    // The row replaced by a copy with another word: refused.
+    git_ok(&dir, &["reset", "--hard", "HEAD~1"]);
+    std::fs::write(dir.join("adrdom/state/reader.tsv"), row.replacen("\tsame\t", "\tdepends\t", 1)).unwrap();
+    commit_all(&dir, "the row with another word");
+    let forced = run_git(&dir, &["push", "--force", "origin", &branch]);
+    assert!(!forced.status.success(), "a push that edits a remote reader row must be refused");
+    let text = format!("{}{}", stdout(&forced), stderr(&forced));
+    assert!(text.contains("would change a reader row the remote's"), "{}", text);
+    assert!(!text.contains("would drop ledger rows"), "{}", text);
+
+    // The row gone whole: passes.
     git_ok(&dir, &["reset", "--hard", "HEAD~1"]);
     std::fs::write(dir.join("unrelated.txt"), "unrelated change\n").unwrap();
     commit_all(&dir, "an unrelated commit, replacing the one with the row");
-
     let forced = run_git(&dir, &["push", "--force", "origin", &branch]);
-    assert!(!forced.status.success(), "a push that drops a remote reader row must be refused");
-    let text = format!("{}{}", stdout(&forced), stderr(&forced));
-    assert!(text.contains("would drop reader rows the remote's"), "{}", text);
-    assert!(!text.contains("would drop ledger rows"), "{}", text);
+    assert!(forced.status.success(), "a push that drops a remote reader row passes: {}{}", stdout(&forced), stderr(&forced));
 }

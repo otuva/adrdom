@@ -17,7 +17,8 @@ pub const LEDGER_PATH: &str = "adrdom/state/ledger.tsv";
 /// and the word). `install`'s gitignore keeps it out of git.
 pub const ROLES_PATH: &str = "adrdom/state/roles.tsv";
 /// The reader's file: one row for each word the reader gave on a pair of
-/// texts (`reader::Row`). Held by `check` the way the ledger is.
+/// texts (`reader::Row`). `check` holds each row at HEAD byte for byte or gone whole; the tool drops
+/// a row whose text or neighbour is gone from the records when it appends.
 pub const READER_PATH: &str = "adrdom/state/reader.tsv";
 /// The repo's own terms file.
 /// Where blame files live, relative to the repo root (per "What does a
