@@ -372,6 +372,8 @@ Standard: a cache keyed by content hash is pruned of entries whose key no longer
   Why: every reading ever made stays; the file is a record like the ledger.
   Costs: a row per edited draft text for ever, read on every command.
 
+**Answer:** A
+
 ### What does check hold of the reader's file?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 90714223-52e3-4bb9-b0b4-2a8b87d74145=*, 08a1b488-32fc-4dc7-b4b3-93a6e768725f
 unrelated: 34e81f57-9b3c-4dc4-a2ba-ca227523177d, 6ef9eca6-fd8b-4211-aae7-00b37a2a9245, ec3f875c-a0f8-4085-8da1-fec9dcb14377, 6108b8b2-911e-443b-abe0-4c6f8b407384, bceceda8-133a-4c9b-b439-b5c1a4414a02, 902bd279-e6c1-4a21-9637-a3a43f360bae, 05141f49-d9d2-407c-b60c-ebb195a05864, a6f41dee-2381-421a-bcc4-b14af243209b, 7a1e7b81-0967-4ed2-8a8a-c7153056836f, bf6697e3-8832-4b90-b036-8fecedb55406, c10c3a49-e993-4c9f-a46b-4a1ba3646dcf, 385a57d5-5f76-454a-ae5d-9b0d6f5c1492, d2851ea1-fcb6-476a-b321-c813a594d5e5, f3e64c4e-21ab-442f-8c40-6060591e2b77
@@ -391,3 +393,5 @@ Standard: a machine-written cache is verified for shape and against edits; remov
 - C) The shape of each row alone.
   Why: nothing to compare with history.
   Costs: a row edited by hand passes as the reader's word.
+
+**Answer:** A

@@ -312,6 +312,8 @@ Standard: a review listing shows a disputed item beside the item, and the full a
   Why: no new line form.
   Costs: the owner never sees the reader's word; the agent's line stands alone at approval.
 
+**Answer:** A
+
 ### Does show print the reference lines of an answered question?
 depends: aef1b384-2b33-47a2-92a8-ec7f8fb258ef, b36113a1-1384-4e4c-a798-8399f4181366, a6f41dee-2381-421a-bcc4-b14af243209b
 unrelated: 946263aa-519a-47aa-b743-5cdcf52f5d35, 11be073c-ce91-44d8-833a-ef0b5e0b1672, 1fb71321-bb84-492f-b9d5-1444c9c444af, ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf, 55a8abb2-0f6d-430b-99f9-a378f3f154e5, 6108b8b2-911e-443b-abe0-4c6f8b407384, 462e22c6-8b23-4061-9a2a-bbf8691fce60, 7327cd58-ac58-40a4-8ef2-00072fb552b2, 9d634996-475e-4ddc-8113-05c404ad9d5c, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, bceceda8-133a-4c9b-b439-b5c1a4414a02, c84a4bd9-fc2d-44f0-b333-172978f61544, 332ff0c7-0769-45ac-8f89-00aeff318467, b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051, f3c9e736-157c-4197-b49e-19e3674e4e0c, 36dfbeaa-698d-4a57-b3b0-d425348e14a5, a82db5b7-969c-44e9-9eec-876ead7099d3, 3fc35d4f-90f3-4425-9dac-951a89631fdf, 7857d633-2055-47eb-857f-cb70da9fa7ba, 0487a1cf-eb61-4bf8-bd16-eed899d22d2c, 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
@@ -328,6 +330,8 @@ Standard: a listing prints what the next step reads; what stands behind a closed
   Why: every line of every question in one listing.
   Costs: lines no move reads make most of the listing of a settled file.
 
+**Answer:** A
+
 ### Does the tool colour what it prints to a terminal?
 depends: 1d7e59ea-99e3-4d4b-9928-5dabca62723d, f90dbd5b-8fbe-4899-8588-f8762795c2e2, 848e1b76-9cfe-483b-94dd-094eb9b2f995, 069a6b4a-de35-45f3-8c6c-8e254bf40565, 7857d633-2055-47eb-857f-cb70da9fa7ba
 unrelated: 2db33118-82b4-4edf-a9cb-e92ac62738b9, 36dfbeaa-698d-4a57-b3b0-d425348e14a5, c84a4bd9-fc2d-44f0-b333-172978f61544, 3fc35d4f-90f3-4425-9dac-951a89631fdf, a6f41dee-2381-421a-bcc4-b14af243209b, f53ac3b9-efde-427c-8027-19988aa8fda7, bceceda8-133a-4c9b-b439-b5c1a4414a02, 11be073c-ce91-44d8-833a-ef0b5e0b1672, 902bd279-e6c1-4a21-9637-a3a43f360bae, aa275fac-def5-42a2-8a61-660142acad8e, 83190b10-8060-47c1-8194-f6a5c4f0d703, 332ff0c7-0769-45ac-8f89-00aeff318467, f3c9e736-157c-4197-b49e-19e3674e4e0c
@@ -343,6 +347,8 @@ Standard: a command colours its output when standard output is a terminal, print
 - B) No.
   Why: one output everywhere; nothing to check.
   Costs: the owner reads every listing in one shade.
+
+**Answer:** A
 
 ### What does the tool add to the shape of what it prints to a terminal?
 depends: 1d7e59ea-99e3-4d4b-9928-5dabca62723d, f90dbd5b-8fbe-4899-8588-f8762795c2e2, 848e1b76-9cfe-483b-94dd-094eb9b2f995, 069a6b4a-de35-45f3-8c6c-8e254bf40565, 7857d633-2055-47eb-857f-cb70da9fa7ba, c84a4bd9-fc2d-44f0-b333-172978f61544, a6f41dee-2381-421a-bcc4-b14af243209b, b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051=*
@@ -362,3 +368,5 @@ Standard: a listing groups its lines, with a blank line between groups and a hea
 - C) Tables: columns aligned per group with a header row, on a terminal; piped output one line per item.
   Why: statuses and headings line up.
   Costs: column widths per group, wrapping of long headings, and a second form of every line.
+
+**Answer:** A
