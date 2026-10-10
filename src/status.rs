@@ -205,7 +205,7 @@ pub fn topic_file_status_at(led: &Ledger, rf: &RecordFile, rel: &str) -> TopicFi
 fn approval_status(led: &Ledger, event: &str, rel: &str, approved: bool) -> FileStatus {
     if approved {
         FileStatus::Approved
-    } else if led.latest_for_path(event, rel).is_some() {
+    } else if (if event == "blame" { led.latest_blame(rel) } else { led.latest_for_path(event, rel) }).is_some() {
         FileStatus::Changed
     } else {
         FileStatus::New

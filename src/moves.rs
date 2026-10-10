@@ -831,7 +831,7 @@ mod tests {
                     .then(|| LedgerRow {
                         time: "2024-01-01T00:00:00Z".to_string(),
                         event: "blame".to_string(),
-                        id: "-".to_string(),
+                        id: bf.id.clone().unwrap_or_else(|| "-".to_string()),
                         hash: blame::file_hash(&bf.lines),
                         detail: bf.rel.clone(),
                         version: "0.1.0".to_string(),

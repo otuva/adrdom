@@ -351,6 +351,8 @@ impl Entry {
 #[derive(Debug, Clone)]
 pub struct Index {
     entries: Vec<Entry>,
+    /// The path and identifier of every `blame` ledger row, in ledger order.
+    blame_rows: Vec<(String, String)>,
 }
 
 impl Index {
@@ -366,7 +368,20 @@ impl Index {
                 file,
             })
             .collect();
-        Index { entries }
+        let blame_rows =
+            led.rows.iter().filter(|r| r.event == "blame").map(|r| (r.detail.clone(), r.id.clone())).collect();
+        Index { entries, blame_rows }
+    }
+
+    /// The identifier of the latest `blame` row for `rel` (`-` in a row of an
+    /// older ledger), `None` when the file has no approval.
+    pub fn approved_id(&self, rel: &str) -> Option<&str> {
+        self.blame_rows.iter().rfind(|(path, _)| path == rel).map(|(_, id)| id.as_str())
+    }
+
+    /// True when some `blame` row, for any path, holds `id`.
+    pub fn row_holds(&self, id: &str) -> bool {
+        self.blame_rows.iter().any(|(_, held)| held.eq_ignore_ascii_case(id))
     }
 
     /// The index of every blame file in `source`, and the path of each one
@@ -519,7 +534,22 @@ pub fn file_state(
     // one only for a file never approved (d2851ea1 A). A faulty id line is
     // an id line, and its own finding says what is wrong with it.
     if status == FileStatus::Changed && bf.id.is_none() && !bf.shape_errors.iter().any(|e| e.kind == ShapeKind::Id) {
-        st.findings.push(about(msg::blame_id_line_gone(rel)));
+        st.findings.push(about(msg::blame_id_line_gone(rel, index.approved_id(rel).unwrap_or_default())));
+    }
+    // The tool wrote the id line and the ledger holds what it wrote: an id
+    // line no `blame` row holds was written by hand, and an approved file
+    // whose id line differs from its approval's was edited since. A file
+    // renamed after approval holds an identifier of a row for another path
+    // and has no row of its own: neither.
+    if let Some(id) = bf.id.as_deref() {
+        match index.approved_id(rel) {
+            Some(written) if !written.eq_ignore_ascii_case(id) => {
+                st.findings.push(about(msg::blame_id_edited(rel, written)))
+            }
+            Some(_) => {}
+            None if !index.row_holds(id) => st.findings.push(about(msg::blame_id_not_written(rel))),
+            None => {}
+        }
     }
     let Some(origin) = bf.origin.clone() else {
         return st;
@@ -602,7 +632,7 @@ mod tests {
                 .map(|bf| LedgerRow {
                     time: "2024-01-01T00:00:00Z".to_string(),
                     event: "blame".to_string(),
-                    id: "-".to_string(),
+                    id: bf.id.clone().unwrap_or_else(|| "-".to_string()),
                     hash: file_hash(&bf.lines),
                     detail: bf.rel.clone(),
                     version: "0.1.0".to_string(),

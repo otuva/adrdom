@@ -176,7 +176,7 @@ pub fn terms_approved(led: &Ledger, tf: &TermsFile) -> bool {
 pub fn blame_approved(led: &Ledger, rel: &str, content: &str) -> bool {
     let lines = record::split_lines(content);
     let hash = crate::blame::file_hash(&lines);
-    match led.latest_for_path("blame", rel) {
+    match led.latest_blame(rel) {
         Some(row) => row.hash == hash,
         None => false,
     }
@@ -995,7 +995,7 @@ mod tests {
             rows: vec![Row {
                 time: "2024-01-01T00:00:00Z".to_string(),
                 event: "blame".to_string(),
-                id: "-".to_string(),
+                id: "11111111-1111-4111-8111-111111111111".to_string(),
                 hash,
                 detail: "adrdom/blame/x.md".to_string(),
                 version: "0.1.0".to_string(),

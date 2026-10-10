@@ -2192,11 +2192,31 @@ pub fn blame_id_error(rel: &str, e: &str) -> Said {
 
 /// `rel` was approved and has no id line now: the identifier its approval
 /// gave is gone, and approve does not assign another.
-pub fn blame_id_line_gone(rel: &str) -> Said {
+pub fn blame_id_line_gone(rel: &str, id: &str) -> Said {
     said(
         &crate::rule::BLAME_ID_ASSIGNED_BY_TOOL,
         format!("{}: the id line of its approval is gone", rel),
-        Next::agent("restores the id line from git"),
+        Next::agent(format!("writes back the id line \"id: {}\"", id)),
+    )
+}
+
+/// The id line of `rel` holds an identifier no `blame` ledger row holds: the
+/// tool did not write it.
+pub fn blame_id_not_written(rel: &str) -> Said {
+    said(
+        &crate::rule::BLAME_ID_ASSIGNED_BY_TOOL,
+        format!("{}: its id line holds an identifier the tool did not write", rel),
+        Next::agent("removes the id line"),
+    )
+}
+
+/// `rel` was approved and its id line differs from the identifier its
+/// approval gave (`written`).
+pub fn blame_id_edited(rel: &str, written: &str) -> Said {
+    said(
+        &crate::rule::BLAME_ID_ASSIGNED_BY_TOOL,
+        format!("{}: its id line differs from the identifier of its approval", rel),
+        Next::agent(format!("writes back the id line \"id: {}\"", written)),
     )
 }
 
@@ -2717,7 +2737,9 @@ mod tests {
             blame_shape_error("adrdom/blame/x.md", "line 1: missing \"origin: <path>\"").text(),
             blame_row_value_error("adrdom/blame/x.md", "line 4: row value \"term: pass\" is neither decision nor detail").text(),
             blame_id_error("adrdom/blame/x.md", "line 3: id line holds \"x\", which is no identifier the tool assigns").text(),
-            blame_id_line_gone("adrdom/blame/x.md").text(),
+            blame_id_line_gone("adrdom/blame/x.md", "11111111-1111-4111-8111-111111111111").text(),
+            blame_id_not_written("adrdom/blame/x.md").text(),
+            blame_id_edited("adrdom/blame/x.md", "11111111-1111-4111-8111-111111111111").text(),
             blame_id_shared("adrdom/blame/x.md", "adrdom/blame/y.md").text(),
             blame_coverage_gap("adrdom/blame/x.md", 3, 5).text(),
             blame_range_beyond("adrdom/blame/x.md", 1, 10, 5).text(),

@@ -826,8 +826,10 @@ fn do_approve_blame(
     // file without shape faults has that blank line as its line 3.
     let mut work_lines = bf.lines.clone();
     let minted = bf.id.is_none();
+    let mut file_id = bf.id.clone().unwrap_or_default();
     if minted {
-        let id_line = format!("id: {}", Uuid::new_v4());
+        file_id = Uuid::new_v4().to_string();
+        let id_line = format!("id: {}", file_id);
         work_lines.insert(2, id_line.clone());
         // Only the id line is added to the bytes on disk, with the line
         // ending of the line above it (d2851ea1 A).
@@ -842,7 +844,7 @@ fn do_approve_blame(
     }
 
     let new_hash = blame::file_hash(&work_lines);
-    let unchanged = led.latest_for_path("blame", rel).map(|r| r.hash.as_str()) == Some(new_hash.as_str());
+    let unchanged = led.latest_blame(rel).map(|r| r.hash.as_str()) == Some(new_hash.as_str());
 
     // No row, no line: a hash the ledger already holds is no event.
     let mut rows: Vec<ledger::Row> = Vec::new();
@@ -850,7 +852,7 @@ fn do_approve_blame(
         let row = ledger::Row {
             time: ledger::write_time(led),
             event: "blame".to_string(),
-            id: "-".to_string(),
+            id: file_id,
             hash: new_hash,
             detail: rel.to_string(),
             version: crate::version::VERSION.to_string(),

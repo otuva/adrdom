@@ -49,7 +49,7 @@ fn approve_takes_decision_and_detail_rows_writes_the_id_line_and_one_row() {
     let blame_line = ledger.lines().find(|l| l.contains("\tblame\t")).unwrap();
     let cols: Vec<&str> = blame_line.split('\t').collect();
     assert_eq!(cols.len(), 6, "{}", blame_line);
-    assert_eq!(cols[2], "-", "a blame file stays named by its path in the ledger");
+    assert_eq!(cols[2], id, "the row carries the identifier on the file's id line");
     assert_eq!(cols[3], blame::file_hash(&record::split_lines(&saved)));
     assert_eq!(cols[4], "adrdom/blame/x.md");
 }
@@ -400,16 +400,19 @@ fn a_changed_blame_file_that_lost_its_id_line_refuses() {
     let written = std::fs::read_to_string(&path).unwrap();
     let rows_before = blame_row_count(&dir);
 
-    let line = "adrdom/blame/x.md: the id line of its approval is gone; the tool assigns a blame file's identifier; agent restores the id line from git";
+    let line = format!(
+        "adrdom/blame/x.md: the id line of its approval is gone; the tool assigns a blame file's identifier; agent writes back the id line \"id: {}\"",
+        id_line.strip_prefix("id: ").unwrap()
+    );
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(!out.status.success(), "approve minted an identifier: {}", stdout(&out));
-    assert_eq!(refusal_lines(&out, "approve: "), vec![line.to_string()], "{}", stderr(&out));
+    assert_eq!(refusal_lines(&out, "approve: "), vec![line.clone()], "{}", stderr(&out));
     assert_eq!(std::fs::read_to_string(&path).unwrap(), written, "nothing written on refusal");
     assert_eq!(blame_row_count(&dir), rows_before);
 
     let checked = adr(&dir, &["check"], &[], "");
     assert!(stdout(&checked).lines().any(|l| l == line), "{}", stdout(&checked));
-    assert_eq!(file_moves(&dir, "adrdom/blame/x.md"), vec![line.to_string()]);
+    assert_eq!(file_moves(&dir, "adrdom/blame/x.md"), vec![line.clone()]);
 
     // The agent restores the line from git; the file is as approved again.
     std::fs::write(&path, &approved).unwrap();
@@ -811,8 +814,6 @@ fn approve_keeps_the_line_endings_of_an_lf_blame_file() {
 fn identifiers_differing_only_in_case_are_one_identifier() {
     let dir = setup();
     let blob = write_origin(&dir, "docs/x.md", "one\n");
-    let upper = "ABCDEF78-1234-4234-8234-123456789ABC";
-    let lower = upper.to_lowercase();
     let mk = |name: &str, id: &str| {
         write_record(
             &dir,
@@ -820,10 +821,11 @@ fn identifiers_differing_only_in_case_are_one_identifier() {
             &format!("origin: docs/x.md\nblob: {}\nid: {}\n\n1-1\tdetail\n", blob, id),
         )
     };
-    let u = mk("u", upper);
-    let v = mk("v", &lower);
+    let u = write_blame_file(&dir, "adrdom/blame/u.md", "docs/x.md", &blob, "1-1\tdetail\n");
     let out = adr_owner(&dir, &["approve", u.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
+    let lower = id_line_of(&u);
+    let v = mk("v", &lower.to_uppercase());
     let out = adr_owner(&dir, &["approve", v.to_str().unwrap()], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     let line = "adrdom/blame/v.md: its id line holds the identifier of adrdom/blame/u.md; one identifier names one blame file; agent removes the id line from adrdom/blame/v.md";
@@ -846,4 +848,62 @@ fn a_coverage_gap_move_says_line_for_one_line_and_lines_for_more() {
     let path = write_blame_file(&dir, "adrdom/blame/gap2.md", "docs/gap2.md", &blob, "1-1\tdetail\n5-5\tdetail\n");
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(stderr(&out).contains("agent adds a row for lines 2-4"), "{}", stderr(&out));
+}
+
+// adr: d2851ea1-fcb6-476a-b321-c813a594d5e5
+//
+// "an identifier line approve writes": the `blame` row carries the
+// identifier of the file's id line in its identifier column, and a second
+// approval of a changed file carries the same one.
+#[test]
+fn the_blame_row_carries_the_identifier_of_the_id_line() {
+    let dir = setup();
+    let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
+    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-1\tdecision\n2-2\tdetail\n");
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    let id = id_line_of(&path);
+    let rows_of = || -> Vec<String> {
+        std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv"))
+            .unwrap()
+            .lines()
+            .filter(|l| l.contains("\tblame\t"))
+            .map(|l| l.split('\t').nth(2).unwrap().to_string())
+            .collect()
+    };
+    assert_eq!(rows_of(), vec![id.clone()]);
+
+    let text = std::fs::read_to_string(&path).unwrap().replace("2-2\tdetail", "2-2\tdecision");
+    std::fs::write(&path, text).unwrap();
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(rows_of(), vec![id.clone(), id]);
+}
+
+// adr: d2851ea1-fcb6-476a-b321-c813a594d5e5
+//
+// An id line no `blame` row holds was not written by the tool: on a file
+// never approved it is a finding check notes, and approve refuses it and
+// writes nothing.
+#[test]
+fn a_hand_written_id_on_a_never_approved_file_is_a_finding_and_approve_refuses() {
+    let dir = setup();
+    let blob = write_origin(&dir, "docs/x.md", "one\n");
+    let path = write_record(
+        &dir,
+        "adrdom/blame/x.md",
+        &format!("origin: docs/x.md\nblob: {}\nid: 12345678-1234-4234-8234-123456789abc\n\n1-1\tdetail\n", blob),
+    );
+    let before = std::fs::read_to_string(&path).unwrap();
+    let line = "adrdom/blame/x.md: its id line holds an identifier the tool did not write; the tool assigns a blame file's identifier; agent removes the id line";
+
+    let checked = adr(&dir, &["check"], &[], "");
+    assert!(checked.status.success(), "a note on a draft: {}", stdout(&checked));
+    assert!(stdout(&checked).lines().any(|l| l == line), "{}", stdout(&checked));
+
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(!out.status.success(), "{}", stdout(&out));
+    assert_eq!(refusal_lines(&out, "approve: "), vec![line.to_string()], "{}", stderr(&out));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
+    assert_eq!(blame_row_count(&dir), 0);
 }

@@ -657,7 +657,7 @@ fn of_two_drafts_sharing_an_id_the_first_by_path_keeps_it() {
     let line = "adrdom/blame/b.md: its id line holds the identifier of adrdom/blame/a.md; one identifier names one blame file; agent removes the id line from adrdom/blame/b.md";
     assert!(stdout(&out).lines().any(|l| l == line), "{}", stdout(&out));
     assert!(
-        !stdout(&out).lines().any(|l| l.starts_with("adrdom/blame/a.md")),
+        !stdout(&out).lines().any(|l| l.starts_with("adrdom/blame/a.md") && l.contains("holds the identifier of")),
         "{}",
         stdout(&out)
     );
@@ -706,4 +706,45 @@ fn a_blob_of_a_converted_origin_matches_in_both_sources() {
         assert!(!stdout(&out).contains("no longer matches"), "{:?}: {}", args, stdout(&out));
         assert!(!stdout(&out).contains("adrdom/blame/x.md"), "{:?}: {}", args, stdout(&out));
     }
+}
+
+// adr: d2851ea1-fcb6-476a-b321-c813a594d5e5
+//
+// An id line edited after approval differs from the identifier of the
+// latest `blame` row: check fails, and the move writes the approved
+// identifier back.
+#[test]
+fn a_hand_edited_id_makes_an_approved_file_a_draft_check_notes_it_and_approve_refuses() {
+    let dir = blame_setup();
+    let path = approved_blame_file(&dir, "x", "docs/x.md", "one\n", "1-1\tdetail\n");
+    let id = id_line_of(&path);
+    let text = std::fs::read_to_string(&path).unwrap();
+    let other = "22222222-2222-4222-8222-222222222222";
+    std::fs::write(&path, text.replace(&id, other)).unwrap();
+
+    // The edit changes the file's hash, so the file is a draft again: the
+    // finding is a note in check, and approve refuses on it.
+    let out = adr(&dir, &["check"], &[], "");
+    let line = format!(
+        "adrdom/blame/x.md: its id line differs from the identifier of its approval; the tool assigns a blame file's identifier; agent writes back the id line \"id: {}\"",
+        id
+    );
+    assert!(stdout(&out).lines().any(|l| l == line), "{}", stdout(&out));
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(!out.status.success(), "{}", stdout(&out));
+    assert_eq!(refusal_lines(&out, "approve: "), vec![line], "{}", stderr(&out));
+}
+
+// adr: d2851ea1-fcb6-476a-b321-c813a594d5e5
+//
+// A renamed approved file holds an identifier of a row for another path and
+// has no row of its own: neither id fault applies.
+#[test]
+fn a_renamed_approved_file_is_clean() {
+    let dir = blame_setup();
+    let path = approved_blame_file(&dir, "x", "docs/x.md", "one\n", "1-1\tdetail\n");
+    std::fs::rename(&path, dir.join("adrdom/blame/y.md")).unwrap();
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "{}", stdout(&out));
+    assert!(!stdout(&out).contains("id line"), "{}", stdout(&out));
 }
