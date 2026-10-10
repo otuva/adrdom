@@ -499,7 +499,7 @@ fn show_is_short_until_it_is_asked_for_the_whole() {
     );
 
     let whole = format!(
-        "[approved] Gate ({rel})\n[answered A] {one}\n  depends: widget\n\
+        "[approved] Gate ({rel})\n[answered A] {one}\n\
 [asked @{version}] {three}\n  depends: widget, {one}=A\n  Problem: the widget breaks.\n  Standard: plain words.\n  \
 - A) Yes the widget holds.\n    Why: reasons.\n    Costs: costs.\n  \
 - B) No the widget does not hold.\n    Why: other reasons.\n    Costs: other costs.\n\

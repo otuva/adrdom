@@ -191,7 +191,7 @@ fn a_removed_topic_file_lists_its_decisions_and_their_letters() {
     let listing = show(&dir, &[]);
     assert!(listing.contains(&format!("[removed] {}\n  {}\n    Yes.\n", REL, ONE)), "{}", listing);
     let form = show(&dir, &[REL]);
-    assert!(form.contains(&format!("[answered A] {}\n  depends: widget\n", ONE)), "{}", form);
+    assert!(form.contains(&format!("[answered A] {}\n", ONE)) && !form.contains(&format!("[answered A] {}\n  depends: widget\n", ONE)), "{}", form);
     assert!(form.contains(&format!("[asked @")), "{}", form);
     assert!(form.contains("  Problem: the widget breaks.\n"), "{}", form);
 }

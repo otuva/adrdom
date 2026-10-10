@@ -267,23 +267,142 @@ pub fn rows_via(root: &Path, source: &repo::Source) -> std::sync::Arc<Vec<Row>> 
     }
 }
 
-/// Appends `rows` to the reader file.
+/// The texts and the neighbours the records hold, the ones a row of the
+/// reader file may still name.
+pub struct Live {
+    texts: HashSet<String>,
+    neighbours: HashSet<String>,
+    /// Whether every topic file and the terms file loaded. A text is not
+    /// gone from records that could not be read, so nothing is dropped
+    /// against sets that are not complete.
+    complete: bool,
+}
+
+impl Live {
+    /// Read once for a command run: the working tree's topic files and
+    /// terms file. A text is the hash of a heading, of a heading with its
+    /// body, or of an answered question's heading and picked option (what
+    /// `adr read` gives the reader). A neighbour is the id of a question,
+    /// the id (or name) of a term, retired or not, or `text:` and the hash
+    /// of a question's heading and body.
+    pub fn of(root: &Path) -> Live {
+        let mut texts = HashSet::new();
+        let mut neighbours = HashSet::new();
+        let (records, load_errors) = crate::record::load_all_via(root, &repo::Source::WorkingTree);
+        let mut complete = load_errors.is_empty();
+        for rf in records {
+            for sec in &rf.sections {
+                texts.insert(crate::record::heading_hash(sec));
+                let body = crate::record::body_hash(&rf, sec);
+                neighbours.insert(format!("text:{}", body));
+                texts.insert(body);
+                if let Some(id) = &sec.id {
+                    neighbours.insert(id.clone());
+                    if let Some(s) = sec.chosen_sentence() {
+                        texts.insert(sha256_hex(&format!("{}\n{}", sec.heading_text.trim(), s)));
+                    }
+                }
+            }
+        }
+        match crate::state::load_terms_checked(root) {
+            crate::state::TermsLoad::Ok(tf) => {
+                for t in &tf.terms {
+                    neighbours.insert(t.id.clone().unwrap_or_else(|| t.name.clone()));
+                }
+            }
+            crate::state::TermsLoad::Missing => {}
+            crate::state::TermsLoad::LoadError(_) => complete = false,
+        }
+        Live { texts, neighbours, complete }
+    }
+
+    fn holds(&self, r: &Row) -> bool {
+        !self.complete || self.texts.contains(&r.text_hash) && self.neighbours.contains(&r.neighbour)
+    }
+}
+
+/// Appends `rows` to the reader file. Per "Does the reader's file keep a row
+/// whose text is gone from the records?" (90714223-52e3-4bb9-b0b4-2a8b87d74145
+/// A): when it appends, it first drops each row whose text or neighbour is
+/// gone from the records; a line that is no row stays as it is. With no row
+/// to append nothing is dropped. Prints nothing: a dropped row is no ledger
+/// event.
 pub fn append(root: &Path, rows: &[Row]) -> Result<(), String> {
-    use std::io::Write;
     if rows.is_empty() {
         return Ok(());
     }
-    let mut f = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(root.join(repo::READER_PATH))
-        .map_err(msg::reader_write_failed)?;
+    append_live(root, rows, &Live::of(root))
+}
+
+/// Like `append`, against the live sets a command read once for its run.
+/// The whole read-filter-write runs under an exclusive lock on the reader
+/// file, so a session that appends or rewrites at the same time loses no row.
+pub fn append_live(root: &Path, rows: &[Row], live: &Live) -> Result<(), String> {
+    use std::io::{Read, Write};
+    if rows.is_empty() {
+        return Ok(());
+    }
+    let path = root.join(repo::READER_PATH);
     let mut text = String::new();
     for r in rows {
         text.push_str(&row_line(r));
         text.push('\n');
     }
-    f.write_all(text.as_bytes()).map_err(msg::reader_write_failed)
+    // Lock the file, then check the path still names the locked file: a
+    // rewrite by another session renames a new file over it.
+    let mut handle = loop {
+        let h = std::fs::OpenOptions::new()
+            .create(true)
+            .read(true)
+            .append(true)
+            .open(&path)
+            .map_err(msg::reader_write_failed)?;
+        h.lock().map_err(msg::reader_write_failed)?;
+        if same_file(&h, &path) {
+            break h;
+        }
+    };
+    let mut old = String::new();
+    // Bytes that are no text read as empty and so are never dropped.
+    if handle.read_to_string(&mut old).is_err() {
+        old.clear();
+    }
+    // A file that does not end in a newline would glue its last line to the
+    // first new row.
+    let lead = if !old.is_empty() && !old.ends_with('\n') { "\n" } else { "" };
+    let kept: Vec<&str> = old.lines().filter(|l| parse_row(l).map_or(true, |r| live.holds(&r))).collect();
+    if kept.len() == old.lines().count() {
+        let text = format!("{}{}", lead, text);
+        return handle.write_all(text.as_bytes()).map_err(msg::reader_write_failed);
+    }
+    let mut all = String::new();
+    for l in kept {
+        all.push_str(l);
+        all.push('\n');
+    }
+    all.push_str(&text);
+    let tmp = path.with_file_name(format!("reader.tsv.{}.tmp", uuid::Uuid::new_v4()));
+    let done = std::fs::write(&tmp, all).and_then(|_| std::fs::rename(&tmp, &path));
+    if let Err(e) = done {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(msg::reader_write_failed(e));
+    }
+    Ok(())
+}
+
+/// Whether `path` still names the file `handle` holds open.
+#[cfg(unix)]
+fn same_file(handle: &std::fs::File, path: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    match (handle.metadata(), std::fs::metadata(path)) {
+        (Ok(a), Ok(b)) => a.dev() == b.dev() && a.ino() == b.ino(),
+        _ => false,
+    }
+}
+
+#[cfg(not(unix))]
+fn same_file(_handle: &std::fs::File, _path: &Path) -> bool {
+    true
 }
 
 /// The reason and the word of a reply: the last non-empty line is the word,
@@ -463,11 +582,20 @@ pub fn load() -> Result<Box<dyn Reader>, String> {
 /// to the reader file, under one time, only when every pair of the call has
 /// a word: a call that fails keeps nothing.
 pub fn read(root: &Path, pairs: &[Pair]) -> Result<Vec<Row>, String> {
+    read_live(root, pairs, &Live::of(root))
+}
+
+/// Like `read`, against the live sets a command read once for its run.
+pub fn read_live(root: &Path, pairs: &[Pair], live: &Live) -> Result<Vec<Row>, String> {
     let reader = load()?;
-    read_with(root, reader.as_ref(), pairs)
+    read_with_live(root, reader.as_ref(), pairs, live)
 }
 
 pub fn read_with(root: &Path, reader: &dyn Reader, pairs: &[Pair]) -> Result<Vec<Row>, String> {
+    read_with_live(root, reader, pairs, &Live::of(root))
+}
+
+pub fn read_with_live(root: &Path, reader: &dyn Reader, pairs: &[Pair], live: &Live) -> Result<Vec<Row>, String> {
     let mut have: HashMap<(String, String, String, String), Row> = HashMap::new();
     for r in read_file(root).rows {
         if r.model == MODEL {
@@ -524,7 +652,7 @@ pub fn read_with(root: &Path, reader: &dyn Reader, pairs: &[Pair]) -> Result<Vec
             }
         }
     }
-    append(root, &fresh)?;
+    append_live(root, &fresh, live)?;
     for r in fresh {
         have.insert(r.key(), r);
     }

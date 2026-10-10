@@ -95,8 +95,10 @@ fn read_all(root: &std::path::Path) -> Result<Vec<Line>, String> {
         })
         .collect();
     let mut rows = Vec::new();
+    // Read once for the run, not once per chunk.
+    let live = reader::Live::of(root);
     for chunk in pairs.chunks(CHUNK) {
-        match reader::read(root, chunk) {
+        match reader::read_live(root, chunk, &live) {
             Ok(r) => rows.extend(r),
             // The rows of earlier chunks are kept; the error names the move.
             Err(e) => return Err(e),

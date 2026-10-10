@@ -150,15 +150,15 @@ fn check_dropped(led: &Ledger, records: &[RecordFile], root: &Path) -> Vec<Failu
     out
 }
 
-/// The refusals of one held file: the ledger's and the reader file's differ
-/// in what they name, not in the rule.
+/// The refusals of the ledger's held rows. (The reader's file has its own
+/// rule: `reader::check_reader`.)
 pub(super) struct HeldMsgs {
     pub not_append_only: fn() -> msg::Said,
     pub merge_drops_rows: fn() -> msg::Said,
     pub since_drops_rows: fn(&str) -> msg::Said,
-    /// Whether this file reports a merge parent or a `since` commit that
-    /// cannot be read; the ledger reports it, and the reader file leaves it
-    /// to that one report, since both hit the same commit.
+    /// Whether a merge parent or a `since` commit that cannot be read is
+    /// reported; the ledger reports it, and the reader's file leaves it to
+    /// that one report, since both hit the same commit.
     pub report_unreadable: bool,
 }
 
@@ -169,16 +169,9 @@ const LEDGER_MSGS: HeldMsgs = HeldMsgs {
     report_unreadable: true,
 };
 
-pub(super) const READER_MSGS: HeldMsgs = HeldMsgs {
-    not_append_only: msg::reader_not_append_only,
-    merge_drops_rows: msg::reader_merge_drops_rows,
-    since_drops_rows: msg::reader_since_drops_rows,
-    report_unreadable: false,
-};
-
 /// The rows of the file at `path` (judged as `content`) that HEAD, the
 /// other side of a merge and `since` hold must all still be there, byte for
-/// byte: the one rule the ledger and the reader file are held to.
+/// byte: the ledger's rule.
 pub(super) fn check_held(
     root: &Path,
     path: &str,
@@ -329,7 +322,7 @@ pub(super) fn lines_missing(other_content: &str, present: &HashSet<&str>) -> boo
 /// for an ordinary commit, two or more for a merge commit; a commit's
 /// header lines end at the first blank line, so nothing past that (the
 /// commit message) is mistaken for a `parent` line.
-fn head_parents(root: &Path) -> Vec<String> {
+pub(super) fn head_parents(root: &Path) -> Vec<String> {
     let Some(raw) = repo::git(root, &["cat-file", "commit", "HEAD"]) else {
         return Vec::new();
     };
