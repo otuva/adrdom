@@ -1,14 +1,15 @@
 //! `adr show`: what the records hold and every move. With no file, every
 //! current decision and every move (per "What does show print with no file
 //! named?", c84a4bd9 A). With a file approve takes -- a topic file, the
-//! terms file or a blame file -- every question, entry or row with its
-//! status, every depends and supersedes line and the body of an asked
-//! question (per "What does show print of the file named?", dce141e9 A), with what the
-//! file holds beyond its latest approval marked (per "Does show print what a
-//! file holds beyond its latest approval?", bceceda8 A), then the moves of
-//! that file. What it computes from the records comes under a flag (per
+//! terms file or a blame file -- every question or entry with its
+//! status (a blame file: its origin and each row as written), every depends
+//! and supersedes line and the body of an asked question, with what the file
+//! holds beyond its latest approval marked (per "Does show print what a file
+//! holds beyond its latest approval?", bceceda8 A), then the moves of that
+//! file. What it computes from the records comes under a flag (per
 //! "Does a command print under a flag what it computes from the records?",
-//! 36dfbeaa A): `--neighbours`, `--dependents` and `--unrelated`. Every line goes through
+//! 36dfbeaa A): `--neighbours`, `--dependents`, `--unrelated` and
+//! `--questions`. Every line goes through
 //! `out` (per "What does a command that writes nothing print?", 848e1b76 A).
 use crate::rules::Command;
 use crate::approval::{self, Change, Side};
@@ -39,6 +40,10 @@ pub struct Views {
     pub dependents: bool,
     /// The `unrelated:` line of each question, marked when changed.
     pub unrelated: bool,
+    /// For a blame file: how many of its decision rows a question names and
+    /// how many none names (per "What does check do with a decision row
+    /// that no question names?", ee27fd4c A).
+    pub questions: bool,
 }
 
 /// Everything `show` reads, loaded once; the page reads its lines from the
@@ -53,22 +58,20 @@ pub(crate) struct Records {
     pub(crate) terms_list: Vec<Term>,
     pub(crate) topic_files: Vec<RecordFile>,
     pub(crate) unreadable_topic_files: Vec<(String, String)>,
-    blame_files: Vec<blame::BlameFile>,
-    unreadable_blame_files: Vec<(String, String)>,
+    blame: blame::Index,
+    pub(crate) unreadable_blame_files: Vec<(String, String)>,
     pub(crate) tests: HashMap<String, Vec<String>>,
-    /// Every question's heading and every term's name by its identifier:
-    /// what turns an identifier on a line back into words.
+    /// Every question's heading, every term's name and every blame file's
+    /// name by its identifier: what turns an identifier on a line back into
+    /// words.
     pub(crate) names: HashMap<String, String>,
     /// What the judgement of every topic file reads of the whole
     /// repository, read the first time a file is judged and kept for the
     /// rest (`rules::RepoIndex`).
     index: std::cell::OnceCell<rules::RepoIndex>,
-    /// What every blame row resolves against, read the first time a blame
-    /// file is judged (`rules::BlameNames`).
-    blame_names: std::cell::OnceCell<rules::BlameNames>,
     /// The terms file with an identifier on every entry
     /// (`terms::minted_copy`), minted the first time it is needed: the one
-    /// list the terms judgement and the blame rows read, as in `check`.
+    /// list the terms judgement reads, as in `check`.
     minted_terms: std::cell::OnceCell<Option<TermsFile>>,
 }
 
@@ -81,14 +84,15 @@ impl Records {
             state::TermsLoad::Missing => (None, None),
         };
         // The terms every topic file is judged against, as check judges
-        // them: one minted copy, read by the topic files and the blame rows
-        // alike, so an entry with no id yet carries one identifier.
+        // them: one minted copy, so an entry with no id yet carries one
+        // identifier.
         let minted = terms_file.as_ref().map(terms::minted_copy);
         let terms_list: Vec<Term> = minted.as_ref().map(|tf| tf.terms.clone()).unwrap_or_default();
         let (topic_files, unreadable) = record::load_all_via(&root, &repo::Source::WorkingTree);
         let unreadable_topic_files =
             unreadable.into_iter().map(|(f, e)| (state::rel_path(&root, &f), e.to_string())).collect();
         let (blame_files, unreadable_blame_files) = blame::load_all_with_errors(&root);
+        let blame = blame::Index::of(blame_files, &led);
         let tests = crate::commands::check::test_index(&root, &repo::Source::WorkingTree);
         let mut names: HashMap<String, String> =
             terms_list.iter().filter_map(|t| Some((t.id.clone()?, t.name.clone()))).collect();
@@ -99,6 +103,16 @@ impl Records {
             names.insert(row.id.clone(), row.detail.clone());
         }
         names.extend(view::heading_texts(&topic_files));
+        // A blame file by the name its path gives, under the identifier its
+        // id line holds: what turns the identifier of a `blame:` line back
+        // into the name approve turned (a copy of a file's id names nothing,
+        // and no blame file's name replaces a question's or a term's).
+        for e in blame.entries() {
+            let Some(id) = e.id() else { continue };
+            if blame.keeper_of(id).is_some_and(|k| k.rel() == e.rel()) {
+                names.entry(id.to_ascii_lowercase()).or_insert_with(|| e.name.clone());
+            }
+        }
         Records {
             root,
             led,
@@ -107,12 +121,11 @@ impl Records {
             terms_list,
             topic_files,
             unreadable_topic_files,
-            blame_files,
+            blame,
             unreadable_blame_files,
             tests,
             names,
             index: std::cell::OnceCell::new(),
-            blame_names: std::cell::OnceCell::new(),
             minted_terms: std::cell::OnceCell::from(minted),
         }
     }
@@ -125,13 +138,6 @@ impl Records {
 
     pub(crate) fn minted_terms(&self) -> Option<&TermsFile> {
         self.minted_terms.get_or_init(|| self.terms_file.as_ref().map(terms::minted_copy)).as_ref()
-    }
-
-    fn blame_names(&self) -> &rules::BlameNames {
-        self.blame_names.get_or_init(|| {
-            let minted = self.minted_terms().map(|tf| tf.terms.clone()).unwrap_or_default();
-            rules::BlameNames::of(&self.root, &repo::Source::WorkingTree, &self.topic_files, minted)
-        })
     }
 
     pub(crate) fn index(&self) -> &rules::RepoIndex {
@@ -166,6 +172,9 @@ fn show_args(record_arg: Option<&std::path::Path>, all: bool, views: &Views) -> 
     }
     if views.unrelated {
         args.push("--unrelated".to_string());
+    }
+    if views.questions {
+        args.push("--questions".to_string());
     }
     args
 }
@@ -285,11 +294,10 @@ pub(crate) fn rest(r: &Records) -> Vec<Line> {
         }
         lines.extend(out::report(&removed_report(r, &rel)));
     }
-    for bf in &r.blame_files {
-        let (st, report) = blame_report(r, bf);
-        let report = out::report(&report);
+    for e in r.blame.entries() {
+        let report = out::report(&blame_report(r, e));
         if !report.is_empty() {
-            lines.push(file_status(&bf.rel, st));
+            lines.push(file_status(e.rel(), e.status));
             lines.extend(report);
         }
     }
@@ -317,8 +325,8 @@ fn whole(r: &Records, views: Views) -> Vec<Line> {
     if let Some(tf) = &r.terms_file {
         lines.extend(terms_file(r, tf, views));
     }
-    for bf in &r.blame_files {
-        lines.extend(blame_file(r, bf));
+    for e in r.blame.entries() {
+        lines.extend(blame_file(r, e, views));
     }
     for (rel, _) in &r.unreadable_blame_files {
         lines.push(out::refusal(Command::Show, &msg::blame_file_unreadable(rel)));
@@ -339,8 +347,8 @@ pub(crate) fn file_form(r: &Records, rel: &str, views: Views) -> Result<Vec<Line
     if let Some(rf) = r.topic_files.iter().find(|rf| rf.rel == rel) {
         return Ok(topic_file(r, rf, views));
     }
-    if let Some(bf) = r.blame_files.iter().find(|bf| bf.rel == rel) {
-        return Ok(blame_file(r, bf));
+    if let Some(e) = r.blame.entries().iter().find(|e| e.rel() == rel) {
+        return Ok(blame_file(r, e, views));
     }
     // The finding `show` and `check` print for it, word for word.
     if let Some((_, e)) = r.unreadable_topic_files.iter().find(|(f, _)| f == rel) {
@@ -381,6 +389,12 @@ pub(crate) fn topic_subject(rf: &RecordFile) -> String {
         Some(t) if !t.is_empty() => format!("{} ({})", t, rf.rel),
         _ => rf.rel.clone(),
     }
+}
+
+/// The status line of a blame file, as every command that names its status
+/// prints it.
+pub(crate) fn blame_file_status_line(e: &blame::Entry) -> Line {
+    file_status(e.rel(), e.status)
 }
 
 fn file_status(subject: &str, st: FileStatus) -> Line {
@@ -428,9 +442,9 @@ fn change_lines(change: &Change, own: Option<&str>, names: &HashMap<String, Stri
 
 /// `printed`, the printed form of the record line `line`, with the
 /// identifiers turned back into words when `line` is a reference line
-/// (`depends:`, `supersedes:`, `unrelated:`): what approve turns names into
-/// identifiers on, and nothing else. An identifier in prose stays as the
-/// file holds it, the text approve signs.
+/// (`depends:`, `supersedes:`, `unrelated:`, `blame:`): what approve turns
+/// names into identifiers on, and nothing else. An identifier in prose stays
+/// as the file holds it, the text approve signs.
 fn reference_named(printed: &str, line: &str, names: &HashMap<String, String>) -> String {
     if is_reference(line) {
         named(printed, names)
@@ -440,7 +454,7 @@ fn reference_named(printed: &str, line: &str, names: &HashMap<String, String>) -
 }
 
 fn is_reference(line: &str) -> bool {
-    ["depends:", "supersedes:", "unrelated:"].iter().any(|p| line.starts_with(p))
+    ["depends:", "supersedes:", "unrelated:", "blame:"].iter().any(|p| line.starts_with(p))
 }
 
 /// A line the records hold with every identifier on it turned back into
@@ -456,7 +470,7 @@ fn named(line: &str, names: &HashMap<String, String>) -> String {
             let bounded = !line[..i].ends_with(|c: char| c.is_ascii_hexdigit())
                 && !line[i + LEN..].starts_with(|c: char| c.is_ascii_hexdigit());
             if bounded && record::is_uuid(cand) {
-                if let Some(name) = names.get(cand) {
+                if let Some(name) = names.get(&cand.to_ascii_lowercase()) {
                     out.push_str(name);
                     i += LEN;
                     continue;
@@ -471,7 +485,7 @@ fn named(line: &str, names: &HashMap<String, String>) -> String {
 }
 
 /// The reference lines a question carries (`depends:`, `supersedes:`,
-/// `unrelated:`), and its body, each as the file holds it.
+/// `unrelated:`, `blame:`), and its body, each as the file holds it.
 fn reference_and_body(lines: &[String]) -> (Vec<String>, Vec<String>) {
     let rest = lines.iter().skip(1);
     (rest.clone().filter(|l| is_reference(l)).cloned().collect(), rest.filter(|l| !is_reference(l)).cloned().collect())
@@ -724,71 +738,45 @@ fn terms_file_lines(r: &Records, tf: &TermsFile, views: Views, st: FileStatus) -
     lines
 }
 
-/// A blame file: its status, its origin and every row, each row naming a
-/// question with that question's status, marked when beyond its latest
-/// approval, then its moves.
-fn blame_file(r: &Records, bf: &blame::BlameFile) -> Vec<Line> {
-    let (st, report) = blame_report(r, bf);
-    let mut lines = vec![file_status(&bf.rel, st)];
+/// A blame file: its status, its origin and every row as written, marked
+/// when beyond its latest approval, under `--questions` the count of its
+/// decision rows a question names, then its moves.
+fn blame_file(r: &Records, e: &blame::Entry, views: Views) -> Vec<Line> {
+    let bf = &e.file;
+    let report = blame_report(r, e);
+    let mut lines = vec![blame_file_status_line(e)];
     match approval::blame_file(&r.root, &bf.rel, &bf.lines, &r.led) {
-        Some(change) => lines.extend(blame_change_lines(r, &change)),
+        Some(change) => lines.extend(blame_change_lines(&change)),
         None => {
             if let Some(origin) = &bf.origin {
                 lines.push(Line::Record { depth: 1, text: format!("origin: {}", origin) });
             }
-            let (any_headings, known_ids) = blame::heading_ids(&r.topic_files);
-            for row in &bf.rows {
-                let range = format!("{}-{}", row.start, row.end);
-                let dest = named(row.dest.trim(), &r.names);
-                let status = row_status(r, &row.dest, &any_headings, &known_ids);
-                let text = match status {
-                    Some(s) => format!("{}\t{} [{}]", range, dest, s),
-                    None => format!("{}\t{}", range, dest),
-                };
-                lines.push(Line::Record { depth: 1, text });
-            }
+            lines.extend(bf.rows.iter().map(blame_row_line));
         }
+    }
+    if views.questions {
+        let rows = blame::decision_rows(e, &r.blame, &r.topic_files);
+        let with = rows.iter().filter(|&&(_, named)| named).count();
+        lines.push(Line::Record { depth: 1, text: msg::show_decision_rows(with, rows.len() - with) });
     }
     lines.extend(out::report(&report));
     lines
 }
 
-/// The lines of a blame file's change, marked, each row that names a
-/// question followed by that question's status as the approved form prints
-/// it: the owner reading a draft before `adr approve` sees which rows name
-/// an open question.
-fn blame_change_lines(r: &Records, change: &Change) -> Vec<Line> {
-    let (any_headings, known_ids) = blame::heading_ids(&r.topic_files);
+/// A row of a blame file as the listing prints it: its range, a tab, its
+/// value.
+pub(crate) fn blame_row_line(row: &blame::Row) -> Line {
+    Line::Record { depth: 1, text: format!("{}-{}\t{}", row.start, row.end, row.value) }
+}
+
+/// The lines of a blame file's change, each as written and marked.
+fn blame_change_lines(change: &Change) -> Vec<Line> {
     let mut out = Vec::new();
     if !change.baseline {
         out.push(Line::Record { depth: 1, text: msg::show_no_baseline() });
     }
-    for l in &change.lines {
-        let mut text = l.marked();
-        if l.side != Side::Removed {
-            if let Some((_, dest)) = l.text.split_once('\t') {
-                if let Some(s) = row_status(r, dest, &any_headings, &known_ids) {
-                    text = format!("{} [{}]", text, s);
-                }
-            }
-        }
-        out.push(Line::Record { depth: 1, text: named(&text, &r.names) });
-    }
+    out.extend(change.lines.iter().map(|l| Line::Record { depth: 1, text: l.marked() }));
     out
-}
-
-/// The status of the question a blame row names (a `decision:` row, or a
-/// `dropped: copy of` a question), `None` for any other row.
-fn row_status(
-    r: &Records,
-    dest: &str,
-    any_headings: &HashMap<String, Vec<(String, String)>>,
-    known_ids: &HashSet<String>,
-) -> Option<String> {
-    let value = blame::decision_target(dest).or_else(|| blame::copy_target(dest.trim()))?;
-    let id = blame::resolve_heading_value(value, any_headings, known_ids)?;
-    let sec = r.topic_files.iter().flat_map(|rf| rf.sections.iter()).find(|s| s.id.as_deref() == Some(id.as_str()))?;
-    Some(status::question_status(&r.led, sec).name_with(sec.answer_letter()))
 }
 
 /// The neighbour lines `show --neighbours` prints under each question of
@@ -837,24 +825,7 @@ pub(crate) fn terms_report(r: &Records, tf: &TermsFile) -> (FileStatus, Report) 
     (st, moves::of_terms_file(findings, st))
 }
 
-/// The status of a blame file and its findings and moves
-/// (`moves::of_blame_file`).
-fn blame_report(r: &Records, bf: &blame::BlameFile) -> (FileStatus, Report) {
-    let content = record::join_lines(&bf.lines);
-    let st = status::blame_file_status(&r.led, &bf.rel, &content);
-    let (any_headings, known_ids) = blame::heading_ids(&r.topic_files);
-    let fs = blame::file_state(
-        &r.root,
-        &repo::Source::WorkingTree,
-        bf,
-        &content,
-        &r.topic_files,
-        &r.led,
-        &any_headings,
-        &known_ids,
-    );
-    let findings = rules::judge_blame_file(&r.root, &fs, bf, r.blame_names());
-    let stops: Vec<Line> = fs.stops.iter().flat_map(|m| out::stop(crate::rules::Command::Show, m)).collect();
-    (st, moves::of_blame_file(&bf.rel, stops, findings, fs.awaiting))
+/// The findings and moves of a blame file (`moves::of_blame_file`).
+fn blame_report(r: &Records, e: &blame::Entry) -> Report {
+    moves::of_blame_file(&r.root, e, &r.blame, Command::Show)
 }
-

@@ -610,7 +610,7 @@ pub fn blame_file(root: &Path, rel: &str, lines: &[String], led: &Ledger) -> Opt
     if state::blame_approved(led, rel, &content) {
         return None;
     }
-    let Some(row) = led.latest_for_path("blame", rel) else {
+    let Some(row) = led.latest_blame(rel) else {
         return Some(Change::new(FileStatus::New, added(&inner_lines(lines))));
     };
     let hash = row.hash.clone();

@@ -126,7 +126,7 @@ not yet: \"{one}\" is answered and is built once \"{two}\" is answered\n",
 // The unrelated line comes under its own flag.
 #[test]
 fn show_prints_the_unrelated_line_only_under_its_flag() {
-    // adr: dce141e9-7d2e-4b70-b317-9f3d70bf5a69
+    // adr: a6f41dee-2381-421a-bcc4-b14af243209b
     let (dir, path) = asked();
     let plain = show(&dir, &[REL]);
     assert!(plain.contains("  depends: widget\n"), "{}", plain);
@@ -224,10 +224,10 @@ fn show_marks_what_a_file_holds_beyond_its_latest_approval() {
 
     // A new blame file: its lines, marked.
     let blob = write_origin(&dir, "docs/x.md", "one\n");
-    write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-1\tdropped: dead\n");
+    write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-1\tdetail\n");
     let shown = show(&dir, &["adrdom/blame/x.md"]);
     assert!(shown.starts_with("[new] adrdom/blame/x.md\n  + origin: docs/x.md\n"), "{}", shown);
-    assert!(shown.contains("  + 1-1\tdropped: dead\n"), "{}", shown);
+    assert!(shown.contains("  + 1-1\tdetail\n"), "{}", shown);
 }
 
 // adr: 36dfbeaa-698d-4a57-b3b0-d425348e14a5
@@ -275,7 +275,7 @@ fn a_view_computed_from_the_records_comes_under_its_flag() {
 fn show_prints_no_count_tier_or_hint_line() {
     let (dir, _path) = asked();
     let blob = write_origin(&dir, "docs/x.md", "one\n");
-    write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-1\tdropped: dead\n");
+    write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-1\tdetail\n");
     for args in [vec![], vec![REL], vec!["--all"], vec!["adrdom/terms.md"], vec!["adrdom/blame/x.md"]] {
         let shown = show(&dir, &args);
         for line in shown.lines() {
@@ -283,7 +283,7 @@ fn show_prints_no_count_tier_or_hint_line() {
             assert!(!line.starts_with("tier ") && !line.starts_with("next"), "{:?}: {}", args, shown);
         }
         assert!(!shown.contains("adr show <topic file>"), "{}", shown);
-        assert!(!shown.contains("dropped: dead 1") && !shown.contains("from: "), "{}", shown);
+        assert!(!shown.contains("detail 1") && !shown.contains("from: "), "{}", shown);
     }
 }
 

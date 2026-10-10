@@ -182,6 +182,8 @@ Standard: an intermediate representation carries one classification per unit and
   Why: the file carries both the classification and the link.
   Costs: the approved file changes after planning, and the owner approves it twice.
 
+**Answer:** A
+
 ### What does a question carry of the blame file it came from?
 depends: 108053a8-c2c3-4561-874c-2f573a5409f2, 277a8338-c57a-43cc-8b28-6b42e9347f6a, e877e4a9-2caf-4fe6-9f82-5476a2abb00b, d2851ea1-fcb6-476a-b321-c813a594d5e5=A, e879fe72-ec07-48cd-9902-2b158aaae726, 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f, ecb18413-cb3e-437e-9444-3cdd406ed67d
 unrelated: 5fddeeb5-cf54-4550-a701-dd9e4a6a81d6, 4bb5ef1b-da16-4206-a7d2-c7380c36a4cc, 34f0202a-0be4-4049-94de-d3886f4f8ffc, dce141e9-7d2e-4b70-b317-9f3d70bf5a69, 946263aa-519a-47aa-b743-5cdcf52f5d35, 38216d39-b064-4927-ab60-951a3c89e388, 7d47885f-3a45-45f9-a092-4314301f0d7b, 292a10b8-c287-4d71-b2bd-840da0a6de61, 5c399a14-1e5c-48eb-b502-b57524c01c24, bf6697e3-8832-4b90-b036-8fecedb55406, 99619e27-19b6-47ef-83b9-c79ac30ee2f0, f5c242b6-e2f6-45a3-8c61-c743f3ad794f, ee27fd4c-89b7-411f-a3e4-2535c49b6d1b, 6f6e7f4a-d733-4f3a-99f9-6a47fec5db70, 0c3d498a-c540-47f3-8384-050fc044c109, c10c3a49-e993-4c9f-a46b-4a1ba3646dcf
@@ -201,6 +203,8 @@ Standard: traceability runs from the derived artifact to its source by a stable 
   Why: no line to write.
   Costs: a question from two files, or a file with many questions, cannot be distinguished.
 
+**Answer:** A
+
 ### What does check do with a decision row that no question names?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, d2851ea1-fcb6-476a-b321-c813a594d5e5=A, 672201dd-8f22-4dc3-8b21-a73eb7606e83=A, 36dfbeaa-698d-4a57-b3b0-d425348e14a5
 unrelated: 3fc35d4f-90f3-4425-9dac-951a89631fdf, 3460d220-e523-448b-aeff-baa8051b7d06, c10c3a49-e993-4c9f-a46b-4a1ba3646dcf, 23d55c81-2224-487c-a579-298915957a79, 110f471d-ac4b-4cbb-aa7b-3f74ac442d78, 751ef30c-6a2f-4936-bf9b-b9d487146e53, c84a4bd9-fc2d-44f0-b333-172978f61544, bf6697e3-8832-4b90-b036-8fecedb55406, 4319a653-6901-446c-94ab-6420ef472134, 05141f49-d9d2-407c-b60c-ebb195a05864, c3127af2-4c96-48d5-a164-bac49a9a09ec, 4bb5ef1b-da16-4206-a7d2-c7380c36a4cc, 5fddeeb5-cf54-4550-a701-dd9e4a6a81d6, 6f6e7f4a-d733-4f3a-99f9-6a47fec5db70, 0c3d498a-c540-47f3-8384-050fc044c109, 5c399a14-1e5c-48eb-b502-b57524c01c24
@@ -219,6 +223,8 @@ Standard: traceability is reported as coverage, a count the reviewer reads, not 
 - C) Nothing, and nothing is counted.
   Why: the blame file and the plan never meet.
   Costs: whether an origin's decisions reached the records is read by hand.
+
+**Answer:** A
 
 ### What does check do when an origin differs from its blame file's blob identifier?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, ecb18413-cb3e-437e-9444-3cdd406ed67d, e877e4a9-2caf-4fe6-9f82-5476a2abb00b, d2851ea1-fcb6-476a-b321-c813a594d5e5=*, 05141f49-d9d2-407c-b60c-ebb195a05864, e879fe72-ec07-48cd-9902-2b158aaae726
@@ -240,6 +246,8 @@ Standard: a derived artifact records a content hash of its source and is checked
   Why: the simplest file.
   Costs: the blame file drifts from its origin and nothing says so.
 
+**Answer:** A
+
 ### What does check do when an origin is absent?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, ecb18413-cb3e-437e-9444-3cdd406ed67d, d2851ea1-fcb6-476a-b321-c813a594d5e5=A, 6f6e7f4a-d733-4f3a-99f9-6a47fec5db70=*, 05141f49-d9d2-407c-b60c-ebb195a05864, e879fe72-ec07-48cd-9902-2b158aaae726
 supersedes: 4bb5ef1b-da16-4206-a7d2-c7380c36a4cc
@@ -259,3 +267,5 @@ Standard: a source is retired after its replacement is verified, and the owner o
 - C) A finding always.
   Why: the blame file and the text always sit together.
   Costs: migrated text never leaves the working tree.
+
+**Answer:** A

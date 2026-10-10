@@ -34,7 +34,7 @@ it.
 
 `adr show <file>` takes every file `adr approve` takes: a topic file, the
 terms file, a blame file. For a topic file it prints every question with its
-status, every depends and supersedes line, and the body of a question that
+status, every depends, supersedes and blame line, and the body of a question that
 waits for the owner's answer; what the file holds beyond its latest approval is printed marked,
 `+` for a line added and `-` for a line gone, and a question new or struck
 as a whole carries the mark on its own line too; then the findings and the
@@ -43,7 +43,9 @@ their status in brackets: `[new]`, `[changed]`, `[approved]`, `[removed]`,
 and `[retired]` for a term. `adr show --dependents <file>` also prints what
 stands on each question or term entry and what took the place of a question
 that was replaced. `adr show --unrelated <file>` also prints the unrelated
-lines. Each question opens with where it stands, in brackets:
+lines. `adr show --questions <file>` also prints, for a blame file, how many
+of its decision rows a question names and how many none names. Each question
+opens with where it stands, in brackets:
 
 - `[no body]`: a heading of the plan, its body not written.
 - `[not asked]`: the body is written, `adr ask` has not run on it.
@@ -89,7 +91,8 @@ What the git hooks run and when.
 Ask "does X" or "what does X do". A heading that opens with "which",
 "where", "how many" or "how much" is refused: it assumes an answer the owner
 has not given. One question per heading: a heading with "and" or "or" in it
-is refused as two questions.
+is refused as two questions. A heading written from a decision row of a blame
+file carries a blame line under it (see Blame).
 
 **2. Run `adr plan <file>`.** For each heading it brings the ten nearest
 current decisions and term definitions, and the reader's word on each: same,
@@ -228,37 +231,55 @@ after any edit.
 ## Blame
 
 An old prose file (an origin) enters the records through a blame file,
-`adrdom/blame/<name>.md`, which maps every line of the origin to where it
-went. Git keeps the text; the blame file is the proof that nothing was
-dropped in silence. Write it after the plan is approved, so the headings
-exist:
+`adrdom/blame/<name>.md`: the line ranges of the origin, and for each range
+whether it holds a decision. Git keeps the text; the blame file copies none
+of it. Blame comes first, then planning: write the blame file before any
+heading.
 
 ```
 origin: docs/adr/old-file.md
 blob: <git hash-object docs/adr/old-file.md>
 
-1-9	dropped: dead
-10-14	prose: <topic file name>
-15-22	decision: <heading of a question in a topic file>
-23-23	term: <name>
-24-30	dropped: copy of <heading of a question in a topic file>
-31-35	dropped: copy of docs/adr/other-file.md
-36-40	dropped: detail
+1-9	detail
+10-14	decision
+15-22	detail
+23-30	decision
 ```
 
-A row is a line range, a tab, and one destination. Lines are counted as an
-editor shows them, so a last line with no newline still counts (`wc -l`
-misses it). The ranges must reach every line of the origin; a range may
-appear in more than one row. The destinations: `decision:` for text that
-lives in a question's section (its answer, its Why or its Costs), `term:`,
-`prose:` for the text above a topic file's first question, and `dropped:`
-with one reason: `dead` (contradicted or obsolete), `detail` (the code is
-the record), or `copy of` what says the same thing elsewhere: a question by
-its heading (any state), or another origin by its path. Nothing else is
-accepted. The owner runs `adr approve adrdom/blame/<name>.md`. Verification
+A row is a line range, a tab, and one word. `decision` marks a range the
+owner settles by picking an option; `detail` is every other range. Lines are
+counted as an editor shows them, so a last line with no newline still counts
+(`wc -l` misses it). The ranges must reach every line of the origin; a range
+may appear in more than one row. Whether a decision is in the records, or
+contradicts one, is found in planning, not in the row. Nothing else is
+accepted. Say the blame file is ready, post
+`owner runs: adr approve adrdom/blame/<name>.md` and stop. Approval writes an
+`id:` line under the `blob:` line: leave that line as it is. Verification
 passes by other agents edit the rows; the owner approves once at the end.
-When an origin is renamed, update the `origin:` line. Once every row is
-closed, delete the origin.
+
+Then write the headings from the decision rows, each in the topic file of
+its subject, and under each heading a blame line: the name of the blame file,
+which is its path under `adrdom/blame` without `.md`, then the range of each
+row the question came from. `adr show --questions adrdom/blame/<name>.md`
+prints how many decision rows a question names and how many none names.
+
+```
+### Does the pre-commit hook run the tests?
+blame: old-file 10-14
+```
+
+A heading holds one blame line; a question that came from two blame files
+names both on it, comma separated: `blame: old-file 10-14 23-30, other 3-9`.
+Each range is the range of a row of an approved blame file. A question that
+replaces another carries only the ranges it came from itself. `adr check`
+reports no decision row that no question names: a row that planning merges
+into another heading, or drops as a copy, needs no heading of its own. From
+there the plan is made in its six steps.
+
+While the origin is in the repository, `adr check` compares it with the
+`blob:` line: when the origin changes, write the rows and the `blob:` line
+again, keep the `id:` line, and the owner approves again. Once the blame file
+is approved the origin may leave the repository: the owner deletes it.
 
 ## When a command refuses
 

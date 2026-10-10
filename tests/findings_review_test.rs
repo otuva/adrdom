@@ -60,12 +60,12 @@ fn show_of_a_topic_file_prints_an_unreadable_terms_file_and_offers_no_approve() 
 // show prints the stop and does not offer the owner's approve.
 #[test]
 fn show_of_a_blame_file_prints_an_unreadable_origin_and_offers_no_approve() {
-    let (dir, _id1, _id2) = blame_setup();
+    let dir = blame_setup();
     std::fs::create_dir_all(dir.join("docs")).unwrap();
     std::fs::write(dir.join("docs/x.md"), [0xffu8, 0xfe, 0x00, 0xff]).unwrap();
     let out = run_git(&dir, &["hash-object", "-w", "docs/x.md"]);
     let blob = stdout(&out).trim().to_string();
-    write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-1\tdropped: dead\n");
+    write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-1\tdetail\n");
 
     let out = adr(&dir, &["show", "adrdom/blame/x.md"], &[], "");
     let text = format!("{}{}", stdout(&out), stderr(&out));

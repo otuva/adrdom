@@ -230,6 +230,13 @@ impl Ledger {
             .rfind(|r| r.event == event && r.detail == path && r.id == "-")
     }
 
+    /// The latest `blame` row whose `detail` column equals `path`, whatever
+    /// its identifier: a blame file's approval carries the file's own
+    /// identifier (d2851ea1 A), `-` in the rows of older ledgers.
+    pub fn latest_blame(&self, path: &str) -> Option<&Row> {
+        self.rows.iter().rfind(|r| r.event == "blame" && r.detail == path)
+    }
+
     /// The latest row of `event` for the identifier `id`.
     pub fn latest_for_id(&self, event: &str, id: &str) -> Option<&Row> {
         self.rows.iter().rfind(|r| r.event == event && r.id == id)

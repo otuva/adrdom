@@ -66,3 +66,16 @@ fn a_supersedes_list_continued_on_a_bare_following_line_is_refused() {
     let (dir, record) = approved_then_edited(|d| format!("{d}\nsupersedes: aaa,\n  bbb"));
     refused_everywhere(&dir, &record, "stray line");
 }
+
+#[test]
+fn a_second_blame_line_is_refused() {
+    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
+    // The second blame line is line 6 of the file: the heading is line 3, the
+    // depends line 4, the first blame line 5.
+    let (dir, record) = approved_then_edited(|d| format!("{d}\nblame: aaa 1-2\nblame: bbb 1-2"));
+    refused_everywhere(
+        &dir,
+        &record,
+        "adrdom/decisions/example.md: \"1.1 What is a decision?\": blame second line, line 6; each reference line appears once, on one line; agent rewrites the blame line",
+    );
+}

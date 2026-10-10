@@ -290,3 +290,5 @@ Standard: a listing prints what the next move reads and takes a flag for the res
 - C) Each thing's status only, and every line and body under a flag.
   Why: the shortest listing.
   Costs: the owner approves lines and answers bodies without seeing them.
+
+**Answer:** A

@@ -185,12 +185,12 @@ fn every_command_names_the_move_for_a_removed_file_with_an_asked_question() {
 
 // adr: aac5c313-dedd-466b-a0c3-ead5e99ce913
 #[test]
-fn every_command_names_the_move_for_a_blame_row_naming_no_question() {
-    let (dir, _, _) = blame_setup();
+fn every_command_names_the_move_for_a_blame_row_in_the_old_form() {
+    let dir = blame_setup();
     let blob = write_origin(&dir, "docs/old.md", "one\ntwo\n");
     let blame = write_blame_file(&dir, "adrdom/blame/old.md", "docs/old.md", &blob, "1-2\tdecision: Is there no such thing?\n");
     let out = approve_unplanned(&dir, &blame);
-    assert_every_command_names(&dir, &blame, &refusal_lines(&out, "approve: "), "blame row naming no question", false);
+    assert_every_command_names(&dir, &blame, &refusal_lines(&out, "approve: "), "blame row in the old form", false);
 }
 
 // adr: aac5c313-dedd-466b-a0c3-ead5e99ce913

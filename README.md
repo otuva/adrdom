@@ -68,6 +68,11 @@ runtime dependencies beyond `git` on `PATH`.
   `adrdom/terms.md`: fill in missing term ids and approve it (a `terms` row),
   refusing first on a shape error, a binding that would resolve differently,
   or a newly banned word appearing in a topic file.
+  For a blame file under `adrdom/blame`: write its `id:` line at the first
+  approval and approve it (a `blame` row), refusing first on a shape error, a
+  row that says neither `decision` nor `detail`, a line of the origin no row
+  covers, a missing origin, or a `blob:` line the origin no longer matches.
+  Once a blame file is approved its origin may leave the repository.
 - `adr read` — reads every current decision against its ten nearest current
   decisions and prints each pair the reader marks same, inconsistent or
   depends.
@@ -79,17 +84,19 @@ runtime dependencies beyond `git` on `PATH`.
   heading and the option picked), every finding (its rule, then the finding
   with the move that clears it) and every move, one line each, a move
   opening with who makes it. With a topic file, `adrdom/terms.md` or a blame file
-  (every file `adr approve` takes): each question, entry or row with its
+  (every file `adr approve` takes): each question or entry with its
   status (`no body`, `not asked`, `asked @<version>`, `answered <letter>`,
   `refused`, `superseded`, `withdrawn`, `dropped`; a file is `new`,
-  `changed`, `approved` or `removed`), every depends and supersedes line, the body of an
+  `changed`, `approved` or `removed`), for a blame file its origin and rows,
+  every depends, supersedes and blame line, the body of an
   asked question, and what the file holds beyond its latest approval,
   marked `+` and `-` (a question new or struck as a whole carries the mark
   on its own line too); then the file's findings and moves. `--all` prints every such file
   that way; `--neighbours` adds each neighbour with the reader's word, and
   `--dependents` what stands on each question or term entry and what
   replaced a question; `--unrelated` adds the unrelated line of each
-  question.
+  question; `--questions` adds, for a blame file, how many of its decision
+  rows a question names and how many none names.
 - `adr plan <topic_file>` — do the planning step the file is at (read its
   headings, then its bodies, against their nearest current decisions and
   terms) and print what it read, the findings on the file and its next
