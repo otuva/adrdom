@@ -71,6 +71,9 @@ enum Command {
         /// With a file or --all: for a blame file, how many of its decision rows a question names and how many none names.
         #[arg(long, requires = "whole")]
         questions: bool,
+        /// With a file or --all: every word the reader gave on every neighbour of each question, with its reason.
+        #[arg(long, requires = "whole")]
+        reader: bool,
     },
     /// Read lines from stdin and ban them (and their tokens) from the repo.
     Ban {
@@ -123,8 +126,8 @@ fn main() {
         Command::Read => commands::read::run(),
         Command::Approve { file } => commands::approve::run(file),
         Command::Answer { id, letter } => commands::answer::run(id, letter),
-        Command::Show { topic_file, all, neighbours, dependents, unrelated, questions } => {
-            commands::show::run(topic_file, all, commands::show::Views { neighbours, dependents, unrelated, questions })
+        Command::Show { topic_file, all, neighbours, dependents, unrelated, questions, reader } => {
+            commands::show::run(topic_file, all, commands::show::Views { neighbours, dependents, unrelated, questions, reader })
         }
         Command::Ban { term, rebuild } => commands::ban::run(term, rebuild),
         Command::Unban => commands::unban::run(),

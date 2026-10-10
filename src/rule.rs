@@ -667,32 +667,32 @@ pub const READER_ROW_FIELDS: Rule = Rule {
     protects: "the reader's word on a pair stays readable",
 };
 
-/// Decision: Does check hold the reader's file as it holds the ledger?
-pub const READER_ROWS_KEPT: Rule = Rule {
-    name: "reader_rows_kept",
-    decisions: &["26c5352f-3f82-4376-9dc2-8ccc0074d080"],
-    protects: "past reader rows stay byte for byte",
+/// Decision: What does check hold of the reader's file?
+pub const READER_ROWS_UNEDITED: Rule = Rule {
+    name: "reader_rows_unedited",
+    decisions: &["abb6faed-96f7-406d-8384-002ee81bb157"],
+    protects: "a reader row is never changed by hand",
 };
 
-/// Decision: Does check hold the reader's file as it holds the ledger?
-pub const MERGE_KEEPS_READER_ROWS: Rule = Rule {
-    name: "merge_keeps_reader_rows",
-    decisions: &["26c5352f-3f82-4376-9dc2-8ccc0074d080"],
-    protects: "no reader row is lost in a merge",
+/// Decision: What does check hold of the reader's file?
+pub const MERGE_LEAVES_READER_ROWS_UNEDITED: Rule = Rule {
+    name: "merge_leaves_reader_rows_unedited",
+    decisions: &["abb6faed-96f7-406d-8384-002ee81bb157"],
+    protects: "a merge changes no reader row of a merged branch",
 };
 
-/// Decision: Does check hold the reader's file as it holds the ledger?
-pub const PUSH_KEEPS_READER_ROWS: Rule = Rule {
-    name: "push_keeps_reader_rows",
-    decisions: &["26c5352f-3f82-4376-9dc2-8ccc0074d080"],
-    protects: "no reader row is lost before a push",
+/// Decision: What does check hold of the reader's file?
+pub const PUSH_LEAVES_READER_ROWS_UNEDITED: Rule = Rule {
+    name: "push_leaves_reader_rows_unedited",
+    decisions: &["abb6faed-96f7-406d-8384-002ee81bb157"],
+    protects: "a push changes no reader row the remote holds",
 };
 
-/// Decision: Does check hold the reader's file as it holds the ledger?
-pub const SINCE_KEEPS_READER_ROWS: Rule = Rule {
-    name: "since_keeps_reader_rows",
-    decisions: &["26c5352f-3f82-4376-9dc2-8ccc0074d080"],
-    protects: "no reader row is lost between pushes",
+/// Decision: What does check hold of the reader's file?
+pub const SINCE_LEAVES_READER_ROWS_UNEDITED: Rule = Rule {
+    name: "since_leaves_reader_rows_unedited",
+    decisions: &["abb6faed-96f7-406d-8384-002ee81bb157"],
+    protects: "no reader row of an earlier commit is changed since",
 };
 
 /// Decision: What does the ban scan read?
@@ -1170,10 +1170,10 @@ pub const ALL: &[&Rule] = &[
     &SINCE_KEEPS_LEDGER_ROWS,
     &LEDGER_LATEST_ROW_IS_ONE,
     &READER_ROW_FIELDS,
-    &READER_ROWS_KEPT,
-    &MERGE_KEEPS_READER_ROWS,
-    &PUSH_KEEPS_READER_ROWS,
-    &SINCE_KEEPS_READER_ROWS,
+    &READER_ROWS_UNEDITED,
+    &MERGE_LEAVES_READER_ROWS_UNEDITED,
+    &PUSH_LEAVES_READER_ROWS_UNEDITED,
+    &SINCE_LEAVES_READER_ROWS_UNEDITED,
     &BANNED_WORD_ABSENT_FROM_FILES,
     &BAN_LIST_MATCHES_LEDGER,
     &ANSWER_SET_FROZEN_AT_ASK,

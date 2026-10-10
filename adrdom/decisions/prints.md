@@ -292,3 +292,81 @@ Standard: a listing prints what the next move reads and takes a flag for the res
   Costs: the owner approves lines and answers bodies without seeing them.
 
 **Answer:** A
+
+### What does show print of the reader's word on a question?
+depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 277a8338-c57a-43cc-8b28-6b42e9347f6a, daec9ffd-676f-4111-a359-2827bfd4527c, a6f41dee-2381-421a-bcc4-b14af243209b, 36dfbeaa-698d-4a57-b3b0-d425348e14a5, 2db33118-82b4-4edf-a9cb-e92ac62738b9, c6e0b7d6-cdec-46da-b2bc-cda218673868, 08a1b488-32fc-4dc7-b4b3-93a6e768725f
+unrelated: 11be073c-ce91-44d8-833a-ef0b5e0b1672, 55a8abb2-0f6d-430b-99f9-a378f3f154e5, 6108b8b2-911e-443b-abe0-4c6f8b407384, f5c242b6-e2f6-45a3-8c61-c743f3ad794f, bceceda8-133a-4c9b-b439-b5c1a4414a02, 9d634996-475e-4ddc-8113-05c404ad9d5c, 21ae8ae0-6884-4d3c-8464-024a8a5aae2d, c3127af2-4c96-48d5-a164-bac49a9a09ec, aa475aa3-05b2-429a-b33a-46b1dcb52049, 644b43ce-be10-4e9a-a7d5-71b27c51e365, 05141f49-d9d2-407c-b60c-ebb195a05864, 83190b10-8060-47c1-8194-f6a5c4f0d703, b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051, f3c9e736-157c-4197-b49e-19e3674e4e0c, 23d53545-c238-48cc-ae5e-21a2c7aab83e
+id: 332ff0c7-0769-45ac-8f89-00aeff318467
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, approval=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approves=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approving=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, move=d904dc0d-231f-4e93-ac74-7babe888107d, moves=d904dc0d-231f-4e93-ac74-7babe888107d, neighbour=daec9ffd-676f-4111-a359-2827bfd4527c, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, supersedes=2bae531b-c4df-48a0-89a0-3d52726741ea
+
+Problem: the owner approves a plan reading the agent's lines, and the reader's word on those lines, inconsistent or same, is printed to the agent alone.
+Standard: a review listing shows a disputed item beside the item, and the full analysis on request.
+
+- A) Under the question, [inconsistent] or [same] with the neighbour when no supersedes line names it; every word under --reader.
+  Why: the owner sees a disputed line beside the line before approving; the rest stays out of the plain listing.
+  Costs: a view with no move on its line; show reads the reader's file for each question.
+- B) Every word under --reader, nothing in the plain listing.
+  Why: the plain listing stays the agent's lines and the moves.
+  Costs: the owner runs the flag before each approval, or approves a disputed line unseen.
+- C) Nothing: the reader's word is read in plan's output alone.
+  Why: no new line form.
+  Costs: the owner never sees the reader's word; the agent's line stands alone at approval.
+
+**Answer:** A
+
+### Does show print the reference lines of an answered question?
+depends: aef1b384-2b33-47a2-92a8-ec7f8fb258ef, b36113a1-1384-4e4c-a798-8399f4181366, a6f41dee-2381-421a-bcc4-b14af243209b
+unrelated: 946263aa-519a-47aa-b743-5cdcf52f5d35, 11be073c-ce91-44d8-833a-ef0b5e0b1672, 1fb71321-bb84-492f-b9d5-1444c9c444af, ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf, 55a8abb2-0f6d-430b-99f9-a378f3f154e5, 6108b8b2-911e-443b-abe0-4c6f8b407384, 462e22c6-8b23-4061-9a2a-bbf8691fce60, 7327cd58-ac58-40a4-8ef2-00072fb552b2, 9d634996-475e-4ddc-8113-05c404ad9d5c, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, bceceda8-133a-4c9b-b439-b5c1a4414a02, c84a4bd9-fc2d-44f0-b333-172978f61544, 332ff0c7-0769-45ac-8f89-00aeff318467, b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051, f3c9e736-157c-4197-b49e-19e3674e4e0c, 36dfbeaa-698d-4a57-b3b0-d425348e14a5, a82db5b7-969c-44e9-9eec-876ead7099d3, 3fc35d4f-90f3-4425-9dac-951a89631fdf, 7857d633-2055-47eb-857f-cb70da9fa7ba, 0487a1cf-eb61-4bf8-bd16-eed899d22d2c, 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
+id: 83190b10-8060-47c1-8194-f6a5c4f0d703
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answered=b36113a1-1384-4e4c-a798-8399f4181366, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, blame lines=108053a8-c2c3-4561-874c-2f573a5409f2, depends=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, move=d904dc0d-231f-4e93-ac74-7babe888107d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, supersedes=2bae531b-c4df-48a0-89a0-3d52726741ea
+
+Problem: the depends, supersedes and blame lines of every answered question fill half of show's listing of a file, and no move on an answered question reads them.
+Standard: a listing prints what the next step reads; what stands behind a closed item is shown on request.
+
+- A) No.
+  Why: the lines of an unanswered question are what approve reads; those of an answered one print under --dependents.
+  Costs: an agent after an answered question's lines runs --dependents or reads the file.
+- B) Yes.
+  Why: every line of every question in one listing.
+  Costs: lines no move reads make most of the listing of a settled file.
+
+**Answer:** A
+
+### Does the tool colour what it prints to a terminal?
+depends: 1d7e59ea-99e3-4d4b-9928-5dabca62723d, f90dbd5b-8fbe-4899-8588-f8762795c2e2, 848e1b76-9cfe-483b-94dd-094eb9b2f995, 069a6b4a-de35-45f3-8c6c-8e254bf40565, 7857d633-2055-47eb-857f-cb70da9fa7ba
+unrelated: 2db33118-82b4-4edf-a9cb-e92ac62738b9, 36dfbeaa-698d-4a57-b3b0-d425348e14a5, c84a4bd9-fc2d-44f0-b333-172978f61544, 3fc35d4f-90f3-4425-9dac-951a89631fdf, a6f41dee-2381-421a-bcc4-b14af243209b, f53ac3b9-efde-427c-8027-19988aa8fda7, bceceda8-133a-4c9b-b439-b5c1a4414a02, 11be073c-ce91-44d8-833a-ef0b5e0b1672, 902bd279-e6c1-4a21-9637-a3a43f360bae, aa275fac-def5-42a2-8a61-660142acad8e, 83190b10-8060-47c1-8194-f6a5c4f0d703, 332ff0c7-0769-45ac-8f89-00aeff318467, f3c9e736-157c-4197-b49e-19e3674e4e0c
+id: b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, findings=ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, moves=d904dc0d-231f-4e93-ac74-7babe888107d, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, refusal=0942e445-0163-423e-8ba7-84dd8ac07045, statuses=209081f4-864f-4ef6-8909-65da87f135e5
+
+Problem: statuses, findings and moves print in one shade, and the owner reads a disputed line, a refusal and a settled question alike.
+Standard: a command colours its output when standard output is a terminal, prints plain when piped, and honours NO_COLOR.
+
+- A) Yes.
+  Why: the owner's eye finds the line to act on; an agent and the tests read piped output, plain.
+  Costs: a palette per line kind, a terminal check before every print, and the page's own rendering of it.
+- B) No.
+  Why: one output everywhere; nothing to check.
+  Costs: the owner reads every listing in one shade.
+
+**Answer:** A
+
+### What does the tool add to the shape of what it prints to a terminal?
+depends: 1d7e59ea-99e3-4d4b-9928-5dabca62723d, f90dbd5b-8fbe-4899-8588-f8762795c2e2, 848e1b76-9cfe-483b-94dd-094eb9b2f995, 069a6b4a-de35-45f3-8c6c-8e254bf40565, 7857d633-2055-47eb-857f-cb70da9fa7ba, c84a4bd9-fc2d-44f0-b333-172978f61544, a6f41dee-2381-421a-bcc4-b14af243209b, b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051=*
+unrelated: 36dfbeaa-698d-4a57-b3b0-d425348e14a5, 2db33118-82b4-4edf-a9cb-e92ac62738b9, bf7da2dd-d8a7-41b8-9898-11cf68d0e833, a7b0b910-57f6-4c59-b904-b42f78db63f7, 08a1b488-32fc-4dc7-b4b3-93a6e768725f, bceceda8-133a-4c9b-b439-b5c1a4414a02, a82db5b7-969c-44e9-9eec-876ead7099d3, 3fc35d4f-90f3-4425-9dac-951a89631fdf, 4f925b13-ad16-48b8-acd1-3e30d6e308b6, 385a57d5-5f76-454a-ae5d-9b0d6f5c1492, 83190b10-8060-47c1-8194-f6a5c4f0d703, 332ff0c7-0769-45ac-8f89-00aeff318467, 05141f49-d9d2-407c-b60c-ebb195a05864
+id: f3c9e736-157c-4197-b49e-19e3674e4e0c
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, findings=ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, moves=d904dc0d-231f-4e93-ac74-7babe888107d, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, status=209081f4-864f-4ef6-8909-65da87f135e5, statuses=209081f4-864f-4ef6-8909-65da87f135e5
+
+Problem: every line prints at one indent with no break between the questions, the findings and the moves, and a listing of a file runs on as one block.
+Standard: a listing groups its lines, with a blank line between groups and a header per group, as git status does; piped output stays one line per item.
+
+- A) Blank lines and headers between questions, findings and moves on a terminal; piped output one line per item.
+  Why: the groups read apart, coloured or not; a line per item stays for the agent and the tests.
+  Costs: a header per group, a terminal check before every listing, and the page's own rendering of the groups.
+- B) Nothing.
+  Why: one output on a terminal and in a pipe.
+  Costs: the owner reads a file's listing as one block.
+- C) Tables: columns aligned per group with a header row, on a terminal; piped output one line per item.
+  Why: statuses and headings line up.
+  Costs: column widths per group, wrapping of long headings, and a second form of every line.
+
+**Answer:** A

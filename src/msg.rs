@@ -1317,6 +1317,17 @@ pub fn pairs_no_term_at_write(rel: &str, heading: &str) -> Said {
 
 use crate::status::FileStatus;
 
+/// The header of a group of findings on a terminal (per "What does the tool
+/// add to the shape of what it prints to a terminal?", f3c9e736 A).
+pub fn group_findings() -> String {
+    "Findings".to_string()
+}
+
+/// The header of a group of moves on a terminal.
+pub fn group_moves() -> String {
+    "Moves".to_string()
+}
+
 pub fn show_topic(topic: &str, rel: &str) -> String {
     if topic.is_empty() {
         return format!("# ({})", rel);
@@ -2500,36 +2511,37 @@ pub fn malformed_reader_row(lineno: usize, raw: &str) -> Said {
     )
 }
 
-/// A HEAD row of the reader file is missing or changed.
-pub fn reader_not_append_only() -> Said {
+/// A row of HEAD's reader file is edited: its line is not there byte for
+/// byte, and a line with the same time, text, neighbour, prompt and model is.
+pub fn reader_row_edited() -> Said {
     said(
-        &crate::rule::READER_ROWS_KEPT,
-        "a row from HEAD's reader file is missing or changed",
-        Next::owner("restores the missing or changed row from HEAD"),
+        &crate::rule::READER_ROWS_UNEDITED,
+        "a row from HEAD's reader file is edited by hand",
+        Next::owner("restores the row as HEAD holds it or removes the changed line"),
     )
 }
 
-pub fn reader_merge_drops_rows() -> Said {
+pub fn reader_merge_row_edited() -> Said {
     said(
-        &crate::rule::MERGE_KEEPS_READER_ROWS,
-        "merge drops a reader row of a merged branch",
-        Next::owner("adds the missing rows back from that branch"),
+        &crate::rule::MERGE_LEAVES_READER_ROWS_UNEDITED,
+        "merge edits a reader row of a merged branch",
+        Next::owner("restores the row as that branch holds it or removes the changed line"),
     )
 }
 
-pub fn reader_push_drops_rows(local_ref: &str, remote_ref: &str) -> Said {
+pub fn reader_push_row_edited(local_ref: &str, remote_ref: &str) -> Said {
     said(
-        &crate::rule::PUSH_KEEPS_READER_ROWS,
-        format!("push of {} would drop reader rows the remote's {} holds", local_ref, remote_ref),
-        Next::owner("adds the missing rows back, then pushes again"),
+        &crate::rule::PUSH_LEAVES_READER_ROWS_UNEDITED,
+        format!("push of {} would change a reader row the remote's {} holds", local_ref, remote_ref),
+        Next::owner("restores the row as the remote holds it or removes the changed line, then pushes again"),
     )
 }
 
-pub fn reader_since_drops_rows(commit: &str) -> Said {
+pub fn reader_since_row_edited(commit: &str) -> Said {
     said(
-        &crate::rule::SINCE_KEEPS_READER_ROWS,
-        format!("reader file drops a row {} already holds", commit),
-        Next::owner("adds the missing rows back from that commit"),
+        &crate::rule::SINCE_LEAVES_READER_ROWS_UNEDITED,
+        format!("reader file edits a row {} already holds", commit),
+        Next::owner("restores the row as that commit holds it or removes the changed line"),
     )
 }
 
@@ -2730,10 +2742,10 @@ mod tests {
             reader_failed("id-1", "no answer"),
             reader_write_failed("disk full"),
             malformed_reader_row(3, "bad row").text(),
-            reader_not_append_only().text(),
-            reader_merge_drops_rows().text(),
-            reader_since_drops_rows("abc123").text(),
-            reader_push_drops_rows("refs/heads/feat", "refs/heads/main").text(),
+            reader_row_edited().text(),
+            reader_merge_row_edited().text(),
+            reader_since_row_edited("abc123").text(),
+            reader_push_row_edited("refs/heads/feat", "refs/heads/main").text(),
             malformed_ledger_row(3, "bad row").text(),
             ledger_not_append_only().text(),
             ledger_merge_drops_rows().text(),

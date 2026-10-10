@@ -355,3 +355,43 @@ Standard: a review surface shows the evidence beside the judgment.
   Costs: the owner reads hashes and identifiers in a tab-separated file, or trusts the agent's line unseen.
 
 **Answer:** A
+
+### Does the reader's file keep a row whose text is gone from the records?
+depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, daec9ffd-676f-4111-a359-2827bfd4527c, 08a1b488-32fc-4dc7-b4b3-93a6e768725f
+unrelated: 385a57d5-5f76-454a-ae5d-9b0d6f5c1492, bf6697e3-8832-4b90-b036-8fecedb55406, c10c3a49-e993-4c9f-a46b-4a1ba3646dcf, bceceda8-133a-4c9b-b439-b5c1a4414a02, a82db5b7-969c-44e9-9eec-876ead7099d3, f3e64c4e-21ab-442f-8c40-6060591e2b77, 3fc35d4f-90f3-4425-9dac-951a89631fdf, 55a8abb2-0f6d-430b-99f9-a378f3f154e5, 1c27f2d6-ab62-4c5a-91b2-1488722f3c48, cd83e277-ebf0-4458-a77a-c526ab4cfeca, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c, 99619e27-19b6-47ef-83b9-c79ac30ee2f0, 26c5352f-3f82-4376-9dc2-8ccc0074d080, 7a1e7b81-0967-4ed2-8a8a-c7153056836f, abb6faed-96f7-406d-8384-002ee81bb157
+id: 90714223-52e3-4bb9-b0b4-2a8b87d74145
+terms: ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, neighbour=daec9ffd-676f-4111-a359-2827bfd4527c, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641
+
+Problem: the file grows by a row for every reading of a text since edited away, and a row nothing can look up again is weight on every read.
+Standard: a cache keyed by content hash is pruned of entries whose key no longer resolves; the record of events is kept elsewhere.
+
+- A) No.
+  Why: when it appends, the tool drops each row whose text or neighbour is gone from the records; git keeps them.
+  Costs: a merge brings a dropped row back from the other branch until the next append drops it again.
+- B) Yes.
+  Why: every reading ever made stays; the file is a record like the ledger.
+  Costs: a row per edited draft text for ever, read on every command.
+
+**Answer:** A
+
+### What does check hold of the reader's file?
+depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 90714223-52e3-4bb9-b0b4-2a8b87d74145=*, 08a1b488-32fc-4dc7-b4b3-93a6e768725f
+unrelated: 34e81f57-9b3c-4dc4-a2ba-ca227523177d, 6ef9eca6-fd8b-4211-aae7-00b37a2a9245, ec3f875c-a0f8-4085-8da1-fec9dcb14377, 6108b8b2-911e-443b-abe0-4c6f8b407384, bceceda8-133a-4c9b-b439-b5c1a4414a02, 902bd279-e6c1-4a21-9637-a3a43f360bae, 05141f49-d9d2-407c-b60c-ebb195a05864, a6f41dee-2381-421a-bcc4-b14af243209b, 7a1e7b81-0967-4ed2-8a8a-c7153056836f, bf6697e3-8832-4b90-b036-8fecedb55406, c10c3a49-e993-4c9f-a46b-4a1ba3646dcf, 385a57d5-5f76-454a-ae5d-9b0d6f5c1492, d2851ea1-fcb6-476a-b321-c813a594d5e5, f3e64c4e-21ab-442f-8c40-6060591e2b77
+supersedes: 26c5352f-3f82-4376-9dc2-8ccc0074d080
+id: abb6faed-96f7-406d-8384-002ee81bb157
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641
+
+Problem: a file the tool writes and the agent may edit is a file the agent will edit; a rule that holds every row at HEAD byte for byte holds a row the tool itself drops.
+Standard: a machine-written cache is verified for shape and against edits; removal is the writer's act.
+
+- A) Every row at HEAD stays byte for byte or is gone whole; no row is edited or added by hand.
+  Why: a hand-edited row never passes as the reader's word; the tool's own drop passes.
+  Costs: a row deleted by hand passes as a drop; a hand-written row is caught by its shape alone.
+- B) Every row at HEAD stays byte for byte.
+  Why: the file is held like the ledger.
+  Costs: the tool cannot drop a row, so the file keeps every reading ever made.
+- C) The shape of each row alone.
+  Why: nothing to compare with history.
+  Costs: a row edited by hand passes as the reader's word.
+
+**Answer:** A

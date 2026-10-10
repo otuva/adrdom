@@ -83,22 +83,24 @@ fn check_one_ref(root: &Path, line: &str, stops: &mut Vec<String>) -> Vec<Failur
         return Vec::new();
     }
 
-    // The ledger and the reader file are held the same way ("Does check hold
-    // the reader's file as it holds the ledger?", 26c5352f-3f82-4376-9dc2-8ccc0074d080).
+    // The ledger keeps every row; the reader's file keeps every row byte for
+    // byte or gone whole ("What does check hold of the reader's file?",
+    // abb6faed-96f7-406d-8384-002ee81bb157).
     let mut out = Vec::new();
-    let files: [(&str, Class, msg::Said); 2] = [
-        (repo::LEDGER_PATH, Class::Ledger, msg::ledger_push_drops_rows(local_ref, remote_ref)),
-        (repo::READER_PATH, Class::Reader, msg::reader_push_drops_rows(local_ref, remote_ref)),
-    ];
-    for (path, class, said) in files {
-        let Some(remote_content) = repo::git(root, &["show", &format!("{}:{}", remote_sha, path)]) else {
-            // The remote commit holds no such file: nothing to compare.
-            continue;
-        };
-        let local_content = repo::git(root, &["show", &format!("{}:{}", local_sha, path)]).unwrap_or_default();
+    // The ledger's drop rule.
+    if let Some(remote_content) = repo::git(root, &["show", &format!("{}:{}", remote_sha, repo::LEDGER_PATH)]) {
+        let local_content = repo::git(root, &["show", &format!("{}:{}", local_sha, repo::LEDGER_PATH)]).unwrap_or_default();
         let present: std::collections::HashSet<&str> = local_content.lines().collect();
         if super::ledger::lines_missing(&remote_content, &present) {
-            out.push(Failure::said(class, said));
+            out.push(Failure::said(Class::Ledger, msg::ledger_push_drops_rows(local_ref, remote_ref)));
+        }
+    }
+    // The reader's edit rule. A remote commit that holds no such file has
+    // nothing to compare.
+    if let Some(remote_content) = repo::git(root, &["show", &format!("{}:{}", remote_sha, repo::READER_PATH)]) {
+        let local_content = repo::git(root, &["show", &format!("{}:{}", local_sha, repo::READER_PATH)]).unwrap_or_default();
+        if super::reader::push_edits_row(&remote_content, &local_content) {
+            out.push(Failure::said(Class::Reader, msg::reader_push_row_edited(local_ref, remote_ref)));
         }
     }
     out

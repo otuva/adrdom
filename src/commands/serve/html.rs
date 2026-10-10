@@ -18,9 +18,26 @@ pub(super) fn plural(n: usize, one: &str, many: &str) -> String {
     }
 }
 
-/// The lines as the page renders them, each through `out::html`.
+/// The lines as the page renders them, each through `out::html`, in the
+/// groups a terminal shows (`out::groups`): a group with a header word is an
+/// element that carries it (per "What does the tool add to the shape of what
+/// it prints to a terminal?", f3c9e736 A; per "Does the ui show what the
+/// terminal prints?", 7857d633 A).
 pub(super) fn lines(lines: &[Line]) -> String {
-    out::present(lines).into_iter().map(|l| format!("{}\n", out::html(l))).collect()
+    let mut s = String::new();
+    for (group, run) in out::groups(&out::present(lines)) {
+        let body: String = run.into_iter().map(|l| format!("{}\n", out::html(l))).collect();
+        match group.header() {
+            Some(h) => s.push_str(&format!(
+                "<section class=\"group {}\"><h3>{}</h3>\n{}</section>\n",
+                group.class(),
+                esc(&h),
+                body
+            )),
+            None => s.push_str(&body),
+        }
+    }
+    s
 }
 
 /// A status line as small badges: the status name (the version of an asked

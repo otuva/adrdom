@@ -89,13 +89,16 @@ runtime dependencies beyond `git` on `PATH`.
   status (`no body`, `not asked`, `asked @<version>`, `answered <letter>`,
   `refused`, `superseded`, `withdrawn`, `dropped`; a file is `new`,
   `changed`, `approved` or `removed`), for a blame file its origin and rows,
-  every depends, supersedes and blame line, the body of an
-  asked question, and what the file holds beyond its latest approval,
+  the depends, supersedes and blame lines of a question not yet answered
+  with `[inconsistent]` or `[same]` and each neighbour the reader marks so
+  that no supersedes line names, the body of an asked question, and what the file holds beyond its latest approval,
   marked `+` and `-` (a question new or struck as a whole carries the mark
   on its own line too); then the file's findings and moves. `--all` prints every such file
   that way; `--neighbours` adds each neighbour with the reader's word, and
-  `--dependents` what stands on each question or term entry and what
-  replaced a question; `--unrelated` adds the unrelated line of each
+  `--dependents` the depends, supersedes and blame lines of an answered
+  question, what stands on each question or term entry and what replaced a
+  question; `--reader` the reader's word on every neighbour of each question,
+  its reason on the line under; `--unrelated` adds the unrelated line of each
   question; `--questions` adds, for a blame file, how many of its decision
   rows a question names and how many none names.
 - `adr plan <topic_file>` — do the planning step the file is at (read its
@@ -130,7 +133,9 @@ A command that writes prints one line per ledger row it appends, and one
 per file it writes that no such row covers, or on standard error the
 findings that stopped it. A command that writes nothing prints what it
 read, statuses, findings and moves. The page `adr serve` serves renders
-the same lines.
+the same lines. On a terminal the lines are coloured and grouped, a blank
+line and a header (`Findings`, `Moves`) between questions, findings and
+moves; piped, or with `NO_COLOR` set, they print plain, one line per item.
 
 `adr answer`, `adr approve`, `adr unban`, `adr serve`, and `adr uninstall`
 refuse to run unless invoked interactively by a human (a real TTY on
@@ -216,6 +221,14 @@ answer's letter was not in its answer set (asked or not; it never returns); `ass
 declared on the asked one; `approved` and `context` track a topic file's
 plan and context prose; `terms` tracks the terms file; `banned` and
 `unbanned` track the ban list.
+
+`adrdom/state/reader.tsv` holds the reader's word on each pair, one
+tab-separated `time, text hash, neighbour, word, reason, prompt hash, model,
+version` row per reading. When `adr plan` or `adr read` appends to it, every
+row whose text or neighbour is gone from the records is dropped first; git
+keeps the old rows. `check` fails a row of HEAD, of a merged branch, of
+`--since` or of the remote that is edited by hand; a row gone whole passes,
+and a new row is judged by its shape.
 
 ## Tests
 

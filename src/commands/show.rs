@@ -9,7 +9,13 @@
 //! file. What it computes from the records comes under a flag (per
 //! "Does a command print under a flag what it computes from the records?",
 //! 36dfbeaa A): `--neighbours`, `--dependents`, `--unrelated` and
-//! `--questions`. Every line goes through
+//! `--questions` and `--reader`. The reference lines of an answered question
+//! are one of them: printed under `--dependents` (per "Does show print the
+//! reference lines of an answered question?", 83190b10 A). The reader's word
+//! `inconsistent` or `same` on a neighbour comes under a question not yet
+//! answered in the plain listing, every word under `--reader` (per "What
+//! does show print of the reader's word on a question?", 332ff0c7 A). Every
+//! line goes through
 //! `out` (per "What does a command that writes nothing print?", 848e1b76 A).
 use crate::rules::Command;
 use crate::approval::{self, Change, Side};
@@ -44,6 +50,9 @@ pub struct Views {
     /// how many none names (per "What does check do with a decision row
     /// that no question names?", ee27fd4c A).
     pub questions: bool,
+    /// Every word the reader gave on every neighbour of each question, with
+    /// its reason.
+    pub reader: bool,
 }
 
 /// Everything `show` reads, loaded once; the page reads its lines from the
@@ -185,6 +194,9 @@ fn show_args(record_arg: Option<&std::path::Path>, all: bool, views: &Views) -> 
     if views.questions {
         args.push("--questions".to_string());
     }
+    if views.reader {
+        args.push("--reader".to_string());
+    }
     args
 }
 
@@ -253,7 +265,7 @@ pub(crate) fn unreadable_topic_lines(r: &Records) -> Vec<Line> {
 
 /// The line that opens a topic file in the listing.
 pub(crate) fn topic_heading(rf: &RecordFile) -> Line {
-    Line::Record { depth: 0, text: msg::show_topic(rf.topic.as_deref().unwrap_or(""), &rf.rel) }
+    Line::Topic { text: msg::show_topic(rf.topic.as_deref().unwrap_or(""), &rf.rel) }
 }
 
 /// Every current decision of `rf` as its heading and the option picked.
@@ -520,13 +532,24 @@ fn topic_file_lines(r: &Records, rf: &RecordFile, views: Views) -> Vec<Line> {
         lines.extend(change_lines(prose, None, &r.names, true));
     }
     let shown = (views.neighbours).then(|| plan::load_shown_with(rf, &r.terms_list, led, &r.index().planning));
+    // Built on the first question that reads the reader's words.
+    let by_body = std::cell::OnceCell::new();
     for (i, sec) in rf.sections.iter().enumerate() {
         let st = status::question_status(led, sec);
         let change = changes.questions.get(i).and_then(Option::as_ref);
         lines.push(change_status(&sec.heading_text, question_status_of(led, rf, sec), change));
         match change {
             Some(change) => lines.extend(change_lines(change, Some(&format!("### {}", sec.heading_text)), &r.names, views.unrelated)),
-            None => lines.extend(reference_and_body_lines(&approval::question_lines(rf, sec), st, &r.names, views.unrelated)),
+            None => lines.extend(reference_and_body_lines(
+                &approval::question_lines(rf, sec),
+                st,
+                &r.names,
+                views.unrelated,
+                views.dependents || !is_answered(st),
+            )),
+        }
+        if views.reader || !is_answered(st) {
+            lines.extend(reader_lines(r, rf, i, views.reader, by_body.get_or_init(|| plan::BodyIndex::of(rf))));
         }
         if views.neighbours && matches!(st, QuestionStatus::NoBody | QuestionStatus::NotAsked | QuestionStatus::Asked) {
             if let Some(q) = shown.as_ref().and_then(|p| p.questions.iter().find(|q| q.heading == sec.heading_text)) {
@@ -578,17 +601,54 @@ fn answer_letter(led: &Ledger, sec: &Section) -> Option<char> {
 /// A question's reference lines with identifiers turned back into words,
 /// and its body when it is asked: what the file form prints under a
 /// question approved as it stands.
-fn reference_and_body_lines(qlines: &[String], st: QuestionStatus, names: &HashMap<String, String>, unrelated: bool) -> Vec<Line> {
+/// `show_refs` is whether the reference lines print: those of an answered
+/// question do not, unless `--dependents` asks (per "Does show print the
+/// reference lines of an answered question?", 83190b10 A). `--unrelated`
+/// prints the `unrelated:` line of every question, answered or not.
+fn reference_and_body_lines(
+    qlines: &[String],
+    st: QuestionStatus,
+    names: &HashMap<String, String>,
+    unrelated: bool,
+    show_refs: bool,
+) -> Vec<Line> {
     // The `id:` line is printed only as part of a change (what approve signs
     // beyond its latest approval), never in the listing of a question.
     let qlines: Vec<String> = qlines.iter().filter(|l| !l.starts_with("id: ")).cloned().collect();
     let (refs, body) = reference_and_body(&qlines);
-    let refs: Vec<String> = refs.into_iter().filter(|l| unrelated || !l.starts_with("unrelated:")).collect();
+    let refs: Vec<String> =
+        refs.into_iter().filter(|l| if l.starts_with("unrelated:") { unrelated } else { show_refs }).collect();
     let body = if st == QuestionStatus::Asked { body } else { Vec::new() };
     refs.iter()
         .map(|l| Line::Record { depth: 1, text: named(l, names) })
         .chain(body.iter().map(|l| Line::Record { depth: 1, text: l.clone() }))
         .collect()
+}
+
+/// Whether the owner has acted on the question: picked an option or
+/// refused it. A superseded question was answered first.
+fn is_answered(st: QuestionStatus) -> bool {
+    matches!(st, QuestionStatus::Answered | QuestionStatus::Refused | QuestionStatus::Superseded)
+}
+
+/// The reader's words under question `idx` of `rf`: with `all`, every word
+/// on every neighbour, the reason a line under at depth 2; otherwise the
+/// neighbours the reader marked `inconsistent` or `same` that the
+/// question's `supersedes:` line does not name (per "What does show print of
+/// the reader's word on a question?", 332ff0c7 A). A view: no move stands on
+/// a line.
+fn reader_lines(r: &Records, rf: &RecordFile, idx: usize, all: bool, by_body: &plan::BodyIndex) -> Vec<Line> {
+    let words = r.index().planning.reader_words(rf, idx, &r.terms_list, &r.led, by_body);
+    let mut lines = Vec::new();
+    for w in words {
+        if all {
+            lines.push(Line::Word { word: w.word, name: w.name });
+            lines.push(Line::Record { depth: 2, text: w.reason });
+        } else if matches!(w.word.as_str(), "inconsistent" | "same") && !w.on_supersedes {
+            lines.push(Line::Word { word: w.word, name: w.name });
+        }
+    }
+    lines
 }
 
 /// `text` with an identifier turned back into the words it stands for.
@@ -699,7 +759,13 @@ fn removed_topic_file(r: &Records, rel: &str, views: Views) -> Vec<Line> {
         for sec in &old.sections {
             let st = status::question_status(&r.led, sec);
             lines.push(Line::Status { subject: sec.heading_text.clone(), status: question_status_of(&r.led, &old, sec), mark: None });
-            lines.extend(reference_and_body_lines(&approval::question_lines(&old, sec), st, &r.names, views.unrelated));
+            lines.extend(reference_and_body_lines(
+                &approval::question_lines(&old, sec),
+                st,
+                &r.names,
+                views.unrelated,
+                views.dependents || !is_answered(st),
+            ));
         }
     }
     lines.extend(out::report(&removed_report(r, rel)));

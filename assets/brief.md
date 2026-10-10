@@ -35,15 +35,19 @@ it.
 
 `adr show <file>` takes every file `adr approve` takes: a topic file, the
 terms file, a blame file. For a topic file it prints every question with its
-status, every depends, supersedes and blame line, and the body of a question that
-waits for the owner's answer; what the file holds beyond its latest approval is printed marked,
+status; under a question not yet answered, its depends, supersedes and blame
+lines, and `[inconsistent]` or `[same]` with each neighbour the reader marks
+so that no supersedes line of the question names; and the body of a question
+that waits for the owner's answer; what the file holds beyond its latest approval is printed marked,
 `+` for a line added and `-` for a line gone, and a question new or struck
 as a whole carries the mark on its own line too; then the findings and the
 moves of the file. The file itself, a term entry and the prose open with
 their status in brackets: `[new]`, `[changed]`, `[approved]`, `[removed]`,
-and `[retired]` for a term. `adr show --dependents <file>` also prints what
-stands on each question or term entry and what took the place of a question
-that was replaced. `adr show --unrelated <file>` also prints the unrelated
+and `[retired]` for a term. `adr show --dependents <file>` also prints the
+depends, supersedes and blame lines of an answered question, what stands on
+each question or term entry and what took the place of a question that was
+replaced. `adr show --reader <file>` also prints the reader's word on every
+neighbour of each question, with its reason on the line under. `adr show --unrelated <file>` also prints the unrelated
 lines. `adr show --questions <file>` also prints, for a blame file, how many
 of its decision rows a question names and how many none names. Each question
 opens with where it stands, in brackets:
