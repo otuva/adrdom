@@ -90,8 +90,6 @@ impl Move {
         self
     }
 
-    /// Who takes the move, fixed by its kind (and, for a build, the role of
-    /// the session).
     /// A build move's words open with the mover `actor` names: builder in a
     /// planner's session, agent in any other.
     fn build_mover(&self, action: String) -> Next {
@@ -101,6 +99,8 @@ impl Move {
         }
     }
 
+    /// Who takes the move, fixed by its kind (and, for a build, the role of
+    /// the session).
     pub fn actor(&self) -> Mover {
         if matches!(self.kind, MoveKind::Build { .. } | MoveKind::Retie { .. }) && self.session == crate::session::Role::Planner {
             return Mover::Builder;
