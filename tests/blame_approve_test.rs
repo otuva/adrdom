@@ -943,3 +943,45 @@ fn a_blame_row_with_no_identifier_counts_as_approved_with_none_assigned() {
     let checked = adr(&dir, &["check"], &[], "");
     assert!(!stdout(&checked).contains("blame/x.md"), "{}", stdout(&checked));
 }
+
+// adr: d2851ea1-fcb6-476a-b321-c813a594d5e5
+//
+// An approved file whose id line was overwritten with a non-identifier is told
+// to write back the id line of its approval, not to remove the line.
+#[test]
+fn an_approved_file_with_a_faulty_id_line_is_told_to_write_back_its_id() {
+    let dir = setup();
+    let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
+    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-1\tdecision\n2-2\tdetail\n");
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(out.status.success(), "{}", stderr(&out));
+    let approved = std::fs::read_to_string(&path).unwrap();
+    let id_line = approved.lines().nth(2).unwrap().to_string();
+    std::fs::write(&path, approved.replacen(&id_line, "id: oops", 1)).unwrap();
+
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(!out.status.success());
+    let expect = format!("agent writes back the id line \"{}\"", id_line);
+    assert!(
+        refusal_lines(&out, "approve: ").iter().any(|l| l.contains("which is no identifier") && l.ends_with(&expect)),
+        "{}",
+        stderr(&out)
+    );
+}
+
+// adr: 5c399a14-1e5c-48eb-b502-b57524c01c24
+//
+// A row partly beyond the origin names the beyond finding only; the lines it
+// reaches inside the origin count as covered.
+#[test]
+fn a_row_partly_beyond_the_origin_leaves_no_coverage_gap() {
+    let dir = setup();
+    let blob = write_origin(&dir, "docs/x.md", "1\n2\n3\n4\n5\n");
+    let path = write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-10\tdecision\n");
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    assert!(!out.status.success());
+    let lines = refusal_lines(&out, "approve: ");
+    assert!(lines.iter().any(|l| l.contains("beyond")), "{}", stderr(&out));
+    assert!(!lines.iter().any(|l| l.contains("gap") || l.contains("not covered") || l.contains("uncovered")), "{}", stderr(&out));
+    assert_eq!(lines.len(), 1, "{}", stderr(&out));
+}

@@ -67,11 +67,11 @@ pub struct ShapeError {
 
 impl ShapeError {
     /// The message of this fault on the blame file `rel`.
-    pub fn said(&self, rel: &str) -> msg::Said {
+    pub fn said(&self, rel: &str, approved: Option<&str>) -> msg::Said {
         match self.kind {
             ShapeKind::File => msg::blame_shape_error(rel, &self.text),
             ShapeKind::RowValue => msg::blame_row_value_error(rel, &self.text),
-            ShapeKind::Id => msg::blame_id_error(rel, &self.text),
+            ShapeKind::Id => msg::blame_id_error(rel, &self.text, approved),
         }
     }
 }
@@ -228,9 +228,9 @@ pub fn coverage_errors(rows: &[Row], n: usize) -> (Vec<BeyondError>, Vec<GapErro
     for r in rows {
         if r.start > n || r.end > n {
             beyond.push(BeyondError { start: r.start, end: r.end });
-            continue;
         }
-        for i in r.start..=r.end {
+        // Only the part inside the origin marks coverage.
+        for i in r.start..=r.end.min(n) {
             covered[i] = true;
         }
     }
@@ -527,7 +527,7 @@ pub fn file_state(
     let rel = &bf.rel;
     let mut st = FileState { findings: Vec::new(), stops: Vec::new(), origin_content: None };
     let about = |said: msg::Said| Finding::said(Class::Blame, said).about(Subject::BlameFile(rel.clone()));
-    st.findings = bf.shape_errors.iter().map(|e| about(e.said(rel))).collect();
+    st.findings = bf.shape_errors.iter().map(|e| about(e.said(rel, index.approved_id(rel)))).collect();
     if let Some(keeper) = index.id_taken_from(bf) {
         st.findings.push(about(msg::blame_id_shared(rel, keeper.rel())));
     }
@@ -796,7 +796,7 @@ mod tests {
         let (beyond, gaps) = coverage_errors(&rows, 5);
         assert_eq!(beyond.len(), 1);
         assert_eq!((beyond[0].start, beyond[0].end), (1, 10));
-        assert_eq!(gaps.len(), 1, "the rest of the origin is still a gap");
+        assert!(gaps.is_empty(), "the part inside the origin counts as covered");
     }
 
     #[test]

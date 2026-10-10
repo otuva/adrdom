@@ -123,6 +123,36 @@ fn index_files(root: &Path) -> std::sync::Arc<std::collections::HashSet<String>>
     set
 }
 
+/// Every path the index holds with mode 120000 (a symbolic link), read once
+/// per repository for the process, the same way as `index_files`.
+fn index_links(root: &Path) -> std::sync::Arc<std::collections::HashSet<String>> {
+    use std::collections::{HashMap, HashSet};
+    use std::sync::{Arc, Mutex, OnceLock};
+    static LINKS: OnceLock<Mutex<HashMap<std::path::PathBuf, Arc<HashSet<String>>>>> = OnceLock::new();
+    let map = LINKS.get_or_init(Default::default);
+    if let Some(found) = map.lock().unwrap_or_else(|e| e.into_inner()).get(root) {
+        return found.clone();
+    }
+    let Some(listing) = git_bytes(root, &["ls-files", "-s", "-z"]) else {
+        // Not kept: a failure to run git is asked again.
+        return Arc::new(HashSet::new());
+    };
+    let set: Arc<HashSet<String>> = Arc::new(index_link_paths(&listing));
+    map.lock().unwrap_or_else(|e| e.into_inner()).insert(root.to_path_buf(), set.clone());
+    set
+}
+
+/// The paths with mode 120000 in `git ls-files -s -z` output `listing`.
+fn index_link_paths(listing: &[u8]) -> std::collections::HashSet<String> {
+    String::from_utf8_lossy(listing)
+        .split('\0')
+        .filter_map(|entry| {
+            let (meta, name) = entry.split_once('\t')?;
+            meta.starts_with("120000 ").then(|| name.to_string())
+        })
+        .collect()
+}
+
 /// The paths a git listing command prints (`ls-files`, `diff --name-only`),
 /// one entry per path. Runs the command with `-z`: git then ends each path
 /// with a NUL and prints it as it is, where the plain form wraps a path
@@ -414,8 +444,7 @@ impl Source {
                 Source::WorkingTree => {
                     root.join(&prefix).symlink_metadata().is_ok_and(|m| m.file_type().is_symlink())
                 }
-                Source::Index => git_bytes(root, &["ls-files", "-s", "-z", "--", &prefix])
-                    .is_some_and(|b| index_entry_is_link(&b, &prefix)),
+                Source::Index => index_links(root).contains(&prefix),
             };
             if link {
                 return true;
@@ -438,14 +467,6 @@ impl Source {
             Source::Index => git_paths(root, &["ls-files", "--", rel_dir]).unwrap_or_default(),
         }
     }
-}
-
-/// Whether `git ls-files -s -z` output `listing` holds an entry for exactly
-/// `path` with mode 120000 (a symbolic link).
-fn index_entry_is_link(listing: &[u8], path: &str) -> bool {
-    String::from_utf8_lossy(listing).split('\0').any(|entry| {
-        entry.split_once('\t').is_some_and(|(meta, name)| name == path && meta.starts_with("120000 "))
-    })
 }
 
 /// The owner-authorization gate shared by every owner command (`answer`,

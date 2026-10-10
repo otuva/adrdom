@@ -2186,11 +2186,15 @@ pub fn blame_row_value_error(rel: &str, e: &str) -> Said {
 
 /// An id line that holds no identifier, or sits below the header: the tool
 /// writes the identifier of a blame file, at approval, as line 3.
-pub fn blame_id_error(rel: &str, e: &str) -> Said {
-    // `e` opens with the line it found, as "line N: ...".
-    let next = match e.strip_prefix("line ").and_then(|r| r.split(':').next()).filter(|n| n.parse::<usize>().is_ok()) {
+pub fn blame_id_error(rel: &str, e: &str, approved: Option<&str>) -> Said {
+    // `e` opens with the line it found, as "line N: ...". A file with an
+    // approval gets its approved id line back instead.
+    let next = match approved {
+        Some(id) => Next::agent(format!("writes back the id line \"id: {}\"", id)),
+        None => match e.strip_prefix("line ").and_then(|r| r.split(':').next()).filter(|n| n.parse::<usize>().is_ok()) {
         Some(n) => Next::agent(format!("removes the id line, line {}", n)),
         None => Next::agent("removes the id line"),
+        },
     };
     said(&crate::rule::BLAME_ID_ASSIGNED_BY_TOOL, format!("{}: {}", rel, e), next)
 }
@@ -2741,7 +2745,7 @@ mod tests {
             missing_answer_selection("id-1", "abcd1234"),
             blame_shape_error("adrdom/blame/x.md", "line 1: missing \"origin: <path>\"").text(),
             blame_row_value_error("adrdom/blame/x.md", "line 4: row value \"term: pass\" is neither decision nor detail").text(),
-            blame_id_error("adrdom/blame/x.md", "line 3: id line holds \"x\", which is no identifier the tool assigns").text(),
+            blame_id_error("adrdom/blame/x.md", "line 3: id line holds \"x\", which is no identifier the tool assigns", None).text(),
             blame_id_line_gone("adrdom/blame/x.md", "11111111-1111-4111-8111-111111111111").text(),
             blame_id_not_written("adrdom/blame/x.md").text(),
             blame_id_edited("adrdom/blame/x.md", "11111111-1111-4111-8111-111111111111").text(),

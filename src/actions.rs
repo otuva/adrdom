@@ -827,26 +827,28 @@ fn do_approve_blame(
     let mut work_lines = bf.lines.clone();
     let minted = bf.id.is_none();
     let mut file_id = bf.id.clone().unwrap_or_default();
+    let mut written: Option<String> = None;
     if minted {
         file_id = Uuid::new_v4().to_string();
         let id_line = format!("id: {}", file_id);
         work_lines.insert(2, id_line.clone());
         // Only the id line is added to the bytes on disk, with the line
         // ending of the line above it (d2851ea1 A).
-        let written = insert_id_line(&content, &id_line).unwrap_or_else(|| record::join_lines(&work_lines));
-        std::fs::write(&bf.path, written).map_err(|e| {
+        written = Some(insert_id_line(&content, &id_line).ok_or_else(|| {
             stop(Command::Approve, msg::write_failed(
                 &file.display().to_string(),
-                e,
+                "no second line to insert the id line after",
                 msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
             ))
-        })?;
+        })?);
     }
 
     let new_hash = blame::file_hash(&work_lines);
     let unchanged = led.latest_blame(rel).map(|r| r.hash.as_str()) == Some(new_hash.as_str());
 
-    // No row, no line: a hash the ledger already holds is no event.
+    // No row, no line: a hash the ledger already holds is no event. The row
+    // is appended before the id line is written: a death between the two
+    // leaves a row whose id line is missing, which check names precisely.
     let mut rows: Vec<ledger::Row> = Vec::new();
     if !unchanged {
         let row = ledger::Row {
@@ -858,10 +860,6 @@ fn do_approve_blame(
             version: crate::version::VERSION.to_string(),
         };
         ledger::append(ledger_path, std::slice::from_ref(&row)).map_err(|e| {
-            // The id line was written above: put the bytes read at the start back.
-            if minted {
-                let _ = std::fs::write(&bf.path, &content);
-            }
             stop(Command::Approve, msg::update_failed(
                 "ledger",
                 e,
@@ -869,6 +867,15 @@ fn do_approve_blame(
             ))
         })?;
         rows.push(row);
+    }
+    if let Some(written) = written {
+        std::fs::write(&bf.path, written).map_err(|e| {
+            stop(Command::Approve, msg::write_failed(
+                &file.display().to_string(),
+                e,
+                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+            ))
+        })?;
     }
 
     Ok(Outcome::of_rows(&rows, &HashMap::new()))

@@ -141,7 +141,16 @@ impl Records {
     }
 
     pub(crate) fn index(&self) -> &rules::RepoIndex {
-        self.index.get_or_init(|| rules::RepoIndex::new(&self.root, &self.topic_files, &self.terms_list, &self.led))
+        self.index.get_or_init(|| {
+            rules::RepoIndex::new_with_blame(
+                &self.root,
+                &self.topic_files,
+                &self.terms_list,
+                &self.led,
+                &repo::Source::WorkingTree,
+                self.blame.clone(),
+            )
+        })
     }
 
     fn present_ids(&self) -> HashSet<String> {
@@ -470,7 +479,7 @@ fn named(line: &str, names: &HashMap<String, String>) -> String {
             let bounded = !line[..i].ends_with(|c: char| c.is_ascii_hexdigit())
                 && !line[i + LEN..].starts_with(|c: char| c.is_ascii_hexdigit());
             if bounded && record::is_uuid(cand) {
-                if let Some(name) = names.get(&cand.to_ascii_lowercase()) {
+                if let Some(name) = names.get(cand).or_else(|| names.get(&cand.to_ascii_lowercase())) {
                     out.push_str(name);
                     i += LEN;
                     continue;

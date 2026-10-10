@@ -1541,11 +1541,24 @@ impl RepoIndex {
 
     /// `new` with the reader's rows as `source` holds them.
     pub fn new_via(root: &Path, all: &[RecordFile], terms_list: &[terms::Term], led: &Ledger, source: &repo::Source) -> RepoIndex {
+        let (blame, _) = crate::blame::Index::read(root, source, led);
+        RepoIndex::new_with_blame(root, all, terms_list, led, source, blame)
+    }
+
+    /// `new_via` with the blame index the caller already holds, read from the
+    /// same rows as `source`, instead of reading it again.
+    pub fn new_with_blame(
+        root: &Path,
+        all: &[RecordFile],
+        terms_list: &[terms::Term],
+        led: &Ledger,
+        source: &repo::Source,
+        blame: crate::blame::Index,
+    ) -> RepoIndex {
         let planning = crate::plan::Shared::new_via(root, all, terms_list, led, source);
         let base = depends::replaced_base(all, &depends::approved_plan_rels(all, led), &planning.cross, led);
         let stale = stale_files(all, led).into_iter().map(str::to_string).collect();
         let records = judge_records(all, led);
-        let (blame, _) = crate::blame::Index::read(root, source, led);
         RepoIndex { planning, blame, base, stale, records }
     }
 
