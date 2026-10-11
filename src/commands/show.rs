@@ -282,9 +282,7 @@ pub(crate) fn decision_lines(rf: &RecordFile, led: &Ledger) -> Vec<Line> {
     let mut lines = Vec::new();
     for sec in rf.sections.iter().filter(|s| status::question_status(led, s) == QuestionStatus::Answered) {
         lines.push(Line::Record { depth: 1, text: sec.heading_text.clone() });
-        if let Some(s) = sec.chosen_sentence() {
-            lines.push(Line::Record { depth: 2, text: s.to_string() });
-        }
+        lines.extend(chosen_line(led, sec, QuestionStatus::Answered, 2));
     }
     lines
 }
@@ -553,7 +551,7 @@ fn topic_file_lines(r: &Records, rf: &RecordFile, views: Views) -> Vec<Line> {
             continue;
         }
         lines.push(change_status(&sec.heading_text, question_status_of(led, rf, sec), change));
-        lines.extend(chosen_line(sec, st));
+        lines.extend(chosen_line(led, sec, st, 1));
         match change {
             Some(change) => lines.extend(change_lines(change, Some(&format!("### {}", sec.heading_text)), &r.names, views.unrelated)),
             None => lines.extend(reference_and_body_lines(
@@ -677,12 +675,17 @@ fn names_of(text: &str, names: &HashMap<String, String>) -> String {
 
 /// The option the owner picked, under a current decision: the sentence the
 /// build move reads (per "What does show print of a file under adrdom?",
-/// a6f41dee A), as the listing with no file named prints it.
-fn chosen_line(sec: &Section, st: QuestionStatus) -> Option<Line> {
+/// a6f41dee A), the one line the listing with no file named and the file
+/// form both print. The letter is the one the status line names
+/// (`answer_letter`): the `**Answer:**` line, or the ledger's when the text
+/// read predates that line.
+fn chosen_line(led: &Ledger, sec: &Section, st: QuestionStatus, depth: usize) -> Option<Line> {
     if st != QuestionStatus::Answered {
         return None;
     }
-    sec.chosen_sentence().map(|s| Line::Record { depth: 1, text: s.to_string() })
+    let letter = answer_letter(led, sec)?;
+    let sentence = sec.options.iter().find(|o| o.letter == letter).and_then(|o| o.sentence.as_deref())?;
+    Some(Line::Record { depth, text: sentence.to_string() })
 }
 
 /// What stands on `sec`: what `--dependents` prints under a question.
@@ -793,7 +796,7 @@ fn removed_topic_file(r: &Records, rel: &str, views: Views) -> Vec<Line> {
                 continue;
             }
             lines.push(Line::Status { subject: sec.heading_text.clone(), status: question_status_of(&r.led, &old, sec), mark: None });
-            lines.extend(chosen_line(sec, st));
+            lines.extend(chosen_line(&r.led, sec, st, 1));
             lines.extend(reference_and_body_lines(
                 &approval::question_lines(&old, sec),
                 st,

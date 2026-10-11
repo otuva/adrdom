@@ -314,6 +314,48 @@ fn a_removed_topic_file_shows_each_question_with_its_own_status() {
     assert!(!shown.contains(&format!("[removed] {}", ONE)), "{}", shown);
 }
 
+// adr: a6f41dee-2381-421a-bcc4-b14af243209b
+//
+// A removed topic file is listed as a live one is: the option picked under
+// a current decision, read by the letter the status line names even when
+// the committed text predates the answer line; a superseded question left
+// out until --superseded, which prints what replaced it.
+#[test]
+fn a_removed_topic_file_prints_the_option_picked_and_superseded_under_its_flag() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let (c, d) = ("Is the widget gate replaced?", "Is the widget gate the replacement?");
+    let path = write_record(&dir, REL, &format!("# Gate\n\n{}", q(c)));
+    approve_record(&dir, REL);
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr_answer(&dir, &id_of(&path, c), "A").status.success());
+    let c_id = id_of(&path, c);
+    let mut text = std::fs::read_to_string(&path).unwrap();
+    text.push_str(&format!("### {}\ndepends: widget\nsupersedes: {}\n{}\n", d, c_id, BODY));
+    std::fs::write(&path, text).unwrap();
+    approve_record(&dir, REL);
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    // Committed before the answer: the approved text git holds has no
+    // answer line under the replacement, the ledger has its answer.
+    commit_all(&dir, "the gate, replaced");
+    assert!(adr_answer(&dir, &id_of(&path, d), "A").status.success());
+    std::fs::remove_file(&path).unwrap();
+
+    let plain = show(&dir, &[REL]);
+    assert!(plain.starts_with(&format!("[removed] {}\n", REL)), "{}", plain);
+    assert!(plain.contains(&format!("[answered A] {}\n  Yes the widget holds.\n", d)), "{}", plain);
+    assert!(!plain.contains(&format!("[superseded] {}", c)), "{}", plain);
+    assert!(!plain.contains("replaced by"), "{}", plain);
+    let both = show(&dir, &[REL, "--dependents", "--superseded"]);
+    assert!(
+        both.contains(&format!("[superseded] {}\n  depends: widget\n  replaced by: {}\n", c, d)),
+        "{}",
+        both
+    );
+    assert!(both.contains(&format!("[answered A] {}\n  Yes the widget holds.\n  depends: widget\n  supersedes: {}\n", d, c)), "{}", both);
+}
+
 // adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
 //
 // Approved and not yet committed, then a question struck: no committed text
