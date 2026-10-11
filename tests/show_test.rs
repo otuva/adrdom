@@ -68,9 +68,11 @@ fn show_lists_every_question_with_its_state_and_tier() {
     assert!(shown.starts_with("[approved] Example (adrdom/decisions/example.md)\n"), "{}", shown);
     assert!(!shown.contains("tier 1"), "{}", shown);
     assert!(shown.contains("[answered A] 1.1 Is this current?"), "{}", shown);
-    // An answered question carries its status and its lines; its body and
-    // the option picked are in the listing with no file named.
-    assert!(!shown.contains("Yes it is current."), "{}", shown);
+    // An answered question carries its status and, on the line under, the
+    // option picked, as the listing with no file named prints it; its body
+    // is not printed.
+    assert!(shown.contains("[answered A] 1.1 Is this current?\n  Yes it is current.\n"), "{}", shown);
+    assert!(!shown.contains("- A) Yes it is current."), "{}", shown);
     // The second question is still open (asked, not answered): it is now
     // listed too, with its state, rather than left out.
     //
@@ -170,6 +172,7 @@ fn show_prints_each_status_and_the_lines_each_question_carries() {
     let expected = "\
 [approved] Tiered Topic (adrdom/decisions/tiered-topic.md)
 [answered A] 1.1 Root?
+  First choice.
 [not asked] 1.2 Unasked root?
 [no body] 1.3 Skeleton?
 [asked @{V}] 2.1 Depends on root?

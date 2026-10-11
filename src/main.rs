@@ -62,9 +62,12 @@ enum Command {
         /// With a file or --all: each neighbour of a question not yet answered, with the reader's word and the agent's line.
         #[arg(long, requires = "whole")]
         neighbours: bool,
-        /// With a file or --all: what depends on each question or term entry, and what replaced a superseded question.
+        /// With a file or --all: what depends on each question or term entry.
         #[arg(long, requires = "whole")]
         dependents: bool,
+        /// With a file or --all: each superseded question, with what replaced it.
+        #[arg(long, requires = "whole")]
+        superseded: bool,
         /// With a file or --all: the unrelated line of each question, marked when changed.
         #[arg(long, requires = "whole")]
         unrelated: bool,
@@ -126,9 +129,11 @@ fn main() {
         Command::Read => commands::read::run(),
         Command::Approve { file } => commands::approve::run(file),
         Command::Answer { id, letter } => commands::answer::run(id, letter),
-        Command::Show { topic_file, all, neighbours, dependents, unrelated, questions, reader } => {
-            commands::show::run(topic_file, all, commands::show::Views { neighbours, dependents, unrelated, questions, reader })
-        }
+        Command::Show { topic_file, all, neighbours, dependents, unrelated, questions, reader, superseded } => commands::show::run(
+            topic_file,
+            all,
+            commands::show::Views { neighbours, dependents, unrelated, questions, reader, superseded },
+        ),
         Command::Ban { term, rebuild } => commands::ban::run(term, rebuild),
         Command::Unban => commands::unban::run(),
         Command::Serve { port } => commands::serve::run(port),

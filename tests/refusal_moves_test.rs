@@ -247,7 +247,7 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     let shown = stdout(&adr(&dir, &["show", "--all", "--dependents"], &[], ""));
     assert!(
         shown.contains(&format!(
-            "[answered A] {}\n  depends: widget\n  dependents: {} ({})\n",
+            "[answered A] {}\n  Yes the widget holds.\n  depends: widget\n  dependents: {} ({})\n",
             ALPHA, BETA, B
         )),
         "{}",
