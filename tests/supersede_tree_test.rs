@@ -240,7 +240,7 @@ fn check_prints_the_tree_refusal_once_for_an_approved_unasked_replacement_whose_
 // supersede several?": several newer decisions may name the same older
 // one) is shown replaced by each of them, in the order they were answered.
 #[test]
-fn a_decision_superseded_by_two_names_both_under_dependents() {
+fn a_decision_superseded_by_two_names_both_under_superseded() {
     let dir = setup();
     with_q1(&dir);
     let b = write_record(
@@ -255,6 +255,6 @@ fn a_decision_superseded_by_two_names_both_under_dependents() {
         let out = adr_answer(&dir, &id_of(&b, h), "A");
         assert!(out.status.success(), "answer {} failed: {}", h, stderr(&out));
     }
-    let shown = stdout(&adr(&dir, &["show", "--dependents", &rel("a")], &[], ""));
+    let shown = stdout(&adr(&dir, &["show", "--superseded", &rel("a")], &[], ""));
     assert!(shown.contains(&format!("replaced by: {}, {}", Q4, Q5)), "{}", shown);
 }

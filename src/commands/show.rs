@@ -9,9 +9,14 @@
 //! file. What it computes from the records comes under a flag (per
 //! "Does a command print under a flag what it computes from the records?",
 //! 36dfbeaa A): `--neighbours`, `--dependents`, `--unrelated` and
-//! `--questions` and `--reader`. The reference lines of an answered question
-//! are one of them: printed under `--dependents` (per "Does show print the
-//! reference lines of an answered question?", 83190b10 A). The reader's word
+//! `--questions`, `--reader` and `--superseded`. The reference lines of an
+//! answered question are one of them: printed under `--dependents` (per "Does
+//! show print the reference lines of an answered question?", 83190b10 A).
+//! What the next move on the file reads is in the plain listing, the rest
+//! under a flag (per "What does show print of a file under adrdom?",
+//! a6f41dee A): the option picked prints under an answered question, what
+//! the build move reads; a superseded question, which no move reads, prints
+//! under `--superseded` with what replaced it. The reader's word
 //! `inconsistent` or `same` on a neighbour comes under a question not yet
 //! answered in the plain listing, every word under `--reader` (per "What
 //! does show print of the reader's word on a question?", 332ff0c7 A). Every
@@ -41,9 +46,10 @@ pub struct Views {
     /// Each neighbour of a question not yet answered, with the reader's word
     /// and the agent's line.
     pub neighbours: bool,
-    /// What stands on each question or term entry, and what replaced a
-    /// superseded question.
+    /// What stands on each question or term entry.
     pub dependents: bool,
+    /// Each superseded question of a topic file, with what replaced it.
+    pub superseded: bool,
     /// The `unrelated:` line of each question, marked when changed.
     pub unrelated: bool,
     /// For a blame file: how many of its decision rows a question names and
@@ -197,6 +203,9 @@ fn show_args(record_arg: Option<&std::path::Path>, all: bool, views: &Views) -> 
     if views.reader {
         args.push("--reader".to_string());
     }
+    if views.superseded {
+        args.push("--superseded".to_string());
+    }
     args
 }
 
@@ -273,9 +282,7 @@ pub(crate) fn decision_lines(rf: &RecordFile, led: &Ledger) -> Vec<Line> {
     let mut lines = Vec::new();
     for sec in rf.sections.iter().filter(|s| status::question_status(led, s) == QuestionStatus::Answered) {
         lines.push(Line::Record { depth: 1, text: sec.heading_text.clone() });
-        if let Some(s) = sec.chosen_sentence() {
-            lines.push(Line::Record { depth: 2, text: s.to_string() });
-        }
+        lines.extend(chosen_line(led, sec, QuestionStatus::Answered, 2));
     }
     lines
 }
@@ -537,7 +544,14 @@ fn topic_file_lines(r: &Records, rf: &RecordFile, views: Views) -> Vec<Line> {
     for (i, sec) in rf.sections.iter().enumerate() {
         let st = status::question_status(led, sec);
         let change = changes.questions.get(i).and_then(Option::as_ref);
+        // A superseded question approved as it stands is read by no move:
+        // it prints under --superseded. One changed since its approval is
+        // what approve reads, and prints marked as every change does.
+        if st == QuestionStatus::Superseded && change.is_none() && !views.superseded {
+            continue;
+        }
         lines.push(change_status(&sec.heading_text, question_status_of(led, rf, sec), change));
+        lines.extend(chosen_line(led, sec, st, 1));
         match change {
             Some(change) => lines.extend(change_lines(change, Some(&format!("### {}", sec.heading_text)), &r.names, views.unrelated)),
             None => lines.extend(reference_and_body_lines(
@@ -561,7 +575,10 @@ fn topic_file_lines(r: &Records, rf: &RecordFile, views: Views) -> Vec<Line> {
             }
         }
         if views.dependents {
-            lines.extend(stood_on_lines(r, rf, sec, st));
+            lines.extend(stood_on_lines(r, rf, sec));
+        }
+        if views.superseded && st == QuestionStatus::Superseded {
+            lines.extend(replaced_by_lines(r, sec));
         }
     }
     if changes.struck_unsure {
@@ -656,35 +673,52 @@ fn names_of(text: &str, names: &HashMap<String, String>) -> String {
     named(text, names)
 }
 
-/// What stands on `sec`, and for a superseded question what replaced it.
-fn stood_on_lines(r: &Records, rf: &RecordFile, sec: &Section, st: QuestionStatus) -> Vec<Line> {
-    let mut lines = Vec::new();
-    let dependents = stood_on_by(rf, sec, &r.topic_files, &r.led);
-    if !dependents.is_empty() {
-        lines.push(Line::Record { depth: 1, text: format!("dependents: {}", dependents.join(", ")) });
+/// The option the owner picked, under a current decision: the sentence the
+/// build move reads (per "What does show print of a file under adrdom?",
+/// a6f41dee A), the one line the listing with no file named and the file
+/// form both print. The letter is the one the status line names
+/// (`answer_letter`): the `**Answer:**` line, or the ledger's when the text
+/// read predates that line.
+fn chosen_line(led: &Ledger, sec: &Section, st: QuestionStatus, depth: usize) -> Option<Line> {
+    if st != QuestionStatus::Answered {
+        return None;
     }
-    // Each `superseded` row holds the id of a question that replaced it; a
-    // decision several questions supersede has one row for each (per "Does
-    // one decision supersede several?"), named in ledger order.
-    if st == QuestionStatus::Superseded {
-        let mut by: Vec<String> = Vec::new();
-        if let Some(id) = sec.id.as_deref() {
-            for row in r.led.rows.iter().filter(|row| row.id == id && row.event == "superseded") {
-                let b = row.detail.trim();
-                if b.is_empty() {
-                    continue;
-                }
-                let name = r.names.get(b).cloned().unwrap_or_else(|| b.to_string());
-                if !by.contains(&name) {
-                    by.push(name);
-                }
+    let letter = answer_letter(led, sec)?;
+    let sentence = sec.options.iter().find(|o| o.letter == letter).and_then(|o| o.sentence.as_deref())?;
+    Some(Line::Record { depth, text: sentence.to_string() })
+}
+
+/// What stands on `sec`: what `--dependents` prints under a question.
+fn stood_on_lines(r: &Records, rf: &RecordFile, sec: &Section) -> Vec<Line> {
+    let dependents = stood_on_by(rf, sec, &r.topic_files, &r.led);
+    if dependents.is_empty() {
+        return Vec::new();
+    }
+    vec![Line::Record { depth: 1, text: format!("dependents: {}", dependents.join(", ")) }]
+}
+
+/// What replaced a superseded question: what `--superseded` prints under
+/// it. Each `superseded` row holds the id of a question that replaced it; a
+/// decision several questions supersede has one row for each (per "Does
+/// one decision supersede several?"), named in ledger order.
+fn replaced_by_lines(r: &Records, sec: &Section) -> Vec<Line> {
+    let mut by: Vec<String> = Vec::new();
+    if let Some(id) = sec.id.as_deref() {
+        for row in r.led.rows.iter().filter(|row| row.id == id && row.event == "superseded") {
+            let b = row.detail.trim();
+            if b.is_empty() {
+                continue;
+            }
+            let name = r.names.get(b).cloned().unwrap_or_else(|| b.to_string());
+            if !by.contains(&name) {
+                by.push(name);
             }
         }
-        if !by.is_empty() {
-            lines.push(Line::Record { depth: 1, text: format!("replaced by: {}", by.join(", ")) });
-        }
     }
-    lines
+    if by.is_empty() {
+        return Vec::new();
+    }
+    vec![Line::Record { depth: 1, text: format!("replaced by: {}", by.join(", ")) }]
 }
 
 /// The questions whose depends line names `sec`, in the order of the topic
@@ -758,7 +792,11 @@ fn removed_topic_file(r: &Records, rel: &str, views: Views) -> Vec<Line> {
     if let Some(old) = rules::latest_approved_version(&r.root, rel, &r.led) {
         for sec in &old.sections {
             let st = status::question_status(&r.led, sec);
+            if st == QuestionStatus::Superseded && !views.superseded {
+                continue;
+            }
             lines.push(Line::Status { subject: sec.heading_text.clone(), status: question_status_of(&r.led, &old, sec), mark: None });
+            lines.extend(chosen_line(&r.led, sec, st, 1));
             lines.extend(reference_and_body_lines(
                 &approval::question_lines(&old, sec),
                 st,
@@ -766,6 +804,9 @@ fn removed_topic_file(r: &Records, rel: &str, views: Views) -> Vec<Line> {
                 views.unrelated,
                 views.dependents || !is_answered(st),
             ));
+            if views.superseded && st == QuestionStatus::Superseded {
+                lines.extend(replaced_by_lines(r, sec));
+            }
         }
     }
     lines.extend(out::report(&removed_report(r, rel)));

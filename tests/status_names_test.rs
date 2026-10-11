@@ -173,7 +173,8 @@ fn show_prints_every_status_by_its_name() {
     for (event, head) in [("superseded", heads[2]), ("withdrawn", heads[3]), ("dropped", heads[4])] {
         append_ledger_row_at(&dir, event, &id_of(&path, head), "h", REL, "2999-01-01T00:00:00Z");
     }
-    seen.extend(bracketed(&show(&dir, &[REL])));
+    // A superseded question prints under its flag alone.
+    seen.extend(bracketed(&show(&dir, &[REL, "--superseded"])));
 
     // Changed: the prose edited after the approval.
     let text = std::fs::read_to_string(&path).unwrap().replacen("# Gate\n", "# Gate\n\nThe widget gate.\n", 1);

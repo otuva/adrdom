@@ -91,13 +91,15 @@ runtime dependencies beyond `git` on `PATH`.
   `changed`, `approved` or `removed`), for a blame file its origin and rows,
   the depends, supersedes and blame lines of a question not yet answered
   with `[inconsistent]` or `[same]` and each neighbour the reader marks so
-  that no supersedes line names, the body of an asked question, and what the file holds beyond its latest approval,
+  that no supersedes line names, the option picked under an answered
+  question, the body of an asked question, and what the file holds beyond its latest approval,
   marked `+` and `-` (a question new or struck as a whole carries the mark
   on its own line too); then the file's findings and moves. `--all` prints every such file
   that way; `--neighbours` adds each neighbour with the reader's word, and
   `--dependents` the depends, supersedes and blame lines of an answered
-  question, what stands on each question or term entry and what replaced a
-  question; `--reader` the reader's word on every neighbour of each question,
+  question and what stands on each question or term entry; `--superseded`
+  each superseded question, left out otherwise, with what replaced it;
+  `--reader` the reader's word on every neighbour of each question,
   its reason on the line under; `--unrelated` adds the unrelated line of each
   question; `--questions` adds, for a blame file, how many of its decision
   rows a question names and how many none names.

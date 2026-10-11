@@ -409,10 +409,10 @@ fn show_names_what_replaced_a_superseded_question() {
 
     // What replaced a superseded question is computed from the records:
     // it comes under its flag.
-    let shown = stdout(&adr(&dir, &["show", "--all", "--dependents"], &[], ""));
+    let shown = stdout(&adr(&dir, &["show", "--all", "--dependents", "--superseded"], &[], ""));
     let expected = format!(
         "[superseded] {one}\n  depends: widget\n  replaced by: {two}\n\
-[answered A] {two}\n  depends: widget\n  supersedes: {one}\n",
+[answered A] {two}\n  Yes the widget holds.\n  depends: widget\n  supersedes: {one}\n",
         one = ONE,
         two = TWO
     );
@@ -499,7 +499,7 @@ fn show_is_short_until_it_is_asked_for_the_whole() {
     );
 
     let whole = format!(
-        "[approved] Gate ({rel})\n[answered A] {one}\n\
+        "[approved] Gate ({rel})\n[answered A] {one}\n  Yes the widget holds.\n\
 [asked @{version}] {three}\n  depends: widget, {one}=A\n  Problem: the widget breaks.\n  Standard: plain words.\n  \
 - A) Yes the widget holds.\n    Why: reasons.\n    Costs: costs.\n  \
 - B) No the widget does not hold.\n    Why: other reasons.\n    Costs: other costs.\n\

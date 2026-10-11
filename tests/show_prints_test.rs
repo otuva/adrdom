@@ -108,7 +108,7 @@ fn show_with_a_file_prints_each_question_its_lines_and_an_asked_body() {
         shown,
         format!(
             "[approved] Gate ({rel})\n\
-[answered A] {one}\n\
+[answered A] {one}\n  Yes the widget holds.\n\
 [asked @{version}] {two}\n  depends: widget\n  Problem: the widget breaks.\n  Standard: plain words.\n  \
 - A) Yes the widget holds.\n    Why: reasons.\n    Costs: costs.\n  \
 - B) No the widget does not hold.\n    Why: other reasons.\n    Costs: other costs.\n\
@@ -134,7 +134,7 @@ fn show_prints_the_unrelated_line_only_under_its_flag() {
     // The first question is answered: its depends line comes under
     // --dependents, its unrelated line under --unrelated alone.
     let flagged = show(&dir, &[REL, "--unrelated"]);
-    assert!(flagged.contains(&format!("] {}\n  unrelated: {}\n", ONE, TWO)), "{}", flagged);
+    assert!(flagged.contains(&format!("] {}\n  Yes the widget holds.\n  unrelated: {}\n", ONE, TWO)), "{}", flagged);
     let flagged = show(&dir, &[REL, "--unrelated", "--dependents"]);
     assert!(flagged.contains(&format!("  unrelated: {}\n", TWO)), "{}", flagged);
 
@@ -271,6 +271,7 @@ fn a_view_computed_from_the_records_comes_under_its_flag() {
     let dependents = show(&dir, &[REL, "--dependents"]);
     assert!(dependents.contains(&format!("  dependents: {}\n", three)), "{}", dependents);
     assert!(!dependents.contains("  term \"widget\": heading "), "{}", dependents);
+    assert!(!dependents.contains("replaced by"), "{}", dependents);
 
     let out = adr(&dir, &["show", "--neighbours"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
@@ -311,6 +312,48 @@ fn a_removed_topic_file_shows_each_question_with_its_own_status() {
     assert!(shown.contains(&format!("[answered A] {}\n", ONE)), "{}", shown);
     assert!(shown.contains(&format!("[asked @{}] {}\n", version, TWO)), "{}", shown);
     assert!(!shown.contains(&format!("[removed] {}", ONE)), "{}", shown);
+}
+
+// adr: a6f41dee-2381-421a-bcc4-b14af243209b
+//
+// A removed topic file is listed as a live one is: the option picked under
+// a current decision, read by the letter the status line names even when
+// the committed text predates the answer line; a superseded question left
+// out until --superseded, which prints what replaced it.
+#[test]
+fn a_removed_topic_file_prints_the_option_picked_and_superseded_under_its_flag() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let (c, d) = ("Is the widget gate replaced?", "Is the widget gate the replacement?");
+    let path = write_record(&dir, REL, &format!("# Gate\n\n{}", q(c)));
+    approve_record(&dir, REL);
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr_answer(&dir, &id_of(&path, c), "A").status.success());
+    let c_id = id_of(&path, c);
+    let mut text = std::fs::read_to_string(&path).unwrap();
+    text.push_str(&format!("### {}\ndepends: widget\nsupersedes: {}\n{}\n", d, c_id, BODY));
+    std::fs::write(&path, text).unwrap();
+    approve_record(&dir, REL);
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    // Committed before the answer: the approved text git holds has no
+    // answer line under the replacement, the ledger has its answer.
+    commit_all(&dir, "the gate, replaced");
+    assert!(adr_answer(&dir, &id_of(&path, d), "A").status.success());
+    std::fs::remove_file(&path).unwrap();
+
+    let plain = show(&dir, &[REL]);
+    assert!(plain.starts_with(&format!("[removed] {}\n", REL)), "{}", plain);
+    assert!(plain.contains(&format!("[answered A] {}\n  Yes the widget holds.\n", d)), "{}", plain);
+    assert!(!plain.contains(&format!("[superseded] {}", c)), "{}", plain);
+    assert!(!plain.contains("replaced by"), "{}", plain);
+    let both = show(&dir, &[REL, "--dependents", "--superseded"]);
+    assert!(
+        both.contains(&format!("[superseded] {}\n  depends: widget\n  replaced by: {}\n", c, d)),
+        "{}",
+        both
+    );
+    assert!(both.contains(&format!("[answered A] {}\n  Yes the widget holds.\n  depends: widget\n  supersedes: {}\n", d, c)), "{}", both);
 }
 
 // adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
@@ -452,20 +495,89 @@ fn show_prints_no_reference_lines_of_an_answered_question_unless_dependents() {
     let first_line_after = |shown: &str, heading: &str| -> String {
         shown.lines().skip_while(|l| !l.ends_with(&format!("] {}", heading))).nth(1).unwrap_or("").to_string()
     };
+    // The line under an answered question is the option picked, so the
+    // reference lines are judged from the line after it.
+    let depends_line_of = |shown: &str, heading: &str| -> String {
+        shown
+            .lines()
+            .skip_while(|l| !l.ends_with(&format!("] {}", heading)))
+            .skip(1)
+            .take_while(|l| l.starts_with(' '))
+            .find(|l| l.starts_with("  depends:") || l.starts_with("  supersedes:"))
+            .unwrap_or("")
+            .to_string()
+    };
     let plain = show(&dir, &[REL]);
-    for h in [a, b, c, d] {
-        assert!(!first_line_after(&plain, h).starts_with("  depends:"), "{}: {}", h, plain);
+    for h in [a, b, d] {
+        assert_eq!(depends_line_of(&plain, h), "", "{}: {}", h, plain);
     }
-    assert!(plain.contains(&format!("[superseded] {}", c)) && plain.contains(&format!("[refused] {}", b)), "{}", plain);
+    assert!(plain.contains(&format!("[refused] {}", b)), "{}", plain);
     assert!(!plain.contains("supersedes:"), "{}", plain);
     assert_eq!(first_line_after(&plain, e), "  depends: widget", "{}", plain);
 
-    let shown = show(&dir, &[REL, "--dependents"]);
+    let shown = show(&dir, &[REL, "--dependents", "--superseded"]);
     for h in [a, b, c, d] {
-        assert!(first_line_after(&shown, h).starts_with("  depends:"), "{}: {}", h, shown);
+        assert!(depends_line_of(&shown, h).starts_with("  depends:"), "{}: {}", h, shown);
     }
     assert!(shown.contains(&format!("  supersedes: {}\n", c)), "{}", shown);
     assert!(shown.contains(&format!("  replaced by: {}\n", d)), "{}", shown);
+}
+
+// adr: a6f41dee-2381-421a-bcc4-b14af243209b
+//
+// The plain listing of a topic file holds what the next move reads: under
+// an answered question the option the owner picked, as the listing with no
+// file named prints it; a superseded question, which no move reads, is left
+// out and comes under --superseded with what replaced it, and with
+// --dependents too its reference lines.
+#[test]
+fn show_of_a_file_prints_the_option_picked_and_superseded_under_its_flag() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    approve_minimal_terms(&dir, "widget");
+    let (c, d) = ("Is the widget gate replaced?", "Is the widget gate the replacement?");
+    let path = write_record(&dir, REL, &format!("# Gate\n\n{}", q(c)));
+    approve_record(&dir, REL);
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr_answer(&dir, &id_of(&path, c), "A").status.success());
+    let c_id = id_of(&path, c);
+    let mut text = std::fs::read_to_string(&path).unwrap();
+    text.push_str(&format!("### {}\ndepends: widget\nsupersedes: {}\n{}\n", d, c_id, BODY));
+    std::fs::write(&path, text).unwrap();
+    approve_record(&dir, REL);
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr_answer(&dir, &id_of(&path, d), "A").status.success());
+
+    // The option picked, on the line under the current decision, the same
+    // sentence the listing with no file named prints under its heading.
+    let summary = show(&dir, &[]);
+    let sentence = summary
+        .lines()
+        .skip_while(|l| l.trim() != d)
+        .nth(1)
+        .unwrap_or_else(|| panic!("{}", summary))
+        .trim()
+        .to_string();
+    assert!(sentence.starts_with("Yes") || sentence.starts_with("No"), "{}", summary);
+    let plain = show(&dir, &[REL]);
+    assert!(plain.contains(&format!("[answered A] {}\n  {}\n", d, sentence)), "{}", plain);
+    assert!(!plain.contains(&format!("[superseded] {}", c)), "{}", plain);
+    assert!(!plain.contains("replaced by"), "{}", plain);
+    let all = show(&dir, &["--all"]);
+    assert!(!all.contains(&format!("[superseded] {}", c)), "{}", all);
+
+    let superseded = show(&dir, &[REL, "--superseded"]);
+    assert!(superseded.contains(&format!("[superseded] {}\n  replaced by: {}\n", c, d)), "{}", superseded);
+    assert!(!superseded.contains("supersedes:"), "{}", superseded);
+    let dependents = show(&dir, &[REL, "--dependents"]);
+    assert!(!dependents.contains(&format!("[superseded] {}", c)), "{}", dependents);
+    let both = show(&dir, &[REL, "--dependents", "--superseded"]);
+    assert!(
+        both.contains(&format!("[superseded] {}\n  depends: widget\n  replaced by: {}\n", c, d)),
+        "{}",
+        both
+    );
+    assert!(both.contains(&format!("[answered A] {}\n  {}\n  depends: widget\n  supersedes: {}\n", d, sentence, c)), "{}", both);
 }
 
 // adr: 83190b10-8060-47c1-8194-f6a5c4f0d703
@@ -487,7 +599,8 @@ fn unrelated_prints_the_unrelated_line_of_an_answered_question() {
     let plain = show(&dir, &[REL]);
     assert!(!plain.contains("unrelated:"), "{}", plain);
     let shown = show(&dir, &[REL, "--unrelated"]);
-    let after_a: Vec<&str> = shown.lines().skip_while(|l| !l.ends_with(&format!("] {}", a))).skip(1).take(1).collect();
-    assert_eq!(after_a, vec![format!("  unrelated: {}", b)], "{}", shown);
+    // Under the heading: the option picked, then the unrelated line.
+    let after_a: Vec<&str> = shown.lines().skip_while(|l| !l.ends_with(&format!("] {}", a))).skip(1).take(2).collect();
+    assert_eq!(after_a, vec!["  Yes the widget holds.".to_string(), format!("  unrelated: {}", b)], "{}", shown);
     assert!(!shown.contains(&format!("] {}\n  depends:", a)), "{}", shown);
 }
