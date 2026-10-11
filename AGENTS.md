@@ -44,10 +44,13 @@ that waits for the owner's answer; what the file holds beyond its latest approva
 as a whole carries the mark on its own line too; then the findings and the
 moves of the file. The file itself, a term entry and the prose open with
 their status in brackets: `[new]`, `[changed]`, `[approved]`, `[removed]`,
-and `[retired]` for a term. `adr show --dependents <file>` also prints the
-depends, supersedes and blame lines of an answered question, what stands on
-each question or term entry and what took the place of a question that was
-replaced. `adr show --reader <file>` also prints the reader's word on every
+and `[retired]` for a term. Under an answered question stands the option
+the owner picked; a superseded question is left out. `adr show --dependents
+<file>` also prints the depends, supersedes and blame lines of an answered
+question and what stands on each question or term entry. `adr show
+--superseded <file>` also prints each superseded question, and under it
+what took its place; with `--dependents` its lines too. `adr show --reader
+<file>` also prints the reader's word on every
 neighbour of each question, with its reason on the line under. `adr show --unrelated <file>` also prints the unrelated
 lines. `adr show --questions <file>` also prints, for a blame file, how many
 of its decision rows a question names and how many none names. Each question
