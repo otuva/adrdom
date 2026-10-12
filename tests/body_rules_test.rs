@@ -176,9 +176,10 @@ fn check_approve_and_plan_find_a_set_on_an_answered_question() {
     ));
     let terms = std::fs::read_to_string(dir.join("adrdom/terms.md")).unwrap();
     let term = terms.lines().find_map(|l| l.strip_prefix("id: ")).expect("approved term has an id").trim().to_string();
-    // The answered question is a complete, unedited one: its section hash
-    // matches its asked row and it carries its terms line, so nothing in
-    // other.md fails check and the exit code is the draft finding's alone.
+    // The answered question sits in the same file, complete and unedited:
+    // its section hash matches its asked row and it carries its terms line,
+    // so nothing else fails check and the exit code is the draft finding's
+    // alone.
     let section = format!(
         "### Does the lid stay?\ndepends: {}\n\nid: {}\n\nterms: decision={}\n\nProblem: p of the decision.\n\nStandard: s.\n\n{}",
         term,
@@ -189,7 +190,8 @@ fn check_approve_and_plan_find_a_set_on_an_answered_question() {
     let hash = mirror_section_hash(&section);
     append_ledger_row_at(&dir, "asked", target, &hash, "Does the lid stay?", "2024-01-01T00:00:00Z");
     append_ledger_row_at(&dir, "answered", target, &hash, "A", "2024-01-01T00:00:01Z");
-    write_record(&dir, "adrdom/decisions/other.md", &format!("# Other\n\n{}\n\n**Answer:** A\n", section));
+    let draft = std::fs::read_to_string(&rec).unwrap();
+    std::fs::write(&rec, format!("{}\n{}\n\n**Answer:** A\n", draft.trim_end(), section)).unwrap();
     write_test_comment(&dir, target);
     let (chk, apr, pln) = three(&dir, &rec, true);
     for out in [&chk, &apr, &pln] {

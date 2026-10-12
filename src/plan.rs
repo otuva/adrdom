@@ -295,7 +295,7 @@ fn line_targets(
     let sec = &rf.sections[idx];
     let mut out = HashMap::new();
     for d in &sec.depends {
-        if let Ok(Some(t)) = depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, cross, led) {
+        if let Ok(Some(t)) = depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, led) {
             out.entry(match t {
                 DepTarget::Heading(i) => question_target(rf, i, led),
                 DepTarget::Term(id) => Target::Term(id),

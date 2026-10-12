@@ -41,35 +41,35 @@ fn refused_everywhere(dir: &std::path::Path, record: &std::path::Path, needle: &
 
 #[test]
 fn a_depends_list_continued_on_a_second_line_is_refused() {
-    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
+    // adr: b0554224-15e4-4e91-a2bb-9ae5667803f4
     let (dir, record) = approved_then_edited(|d| format!("{d}\n{d}"));
     refused_everywhere(&dir, &record, "depends second line");
 }
 
 #[test]
 fn a_depends_list_continued_on_a_bare_following_line_is_refused() {
-    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
+    // adr: b0554224-15e4-4e91-a2bb-9ae5667803f4
     let (dir, record) = approved_then_edited(|d| format!("{d},\n  {}", d.trim_start_matches("depends: ")));
     refused_everywhere(&dir, &record, "stray line");
 }
 
 #[test]
 fn a_supersedes_list_continued_on_a_second_line_is_refused() {
-    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
+    // adr: b0554224-15e4-4e91-a2bb-9ae5667803f4
     let (dir, record) = approved_then_edited(|d| format!("{d}\nsupersedes: aaa\nsupersedes: bbb"));
     refused_everywhere(&dir, &record, "supersedes second line");
 }
 
 #[test]
 fn a_supersedes_list_continued_on_a_bare_following_line_is_refused() {
-    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
+    // adr: b0554224-15e4-4e91-a2bb-9ae5667803f4
     let (dir, record) = approved_then_edited(|d| format!("{d}\nsupersedes: aaa,\n  bbb"));
     refused_everywhere(&dir, &record, "stray line");
 }
 
 #[test]
 fn a_second_blame_line_is_refused() {
-    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
+    // adr: b0554224-15e4-4e91-a2bb-9ae5667803f4
     // The second blame line is line 6 of the file: the heading is line 3, the
     // depends line 4, the first blame line 5.
     let (dir, record) = approved_then_edited(|d| format!("{d}\nblame: aaa 1-2\nblame: bbb 1-2"));

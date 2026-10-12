@@ -20,10 +20,10 @@ pub const TOPIC_FILE_SHAPE: Rule = Rule {
     protects: "a topic file holds a heading, prose and questions only",
 };
 
-/// Decision: What does the tool derive the tiers from?
+/// Decision: What are the tiers derived from?
 pub const TIER_HEADING_ABSENT: Rule = Rule {
     name: "tier_heading_absent",
-    decisions: &["1fb71321-bb84-492f-b9d5-1444c9c444af"],
+    decisions: &["f1b4c4cc-97bd-446f-87b4-df5f1b6f4da2"],
     protects: "tiers come only from the depends lines",
 };
 
@@ -41,10 +41,10 @@ pub const QUESTION_SECTION_SHAPE: Rule = Rule {
     protects: "a question holds Problem, Standard and two or three options",
 };
 
-/// Decision: Does a reference line hold its list on one line?
+/// Decision: Does a reference line keep its list on one line?
 pub const REFERENCE_LINE_ONCE: Rule = Rule {
     name: "reference_line_once",
-    decisions: &["a82db5b7-969c-44e9-9eec-876ead7099d3"],
+    decisions: &["b0554224-15e4-4e91-a2bb-9ae5667803f4"],
     protects: "each reference line appears once, on one line",
 };
 
@@ -90,53 +90,39 @@ pub const COSTS_WORD_LIMIT: Rule = Rule {
     protects: "a Costs line states one cost in twenty words",
 };
 
-/// Decision: What does a depends line name?
+/// Decision: What stops a question that has no depends line?
 pub const QUESTION_HAS_DEPENDS_LINE: Rule = Rule {
     name: "question_has_depends_line",
-    decisions: &["ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf"],
+    decisions: &["9bf76db8-4821-4257-ac49-4c22c2a0e538"],
     protects: "every question carries a depends line",
 };
 
-/// Decision: What does a depends line name?
+/// Decision: What stops a depends entry that resolves to nothing?
 pub const DEPENDS_ENTRY_RESOLVES: Rule = Rule {
     name: "depends_entry_resolves",
-    decisions: &["ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf"],
-    protects: "a depends entry names a heading, term or current decision",
+    decisions: &["49a1c3a8-07ea-448a-8926-2362c0617758"],
+    protects: "a depends entry names something that exists",
 };
 
-/// Decision: What does a depends line name?
+/// Decision: What does a depends entry name?
+pub const DEPENDS_ENTRY_NAMES_TERM_OR_FILE_QUESTION: Rule = Rule {
+    name: "depends_entry_names_term_or_file_question",
+    decisions: &["9afe335c-2a7a-4625-b115-f74d3f091cac"],
+    protects: "a question stands on terms and questions of its file",
+};
+
+/// Decision: What stops a depends entry that resolves to nothing?
 pub const DEPENDS_TERM_IS_LIVE: Rule = Rule {
     name: "depends_term_is_live",
-    decisions: &["ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf"],
+    decisions: &["49a1c3a8-07ea-448a-8926-2362c0617758"],
     protects: "a depends entry names no retired term",
 };
 
-/// Decision: What does a depends line name?
+/// Decision: What stops a depends entry that resolves to nothing?
 pub const DEPENDS_TERM_EXISTS: Rule = Rule {
     name: "depends_term_exists",
-    decisions: &["ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf"],
+    decisions: &["49a1c3a8-07ea-448a-8926-2362c0617758"],
     protects: "a depends entry naming a term names an existing one",
-};
-
-/// Decision: Does a reference in a topic file carry the identifier of what it names?
-pub const DEPENDS_ENTRY_NAMES_ONE_DECISION: Rule = Rule {
-    name: "depends_entry_names_one_decision",
-    decisions: &["7cad9922-9bd1-4c1a-aedc-df1f77c83e1f"],
-    protects: "a reference carries the identifier of what it names",
-};
-
-/// Decision: What does a depends line name?
-pub const DEPENDS_TARGET_IS_ANSWERED: Rule = Rule {
-    name: "depends_target_is_answered",
-    decisions: &["ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf"],
-    protects: "a question stands only on decisions in force",
-};
-
-/// Decision: What does a depends line name?
-pub const DEPENDS_TARGET_IS_NOT_REFUSED: Rule = Rule {
-    name: "depends_target_is_not_refused",
-    decisions: &["ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf"],
-    protects: "a question stands only on decisions in force",
 };
 
 /// Decision: Does a decision change after it is answered?
@@ -160,11 +146,18 @@ pub const ANSWER_SET_ON_OPEN_QUESTION_ONLY: Rule = Rule {
     protects: "an answer set belongs only to an unanswered question",
 };
 
-/// Decision: What bounds the questions of a tier?
+/// Decision: What bounds the questions at one tier?
 pub const TIER_QUESTION_LIMIT: Rule = Rule {
     name: "tier_question_limit",
-    decisions: &["eb2cde37-ebcb-4407-a5b0-9fcda4bd9a4e"],
+    decisions: &["0e38f001-0226-4927-9a78-2e9fc1ec18d4"],
     protects: "no tier holds more than four questions",
+};
+
+/// Decision: What bounds the questions a depends line names?
+pub const DEPENDS_LINE_QUESTION_LIMIT: Rule = Rule {
+    name: "depends_line_question_limit",
+    decisions: &["010901e0-c02d-49eb-98bc-d584756d7f51"],
+    protects: "a depends line names at most two questions",
 };
 
 /// Decision: Does the agent write the bodies before approve?
@@ -181,10 +174,10 @@ pub const NEIGHBOUR_IS_ON_A_LINE: Rule = Rule {
     protects: "every neighbour of a question is on a line",
 };
 
-/// Decision: Does a reference in a topic file carry the identifier of what it names?
+/// Decision: What does a reference in a topic file carry?
 pub const UNRELATED_ENTRY_NAMES_ONE_DECISION: Rule = Rule {
     name: "unrelated_entry_names_one_decision",
-    decisions: &["7cad9922-9bd1-4c1a-aedc-df1f77c83e1f"],
+    decisions: &["7c0b9fe3-6038-4a23-93fe-88a31c7eaf40"],
     protects: "a reference carries the identifier of what it names",
 };
 
@@ -202,24 +195,24 @@ pub const SUPERSEDES_NAMES_DEPENDENTS: Rule = Rule {
     protects: "the supersedes line names every decision standing on its target",
 };
 
-/// Decision: Does a reference in a topic file carry the identifier of what it names?
+/// Decision: What does a reference in a topic file carry?
 pub const SUPERSEDES_ENTRY_NAMES_ONE_DECISION: Rule = Rule {
     name: "supersedes_entry_names_one_decision",
-    decisions: &["7cad9922-9bd1-4c1a-aedc-df1f77c83e1f"],
+    decisions: &["7c0b9fe3-6038-4a23-93fe-88a31c7eaf40"],
     protects: "a reference carries the identifier of what it names",
 };
 
-/// Decision: What does a question carry of the blame file it came from?
+/// Decision: What does a question carry of its blame file?
 pub const BLAME_LINE_NAMES_APPROVED_FILE: Rule = Rule {
     name: "blame_line_names_approved_file",
-    decisions: &["672201dd-8f22-4dc3-8b21-a73eb7606e83"],
+    decisions: &["69708a07-469c-406b-9e25-63da1605b432"],
     protects: "a blame line names an approved blame file",
 };
 
-/// Decision: What does a question carry of the blame file it came from?
+/// Decision: What does a question carry of its blame file?
 pub const BLAME_LINE_NAMES_ROW_RANGES: Rule = Rule {
     name: "blame_line_names_row_ranges",
-    decisions: &["672201dd-8f22-4dc3-8b21-a73eb7606e83"],
+    decisions: &["69708a07-469c-406b-9e25-63da1605b432"],
     protects: "a blame line names row ranges of its blame file",
 };
 
@@ -244,10 +237,10 @@ pub const PLAN_APPROVED_BEFORE_ASK: Rule = Rule {
     protects: "a question is asked only from the approved plan",
 };
 
-/// Decision: Does ask run on a file whose prose is unapproved?
+/// Decision: Does ask run on a file with unapproved prose?
 pub const PROSE_APPROVED_BEFORE_ASK: Rule = Rule {
     name: "prose_approved_before_ask",
-    decisions: &["3ce82f34-a4fc-4918-bb9b-65a0d81a6853"],
+    decisions: &["1cdec741-98e1-4715-a7a5-94f7a73cd425"],
     protects: "a question is asked only under the approved prose",
 };
 
@@ -259,19 +252,19 @@ pub const ID_NAMES_ONE_QUESTION: Rule = Rule {
 };
 
 /// Decision: Does approve withdraw an asked question struck from the plan?
-/// Decision: Does a command refuse what check passes?
+/// Decision: Does a command refuse what check lets pass?
 pub const ASKED_QUESTION_LEAVES_BY_APPROVAL: Rule = Rule {
     name: "asked_question_leaves_by_approval",
-    decisions: &["21ae8ae0-6884-4d3c-8464-024a8a5aae2d", "fe14991d-9715-4ae0-9a23-d314a950d3b9"],
+    decisions: &["21ae8ae0-6884-4d3c-8464-024a8a5aae2d", "80b89c24-7d65-43f4-bb03-55e9d85c327d"],
     protects: "an asked question leaves only by the owner's approval",
 };
 
 /// Decision: What may leave a topic file by a plan change?
-/// Decision: Does a command refuse what check passes?
+/// Decision: Does a command refuse what check lets pass?
 /// Decision: Does approve withdraw an asked question struck from the plan?
 pub const FILE_LEAVES_WITH_NO_LIVE_QUESTION: Rule = Rule {
     name: "file_leaves_with_no_live_question",
-    decisions: &["79da6500-2246-4a80-baf1-0eaf7cad49ee", "fe14991d-9715-4ae0-9a23-d314a950d3b9", "21ae8ae0-6884-4d3c-8464-024a8a5aae2d"],
+    decisions: &["79da6500-2246-4a80-baf1-0eaf7cad49ee", "80b89c24-7d65-43f4-bb03-55e9d85c327d", "21ae8ae0-6884-4d3c-8464-024a8a5aae2d"],
     protects: "a file leaves only with no live question in it",
 };
 
@@ -296,10 +289,10 @@ pub const FILE_REMOVAL_KEEPS_LIVE_QUESTIONS: Rule = Rule {
     protects: "a file leaves only with no live question in it",
 };
 
-/// Decision: Does answer take a question standing on a question with no decision?
+/// Decision: Does answer take a question standing on a question that has no decision?
 pub const ANSWER_NEEDS_LOWER_ANSWERS: Rule = Rule {
     name: "answer_needs_lower_answers",
-    decisions: &["7327cd58-ac58-40a4-8ef2-00072fb552b2"],
+    decisions: &["da80931c-68cf-4c51-acce-060307bbd973"],
     protects: "no question is answered above one with no decision",
 };
 
@@ -500,6 +493,7 @@ pub const BLAME_ORIGIN_STAYS_UNTIL_APPROVED: Rule = Rule {
 };
 
 /// Decision: What does a blame file hold of its origin?
+/// Decision: Does a question keep its identifier when its heading is reworded?
 pub const BLAME_ID_ASSIGNED_BY_TOOL: Rule = Rule {
     name: "blame_id_assigned_by_tool",
     decisions: &["d2851ea1-fcb6-476a-b321-c813a594d5e5", "7a1e7b81-0967-4ed2-8a8a-c7153056836f"],
@@ -507,6 +501,7 @@ pub const BLAME_ID_ASSIGNED_BY_TOOL: Rule = Rule {
 };
 
 /// Decision: What does a blame file hold of its origin?
+/// Decision: Does a question keep its identifier when its heading is reworded?
 pub const BLAME_ID_NAMES_ONE_FILE: Rule = Rule {
     name: "blame_id_names_one_file",
     decisions: &["d2851ea1-fcb6-476a-b321-c813a594d5e5", "7a1e7b81-0967-4ed2-8a8a-c7153056836f"],
@@ -849,17 +844,17 @@ pub const DROPPED_QUESTION_LEAVES_FILES: Rule = Rule {
     protects: "a dropped question is gone from every topic file",
 };
 
-/// Decision: What does the tool derive the tiers from?
+/// Decision: What are the tiers derived from?
 pub const DEPENDS_LINES_HAVE_NO_CYCLE: Rule = Rule {
     name: "depends_lines_have_no_cycle",
-    decisions: &["1fb71321-bb84-492f-b9d5-1444c9c444af"],
+    decisions: &["f1b4c4cc-97bd-446f-87b4-df5f1b6f4da2"],
     protects: "depends lines never lead back to their own question",
 };
 
-/// Decision: What does the tool derive the tiers from?
+/// Decision: What are the tiers derived from?
 pub const QUESTION_NOT_ON_ITSELF: Rule = Rule {
     name: "question_not_on_itself",
-    decisions: &["1fb71321-bb84-492f-b9d5-1444c9c444af"],
+    decisions: &["f1b4c4cc-97bd-446f-87b4-df5f1b6f4da2"],
     protects: "a question never stands on itself",
 };
 
@@ -967,47 +962,47 @@ pub const ANSWER_SET_NOT_ON_TERM: Rule = Rule {
     protects: "an answer set names options, and a term has none",
 };
 
-/// Decision: Does a reference in a topic file carry the identifier of what it names?
+/// Decision: What does a reference in a topic file carry?
 pub const DEPENDS_ENTRY_ONCE: Rule = Rule {
     name: "depends_entry_once",
-    decisions: &["7cad9922-9bd1-4c1a-aedc-df1f77c83e1f"],
+    decisions: &["7c0b9fe3-6038-4a23-93fe-88a31c7eaf40"],
     protects: "a depends line names each thing once",
 };
 
-/// Decision: Does a reference in a topic file carry the identifier of what it names?
+/// Decision: What does a reference in a topic file carry?
 pub const SUPERSEDES_ENTRY_ONCE: Rule = Rule {
     name: "supersedes_entry_once",
-    decisions: &["7cad9922-9bd1-4c1a-aedc-df1f77c83e1f"],
+    decisions: &["7c0b9fe3-6038-4a23-93fe-88a31c7eaf40"],
     protects: "a supersedes line names each decision once",
 };
 
-/// Decision: What does a depends line name?
+/// Decision: What does a depends entry name?
 /// Decision: Does one decision supersede several?
 pub const QUESTION_NOT_ON_WHAT_IT_SUPERSEDES: Rule = Rule {
     name: "question_not_on_what_it_supersedes",
-    decisions: &["ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf", "f4f667ad-8714-4e65-897b-c7002e423c28"],
+    decisions: &["9afe335c-2a7a-4625-b115-f74d3f091cac", "f4f667ad-8714-4e65-897b-c7002e423c28"],
     protects: "a question never stands on the decision it replaces",
 };
 
-/// Decision: What does a depends line name?
+/// Decision: What does a depends entry name?
 /// Decision: Does one decision supersede several?
 pub const NO_QUESTION_ON_WHAT_PLAN_SUPERSEDES: Rule = Rule {
     name: "no_question_on_what_plan_supersedes",
-    decisions: &["ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf", "f4f667ad-8714-4e65-897b-c7002e423c28"],
+    decisions: &["9afe335c-2a7a-4625-b115-f74d3f091cac", "f4f667ad-8714-4e65-897b-c7002e423c28"],
     protects: "no open question stands on a decision the plan replaces",
 };
 
-/// Decision: Does a reference in a topic file carry the identifier of what it names?
+/// Decision: What does a reference in a topic file carry?
 pub const HEADING_ONCE_IN_FILE: Rule = Rule {
     name: "heading_once_in_file",
-    decisions: &["7cad9922-9bd1-4c1a-aedc-df1f77c83e1f"],
+    decisions: &["7c0b9fe3-6038-4a23-93fe-88a31c7eaf40"],
     protects: "a heading appears once in its file",
 };
 
-/// Decision: Does a reference in a topic file carry the identifier of what it names?
+/// Decision: What does a reference in a topic file carry?
 pub const UNRELATED_ENTRY_NAMES_SOMETHING: Rule = Rule {
     name: "unrelated_entry_names_something",
-    decisions: &["7cad9922-9bd1-4c1a-aedc-df1f77c83e1f"],
+    decisions: &["7c0b9fe3-6038-4a23-93fe-88a31c7eaf40"],
     protects: "an unrelated entry names something that exists",
 };
 
@@ -1060,11 +1055,11 @@ pub const DROPPED_ROW_NAMES_GROUND: Rule = Rule {
     protects: "a dropped row names ground the dropped question stood on",
 };
 
-/// Decision: Does a command refuse what check passes?
+/// Decision: Does a command refuse what check lets pass?
 /// Decision: Does approve withdraw an asked question struck from the plan?
 pub const LEDGER_IDENTIFIER_IN_A_FILE: Rule = Rule {
     name: "ledger_identifier_in_a_file",
-    decisions: &["fe14991d-9715-4ae0-9a23-d314a950d3b9", "21ae8ae0-6884-4d3c-8464-024a8a5aae2d"],
+    decisions: &["80b89c24-7d65-43f4-bb03-55e9d85c327d", "21ae8ae0-6884-4d3c-8464-024a8a5aae2d"],
     protects: "every ledger identifier names a question in a topic file",
 };
 
@@ -1090,15 +1085,14 @@ pub const ALL: &[&Rule] = &[
     &COSTS_WORD_LIMIT,
     &QUESTION_HAS_DEPENDS_LINE,
     &DEPENDS_ENTRY_RESOLVES,
+    &DEPENDS_ENTRY_NAMES_TERM_OR_FILE_QUESTION,
     &DEPENDS_TERM_IS_LIVE,
     &DEPENDS_TERM_EXISTS,
-    &DEPENDS_ENTRY_NAMES_ONE_DECISION,
-    &DEPENDS_TARGET_IS_ANSWERED,
-    &DEPENDS_TARGET_IS_NOT_REFUSED,
     &ANSWERED_DEPENDS_LINE_FROZEN,
     &DEPENDS_ENTRY_HAS_ANSWER_SET,
     &ANSWER_SET_ON_OPEN_QUESTION_ONLY,
     &TIER_QUESTION_LIMIT,
+    &DEPENDS_LINE_QUESTION_LIMIT,
     &QUESTION_HAS_BODY,
     &NEIGHBOUR_IS_ON_A_LINE,
     &UNRELATED_ENTRY_NAMES_ONE_DECISION,

@@ -118,13 +118,14 @@ depends or unrelated, after one sentence of reason.
 entry on one of three lines, comma separated:
 
 - `depends:` the question stands on it: its options make sense only after
-  the other is answered. A term by its name, another heading in this file by
-  its text, or a current decision by its heading text.
+  the other is answered. A term by its name, or another heading in this file
+  by its text. A line names at most two questions.
 - `supersedes:` the question replaces that current decision.
 - `unrelated:` neither.
 
 The reader's word is not a ruling; your line is. Write a `depends:` entry for
-every thing the question stands on, a neighbour or not, and none that is not.
+every term the question stands on and for each question of this file it
+stands on, a neighbour or not, and none that is not.
 Run `adr plan <file>` again: it names every neighbour on no line.
 
 When a question replaces a current decision, write the heading of that

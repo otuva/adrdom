@@ -81,7 +81,7 @@ fn full_tier(dir: &Path) -> PathBuf {
     p
 }
 
-// adr: 14180eab-60a4-48d3-8efc-c1b23a96ce3a
+// adr: 86d5e944-ecfa-44bc-9819-83ee4b96890d
 #[test]
 fn a_fifth_heading_superseding_one_of_four_passes_approve_check_and_ask() {
     let dir = init_repo();
@@ -116,7 +116,7 @@ fn two_replacements_of_one_decision_in_a_full_tier_fail_the_cap() {
     assert!(cap_refusal(&out), "{}", stderr(&out));
 }
 
-// adr: 14180eab-60a4-48d3-8efc-c1b23a96ce3a
+// adr: 86d5e944-ecfa-44bc-9819-83ee4b96890d
 #[test]
 fn a_refused_replacement_returns_the_old_decision_to_the_count() {
     let dir = init_repo();
@@ -145,33 +145,8 @@ fn an_open_replacement_in_another_file_frees_a_slot_in_the_full_tier() {
     assert!(out.status.success(), "a.md counts 3 + 1: {}", stderr(&out));
 }
 
-#[test]
-fn check_counts_a_tier_as_approve_does_when_the_replacing_file_has_a_cross_file_heading_entry() {
-    let dir = init_repo();
-    let a = full_tier(&dir);
-    // b.md names a decision of a.md by its heading (approve rewrites the
-    // entry to an id on disk; check normalizes heading entries in memory
-    // before it counts) and holds an open question replacing option 1.
-    let b = format!(
-        "# B\n\n### {}\ndepends: {}\nsupersedes: {}\n{}",
-        h(9),
-        h(2),
-        h(1),
-        BODY
-    );
-    write_record(&dir, &rel("b"), &b);
-    approve_ok(&dir, "b");
-    append(&a, &sec(&h(5), None, true));
-    let out = approve(&dir, "a");
-    assert!(out.status.success(), "approve counts 3 + 1: {}", stderr(&out));
-    let chk = adr(&dir, &["check"], &[], "");
-    let both = format!("{}{}", stdout(&chk), stderr(&chk));
-    assert!(!cap_refusal(&chk), "check printed a cap refusal: {}", both);
-    assert!(chk.status.success(), "check counts 3 + 1 as approve does: {}", both);
-}
-
-// adr: eb2cde37-ebcb-4407-a5b0-9fcda4bd9a4e
-// adr: 14180eab-60a4-48d3-8efc-c1b23a96ce3a
+// adr: 0e38f001-0226-4927-9a78-2e9fc1ec18d4
+// adr: 86d5e944-ecfa-44bc-9819-83ee4b96890d
 //
 // a.md holds four answered questions and a fifth approved while an open
 // question of b.md replaced one of the four. When b.md's question is

@@ -31,12 +31,8 @@ pub(super) fn check_ids(
     // change awaiting re-approval. This doesn't depend on which id is being
     // looked at, so it's computed once for the whole loop below rather than
     // per id.
-    // Read off `raw_hashes` (computed before the normalize pass mutates
-    // each `RecordFile`'s parsed `depends:` entries in memory) rather than
-    // `state::plan_approved(led, rf, &rf.rel)`, which would otherwise
-    // recompute the plan hash from the by-then-normalized `rf`: approval
-    // state must always be read off the file exactly as it sits on disk
-    // (per "...").
+    // Read off `raw_hashes`, the hashes of each file exactly as it sits on
+    // disk (per "...").
     let stale: Vec<&str> = records
         .iter()
         .filter(|rf| {

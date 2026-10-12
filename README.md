@@ -64,8 +64,9 @@ runtime dependencies beyond `git` on `PATH`.
   heading that has none, then approve its current plan and/or context (an
   `approved`/`context` ledger row each), refusing first on
   a shape error, a heading with no `depends:` line, a `depends:` entry that
-  fails to resolve (no such term, no current decision, no such heading in
-  the file, a cycle, a self-dependency), or a tier over the cap. For
+  fails to resolve (no such term, no such heading in the file, a decision of
+  another file, a cycle, a self-dependency), a `depends:` line naming more
+  than two questions, or a tier over the cap. For
   `adrdom/terms.md`: fill in missing term ids and approve it (a `terms` row),
   refusing first on a shape error, a binding that would resolve differently,
   or a newly banned word appearing in a topic file.
@@ -154,16 +155,20 @@ written by hand, they are derived from `depends:` lines.
 
 Each `### <text>?` question (h3, must end in `?`) opens with exactly one
 `depends: <entry>, <entry>, ...` line, comma-separated entries, naming what
-the question stands on: a term by name or alias; a heading in the same
+the question stands on: a term by name or alias; or a question of the same
 file by text, exact match after trim, which may carry an answer set suffix
 `=A`, `=A|B`, or `=*` naming the letters of that question's options the
 dependent still assumes; or a uuid, which names a heading id in the same
-file, a term id, or a current decision's id — and heading text may also
-name a current decision's heading text in another topic file. A heading
-with no `depends:` line, or more than one, is a shape error. `adr
+file or a term id. A decision of another topic file is no entry: it goes on
+no `depends:` line. A line names at most two questions (a cap set in the
+tool for "What bounds the questions a depends line names?"); terms do not
+count. A heading with no `depends:` line, or more than one, is a shape
+error. The rule judges a question only while it is open to ask: an answered
+or asked question keeps a `depends:` entry naming another file's decision as
+the record of what it stood on. `adr
 ask`/`adr approve` derive each question's tier from its heading `depends:`
-entries alone (term and decision entries don't affect tier): a question
-whose entries name only terms or decisions, never another heading in the
+entries alone (term entries don't affect tier): a question
+whose entries name only terms, never another heading in the
 file, is tier 1, a root; otherwise its tier is one more than the highest
 tier among the questions it names. A dangling entry, a cycle, or a question
 depending on itself refuses. One tier may hold at most 4 live questions (a

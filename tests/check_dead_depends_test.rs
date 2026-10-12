@@ -41,7 +41,10 @@ fn add_answered(dir: &Path, rel: &str, title: &str, sec: &str) -> String {
 }
 
 /// a.md alpha answered; b.md beta stands on alpha, answered. Returns
-/// (dir, alpha id).
+/// (dir, alpha id). Beta is answered while it sits in a.md, standing on
+/// alpha there, and then moves to b.md with its text unchanged: the record
+/// of a question that names a decision of another file, which a question
+/// written now cannot be.
 fn alpha_and_beta() -> (std::path::PathBuf, String) {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
@@ -52,15 +55,26 @@ fn alpha_and_beta() -> (std::path::PathBuf, String) {
         "A",
         &section("Does alpha hold authority?", "authority", ""),
     );
-    add_answered(
+    let beta = add_answered(
         &dir,
-        "adrdom/decisions/b.md",
-        "B",
+        "adrdom/decisions/a.md",
+        "A",
         &section("Does beta hold authority?", &alpha, ""),
     );
+    let a = std::fs::read_to_string(dir.join("adrdom/decisions/a.md")).unwrap();
+    let at = a.find("### Does beta hold authority?").unwrap();
+    let (kept, moved) = a.split_at(at);
+    write_record(&dir, "adrdom/decisions/a.md", kept.trim_end_matches('\n'));
+    write_record(&dir, "adrdom/decisions/b.md", &format!("# B\n\n{}", moved));
+    let _ = beta;
+    for rel in ["adrdom/decisions/a.md", "adrdom/decisions/b.md"] {
+        let out = adr_owner(&dir, &["approve", dir.join(rel).to_str().unwrap()], "");
+        assert!(out.status.success(), "approve {}: {}{}", rel, stdout(&out), stderr(&out));
+    }
     (dir, alpha)
 }
 
+// adr: 9afe335c-2a7a-4625-b115-f74d3f091cac
 #[test]
 fn check_ignores_the_depends_line_of_a_superseded_section() {
     let (dir, _alpha) = alpha_and_beta();
@@ -77,7 +91,7 @@ fn check_ignores_the_depends_line_of_a_superseded_section() {
 
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
-    assert!(!text.contains("which is not a current decision"), "{}", text);
+    assert!(!text.contains("which names no term and no question of this file"), "{}", text);
     assert!(!text.contains("tiers: adrdom/decisions/b.md: \n"), "{}", text);
     assert!(!text.contains("tiers: adrdom/decisions/b.md:\n"), "{}", text);
     for line in text.lines() {
@@ -90,6 +104,7 @@ fn check_ignores_the_depends_line_of_a_superseded_section() {
     }
 }
 
+// adr: 9afe335c-2a7a-4625-b115-f74d3f091cac
 #[test]
 fn check_still_refuses_a_live_section_standing_on_a_superseded_decision() {
     let (dir, alpha) = alpha_and_beta();
@@ -108,8 +123,42 @@ fn check_still_refuses_a_live_section_standing_on_a_superseded_decision() {
     assert!(!out.status.success(), "{}", text);
     assert!(
         text.contains(&format!("depends on {} (", alpha))
-            && text.contains("which is not a current decision"),
+            && text.contains("which names no term and no question of this file"),
         "{}",
         text
     );
+}
+
+/// No line reports the depends entry that names alpha: the tie reminders
+/// name alpha by id too, so only lines about a depends entry are read.
+fn assert_no_dep_line(text: &str, alpha: &str) {
+    for line in text.lines() {
+        assert!(
+            !(line.contains(alpha) && line.contains("depends")) && !line.contains("decision of another file"),
+            "old entry reported: {}\n{}",
+            line,
+            text
+        );
+    }
+}
+
+// adr: 9afe335c-2a7a-4625-b115-f74d3f091cac
+#[test]
+fn old_cross_file_entry_on_a_closed_question_does_not_stop_a_draft_file() {
+    let (dir, alpha) = alpha_and_beta();
+    let rel = "adrdom/decisions/b.md";
+    let path = dir.join(rel);
+    let mut content = std::fs::read_to_string(&path).unwrap();
+    content.push_str(&section("Does delta hold authority?", "authority", ""));
+    write_record(&dir, rel, &content);
+
+    let out = adr(&dir, &["check"], &[], "");
+    let text = format!("{}{}", stdout(&out), stderr(&out));
+    assert_no_dep_line(&text, &alpha);
+
+    plan_record(&dir, rel);
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    let text = format!("{}{}", stdout(&out), stderr(&out));
+    assert!(out.status.success(), "approve failed: {}", text);
+    assert_no_dep_line(&text, &alpha);
 }

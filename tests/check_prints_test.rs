@@ -132,7 +132,7 @@ fn a_passing_commit_prints_nothing_from_the_hooks() {
 
 #[test]
 fn what_approve_refuses_in_a_draft_check_reports_with_the_same_move() {
-    // adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
+    // adr: 80b89c24-7d65-43f4-bb03-55e9d85c327d
     let cases: Vec<(&str, String)> = vec![
         ("loaded word in a body", format!("# Gate\n\n{}", q("Does the widget hold?", "the widget currently breaks."))),
         ("heading with no body", format!("# Gate\n\n{}\n### Does the widget stay?\ndepends: widget\n", q("Does the widget hold?", "the widget breaks."))),
@@ -166,7 +166,7 @@ fn what_approve_refuses_in_a_draft_check_reports_with_the_same_move() {
 
 #[test]
 fn what_approve_refuses_of_a_removed_file_check_reports_with_the_same_move() {
-    // adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
+    // adr: 80b89c24-7d65-43f4-bb03-55e9d85c327d
     let dir = repo();
     let rec = write_record(&dir, REL, &format!("# Gate\n\n{}", q("Does the widget hold?", "the widget breaks.")));
     approve_record(&dir, REL);
@@ -178,7 +178,7 @@ fn what_approve_refuses_of_a_removed_file_check_reports_with_the_same_move() {
 
 #[test]
 fn what_approve_refuses_of_a_blame_draft_check_reports_with_the_same_move() {
-    // adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
+    // adr: 80b89c24-7d65-43f4-bb03-55e9d85c327d
     // A row in the old form (it names a question) is a row whose value is
     // neither word: a shape fault of the draft.
     let dir = blame_setup();
@@ -192,7 +192,7 @@ fn what_approve_refuses_of_a_blame_draft_check_reports_with_the_same_move() {
 
 #[test]
 fn a_blame_draft_with_a_shape_fault_is_a_note() {
-    // adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
+    // adr: 80b89c24-7d65-43f4-bb03-55e9d85c327d
     let dir = blame_setup();
     // The origin is there: the shape fault is the file's only finding.
     write_origin(&dir, "docs/old.md", "one\ntwo\n");
@@ -205,7 +205,7 @@ fn a_blame_draft_with_a_shape_fault_is_a_note() {
 
 #[test]
 fn what_approve_refuses_of_an_edited_asked_question_check_reports_with_the_same_move() {
-    // adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
+    // adr: 80b89c24-7d65-43f4-bb03-55e9d85c327d
     let dir = repo();
     let rec = write_record(&dir, REL, &format!("# Gate\n\n{}", q("Does the widget hold?", "the widget breaks.")));
     approve_record(&dir, REL);
@@ -223,7 +223,7 @@ fn what_approve_refuses_of_an_edited_asked_question_check_reports_with_the_same_
 
 #[test]
 fn an_approved_file_is_not_judged_by_the_planning_rules_by_approve_or_check() {
-    // adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
+    // adr: 80b89c24-7d65-43f4-bb03-55e9d85c327d
     // A heading approved with no body before the planning rules: the one
     // scope both commands read leaves it be while the file is approved.
     let dir = repo();

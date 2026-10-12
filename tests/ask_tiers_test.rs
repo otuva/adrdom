@@ -159,9 +159,9 @@ fn ask_names_every_fault_in_one_run() {
 
 // --- one run asks every tier ------------------------------------------------
 
-// adr: 7d47885f-3a45-45f9-a092-4314301f0d7b
+// adr: 1d7c758d-1fd5-4e0c-8559-517315b15aaa
 //
-// "What does ask put to the owner in one run?": every unanswered question of
+// "What does ask put to the owner at one run?": every unanswered question of
 // the file at once, whatever its tier. Q1 is asked and open; Q2 (tier 2,
 // standing on Q1) is asked by the next run beside it. `answer` is what keeps
 // Q2 from being taken first (`answer_takes_a_question_in_the_order_it_stands_on`).
@@ -218,7 +218,7 @@ fn ask_asks_a_later_tier_candidate_while_the_lower_tier_is_open() {
     assert_eq!(asked_row_count(&dir), 2);
 }
 
-// adr: 7d47885f-3a45-45f9-a092-4314301f0d7b
+// adr: 1d7c758d-1fd5-4e0c-8559-517315b15aaa
 //
 // One run of ask on a file that holds three tiers asks all of its
 // questions: an `asked` row for each, and one line for each row.
@@ -427,7 +427,7 @@ Standard: plain words.
 // file stops on "plan not approved" before it reads the cap, so the ask
 // side of the cap is shown by `ask_stops_a_tier_that_a_refused_replacement_
 // in_another_file_took_over_the_cap` in supersede_cap_test.rs.
-// adr: eb2cde37-ebcb-4407-a5b0-9fcda4bd9a4e
+// adr: 0e38f001-0226-4927-9a78-2e9fc1ec18d4
 #[test]
 fn approve_refuses_a_tier_over_the_cap() {
     let dir = init_repo();
@@ -552,9 +552,9 @@ Standard: plain words.
 
 // --- open tier holds a written question --------------------------------------
 
-// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+// adr: da80931c-68cf-4c51-acce-060307bbd973
 //
-// "Does answer take a question standing on a question with no decision?"
+// "Does answer take a question standing on a question that has no decision?"
 // No: one run of ask asks Q1 and Q2 (standing on Q1) together, and `answer`,
 // a letter or a refusal, refuses Q2 while Q1 has no decision. The refusal
 // names Q1 and the owner's command for it; answering in order passes.
@@ -600,7 +600,7 @@ fn answer_takes_a_question_in_the_order_it_stands_on() {
     assert!(adr_answer(&dir, &q2_id, "A").status.success());
 }
 
-// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+// adr: da80931c-68cf-4c51-acce-060307bbd973
 //
 // A target that is refused has no decision either: `answer` (letter and
 // refusal) refuses the question standing on it, naming the plan change and
@@ -889,7 +889,7 @@ fn ask_asks_every_tier_show_named_and_the_owners_answers_come_in_order() {
     assert!(!shown.contains("not yet: \"Is delta"), "{}", shown);
 }
 
-// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+// adr: da80931c-68cf-4c51-acce-060307bbd973
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 //
 // The refusal names the move `show` names for the question Q2 waits on. Q1 is
@@ -927,7 +927,7 @@ fn answer_names_the_move_show_names_for_an_edited_target() {
     assert!(shown.contains(&format!("agent runs: adr ask {}", rel)), "{}", shown);
 }
 
-// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+// adr: da80931c-68cf-4c51-acce-060307bbd973
 //
 // Two questions edited since they were asked, and a third standing on both:
 // the refusal of `answer` on the third names one `adr ask` clause listing
@@ -963,7 +963,7 @@ fn answer_names_one_ask_clause_for_every_edited_heading() {
     assert!(!err.contains('#'), "{}", err);
 }
 
-// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+// adr: da80931c-68cf-4c51-acce-060307bbd973
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 //
 // A plan `approve` would refuse: `next` names what clears the refusal, and so
