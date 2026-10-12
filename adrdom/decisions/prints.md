@@ -372,9 +372,11 @@ Standard: a listing groups its lines, with a blank line between groups and a hea
 **Answer:** A
 
 ### Does a command refuse what check lets pass?
-depends: check, refusal, finding
-supersedes: Does a command refuse what check passes?, What does a command that writes print?, What does a finding name?, Does a finding name the identifier of the decision it judges?, Does the ui show what the terminal prints?, Does the tool colour what it prints to a terminal?, What does the tool add to the shape of what it prints to a terminal?
-unrelated: Does a command compute a move of its own?, Does a command name a status of its own?, Does a command stop when the environment gives no session identifier?, Does a refusal name the command that clears it?, Does ban refuse a word that appears in the repository?, Does check fail a planner's commit that reaches outside adrdom?, Does check print a line that names no move?, Does the reader's word stop a command?, Does a supersedes line name every current decision standing on its target?, Does check read the words of an answered question again?, Does the agent build what no current decision covers?, Does the tool stop while the terms file waits for approval?, What does check do with a fault on a file awaiting approval?, Does the tool colour its terminal output?, Does the ui show what the commands print?, What does a finding line name?, What does a writing command print?, What does the tool add to the shape of its terminal output?
+depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 0942e445-0163-423e-8ba7-84dd8ac07045, ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862
+supersedes: fe14991d-9715-4ae0-9a23-d314a950d3b9, 069a6b4a-de35-45f3-8c6c-8e254bf40565, 184b5bcb-fa72-436b-92cb-4d4605366c59, de1c5329-e448-45eb-b14c-88b8654447a4, 7857d633-2055-47eb-857f-cb70da9fa7ba, b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051, f3c9e736-157c-4197-b49e-19e3674e4e0c
+unrelated: aac5c313-dedd-466b-a0c3-ead5e99ce913, f53ac3b9-efde-427c-8027-19988aa8fda7, 8081c82d-e5c6-485b-a302-07d586f1a01b, b0e865b4-9204-4c55-9f5b-dcb755b3a03b, 4f04bae4-98e3-48eb-9403-3257268e2d87, db07a54d-4d80-4035-a9ef-eabcc0c872b3, 3fc35d4f-90f3-4425-9dac-951a89631fdf, 902bd279-e6c1-4a21-9637-a3a43f360bae, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, 6108b8b2-911e-443b-abe0-4c6f8b407384, c3127af2-4c96-48d5-a164-bac49a9a09ec, aa475aa3-05b2-429a-b33a-46b1dcb52049, 05141f49-d9d2-407c-b60c-ebb195a05864, 44d02e7a-c902-4b89-973c-cf9d5c67c70e, 3cf56867-3918-4ce6-a296-2cc62a91b154, 343d0d28-2c5d-40fc-99aa-22bfba4ea79f, 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763, 6875e4df-207a-4b62-8a89-d3179722a6d7
+id: 80b89c24-7d65-43f4-bb03-55e9d85c327d
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, approval=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ban=ef83beae-6857-4200-b251-a0fcc3c72f9d, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, move=d904dc0d-231f-4e93-ac74-7babe888107d, refusal=0942e445-0163-423e-8ba7-84dd8ac07045, refuse=0942e445-0163-423e-8ba7-84dd8ac07045, refused=0942e445-0163-423e-8ba7-84dd8ac07045, refuses=0942e445-0163-423e-8ba7-84dd8ac07045
 
 Problem: approve refuses a draft with a refused word that check passes, and refuses a removed file that check and show report as awaiting approval; each command judges the records on its own.
 Standard: one judgement per rule on the records, read by every command that acts on it.
@@ -387,9 +389,11 @@ Standard: one judgement per rule on the records, read by every command that acts
   Costs: a draft passes check and the commit, then stops at approve, and the agent learns the rule from the refusal.
 
 ### What does a writing command print?
-depends: ledger, finding, move
-supersedes: What does a command that writes print?, What does a finding name?, Does the ui show what the terminal prints?, Does the tool colour what it prints to a terminal?, What does the tool add to the shape of what it prints to a terminal?, Does a finding name the identifier of the decision it judges?
-unrelated: Does a command print under a flag what it computes from the records?, Does a command write a time later than the last ledger row?, Does check print a line that names no move?, What does a command that writes nothing print?, What does show print of a file under adrdom?, What does show print with no file named?, Does an owner command commit?, Does approve withdraw an asked question struck from the plan?, Does ban refuse a word that appears in the repository?, Does the agent build what no current decision covers?, What does check do with a fault on a file awaiting approval?, What does the tool print for a build move in a planner's session?, Does a command refuse what check lets pass?, Does the tool colour its terminal output?, Does the ui show what the commands print?, What does a finding line name?, What does the tool add to the shape of its terminal output?
+depends: e18b82d8-5271-4385-bbab-2b89e5da278f, ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, d904dc0d-231f-4e93-ac74-7babe888107d
+supersedes: 069a6b4a-de35-45f3-8c6c-8e254bf40565, 184b5bcb-fa72-436b-92cb-4d4605366c59, 7857d633-2055-47eb-857f-cb70da9fa7ba, b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051, f3c9e736-157c-4197-b49e-19e3674e4e0c, de1c5329-e448-45eb-b14c-88b8654447a4
+unrelated: 36dfbeaa-698d-4a57-b3b0-d425348e14a5, aefa7f3c-70c3-412e-8d73-16ff9e2b703a, 3fc35d4f-90f3-4425-9dac-951a89631fdf, 848e1b76-9cfe-483b-94dd-094eb9b2f995, a6f41dee-2381-421a-bcc4-b14af243209b, c84a4bd9-fc2d-44f0-b333-172978f61544, dfd32ef6-c2ac-40ef-b8b3-9c58732516b1, 21ae8ae0-6884-4d3c-8464-024a8a5aae2d, 4f04bae4-98e3-48eb-9403-3257268e2d87, c3127af2-4c96-48d5-a164-bac49a9a09ec, 05141f49-d9d2-407c-b60c-ebb195a05864, 8f81dee1-9c19-447d-baa8-d7d0af691db8, 80b89c24-7d65-43f4-bb03-55e9d85c327d, 44d02e7a-c902-4b89-973c-cf9d5c67c70e, 3cf56867-3918-4ce6-a296-2cc62a91b154, 343d0d28-2c5d-40fc-99aa-22bfba4ea79f, 6875e4df-207a-4b62-8a89-d3179722a6d7
+id: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answer=b36113a1-1384-4e4c-a798-8399f4181366, answers=b36113a1-1384-4e4c-a798-8399f4181366, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approved=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, ban=ef83beae-6857-4200-b251-a0fcc3c72f9d, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, finding=ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, install=1b98cdea-dc1b-4789-8f67-68d130d7a49d, move=d904dc0d-231f-4e93-ac74-7babe888107d, moves=d904dc0d-231f-4e93-ac74-7babe888107d, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, tier=f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c
 
 Problem: approve, answer and ask print tier lines and the lines of other commands, install and the ban rebuild print lines no decision names, and what the owner reads after an act has no decision behind it.
 Standard: a command that writes prints one line per event, as git commit does, or nothing, as mv does.
@@ -405,9 +409,11 @@ Standard: a command that writes prints one line per event, as git commit does, o
   Costs: ask repeats what show prints, and the owner's answer lines reach a terminal the owner answers from the page.
 
 ### What does a finding line name?
-depends: finding, move, decision, Does a command refuse what check lets pass?=*
-supersedes: What does a finding name?, Does a finding name the identifier of the decision it judges?
-unrelated: Does a reference line hold its list on one line?, Does a supersedes line name every current decision standing on its target?, Does check print a line that names no move?, Does show print the reference lines of an answered question?, What does a command that writes print?, What does a comment in code carry to name the decision it follows?, What does a depends line name?, What does a test carry to name its decision?, What does show print with no file named?, Does check read the words of an answered question again?, Does the agent build what no current decision covers?, Does the owner override a stop in the tool?, What does check do with a decision row that no question names?, Does the tool colour its terminal output?, Does the ui show what the commands print?, What does a writing command print?, What does the tool add to the shape of its terminal output?
+depends: ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, d904dc0d-231f-4e93-ac74-7babe888107d, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, 80b89c24-7d65-43f4-bb03-55e9d85c327d=*
+supersedes: 184b5bcb-fa72-436b-92cb-4d4605366c59, de1c5329-e448-45eb-b14c-88b8654447a4
+unrelated: a82db5b7-969c-44e9-9eec-876ead7099d3, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, 3fc35d4f-90f3-4425-9dac-951a89631fdf, 83190b10-8060-47c1-8194-f6a5c4f0d703, 069a6b4a-de35-45f3-8c6c-8e254bf40565, 1259323f-cdec-4101-9d47-a165a286089f, ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf, 4319a653-6901-446c-94ab-6420ef472134, c84a4bd9-fc2d-44f0-b333-172978f61544, 6108b8b2-911e-443b-abe0-4c6f8b407384, c3127af2-4c96-48d5-a164-bac49a9a09ec, 48f4647d-8c81-4e8a-a936-6b32f5fb0699, ee27fd4c-89b7-411f-a3e4-2535c49b6d1b, 44d02e7a-c902-4b89-973c-cf9d5c67c70e, 3cf56867-3918-4ce6-a296-2cc62a91b154, 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763, 6875e4df-207a-4b62-8a89-d3179722a6d7
+id: 343d0d28-2c5d-40fc-99aa-22bfba4ea79f
+terms: answered=b36113a1-1384-4e4c-a798-8399f4181366, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, finding=ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, identifiers=e877e4a9-2caf-4fe6-9f82-5476a2abb00b, move=d904dc0d-231f-4e93-ac74-7babe888107d, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d
 
 Problem: a finding names the number it measured and the act that lowers the number; the one who reads it clears the number, and the meaning the rule protects changes.
 Standard: a compiler error names the rule a line breaks and leaves the fix to the writer.
@@ -423,9 +429,11 @@ Standard: a compiler error names the rule a line breaks and leaves the fix to th
   Costs: the move names the counter, not the rule, and the fix that clears the counter can change the meaning.
 
 ### Does the tool colour its terminal output?
-depends: owner, agent, What does a finding line name?=*
-supersedes: Does the tool colour what it prints to a terminal?, What does the tool add to the shape of what it prints to a terminal?
-unrelated: Does a command name a status of its own?, Does a command print under a flag what it computes from the records?, Does show print the reference lines of an answered question?, Does the tool mark a builder?, Does the tool print every pair the reader marks?, Does the ui show what the terminal prints?, What does a command that writes print?, What does show print with no file named?, Does an answer carry the version of the question the owner read?, Does check print a line that names no move?, What does a command that writes nothing print?, What does an owner command look for before it runs?, Does a command refuse what check lets pass?, Does the ui show what the commands print?, What does a writing command print?, What does the tool add to the shape of its terminal output?
+depends: 1d7e59ea-99e3-4d4b-9928-5dabca62723d, f90dbd5b-8fbe-4899-8588-f8762795c2e2, 343d0d28-2c5d-40fc-99aa-22bfba4ea79f=*
+supersedes: b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051, f3c9e736-157c-4197-b49e-19e3674e4e0c
+unrelated: f53ac3b9-efde-427c-8027-19988aa8fda7, 36dfbeaa-698d-4a57-b3b0-d425348e14a5, 83190b10-8060-47c1-8194-f6a5c4f0d703, 8d3337b9-6fb3-4756-80f1-b388fe81d856, 2db33118-82b4-4edf-a9cb-e92ac62738b9, 7857d633-2055-47eb-857f-cb70da9fa7ba, 069a6b4a-de35-45f3-8c6c-8e254bf40565, c84a4bd9-fc2d-44f0-b333-172978f61544, 11be073c-ce91-44d8-833a-ef0b5e0b1672, 3fc35d4f-90f3-4425-9dac-951a89631fdf, 848e1b76-9cfe-483b-94dd-094eb9b2f995, aa275fac-def5-42a2-8a61-660142acad8e, 80b89c24-7d65-43f4-bb03-55e9d85c327d, 3cf56867-3918-4ce6-a296-2cc62a91b154, 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763, 6875e4df-207a-4b62-8a89-d3179722a6d7
+id: 44d02e7a-c902-4b89-973c-cf9d5c67c70e
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, findings=ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, moves=d904dc0d-231f-4e93-ac74-7babe888107d, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, refusal=0942e445-0163-423e-8ba7-84dd8ac07045, statuses=209081f4-864f-4ef6-8909-65da87f135e5
 
 Problem: statuses, findings and moves print in one shade, and the owner reads a disputed line, a refusal and a settled question alike.
 Standard: a command colours its output when standard output is a terminal, prints plain when piped, and honours NO_COLOR.
@@ -438,9 +446,11 @@ Standard: a command colours its output when standard output is a terminal, print
   Costs: the owner reads every listing in one shade.
 
 ### What does the tool add to the shape of its terminal output?
-depends: owner, agent, Does the tool colour its terminal output?=*
-supersedes: What does the tool add to the shape of what it prints to a terminal?
-unrelated: Does the tool colour what it prints to a terminal?, Does the tool take the order of ledger rows from their time?, Does the ui show what the terminal prints?, What does a command that writes print?, What does show print of a file under adrdom?, What does show print with no file named?, What does the tool keep of the reader's word?, embedding index, embedding model, Does a reference line hold its list on one line?, Does check print a line that names no move?, Does show print the reference lines of an answered question?, What does the tool print for a build move in a planner's session?, Does a command refuse what check lets pass?, Does the ui show what the commands print?, What does a finding line name?, What does a writing command print?
+depends: 1d7e59ea-99e3-4d4b-9928-5dabca62723d, f90dbd5b-8fbe-4899-8588-f8762795c2e2, 44d02e7a-c902-4b89-973c-cf9d5c67c70e=*
+supersedes: f3c9e736-157c-4197-b49e-19e3674e4e0c
+unrelated: b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051, 385a57d5-5f76-454a-ae5d-9b0d6f5c1492, 7857d633-2055-47eb-857f-cb70da9fa7ba, 069a6b4a-de35-45f3-8c6c-8e254bf40565, a6f41dee-2381-421a-bcc4-b14af243209b, c84a4bd9-fc2d-44f0-b333-172978f61544, 08a1b488-32fc-4dc7-b4b3-93a6e768725f, bf7da2dd-d8a7-41b8-9898-11cf68d0e833, a7b0b910-57f6-4c59-b904-b42f78db63f7, a82db5b7-969c-44e9-9eec-876ead7099d3, 3fc35d4f-90f3-4425-9dac-951a89631fdf, 83190b10-8060-47c1-8194-f6a5c4f0d703, 8f81dee1-9c19-447d-baa8-d7d0af691db8, 80b89c24-7d65-43f4-bb03-55e9d85c327d, 3cf56867-3918-4ce6-a296-2cc62a91b154, 343d0d28-2c5d-40fc-99aa-22bfba4ea79f, 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
+id: 6875e4df-207a-4b62-8a89-d3179722a6d7
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, findings=ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, moves=d904dc0d-231f-4e93-ac74-7babe888107d, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, status=209081f4-864f-4ef6-8909-65da87f135e5, statuses=209081f4-864f-4ef6-8909-65da87f135e5
 
 Problem: every line prints at one indent with no break between the questions, the findings and the moves, and a listing of a file runs on as one block.
 Standard: a listing groups its lines, with a blank line between groups and a header per group, as git status does; piped output stays one line per item.
@@ -456,9 +466,11 @@ Standard: a listing groups its lines, with a blank line between groups and a hea
   Costs: column widths per group, wrapping of long headings, and a second form of every line.
 
 ### Does the ui show what the commands print?
-depends: ui, owner, What does a writing command print?=*, What does the tool add to the shape of its terminal output?=*
-supersedes: Does the ui show what the terminal prints?, Does the tool colour what it prints to a terminal?, What does the tool add to the shape of what it prints to a terminal?
-unrelated: Does a command name a status of its own?, Does a command print under a flag what it computes from the records?, Does check print a line that names no move?, Does show print the reference lines of an answered question?, What does a command that writes nothing print?, What does a command that writes print?, What does show print of a file under adrdom?, What does show print with no file named?, Does an answer carry the version of the question the owner read?, Does the ui perform every owner act?, Does a command refuse what check lets pass?, Does the tool colour its terminal output?, What does a finding line name?
+depends: 7127ab1e-c313-4c51-9134-c09d551682cf, 1d7e59ea-99e3-4d4b-9928-5dabca62723d, 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763=*, 6875e4df-207a-4b62-8a89-d3179722a6d7=*
+supersedes: 7857d633-2055-47eb-857f-cb70da9fa7ba, b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051, f3c9e736-157c-4197-b49e-19e3674e4e0c
+unrelated: f53ac3b9-efde-427c-8027-19988aa8fda7, 36dfbeaa-698d-4a57-b3b0-d425348e14a5, 3fc35d4f-90f3-4425-9dac-951a89631fdf, 83190b10-8060-47c1-8194-f6a5c4f0d703, 848e1b76-9cfe-483b-94dd-094eb9b2f995, 069a6b4a-de35-45f3-8c6c-8e254bf40565, a6f41dee-2381-421a-bcc4-b14af243209b, c84a4bd9-fc2d-44f0-b333-172978f61544, 11be073c-ce91-44d8-833a-ef0b5e0b1672, 644b43ce-be10-4e9a-a7d5-71b27c51e365, 80b89c24-7d65-43f4-bb03-55e9d85c327d, 44d02e7a-c902-4b89-973c-cf9d5c67c70e, 343d0d28-2c5d-40fc-99aa-22bfba4ea79f
+id: 3cf56867-3918-4ce6-a296-2cc62a91b154
+terms: check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, findings=ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, moves=d904dc0d-231f-4e93-ac74-7babe888107d, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, statuses=209081f4-864f-4ef6-8909-65da87f135e5, ui=7127ab1e-c313-4c51-9134-c09d551682cf
 
 Problem: the ui copies check's whole output into a block, shows one open question at a time with no count of the rest, and its lines have no decision behind them apart from the owner's acts.
 Standard: one view model, two renderings.

@@ -221,9 +221,11 @@ Standard: a listing tells the reader which items are theirs before they act.
 **Answer:** A
 
 ### Does a finding hold the identifier of the decision it judges?
-depends: finding, decision, identifier, What does check do with a test that names a decision that is not current?
-supersedes: Does a finding name the identifier of the decision it judges?
-unrelated: Does a depends entry on a question in its file carry an answer set?, Does a question keep its identifier when its heading is reworded?, Does a reference in a topic file carry the identifier of what it names?, Does a supersedes line name every current decision standing on its target?, Does a term carry its own banned words?, Does check read the words of an answered question again?, Does every sentence of the brief come from a decision?, Does the agent build what no current decision covers?, Does the cap count a decision that an open question supersedes?, Does the tool read a pair of decisions in both directions?, What does a term hold?, What does a test carry to name its decision?, What does check do with an untested current decision?, current, supersede, What does a comment in code carry to name the decision it follows?, What does a finding name?, What does check do with a decision row that no question names?, What does a blame file hold of its origin?
+depends: ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, e877e4a9-2caf-4fe6-9f82-5476a2abb00b, 2381d759-f85f-484e-9031-fadbe6ea045a
+supersedes: de1c5329-e448-45eb-b14c-88b8654447a4
+unrelated: 946263aa-519a-47aa-b743-5cdcf52f5d35, 7a1e7b81-0967-4ed2-8a8a-c7153056836f, 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, c6da863d-5085-402f-815a-9bb832b4df7e, 6108b8b2-911e-443b-abe0-4c6f8b407384, de5ed5b1-3a83-4403-8953-941cb7e94390, c3127af2-4c96-48d5-a164-bac49a9a09ec, 14180eab-60a4-48d3-8efc-c1b23a96ce3a, 4b407ee1-1e64-4ca1-842b-69773fc0e48a, 7c306235-6243-4d79-b9aa-08ed19662779, 4319a653-6901-446c-94ab-6420ef472134, 3460d220-e523-448b-aeff-baa8051b7d06, e2533580-1486-4dc9-8697-e6c53605fe72, 2bae531b-c4df-48a0-89a0-3d52726741ea, 1259323f-cdec-4101-9d47-a165a286089f, 184b5bcb-fa72-436b-92cb-4d4605366c59, ee27fd4c-89b7-411f-a3e4-2535c49b6d1b, d2851ea1-fcb6-476a-b321-c813a594d5e5
+id: 24bdcbde-d9f4-45a0-8c3d-37e53569e950
+terms: current=e2533580-1486-4dc9-8697-e6c53605fe72, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, finding=ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, findings=ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, identifier=e877e4a9-2caf-4fe6-9f82-5476a2abb00b, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, superseded=2bae531b-c4df-48a0-89a0-3d52726741ea
 
 Problem: a finding is tagged with a name the code picks, tells, plan, ids; nothing ties a message to the decision it judges, and a message with no decision behind it is written like the rest.
 Standard: every diagnostic carries a stable code that documentation and tests key on.

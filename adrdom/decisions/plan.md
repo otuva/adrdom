@@ -369,9 +369,11 @@ Standard: ADR collections name each file by a slug of its subject.
 **Answer:** A
 
 ### Does ask run on a file with unapproved prose?
-depends: ask, approve, What does approve write for the prose above the first question?
-supersedes: Does ask run on a file whose prose is unapproved?, Does a command refuse what check passes?, What does a command that writes print?, What does a finding name?, Does a finding name the identifier of the decision it judges?, Does the ui show what the terminal prints?, Does the tool colour what it prints to a terminal?, What does the tool add to the shape of what it prints to a terminal?
-unrelated: Does approve write the terms brief?, Does ask refuse an option over a word limit?, Does ban refuse a word that appears in the repository?, Does check fail a topic file awaiting approval?, Does show print what a file holds beyond its latest approval?, Does the tool stop while the terms file waits for approval?, What does ask put to the owner in one run?, Does a refused question hold the tiers above it?, Does a refused question stay in its topic file?, Does an answer carry the version of the question the owner read?, Does approve withdraw an asked question struck from the plan?, Does ask stop a question outside the plan?, Does the ui perform every owner act?, Does a reference line keep its list on one line?
+depends: 3c8d4c9c-abca-4faa-b7c1-aae39951376c, e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 5b9170f9-a48e-4ddd-a7dc-73c3be1c2fb8
+supersedes: 3ce82f34-a4fc-4918-bb9b-65a0d81a6853, fe14991d-9715-4ae0-9a23-d314a950d3b9, 069a6b4a-de35-45f3-8c6c-8e254bf40565, 184b5bcb-fa72-436b-92cb-4d4605366c59, de1c5329-e448-45eb-b14c-88b8654447a4, 7857d633-2055-47eb-857f-cb70da9fa7ba, b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051, f3c9e736-157c-4197-b49e-19e3674e4e0c
+unrelated: fcab4bf9-c02d-4094-b3cb-688c4ec312dc, d808917b-0717-45ad-ab83-9fa274b9a9d4, 4f04bae4-98e3-48eb-9403-3257268e2d87, 912f4f3b-1213-435a-af0d-7617017fcff4, bceceda8-133a-4c9b-b439-b5c1a4414a02, aa475aa3-05b2-429a-b33a-46b1dcb52049, 7d47885f-3a45-45f9-a092-4314301f0d7b, 506b3c6d-3d0a-4a02-98de-3b8a573d2fe9, 6b3d8e59-e145-49e1-860d-a79d753d745c, 11be073c-ce91-44d8-833a-ef0b5e0b1672, 21ae8ae0-6884-4d3c-8464-024a8a5aae2d, da59b448-1afb-4469-b40e-69eda8f253c2, 644b43ce-be10-4e9a-a7d5-71b27c51e365, b0554224-15e4-4e91-a2bb-9ae5667803f4
+id: 1cdec741-98e1-4715-a7a5-94f7a73cd425
+terms: answers=b36113a1-1384-4e4c-a798-8399f4181366, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approved=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, asked=3c8d4c9c-abca-4faa-b7c1-aae39951376c, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a
 
 Problem: a question is asked under prose the owner has not read, and the prose sets the scope the question is read in.
 Standard: a change is reviewed whole; a part left unreviewed holds the rest.
@@ -384,9 +386,11 @@ Standard: a change is reviewed whole; a part left unreviewed holds the rest.
   Costs: the owner answers a question under scope text nobody approved.
 
 ### Does a reference line keep its list on one line?
-depends: depends, supersede, What stands under a question's heading?
-supersedes: Does a reference line hold its list on one line?
-unrelated: Does a reference in a topic file carry the identifier of what it names?, Does a supersedes line name every current decision standing on its target?, Does check print a line that names no move?, Does show print the reference lines of an answered question?, Does the reader's file keep a row whose text is gone from the records?, Does the word limit hold for an option's Costs line?, Does the word limit hold for an option's Why line?, What does the terms brief hold?, What holds the list of loaded phrases?, Does a term carry its own banned words?, Does approve turn the supersedes line into identifiers?, Does one decision supersede several?, Does one question heading stand in two topic files?, What does a depends line name?, Does ask run on a file with unapproved prose?, question
+depends: aef1b384-2b33-47a2-92a8-ec7f8fb258ef, 2bae531b-c4df-48a0-89a0-3d52726741ea, 178a232e-b51c-4122-a1a9-9e9ed6970748
+supersedes: a82db5b7-969c-44e9-9eec-876ead7099d3
+unrelated: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, 3fc35d4f-90f3-4425-9dac-951a89631fdf, 83190b10-8060-47c1-8194-f6a5c4f0d703, 90714223-52e3-4bb9-b0b4-2a8b87d74145, c96518bf-470d-45c0-8b86-eaf8f54cb490, 0487a1cf-eb61-4bf8-bd16-eed899d22d2c, f1294391-48b0-4ba3-82b4-c1d6b1c2c884, 149c9a73-16eb-46aa-9806-2950423ee1a2, c6da863d-5085-402f-815a-9bb832b4df7e, 3b8da790-ea0c-4ca5-860a-980c7bc5f361, f4f667ad-8714-4e65-897b-c7002e423c28, 23f21671-e34c-44aa-8804-6163d975807f, ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf, 1cdec741-98e1-4715-a7a5-94f7a73cd425, 277a8338-c57a-43cc-8b28-6b42e9347f6a
+id: b0554224-15e4-4e91-a2bb-9ae5667803f4
+terms: depends=aef1b384-2b33-47a2-92a8-ec7f8fb258ef, supersedes=2bae531b-c4df-48a0-89a0-3d52726741ea, terms=f590059d-b681-40ec-8a1c-c8916d71f6bb
 
 Problem: a depends, terms or supersedes line spread over several lines, one entry per line, is a second layout for the same job, and each new kind of list invites another.
 Standard: one field, one line, entries separated by commas, as in email and HTTP headers.
