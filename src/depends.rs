@@ -193,11 +193,10 @@ pub enum SupersedesError {
 }
 
 /// The identifier of the current decision a `supersedes:` entry names (per
-/// "What does a reference in a topic file carry?": the agent writes the name, the tool turns it into the
-/// identifier). An entry is the identifier of a current decision, or the
-/// heading of exactly one, in this topic file or another;
-/// `cross_file_headings` is `cross_file_heading_index`, every current
-/// decision by its heading.
+/// "What does a reference in a topic file carry?": the agent writes the name, the tool turns it
+/// into the identifier). An entry is the identifier of a current decision, or the heading of
+/// exactly one, in this topic file or another; `cross_file_headings` is `cross_file_heading_index`,
+/// every current decision by its heading.
 pub fn resolve_supersedes(
     entry: &str,
     cross_file_headings: &HashMap<String, Vec<(String, String)>>,

@@ -193,7 +193,7 @@ pub fn run(given: PathBuf) -> i32 {
     // would also refuse on this same file, so the fix has to happen before
     // either command can move: point the owner at the topic file first, the
     // re-approval second.
-    if let Some(f) = rules::derive_finding(&rel, &rf, &all_records, &led) {
+    if let Some(f) = rules::derive_finding(&rel, &rf, &cross_file_headings, &led) {
         out::eprint(&[Line::Finding(f)]);
         return 1;
     }
@@ -259,11 +259,11 @@ pub fn run(given: PathBuf) -> i32 {
         return 1;
     }
 
-    // Per "What does a reference in a topic file carry?": ask writes no ids. Every non-skeleton section already has one
-    // here -- refusal 4 above (`plan_approved`) already refused whenever
-    // one is missing, since `approve` mints every heading's id in the same
-    // pass that makes the plan hash match, and any further edit that added
-    // a heading lacking one would already have moved the plan hash.
+    // Per "What does a reference in a topic file carry?": ask writes no ids. Every non-skeleton
+    // section already has one here -- refusal 4 above (`plan_approved`) already refused whenever
+    // one is missing, since `approve` mints every heading's id in the same pass that makes the plan
+    // hash match, and any further edit that added a heading lacking one would already have moved
+    // the plan hash.
 
     // Write/replace the `terms:` line directly under the `id:` line for
     // every candidate, bottom-to-top so earlier sections' line numbers are
@@ -314,10 +314,9 @@ pub fn run(given: PathBuf) -> i32 {
     let write_time = ledger::write_time(&led);
     let mut new_rows = Vec::new();
     for (i, sec) in rf.sections.iter().enumerate() {
-        // Per "What does a reference in a topic file carry?": `approve` now gives a skeleton an id too, so an
-        // id alone no longer means "this is a candidate" -- a skeleton
-        // must still never be asked, exactly as `candidate` above already
-        // excludes it from becoming one.
+        // Per "What does a reference in a topic file carry?": `approve` now gives a skeleton an id
+        // too, so an id alone no longer means "this is a candidate" -- a skeleton must still never
+        // be asked, exactly as `candidate` above already excludes it from becoming one.
         if sec.is_skeleton || !candidate[i] {
             continue;
         }
@@ -349,11 +348,10 @@ pub fn run(given: PathBuf) -> i32 {
                 continue;
             };
             let dependent = &rf.sections[di];
-            // Per "What does a reference in a topic file carry?": an `assumes` row keys on the dependent's own
-            // heading id, not its heading text -- every heading already has
-            // one by the time `ask` runs (approve mints them all up front),
-            // so the row stays valid across a rename that doesn't otherwise
-            // change the plan.
+            // Per "What does a reference in a topic file carry?": an `assumes` row keys on the
+            // dependent's own heading id, not its heading text -- every heading already has one by
+            // the time `ask` runs (approve mints them all up front), so the row stays valid across
+            // a rename that doesn't otherwise change the plan.
             let Some(dep_id) = dependent.id.clone() else {
                 continue;
             };

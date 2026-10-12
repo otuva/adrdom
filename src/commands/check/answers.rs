@@ -35,10 +35,9 @@ pub(super) fn check_answers(
             let Some(id) = &sec.id else { continue };
             let cur = record::section_hash(&rf.lines, sec);
             // An asked question with no answer line whose text no longer
-            // hashes as asked: edited after asking. Per "What does a reference in a topic file carry?",
-            // approve gives every heading an id, a question never asked
-            // included: only one asked before is edited after asking. The
-            // move is the one `show` names for its file.
+            // hashes as asked: edited after asking. Per "What does a reference in a topic file
+            // carry?", approve gives every heading an id, a question never asked included: only one
+            // asked before is edited after asking. The move is the one `show` names for its file.
             let asked_open = sec.answer_line.is_none()
                 && (state::is_open_again(led, id)
                     || !led.rows.iter().any(|r| (r.event == "answered" || r.event == "refused") && &r.id == id));
@@ -63,14 +62,13 @@ pub(super) fn check_answers(
     out
 }
 
-/// Per "Does a depends entry carry the answers it holds under?" and "What does a reference in a topic file carry?": for
-/// every `assumes` row of an asked/answered/refused id, the file's current
-/// set on that dependent entry must still hash to the row's hash -- a
-/// change to a depends line's answer set after the question was asked is a
-/// plan change, caught here rather than silently taking effect. The row's
-/// `detail` is the dependent's own heading id, not its heading text; a dependent id that
-/// disappeared since (the heading removed, or the plan otherwise changed)
-/// is fine: there is nothing left to compare against.
+/// Per "Does a depends entry carry the answers it holds under?" and "What does a reference in a
+/// topic file carry?": for every `assumes` row of an asked/answered/refused id, the file's current
+/// set on that dependent entry must still hash to the row's hash -- a change to a depends line's
+/// answer set after the question was asked is a plan change, caught here rather than silently
+/// taking effect. The row's `detail` is the dependent's own heading id, not its heading text; a
+/// dependent id that disappeared since (the heading removed, or the plan otherwise changed) is
+/// fine: there is nothing left to compare against.
 fn check_frozen_sets(
     rf: &RecordFile,
     ti: usize,

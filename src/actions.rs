@@ -270,13 +270,12 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
     Ok(Located { led, rf, idx, rel, tf, cur_hash })
 }
 
-/// The refusal when `answer` does not take question `idx` now (per "Does answer take a question standing on a question that has no decision?" and
-/// "Does a refused question hold the tiers above it?"): `state::answer_waits`
-/// is the one test, the `next` lines and the page read it too. Shared by
-/// a letter and a refusal. An unanswered target names the owner's
-/// `adr answer` of the first question in its chain that `answer` takes, once
-/// that question is asked and stands as asked, else the agent's `adr ask`
-/// (or the writing of a body first); a chain that ends on a refused question
+/// The refusal when `answer` does not take question `idx` now (per "Does answer take a question
+/// standing on a question that has no decision?" and "Does a refused question hold the tiers above
+/// it?"): `state::answer_waits` is the one test, the `next` lines and the page read it too. Shared
+/// by a letter and a refusal. An unanswered target names the owner's `adr answer` of the first
+/// question in its chain that `answer` takes, once that question is asked and stands as asked, else
+/// the agent's `adr ask` (or the writing of a body first); a chain that ends on a refused question
 /// names the plan change and the approval.
 fn answer_gate(root: &Path, rf: &RecordFile, led: &Ledger, tf: &terms::TermsFile, idx: usize, rel: &str) -> Option<Stops> {
     let w = state::answer_waits(rf, idx);
@@ -1053,11 +1052,10 @@ fn do_approve_terms(
 
 /// Inserts a freshly minted id directly after each skeleton section's
 /// `depends:` line (or its `supersedes:`, `unrelated:` or `blame:` line,
-/// directly under it) (per "What does a reference in a topic file carry?"; no blank padding, the same bare
-/// single-line insert `ask` uses for `terms:` after `id:`). Every section
-/// here has already passed `record_refusals`'s "has no depends line"
-/// check, so the search below should never fail -- but that invariant
-/// lives in a different function now, so a future reorder of the two
+/// directly under it) (per "What does a reference in a topic file carry?"; no blank padding, the
+/// same bare single-line insert `ask` uses for `terms:` after `id:`). Every section here has
+/// already passed `record_refusals`'s "has no depends line" check, so the search below should never
+/// fail -- but that invariant lives in a different function now, so a future reorder of the two
 /// reports an error instead of panicking.
 fn insert_missing_ids(rf: &RecordFile, mut work_lines: Vec<String>) -> Result<Vec<String>, Stops> {
     let needs_id: Vec<bool> = rf.sections.iter().map(|s| s.id.is_none()).collect();
@@ -1084,16 +1082,14 @@ fn insert_missing_ids(rf: &RecordFile, mut work_lines: Vec<String>) -> Result<Ve
 }
 
 /// A topic file: parse, refuse on shape errors; resolve every `depends:`
-/// entry (per "What does a reference in a topic file carry?": the file holds ids, the agent writes words, and `approve`
-/// is what turns one into the other); check every ledger id that now
-/// appears in no topic file, refusing on a current (answered) one, before
-/// anything is written -- withdrawing an asked/refused one and allowing a
-/// superseded one silently happen after, since neither is a refusal; only
-/// then mint an id for every heading that lacks one, compute plan hash and
-/// context hash over the rewritten file, write an `approved` row if it
-/// differs from the latest for the path, a `context` row likewise, and
-/// finally write the withdrawn rows. Nothing is written to disk (file or
-/// ledger) when any check refuses.
+/// entry (per "What does a reference in a topic file carry?": the file holds ids, the agent writes
+/// words, and `approve` is what turns one into the other); check every ledger id that now appears
+/// in no topic file, refusing on a current (answered) one, before anything is written --
+/// withdrawing an asked/refused one and allowing a superseded one silently happen after, since
+/// neither is a refusal; only then mint an id for every heading that lacks one, compute plan hash
+/// and context hash over the rewritten file, write an `approved` row if it differs from the latest
+/// for the path, a `context` row likewise, and finally write the withdrawn rows. Nothing is written
+/// to disk (file or ledger) when any check refuses.
 fn do_approve_record(
     root: &Path,
     file: &Path,

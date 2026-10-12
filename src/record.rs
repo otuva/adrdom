@@ -22,18 +22,16 @@ pub enum AnswerSet {
 }
 
 /// One `depends:` line, classified only by whether it is a uuid or still
-/// words (per "What does a reference in a topic file carry?"): `Id` is a uuid already written to the file, resolved by
-/// lookup (a heading id in this file, a term id, or a decision id) rather
-/// than by shape, since `approve` is the only command that mints an id and
-/// rewrites a `depends:` line to one. `Text` is anything still unresolved:
-/// heading-shaped (ends in `?`, optionally carrying an answer set) or
-/// term-shaped otherwise, exactly as `approve` classifies it when rewriting.
-/// Term/decision/heading resolution for an `Id` or a term-shaped `Text`
-/// happens in the commands (`approve`/`ask`/`check`), not here: record.rs has
-/// no ledger or terms access; a heading-shaped reference (either form) is
-/// resolved locally, in memory, against this file's own sections (used by
-/// `derive_tiers`/`dependents_of` so `show` can print tiers even before a
-/// plan is approved).
+/// words (per "What does a reference in a topic file carry?"): `Id` is a uuid already written to
+/// the file, resolved by lookup (a heading id in this file, a term id, or a decision id) rather
+/// than by shape, since `approve` is the only command that mints an id and rewrites a `depends:`
+/// line to one. `Text` is anything still unresolved: heading-shaped (ends in `?`, optionally
+/// carrying an answer set) or term-shaped otherwise, exactly as `approve` classifies it when
+/// rewriting. Term/decision/heading resolution for an `Id` or a term-shaped `Text` happens in the
+/// commands (`approve`/`ask`/`check`), not here: record.rs has no ledger or terms access; a
+/// heading-shaped reference (either form) is resolved locally, in memory, against this file's own
+/// sections (used by `derive_tiers`/`dependents_of` so `show` can print tiers even before a plan is
+/// approved).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Dep {
     Id { id: String, set: Option<AnswerSet> },
@@ -242,8 +240,8 @@ impl RecordFile {
     /// Sections whose heading `depends:` entry names section `idx`'s
     /// heading (by id once approved, by heading text before), paired with
     /// the set they declare on that entry, if any (per "What does a
-    /// depends line name?", updated by "What does a reference in a topic file carry?": dependents_of keys on
-    /// heading ids once they exist).
+    /// depends line name?", updated by "What does a reference in a topic file carry?":
+    /// dependents_of keys on heading ids once they exist).
     pub fn dependents_of(&self, idx: usize) -> Vec<(usize, Option<&AnswerSet>)> {
         let mut out = Vec::new();
         if self.sections.get(idx).is_none() {
@@ -870,11 +868,10 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
 /// `supersedes:` line (part of the plan, per "Does approve turn the
 /// supersedes line into identifiers?"), an `unrelated:` line, a `blame:`
 /// line (per "What does a question carry of the blame file it came from?"),
-/// and an `id:` line (per "What stops a question that has no depends line?" and "What does a reference in a topic file carry?"): needs no id
-/// of its own to stay a skeleton, but `approve` gives every heading an id,
-/// skeletons included,
-/// so a skeleton must stay a skeleton once it has one.
-/// A `depends:` line with nothing after it, indented or not.
+/// and an `id:` line (per "What stops a question that has no depends line?" and "What does a
+/// reference in a topic file carry?"): needs no id of its own to stay a skeleton, but `approve`
+/// gives every heading an id, skeletons included, so a skeleton must stay a skeleton once it has
+/// one. A `depends:` line with nothing after it, indented or not.
 fn is_bare_depends_line(line: &str) -> bool {
     line.trim() == "depends:"
 }
@@ -1198,11 +1195,10 @@ pub fn set_suffix(set: &Option<AnswerSet>) -> String {
 }
 
 /// sha256 of `<dependent key>=<canonical set>` (per "Does a depends entry
-/// carry the answers it holds under?", updated by "What does a reference in a topic file carry?"): an `assumes`
-/// row's hash, and what `check`'s frozen-set comparison
-/// recomputes against the depends line as currently written. `dependent_key`
-/// is the dependent section's own heading id (`assumes` rows
-/// key on heading ids, not text).
+/// carry the answers it holds under?", updated by "What does a reference in a topic file carry?"):
+/// an `assumes` row's hash, and what `check`'s frozen-set comparison recomputes against the depends
+/// line as currently written. `dependent_key` is the dependent section's own heading id (`assumes`
+/// rows key on heading ids, not text).
 pub fn assumes_hash(dependent_key: &str, set: &AnswerSet) -> String {
     sha256_hex(&format!("{}={}", dependent_key, canonical_set(set)))
 }
@@ -1268,11 +1264,10 @@ pub fn derive_tiers(rf: &RecordFile) -> Result<Vec<usize>, DeriveError> {
         for d in &sec.depends {
             match d {
                 // An `Id` entry is a heading dep only when it matches a
-                // heading id in this same file (per "What does a reference in a topic file carry?");
-                // otherwise it is a
-                // term or decision reference, resolved elsewhere, and never
-                // affects tier -- never a Dangling error either, since it
-                // may legitimately resolve outside this file.
+                // heading id in this same file (per "What does a reference in a topic file
+                // carry?"); otherwise it is a term or decision reference, resolved elsewhere, and
+                // never affects tier -- never a Dangling error either, since it may legitimately
+                // resolve outside this file.
                 Dep::Id { id, .. } => {
                     if let Some(&j) = id_idx.get(id.as_str()) {
                         if j == i {
@@ -2288,8 +2283,8 @@ mod tests {
 
     #[test]
     fn skeleton_with_an_id_line_is_still_skeleton() {
-        // Per "What does a reference in a topic file carry?": `approve` gives every heading an id, skeletons
-        // included; a skeleton that has picked one up must not suddenly start requiring
+        // Per "What does a reference in a topic file carry?": `approve` gives every heading an id,
+        // skeletons included; a skeleton that has picked one up must not suddenly start requiring
         // Problem/Standard/options.
         let rf = rf_from(
             "# Topic\n\n### 1.1 Skeleton?\n\nid: 11111111-1111-1111-1111-111111111111\n\ndepends: widget\n\n### 1.2 Other?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",

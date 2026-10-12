@@ -720,10 +720,10 @@ pub enum Waits {
 
 /// `answer` (a letter or a refusal) of a question that waits: it stands on a
 /// question of its file with no decision, or a question of a lower tier is
-/// refused (per "Does answer take a question standing on a question that has no decision?" and "Does a refused question hold the tiers above it?").
-/// Every question it waits on is named, each with the move that clears it:
-/// the agent's moves first, one `adr ask` naming every heading, and the one
-/// owner move last.
+/// refused (per "Does answer take a question standing on a question that has no decision?" and
+/// "Does a refused question hold the tiers above it?"). Every question it waits on is named, each
+/// with the move that clears it: the agent's moves first, one `adr ask` naming every heading, and
+/// the one owner move last.
 pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> (crate::msg::Said, Vec<Finding>) {
     let mut parts = Vec::new();
     let mut answer: Option<Move> = None;

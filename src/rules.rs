@@ -836,19 +836,16 @@ pub fn record_refusals(
         }
     }
 
-    // Resolve every entry (per "What stops a depends entry that resolves to nothing?" and "What does a reference in a topic file carry?").
-    // An `Id` entry is kept as written and must already be a heading id in
-    // this file, a non-retired term id, or, on a closed question, a current decision. A `Text`
-    // entry ending in `?` is a heading reference, whose dangling/cycle/
-    // self-dep is `derive_tiers`'s single error (computed at parse time
-    // into `rf.derive_error`); any other `Text` entry must resolve to
-    // exactly one non-retired term. A `Text` entry (of either shape) found
-    // inside a section whose latest ledger state is
-    // `answered`/`refused`/`superseded` refuses instead of being silently
-    // rewritten (per "Does a decision change after it is answered?"): that
-    // section is frozen -- its decision is already closed, one way or
-    // another -- and an edit there is the agent's to remove, not approve's
-    // to carry forward.
+    // Resolve every entry (per "What stops a depends entry that resolves to nothing?" and "What
+    // does a reference in a topic file carry?"). An `Id` entry is kept as written and must already
+    // be a heading id in this file, a non-retired term id, or, on a closed question, a current
+    // decision. A `Text` entry ending in `?` is a heading reference, whose dangling/cycle/ self-dep
+    // is `derive_tiers`'s single error (computed at parse time into `rf.derive_error`); any other
+    // `Text` entry must resolve to exactly one non-retired term. A `Text` entry (of either shape)
+    // found inside a section whose latest ledger state is `answered`/`refused`/`superseded` refuses
+    // instead of being silently rewritten (per "Does a decision change after it is answered?"):
+    // that section is frozen -- its decision is already closed, one way or another -- and an edit
+    // there is the agent's to remove, not approve's to carry forward.
     for (si, sec) in rf.sections.iter().enumerate() {
         let frozen = state::is_frozen(led, sec);
         for d in &sec.depends {
@@ -897,7 +894,7 @@ pub fn record_refusals(
     // category "answers", which `check` prints from `check_answers` and
     // forwards no line of from here, so it prints once.
     out.extend(closed_findings(rel, rf, led));
-    out.extend(derive_finding(rel, rf, all, led));
+    out.extend(derive_finding(rel, rf, cross_file_headings, led));
     out.extend(cap_finding(rel, rf, replaced, led));
     out.extend(depends_line_cap_findings(rel, rf, led));
 
@@ -1251,15 +1248,20 @@ pub(crate) fn set_frozen_at_ask(led: &Ledger, sec: &record::Section, d: &record:
 /// question being judged, earns the finding on what a depends entry names
 /// instead (per "What does a depends entry name?"). About the questions the
 /// error names.
-pub fn derive_finding(rel: &str, rf: &RecordFile, all: &[RecordFile], led: &Ledger) -> Option<Finding> {
+pub fn derive_finding(
+    rel: &str,
+    rf: &RecordFile,
+    cross_file_headings: &HashMap<String, Vec<(String, String)>>,
+    led: &Ledger,
+) -> Option<Finding> {
     let err = rf.derive_error.as_ref()?;
     let other_file = match err {
         record::DeriveError::Dangling { section, entry } => rf
             .sections
             .iter()
-            .find(|s| s.heading_text == *section)
+            .find(|s| s.heading_text.trim() == section.trim())
             .filter(|s| status::open_to_ask_text(led, rf, s))
-            .filter(|_| names_decision_of_other_file(rel, entry, all, led))
+            .filter(|_| names_decision_of_other_file(rel, entry, cross_file_headings))
             .map(|_| Finding::said(Class::Plan, msg::dep_names_heading_of_other_file(rel, section, entry.trim()))),
         _ => None,
     };
@@ -1283,13 +1285,9 @@ pub fn derive_finding(rel: &str, rf: &RecordFile, all: &[RecordFile], led: &Ledg
 }
 
 /// Whether `entry` is the heading of a current decision of a topic file other
-/// than `rel`.
-fn names_decision_of_other_file(rel: &str, entry: &str, all: &[RecordFile], led: &Ledger) -> bool {
-    all.iter().filter(|o| o.rel != rel).any(|o| {
-        o.sections.iter().any(|s| {
-            s.heading_text.trim() == entry.trim() && s.id.as_deref().is_some_and(|id| state::is_current(led, id))
-        })
-    })
+/// than `rel` (`depends::cross_file_heading_index`).
+fn names_decision_of_other_file(rel: &str, entry: &str, cross_file_headings: &HashMap<String, Vec<(String, String)>>) -> bool {
+    cross_file_headings.get(entry.trim()).is_some_and(|at| at.iter().any(|(file, _)| file != rel))
 }
 
 /// The cap on a depends line (per "What bounds the questions a depends line

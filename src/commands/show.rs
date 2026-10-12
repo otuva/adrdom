@@ -486,8 +486,8 @@ fn is_reference(line: &str) -> bool {
 }
 
 /// A line the records hold with every identifier on it turned back into
-/// the heading or the name it stands for (per "What does a reference in a topic file carry?": show turns it back into
-/// the name). An identifier no question or term holds stays as it is.
+/// the heading or the name it stands for (per "What does a reference in a topic file carry?": show
+/// turns it back into the name). An identifier no question or term holds stays as it is.
 fn named(line: &str, names: &HashMap<String, String>) -> String {
     const LEN: usize = 36;
     let mut out = String::with_capacity(line.len());

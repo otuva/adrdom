@@ -700,15 +700,13 @@ pub fn unresolved_sibling(rf: &RecordFile, i: usize) -> Option<&Section> {
     find(false).or_else(|| find(true))
 }
 
-/// What holds question `i` of a file back from `answer` (per "Does answer take a question standing on a question that has no decision?" and "Does a
-/// refused question hold the tiers above it?"): the questions of the same
-/// file it names on its depends line that have no letter answer, split into
-/// those still waiting for one (`unanswered`) and refused ones
-/// (`refused_target`), and the refused questions of a lower tier it does not
-/// stand on (`refused_tier`). Read off the file text alone, like
-/// `tier_unresolved`. An unanswered question that is not a target holds
-/// nothing back. A dependency on another file names a current decision and
-/// never waits.
+/// What holds question `i` of a file back from `answer` (per "Does answer take a question standing
+/// on a question that has no decision?" and "Does a refused question hold the tiers above it?"):
+/// the questions of the same file it names on its depends line that have no letter answer, split
+/// into those still waiting for one (`unanswered`) and refused ones (`refused_target`), and the
+/// refused questions of a lower tier it does not stand on (`refused_tier`). Read off the file text
+/// alone, like `tier_unresolved`. An unanswered question that is not a target holds nothing back. A
+/// dependency on another file names a current decision and never waits.
 #[derive(Debug, Default, PartialEq)]
 pub struct AnswerWaits {
     pub unanswered: Vec<usize>,
@@ -945,12 +943,11 @@ pub fn conflicting_rulings(led: &Ledger, id: &str) -> Option<(Ruling, Ruling)> {
 }
 
 /// The text a section's `terms:` line is (re)computed from, and what the
-/// banned-word scan reads (per "What does a reference in a topic file carry?"): the section's hashed range (heading
-/// through the hash end, see `record::hash_range`) with the `terms:` line
-/// itself left out (so re-resolving never matches against a term's own
-/// previous resolution rather than the prose that produced it), and with
-/// `id:`, `depends:`, `supersedes:`, `unrelated:` and `blame:` lines left out
-/// too, since those hold ids and references, not prose, once a plan is
+/// banned-word scan reads (per "What does a reference in a topic file carry?"): the section's
+/// hashed range (heading through the hash end, see `record::hash_range`) with the `terms:` line
+/// itself left out (so re-resolving never matches against a term's own previous resolution rather
+/// than the prose that produced it), and with `id:`, `depends:`, `supersedes:`, `unrelated:` and
+/// `blame:` lines left out too, since those hold ids and references, not prose, once a plan is
 /// approved.
 pub fn section_text_excluding_terms_line(lines: &[String], sec: &Section) -> String {
     let (s, e) = record::hash_range(lines, sec);

@@ -121,10 +121,9 @@ fn build(
     };
     let phrase_lookup = terms_mod::phrase_lookup(&terms_list);
     // Every current decision's heading text, repo-wide (the cross-file gap
-    // "What does a reference in a topic file carry?" left open): built once here too, shared the same way
-    // `terms_list`/`phrase_lookup` already are. Built from `records`,
-    // already loaded above, rather than re-reading every topic file a
-    // second time off disk.
+    // "What does a reference in a topic file carry?" left open): built once here too, shared the
+    // same way `terms_list`/`phrase_lookup` already are. Built from `records`, already loaded
+    // above, rather than re-reading every topic file a second time off disk.
     let cross_file_headings = depends::cross_file_heading_index(&records, &led);
 
     // Plan/context approval state must be read off each file exactly as it
@@ -146,9 +145,9 @@ fn build(
         .collect();
 
     let names = crate::view::heading_texts(&records);
-    // Which plans are approved comes from `raw_hashes`, computed once and shared with `check_terms`. The
-    // replaced-id set is built once and extended per file with that file's
-    // own `supersedes:` lines.
+    // Which plans are approved comes from `raw_hashes`, computed once and shared with
+    // `check_terms`. The replaced-id set is built once and extended per file with that file's own
+    // `supersedes:` lines.
     let approved_rels: std::collections::HashSet<String> = raw_hashes
         .iter()
         .filter(|(rel, (plan_h, _))| state::plan_approved_hashes(&led, rel, plan_h))
