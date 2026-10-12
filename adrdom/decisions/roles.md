@@ -236,3 +236,5 @@ Standard: every diagnostic carries a stable code that documentation and tests ke
 - B) No.
   Why: the code names its rules as it likes; the record and the messages stay apart.
   Costs: a message with no decision behind it passes every gate and is caught at review alone.
+
+**Answer:** A

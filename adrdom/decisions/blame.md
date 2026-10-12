@@ -290,6 +290,8 @@ Standard: traceability runs from the derived artifact to its source by a stable 
   Why: no line to write.
   Costs: a question from two files, or a file with many questions, cannot be distinguished.
 
+**Answer:** A
+
 ### What does check do with a decision row no question names?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, 108053a8-c2c3-4561-874c-2f573a5409f2, d2851ea1-fcb6-476a-b321-c813a594d5e5, 69708a07-469c-406b-9e25-63da1605b432=A
 supersedes: ee27fd4c-89b7-411f-a3e4-2535c49b6d1b
@@ -309,3 +311,5 @@ Standard: traceability is reported as coverage, a count the reviewer reads, not 
 - C) Nothing, and nothing is counted.
   Why: the blame file and the plan never meet.
   Costs: whether an origin's decisions reached the records is read by hand.
+
+**Answer:** A

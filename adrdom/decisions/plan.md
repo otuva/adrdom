@@ -385,6 +385,8 @@ Standard: a change is reviewed whole; a part left unreviewed holds the rest.
   Why: a prose edit never holds a question.
   Costs: the owner answers a question under scope text nobody approved.
 
+**Answer:** A
+
 ### Does a reference line keep its list on one line?
 depends: aef1b384-2b33-47a2-92a8-ec7f8fb258ef, 2bae531b-c4df-48a0-89a0-3d52726741ea, 178a232e-b51c-4122-a1a9-9e9ed6970748
 supersedes: a82db5b7-969c-44e9-9eec-876ead7099d3
@@ -401,3 +403,5 @@ Standard: one field, one line, entries separated by commas, as in email and HTTP
 - B) No.
   Why: each entry diffs on its own.
   Costs: two layouts to parse, and a list's end is found only by what follows it.
+
+**Answer:** A

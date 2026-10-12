@@ -388,6 +388,8 @@ Standard: one judgement per rule on the records, read by every command that acts
   Why: each command judges what it needs when it writes.
   Costs: a draft passes check and the commit, then stops at approve, and the agent learns the rule from the refusal.
 
+**Answer:** A
+
 ### What does a writing command print?
 depends: e18b82d8-5271-4385-bbab-2b89e5da278f, ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, d904dc0d-231f-4e93-ac74-7babe888107d
 supersedes: 069a6b4a-de35-45f3-8c6c-8e254bf40565, 184b5bcb-fa72-436b-92cb-4d4605366c59, 7857d633-2055-47eb-857f-cb70da9fa7ba, b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051, f3c9e736-157c-4197-b49e-19e3674e4e0c, de1c5329-e448-45eb-b14c-88b8654447a4
@@ -407,6 +409,8 @@ Standard: a command that writes prints one line per event, as git commit does, o
 - C) The event it wrote and the moves that follow it.
   Why: one command gives the agent its next move.
   Costs: ask repeats what show prints, and the owner's answer lines reach a terminal the owner answers from the page.
+
+**Answer:** A
 
 ### What does a finding line name?
 depends: ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, d904dc0d-231f-4e93-ac74-7babe888107d, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, 80b89c24-7d65-43f4-bb03-55e9d85c327d=*
@@ -428,6 +432,8 @@ Standard: a compiler error names the rule a line breaks and leaves the fix to th
   Why: the shortest line, and the one the counter gives for free.
   Costs: the move names the counter, not the rule, and the fix that clears the counter can change the meaning.
 
+**Answer:** A
+
 ### Does the tool colour its terminal output?
 depends: 1d7e59ea-99e3-4d4b-9928-5dabca62723d, f90dbd5b-8fbe-4899-8588-f8762795c2e2, 343d0d28-2c5d-40fc-99aa-22bfba4ea79f=*
 supersedes: b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051, f3c9e736-157c-4197-b49e-19e3674e4e0c
@@ -444,6 +450,8 @@ Standard: a command colours its output when standard output is a terminal, print
 - B) No.
   Why: one output everywhere; nothing to check.
   Costs: the owner reads every listing in one shade.
+
+**Answer:** A
 
 ### What does the tool add to the shape of its terminal output?
 depends: 1d7e59ea-99e3-4d4b-9928-5dabca62723d, f90dbd5b-8fbe-4899-8588-f8762795c2e2, 44d02e7a-c902-4b89-973c-cf9d5c67c70e=*
@@ -465,6 +473,8 @@ Standard: a listing groups its lines, with a blank line between groups and a hea
   Why: statuses and headings line up.
   Costs: column widths per group, wrapping of long headings, and a second form of every line.
 
+**Answer:** A
+
 ### Does the ui show what the commands print?
 depends: 7127ab1e-c313-4c51-9134-c09d551682cf, 1d7e59ea-99e3-4d4b-9928-5dabca62723d, 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763=*, 6875e4df-207a-4b62-8a89-d3179722a6d7=*
 supersedes: 7857d633-2055-47eb-857f-cb70da9fa7ba, b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051, f3c9e736-157c-4197-b49e-19e3674e4e0c
@@ -481,3 +491,5 @@ Standard: one view model, two renderings.
 - B) No.
   Why: the page is laid out for the owner alone, with its own lines.
   Costs: two sets of lines to hold right, and a line on the page with no decision behind it.
+
+**Answer:** A

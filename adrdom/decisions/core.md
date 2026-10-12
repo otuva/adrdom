@@ -458,6 +458,8 @@ Standard: dependency-ordered task lists carry a prerequisite field per item, and
   Why: the agent states the assumption in its own words.
   Costs: the tool checks nothing, and no order can be derived from it.
 
+**Answer:** A
+
 ### What stops a question that has no depends line?
 depends: aef1b384-2b33-47a2-92a8-ec7f8fb258ef, 277a8338-c57a-43cc-8b28-6b42e9347f6a, 9afe335c-2a7a-4625-b115-f74d3f091cac=A|B
 supersedes: ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf, 1fb71321-bb84-492f-b9d5-1444c9c444af, 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f, 3b8da790-ea0c-4ca5-860a-980c7bc5f361, 672201dd-8f22-4dc3-8b21-a73eb7606e83, a82db5b7-969c-44e9-9eec-876ead7099d3, ee27fd4c-89b7-411f-a3e4-2535c49b6d1b, 7d47885f-3a45-45f9-a092-4314301f0d7b, eb2cde37-ebcb-4407-a5b0-9fcda4bd9a4e, 14180eab-60a4-48d3-8efc-c1b23a96ce3a, 3ce82f34-a4fc-4918-bb9b-65a0d81a6853, 7327cd58-ac58-40a4-8ef2-00072fb552b2, fe14991d-9715-4ae0-9a23-d314a950d3b9, 069a6b4a-de35-45f3-8c6c-8e254bf40565, 184b5bcb-fa72-436b-92cb-4d4605366c59, de1c5329-e448-45eb-b14c-88b8654447a4, 7857d633-2055-47eb-857f-cb70da9fa7ba, b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051, f3c9e736-157c-4197-b49e-19e3674e4e0c
@@ -477,6 +479,8 @@ Standard: a required field: an item with the field empty is refused, not read as
 - C) Check: a finding on the question, and the plan goes on.
   Why: the owner approves and answers with the gap in view.
   Costs: a question is answered on an assumption nobody wrote.
+
+**Answer:** A
 
 ### What stops a depends entry that resolves to nothing?
 depends: aef1b384-2b33-47a2-92a8-ec7f8fb258ef, e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 3c8d4c9c-abca-4faa-b7c1-aae39951376c, 9afe335c-2a7a-4625-b115-f74d3f091cac=A|B, 7c0b9fe3-6038-4a23-93fe-88a31c7eaf40=*
@@ -498,6 +502,8 @@ Standard: a prerequisite that does not resolve stops the item, as a build stops 
   Why: the plan moves while the entry is fixed.
   Costs: the owner approves a line that points nowhere.
 
+**Answer:** A
+
 ### What bounds the questions a depends line names?
 depends: aef1b384-2b33-47a2-92a8-ec7f8fb258ef, 277a8338-c57a-43cc-8b28-6b42e9347f6a, 9afe335c-2a7a-4625-b115-f74d3f091cac=A
 unrelated: 946263aa-519a-47aa-b743-5cdcf52f5d35, a82db5b7-969c-44e9-9eec-876ead7099d3, d808917b-0717-45ad-ab83-9fa274b9a9d4, 83190b10-8060-47c1-8194-f6a5c4f0d703, 0487a1cf-eb61-4bf8-bd16-eed899d22d2c, 55a8abb2-0f6d-430b-99f9-a378f3f154e5, ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf, 1fb71321-bb84-492f-b9d5-1444c9c444af, 0a742360-83c2-479d-b858-4bea646c9b36, b0e865b4-9204-4c55-9f5b-dcb755b3a03b, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, da59b448-1afb-4469-b40e-69eda8f253c2, c3127af2-4c96-48d5-a164-bac49a9a09ec, eb2cde37-ebcb-4407-a5b0-9fcda4bd9a4e, 7c0b9fe3-6038-4a23-93fe-88a31c7eaf40, 49a1c3a8-07ea-448a-8926-2362c0617758, da80931c-68cf-4c51-acce-060307bbd973, 9bf76db8-4821-4257-ac49-4c22c2a0e538, 86d5e944-ecfa-44bc-9819-83ee4b96890d, f1b4c4cc-97bd-446f-87b4-df5f1b6f4da2, 0e38f001-0226-4927-9a78-2e9fc1ec18d4, 1d7c758d-1fd5-4e0c-8559-517315b15aaa
@@ -517,6 +523,8 @@ Standard: a dependency graph keeps its fan-in small, a few prerequisites per ite
   Why: the value moves without a question or a release.
   Costs: one more owner command and ledger event to guard, for a value no plan has pushed against.
 
+**Answer:** A
+
 ### What does a reference in a topic file carry?
 depends: e877e4a9-2caf-4fe6-9f82-5476a2abb00b, 08193e75-dd89-4857-8e9f-b19e1a9e75e6, 9afe335c-2a7a-4625-b115-f74d3f091cac=A|B
 supersedes: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f, 3b8da790-ea0c-4ca5-860a-980c7bc5f361, 672201dd-8f22-4dc3-8b21-a73eb7606e83, a82db5b7-969c-44e9-9eec-876ead7099d3, ee27fd4c-89b7-411f-a3e4-2535c49b6d1b
@@ -533,6 +541,8 @@ Standard: reference by a stable identifier; the name is only shown to people.
 - B) The text of its target; a rename breaks it and the agent fixes it by hand.
   Why: the raw file reads on its own.
   Costs: every rename is an edit on every line that points at the target.
+
+**Answer:** A
 
 ### What are the tiers derived from?
 depends: f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, 9afe335c-2a7a-4625-b115-f74d3f091cac=A|B, 9bf76db8-4821-4257-ac49-4c22c2a0e538=A
@@ -551,6 +561,8 @@ Standard: build systems derive execution order from declared dependencies and st
   Why: the raw file shows the order.
   Costs: two sources for one order, and every mismatch is a failure the agent fixes by hand.
 
+**Answer:** A
+
 ### What does ask put to the owner at one run?
 depends: 3c8d4c9c-abca-4faa-b7c1-aae39951376c, 1d7e59ea-99e3-4d4b-9928-5dabca62723d, 94677ed8-eaf6-46e2-bc71-7392fa0805bf, f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, f1b4c4cc-97bd-446f-87b4-df5f1b6f4da2=*
 supersedes: 7d47885f-3a45-45f9-a092-4314301f0d7b, 3ce82f34-a4fc-4918-bb9b-65a0d81a6853, 7327cd58-ac58-40a4-8ef2-00072fb552b2, eb2cde37-ebcb-4407-a5b0-9fcda4bd9a4e, 14180eab-60a4-48d3-8efc-c1b23a96ce3a, fe14991d-9715-4ae0-9a23-d314a950d3b9, 069a6b4a-de35-45f3-8c6c-8e254bf40565, 184b5bcb-fa72-436b-92cb-4d4605366c59, de1c5329-e448-45eb-b14c-88b8654447a4, 7857d633-2055-47eb-857f-cb70da9fa7ba, b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051, f3c9e736-157c-4197-b49e-19e3674e4e0c
@@ -568,6 +580,8 @@ Standard: a code review puts the whole change before the reviewer at once, in th
   Why: every question reaches the owner after the answers it stands on, so none is asked in vain.
   Costs: a plan of four tiers takes four runs, each waiting on a commit and the owner's answers.
 
+**Answer:** A
+
 ### Does answer take a question standing on a question that has no decision?
 depends: b36113a1-1384-4e4c-a798-8399f4181366, 9d634996-475e-4ddc-8113-05c404ad9d5c, 1d7c758d-1fd5-4e0c-8559-517315b15aaa=A
 supersedes: 7327cd58-ac58-40a4-8ef2-00072fb552b2
@@ -584,6 +598,8 @@ Standard: a dependency is resolved before what rests on it; a build never links 
 - B) Yes.
   Why: the owner answers in any order.
   Costs: a lower answer may remove an answered question, against the rule that an answered decision never changes.
+
+**Answer:** A
 
 ### What bounds the questions at one tier?
 depends: f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, f1b4c4cc-97bd-446f-87b4-df5f1b6f4da2=*
@@ -605,6 +621,8 @@ Standard: kanban caps work in progress at every column and stops a pull past the
   Why: the value moves without a question or a release.
   Costs: one more owner command and ledger event to guard, for a value no plan has pushed against.
 
+**Answer:** A
+
 ### Does the tier cap count a decision an open question supersedes?
 depends: f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, 2bae531b-c4df-48a0-89a0-3d52726741ea, e2533580-1486-4dc9-8697-e6c53605fe72, 0e38f001-0226-4927-9a78-2e9fc1ec18d4=A|C
 supersedes: 14180eab-60a4-48d3-8efc-c1b23a96ce3a
@@ -621,3 +639,5 @@ Standard: a limit on a set is judged on the set as the change leaves it.
 - B) Yes.
   Why: one count, read straight off the file.
   Costs: a full tier takes no replacement in its own file, so the replacement lands away from its subject.
+
+**Answer:** A

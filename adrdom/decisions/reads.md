@@ -120,3 +120,5 @@ Standard: one rule for every reference in a topic file.
 - C) Whichever command sees a heading on the line.
   Why: the agent writes the line whenever it finds the need.
   Costs: two commands hold the same rule.
+
+**Answer:** A
