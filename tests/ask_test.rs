@@ -567,10 +567,11 @@ fn ask_pairs_a_word_from_the_problem_line_and_a_word_from_a_single_option() {
     );
 }
 
-// --- core.md: "What does a depends line name?" -- the "does not resolve"
+// --- core.md: "What stops a depends entry that resolves to nothing?" -- the "does not resolve"
 // half, reached through ask on a file approve already accepted --------
 
-// adr: ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf
+// adr: 9bf76db8-4821-4257-ac49-4c22c2a0e538
+// adr: 49a1c3a8-07ea-448a-8926-2362c0617758
 //
 // "every question carries [a depends] line ...; approve and ask stop a
 // line that is missing or names anything that does not resolve": the
@@ -586,7 +587,7 @@ fn ask_pairs_a_word_from_the_problem_line_and_a_word_from_a_single_option() {
 // names only `approve`'s validation and `check`'s plan check as callers
 // of `resolve_dep`; `ask` is not one of them). `adr check`, run on the
 // same broken file right after, is what actually names the specific
-// thing wrong with the line ("... which is not a current decision" /
+// thing wrong with the line ("... which names no term and no question of this file" /
 // "has no depends line") -- confirming ask's refusal, though real, never
 // gets that specific.
 #[test]
@@ -624,7 +625,7 @@ fn ask_refuses_a_depends_entry_that_no_longer_resolves_or_is_missing_after_appro
     // The edited file awaits approval again: check prints the finding as a note (912f4f3b-1213-435a-af0d-7617017fcff4).
     assert!(check_out.status.success());
     assert!(
-        stdout(&check_out).contains("which is not a current decision"),
+        stdout(&check_out).contains("which names no term and no question of this file"),
         "{}",
         stdout(&check_out)
     );

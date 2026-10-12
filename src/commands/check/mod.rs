@@ -85,7 +85,7 @@ fn build(
     let ledger_rel = repo::LEDGER_PATH;
     let ledger_content = source.read(root, ledger_rel).unwrap_or_default();
     let parsed_led;
-    let (led, mut records, unreadable_stops): (&Ledger, Vec<RecordFile>, Vec<String>) = match held {
+    let (led, records, unreadable_stops): (&Ledger, Vec<RecordFile>, Vec<String>) = match held {
         Some((h, _)) => (
             &h.led,
             h.topic_files.clone(),
@@ -121,27 +121,22 @@ fn build(
     };
     let phrase_lookup = terms_mod::phrase_lookup(&terms_list);
     // Every current decision's heading text, repo-wide (the cross-file gap
-    // "Does a reference in a topic file carry the identifier of what it
-    // names?" left open): built once here too, shared the same way
-    // `terms_list`/`phrase_lookup` already are. Built from `records`,
-    // already loaded above, rather than re-reading every topic file a
-    // second time off disk.
+    // "What does a reference in a topic file carry?" left open): built once here too, shared the
+    // same way `terms_list`/`phrase_lookup` already are. Built from `records`, already loaded
+    // above, rather than re-reading every topic file a second time off disk.
     let cross_file_headings = depends::cross_file_heading_index(&records, &led);
 
     // Plan/context approval state must be read off each file exactly as it
-    // sits on disk, before the normalize pass below mutates its parsed
-    // `depends:` entries in memory: captured here, ahead of that mutation,
-    // keyed by `rel` and threaded down to every check that compares against
-    // the ledger (`file_approval`, `ids::check_ids`'s stale-plan filter)
-    // instead of letting them recompute the hash from the (by-then-
-    // normalized) `RecordFile`.
+    // sits on disk: captured here, keyed by `rel` and threaded down to
+    // every check that compares against the ledger (`file_approval`,
+    // `ids::check_ids`'s stale-plan filter).
     let raw_hashes: HashMap<String, (Vec<String>, String)> = records
         .iter()
         .map(|rf| (rf.rel.clone(), (record::question_hashes(rf), record::context_hash(rf))))
         .collect();
     // The files awaiting approval: a finding on one of them is a note (per
     // "What does check do with a fault on a file awaiting approval?").
-    // Read off each file as written, before the normalize pass below: the
+    // Read off each file as written: the
     // same scope `approve` reads for the planning rules.
     let awaiting: Vec<String> = records
         .iter()
@@ -149,23 +144,10 @@ fn build(
         .map(|rf| rf.rel.clone())
         .collect();
 
-    // Heading-shaped `depends:` entries that name no heading in their own
-    // file but resolve to exactly one current decision elsewhere are
-    // rewritten to `Id` entries in memory here, before any finding is
-    // judged below -- the same normalization `approve` runs on the file it
-    // is approving, so `check` never reports a legitimate cross-file
-    // reference as the file-wide `derive_error` a plain, unresolved `Text`
-    // heading dep always earns.
-    let as_loaded = records.clone();
-    for rf in &mut records {
-        depends::normalize_cross_file_deps(rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
-    }
-
     let names = crate::view::heading_texts(&records);
-    // Which plans are approved comes from `raw_hashes`, taken before the
-    // normalize pass; computed once and shared with `check_terms`. The
-    // replaced-id set is built once and extended per file with that file's
-    // own `supersedes:` lines.
+    // Which plans are approved comes from `raw_hashes`, computed once and shared with
+    // `check_terms`. The replaced-id set is built once and extended per file with that file's own
+    // `supersedes:` lines.
     let approved_rels: std::collections::HashSet<String> = raw_hashes
         .iter()
         .filter(|(rel, (plan_h, _))| state::plan_approved_hashes(&led, rel, plan_h))
@@ -267,7 +249,7 @@ fn build(
     push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_content, since, &mut stops));
     push_failures(&mut failures, reader::check_reader(root, &source, since));
     push_failures(&mut failures, banned::check_banned_ledger(&led, root, &source));
-    push_failures(&mut failures, answers::check_answers(root, &records, &as_loaded, &terms_list, &led, &source));
+    push_failures(&mut failures, answers::check_answers(root, &records, &terms_list, &led, &source));
     push_failures(&mut failures, banned::check_banned(root, staged, message, &source, &mut stops));
     push_failures(&mut failures, install::check_install(root, &source));
     let (plan_failures, plan_notes) =

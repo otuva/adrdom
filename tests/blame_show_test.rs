@@ -188,7 +188,7 @@ fn short_show_names_the_approval_a_blame_file_waits_for() {
     );
 }
 
-// adr: ee27fd4c-89b7-411f-a3e4-2535c49b6d1b
+// adr: a469ecb9-a4f1-4a2a-89c5-7378cc1138b4
 // adr: 36dfbeaa-698d-4a57-b3b0-d425348e14a5
 //
 // "the count of decision rows with and without a question is printed for the
@@ -242,7 +242,7 @@ fn show_counts_decision_rows_with_and_without_a_question_under_its_flag() {
     }
 }
 
-// adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
+// adr: 7c0b9fe3-6038-4a23-93fe-88a31c7eaf40
 //
 // "show turns an identifier back into the name": a blame file whose id line
 // holds the identifier of a question does not rename it. The question keeps

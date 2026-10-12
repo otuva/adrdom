@@ -22,7 +22,7 @@ fn set_mode(path: &Path, mode: u32) {
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
 }
 
-// adr: 069a6b4a-de35-45f3-8c6c-8e254bf40565
+// adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
 //
 // Approve that rewrites a topic file and writes no row (a reference line
 // written back in words, its hash the approved one) names the file it wrote.
@@ -39,7 +39,7 @@ fn approve_names_a_file_it_rewrote_with_no_row() {
     assert_eq!(stdout(&out), format!("written: {}\n", REL));
 }
 
-// adr: 069a6b4a-de35-45f3-8c6c-8e254bf40565
+// adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
 //
 // An asked question's terms line deleted by hand: ask writes it back, a
 // file written with no row, and says so in one line; check then passes it.
@@ -58,7 +58,7 @@ fn ask_writes_back_a_terms_line_and_names_the_file() {
     assert!(std::fs::read_to_string(&path).unwrap().contains("\nterms: "));
 }
 
-// adr: 069a6b4a-de35-45f3-8c6c-8e254bf40565
+// adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
 //
 // A ledger that refuses the rows leaves the file as it was: ask writes no
 // terms line for rows no ledger holds, and running it again asks.
@@ -80,7 +80,7 @@ fn ask_leaves_the_file_as_it_was_when_the_ledger_refuses() {
     assert_eq!(stdout(&again), format!("asked: \"{}\"\n", ONE));
 }
 
-// adr: 069a6b4a-de35-45f3-8c6c-8e254bf40565
+// adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
 //
 // Approve of the terms file that the ledger refuses leaves the terms file
 // and the terms brief as they were.
@@ -100,7 +100,7 @@ fn terms_approve_leaves_its_files_as_they_were_when_the_ledger_refuses() {
     assert!(!dir.join("adrdom/state/terms-brief.md").exists());
 }
 
-// adr: 069a6b4a-de35-45f3-8c6c-8e254bf40565
+// adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
 //
 // A supersedes line that names one decision twice is found before
 // approval, as a finding of the file.
@@ -122,7 +122,7 @@ fn a_supersedes_line_naming_one_decision_twice_is_found() {
     assert!(shown.contains("names what an earlier entry of the line names"), "{}", shown);
 }
 
-// adr: 069a6b4a-de35-45f3-8c6c-8e254bf40565
+// adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
 //
 // Unban counts the words given, not the hashes of each: two words, none
 // banned, read as two; what is banned is what the ledger says, whatever the
@@ -142,7 +142,7 @@ fn unban_counts_words_and_reads_the_ledger() {
     assert_eq!(stdout(&out), "unbanned: a word\n");
 }
 
-// adr: 069a6b4a-de35-45f3-8c6c-8e254bf40565
+// adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
 //
 // A word given to ban that stands in the repository: each place is a
 // finding with the move that clears it, as check names a banned word's
@@ -159,7 +159,7 @@ fn ban_names_each_place_a_word_stands_with_its_move() {
     assert!(err.contains("notes.md:1: holds a word given; a ban never lands on a word the repository holds; agent rewrites the line, then runs: adr ban"), "{}", err);
 }
 
-// adr: 069a6b4a-de35-45f3-8c6c-8e254bf40565
+// adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
 //
 // `ban` with nothing new and `ban --rebuild` bring a missing ban list to
 // the ledger's set alike: both write it, once.
@@ -176,7 +176,7 @@ fn ban_and_rebuild_bring_a_missing_list_back_alike() {
     }
 }
 
-// adr: 069a6b4a-de35-45f3-8c6c-8e254bf40565
+// adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
 //
 // Install names git's configuration it sets, and uninstall the key it
 // unsets, each one line; a hook edited by hand keeps running where git
@@ -204,7 +204,7 @@ fn install_and_uninstall_name_the_configuration_they_change() {
     assert_eq!(String::from_utf8_lossy(&path.stdout).trim(), ".githooks");
 }
 
-// adr: 069a6b4a-de35-45f3-8c6c-8e254bf40565
+// adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
 //
 // AGENTS.md that cannot be read as text is a failure of uninstall, named,
 // never skipped as if install had written nothing there.
@@ -220,7 +220,7 @@ fn uninstall_names_an_agents_file_it_cannot_read() {
     assert!(stderr(&out).contains("AGENTS.md"), "{}", stderr(&out));
 }
 
-// adr: 069a6b4a-de35-45f3-8c6c-8e254bf40565
+// adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
 //
 // A hook saved with CRLF line ends is no hook git can run: check names it
 // and install writes it again; the brief's markers saved with CRLF are

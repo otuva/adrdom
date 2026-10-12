@@ -7,13 +7,12 @@ use crate::state;
 use crate::terms::Term;
 use std::path::Path;
 
-/// `as_loaded`: every topic file as written, before the normalize pass, so
-/// the move an edited asked question names is the one `show` computes for
-/// its file (`moves::of_unasked_question_in`).
+/// `records` are every topic file as written, so the move an edited asked
+/// question names is the one `show` computes for its file
+/// (`moves::of_unasked_question_in`).
 pub(super) fn check_answers(
     root: &Path,
     records: &[RecordFile],
-    as_loaded: &[RecordFile],
     terms_list: &[Term],
     led: &Ledger,
     source: &crate::repo::Source,
@@ -36,11 +35,9 @@ pub(super) fn check_answers(
             let Some(id) = &sec.id else { continue };
             let cur = record::section_hash(&rf.lines, sec);
             // An asked question with no answer line whose text no longer
-            // hashes as asked: edited after asking. Per "Does a reference
-            // in a topic file carry the identifier of what it names?",
-            // approve gives every heading an id, a question never asked
-            // included: only one asked before is edited after asking. The
-            // move is the one `show` names for its file.
+            // hashes as asked: edited after asking. Per "What does a reference in a topic file
+            // carry?", approve gives every heading an id, a question never asked included: only one
+            // asked before is edited after asking. The move is the one `show` names for its file.
             let asked_open = sec.answer_line.is_none()
                 && (state::is_open_again(led, id)
                     || !led.rows.iter().any(|r| (r.event == "answered" || r.event == "refused") && &r.id == id));
@@ -48,10 +45,10 @@ pub(super) fn check_answers(
                 if let Some(latest_asked_hash) = led.latest_asked(id).map(|r| r.hash.clone()) {
                     if latest_asked_hash != cur {
                         let moves = file_report.get_or_init(|| {
-                            let loaded = as_loaded.iter().find(|f| f.rel == rf.rel).unwrap_or(rf);
+                            let loaded = rf;
                             let index =
-                                index.get_or_init(|| crate::rules::RepoIndex::new_via(root, as_loaded, terms_list, led, source));
-                            let j = crate::moves::Judging { root, all: as_loaded, terms_list, led, index };
+                                index.get_or_init(|| crate::rules::RepoIndex::new_via(root, records, terms_list, led, source));
+                            let j = crate::moves::Judging { root, all: records, terms_list, led, index };
                             crate::moves::of_unasked_question_in(&j, loaded, &sec.heading_text, false)
                         });
                         out.push(Failure::said(Class::Answers, msg::edited_after_asking(&rf.rel, &sec.heading_text, moves)));
@@ -65,15 +62,13 @@ pub(super) fn check_answers(
     out
 }
 
-/// Per "Does a depends entry carry the answers it holds under?" and "Does a
-/// reference in a topic file carry the identifier of what it names?": for
-/// every `assumes` row of an asked/answered/refused id, the file's current
-/// set on that dependent entry must still hash to the row's hash -- a
-/// change to a depends line's answer set after the question was asked is a
-/// plan change, caught here rather than silently taking effect. The row's
-/// `detail` is the dependent's own heading id, not its heading text; a dependent id that
-/// disappeared since (the heading removed, or the plan otherwise changed)
-/// is fine: there is nothing left to compare against.
+/// Per "Does a depends entry carry the answers it holds under?" and "What does a reference in a
+/// topic file carry?": for every `assumes` row of an asked/answered/refused id, the file's current
+/// set on that dependent entry must still hash to the row's hash -- a change to a depends line's
+/// answer set after the question was asked is a plan change, caught here rather than silently
+/// taking effect. The row's `detail` is the dependent's own heading id, not its heading text; a
+/// dependent id that disappeared since (the heading removed, or the plan otherwise changed) is
+/// fine: there is nothing left to compare against.
 fn check_frozen_sets(
     rf: &RecordFile,
     ti: usize,

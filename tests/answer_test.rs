@@ -509,7 +509,7 @@ fn answer_refuses_a_second_time_with_already_answered_message() {
 // question and supersedes both targets: the sibling replacer answered first.
 //
 // adr: f4f667ad-8714-4e65-897b-c7002e423c28
-// adr: 3b8da790-ea0c-4ca5-860a-980c7bc5f361
+// adr: f19e7914-ad97-4f6b-87dd-9301e53cd068
 //
 // "each target must be current when the question is asked (ask stops a
 // non-current target)".
@@ -799,7 +799,7 @@ fn answer_accepts_a_split_where_two_questions_asked_together_name_the_same_targe
 // `supersedes:`. `approve` refuses Z's plan outright, since the target is
 // not a current decision.
 //
-// adr: 3b8da790-ea0c-4ca5-860a-980c7bc5f361
+// adr: f19e7914-ad97-4f6b-87dd-9301e53cd068
 #[test]
 fn approve_refuses_a_heading_whose_supersedes_target_is_stale() {
     let dir = init_repo();

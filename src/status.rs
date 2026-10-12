@@ -176,7 +176,7 @@ impl FileStatus {
 
 /// The status of a topic file, one name for its plan and prose together:
 /// `Approved` only while both equal their latest approval. `rf` must be the
-/// file as written, before `depends::normalize_cross_file_deps`.
+/// file as written.
 pub type TopicFileStatus = FileStatus;
 /// The status of the terms file.
 pub type TermsFileStatus = FileStatus;

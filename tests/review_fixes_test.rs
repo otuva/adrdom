@@ -36,7 +36,7 @@ const WITH_COMMA: &str = "Is the widget hold, in the rain?";
 // hold a comma: the line is not cut at it. Approve turns the heading into
 // the identifier, before any body exists.
 //
-// adr: 3b8da790-ea0c-4ca5-860a-980c7bc5f361
+// adr: f19e7914-ad97-4f6b-87dd-9301e53cd068
 #[test]
 fn a_supersedes_line_takes_a_heading_that_holds_a_comma() {
     let dir = setup();

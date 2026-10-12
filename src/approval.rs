@@ -353,8 +353,7 @@ pub struct TopicChanges {
     pub struck_unsure: bool,
 }
 
-/// What the topic file `rf` (as loaded, before
-/// `depends::normalize_cross_file_deps`) holds beyond its latest approval.
+/// What the topic file `rf` (as loaded) holds beyond its latest approval.
 pub fn topic_file(root: &Path, rf: &RecordFile, led: &Ledger) -> TopicChanges {
     let rel = rf.rel.as_str();
     let plan_ok = state::plan_approved(led, rf, rel);

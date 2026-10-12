@@ -29,14 +29,15 @@ const A: &str = "adrdom/decisions/a.md";
 const B: &str = "adrdom/decisions/b.md";
 
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
-// adr: ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf
+// adr: 49a1c3a8-07ea-448a-8926-2362c0617758
+// adr: 9afe335c-2a7a-4625-b115-f74d3f091cac
 //
-// "What does a depends line name?": "a term, a question in the same topic
-// file, or a current decision". An entry that names a question of another
-// file which is not answered names none of the three. "adds the heading"
-// would copy that question into this file.
+// "What does a depends entry name?": "a term, or a question of the same
+// topic file". An entry that names a question of another file names
+// neither: while that question is not answered the entry resolves to nothing,
+// and once it is answered it is a decision of another file, refused too.
 #[test]
-fn an_entry_on_an_unanswered_question_of_another_file_says_it_waits() {
+fn an_entry_on_a_question_of_another_file_is_refused_in_both_states() {
     let dir = setup();
     let a = write_record(
         &dir,
@@ -54,12 +55,9 @@ fn an_entry_on_an_unanswered_question_of_another_file_says_it_waits() {
             question("Is the widget beta hold?", "widget, Is the widget alpha hold?", "")
         ),
     );
-    // The tool holds alpha's state in the other file: the line says whose
-    // turn it is (nobody's but the owner's, through alpha), not a move the
-    // agent cannot make.
     let refusal = format!(
-        "{}: \"Is the widget beta hold?\" depends on \"Is the widget alpha hold?\" ({}) which is not answered yet; a question stands only on decisions in force; not yet, after it is answered",
-        B, A
+        "{}: \"Is the widget beta hold?\" depends on \"Is the widget alpha hold?\" which is no heading in this file; a depends entry names something that exists; agent rewrites the entry",
+        B
     );
     let out = adr(&dir, &["check"], &[], "");
     assert!(stdout(&out).contains(&refusal), "{}", stdout(&out));
@@ -67,11 +65,19 @@ fn an_entry_on_an_unanswered_question_of_another_file_says_it_waits() {
     assert!(!out.status.success());
     assert!(stderr(&out).contains(&refusal), "{}", stderr(&out));
 
-    // Once alpha is answered it is a current decision: the entry holds.
+    // Once alpha is answered it is a current decision of another file.
     let alpha = extract_ids(&std::fs::read_to_string(&a).unwrap())[0].clone();
     assert!(adr_answer(&dir, &alpha, "A").status.success());
     let out = adr_owner(&dir, &["approve", b.to_str().unwrap()], "");
-    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(!out.status.success());
+    assert!(
+        stderr(&out).contains(&format!(
+            "{}: \"Is the widget beta hold?\" depends on \"Is the widget alpha hold?\", a decision of another topic file; a question stands on terms and questions of its file; agent rewrites the depends line of \"Is the widget beta hold?\" to name terms and questions of this file; a decision of another file it relies on goes on no depends line",
+            B
+        )),
+        "{}",
+        stderr(&out)
+    );
 }
 
 // adr: 4319a653-6901-446c-94ab-6420ef472134
@@ -234,21 +240,18 @@ fn a_refusal_names_the_question_beside_its_identifier() {
 
     // Beta stands on alpha; then gamma takes alpha's place.
     write_test_comment(&dir, &alpha);
-    let beta = answered(
-        &dir,
-        B,
-        &format!("# B\n\n{}", question(BETA, &format!("widget, {}", ALPHA), "")),
-        0,
-    );
+    let mut with_beta = std::fs::read_to_string(dir.join(A)).unwrap();
+    with_beta.push_str(&format!("\n{}", question(BETA, &format!("widget, {}", ALPHA), "")));
+    let beta = answered(&dir, A, &with_beta, 1);
     write_test_comment(&dir, &beta);
 
-    // Under alpha, show names under its flag the question of the other file
-    // that stands on it: what would lose its ground with alpha.
+    // Under alpha, show names under its flag the question that stands on
+    // it: what would lose its ground with alpha.
     let shown = stdout(&adr(&dir, &["show", "--all", "--dependents"], &[], ""));
     assert!(
         shown.contains(&format!(
-            "[answered A] {}\n  Yes the widget holds.\n  depends: widget\n  dependents: {} ({})\n",
-            ALPHA, BETA, B
+            "[answered A] {}\n  Yes the widget holds.\n  depends: widget\n  dependents: {}\n",
+            ALPHA, BETA
         )),
         "{}",
         shown
@@ -262,7 +265,7 @@ fn a_refusal_names_the_question_beside_its_identifier() {
         "\n{}",
         question(GAMMA, "widget", &format!("supersedes: {}, {}\n", alpha, BETA))
     ));
-    let gamma = answered(&dir, A, &a, 1);
+    let gamma = answered(&dir, A, &a, 2);
     write_test_comment(&dir, &gamma);
 
     let out = adr(&dir, &["check"], &[], "");

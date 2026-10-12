@@ -74,8 +74,8 @@ fn assert_refused_and_noted(dir: &Path, rec: &Path, lines: &[String]) {
 
 // --- approve turns the name into the identifier ----------------------------
 
-// adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
-// adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
+// adr: 69708a07-469c-406b-9e25-63da1605b432
+// adr: 7c0b9fe3-6038-4a23-93fe-88a31c7eaf40
 //
 // "approve turns the name into an identifier" (672201dd A) and "the agent
 // writes the name, approve turns it into the identifier, and show and the page
@@ -110,7 +110,7 @@ fn approve_turns_the_name_on_a_blame_line_into_the_identifier() {
     assert!(!stdout(&checked).contains("blame entry"), "{}", stdout(&checked));
 }
 
-// adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+// adr: 69708a07-469c-406b-9e25-63da1605b432
 //
 // "A blame line naming the approved blame file and the row ranges the
 // question was born from": a row of either value may be named, a `detail`
@@ -126,7 +126,7 @@ fn a_blame_line_may_name_a_detail_row() {
     assert!(saved.lines().any(|l| l == format!("blame: {} 3-3", id)), "{}", saved);
 }
 
-// adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+// adr: 69708a07-469c-406b-9e25-63da1605b432
 //
 // "naming the approved blame file and the row ranges": one line holds the
 // blame files a question came from, each with its ranges, in any directory
@@ -149,7 +149,7 @@ fn a_blame_line_names_rows_of_two_blame_files() {
     assert!(shown.lines().any(|l| l == "  blame: x 1-2 3-3, sub/other 1-1"), "{}", shown);
 }
 
-// adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+// adr: 69708a07-469c-406b-9e25-63da1605b432
 //
 // A line the agent wrote with the identifier already names the blame file all
 // the same: "the name of a blame file ... or, once approve has turned it, its
@@ -165,7 +165,7 @@ fn a_blame_line_in_identifier_form_approves_as_written() {
     assert!(saved.lines().any(|l| l == format!("blame: {} 1-2", id)), "{}", saved);
 }
 
-// adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+// adr: 69708a07-469c-406b-9e25-63da1605b432
 //
 // A repeated entry or range on the line is tolerated: no rule refuses it,
 // and the line still names the blame file by its identifier.
@@ -183,7 +183,7 @@ fn a_repeated_entry_or_range_on_a_blame_line_is_tolerated() {
 
 // --- what approve refuses ---------------------------------------------------
 
-// adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+// adr: 69708a07-469c-406b-9e25-63da1605b432
 //
 // "A blame line naming the approved blame file": a name or an identifier that
 // is no blame file refuses on the line, and check prints the same line as a
@@ -201,7 +201,7 @@ fn approve_refuses_a_blame_line_naming_no_blame_file() {
     }
 }
 
-// adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+// adr: 69708a07-469c-406b-9e25-63da1605b432
 //
 // "A blame line naming the approved blame file": a blame file never approved
 // is new, and one approved and then edited is changed; neither is the file the
@@ -228,7 +228,7 @@ fn approve_refuses_a_blame_line_naming_a_blame_file_awaiting_approval() {
     assert_refused_and_noted(&dir, &rec, &[line]);
 }
 
-// adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+// adr: 69708a07-469c-406b-9e25-63da1605b432
 //
 // "the row ranges the question was born from": a range that is the range of
 // no row of the blame file refuses on that range alone; a range of a row of
@@ -254,7 +254,7 @@ fn approve_refuses_a_blame_line_naming_a_range_of_no_row() {
     assert!(!stderr(&out).contains("names 1-2,"), "{}", stderr(&out));
 }
 
-// adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+// adr: 69708a07-469c-406b-9e25-63da1605b432
 //
 // "naming the approved blame file and the row ranges": an entry that names a
 // blame file and no range refuses.
@@ -268,7 +268,7 @@ fn approve_refuses_a_blame_entry_with_no_range() {
     assert_refused_and_noted(&dir, &rec, &[line]);
 }
 
-// adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+// adr: 69708a07-469c-406b-9e25-63da1605b432
 //
 // The first token of an entry is always its name, so a lone range-shaped
 // token is a name with no range and refuses as such.
@@ -282,7 +282,7 @@ fn approve_refuses_a_lone_range_shaped_token_as_a_name_with_no_range() {
     assert_refused_and_noted(&dir, &rec, &[line]);
 }
 
-// adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+// adr: 69708a07-469c-406b-9e25-63da1605b432
 //
 // A blame file may be called like a range: the first token of the entry is
 // its name, the rest its ranges, and approve turns the name into the
@@ -300,7 +300,7 @@ fn a_blame_file_named_like_a_range_is_named_by_the_first_token() {
 
 // --- nothing forces the link ------------------------------------------------
 
-// adr: ee27fd4c-89b7-411f-a3e4-2535c49b6d1b
+// adr: a469ecb9-a4f1-4a2a-89c5-7378cc1138b4
 //
 // "no finding, no refusal": a question that carries no blame line is
 // complete. It approves with no blame line written for it, and ask and check
@@ -324,7 +324,7 @@ fn a_question_with_no_blame_line_approves() {
 
 // --- what the line is part of -----------------------------------------------
 
-// adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+// adr: 69708a07-469c-406b-9e25-63da1605b432
 //
 // "a line under the heading": a heading with a depends line and a blame line
 // and nothing else has no body yet; the blame line is no stray line of a body.
@@ -339,7 +339,7 @@ fn a_heading_with_a_depends_and_a_blame_line_has_no_body() {
     assert!(!shown.contains("stray line"), "{}", shown);
 }
 
-// adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+// adr: 69708a07-469c-406b-9e25-63da1605b432
 //
 // "A blame line naming the approved blame file and the row ranges the
 // question was born from": the line is part of the question's approved text,
@@ -371,7 +371,7 @@ fn a_blame_line_is_part_of_the_approved_question() {
 
 // --- a question whose text cannot change is not judged ------------------------
 
-// adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+// adr: 69708a07-469c-406b-9e25-63da1605b432
 //
 // "the approved blame file never changes": a question asked and standing as
 // asked has text that cannot change, so its blame line is not judged again.
@@ -394,8 +394,8 @@ fn an_asked_question_is_not_judged_again_when_its_blame_file_changes() {
     assert!(!stdout(&checked).contains("blame line"), "{}", stdout(&checked));
 }
 
-// adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
-// adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
+// adr: 69708a07-469c-406b-9e25-63da1605b432
+// adr: 80b89c24-7d65-43f4-bb03-55e9d85c327d
 //
 // "what approve refuses, check reports with the same move" (fe14991d A): on
 // an approved topic file whose question is not asked, a blame file edited

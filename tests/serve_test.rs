@@ -1226,7 +1226,7 @@ fn page_shows_question_options_and_the_decisions_list() {
         lines
     );
 
-    // adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
+    // adr: 7c0b9fe3-6038-4a23-93fe-88a31c7eaf40
     // A supersedes entry is written as an id; the page turns it back into
     // the heading it names, never printing the bare id.
     let superseding = format!(
@@ -1335,7 +1335,7 @@ fn page_follows_the_topic_as_it_advances() {
     let _ = child.wait();
 }
 
-// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+// adr: da80931c-68cf-4c51-acce-060307bbd973
 //
 // The page offers a form only for a question `answer` takes: with Q1 and Q2
 // (standing on Q1=A) both asked, /next offers Q1 and shows Q2 with the
@@ -1382,7 +1382,7 @@ fn page_offers_only_the_questions_answer_takes() {
     let _ = child.wait();
 }
 
-// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+// adr: da80931c-68cf-4c51-acce-060307bbd973
 //
 // The page keeps to what `answer` takes. The question standing on another
 // sits first in the file: the overview shows the moves `adr show` prints,
@@ -1428,7 +1428,7 @@ fn page_shows_a_waiting_question_without_a_form_and_offers_it_once_unlocked() {
     let _ = child.wait();
 }
 
-// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+// adr: da80931c-68cf-4c51-acce-060307bbd973
 //
 // A question edited since it was asked has no answer form (`answer`
 // refuses it); the page shows its status and the move `adr show <file>`
@@ -1467,7 +1467,7 @@ fn page_shows_no_form_for_an_edited_question() {
     let _ = child.wait();
 }
 
-// adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
+// adr: 7c0b9fe3-6038-4a23-93fe-88a31c7eaf40
 //
 // "every reference carries the identifier of what it names; the agent
 // writes the name, approve turns it into the identifier, and show and the
@@ -1573,64 +1573,51 @@ fn post_answer_through_the_page_writes_the_answer_to_the_file_and_ledger() {
 
 // adr: da59b448-1afb-4469-b40e-69eda8f253c2
 //
-// The page must show the same approval state the CLI does. B's `depends:`
-// line, hand-reverted back to the heading words `approve` rewrote to A's
-// id, still resolves to that same id in memory (the same cross-file
-// pre-pass `snapshot` runs before reading approval state) -- but it is no
-// longer the bytes the owner approved, exactly the fixture
-// `ask_and_check_refuse_a_cross_file_depends_line_reverted_by_hand_after_approve`
+// The page must show the same approval state the CLI does. A question's
+// `depends:` line, hand-reverted back to the heading words `approve`
+// rewrote to the id of a question of the same file, still resolves to that
+// same question -- but it is no longer the bytes the owner approved,
+// exactly the fixture
+// `ask_and_check_refuse_a_depends_line_reverted_by_hand_after_approve`
 // proves `ask`/`check` catch. The page must catch it too: `snapshot` reads
-// plan/context approval off each file before its own normalize pass
-// mutates the parsed `depends:` entries in memory, and hands those values
-// straight into `build_file_view` as parameters (rather than letting it
-// recompute its own, wrong, copy off the by-then-normalized file) -- so
-// there is no window where the page could show B as approved.
+// plan/context approval off each file as written and hands those values
+// straight into `build_file_view`, so there is no window where the page
+// could show the file as approved.
 #[test]
-fn page_shows_a_reverted_cross_file_depends_line_as_not_approved() {
+fn page_shows_a_reverted_depends_line_as_not_approved() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
 
-    // A: a real, fully approved current decision of its own.
+    // A file approved whole, and a second file approved whole to compare.
     let a_content = "# Topic A\n\n### 1.1 Is A do a thing?\ndepends: decision\n\nProblem: a decision.\n\nStandard: a decision.\n\n- A) x, a decision.\n  Why: w.\n  Costs: c.\n- B) y, a decision.\n  Why: w.\n  Costs: c.\n";
     let record_a = write_record(&dir, "adrdom/decisions/topic-a.md", a_content);
     let out_a = adr_owner(&dir, &["approve", record_a.to_str().unwrap()], "");
     assert!(out_a.status.success(), "approving A failed: {}", stderr(&out_a));
-    let approved_a = std::fs::read_to_string(&record_a).unwrap();
-    let a_id = approved_a
-        .lines()
-        .find_map(|l| l.strip_prefix("id: "))
-        .unwrap()
-        .to_string();
-    let ask_a = adr(&dir, &["ask", record_a.to_str().unwrap()], &[], "");
-    assert!(ask_a.status.success(), "asking A failed: {}", stderr(&ask_a));
-    assert!(
-        adr_answer(&dir, &a_id, "A").status.success(),
-        "answering A failed"
-    );
 
-    // B: its only question stands on A, named by A's heading text.
-    let b_text = "1.1 Is A do a thing?";
+    // B: its second question stands on its first, named by heading text.
+    let b_text = "1.1 Is B do a thing?";
     let b_content = format!(
-        "# Topic B\n\n### 1.1 Is B stand on A?\ndepends: {}\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
-        b_text
+        "# Topic B\n\n### {}\ndepends: decision\n\nProblem: a decision.\n\nStandard: a decision.\n\n- A) x, a decision.\n  Why: w.\n  Costs: c.\n- B) y, a decision.\n  Why: w.\n  Costs: c.\n\n### 1.2 Is B stand on it?\ndepends: {}=A\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        b_text, b_text
     );
     let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", &b_content);
     let out_b = adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "");
     assert!(out_b.status.success(), "approving B failed: {}", stderr(&out_b));
 
     let approved_b = std::fs::read_to_string(&record_b).unwrap();
+    let b_id = approved_b.lines().find_map(|l| l.strip_prefix("id: ")).unwrap().to_string();
     assert!(
-        approved_b.contains(&format!("depends: {}\n", a_id)),
-        "expected B's depends line rewritten to A's id: {}",
+        approved_b.contains(&format!("depends: {}=A\n", b_id)),
+        "expected the depends line rewritten to the id: {}",
         approved_b
     );
 
     // Hand-revert the rewritten line back to the heading words `approve`
     // replaced it with.
     let reverted = approved_b.replacen(
-        &format!("depends: {}\n", a_id),
-        &format!("depends: {}\n", b_text),
+        &format!("depends: {}=A\n", b_id),
+        &format!("depends: {}=A\n", b_text),
         1,
     );
     assert_ne!(reverted, approved_b, "the fixture should still hold the rewritten line");
@@ -1659,7 +1646,7 @@ fn page_shows_a_reverted_cross_file_depends_line_as_not_approved() {
     let _ = child.wait();
 }
 
-// adr: 7857d633-2055-47eb-857f-cb70da9fa7ba
+// adr: 3cf56867-3918-4ce6-a296-2cc62a91b154
 //
 // An act that wrote events and has findings on its input (an unban with one
 // word banned and one not): the banner shows both, each as its own kind,
@@ -1732,7 +1719,7 @@ fn two_asked() -> std::path::PathBuf {
     dir
 }
 
-// adr: 7857d633-2055-47eb-857f-cb70da9fa7ba
+// adr: 3cf56867-3918-4ce6-a296-2cc62a91b154
 //
 // The overview is a card per topic file under the heading "Overview": the
 // count of open questions, a link to the answer page, the file's status
@@ -1771,7 +1758,7 @@ fn overview_is_one_card_per_topic_with_the_asked_questions() {
     assert!(b.contains("action=\"/unban\""), "{}", b);
 }
 
-// adr: 7857d633-2055-47eb-857f-cb70da9fa7ba
+// adr: 3cf56867-3918-4ce6-a296-2cc62a91b154
 //
 // The answer page is one question at a time: its position among the open
 // questions and their count, the options with Why and Costs, the terms its
@@ -1819,7 +1806,7 @@ fn next_is_one_question_with_the_count_and_the_others_linked() {
     assert!(next.body.contains("What is the second unit called?") && next.body.contains("Question 1 of 1 open."), "{}", next.body);
 }
 
-// adr: 7857d633-2055-47eb-857f-cb70da9fa7ba
+// adr: 3cf56867-3918-4ce6-a296-2cc62a91b154
 //
 // A stop on an answer shows the same question again, the findings that
 // stopped it above it as a refused banner.
@@ -1928,7 +1915,7 @@ fn focus_heading(body: &str) -> String {
     unhtml(h1).trim().to_string()
 }
 
-// adr: 7857d633-2055-47eb-857f-cb70da9fa7ba
+// adr: 3cf56867-3918-4ce6-a296-2cc62a91b154
 //
 // Skip moves on in the order of the file and comes back to the one skipped
 // last; an answer moves on from the place of the question answered, though
@@ -2001,7 +1988,7 @@ fn answer_script(body: &str) -> &str {
     &body[from..from + to]
 }
 
-// adr: 7857d633-2055-47eb-857f-cb70da9fa7ba
+// adr: 3cf56867-3918-4ce6-a296-2cc62a91b154
 //
 // The keys of the answer page, read off the script it emits: a letter and S
 // work while a radio, a button or a link holds focus (only a field that takes

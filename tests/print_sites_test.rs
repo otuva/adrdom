@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 const REL: &str = "adrdom/decisions/gate.md";
 
 // adr: 848e1b76-9cfe-483b-94dd-094eb9b2f995
-// adr: 069a6b4a-de35-45f3-8c6c-8e254bf40565
+// adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
 //
 // Every line a command prints goes through the one printer in src/out.rs,
 // so what a command prints is a `Line` (what it read, a status, a finding,
@@ -378,7 +378,7 @@ fn every_planning_stage_prints_one_report_in_every_command() {
 }
 
 // adr: aac5c313-dedd-466b-a0c3-ead5e99ce913
-// adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
+// adr: 80b89c24-7d65-43f4-bb03-55e9d85c327d
 //
 // The states a review found the commands disagreeing on, each one report
 // in every command: a depends line naming one term twice on a draft, a
@@ -441,7 +441,7 @@ fn every_judged_state_prints_one_report_in_every_command() {
     assert!(!show.iter().any(|l| l.starts_with("agent builds")), "{:?}", show);
 }
 
-// adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
+// adr: 80b89c24-7d65-43f4-bb03-55e9d85c327d
 // adr: aac5c313-dedd-466b-a0c3-ead5e99ce913
 //
 // The terms file changed to hold a banned word: approve of the terms file

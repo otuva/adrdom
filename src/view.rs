@@ -20,8 +20,8 @@ pub struct CheckReport {
 
 
 /// Every heading id of the topic files `records`, paired with its heading
-/// text (per "Does a reference in a topic file carry the identifier of what
-/// it names?"): what turns an identifier back into the heading it names.
+/// text (per "What does a reference in a topic file carry?"): what turns an identifier back into
+/// the heading it names.
 pub fn heading_texts(records: &[RecordFile]) -> HashMap<String, String> {
     let mut out = HashMap::new();
     for rf in records {

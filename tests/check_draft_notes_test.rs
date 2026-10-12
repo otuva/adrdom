@@ -225,7 +225,7 @@ fn a_finding_in_an_asked_question_stays_a_failure_in_a_draft_file() {
     // The file holds only the asked question: its finding fails check.
     write_record(&dir, REL, &format!("# Gate\n\n{}\n", beta_section));
     let before = failures(&dir);
-    assert!(before.contains("which is not a current decision"), "{}", before);
+    assert!(before.contains("which names no term and no question of this file"), "{}", before);
     // One unasked question added: the file now awaits approval, but the
     // finding about the asked question still fails; the same finding about
     // the new one is a note.

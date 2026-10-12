@@ -68,12 +68,9 @@ fn lexical(path: &Path) -> std::path::PathBuf {
 /// True when `hash` matches the latest ledger row for `event`/`rel`: the
 /// comparison `plan_approved`/`context_approved` make, factored out so a
 /// caller that already holds the hash -- computed from the file exactly as
-/// it sits on disk, before any in-memory normalization
-/// (`depends::normalize_cross_file_deps`) touched it -- can make the same
-/// comparison without recomputing the hash from a `RecordFile` that may by
-/// then have been normalized. Approval state must always read the file
-/// exactly as written, never the resolved-for-tiers copy: normalization is
-/// only for resolving depends targets and deriving tiers.
+/// it sits on disk -- can make the same comparison without recomputing the
+/// hash from a `RecordFile`. Approval state must always read the file
+/// exactly as written.
 fn hash_matches_latest(led: &Ledger, event: &str, rel: &str, hash: &str) -> bool {
     match led.latest_for_path(event, rel) {
         Some(row) => row.hash == hash,
@@ -140,20 +137,15 @@ pub fn context_approved_hash(led: &Ledger, rel: &str, context_hash: &str) -> boo
 
 /// True when the topic file's current questions match the latest `approved`
 /// ledger row for `rel` (the topic file's path relative to the repo root).
-/// `rf` must not have gone through `depends::normalize_cross_file_deps` --
-/// that mutates the parsed `depends:` entries these hash, in memory, so a
-/// caller that normalizes its `rf` must compute `record::question_hashes`
-/// before doing so and call `plan_approved_hashes` with them instead.
+/// `rf` is the file as written.
 pub fn plan_approved(led: &Ledger, rf: &RecordFile, rel: &str) -> bool {
     plan_approved_hashes(led, rel, &record::question_hashes(rf))
 }
 
 /// True when the topic file's current context hash matches the latest
 /// `context` ledger row for `rel`. Context hashing never reads a
-/// section's `depends:` entries, so it is unaffected by
-/// `depends::normalize_cross_file_deps` in practice -- kept alongside
-/// `plan_approved` (and `context_approved_hash` given the same way) so
-/// nothing about that stays implicit.
+/// section's `depends:` entries; kept alongside `plan_approved` (and
+/// `context_approved_hash` given the same way).
 pub fn context_approved(led: &Ledger, rf: &RecordFile, rel: &str) -> bool {
     context_approved_hash(led, rel, &record::context_hash(rf))
 }
@@ -708,16 +700,13 @@ pub fn unresolved_sibling(rf: &RecordFile, i: usize) -> Option<&Section> {
     find(false).or_else(|| find(true))
 }
 
-/// What holds question `i` of a file back from `answer` (per "Does answer
-/// take a question standing on a question with no decision?" and "Does a
-/// refused question hold the tiers above it?"): the questions of the same
-/// file it names on its depends line that have no letter answer, split into
-/// those still waiting for one (`unanswered`) and refused ones
-/// (`refused_target`), and the refused questions of a lower tier it does not
-/// stand on (`refused_tier`). Read off the file text alone, like
-/// `tier_unresolved`. An unanswered question that is not a target holds
-/// nothing back. A dependency on another file names a current decision and
-/// never waits.
+/// What holds question `i` of a file back from `answer` (per "Does answer take a question standing
+/// on a question that has no decision?" and "Does a refused question hold the tiers above it?"):
+/// the questions of the same file it names on its depends line that have no letter answer, split
+/// into those still waiting for one (`unanswered`) and refused ones (`refused_target`), and the
+/// refused questions of a lower tier it does not stand on (`refused_tier`). Read off the file text
+/// alone, like `tier_unresolved`. An unanswered question that is not a target holds nothing back. A
+/// dependency on another file names a current decision and never waits.
 #[derive(Debug, Default, PartialEq)]
 pub struct AnswerWaits {
     pub unanswered: Vec<usize>,
@@ -954,13 +943,11 @@ pub fn conflicting_rulings(led: &Ledger, id: &str) -> Option<(Ruling, Ruling)> {
 }
 
 /// The text a section's `terms:` line is (re)computed from, and what the
-/// banned-word scan reads (per "Does a reference in a topic file carry the
-/// identifier of what it names?"): the section's hashed range (heading
-/// through the hash end, see `record::hash_range`) with the `terms:` line
-/// itself left out (so re-resolving never matches against a term's own
-/// previous resolution rather than the prose that produced it), and with
-/// `id:`, `depends:`, `supersedes:`, `unrelated:` and `blame:` lines left out
-/// too, since those hold ids and references, not prose, once a plan is
+/// banned-word scan reads (per "What does a reference in a topic file carry?"): the section's
+/// hashed range (heading through the hash end, see `record::hash_range`) with the `terms:` line
+/// itself left out (so re-resolving never matches against a term's own previous resolution rather
+/// than the prose that produced it), and with `id:`, `depends:`, `supersedes:`, `unrelated:` and
+/// `blame:` lines left out too, since those hold ids and references, not prose, once a plan is
 /// approved.
 pub fn section_text_excluding_terms_line(lines: &[String], sec: &Section) -> String {
     let (s, e) = record::hash_range(lines, sec);
@@ -1036,7 +1023,7 @@ mod tests {
         assert!(!blame_approved(&led, "adrdom/blame/x.md", "different content\n"));
     }
 
-    // adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+    // adr: 69708a07-469c-406b-9e25-63da1605b432
     //
     // The text a question is paired to terms from, and the banned-word scan
     // reads, holds the question's words: the reference lines (a blame file's

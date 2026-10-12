@@ -270,14 +270,12 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
     Ok(Located { led, rf, idx, rel, tf, cur_hash })
 }
 
-/// The refusal when `answer` does not take question `idx` now (per "Does
-/// answer take a question standing on a question with no decision?" and
-/// "Does a refused question hold the tiers above it?"): `state::answer_waits`
-/// is the one test, the `next` lines and the page read it too. Shared by
-/// a letter and a refusal. An unanswered target names the owner's
-/// `adr answer` of the first question in its chain that `answer` takes, once
-/// that question is asked and stands as asked, else the agent's `adr ask`
-/// (or the writing of a body first); a chain that ends on a refused question
+/// The refusal when `answer` does not take question `idx` now (per "Does answer take a question
+/// standing on a question that has no decision?" and "Does a refused question hold the tiers above
+/// it?"): `state::answer_waits` is the one test, the `next` lines and the page read it too. Shared
+/// by a letter and a refusal. An unanswered target names the owner's `adr answer` of the first
+/// question in its chain that `answer` takes, once that question is asked and stands as asked, else
+/// the agent's `adr ask` (or the writing of a body first); a chain that ends on a refused question
 /// names the plan change and the approval.
 fn answer_gate(root: &Path, rf: &RecordFile, led: &Ledger, tf: &terms::TermsFile, idx: usize, rel: &str) -> Option<Stops> {
     let w = state::answer_waits(rf, idx);
@@ -510,7 +508,7 @@ fn collect_drops(rf: &RecordFile, rel: &str, led: &Ledger, idx: usize, id: &str,
 }
 
 pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<Outcome, Stops> {
-    let Located { led, mut rf, idx, tf, cur_hash, rel } = locate_asked(root, id, version, Some(letter))?;
+    let Located { led, rf, idx, tf, cur_hash, rel } = locate_asked(root, id, version, Some(letter))?;
 
     let supersedes_val;
     {
@@ -541,10 +539,6 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
     let all = record::load_all(root);
     {
         let cross_file_headings = depends::cross_file_heading_index(&all, &led);
-        // The same normalization `ask` and `check` run before judging a
-        // file, so a cross-file heading-text entry reads the same here.
-        let phrase_lookup = terms::phrase_lookup(&tf.terms);
-        depends::normalize_cross_file_deps(&mut rf, &tf.terms, &phrase_lookup, &cross_file_headings, &led);
         let names = crate::view::heading_texts(&all);
         let refusals = rules::supersedes_refusals(&rf.rel, &rf, &cross_file_headings, &names, &all, &led, Some(idx));
         if !refusals.is_empty() {
@@ -1058,12 +1052,10 @@ fn do_approve_terms(
 
 /// Inserts a freshly minted id directly after each skeleton section's
 /// `depends:` line (or its `supersedes:`, `unrelated:` or `blame:` line,
-/// directly under it) (per "Does a reference in a topic file carry the
-/// identifier of what it names?"; no blank padding, the same bare
-/// single-line insert `ask` uses for `terms:` after `id:`). Every section
-/// here has already passed `record_refusals`'s "has no depends line"
-/// check, so the search below should never fail -- but that invariant
-/// lives in a different function now, so a future reorder of the two
+/// directly under it) (per "What does a reference in a topic file carry?"; no blank padding, the
+/// same bare single-line insert `ask` uses for `terms:` after `id:`). Every section here has
+/// already passed `record_refusals`'s "has no depends line" check, so the search below should never
+/// fail -- but that invariant lives in a different function now, so a future reorder of the two
 /// reports an error instead of panicking.
 fn insert_missing_ids(rf: &RecordFile, mut work_lines: Vec<String>) -> Result<Vec<String>, Stops> {
     let needs_id: Vec<bool> = rf.sections.iter().map(|s| s.id.is_none()).collect();
@@ -1090,17 +1082,14 @@ fn insert_missing_ids(rf: &RecordFile, mut work_lines: Vec<String>) -> Result<Ve
 }
 
 /// A topic file: parse, refuse on shape errors; resolve every `depends:`
-/// entry (per "Does a reference in a topic file carry the identifier of
-/// what it names?": the file holds ids, the agent writes words, and `approve`
-/// is what turns one into the other); check every ledger id that now
-/// appears in no topic file, refusing on a current (answered) one, before
-/// anything is written -- withdrawing an asked/refused one and allowing a
-/// superseded one silently happen after, since neither is a refusal; only
-/// then mint an id for every heading that lacks one, compute plan hash and
-/// context hash over the rewritten file, write an `approved` row if it
-/// differs from the latest for the path, a `context` row likewise, and
-/// finally write the withdrawn rows. Nothing is written to disk (file or
-/// ledger) when any check refuses.
+/// entry (per "What does a reference in a topic file carry?": the file holds ids, the agent writes
+/// words, and `approve` is what turns one into the other); check every ledger id that now appears
+/// in no topic file, refusing on a current (answered) one, before anything is written --
+/// withdrawing an asked/refused one and allowing a superseded one silently happen after, since
+/// neither is a refusal; only then mint an id for every heading that lacks one, compute plan hash
+/// and context hash over the rewritten file, write an `approved` row if it differs from the latest
+/// for the path, a `context` row likewise, and finally write the withdrawn rows. Nothing is written
+/// to disk (file or ledger) when any check refuses.
 fn do_approve_record(
     root: &Path,
     file: &Path,
@@ -1128,7 +1117,7 @@ fn do_approve_record(
     // naming it refuses "which is no term" instead of the one clear "terms
     // not approved" line.
     let tf = require_terms(root, led, rel, Command::Approve)?;
-    // Read off the file as written, before the normalize pass below.
+    // Read off the file as written.
     let planning = rules::planning_rules_apply(led, &rf, rel);
     let terms_list: &[terms::Term] = &tf.terms;
     // Built once per command run (not per depends entry): `resolve_dep`
@@ -1147,26 +1136,10 @@ fn do_approve_record(
     // `state_ids`, so loading before that rewrite changes nothing either
     // read below depends on.
     let all_records: Vec<RecordFile> = record::load_all(root);
-    // Every current decision's heading text, repo-wide (the cross-file gap
-    // "Does a reference in a topic file carry the identifier of what it
-    // names?" left open): built once here too, from `all_records` above,
-    // and reused for the normalize pass below and for every `resolve_dep`
-    // call this function makes.
+    // Every current decision's heading text, repo-wide (the index a
+    // `supersedes:` entry is resolved against): built once here, from
+    // `all_records` above.
     let cross_file_headings = depends::cross_file_heading_index(&all_records, led);
-
-    // Heading-shaped `depends:` entries that name no heading in `rf` but
-    // resolve to exactly one current decision elsewhere are rewritten to
-    // `Id` entries in memory, and `rf.tiers`/`rf.derive_error` recomputed,
-    // before `record_refusals` runs -- otherwise a legitimate cross-file
-    // reference would still trip the file-wide `derive_error` a plain
-    // `Text` heading dep always has when it names no heading in its own
-    // file (`record::derive_tiers` has no cross-file/ledger knowledge of
-    // its own). An entry that matches more than one current decision
-    // elsewhere becomes `rf.derive_error` instead
-    // (`DeriveError::AmbiguousHeading`), which `record_refusals` below
-    // turns into this file's "plan" refusal -- no side list to fold in
-    // here any more.
-    depends::normalize_cross_file_deps(&mut rf, terms_list, &phrase_lookup, &cross_file_headings, led);
 
     // Every refusal this file can earn -- shape, tells, a missing
     // depends line, depends resolution (including a frozen section's
@@ -1302,7 +1275,7 @@ fn do_approve_record(
         let parts: Vec<String> = sec
             .depends
             .iter()
-            .map(|d| rewrite_dep_entry(d, sec, &work_rf, terms_list, &phrase_lookup, &cross_file_headings, led))
+            .map(|d| rewrite_dep_entry(d, sec, &work_rf, terms_list, &phrase_lookup, led))
             .collect();
         work_rf.lines[line_idx] = format!("depends: {}", parts.join(", "));
     }
@@ -1512,21 +1485,12 @@ fn rewrite_dep_entry(
     work_rf: &RecordFile,
     terms_list: &[terms::Term],
     phrase_lookup: &HashMap<String, String>,
-    cross_file_headings: &HashMap<String, Vec<(String, String)>>,
     led: &Ledger,
 ) -> String {
     match d {
         record::Dep::Id { id, set } => format!("{}{}", id, record::set_suffix(set)),
         record::Dep::Text { text, set } => {
-            let resolved = depends::resolve_dep(
-                d,
-                sec,
-                work_rf,
-                terms_list,
-                phrase_lookup,
-                cross_file_headings,
-                led,
-            )
+            let resolved = depends::resolve_dep(d, sec, work_rf, terms_list, phrase_lookup, led)
                 .ok()
                 .flatten()
                 .and_then(|target| match target {
