@@ -706,7 +706,8 @@ pub fn unresolved_sibling(rf: &RecordFile, i: usize) -> Option<&Section> {
 /// into those still waiting for one (`unanswered`) and refused ones (`refused_target`), and the
 /// refused questions of a lower tier it does not stand on (`refused_tier`). Read off the file text
 /// alone, like `tier_unresolved`. An unanswered question that is not a target holds nothing back. A
-/// dependency on another file names a current decision and never waits.
+/// question open to ask names no decision of another file, and an old entry that does, on a closed
+/// question, never waits.
 #[derive(Debug, Default, PartialEq)]
 pub struct AnswerWaits {
     pub unanswered: Vec<usize>,

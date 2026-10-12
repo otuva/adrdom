@@ -158,15 +158,14 @@ pub fn dep_refusal_text(rel: &str, heading: &str, err: &DepError, name: Option<&
 /// (several entries share a heading text only when two current decisions
 /// happen to carry the exact same one, in different files -- `check`'s
 /// cross-file duplicate-heading check flags that separately). Built once
-/// per command run, like `terms::phrase_lookup`, and passed to every
-/// `resolve_supersedes` call in that run, rather than rebuilt per entry or
-/// per file. Takes already-loaded records
-/// rather than a repo root: every caller either already has every topic
-/// file loaded for its own purposes (`check`, and `approve`'s
-/// `missing_answered_refusals` pass) or is the one place left that has to
-/// load them for this alone (`ask`, `show`, the page's `snapshot`) --
-/// either way, this used to re-read every file off disk itself regardless,
-/// doubling that read in the callers that already had it in memory.
+/// per command run and passed to its callers, rather than rebuilt per
+/// entry or per file. It serves the `supersedes:` and `unrelated:` lines
+/// (an entry may name a current decision of another file by its heading)
+/// and the depends finding in `rules::derive_finding`, which uses it to
+/// tell a heading entry that names a decision of another file from one
+/// that names nothing. A `depends:` entry is resolved against the file and
+/// the terms alone. Takes already-loaded records rather than a repo root,
+/// so a caller that has every topic file in memory does not read them again.
 pub fn cross_file_heading_index(records: &[RecordFile], led: &Ledger) -> HashMap<String, Vec<(String, String)>> {
     let mut out: HashMap<String, Vec<(String, String)>> = HashMap::new();
     for rf in records {

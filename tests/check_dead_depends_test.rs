@@ -128,3 +128,37 @@ fn check_still_refuses_a_live_section_standing_on_a_superseded_decision() {
         text
     );
 }
+
+/// No line reports the depends entry that names alpha: the tie reminders
+/// name alpha by id too, so only lines about a depends entry are read.
+fn assert_no_dep_line(text: &str, alpha: &str) {
+    for line in text.lines() {
+        assert!(
+            !(line.contains(alpha) && line.contains("depends")) && !line.contains("decision of another file"),
+            "old entry reported: {}\n{}",
+            line,
+            text
+        );
+    }
+}
+
+// adr: 9afe335c-2a7a-4625-b115-f74d3f091cac
+#[test]
+fn old_cross_file_entry_on_a_closed_question_does_not_stop_a_draft_file() {
+    let (dir, alpha) = alpha_and_beta();
+    let rel = "adrdom/decisions/b.md";
+    let path = dir.join(rel);
+    let mut content = std::fs::read_to_string(&path).unwrap();
+    content.push_str(&section("Does delta hold authority?", "authority", ""));
+    write_record(&dir, rel, &content);
+
+    let out = adr(&dir, &["check"], &[], "");
+    let text = format!("{}{}", stdout(&out), stderr(&out));
+    assert_no_dep_line(&text, &alpha);
+
+    plan_record(&dir, rel);
+    let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
+    let text = format!("{}{}", stdout(&out), stderr(&out));
+    assert!(out.status.success(), "approve failed: {}", text);
+    assert_no_dep_line(&text, &alpha);
+}
