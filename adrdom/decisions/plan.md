@@ -367,3 +367,33 @@ Standard: ADR collections name each file by a slug of its subject.
   Costs: two spellings of one topic make two files.
 
 **Answer:** A
+
+### Does ask run on a file with unapproved prose?
+depends: ask, approve, What does approve write for the prose above the first question?
+supersedes: Does ask run on a file whose prose is unapproved?, Does a command refuse what check passes?, What does a command that writes print?, What does a finding name?, Does a finding name the identifier of the decision it judges?, Does the ui show what the terminal prints?, Does the tool colour what it prints to a terminal?, What does the tool add to the shape of what it prints to a terminal?
+unrelated: Does approve write the terms brief?, Does ask refuse an option over a word limit?, Does ban refuse a word that appears in the repository?, Does check fail a topic file awaiting approval?, Does show print what a file holds beyond its latest approval?, Does the tool stop while the terms file waits for approval?, What does ask put to the owner in one run?, Does a refused question hold the tiers above it?, Does a refused question stay in its topic file?, Does an answer carry the version of the question the owner read?, Does approve withdraw an asked question struck from the plan?, Does ask stop a question outside the plan?, Does the ui perform every owner act?, Does a reference line keep its list on one line?
+
+Problem: a question is asked under prose the owner has not read, and the prose sets the scope the question is read in.
+Standard: a change is reviewed whole; a part left unreviewed holds the rest.
+
+- A) No.
+  Why: the owner reads a question under prose approved with it.
+  Costs: a prose edit holds every question of the file until approve.
+- B) Yes.
+  Why: a prose edit never holds a question.
+  Costs: the owner answers a question under scope text nobody approved.
+
+### Does a reference line keep its list on one line?
+depends: depends, supersede, What stands under a question's heading?
+supersedes: Does a reference line hold its list on one line?
+unrelated: Does a reference in a topic file carry the identifier of what it names?, Does a supersedes line name every current decision standing on its target?, Does check print a line that names no move?, Does show print the reference lines of an answered question?, Does the reader's file keep a row whose text is gone from the records?, Does the word limit hold for an option's Costs line?, Does the word limit hold for an option's Why line?, What does the terms brief hold?, What holds the list of loaded phrases?, Does a term carry its own banned words?, Does approve turn the supersedes line into identifiers?, Does one decision supersede several?, Does one question heading stand in two topic files?, What does a depends line name?, Does ask run on a file with unapproved prose?, question
+
+Problem: a depends, terms or supersedes line spread over several lines, one entry per line, is a second layout for the same job, and each new kind of list invites another.
+Standard: one field, one line, entries separated by commas, as in email and HTTP headers.
+
+- A) Yes.
+  Why: one rule for every list, and one line per field keeps diffs readable.
+  Costs: a long list makes a long line.
+- B) No.
+  Why: each entry diffs on its own.
+  Costs: two layouts to parse, and a list's end is found only by what follows it.

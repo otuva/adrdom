@@ -370,3 +370,102 @@ Standard: a listing groups its lines, with a blank line between groups and a hea
   Costs: column widths per group, wrapping of long headings, and a second form of every line.
 
 **Answer:** A
+
+### Does a command refuse what check lets pass?
+depends: check, refusal, finding
+supersedes: Does a command refuse what check passes?, What does a command that writes print?, What does a finding name?, Does a finding name the identifier of the decision it judges?, Does the ui show what the terminal prints?, Does the tool colour what it prints to a terminal?, What does the tool add to the shape of what it prints to a terminal?
+unrelated: Does a command compute a move of its own?, Does a command name a status of its own?, Does a command stop when the environment gives no session identifier?, Does a refusal name the command that clears it?, Does ban refuse a word that appears in the repository?, Does check fail a planner's commit that reaches outside adrdom?, Does check print a line that names no move?, Does the reader's word stop a command?, Does a supersedes line name every current decision standing on its target?, Does check read the words of an answered question again?, Does the agent build what no current decision covers?, Does the tool stop while the terms file waits for approval?, What does check do with a fault on a file awaiting approval?, Does the tool colour its terminal output?, Does the ui show what the commands print?, What does a finding line name?, What does a writing command print?, What does the tool add to the shape of its terminal output?
+
+Problem: approve refuses a draft with a refused word that check passes, and refuses a removed file that check and show report as awaiting approval; each command judges the records on its own.
+Standard: one judgement per rule on the records, read by every command that acts on it.
+
+- A) No.
+  Why: every rule is judged once and read by every judging command; what approve refuses, check reports with the same move.
+  Costs: check reads every rule those commands read; a rule on the input of one command, like ban, stays there.
+- B) Yes.
+  Why: each command judges what it needs when it writes.
+  Costs: a draft passes check and the commit, then stops at approve, and the agent learns the rule from the refusal.
+
+### What does a writing command print?
+depends: ledger, finding, move
+supersedes: What does a command that writes print?, What does a finding name?, Does the ui show what the terminal prints?, Does the tool colour what it prints to a terminal?, What does the tool add to the shape of what it prints to a terminal?, Does a finding name the identifier of the decision it judges?
+unrelated: Does a command print under a flag what it computes from the records?, Does a command write a time later than the last ledger row?, Does check print a line that names no move?, What does a command that writes nothing print?, What does show print of a file under adrdom?, What does show print with no file named?, Does an owner command commit?, Does approve withdraw an asked question struck from the plan?, Does ban refuse a word that appears in the repository?, Does the agent build what no current decision covers?, What does check do with a fault on a file awaiting approval?, What does the tool print for a build move in a planner's session?, Does a command refuse what check lets pass?, Does the tool colour its terminal output?, Does the ui show what the commands print?, What does a finding line name?, What does the tool add to the shape of its terminal output?
+
+Problem: approve, answer and ask print tier lines and the lines of other commands, install and the ban rebuild print lines no decision names, and what the owner reads after an act has no decision behind it.
+Standard: a command that writes prints one line per event, as git commit does, or nothing, as mv does.
+
+- A) The event it wrote, one line each, or the finding that stopped it, and nothing else.
+  Why: the one who runs it reads what changed; the move after it comes from show.
+  Costs: the move after an act takes a second command.
+- B) Nothing on success; the finding that stopped it on a stop.
+  Why: silence is success.
+  Costs: an owner who runs approve sees no sign of what was approved.
+- C) The event it wrote and the moves that follow it.
+  Why: one command gives the agent its next move.
+  Costs: ask repeats what show prints, and the owner's answer lines reach a terminal the owner answers from the page.
+
+### What does a finding line name?
+depends: finding, move, decision, Does a command refuse what check lets pass?=*
+supersedes: What does a finding name?, Does a finding name the identifier of the decision it judges?
+unrelated: Does a reference line hold its list on one line?, Does a supersedes line name every current decision standing on its target?, Does check print a line that names no move?, Does show print the reference lines of an answered question?, What does a command that writes print?, What does a comment in code carry to name the decision it follows?, What does a depends line name?, What does a test carry to name its decision?, What does show print with no file named?, Does check read the words of an answered question again?, Does the agent build what no current decision covers?, Does the owner override a stop in the tool?, What does check do with a decision row that no question names?, Does the tool colour its terminal output?, Does the ui show what the commands print?, What does a writing command print?, What does the tool add to the shape of its terminal output?
+
+Problem: a finding names the number it measured and the act that lowers the number; the one who reads it clears the number, and the meaning the rule protects changes.
+Standard: a compiler error names the rule a line breaks and leaves the fix to the writer.
+
+- A) What the rule protects, in plain words, what it found, and the move as an act, not a diagnosis.
+  Why: the one who reads it sees what the rule protects and rewrites; the tool never guesses the cause.
+  Costs: the rule's words are the writer's, not the record's, and review alone holds them to it.
+- B) The decision it judges by heading, what it found, and the move.
+  Why: the record itself names the rule, in the words the owner answered.
+  Costs: a terminal in any repository prints the headings and identifiers of this tool's own record.
+- C) What it measured and the act that clears the measurement.
+  Why: the shortest line, and the one the counter gives for free.
+  Costs: the move names the counter, not the rule, and the fix that clears the counter can change the meaning.
+
+### Does the tool colour its terminal output?
+depends: owner, agent, What does a finding line name?=*
+supersedes: Does the tool colour what it prints to a terminal?, What does the tool add to the shape of what it prints to a terminal?
+unrelated: Does a command name a status of its own?, Does a command print under a flag what it computes from the records?, Does show print the reference lines of an answered question?, Does the tool mark a builder?, Does the tool print every pair the reader marks?, Does the ui show what the terminal prints?, What does a command that writes print?, What does show print with no file named?, Does an answer carry the version of the question the owner read?, Does check print a line that names no move?, What does a command that writes nothing print?, What does an owner command look for before it runs?, Does a command refuse what check lets pass?, Does the ui show what the commands print?, What does a writing command print?, What does the tool add to the shape of its terminal output?
+
+Problem: statuses, findings and moves print in one shade, and the owner reads a disputed line, a refusal and a settled question alike.
+Standard: a command colours its output when standard output is a terminal, prints plain when piped, and honours NO_COLOR.
+
+- A) Yes.
+  Why: the owner's eye finds the line to act on; an agent and the tests read piped output, plain.
+  Costs: a palette per line kind, a terminal check before every print, and the page's own rendering of it.
+- B) No.
+  Why: one output everywhere; nothing to check.
+  Costs: the owner reads every listing in one shade.
+
+### What does the tool add to the shape of its terminal output?
+depends: owner, agent, Does the tool colour its terminal output?=*
+supersedes: What does the tool add to the shape of what it prints to a terminal?
+unrelated: Does the tool colour what it prints to a terminal?, Does the tool take the order of ledger rows from their time?, Does the ui show what the terminal prints?, What does a command that writes print?, What does show print of a file under adrdom?, What does show print with no file named?, What does the tool keep of the reader's word?, embedding index, embedding model, Does a reference line hold its list on one line?, Does check print a line that names no move?, Does show print the reference lines of an answered question?, What does the tool print for a build move in a planner's session?, Does a command refuse what check lets pass?, Does the ui show what the commands print?, What does a finding line name?, What does a writing command print?
+
+Problem: every line prints at one indent with no break between the questions, the findings and the moves, and a listing of a file runs on as one block.
+Standard: a listing groups its lines, with a blank line between groups and a header per group, as git status does; piped output stays one line per item.
+
+- A) Blank lines and headers between questions, findings and moves on a terminal; piped output one line per item.
+  Why: the groups read apart, coloured or not; a line per item stays for the agent and the tests.
+  Costs: a header per group, a terminal check before every listing, and the page's own rendering of the groups.
+- B) Nothing.
+  Why: one output on a terminal and in a pipe.
+  Costs: the owner reads a file's listing as one block.
+- C) Tables: columns aligned per group with a header row, on a terminal; piped output one line per item.
+  Why: statuses and headings line up.
+  Costs: column widths per group, wrapping of long headings, and a second form of every line.
+
+### Does the ui show what the commands print?
+depends: ui, owner, What does a writing command print?=*, What does the tool add to the shape of its terminal output?=*
+supersedes: Does the ui show what the terminal prints?, Does the tool colour what it prints to a terminal?, What does the tool add to the shape of what it prints to a terminal?
+unrelated: Does a command name a status of its own?, Does a command print under a flag what it computes from the records?, Does check print a line that names no move?, Does show print the reference lines of an answered question?, What does a command that writes nothing print?, What does a command that writes print?, What does show print of a file under adrdom?, What does show print with no file named?, Does an answer carry the version of the question the owner read?, Does the ui perform every owner act?, Does a command refuse what check lets pass?, Does the tool colour its terminal output?, What does a finding line name?
+
+Problem: the ui copies check's whole output into a block, shows one open question at a time with no count of the rest, and its lines have no decision behind them apart from the owner's acts.
+Standard: one view model, two renderings.
+
+- A) Yes.
+  Why: the page renders the same statuses, findings, moves and events the commands print, from the one computation.
+  Costs: the page shows nothing the terminal cannot; a page form for every line kind.
+- B) No.
+  Why: the page is laid out for the owner alone, with its own lines.
+  Costs: two sets of lines to hold right, and a line on the page with no decision behind it.

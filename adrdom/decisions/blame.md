@@ -269,3 +269,39 @@ Standard: a source is retired after its replacement is verified, and the owner o
   Costs: migrated text never leaves the working tree.
 
 **Answer:** A
+
+### What does a question carry of its blame file?
+depends: blame, question, origin, What does a blame file hold of its origin?
+supersedes: What does a question carry of the blame file it came from?, What does check do with a decision row that no question names?
+unrelated: Does a depends entry on a question in its file carry an answer set?, Does ask run on a file whose prose is unapproved?, What does ask put to the owner in one run?, What does check do when an origin differs from its blame file's blob identifier?, What does check do when an origin is absent?, depends, Does a blame file cover its whole origin?, Does check fail a ledger row that was edited?, Does check fail a ledger whose rows changed place?, Does every ledger row carry the tool version?, Does the owner approve a blame file?, What does check do with a decision row no question names?
+
+Problem: the records need to read, from a question, which lines of which origin it came from, without a change to the approved blame file.
+Standard: traceability runs from the derived artifact to its source by a stable identifier and a location.
+
+- A) One blame line naming each blame file and the rows, by their ranges, the question came from.
+  Why: the agent writes the file's name and the identifier rule turns it; a question from no origin carries none.
+  Costs: a line under the heading, approved with the plan and judged then, like a depends entry; never after.
+- B) Nothing: the blame file's rows name the questions.
+  Why: one file holds the whole map.
+  Costs: the approved blame file changes after every plan, and the owner approves it again.
+- C) Nothing on either side: the ledger records which blame file was open when the question was asked.
+  Why: no line to write.
+  Costs: a question from two files, or a file with many questions, cannot be distinguished.
+
+### What does check do with a decision row no question names?
+depends: check, decision, blame, What does a blame file hold of its origin?, What does a question carry of its blame file?=A
+supersedes: What does check do with a decision row that no question names?
+unrelated: Does a finding name the identifier of the decision it judges?, Does check fail a ledger whose rows changed place?, Does check print a line that names no move?, What does a comment in code carry to name the decision it follows?, What does a test carry to name its decision?, What does check do when an origin is absent?, What does check do with a test that names a decision that is not current?, What does check do with an untested current decision?, What does show print with no file named?, Does check fail a ledger row that was edited?, Does the agent build what no current decision covers?, What does check do when an origin differs from its blame file's blob identifier?, What does check do with a fault on a file awaiting approval?
+
+Problem: the records need to show which decision rows reached a question without making planning answer to the blame file.
+Standard: traceability is reported as coverage, a count the reviewer reads, not a gate on the build.
+
+- A) Nothing: show of the blame file counts, under a flag, its decision rows with a question and those with none.
+  Why: a row's value is a first reading that planning may merge, drop or overturn; the owner reads the count.
+  Costs: a decision row forgotten in planning stops nothing.
+- B) Reports a finding for each such row.
+  Why: every decision row ends in a question or a finding.
+  Costs: a row planning rightly merged or dropped as a copy is a finding until someone rewrites the blame file.
+- C) Nothing, and nothing is counted.
+  Why: the blame file and the plan never meet.
+  Costs: whether an origin's decisions reached the records is read by hand.

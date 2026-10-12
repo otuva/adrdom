@@ -437,3 +437,161 @@ Standard: a code annotation names the requirement it implements and is distinct 
   Costs: an agent building on a decision reads the code with no mark of what follows it.
 
 **Answer:** A
+
+### What does a depends entry name?
+depends: depends, term, question, topic file, Does ask stop a question outside the plan?
+supersedes: What does a depends line name?, What does the tool derive the tiers from?, Does a reference in a topic file carry the identifier of what it names?, Does approve turn the supersedes line into identifiers?, What does a question carry of the blame file it came from?, Does a reference line hold its list on one line?, What does check do with a decision row that no question names?, What does ask put to the owner in one run?, What bounds the questions of a tier?, Does the cap count a decision that an open question supersedes?, Does ask run on a file whose prose is unapproved?, Does answer take a question standing on a question with no decision?, Does a command refuse what check passes?, What does a command that writes print?, What does a finding name?, Does a finding name the identifier of the decision it judges?, Does the ui show what the terminal prints?, Does the tool colour what it prints to a terminal?, What does the tool add to the shape of what it prints to a terminal?
+unrelated: Does a depends entry on a question in its file carry an answer set?, What does a test carry to name its decision?, supersede, Does a supersedes line name every current decision standing on its target?, Does a term carry its own banned words?, Does the agent build what no current decision covers?, What does the tool keep of the reader's word?, Does a reference in a topic file carry the identifier of its target?, Does an unresolved depends entry stop the plan?, Does answer take a question standing on an unanswered question?, Does every question carry a depends line?, Does the tier cap count a decision an open question supersedes?, What are the tiers derived from?, What bounds the questions a depends line names?, What bounds the questions at one tier?, What does ask put to the owner at one run?
+
+Problem: a question that assumes another question's answer carries that assumption nowhere the tool or the owner can see; it surfaces only when the owner reads the options.
+Standard: dependency-ordered task lists carry a prerequisite field per item, and an item names items of its own list.
+
+- A) A term, or a question of the same topic file.
+  Why: the assumption sits beside the heading where the owner reads it, and the order it gives stays inside one file.
+  Costs: a question standing on a decision of another file names it nowhere; only the reader ties that pair.
+- B) A term, a question of the same topic file, or a current decision of another file.
+  Why: every assumption has a name, wherever its decision lives.
+  Costs: a supersede in one file reaches every file a line points at.
+- C) Free text the owner reads and the tool never resolves.
+  Why: the agent states the assumption in its own words.
+  Costs: the tool checks nothing, and no order can be derived from it.
+
+### Does every question carry a depends line?
+depends: depends, question, What does a depends entry name?=A|B
+supersedes: What does a depends line name?, What does the tool derive the tiers from?, Does a reference in a topic file carry the identifier of what it names?, Does approve turn the supersedes line into identifiers?, What does a question carry of the blame file it came from?, Does a reference line hold its list on one line?, What does check do with a decision row that no question names?, What does ask put to the owner in one run?, What bounds the questions of a tier?, Does the cap count a decision that an open question supersedes?, Does ask run on a file whose prose is unapproved?, Does answer take a question standing on a question with no decision?, Does a command refuse what check passes?, What does a command that writes print?, What does a finding name?, Does a finding name the identifier of the decision it judges?, Does the ui show what the terminal prints?, Does the tool colour what it prints to a terminal?, What does the tool add to the shape of what it prints to a terminal?
+unrelated: Does a depends entry on a question in its file carry an answer set?, Does ask pair the whole question to terms?, Does show print the reference lines of an answered question?, What does the reader say about a neighbour of a heading?, What does the reader say about a neighbour of a question with its body?, Does a question carry the agent's lean?, Does a refused question hold the tiers above it?, Does a supersedes line name every current decision standing on its target?, Does ask refuse a question with no term?, Does check fail a question answered with two different options?, Does the owner answer a question with a refusal?, Does a reference in a topic file carry the identifier of its target?, Does an unresolved depends entry stop the plan?, Does answer take a question standing on an unanswered question?, Does the tier cap count a decision an open question supersedes?, What are the tiers derived from?, What bounds the questions a depends line names?, What bounds the questions at one tier?, What does ask put to the owner at one run?
+
+Problem: a question with no line and a question whose assumption was forgotten look the same.
+Standard: a required field: an item with the field empty is refused, not read as none.
+
+- A) Yes.
+  Why: a missing line is refused at approve and ask, so a forgotten assumption cannot pass as none.
+  Costs: a question standing on terms alone still writes the terms it stands on.
+- B) No.
+  Why: a question that stands on nothing costs no line.
+  Costs: a missing line and a forgotten assumption look the same.
+
+### Does an unresolved depends entry stop the plan?
+depends: depends, approve, ask, What does a depends entry name?=A|B, Does a reference in a topic file carry the identifier of its target?=*
+supersedes: What does a depends line name?, What does the tool derive the tiers from?, Does a reference in a topic file carry the identifier of what it names?, Does approve turn the supersedes line into identifiers?, What does a question carry of the blame file it came from?, Does a reference line hold its list on one line?, What does check do with a decision row that no question names?, What does ask put to the owner in one run?, What bounds the questions of a tier?, Does the cap count a decision that an open question supersedes?, Does ask run on a file whose prose is unapproved?, Does answer take a question standing on a question with no decision?, Does a command refuse what check passes?, What does a command that writes print?, What does a finding name?, Does a finding name the identifier of the decision it judges?, Does the ui show what the terminal prints?, Does the tool colour what it prints to a terminal?, What does the tool add to the shape of what it prints to a terminal?
+unrelated: Does a depends entry on a question in its file carry an answer set?, Does a planning step run without the record of the step before?, Does a refused question hold the tiers above it?, Does ask stop a question outside the plan?, Does check fail a planner's commit that reaches outside adrdom?, Does planning stop without the reader?, Does the agent build what no current decision covers?, Does the word limit hold for an option's Costs line?, Does the word limit hold for an option's Why line?, What does check do when an origin is absent?, Does a supersedes line name every current decision standing on its target?, Does ask refuse a question with no term?, Does ban refuse a word that appears in the repository?, Does check print a line that names no move?, Does the owner override a stop in the tool?, Does the tool stop while the terms file waits for approval?, Does answer take a question standing on an unanswered question?, Does every question carry a depends line?, Does the tier cap count a decision an open question supersedes?, What are the tiers derived from?, What bounds the questions a depends line names?, What bounds the questions at one tier?, What does ask put to the owner at one run?
+
+Problem: an entry that names nothing the records hold gives the tool nothing to order by and the owner nothing to read.
+Standard: a prerequisite that does not resolve stops the item, as a build stops on a missing input.
+
+- A) Yes.
+  Why: approve and ask refuse the plan and name the entry, so every line in the record points at something.
+  Costs: a renamed term or heading stops the plan until the entry is rewritten.
+- B) No.
+  Why: a bad entry costs no stop.
+  Costs: a line nothing resolves orders nothing and reads as an assumption that was checked.
+
+### What bounds the questions a depends line names?
+depends: depends, question, What does a depends entry name?=A
+unrelated: Does a depends entry on a question in its file carry an answer set?, Does a reference line hold its list on one line?, Does ask refuse an option over a word limit?, Does show print the reference lines of an answered question?, Does the word limit hold for an option's Why line?, Does the word limit read the text of an answered question?, What does a depends line name?, What does the tool derive the tiers from?, Does a question carry the agent's lean?, Does a refusal name the command that clears it?, Does a supersedes line name every current decision standing on its target?, Does ask stop a question outside the plan?, Does the agent build what no current decision covers?, What bounds the questions of a tier?, Does a reference in a topic file carry the identifier of its target?, Does an unresolved depends entry stop the plan?, Does answer take a question standing on an unanswered question?, Does every question carry a depends line?, Does the tier cap count a decision an open question supersedes?, What are the tiers derived from?, What bounds the questions at one tier?, What does ask put to the owner at one run?
+
+Problem: nothing bounds what a line names; a line naming every nearby question makes the question stand on everything, and one supersede reaches the whole file.
+Standard: a dependency graph keeps its fan-in small, a few prerequisites per item, so a reader can follow it.
+
+- A) A cap of two set in the tool; approve and ask stop a plan with a line over it.
+  Why: the agent names what the question stands on and nothing nearby, and a supersede reaches few questions.
+  Costs: a question standing on three others splits or drops one, and the dropped one is named nowhere.
+- B) Nothing: a line names as many questions as the agent writes.
+  Why: nothing new in the tool.
+  Costs: a line that names every nearby question passes, and a supersede reaches the whole file.
+- C) A cap of two the owner moves with an owner command the ledger records.
+  Why: the value moves without a question or a release.
+  Costs: one more owner command and ledger event to guard, for a value no plan has pushed against.
+
+### Does a reference in a topic file carry the identifier of its target?
+depends: identifier, topic file, What does a depends entry name?=A|B
+supersedes: Does a reference in a topic file carry the identifier of what it names?, Does approve turn the supersedes line into identifiers?, What does a question carry of the blame file it came from?, Does a reference line hold its list on one line?, What does check do with a decision row that no question names?
+unrelated: Does a depends entry on a question in its file carry an answer set?, Does a finding name the identifier of the decision it judges?, Does a question keep its identifier when its heading is reworded?, Does one question heading stand in two topic files?, Does show print the reference lines of an answered question?, Does a refusal name the command that clears it?, Does a refused question stay in its topic file?, Does a supersedes line name every current decision standing on its target?, Does a term carry its own banned words?, Does check read the words of an answered question again?, What does a term hold?, Does an unresolved depends entry stop the plan?, Does answer take a question standing on an unanswered question?, Does every question carry a depends line?, Does the tier cap count a decision an open question supersedes?, What are the tiers derived from?, What bounds the questions a depends line names?, What bounds the questions at one tier?, What does ask put to the owner at one run?
+
+Problem: when a heading is reworded or a term renamed, every reference that names it by its text breaks, and each one is fixed by hand.
+Standard: reference by a stable identifier; the name is only shown to people.
+
+- A) Yes.
+  Why: the agent writes the name, approve turns it into the identifier, show turns it back; a rename breaks nothing.
+  Costs: the raw file does not say what a reference points at without show or the page.
+- B) No.
+  Why: the raw file reads on its own.
+  Costs: every rename is an edit on every line that points at the target.
+
+### What are the tiers derived from?
+depends: tier, What does a depends entry name?=A|B, Does every question carry a depends line?=A
+supersedes: What does the tool derive the tiers from?, What does ask put to the owner in one run?, What bounds the questions of a tier?, Does the cap count a decision that an open question supersedes?, Does ask run on a file whose prose is unapproved?, Does answer take a question standing on a question with no decision?, Does a command refuse what check passes?, What does a command that writes print?, What does a finding name?, Does a finding name the identifier of the decision it judges?, Does the ui show what the terminal prints?, Does the tool colour what it prints to a terminal?, What does the tool add to the shape of what it prints to a terminal?
+unrelated: Does a refused question hold the tiers above it?, Does every ledger row carry the tool version?, Does the agent build on a decision before its tier is fully answered?, What does a question carry of the blame file it came from?, blame, owner, supersede, Does a depends entry on a question in its file carry an answer set?, Does the agent build what no current decision covers?, Does the tool take the order of ledger rows from their time?, What does a depends line name?, Does a reference in a topic file carry the identifier of its target?, Does an unresolved depends entry stop the plan?, Does answer take a question standing on an unanswered question?, Does the tier cap count a decision an open question supersedes?, What bounds the questions a depends line names?, What bounds the questions at one tier?, What does ask put to the owner at one run?
+
+Problem: questions that assume each other's answers reach the owner side by side when nothing in the file orders them.
+Standard: build systems derive execution order from declared dependencies and stop on a cycle; nobody writes the order by hand.
+
+- A) The depends lines alone: a question is one tier above the highest question of its file it stands on.
+  Why: nothing in the file states an order, so a question cannot sit beside one it stands on.
+  Costs: the raw file shows no order without show, and a cycle in the lines stops approve.
+- B) Tier headings the agent writes, checked against the depends lines.
+  Why: the raw file shows the order.
+  Costs: two sources for one order, and every mismatch is a failure the agent fixes by hand.
+
+### What does ask put to the owner at one run?
+depends: ask, owner, plan, tier, What are the tiers derived from?=*
+supersedes: What does ask put to the owner in one run?, Does ask run on a file whose prose is unapproved?, Does answer take a question standing on a question with no decision?, What bounds the questions of a tier?, Does the cap count a decision that an open question supersedes?, Does a command refuse what check passes?, What does a command that writes print?, What does a finding name?, Does a finding name the identifier of the decision it judges?, Does the ui show what the terminal prints?, Does the tool colour what it prints to a terminal?, What does the tool add to the shape of what it prints to a terminal?
+unrelated: Does ask stop a question outside the plan?, Does the owner answer a question with a refusal?, Does the owner lift a ban?, answer, option, session, Does a refused question hold the tiers above it?, Does a refused question stay in its topic file?, Does the agent build on a decision before its tier is fully answered?, Does the agent build what no current decision covers?, What does the tool derive the tiers from?, Does a reference in a topic file carry the identifier of its target?, Does an unresolved depends entry stop the plan?, Does answer take a question standing on an unanswered question?, Does every question carry a depends line?, Does the tier cap count a decision an open question supersedes?, What bounds the questions a depends line names?, What bounds the questions at one tier?, What does a depends entry name?
+
+Problem: a plan of four tiers reaches the owner in four runs, each waiting on a commit and an answer, though the owner read the plan whole at approve.
+Standard: a code review puts the whole change before the reviewer at once, in the order the files stand.
+
+- A) Every unanswered question of the file at once, whatever its tier.
+  Why: one run, one commit and one reading put the whole plan before the owner.
+  Costs: a higher question is asked before the answer it stands on, and a lower answer may remove it.
+- B) The lowest tier of the file holding an unanswered question.
+  Why: every question reaches the owner after the answers it stands on, so none is asked in vain.
+  Costs: a plan of four tiers takes four runs, each waiting on a commit and the owner's answers.
+
+### Does answer take a question standing on an unanswered question?
+depends: answer, answer set, What does ask put to the owner at one run?=A
+supersedes: Does answer take a question standing on a question with no decision?
+unrelated: Does a depends entry on a question in its file carry an answer set?, Does a refused question hold the tiers above it?, Does an answer carry the version of the question the owner read?, Does answer remove a question whose answer set lacks the answer?, Does check fail a question answered with two different options?, Does show print the reference lines of an answered question?, Does the owner answer a question with a refusal?, Does the word limit read the text of an answered question?, Does a decision change after it is answered?, Does a refused question stay in its topic file?, Does the agent build on a decision before its tier is fully answered?, Does a reference in a topic file carry the identifier of its target?, Does an unresolved depends entry stop the plan?, Does every question carry a depends line?, Does the tier cap count a decision an open question supersedes?, What are the tiers derived from?, What bounds the questions a depends line names?, What bounds the questions at one tier?, What does a depends entry name?
+
+Problem: with the whole file asked at once, a higher question answered first may be removed by the lower answer, and the owner's answer is lost.
+Standard: a dependency is resolved before what rests on it; a build never links against an object not yet built.
+
+- A) No.
+  Why: an answer is given only when every answer set it rests on is settled, so none is thrown away.
+  Costs: answer refuses out of order, so the owner answers a file from its first tier up.
+- B) Yes.
+  Why: the owner answers in any order.
+  Costs: a lower answer may remove an answered question, against the rule that an answered decision never changes.
+
+### What bounds the questions at one tier?
+depends: tier, What are the tiers derived from?=*
+supersedes: What bounds the questions of a tier?, Does the cap count a decision that an open question supersedes?
+unrelated: Does a depends entry on a question in its file carry an answer set?, Does a refused question hold the tiers above it?, Does ask refuse an option over a word limit?, Does the agent build on a decision before its tier is fully answered?, What does ask put to the owner in one run?, What does the tool derive the tiers from?, question, topic, Does answer take a question standing on a question with no decision?, Does ask stop a question outside the plan?, Does check fail a question answered with two different options?, Does a reference in a topic file carry the identifier of its target?, Does an unresolved depends entry stop the plan?, Does answer take a question standing on an unanswered question?, Does every question carry a depends line?, Does the tier cap count a decision an open question supersedes?, What bounds the questions a depends line names?, What does a depends entry name?, What does ask put to the owner at one run?
+
+Problem: nothing bounds how many questions stand at one height, and a plan passes by being wide instead of deep.
+Standard: kanban caps work in progress at every column and stops a pull past the cap.
+
+- A) A cap of four set in the tool; approve and ask stop a plan with a tier over it.
+  Why: the harm of one bad question is bounded, and a large plan passes only by being deep.
+  Costs: a topic with more than four questions standing on terms alone needs a higher question or a split.
+- B) Nothing: a tier holds as many questions as the plan puts in it.
+  Why: nothing new in the tool, and the owner reads the plan whole at approve.
+  Costs: a plan passes by being wide, and one bad question sits among many at one height.
+- C) A cap of four the owner moves with an owner command the ledger records.
+  Why: the value moves without a question or a release.
+  Costs: one more owner command and ledger event to guard, for a value no plan has pushed against.
+
+### Does the tier cap count a decision an open question supersedes?
+depends: tier, supersede, current, What bounds the questions at one tier?=A|C
+supersedes: Does the cap count a decision that an open question supersedes?
+unrelated: Does a finding name the identifier of the decision it judges?, Does a refused question hold the tiers above it?, Does a supersedes line name every current decision standing on its target?, Does answer take a question standing on a question with no decision?, Does the agent build on a decision before its tier is fully answered?, Does the agent that asks a question build its decision?, What bounds the questions of a tier?, What does the tool derive the tiers from?, Does a decision change after it is answered?, Does a refused question stay in its topic file?, Does one decision supersede several?, Does a reference in a topic file carry the identifier of its target?, Does an unresolved depends entry stop the plan?, Does answer take a question standing on an unanswered question?, Does every question carry a depends line?, What are the tiers derived from?, What bounds the questions a depends line names?, What does a depends entry name?, What does ask put to the owner at one run?
+
+Problem: a question replacing a decision in a full tier is refused on the cap when old and new count together, so a decision in a full tier cannot be replaced in its own file.
+Standard: a limit on a set is judged on the set as the change leaves it.
+
+- A) No.
+  Why: a replacement in a full tier is a legal move, and the file holding a subject keeps holding it.
+  Costs: approve and ask count from open supersedes lines, and a refused replacement puts the old back in the count.
+- B) Yes.
+  Why: one count, read straight off the file.
+  Costs: a full tier takes no replacement in its own file, so the replacement lands away from its subject.

@@ -219,3 +219,18 @@ Standard: a listing tells the reader which items are theirs before they act.
   Costs: the planner cannot read what waits on a builder, and check hides untested decisions from it.
 
 **Answer:** A
+
+### Does a finding hold the identifier of the decision it judges?
+depends: finding, decision, identifier, What does check do with a test that names a decision that is not current?
+supersedes: Does a finding name the identifier of the decision it judges?
+unrelated: Does a depends entry on a question in its file carry an answer set?, Does a question keep its identifier when its heading is reworded?, Does a reference in a topic file carry the identifier of what it names?, Does a supersedes line name every current decision standing on its target?, Does a term carry its own banned words?, Does check read the words of an answered question again?, Does every sentence of the brief come from a decision?, Does the agent build what no current decision covers?, Does the cap count a decision that an open question supersedes?, Does the tool read a pair of decisions in both directions?, What does a term hold?, What does a test carry to name its decision?, What does check do with an untested current decision?, current, supersede, What does a comment in code carry to name the decision it follows?, What does a finding name?, What does check do with a decision row that no question names?, What does a blame file hold of its origin?
+
+Problem: a finding is tagged with a name the code picks, tells, plan, ids; nothing ties a message to the decision it judges, and a message with no decision behind it is written like the rest.
+Standard: every diagnostic carries a stable code that documentation and tests key on.
+
+- A) Yes.
+  Why: a finding with no current decision behind it cannot be built; one test holds every finding to its decision.
+  Costs: the identifier stays in the code and the test, never on the line; a superseded decision re-tags its findings.
+- B) No.
+  Why: the code names its rules as it likes; the record and the messages stay apart.
+  Costs: a message with no decision behind it passes every gate and is caught at review alone.

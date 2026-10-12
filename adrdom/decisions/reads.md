@@ -100,3 +100,21 @@ Standard: generated documentation is built from the source of truth and never ed
   Costs: a brief sentence binds the agent with nothing the owner answered.
 
 **Answer:** A
+
+### What turns the supersedes line into identifiers?
+depends: supersede, identifier, approve, ask
+supersedes: Does approve turn the supersedes line into identifiers?
+unrelated: Does a question keep its identifier when its heading is reworded?, Does a reference in a topic file carry the identifier of what it names?, Does a reference line hold its list on one line?, Does a supersedes line name every current decision standing on its target?, Does a term carry its own banned words?, Does show print the reference lines of an answered question?, What does a blame file hold of its origin?, What does the tool keep of the reader's word?, Does one decision supersede several?, What does answer write for a removed question?, What does the agent do to plan a topic file?, What stands under a question's heading?, question
+
+Problem: the agent writes a supersedes line with the heading of the decision it replaces; one command turns the heading into its identifier, and which one sets when the line is written.
+Standard: one rule for every reference in a topic file.
+
+- A) Approve: the line belongs to the plan, written under the heading before approval, turned like a depends line.
+  Why: the owner approves what a question replaces together with what it stands on, and one command turns every reference.
+  Costs: a line written after approval waits for a second approval, and the target's currency is checked again at ask.
+- B) Ask: the line is written with the body, after approval; ask turns it and freezes it with the body.
+  Why: the plan comes first and the body with its line second; nothing under a heading changes between approval and ask.
+  Costs: the line is no part of the plan the owner approves; approve turns one kind of reference, ask another.
+- C) Whichever command sees a heading on the line.
+  Why: the agent writes the line whenever it finds the need.
+  Costs: two commands hold the same rule.
