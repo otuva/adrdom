@@ -565,7 +565,6 @@ pub fn of_topic_file_judged(
     let planning = crate::plan::load_with(rf, terms_list, led, shared);
     let findings = crate::rules::judge_topic_file_in(root, rf, all, terms_list, led, index);
     let judged = findings.clone();
-    let rf = rf.clone();
     // The rules on the topic files as a whole (an identifier twice, a
     // withdrawn one back, a current decision no file holds): approve
     // refuses any file on them, so the file's report carries them and its

@@ -163,7 +163,9 @@ file or a term id. A decision of another topic file is no entry: it goes on
 no `depends:` line. A line names at most two questions (a cap set in the
 tool for "What bounds the questions a depends line names?"); terms do not
 count. A heading with no `depends:` line, or more than one, is a shape
-error. `adr
+error. The rule judges a question only while it is open to ask: an answered
+or asked question keeps a `depends:` entry naming another file's decision as
+the record of what it stood on. `adr
 ask`/`adr approve` derive each question's tier from its heading `depends:`
 entries alone (term entries don't affect tier): a question
 whose entries name only terms, never another heading in the

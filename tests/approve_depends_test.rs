@@ -192,6 +192,22 @@ fn approve_via_ledger_fixture(dir: &std::path::Path, x_id: &str, decided_id: &st
     write_record(dir, "adrdom/decisions/topic-x.md", &x);
 }
 
+// adr: 9afe335c-2a7a-4625-b115-f74d3f091cac
+//
+// A draft in another file whose depends entry is the heading text of a
+// decision is not listed as standing on it by `show --dependents`.
+#[test]
+fn show_dependents_does_not_list_a_draft_naming_a_decision_of_another_file_by_heading() {
+    let dir = init_repo();
+    setup(&dir);
+    earlier_decision(&dir);
+    write_record(&dir, "adrdom/decisions/example.md", &one_question("Third?", "Some earlier heading?"));
+    let shown = stdout(&adr(&dir, &["show", "--all", "--dependents"], &[], ""));
+    assert!(shown.contains("Some earlier heading?"), "{}", shown);
+    assert!(!shown.contains("dependents: Third?"), "{}", shown);
+    assert!(!shown.contains("Third? (adrdom/decisions/example.md)"), "{}", shown);
+}
+
 // adr: 010901e0-c02d-49eb-98bc-d584756d7f51
 //
 // A cap of two: a depends line naming two questions passes, three are

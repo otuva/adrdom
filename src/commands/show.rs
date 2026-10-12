@@ -725,11 +725,11 @@ fn replaced_by_lines(r: &Records, sec: &Section) -> Vec<Line> {
 /// path of that file. A refused, superseded or withdrawn question is left
 /// out: its depends line is a record of what it stood on, nothing rests on
 /// `sec` through it any more. An entry written as a heading text names
-/// `sec` in its own file, and in another file only while `sec` is a
-/// current decision (per "What does a depends entry name?").
+/// `sec` in its own file only; an identifier names it wherever the line
+/// stands, the record of what an old question stood on (per "What does a
+/// depends entry name?").
 fn stood_on_by(rf: &RecordFile, sec: &Section, all: &[RecordFile], led: &Ledger) -> Vec<String> {
     let heading = sec.heading_text.trim();
-    let current = sec.id.as_deref().is_some_and(|id| state::is_current(led, id));
     let mut out = Vec::new();
     for other in all {
         let same_file = other.rel == rf.rel;
@@ -739,7 +739,7 @@ fn stood_on_by(rf: &RecordFile, sec: &Section, all: &[RecordFile], led: &Ledger)
             }
             let names_it = dependent.depends.iter().any(|d| match d {
                 record::Dep::Id { id, .. } => sec.id.as_deref() == Some(id.as_str()),
-                record::Dep::Text { text, .. } => text.trim() == heading && (same_file || current),
+                record::Dep::Text { text, .. } => same_file && text.trim() == heading,
             });
             if names_it {
                 out.push(if same_file {

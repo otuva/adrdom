@@ -1602,12 +1602,11 @@ pub fn judge_topic_file_in(
     index: &RepoIndex,
 ) -> Vec<Finding> {
     let shared = &index.planning;
-    let rf = rf.clone();
-    let replaced = depends::replaced_ids(&index.base, &rf, &shared.cross, led);
+    let replaced = depends::replaced_ids(&index.base, rf, &shared.cross, led);
     judge_topic_file(&TopicFileJudge {
         root,
         rel: &rf.rel,
-        rf: &rf,
+        rf,
         all,
         terms_list,
         phrase_lookup: &shared.phrase_lookup,
@@ -1616,7 +1615,7 @@ pub fn judge_topic_file_in(
         replaced: &replaced,
         blame: &index.blame,
         led,
-        planning: planning_rules_apply(led, &rf, &rf.rel),
+        planning: planning_rules_apply(led, rf, &rf.rel),
         shared: Some(shared),
         directory: true,
     })

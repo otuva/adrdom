@@ -7,13 +7,12 @@ use crate::state;
 use crate::terms::Term;
 use std::path::Path;
 
-/// `as_loaded`: every topic file as written, so
-/// the move an edited asked question names is the one `show` computes for
-/// its file (`moves::of_unasked_question_in`).
+/// `records` are every topic file as written, so the move an edited asked
+/// question names is the one `show` computes for its file
+/// (`moves::of_unasked_question_in`).
 pub(super) fn check_answers(
     root: &Path,
     records: &[RecordFile],
-    as_loaded: &[RecordFile],
     terms_list: &[Term],
     led: &Ledger,
     source: &crate::repo::Source,
@@ -47,10 +46,10 @@ pub(super) fn check_answers(
                 if let Some(latest_asked_hash) = led.latest_asked(id).map(|r| r.hash.clone()) {
                     if latest_asked_hash != cur {
                         let moves = file_report.get_or_init(|| {
-                            let loaded = as_loaded.iter().find(|f| f.rel == rf.rel).unwrap_or(rf);
+                            let loaded = rf;
                             let index =
-                                index.get_or_init(|| crate::rules::RepoIndex::new_via(root, as_loaded, terms_list, led, source));
-                            let j = crate::moves::Judging { root, all: as_loaded, terms_list, led, index };
+                                index.get_or_init(|| crate::rules::RepoIndex::new_via(root, records, terms_list, led, source));
+                            let j = crate::moves::Judging { root, all: records, terms_list, led, index };
                             crate::moves::of_unasked_question_in(&j, loaded, &sec.heading_text, false)
                         });
                         out.push(Failure::said(Class::Answers, msg::edited_after_asking(&rf.rel, &sec.heading_text, moves)));

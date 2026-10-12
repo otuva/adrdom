@@ -250,7 +250,7 @@ fn build(
     push_failures(&mut failures, ledger::check_ledger(&led, &records, root, &ledger_content, since, &mut stops));
     push_failures(&mut failures, reader::check_reader(root, &source, since));
     push_failures(&mut failures, banned::check_banned_ledger(&led, root, &source));
-    push_failures(&mut failures, answers::check_answers(root, &records, &records, &terms_list, &led, &source));
+    push_failures(&mut failures, answers::check_answers(root, &records, &terms_list, &led, &source));
     push_failures(&mut failures, banned::check_banned(root, staged, message, &source, &mut stops));
     push_failures(&mut failures, install::check_install(root, &source));
     let (plan_failures, plan_notes) =
