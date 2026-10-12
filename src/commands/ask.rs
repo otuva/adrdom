@@ -87,39 +87,17 @@ pub fn run(given: PathBuf) -> i32 {
     // all three commands read it through).
     let phrase_lookup = terms::phrase_lookup(&terms_list);
     // Every current decision's heading text, repo-wide: built once here,
-    // the same map `approve`/`check` build, and passed to the normalize
-    // pass below and to every `resolve_dep` call `ask` makes through
+    // the same map `approve`/`check` build, and passed to
     // `record_refusals`. `ask` has nothing else loaded repo-wide (only
     // `rf`, the one file it was asked about), so this is the one caller
     // that still has to load every topic file for it.
     let all_records: Vec<record::RecordFile> = record::load_all(&root);
     let cross_file_headings = depends::cross_file_heading_index(&all_records, &led);
 
-    // Plan/context approval state must be read off `rf` exactly as loaded,
-    // before the normalize pass below mutates its parsed `depends:`
-    // entries in memory (per "..."): captured here, ahead of that
-    // mutation, and used below via `state::plan_approved_hashes`/
-    // `context_approved_hash` instead of recomputing from the
-    // (by-then-normalized) `rf`.
+    // Plan/context approval state is read off `rf` exactly as loaded,
+    // via `state::plan_approved_hashes`/`context_approved_hash`.
     let raw_question_hashes = record::question_hashes(&rf);
     let raw_context_hash = record::context_hash(&rf);
-
-    // Same pre-pass `approve`/`check` run before reading `rf.tiers`/
-    // `rf.derive_error` (`depends::normalize_cross_file_deps`): a
-    // heading-shaped `depends:` entry naming a current decision's heading
-    // in another topic file is rewritten in memory to that decision's id
-    // and the tiers re-derived, so a file with such an entry never trips
-    // the derive-error refusal below just because it hasn't been approved
-    // yet. An entry naming a current decision in more than one other file
-    // becomes `rf.derive_error` instead (`DeriveError::AmbiguousHeading`),
-    // checked immediately below, before the plan-approved gate -- exactly
-    // as `approve` refuses on it, and ahead of a "plan not approved"
-    // refusal that would otherwise fire first on an unapproved file.
-    depends::normalize_cross_file_deps(&mut rf, &terms_list, &phrase_lookup, &cross_file_headings, &led);
-    if let Some(err @ record::DeriveError::AmbiguousHeading { .. }) = &rf.derive_error {
-        out::eprint(&[Line::Finding(Finding::said(Class::Plan, msg::derive_error(&rel, err)))]);
-        return 1;
-    }
 
     // Every heading by its identifier, any state: a refusal names the
     // question beside an identifier.
@@ -174,8 +152,7 @@ pub fn run(given: PathBuf) -> i32 {
     }
 
     // Refusal 4: plan / context must be approved before ask will touch the
-    // file at all -- checked against the hashes captured before the
-    // normalize pass above, never the normalized `rf`.
+    // file at all -- checked against the hashes captured above.
     // The refusal names the moves of the file, the ones `show` names for it.
     let file_moves = || -> crate::moves::Report {
         let tests = crate::commands::check::test_index(&root, &repo::Source::WorkingTree);
@@ -230,7 +207,7 @@ pub fn run(given: PathBuf) -> i32 {
         return 1;
     }
 
-    // Per "What does ask put to the owner in one run?": every candidate is
+    // Per "What does ask put to the owner at one run?": every candidate is
     // asked, whatever its tier. What `answer` takes first is not ask's
     // to order: `answer` refuses a question that waits (`state::answer_waits`)
     // and `next` names who moves when.
@@ -282,8 +259,7 @@ pub fn run(given: PathBuf) -> i32 {
         return 1;
     }
 
-    // Per "Does a reference in a topic file carry the identifier of what
-    // it names?": ask writes no ids. Every non-skeleton section already has one
+    // Per "What does a reference in a topic file carry?": ask writes no ids. Every non-skeleton section already has one
     // here -- refusal 4 above (`plan_approved`) already refused whenever
     // one is missing, since `approve` mints every heading's id in the same
     // pass that makes the plan hash match, and any further edit that added
@@ -338,8 +314,7 @@ pub fn run(given: PathBuf) -> i32 {
     let write_time = ledger::write_time(&led);
     let mut new_rows = Vec::new();
     for (i, sec) in rf.sections.iter().enumerate() {
-        // Per "Does a reference in a topic file carry the identifier of
-        // what it names?": `approve` now gives a skeleton an id too, so an
+        // Per "What does a reference in a topic file carry?": `approve` now gives a skeleton an id too, so an
         // id alone no longer means "this is a candidate" -- a skeleton
         // must still never be asked, exactly as `candidate` above already
         // excludes it from becoming one.
@@ -374,8 +349,7 @@ pub fn run(given: PathBuf) -> i32 {
                 continue;
             };
             let dependent = &rf.sections[di];
-            // Per "Does a reference in a topic file carry the identifier
-            // of what it names?": an `assumes` row keys on the dependent's own
+            // Per "What does a reference in a topic file carry?": an `assumes` row keys on the dependent's own
             // heading id, not its heading text -- every heading already has
             // one by the time `ask` runs (approve mints them all up front),
             // so the row stays valid across a rename that doesn't otherwise

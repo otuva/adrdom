@@ -249,7 +249,7 @@ fn check_passes_a_depends_entry_on_a_retired_term_once_the_section_is_superseded
 
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
-    assert!(!text.contains("which is not a current decision"), "{}", text);
+    assert!(!text.contains("which names no term and no question of this file"), "{}", text);
     assert!(!text.contains("no term"), "{}", text);
 }
 
@@ -287,7 +287,7 @@ fn check_names_a_retired_term_under_an_answered_question_as_a_term() {
         "{}",
         text
     );
-    assert!(!text.contains("which is not a current decision"), "{}", text);
+    assert!(!text.contains("which names no term and no question of this file"), "{}", text);
 }
 
 #[test]
@@ -306,7 +306,7 @@ fn check_fails_a_depends_entry_on_a_decision_that_is_not_current() {
     let text = stdout(&out);
     assert!(
         text.contains(&format!(
-            "adrdom/decisions/example.md: \"1.1 Q?\" depends on {} which is not a current decision; a depends entry names a heading, term or current decision; agent names a current decision, or removes the entry",
+            "adrdom/decisions/example.md: \"1.1 Q?\" depends on {} which names no term and no question of this file; a depends entry names something that exists; agent rewrites the entry to name a term or a question of this file, or removes it",
             other_id
         )),
         "{}",
@@ -329,7 +329,7 @@ fn check_passes_a_depends_entry_on_a_current_decision() {
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
     assert!(
-        !text.contains("which is not a current decision"),
+        !text.contains("which names no term and no question of this file"),
         "{}",
         text
     );
@@ -350,7 +350,7 @@ fn check_fails_a_dangling_depends_entry() {
     let text = stdout(&out);
     assert!(
         text.contains(
-            "adrdom/decisions/example.md: \"1.1 Q?\" depends on \"2.2 Missing?\" which is no heading in this file and no current decision; a depends entry names a heading, term or current decision; agent rewrites the entry"
+            "adrdom/decisions/example.md: \"1.1 Q?\" depends on \"2.2 Missing?\" which is no heading in this file; a depends entry names something that exists; agent rewrites the entry"
         ),
         "{}",
         text

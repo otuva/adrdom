@@ -1,4 +1,4 @@
-// adr: 7857d633-2055-47eb-857f-cb70da9fa7ba
+// adr: 3cf56867-3918-4ce6-a296-2cc62a91b154
 //
 // "Does the ui show what the terminal prints?" A: the page renders the same
 // statuses, findings, moves and events the commands print, from the one
@@ -225,7 +225,7 @@ fn draft() -> std::path::PathBuf {
 
 #[test]
 fn every_page_shows_what_the_terminal_prints_at_each_status() {
-    // adr: 7857d633-2055-47eb-857f-cb70da9fa7ba
+    // adr: 3cf56867-3918-4ce6-a296-2cc62a91b154
     let dir = draft();
     let page = Page::start(&dir);
 
@@ -275,7 +275,7 @@ fn every_page_shows_what_the_terminal_prints_at_each_status() {
 
 #[test]
 fn an_act_from_the_page_shows_the_lines_the_command_prints() {
-    // adr: 7857d633-2055-47eb-857f-cb70da9fa7ba
+    // adr: 3cf56867-3918-4ce6-a296-2cc62a91b154
     // Two repositories with the same records: one acts from the page, the
     // other from the terminal.
     let on_page = draft();

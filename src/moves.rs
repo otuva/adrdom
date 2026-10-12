@@ -372,8 +372,7 @@ pub fn of_removed_topic_file(rel: &str, findings: Vec<Finding>) -> Report {
 /// Every move of the topic file `rf`, in the order they are taken: what is
 /// answered is built before anything new is written, then the findings of
 /// its plan, the planning or ask moves, the owner's answers, and what waits.
-/// `plan_ok` is read by the caller off the file as loaded, before
-/// `depends::normalize_cross_file_deps`. `tests` is `check::test_index`: an
+/// `plan_ok` is read by the caller off the file as loaded. `tests` is `check::test_index`: an
 /// answered decision with a test tied to it is built. `planning` is
 /// `plan::load` of the file: a plan that waits for its approval, or holds a
 /// heading with no body, follows the planning steps from it ("What does the
@@ -566,8 +565,7 @@ pub fn of_topic_file_judged(
     let planning = crate::plan::load_with(rf, terms_list, led, shared);
     let findings = crate::rules::judge_topic_file_in(root, rf, all, terms_list, led, index);
     let judged = findings.clone();
-    let mut rf = rf.clone();
-    crate::depends::normalize_cross_file_deps(&mut rf, terms_list, &shared.phrase_lookup, &shared.cross, led);
+    let rf = rf.clone();
     // The rules on the topic files as a whole (an identifier twice, a
     // withdrawn one back, a current decision no file holds): approve
     // refuses any file on them, so the file's report carries them and its
@@ -723,8 +721,7 @@ pub enum Waits {
 
 /// `answer` (a letter or a refusal) of a question that waits: it stands on a
 /// question of its file with no decision, or a question of a lower tier is
-/// refused (per "Does answer take a question standing on a question with
-/// no decision?" and "Does a refused question hold the tiers above it?").
+/// refused (per "Does answer take a question standing on a question that has no decision?" and "Does a refused question hold the tiers above it?").
 /// Every question it waits on is named, each with the move that clears it:
 /// the agent's moves first, one `adr ask` naming every heading, and the one
 /// owner move last.
@@ -838,7 +835,7 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> (crate::msg:
 mod tests {
     use super::*;
 
-    // adr: 184b5bcb-fa72-436b-92cb-4d4605366c59
+    // adr: 343d0d28-2c5d-40fc-99aa-22bfba4ea79f
     #[test]
     fn a_report_with_no_move_names_the_fallback_act() {
         let mut empty = Report::default();

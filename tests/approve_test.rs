@@ -185,7 +185,7 @@ fn approve_refuses_a_question_with_four_options() {
 #[test]
 fn editing_context_prose_requires_reapproval_with_one_new_context_row() {
     // adr: 5b9170f9-a48e-4ddd-a7dc-73c3be1c2fb8
-    // adr: 3ce82f34-a4fc-4918-bb9b-65a0d81a6853
+    // adr: 1cdec741-98e1-4715-a7a5-94f7a73cd425
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
@@ -321,7 +321,7 @@ fn ask_asks_group_two_beside_group_one_and_answer_waits_for_group_one() {
         .status
         .success());
 
-    // Per "What does ask put to the owner in one run?": group two is asked
+    // Per "What does ask put to the owner at one run?": group two is asked
     // now, beside the open group one.
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "ask failed: {}", stderr(&out));
@@ -1103,7 +1103,7 @@ fn a_heading_line_without_a_question_mark_is_refused_by_check_and_approve() {
     assert!(!stdout(&adr(&dir, &["check"], &[], "")).contains("a heading is a question"));
 }
 
-// adr: ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf
+// adr: 9bf76db8-4821-4257-ac49-4c22c2a0e538
 #[test]
 fn an_empty_depends_line_is_refused_as_a_missing_depends_line_and_nothing_else() {
     let dir = widget_repo();
@@ -1929,7 +1929,7 @@ fn approve_refuses_retiring_a_term_while_a_new_term_takes_its_word_and_another_s
     );
 }
 
-// adr: 3b8da790-ea0c-4ca5-860a-980c7bc5f361
+// adr: f19e7914-ad97-4f6b-87dd-9301e53cd068
 //
 // The supersedes line belongs to the plan: a heading with a depends line,
 // a supersedes line and a body is a question that approve accepts, and the
@@ -1960,7 +1960,7 @@ fn approve_turns_a_supersedes_heading_on_a_skeleton_into_an_identifier() {
     );
 }
 
-// adr: 3b8da790-ea0c-4ca5-860a-980c7bc5f361
+// adr: f19e7914-ad97-4f6b-87dd-9301e53cd068
 //
 // A supersedes line written after approval moves the plan hash: check says
 // the plan is not approved and ask stops until approve runs again.
@@ -2012,7 +2012,7 @@ fn split_question(heading: &str, supersedes: Option<&str>) -> String {
     )
 }
 
-// adr: 3b8da790-ea0c-4ca5-860a-980c7bc5f361
+// adr: f19e7914-ad97-4f6b-87dd-9301e53cd068
 // adr: f4f667ad-8714-4e65-897b-c7002e423c28
 //
 // "Does one decision supersede several?": two questions asked together both

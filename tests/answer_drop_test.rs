@@ -399,7 +399,7 @@ fn chain(refuse_first: bool) -> (PathBuf, String, String, String) {
     (dir, ids.0, ids.1, ids.2)
 }
 
-// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+// adr: da80931c-68cf-4c51-acce-060307bbd973
 //
 // Answering Three, which stands on Two, which stands on One, names the
 // owner's command for One: the first question `answer` takes.
@@ -414,7 +414,7 @@ fn a_waiting_chain_names_the_first_question_answer_takes() {
     assert!(!err.contains(&format!("adr answer {}", id_at_version(&dir, &two))), "{}", err);
 }
 
-// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+// adr: da80931c-68cf-4c51-acce-060307bbd973
 //
 // When the chain ends on a refused question, the move is the plan change.
 #[test]

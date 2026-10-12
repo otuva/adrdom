@@ -405,7 +405,7 @@ fn an_old_destination_row_fails_check_on_an_approved_file() {
 
 // --- ee27fd4c A: check reports no decision row that no question names ------
 
-// adr: ee27fd4c-89b7-411f-a3e4-2535c49b6d1b
+// adr: a469ecb9-a4f1-4a2a-89c5-7378cc1138b4
 //
 // "No ... no finding, no refusal": an approved blame file with decision rows
 // that no question names is no line of check's, and ask and answer on a
@@ -495,7 +495,7 @@ fn ask_and_answer_ignore_an_unapproved_blame_file() {
 // it, and check reports the same line, as a note (05141f49).
 #[test]
 fn check_notes_a_shape_error_in_a_blame_file_awaiting_approval() {
-    // adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
+    // adr: 80b89c24-7d65-43f4-bb03-55e9d85c327d
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     // The origin is there: the shape fault is the file's only finding.
@@ -603,7 +603,7 @@ fn check_fails_a_present_unreadable_origin_as_its_own_failure() {
     assert!(!text.contains("is missing"), "{}", text);
 }
 
-// adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
+// adr: 80b89c24-7d65-43f4-bb03-55e9d85c327d
 //
 // A row with a bad value, in check, in show and in approve: the one finding,
 // word for word, with its move. A good row, and a `decision` row that no

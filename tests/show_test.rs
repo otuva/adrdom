@@ -250,18 +250,14 @@ fn override_is_not_a_recognized_command() {
     );
 }
 
+// adr: 9afe335c-2a7a-4625-b115-f74d3f091cac
 //
-// "Does the tool derive tiers from the depends lines?": `show` derives
-// tiers the same way `approve`/`check` do, including the cross-file
-// pre-pass (`depends::normalize_cross_file_deps`) that rewrites a
-// heading-shaped `depends:` entry naming a current decision's heading in
-// another topic file to that decision's id before tiers are derived. File
-// B here is never approved -- its depends line is still the written
-// heading text, exactly as an agent first writes it -- so this only
-// passes when `show` runs that same pre-pass itself instead of reading
-// `rf.tiers` straight off an unnormalized file.
+// "What does a depends entry name?": a term, or a question of the same topic
+// file. File B here is never approved -- its depends line is still the
+// written heading text of a current decision of another file -- and `show`
+// prints the one finding that names the entry, not a dangling reference.
 #[test]
-fn show_derives_tiers_for_an_unapproved_file_whose_depends_line_names_a_cross_file_heading() {
+fn show_names_a_heading_of_another_file_in_the_depends_line_of_an_unapproved_file() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
@@ -293,26 +289,24 @@ fn show_derives_tiers_for_an_unapproved_file_whose_depends_line_names_a_cross_fi
         shown
     );
     assert!(
+        shown.contains("\"1.1 Is B stand on A?\" depends on \"1.1 Is A do a thing?\", a decision of another topic file; a question stands on terms and questions of its file; agent rewrites the depends line"),
+        "{}",
+        shown
+    );
+    assert!(
         !shown.contains("no heading in this file"),
-        "an unapproved cross-file heading reference must not be reported as dangling: {}",
+        "a heading of another file's decision is one finding, not a dangling reference too: {}",
         shown
     );
 }
 
-// adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
+// adr: 9afe335c-2a7a-4625-b115-f74d3f091cac
 //
-// The cross-file half's edge, at `show` rather than `approve`: a heading
-// text that names a current decision in more than one other topic file is
-// ambiguous, so `show` must never guess which one a "stands on" line
-// means. Before this fix, `normalize_cross_file_deps` silently substituted
-// the first of the ambiguous matches (so tiers still derived and `show`
-// printed a "stands on" line naming one of the two decisions, indistin-
-// guishable from a real answer); now the ambiguity becomes the file's own
-// `derive_error`, so `show` prints B's topic line and nothing else for it
-// -- no tier, no question, no guessed "stands on" line -- the same silent
-// drop every other derive error already gets from `show`.
+// A heading text that is a current decision in more than one other topic
+// file is no question of the file either: `show` names the entry and the
+// move, and guesses no "stands on" line.
 #[test]
-fn show_prints_no_guess_for_an_ambiguous_cross_file_heading_dependency() {
+fn show_prints_no_guess_for_a_heading_naming_decisions_of_two_other_files() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "decision");
@@ -351,7 +345,7 @@ fn show_prints_no_guess_for_an_ambiguous_cross_file_heading_dependency() {
     let b_block = shown[b_start..b_end].trim_end();
     assert!(b_block.contains("  + depends: 1.1 Shared heading?"), "{}", shown);
     assert!(
-        b_block.contains("adrdom/decisions/topic-b.md: \"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\" which is a current decision in more than one file: adrdom/decisions/topic-a.md, adrdom/decisions/topic-c.md; a reference carries the identifier of what it names; agent writes the identifier of the one it means"),
+        b_block.contains("adrdom/decisions/topic-b.md: \"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\", a decision of another topic file; a question stands on terms and questions of its file; agent rewrites the depends line of"),
         "an ambiguous cross-file dependency names the agent's move and no guess: {}",
         shown
     );

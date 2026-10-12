@@ -661,8 +661,6 @@ pub fn depends_shape_refusals(
     rf: &RecordFile,
     terms_list: &[terms::Term],
     phrase_lookup: &HashMap<String, String>,
-    cross_file_headings: &HashMap<String, Vec<(String, String)>>,
-    all: &[RecordFile],
     led: &Ledger,
 ) -> Vec<msg::Said> {
     let mut out = Vec::new();
@@ -676,7 +674,7 @@ pub fn depends_shape_refusals(
         let mut seen: Vec<String> = Vec::new();
         for d in &sec.depends {
             let Ok(Some(target)) =
-                depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, cross_file_headings, led)
+                depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, led)
             else {
                 continue;
             };
@@ -693,13 +691,9 @@ pub fn depends_shape_refusals(
                 continue;
             }
             seen.push(key);
-            let (target_section, in_file) = match &target {
-                DepTarget::Heading(idx) => (Some(&rf.sections[*idx]), true),
-                DepTarget::Decision(id) => (
-                    all.iter().find_map(|r| r.sections.iter().find(|s| s.id.as_deref() == Some(id.as_str()))),
-                    false,
-                ),
-                DepTarget::Term(_) => (None, false),
+            let target_section = match &target {
+                DepTarget::Heading(idx) => Some(&rf.sections[*idx]),
+                DepTarget::Decision(_) | DepTarget::Term(_) => None,
             };
             // An answer set names the letters of another question: a term has
             // no options (per "Does a depends entry on a question in its file
@@ -710,7 +704,7 @@ pub fn depends_shape_refusals(
             }
             let Some(ts) = target_section else { continue };
             match d.set() {
-                None if in_file && ts.answer_letter().is_none() => {
+                None if ts.answer_letter().is_none() => {
                     out.push(msg::missing_answer_set(rel, &sec.heading_text, &ts.heading_text))
                 }
                 // A set approved before its target was answered stays (per
@@ -748,16 +742,18 @@ pub fn depends_shape_refusals(
 /// `require_terms` before this is ever called), `check` a copy with every
 /// id minted in memory so a real term in a terms.md that has never been
 /// approved still resolves instead of drowning this in "which is no
-/// term" refusals. `cross_file_headings` is likewise supplied once per
-/// command run (`depends::cross_file_heading_index`), threaded straight
-/// into `resolve_dep`.
+/// term" refusals. `cross_file_headings` (`depends::cross_file_heading_index`,
+/// built once per command run) is read only by the `supersedes:` and
+/// `unrelated:` rules; a `depends:` entry is resolved against the file and
+/// the terms alone.
 ///
 /// `names` is every heading by its id, of any state and any topic file
 /// (`view::heading_texts`), built once per command run by the caller:
 /// a refusal that names an identifier names the question beside it.
-/// `all` is every topic file loaded: a heading-shaped entry that names no
-/// current decision but a question of another topic file that is not
-/// answered (or is refused) is refused with the state the tool holds.
+/// `all` is every topic file loaded: a heading-shaped entry that is the
+/// heading of a current decision of another topic file is refused as naming
+/// a decision of another file (`derive_finding`).
+///
 /// The `parse` findings of a topic file: its shape, a `###` line that is no
 /// question, a section's shape, and what its parse found (178a232e A point
 /// 1: an option with no decision sentence or more than one, a duplicate id
@@ -821,7 +817,7 @@ pub fn record_refusals(
     out.extend(in_sections(Class::Tells, body_tell_found(rel, rf, led)));
     out.extend(in_sections(Class::Tells, no_term_found(rel, rf, terms_list, led)));
     // The three shapes of a depends entry approve stops, found the same way.
-    for said in depends_shape_refusals(rel, rf, terms_list, phrase_lookup, cross_file_headings, all, led) {
+    for said in depends_shape_refusals(rel, rf, terms_list, phrase_lookup, led) {
         out.push(Finding::said(Class::Plan, said));
     }
     {
@@ -831,7 +827,7 @@ pub fn record_refusals(
         }
     }
 
-    // Per "What does a depends line name?": every section, skeleton or
+    // Per "What stops a question that has no depends line?": every section, skeleton or
     // not, needs at least one `depends:` line naming what the question
     // stands on, before anything about it is resolved or written.
     for (si, sec) in rf.sections.iter().enumerate() {
@@ -840,10 +836,9 @@ pub fn record_refusals(
         }
     }
 
-    // Resolve every entry (per "What does a depends line name?" and "Does a
-    // reference in a topic file carry the identifier of what it names?").
+    // Resolve every entry (per "What stops a depends entry that resolves to nothing?" and "What does a reference in a topic file carry?").
     // An `Id` entry is kept as written and must already be a heading id in
-    // this file, a non-retired term id, or a current decision. A `Text`
+    // this file, a non-retired term id, or, on a closed question, a current decision. A `Text`
     // entry ending in `?` is a heading reference, whose dangling/cycle/
     // self-dep is `derive_tiers`'s single error (computed at parse time
     // into `rf.derive_error`); any other `Text` entry must resolve to
@@ -877,13 +872,15 @@ pub fn record_refusals(
                 continue;
             }
             if let Err(e) =
-                depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, cross_file_headings, led)
+                depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, led)
             {
                 // What the identifier names, for the refusal only: a term
                 // (a retired one too), else the heading of a question in
                 // any state.
                 let name = match &e {
-                    depends::DepError::NotCurrentDecision(id) | depends::DepError::RetiredTermId(id) => terms_list
+                    depends::DepError::NotCurrentDecision(id)
+                    | depends::DepError::OtherFile(id)
+                    | depends::DepError::RetiredTermId(id) => terms_list
                         .iter()
                         .find(|t| t.id.as_deref() == Some(id.as_str()))
                         .map(|t| t.name.as_str())
@@ -902,6 +899,7 @@ pub fn record_refusals(
     out.extend(closed_findings(rel, rf, led));
     out.extend(derive_finding(rel, rf, all, led));
     out.extend(cap_finding(rel, rf, replaced, led));
+    out.extend(depends_line_cap_findings(rel, rf, led));
 
     out.extend(supersedes_refusals(rel, rf, cross_file_headings, names, all, led, None));
 
@@ -1076,33 +1074,6 @@ pub fn supersedes_refusals(
     out
 }
 
-/// The refusal for a heading-shaped `depends:` entry that names a question
-/// of another topic file that is not a current decision: not answered yet
-/// (unasked or asked), or refused. `None` when no other file holds an
-/// unanswered or refused question under that heading.
-fn waiting_on_other_file(
-    rel: &str,
-    section: &str,
-    entry: &str,
-    all: &[RecordFile],
-    led: &Ledger,
-) -> Option<Finding> {
-    use status::QuestionStatus;
-    let mut refused: Option<&str> = None;
-    for other in all.iter().filter(|o| o.rel != rel) {
-        for sec in other.sections.iter().filter(|s| s.heading_text.trim() == entry.trim()) {
-            match status::question_status(led, sec) {
-                QuestionStatus::NoBody | QuestionStatus::NotAsked | QuestionStatus::Asked => {
-                    return Some(Finding::said(Class::Plan, msg::dep_waits_on_other_file(rel, section, entry, &other.rel)));
-                }
-                QuestionStatus::Refused => refused = Some(other.rel.as_str()),
-                _ => {}
-            }
-        }
-    }
-    refused.map(|r| Finding::said(Class::Plan, msg::dep_on_refused_in_other_file(rel, section, entry, r)))
-}
-
 /// Refusals about a topic file's own name and its own headings, one
 /// function for `approve` and `check` so the two print the same lines
 /// (per "What names a topic file?"): a name
@@ -1274,23 +1245,29 @@ pub(crate) fn set_frozen_at_ask(led: &Ledger, sec: &record::Section, d: &record:
     led.assumes_for(tid).iter().any(|r| &r.detail == id && r.hash == hash)
 }
 
-/// The rule on the tiers of `rf` (per "What does the tool derive the tiers
-/// from?"): the one finding its derive error earns, a heading-shaped entry
-/// on a question of another topic file not yet answered waiting for that
-/// answer. About the questions the error names.
+/// The rule on the tiers of `rf` (per "What are the tiers derived from?"):
+/// the one finding its derive error earns. A heading-shaped entry that names
+/// no heading of the file but a current decision of another topic file, on a
+/// question being judged, earns the finding on what a depends entry names
+/// instead (per "What does a depends entry name?"). About the questions the
+/// error names.
 pub fn derive_finding(rel: &str, rf: &RecordFile, all: &[RecordFile], led: &Ledger) -> Option<Finding> {
     let err = rf.derive_error.as_ref()?;
-    let waiting = match err {
-        record::DeriveError::Dangling { section, entry } => waiting_on_other_file(rel, section, entry, all, led),
+    let other_file = match err {
+        record::DeriveError::Dangling { section, entry } => rf
+            .sections
+            .iter()
+            .find(|s| s.heading_text == *section)
+            .filter(|s| status::open_to_ask_text(led, rf, s))
+            .filter(|_| names_decision_of_other_file(rel, entry, all, led))
+            .map(|_| Finding::said(Class::Plan, msg::dep_names_heading_of_other_file(rel, section, entry.trim()))),
         _ => None,
     };
     // The sections the error is about (`check` reads them to tell a
     // question that can still change from one that cannot): the one
     // holding the entry, the self-dependent one, or every one in the cycle.
     let named: Vec<&str> = match err {
-        record::DeriveError::Dangling { section, .. } | record::DeriveError::AmbiguousHeading { section, .. } => {
-            vec![section.as_str()]
-        }
+        record::DeriveError::Dangling { section, .. } => vec![section.as_str()],
         record::DeriveError::SelfDep(h) => vec![h.as_str()],
         record::DeriveError::Cycle(hs) => hs.iter().map(String::as_str).collect(),
     };
@@ -1301,11 +1278,53 @@ pub fn derive_finding(rel: &str, rf: &RecordFile, all: &[RecordFile], led: &Ledg
         .filter(|(_, s)| named.contains(&s.heading_text.as_str()))
         .map(|(i, _)| i)
         .collect();
-    let f = waiting.unwrap_or_else(|| Finding::said(Class::Plan, msg::derive_error(rel, err)));
+    let f = other_file.unwrap_or_else(|| Finding::said(Class::Plan, msg::derive_error(rel, err)));
     Some(f.in_sections(at))
 }
 
-/// The cap (per "What bounds the questions of a tier?"): no derived tier may
+/// Whether `entry` is the heading of a current decision of a topic file other
+/// than `rel`.
+fn names_decision_of_other_file(rel: &str, entry: &str, all: &[RecordFile], led: &Ledger) -> bool {
+    all.iter().filter(|o| o.rel != rel).any(|o| {
+        o.sections.iter().any(|s| {
+            s.heading_text.trim() == entry.trim() && s.id.as_deref().is_some_and(|id| state::is_current(led, id))
+        })
+    })
+}
+
+/// The cap on a depends line (per "What bounds the questions a depends line
+/// names?"): a question being judged (`status::open_to_ask_text`) whose
+/// depends line names more than `DEPENDS_LINE_CAP` questions of its file, once
+/// each, by heading or by identifier. A term does not count.
+pub fn depends_line_cap_findings(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<Finding> {
+    let mut out = Vec::new();
+    for (si, sec) in rf.sections.iter().enumerate() {
+        if !status::open_to_ask_text(led, rf, sec) {
+            continue;
+        }
+        let mut targets: Vec<usize> = Vec::new();
+        for d in &sec.depends {
+            if let Some(idx) = rf.dep_target(d) {
+                if !targets.contains(&idx) {
+                    targets.push(idx);
+                }
+            }
+        }
+        if targets.len() > record::DEPENDS_LINE_CAP {
+            let names: Vec<String> = targets.iter().map(|&i| rf.sections[i].heading_text.trim().to_string()).collect();
+            out.push(
+                Finding::said(
+                    Class::Plan,
+                    msg::depends_line_over_limit(rel, &sec.heading_text, &names, record::DEPENDS_LINE_CAP),
+                )
+                .in_section(si),
+            );
+        }
+    }
+    out
+}
+
+/// The cap (per "What bounds the questions at one tier?"): no derived tier may
 /// hold more than `TIER_CAP` live questions. Only judged when tiers were
 /// derived; a refused, superseded or withdrawn question does not count, nor
 /// a decision an open question supersedes (`replaced`).
@@ -1317,9 +1336,8 @@ pub fn cap_finding(rel: &str, rf: &RecordFile, replaced: &HashSet<String>, led: 
 
 // --- the judgements every command reads --------------------------------------
 
-/// What one topic file is judged against: the file normalized
-/// (`depends::normalize_cross_file_deps`), every topic file as loaded, the
-/// terms, and what the caller built once from them.
+/// What one topic file is judged against: the file, every topic file as
+/// loaded, the terms, and what the caller built once from them.
 pub struct TopicFileJudge<'a> {
     pub root: &'a Path,
     pub rel: &'a str,
@@ -1335,7 +1353,7 @@ pub struct TopicFileJudge<'a> {
     pub blame: &'a crate::blame::Index,
     pub led: &'a Ledger,
     /// Whether the planning rules judge the file (`planning_rules_apply`,
-    /// read off the file as written, before the normalize pass).
+    /// read off the file as written).
     pub planning: bool,
     /// What the planning of every file of the run reads, when the caller
     /// judges many files and has read it once; `None` reads it here.
@@ -1352,7 +1370,7 @@ pub struct TopicFileJudge<'a> {
 /// judged by the rules of its record alone, so a heading approved before
 /// those rules is no finding. The one scope `approve` and `check` both read
 /// (per "Does a command refuse what check passes?", fe14991d A). `rf` is the
-/// file as written, before `depends::normalize_cross_file_deps`; `rel` its
+/// file as written; `rel` its
 /// path from the root, as the ledger names it.
 pub fn planning_rules_apply(led: &Ledger, rf: &RecordFile, rel: &str) -> bool {
     status::topic_file_status_at(led, rf, rel).awaits_approval()
@@ -1584,8 +1602,7 @@ pub fn judge_topic_file_in(
     index: &RepoIndex,
 ) -> Vec<Finding> {
     let shared = &index.planning;
-    let mut rf = rf.clone();
-    depends::normalize_cross_file_deps(&mut rf, terms_list, &shared.phrase_lookup, &shared.cross, led);
+    let rf = rf.clone();
     let replaced = depends::replaced_ids(&index.base, &rf, &shared.cross, led);
     judge_topic_file(&TopicFileJudge {
         root,

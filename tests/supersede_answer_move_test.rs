@@ -96,8 +96,24 @@ fn assert_refused_naming(out: &std::process::Output, names: &[&str]) {
     }
 }
 
+/// An answered question of file `name` that stands on `target` (an id) by
+/// identifier: the record of a question that names a decision of another
+/// file, which approve no longer writes. Built from an answered ledger state,
+/// as the other answered fixtures are.
+fn old_dependent(dir: &Path, name: &str, heading: &str, target: &str, id: &str) {
+    let section = format!(
+        "### {}\ndepends: 99999999-9999-9999-9999-999999999999, {}\n\nid: {}\n{}",
+        heading, target, id, BODY
+    );
+    let hash = mirror_section_hash(&section);
+    append_ledger_row_at(dir, "asked", id, &hash, heading, "2024-01-01T00:00:00Z");
+    append_ledger_row_at(dir, "answered", id, &hash, "A", "2024-01-01T00:00:01Z");
+    write_record(dir, &rel(name), &format!("# Old\n\n{}\n**Answer:** A\n", section.trim_end()));
+}
+
 /// The case where approve passed (Q4 names Q1 only, Q1 had no dependents)
-/// and Q1 then gains a dependent: Q7 in c.md, approved and answered.
+/// and Q1 then gains a dependent: Q7 in c.md, an answered question standing
+/// on Q1 by identifier.
 fn q1_gains_a_dependent_after_approve(dir: &Path, ask_q4_first: bool) -> PathBuf {
     let a = with_q1(dir);
     append(&a, &sec(Q4, "widget", Some(Q1), true));
@@ -106,9 +122,7 @@ fn q1_gains_a_dependent_after_approve(dir: &Path, ask_q4_first: bool) -> PathBuf
         let out = adr(dir, &["ask", a.to_str().unwrap()], &[], "");
         assert!(out.status.success(), "ask a failed: {}", stderr(&out));
     }
-    write_record(dir, &rel("c"), &format!("# C\n{}", sec(Q7, &format!("widget, {}", Q1), None, true)));
-    approve_ok(dir, "c");
-    ask_answer(dir, "c", Q7);
+    old_dependent(dir, "c", Q7, &id_of(&a, Q1), "77777777-7777-7777-7777-777777777777");
     a
 }
 

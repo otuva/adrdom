@@ -101,7 +101,7 @@ fn the_terms_file_errors_name_both_entries_and_the_repeated_identifier_rule() {
     assert!(!text.contains("every term has an identifier, name, definition and aliases"), "{}", text);
 }
 
-// adr: 184b5bcb-fa72-436b-92cb-4d4605366c59
+// adr: 343d0d28-2c5d-40fc-99aa-22bfba4ea79f
 //
 // A heading written twice in a topic file prints each finding once.
 #[test]
@@ -221,7 +221,7 @@ fn assert_no_repeats(lines: &[String], what: &str) {
     }
 }
 
-// adr: 184b5bcb-fa72-436b-92cb-4d4605366c59
+// adr: 343d0d28-2c5d-40fc-99aa-22bfba4ea79f
 //
 // A finding line prints once on standard error and on the page too.
 #[test]
@@ -237,7 +237,7 @@ fn identical_finding_lines_print_once_on_standard_error_and_on_the_page() {
     assert_no_repeats(&page, "page");
 }
 
-// adr: 184b5bcb-fa72-436b-92cb-4d4605366c59
+// adr: 343d0d28-2c5d-40fc-99aa-22bfba4ea79f
 //
 // The moves of a stop that lists findings, and of a failed read or write,
 // name an act on a thing, never "clears the findings below", "fixes what the
@@ -292,7 +292,7 @@ fn generic_moves_name_an_act_on_a_thing() {
     assert!(!waits.0.next.contains("clears the findings"), "{}", waits.0.next);
 }
 
-// adr: 184b5bcb-fa72-436b-92cb-4d4605366c59
+// adr: 343d0d28-2c5d-40fc-99aa-22bfba4ea79f
 //
 // The same findings print in the same order under check, show, plan, ask,
 // approve and on the page.

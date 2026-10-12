@@ -580,8 +580,8 @@ pub fn frozen_depends_edited(rel: &str, heading: &str, st: crate::status::Questi
 pub fn dep_not_current_decision(rel: &str, heading: &str, id: &str, name: Option<&str>) -> Said {
     said(
         &rule::DEPENDS_ENTRY_RESOLVES,
-        format!("{}: \"{}\" depends on {} which is not a current decision", rel, heading, named(id, name)),
-        Next::agent("names a current decision, or removes the entry"),
+        format!("{}: \"{}\" depends on {} which names no term and no question of this file", rel, heading, named(id, name)),
+        Next::agent("rewrites the entry to name a term or a question of this file, or removes it"),
     )
 }
 
@@ -605,6 +605,42 @@ pub fn dep_no_term(rel: &str, heading: &str, text: &str) -> Said {
         &rule::DEPENDS_TERM_EXISTS,
         format!("{}: \"{}\" depends on \"{}\" which is no term", rel, heading, text),
         Next::agent("adds the term, or names another"),
+    )
+}
+
+/// A `depends:` entry, on a question being judged, names a current decision
+/// of another topic file by its identifier.
+pub fn dep_names_decision_of_other_file(rel: &str, heading: &str, id: &str, name: Option<&str>) -> Said {
+    dep_names_other_file(rel, heading, &named(id, name))
+}
+
+/// The same, written as the heading of that decision.
+pub fn dep_names_heading_of_other_file(rel: &str, heading: &str, text: &str) -> Said {
+    dep_names_other_file(rel, heading, &format!("\"{}\"", text))
+}
+
+fn dep_names_other_file(rel: &str, heading: &str, target: &str) -> Said {
+    said(
+        &rule::DEPENDS_ENTRY_NAMES_TERM_OR_FILE_QUESTION,
+        format!(
+            "{}: \"{}\" depends on {}, a decision of another topic file",
+            rel, heading, target
+        ),
+        Next::agent(format!(
+            "rewrites the depends line of \"{}\" to name terms and questions of this file; a decision of another file it relies on goes on no depends line",
+            heading
+        )),
+    )
+}
+
+/// The depends line of a question being judged names more questions than the
+/// cap: `names` are the questions its entries name, in line order.
+pub fn depends_line_over_limit(rel: &str, heading: &str, names: &[String], cap: usize) -> Said {
+    let list = names.iter().map(|n| format!("\"{}\"", n)).collect::<Vec<_>>().join(", ");
+    said(
+        &rule::DEPENDS_LINE_QUESTION_LIMIT,
+        format!("{}: \"{}\" depends on {} questions, the most is {}: {}", rel, heading, names.len(), cap, list),
+        Next::agent(format!("rewrites the depends line of \"{}\" to name at most {} questions", heading, cap)),
     )
 }
 
@@ -643,30 +679,6 @@ pub fn dep_retired_term(rel: &str, heading: &str, text: &str) -> Said {
         format!("{}: \"{}\" names the retired term \"{}\"", rel, heading, text),
         Next::agent("rewrites the entry"),
     )
-}
-
-/// A heading-shaped `depends:` entry naming no heading in its own file, but
-/// a current decision's heading text more than once elsewhere (the
-/// cross-file gap "Does a reference in a topic file carry the identifier
-/// of what it names?" left open): which one it means is ambiguous, so this
-/// refuses instead of guessing. `files` is the (deduped, sorted) list of
-/// files those decisions live in -- one entry when the same topic file
-/// happens to carry the heading text on two different current decisions
-/// (`check`'s cross-file duplicate-heading check only flags that between
-/// files, not within one), more than one when the decisions are spread
-/// across files; the wording says which, rather than always calling it
-/// "more than one file" when it may be only one file holding more than one
-/// decision. Reported as a file's one `derive_error` (`derive_what`'s
-/// `DeriveError::AmbiguousHeading` arm, from
-/// `depends::normalize_cross_file_deps`), never per entry:
-/// `depends::dep_refusal_text` never reaches this case (see its own doc
-/// comment).
-fn ambiguous_heading_what(rel: &str, heading: &str, text: &str, files: &[String]) -> String {
-    let detail = match files {
-        [one] => format!("names more than one current decision in {}", one),
-        many => format!("is a current decision in more than one file: {}", many.join(", ")),
-    };
-    format!("{}: \"{}\" depends on \"{}\" which {}", rel, heading, text, detail)
 }
 
 fn ambiguous_heading_next() -> Next {
@@ -722,7 +734,7 @@ fn derive_what(rel: &str, e: &DeriveError) -> (&'static rule::Rule, String, Next
         DeriveError::Dangling { section, entry } => (
             &rule::DEPENDS_ENTRY_RESOLVES,
             format!(
-                "{}: \"{}\" depends on \"{}\" which is no heading in this file and no current decision",
+                "{}: \"{}\" depends on \"{}\" which is no heading in this file",
                 rel, section, entry
             ),
             Next::agent("rewrites the entry"),
@@ -741,38 +753,10 @@ fn derive_what(rel: &str, e: &DeriveError) -> (&'static rule::Rule, String, Next
             format!("{}: \"{}\" depends on itself", rel, h),
             Next::agent("removes the entry, or rewrites it to name another question"),
         ),
-        DeriveError::AmbiguousHeading { section, entry, files } => (
-            &rule::DEPENDS_ENTRY_NAMES_ONE_DECISION,
-            ambiguous_heading_what(rel, section, entry, files),
-            ambiguous_heading_next(),
-        ),
     }
 }
 
 
-
-/// A `depends:` entry names a question of another topic file that is not
-/// answered yet.
-pub fn dep_waits_on_other_file(rel: &str, section: &str, entry: &str, other_rel: &str) -> Said {
-    said_raw(
-        &rule::DEPENDS_TARGET_IS_ANSWERED,
-        format!("{}: \"{}\" depends on \"{}\" ({}) which is not answered yet", rel, section, entry, other_rel),
-        crate::moves::WAIT_TAIL.trim_start_matches("; "),
-    )
-}
-
-/// `dep_waits_on_other_file` without its waiting tail: what the `not yet`
-/// move names.
-
-/// A `depends:` entry names a question of another topic file that is
-/// refused.
-pub fn dep_on_refused_in_other_file(rel: &str, section: &str, entry: &str, other_rel: &str) -> Said {
-    said(
-        &rule::DEPENDS_TARGET_IS_NOT_REFUSED,
-        format!("{}: \"{}\" depends on \"{}\" ({}) which is refused", rel, section, entry, other_rel),
-        Next::agent("names another, or drops the entry"),
-    )
-}
 
 pub fn derive_error(rel: &str, e: &DeriveError) -> Said {
     let (r, found, next) = derive_what(rel, e);
@@ -2794,7 +2778,9 @@ mod tests {
             hooks_path_failed("set", Next::agent("fixes it")),
             heading_not_a_question("x.md", 3).text(),
             approve_not_a_file_approve_takes("README.md"),
-            dep_on_refused_in_other_file("x.md", "H?", "E?", "y.md").text(),
+            dep_names_decision_of_other_file("x.md", "H?", "id-1", None).text(),
+            dep_names_heading_of_other_file("x.md", "H?", "E?").text(),
+            depends_line_over_limit("x.md", "H?", &["A?".to_string(), "B?".to_string(), "C?".to_string()], 2).text(),
             id_not_found_some_unread("id-1", &["y.md".to_string()]),
             drop_without_id("H?", "x.md").text(),
             drop_of_closed("H?", true, "x.md").text(),
@@ -2852,7 +2838,7 @@ mod tests {
         }
     }
 
-    // adr: ee27fd4c-89b7-411f-a3e4-2535c49b6d1b
+    // adr: a469ecb9-a4f1-4a2a-89c5-7378cc1138b4
     //
     // The words of the count `show --questions` prints.
     #[test]
@@ -2860,7 +2846,7 @@ mod tests {
         assert_eq!(show_decision_rows(1, 2), "decision rows: 1 with a question, 2 with none");
     }
 
-    // adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+    // adr: 69708a07-469c-406b-9e25-63da1605b432
     //
     // The five findings of a blame line, word for word: each ends in a move,
     // and the one that waits for a blame file's approval names the status of
@@ -2895,7 +2881,7 @@ mod tests {
         );
     }
 
-    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
+    // adr: b0554224-15e4-4e91-a2bb-9ae5667803f4
     #[test]
     fn a_second_blame_line_is_a_reference_line_given_twice() {
         assert_eq!(
@@ -2952,7 +2938,7 @@ mod tests {
         );
     }
 
-    // adr: 184b5bcb-fa72-436b-92cb-4d4605366c59
+    // adr: 343d0d28-2c5d-40fc-99aa-22bfba4ea79f
     //
     // A move that has two legitimate acts names both, and the one for a
     // current decision names the question by identifier and heading.
@@ -2970,7 +2956,7 @@ mod tests {
         assert!(moved.contains("or writes a question that supersedes id-1"), "{}", moved);
         assert!(section_no_terms_line("x.md", "H?", "id-1", true).text().contains("or writes a question that supersedes id-1"));
         assert!(dep_no_term("x.md", "H?", "w").text().contains("adds the term, or names another"));
-        assert!(dep_not_current_decision("x.md", "H?", "id-1", None).text().contains("or removes the entry"));
+        assert!(dep_not_current_decision("x.md", "H?", "id-1", None).text().contains("or removes it"));
     }
 
     #[test]

@@ -823,7 +823,7 @@ fn uninstall_is_idempotent() {
     assert!(dir.join("adrdom/state/ledger.tsv").is_file());
 }
 
-// adr: 069a6b4a-de35-45f3-8c6c-8e254bf40565
+// adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
 //
 // "What does a command that writes print?" A: the event it wrote, one line
 // each, and nothing else. install writes files and no ledger row, so it

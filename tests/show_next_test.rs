@@ -219,7 +219,7 @@ fn show_names_the_next_move_at_every_step() {
     );
 }
 
-// adr: 7327cd58-ac58-40a4-8ef2-00072fb552b2
+// adr: da80931c-68cf-4c51-acce-060307bbd973
 // adr: 506b3c6d-3d0a-4a02-98de-3b8a573d2fe9
 //
 // `next` and `answer` read one rule: an owner line is printed only for a
@@ -372,8 +372,8 @@ no tier holds more than four questions; agent rewrites the depends lines of thes
 
 // adr: f4f667ad-8714-4e65-897b-c7002e423c28
 //
-// adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
-// adr: 3b8da790-ea0c-4ca5-860a-980c7bc5f361
+// adr: 7c0b9fe3-6038-4a23-93fe-88a31c7eaf40
+// adr: f19e7914-ad97-4f6b-87dd-9301e53cd068
 //
 // A superseded question stays in its topic file, and show names under it
 // the question that took its place. The agent names the decision it

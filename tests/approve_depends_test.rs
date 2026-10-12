@@ -20,6 +20,7 @@ fn setup(dir: &std::path::Path) {
 
 // --- no depends line ----------------------------------------------------
 
+// adr: 9bf76db8-4821-4257-ac49-4c22c2a0e538
 #[test]
 fn approve_refuses_a_heading_with_no_depends_line() {
     let dir = init_repo();
@@ -44,18 +45,16 @@ fn approve_refuses_a_heading_with_no_depends_line() {
     );
 }
 
-// adr: ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf
+// adr: 9afe335c-2a7a-4625-b115-f74d3f091cac
+// adr: 9bf76db8-4821-4257-ac49-4c22c2a0e538
 //
-// "every question carries a depends line naming a term, a question in the
-// same topic file, or a current decision; approve and ask stop a line that
-// is missing or names anything that does not resolve". A heading with no
-// depends line at all refuses (the "missing" half, also covered on its own
-// by `approve_refuses_a_heading_with_no_depends_line` below); a heading
-// whose depends line names a real term, a heading elsewhere in the same
-// file, and a current decision (an id answered before this file even
-// existed) all resolve, and approve accepts every one of the three kinds.
+// A depends entry names a term, or a question of the same topic file;
+// approve stops a line that is missing. A heading with no depends line at
+// all refuses; a heading whose depends line names a real term, and a
+// heading whose line names a question elsewhere in the same file, resolve,
+// and approve accepts both.
 #[test]
-fn approve_accepts_all_three_depends_target_kinds_and_refuses_a_missing_line() {
+fn approve_accepts_a_term_and_a_question_of_the_file_and_refuses_a_missing_line() {
     let dir = init_repo();
     setup(&dir);
 
@@ -69,39 +68,198 @@ fn approve_accepts_all_three_depends_target_kinds_and_refuses_a_missing_line() {
         stderr(&out)
     );
 
-    // A current decision: an id answered before this topic file existed,
-    // living in a topic file of its own (approve refuses an answered id
-    // that appears in no topic file at all -- a different rule from the
-    // one this test is about -- so it needs a home).
-    let decided_id = "66666666-6666-6666-6666-666666666666";
-    append_ledger_row_at(&dir, "asked", decided_id, "h1", "Some earlier heading?", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "answered", decided_id, "h1", "A", "2024-01-01T00:00:01Z");
-    let earlier = format!(
-        "# Earlier\n\n### 1.1 Some earlier heading?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
-        decided_id
-    );
-    write_record(&dir, "adrdom/decisions/earlier.md", &earlier);
-
-    // One file naming all three kinds: a term ("decision"), a heading in
-    // the same file ("First?"), and the current decision above.
-    let content = format!(
-        "# Example\n\n\
+    let content = "# Example\n\n\
         ### First?\ndepends: decision\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
-        ### Second?\ndepends: First?=A\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
-        ### Third?\ndepends: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
-        decided_id
-    );
-    let record = write_record(&dir, "adrdom/decisions/example.md", &content);
+        ### Second?\ndepends: First?=A\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let record = write_record(&dir, "adrdom/decisions/example.md", content);
     let out2 = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(
         out2.status.success(),
-        "approve should accept a term, an in-file heading, and a current decision: {}",
+        "approve should accept a term and a question of the file: {}",
         stderr(&out2)
     );
 }
 
+/// An answered question in `adrdom/decisions/earlier.md`, a current decision
+/// of another topic file; returns its identifier.
+fn earlier_decision(dir: &std::path::Path) -> String {
+    let decided_id = "66666666-6666-6666-6666-666666666666";
+    append_ledger_row_at(dir, "asked", decided_id, "h1", "Some earlier heading?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(dir, "answered", decided_id, "h1", "A", "2024-01-01T00:00:01Z");
+    let earlier = format!(
+        "# Earlier\n\n### Some earlier heading?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        decided_id
+    );
+    write_record(dir, "adrdom/decisions/earlier.md", &earlier);
+    decided_id.to_string()
+}
+
+fn one_question(heading: &str, depends: &str) -> String {
+    format!(
+        "# Example\n\n### {}\ndepends: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        heading, depends
+    )
+}
+
+const OTHER_FILE_REFUSAL: &str = "a decision of another topic file; a question stands on terms and questions of its file; agent rewrites the depends line of";
+
+// adr: 9afe335c-2a7a-4625-b115-f74d3f091cac
+//
+// A depends entry names a term, or a question of the same topic file: a
+// current decision of another file, written by its identifier or by its
+// heading text, is refused at approve and the entry is named; the refusal is
+// check's finding on the draft too.
+#[test]
+fn approve_refuses_an_entry_naming_a_current_decision_of_another_file() {
+    let dir = init_repo();
+    setup(&dir);
+    let decided_id = earlier_decision(&dir);
+
+    for entry in [decided_id.clone(), "Some earlier heading?".to_string()] {
+        let record = write_record(&dir, "adrdom/decisions/example.md", &one_question("Third?", &entry));
+        let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+        assert!(!out.status.success(), "approve should have refused {}: {}", entry, stdout(&out));
+        let err = stderr(&out);
+        assert!(err.contains("\"Third?\" depends on "), "{}", err);
+        assert!(err.contains(OTHER_FILE_REFUSAL), "{}", err);
+        assert!(err.contains(&format!("agent rewrites the depends line of \"Third?\" to name terms and questions of this file")), "{}", err);
+        assert!(err.contains("Some earlier heading?") || err.contains(&decided_id), "{}", err);
+        assert_eq!(err.matches("depends on ").count(), 1, "one finding for the entry: {}", err);
+
+        let check = stdout(&adr(&dir, &["check"], &[], ""));
+        assert!(check.contains(OTHER_FILE_REFUSAL), "check must report the same finding: {}", check);
+
+        let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+        assert!(
+            !ledger.lines().any(|l| l.contains("\tapproved\t") && l.contains("example.md")),
+            "no approved row on refusal: {}",
+            ledger
+        );
+    }
+}
+
+// adr: 9afe335c-2a7a-4625-b115-f74d3f091cac
+//
+// ask refuses the same entry in a plan the owner approved and the agent then
+// edited; the entry is named.
+#[test]
+fn ask_refuses_an_entry_naming_a_current_decision_of_another_file() {
+    let dir = init_repo();
+    setup(&dir);
+    let decided_id = earlier_decision(&dir);
+    let record = write_record(&dir, "adrdom/decisions/example.md", &one_question("Third?", "decision"));
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "").status.success());
+    let approved = std::fs::read_to_string(&record).unwrap();
+
+    for entry in [decided_id.clone(), "Some earlier heading?".to_string()] {
+        let line = approved.lines().find(|l| l.starts_with("depends: ")).unwrap().to_string();
+        std::fs::write(&record, approved.replacen(&line, &format!("depends: {}", entry), 1)).unwrap();
+        let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+        assert!(!out.status.success(), "ask should have refused {}: {}", entry, stdout(&out));
+        let err = stderr(&out);
+        assert!(err.contains(OTHER_FILE_REFUSAL), "{}", err);
+    }
+}
+
+// adr: 9afe335c-2a7a-4625-b115-f74d3f091cac
+//
+// A closed question keeps the record of what it stood on: an answered
+// question whose depends line holds the identifier of a decision of another
+// file is no finding of check, and when that decision is superseded the
+// question falls with it.
+#[test]
+fn check_does_not_report_an_answered_question_standing_on_a_decision_of_another_file() {
+    let dir = init_repo();
+    setup(&dir);
+    let decided_id = earlier_decision(&dir);
+    let x_id = "55555555-5555-5555-5555-555555555555";
+    approve_via_ledger_fixture(&dir, x_id, &decided_id);
+    let check = stdout(&adr(&dir, &["check"], &[], ""));
+    assert!(!check.contains(OTHER_FILE_REFUSAL), "{}", check);
+    assert!(!check.contains("depends on"), "{}", check);
+
+    let show = stdout(&adr(&dir, &["show", "--dependents", "adrdom/decisions/earlier.md"], &[], ""));
+    assert!(show.contains("Does X stand on the earlier one?"), "{}", show);
+}
+
+fn approve_via_ledger_fixture(dir: &std::path::Path, x_id: &str, decided_id: &str) {
+    append_ledger_row_at(dir, "asked", x_id, "h2", "Does X stand on the earlier one?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(dir, "answered", x_id, "h2", "A", "2024-01-01T00:00:01Z");
+    let x = format!(
+        "# Topic X\n\n### Does X stand on the earlier one?\ndepends: {}\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
+        decided_id, x_id
+    );
+    write_record(dir, "adrdom/decisions/topic-x.md", &x);
+}
+
+// adr: 010901e0-c02d-49eb-98bc-d584756d7f51
+//
+// A cap of two: a depends line naming two questions passes, three are
+// refused at approve with the question named; terms do not count.
+#[test]
+fn approve_refuses_a_depends_line_naming_three_questions_and_counts_no_term() {
+    let dir = init_repo();
+    setup(&dir);
+    let q = |h: &str, d: &str| {
+        format!(
+            "### {}\ndepends: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n",
+            h, d
+        )
+    };
+    let roots = format!("{}{}{}", q("Root a?", "decision"), q("Root b?", "decision"), q("Root c?", "decision"));
+
+    let two = format!("# Example\n\n{}{}", roots, q("Over two?", "Root a?=A, Root b?=A, decision"));
+    let record = write_record(&dir, "adrdom/decisions/example.md", &two);
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(out.status.success(), "two questions and a term pass: {}{}", stdout(&out), stderr(&out));
+
+    let three = format!("# Example\n\n{}{}", roots, q("Over three?", "Root a?=A, Root b?=A, Root c?=A, decision"));
+    let record = write_record(&dir, "adrdom/decisions/three.md", &three);
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(!out.status.success(), "three questions are refused: {}", stdout(&out));
+    let err = stderr(&out);
+    let refusal = "\"Over three?\" depends on 3 questions, the most is 2: \"Root a?\", \"Root b?\", \"Root c?\"; a depends line names at most two questions; agent rewrites the depends line of \"Over three?\" to name at most 2 questions";
+    assert!(err.contains(refusal), "{}", err);
+    assert!(!err.contains("Over two?"), "{}", err);
+
+    let check = stdout(&adr(&dir, &["check"], &[], ""));
+    assert!(check.contains(refusal), "check reports the same finding: {}", check);
+}
+
+// adr: 010901e0-c02d-49eb-98bc-d584756d7f51
+//
+// ask refuses a plan whose depends line was edited over the cap after approval.
+#[test]
+fn ask_refuses_a_depends_line_naming_three_questions() {
+    let dir = init_repo();
+    setup(&dir);
+    let q = |h: &str, d: &str| {
+        format!(
+            "### {}\ndepends: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n",
+            h, d
+        )
+    };
+    let body = format!(
+        "# Example\n\n{}{}{}{}",
+        q("Root a?", "decision"),
+        q("Root b?", "decision"),
+        q("Root c?", "decision"),
+        q("Over?", "Root a?=A, Root b?=A")
+    );
+    let record = write_record(&dir, "adrdom/decisions/example.md", &body);
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "").status.success());
+    let approved = std::fs::read_to_string(&record).unwrap();
+    let line = approved.lines().find(|l| l.starts_with("depends: ") && l.contains(",")).unwrap().to_string();
+    let edited = approved.replacen(&line, &format!("{}, Root c?=A", line), 1);
+    std::fs::write(&record, edited).unwrap();
+    let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
+    assert!(!out.status.success(), "{}", stdout(&out));
+    assert!(stderr(&out).contains("\"Over?\" depends on 3 questions, the most is 2"), "{}", stderr(&out));
+}
+
 // --- term entry resolution ------------------------------------------------
 
+// adr: 49a1c3a8-07ea-448a-8926-2362c0617758
 #[test]
 fn approve_refuses_a_term_entry_that_resolves_to_nothing() {
     let dir = init_repo();
@@ -126,6 +284,7 @@ definition: A fixture term for tests.\n\
 aliases: \n\
 retired: yes\n";
 
+// adr: 49a1c3a8-07ea-448a-8926-2362c0617758
 #[test]
 fn approve_refuses_a_term_entry_that_resolves_to_a_retired_term() {
     let dir = init_repo();
@@ -148,6 +307,7 @@ fn approve_refuses_a_term_entry_that_resolves_to_a_retired_term() {
 
 // --- decision entry resolution --------------------------------------------
 
+// adr: 49a1c3a8-07ea-448a-8926-2362c0617758
 #[test]
 fn approve_refuses_a_decision_entry_that_is_not_current() {
     let dir = init_repo();
@@ -164,7 +324,7 @@ fn approve_refuses_a_decision_entry_that_is_not_current() {
     let err = stderr(&out);
     assert!(
         err.contains(&format!(
-            "\"1.1 Q?\" depends on {} which is not a current decision; a depends entry names a heading, term or current decision; agent names a current decision, or removes the entry",
+            "\"1.1 Q?\" depends on {} which names no term and no question of this file; a depends entry names something that exists; agent rewrites the entry to name a term or a question of this file, or removes it",
             uuid
         )),
         "{}",
@@ -174,6 +334,7 @@ fn approve_refuses_a_decision_entry_that_is_not_current() {
 
 // --- heading dep: dangling and cycle --------------------------------------
 
+// adr: 49a1c3a8-07ea-448a-8926-2362c0617758
 #[test]
 fn approve_refuses_a_dangling_heading_dependency() {
     let dir = init_repo();
@@ -185,7 +346,7 @@ fn approve_refuses_a_dangling_heading_dependency() {
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(
-        err.contains("\"1.1 Q?\" depends on \"Missing?\" which is no heading in this file and no current decision; a depends entry names a heading, term or current decision; agent rewrites the entry"),
+        err.contains("\"1.1 Q?\" depends on \"Missing?\" which is no heading in this file; a depends entry names something that exists; agent rewrites the entry"),
         "{}",
         err
     );
@@ -195,7 +356,7 @@ fn approve_refuses_a_dangling_heading_dependency() {
 // "approve stops a cycle": a tier can only be derived when the depends
 // graph has no cycle, so approve refuses outright rather than print a
 // tier order it cannot compute.
-// adr: 1fb71321-bb84-492f-b9d5-1444c9c444af
+// adr: f1b4c4cc-97bd-446f-87b4-df5f1b6f4da2
 #[test]
 fn approve_refuses_a_cycle_between_two_headings() {
     let dir = init_repo();
@@ -231,7 +392,7 @@ fn approve_refuses_a_heading_that_depends_on_itself() {
 
 // --- cap (8.8 A) -----------------------------------------------------------
 
-// adr: eb2cde37-ebcb-4407-a5b0-9fcda4bd9a4e
+// adr: 0e38f001-0226-4927-9a78-2e9fc1ec18d4
 #[test]
 fn approve_refuses_five_root_questions_in_one_tier() {
     let dir = init_repo();
@@ -313,7 +474,7 @@ fn approve_accepts_two_new_headings_when_two_in_the_tier_are_dead() {
     assert!(!stderr(&out).contains("holds"), "{}", stderr(&out));
 }
 
-// adr: eb2cde37-ebcb-4407-a5b0-9fcda4bd9a4e
+// adr: 0e38f001-0226-4927-9a78-2e9fc1ec18d4
 #[test]
 fn approve_accepts_four_root_questions_in_one_tier() {
     let dir = init_repo();
@@ -339,7 +500,7 @@ fn approve_accepts_four_root_questions_in_one_tier() {
 // -- only a `depends:` line -- yet the tool derives "A?" in tier 1 (it
 // stands on nothing in this file, only the `decision` term) and "B?" in
 // tier 2 (one above "A?", the only thing it stands on).
-// adr: 1fb71321-bb84-492f-b9d5-1444c9c444af
+// adr: f1b4c4cc-97bd-446f-87b4-df5f1b6f4da2
 #[test]
 fn the_tool_derives_tiers_across_a_chain() {
     let dir = init_repo();
@@ -440,7 +601,7 @@ fn approve_question_hash_moves_when_only_an_answer_set_changes() {
 
 // --- a reference carries an identifier, not the words it was written with -
 
-// adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
+// adr: 7c0b9fe3-6038-4a23-93fe-88a31c7eaf40
 //
 // "every reference carries the identifier of what it names; the agent
 // writes the name, approve turns it into the identifier, and show turns it
@@ -523,73 +684,39 @@ fn approve_turns_a_depends_name_into_an_id_and_show_turns_it_back_into_words() {
 // "ask stops any question whose heading is not in the plan the owner
 // approved": plan approval is a hash over the file exactly as the owner
 // approved it. B's `depends:` line, hand-reverted back to the heading
-// words `approve` rewrote to A's id, still resolves to that same id in
-// memory (the same cross-file pre-pass `ask`/`check` run before reading
-// approval state) -- but it is no longer the bytes the owner approved.
-// Before this fix, `ask`/`check` computed the plan hash off that
-// normalized in-memory copy instead of the file exactly as it sits on
-// disk, so the revert went unnoticed and both treated B as still
-// approved; this proves they now catch it.
+// words `approve` rewrote to A's id, still resolves to that same question
+// -- but it is no longer the bytes the owner approved, so `ask` refuses and
+// `check` takes the file as awaiting approval.
 #[test]
-fn ask_and_check_refuse_a_cross_file_depends_line_reverted_by_hand_after_approve() {
+fn ask_and_check_refuse_a_depends_line_reverted_by_hand_after_approve() {
     let dir = init_repo();
     setup(&dir);
 
-    // A: a real, fully approved current decision of its own. "decision"
-    // (the fixture term `setup` approves) is repeated in the body so `ask`
-    // pairs a term.
-    let a_content = "# Topic A\n\n### 1.1 Is A do a thing?\ndepends: decision\n\nProblem: a decision.\n\nStandard: a decision.\n\n- A) x, a decision.\n  Why: w.\n  Costs: c.\n- B) y, a decision.\n  Why: w.\n  Costs: c.\n";
-    let record_a = write_record(&dir, "adrdom/decisions/topic-a.md", a_content);
-    let out_a = adr_owner(&dir, &["approve", record_a.to_str().unwrap()], "");
-    assert!(out_a.status.success(), "approving A failed: {}", stderr(&out_a));
-    let approved_a = std::fs::read_to_string(&record_a).unwrap();
-    let a_id = approved_a
-        .lines()
-        .find_map(|l| l.strip_prefix("id: "))
-        .unwrap()
-        .to_string();
-    let ask_a = adr(&dir, &["ask", record_a.to_str().unwrap()], &[], "");
-    assert!(ask_a.status.success(), "asking A failed: {}", stderr(&ask_a));
-    assert!(
-        adr_answer(&dir, &a_id, "A").status.success(),
-        "answering A failed"
-    );
+    let content = "# Topic\n\n### 1.1 Is A do a thing?\ndepends: decision\n\nProblem: a decision.\n\nStandard: a decision.\n\n- A) x, a decision.\n  Why: w.\n  Costs: c.\n- B) y, a decision.\n  Why: w.\n  Costs: c.\n\n### 1.1 Is B stand on A?\ndepends: 1.1 Is A do a thing?=A\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
+    let record = write_record(&dir, "adrdom/decisions/topic.md", content);
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
+    assert!(out.status.success(), "approving failed: {}", stderr(&out));
 
-    // B: its only question stands on A, named by A's heading text.
-    let b_text = "1.1 Is A do a thing?";
-    let b_content = format!(
-        "# Topic B\n\n### 1.1 Is B stand on A?\ndepends: {}\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
-        b_text
-    );
-    let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", &b_content);
-    let out_b = adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "");
-    assert!(out_b.status.success(), "approving B failed: {}", stderr(&out_b));
+    let approved = std::fs::read_to_string(&record).unwrap();
+    let a_id = approved.lines().find_map(|l| l.strip_prefix("id: ")).unwrap().to_string();
+    assert!(approved.contains(&format!("depends: {}=A\n", a_id)), "{}", approved);
 
-    let approved_b = std::fs::read_to_string(&record_b).unwrap();
-    assert!(
-        approved_b.contains(&format!("depends: {}\n", a_id)),
-        "expected B's depends line rewritten to A's id: {}",
-        approved_b
-    );
-
-    // Hand-revert the rewritten line back to the heading words `approve`
-    // replaced it with.
-    let reverted = approved_b.replacen(
-        &format!("depends: {}\n", a_id),
-        &format!("depends: {}\n", b_text),
+    let reverted = approved.replacen(
+        &format!("depends: {}=A\n", a_id),
+        "depends: 1.1 Is A do a thing?=A\n",
         1,
     );
-    assert_ne!(reverted, approved_b, "the fixture should still hold the rewritten line");
-    std::fs::write(&record_b, &reverted).unwrap();
+    assert_ne!(reverted, approved, "the fixture should still hold the rewritten line");
+    std::fs::write(&record, &reverted).unwrap();
 
-    let ask_out = adr(&dir, &["ask", record_b.to_str().unwrap()], &[], "");
+    let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(
         !ask_out.status.success(),
         "ask must refuse a plan reverted back to its pre-approval wording: {}",
         stdout(&ask_out)
     );
     assert!(
-        stderr(&ask_out).contains("adrdom/decisions/topic-b.md: plan is changed"),
+        stderr(&ask_out).contains("adrdom/decisions/topic.md: plan is changed"),
         "{}",
         stderr(&ask_out)
     );
@@ -604,29 +731,23 @@ fn ask_and_check_refuse_a_cross_file_depends_line_reverted_by_hand_after_approve
 }
 
 //
-// A depends entry naming an answered current decision elsewhere by id
-// must not carry an answer set: `approve` refuses it.
+// A depends entry naming an answered question of its file by id must not
+// carry an answer set: `approve` refuses it.
 #[test]
-fn approve_refuses_a_depends_set_on_an_answered_cross_file_decision() {
+fn approve_refuses_a_depends_set_on_an_answered_question_of_the_file() {
     let dir = init_repo();
     setup(&dir);
 
     let a_id = "11111111-2222-3333-4444-555555555555";
     append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Is A do a thing?", "2024-01-01T00:00:00Z");
     append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
-    let a_content = format!(
-        "# Topic A\n\n### 1.1 Is A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
-        a_id
+    let content = format!(
+        "# Topic A\n\n### 1.1 Is A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n\n### 1.1 Is B stand on A?\ndepends: {}=A\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
+        a_id, a_id
     );
-    write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
+    let record = write_record(&dir, "adrdom/decisions/topic-a.md", &content);
 
-    let b_content = format!(
-        "# Topic B\n\n### 1.1 Is B stand on A?\ndepends: {}=A\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
-        a_id
-    );
-    let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", &b_content);
-
-    let out = adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "");
+    let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(
@@ -639,229 +760,9 @@ fn approve_refuses_a_depends_set_on_an_answered_cross_file_decision() {
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(
-        !ledger.lines().any(|l| l.contains("\tapproved\t") && l.contains("topic-b.md")),
-        "no approved row should have been written for B on refusal: {}",
+        !ledger.lines().any(|l| l.contains("\tapproved\t") && l.contains("topic-a.md")),
+        "no approved row should have been written on refusal: {}",
         ledger
-    );
-}
-
-// adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
-//
-// Same decision, the cross-file half: "a current decision" a depends line
-// names by heading text is not only one living in the same topic file --
-// it can be a current decision in a *different* topic file, named the same
-// way, by its heading text alone (never its id, never written by hand).
-// File A holds an already-answered, current decision of its own; file B's
-// only question depends on it by A's heading text. `approve` on file B
-// resolves that name to A's id and rewrites the depends line to it, the
-// same as it would a same-file heading or a term; `show` then reads that
-// id back off B and prints A's heading text again, unprompted.
-#[test]
-fn approve_resolves_a_cross_file_heading_dependency_and_show_turns_it_back_into_words() {
-    let dir = init_repo();
-    setup(&dir);
-
-    // A: an already-answered, current decision living in a topic file of
-    // its own -- the same shape
-    // `approve_accepts_all_three_depends_target_kinds_and_refuses_a_missing_line`
-    // uses for "a current decision", just with a real heading of its own
-    // for B to name.
-    let a_id = "77777777-7777-7777-7777-777777777777";
-    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Is A do a thing?", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
-    let a_content = format!(
-        "# Topic A\n\n### 1.1 Is A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
-        a_id
-    );
-    write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
-
-    // B: a fresh topic file whose only question stands on A, named by A's
-    // heading text.
-    let b_content = "# Topic B\n\n### 1.1 Is B stand on A?\ndepends: 1.1 Is A do a thing?\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
-    let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
-
-    let out = adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "");
-    assert!(out.status.success(), "approve failed: {}", stderr(&out));
-
-    let approved_b = std::fs::read_to_string(&record_b).unwrap();
-    assert!(
-        approved_b.contains(&format!("depends: {}\n", a_id)),
-        "expected B's depends line rewritten to A's id: {}",
-        approved_b
-    );
-    assert!(
-        !approved_b.contains("depends: 1.1 Is A do a thing?"),
-        "the written words must not survive approve: {}",
-        approved_b
-    );
-
-    let show = adr(&dir, &["show", "--all"], &[], "");
-    assert!(show.status.success(), "{}", stderr(&show));
-    assert!(
-        stdout(&show).contains("  depends: 1.1 Is A do a thing?\n"),
-        "{}",
-        stdout(&show)
-    );
-}
-
-// adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
-//
-// The cross-file half's edge: a heading text that names a current decision
-// in more than one other topic file is ambiguous, so `approve` refuses
-// rather than silently picking one.
-#[test]
-fn approve_refuses_a_cross_file_heading_dependency_naming_two_current_decisions() {
-    let dir = init_repo();
-    setup(&dir);
-
-    let a_id = "88888888-8888-8888-8888-888888888888";
-    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
-    let a_content = format!(
-        "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
-        a_id
-    );
-    write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
-
-    let c_id = "99999999-8888-8888-8888-888888888888";
-    append_ledger_row_at(&dir, "asked", c_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "answered", c_id, "h1", "A", "2024-01-01T00:00:01Z");
-    let c_content = format!(
-        "# Topic C\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
-        c_id
-    );
-    write_record(&dir, "adrdom/decisions/topic-c.md", &c_content);
-
-    let b_content = "# Topic B\n\n### 1.1 Does B stand on the shared heading?\ndepends: 1.1 Shared heading?\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
-    let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
-
-    let out = adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "");
-    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
-    let err = stderr(&out);
-    assert!(
-        err.contains("\"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\" which is a current decision in more than one file"),
-        "{}",
-        err
-    );
-    assert!(err.contains("adrdom/decisions/topic-a.md"), "{}", err);
-    assert!(err.contains("adrdom/decisions/topic-c.md"), "{}", err);
-    // The ambiguous entry must earn only its own refusal: before this fix,
-    // `normalize_cross_file_deps` left the entry as an unresolved same-file
-    // `Text` heading dep whenever it found no *unambiguous* substitution to
-    // make, so `derive_tiers` (recomputed, or in this case never
-    // recomputed at all, since there was nothing to substitute) still
-    // called it `Dangling` and this same line earned a second, wrong
-    // refusal alongside the ambiguous one.
-    assert!(
-        !err.contains("which is no heading in this file"),
-        "the ambiguous entry must not also be reported as dangling: {}",
-        err
-    );
-}
-
-// adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
-//
-// The same ambiguity, but every match lives in one other topic file (two
-// current decisions there happen to carry the exact same heading text --
-// `check`'s cross-file duplicate-heading check only flags a duplicate
-// heading text *between* files, so nothing else in this repo refuses on a
-// same-file one): the refusal must say a heading names several decisions
-// in that one file, never "more than one file" when only one file is
-// involved.
-#[test]
-fn approve_refuses_a_cross_file_heading_dependency_naming_two_decisions_in_one_file() {
-    let dir = init_repo();
-    setup(&dir);
-
-    let a_id = "aaaaaaaa-8888-8888-8888-888888888888";
-    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
-    let c_id = "cccccccc-8888-8888-8888-888888888888";
-    append_ledger_row_at(&dir, "asked", c_id, "h2", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "answered", c_id, "h2", "A", "2024-01-01T00:00:01Z");
-    let a_content = format!(
-        "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {a}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {c}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
-        a = a_id,
-        c = c_id,
-    );
-    write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
-
-    let b_content = "# Topic B\n\n### 1.1 Does B stand on the shared heading?\ndepends: 1.1 Shared heading?\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
-    let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
-
-    let out = adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "");
-    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
-    let err = stderr(&out);
-    assert!(
-        err.contains(
-            "\"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\" which names more than one current decision in adrdom/decisions/topic-a.md"
-        ),
-        "{}",
-        err
-    );
-    assert!(
-        !err.contains("more than one file"),
-        "only one file is involved, the wording must not say otherwise: {}",
-        err
-    );
-}
-
-// adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
-//
-// A same-file problem that has nothing to do with the ambiguity must not
-// be hidden behind it: `normalize_cross_file_deps` used to set the file's
-// one `rf.derive_error` straight to the ambiguity and skip
-// `record::derive_tiers` altogether whenever it found an ambiguous entry,
-// so a genuine dangling entry on a *different* heading, in the same file,
-// never got reported at all. B here carries both: 1.1 names a heading that
-// exists nowhere, and 1.2 (afterward, in file order) names the ambiguous
-// shared heading. The real bug must win.
-#[test]
-fn approve_refuses_a_real_dangling_entry_over_a_co_occurring_ambiguous_heading() {
-    let dir = init_repo();
-    setup(&dir);
-
-    let a_id = "88888888-8888-8888-8888-888888888888";
-    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
-    let a_content = format!(
-        "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
-        a_id
-    );
-    write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
-
-    let c_id = "99999999-8888-8888-8888-888888888888";
-    append_ledger_row_at(&dir, "asked", c_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "answered", c_id, "h1", "A", "2024-01-01T00:00:01Z");
-    let c_content = format!(
-        "# Topic C\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
-        c_id
-    );
-    write_record(&dir, "adrdom/decisions/topic-c.md", &c_content);
-
-    let b_content = "# Topic B\n\n\
-### 1.1 Names nothing anywhere?\n\
-depends: 1.1 Nothing anywhere names this?\n\n\
-Problem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n\
-### 1.2 Does B stand on the shared heading?\n\
-depends: 1.1 Shared heading?\n\n\
-Problem: p3 of the decision.\n\nStandard: s3.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
-    let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
-
-    let out = adr_owner(&dir, &["approve", record_b.to_str().unwrap()], "");
-    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
-    let err = stderr(&out);
-    assert!(
-        err.contains(
-            "\"1.1 Names nothing anywhere?\" depends on \"1.1 Nothing anywhere names this?\" which is no heading in this file"
-        ),
-        "the real dangling entry must be reported: {}",
-        err
-    );
-    assert!(
-        !err.contains("current decision in more than one file"),
-        "the ambiguity must not be reported while a real same-file bug is still open: {}",
-        err
     );
 }
 
@@ -924,146 +825,4 @@ fn approve_refuses_a_frozen_sections_depends_line_hand_edited_to_a_cross_file_he
         "check must report the same frozen-edit refusal: {}",
         stdout(&check)
     );
-}
-
-// adr: 7cad9922-9bd1-4c1a-aedc-df1f77c83e1f
-//
-// `ask` builds its own repo-wide cross-file heading index the same way
-// `approve`/`check` do (per "Does a reference in a topic file carry the
-// identifier of what it names?"), now loading every topic file itself
-// (rather than that load living inside `cross_file_heading_index`, shared
-// with callers who load their own copy for other reasons): a plan whose
-// only question names a heading text that is a current decision in more
-// than one other topic file is exactly as ambiguous to `ask` as it is to
-// `approve` -- and `ask`'s own ambiguity check runs before the
-// plan-approved gate, so this refuses on the ambiguity itself rather than
-// on the plan never having been approved.
-#[test]
-fn ask_refuses_a_cross_file_heading_dependency_naming_two_current_decisions() {
-    let dir = init_repo();
-    setup(&dir);
-
-    let a_id = "88888888-8888-8888-8888-888888888888";
-    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
-    let a_content = format!(
-        "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
-        a_id
-    );
-    write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
-
-    let c_id = "99999999-8888-8888-8888-888888888888";
-    append_ledger_row_at(&dir, "asked", c_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "answered", c_id, "h1", "A", "2024-01-01T00:00:01Z");
-    let c_content = format!(
-        "# Topic C\n\n### 1.1 Shared heading?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
-        c_id
-    );
-    write_record(&dir, "adrdom/decisions/topic-c.md", &c_content);
-
-    let b_content = "# Topic B\n\n### 1.1 Does B stand on the shared heading?\ndepends: 1.1 Shared heading?\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
-    let record_b = write_record(&dir, "adrdom/decisions/topic-b.md", b_content);
-
-    let out = adr(&dir, &["ask", record_b.to_str().unwrap()], &[], "");
-    assert!(!out.status.success(), "ask should have refused on the ambiguity: {}", stdout(&out));
-    let err = stderr(&out);
-    assert!(
-        err.contains(
-            "\"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\" which is a current decision in more than one file"
-        ),
-        "{}",
-        err
-    );
-    assert!(
-        !err.contains("plan not approved"),
-        "the ambiguity must refuse before the plan-approved gate: {}",
-        err
-    );
-    assert!(
-        !err.contains("which is no heading in this file"),
-        "the ambiguous entry must not also be reported as dangling: {}",
-        err
-    );
-}
-
-// adr: ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf
-//
-// "What does a depends line name?": a heading of another topic file that is
-// not a current decision stays refused, and the refusal says what the tool
-// holds. Unasked or asked and unanswered, the only move is to wait: check,
-// approve and show's next print a line with no agent move, and approve
-// clears once the decision is answered. Refused, the agent names another
-// heading or drops the entry.
-fn waiting_pair(dir: &std::path::Path) -> (std::path::PathBuf, std::path::PathBuf, String) {
-    let q = "Problem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
-    let a = write_record(
-        dir,
-        "adrdom/decisions/topic-a.md",
-        &format!("# Topic A\n\n### Is the decision hold?\ndepends: decision\n\n{}", q),
-    );
-    assert!(adr_owner(dir, &["approve", a.to_str().unwrap()], "").status.success());
-    let b = write_record(
-        dir,
-        "adrdom/decisions/topic-b.md",
-        &format!("# Topic B\n\n### Is the decision follow?\ndepends: Is the decision hold?\n\n{}", q),
-    );
-    let a_id = std::fs::read_to_string(&a)
-        .unwrap()
-        .lines()
-        .find_map(|l| l.strip_prefix("id: "))
-        .unwrap()
-        .to_string();
-    (a, b, a_id)
-}
-
-#[test]
-fn a_depends_entry_naming_an_unanswered_question_of_another_file_waits_until_it_is_answered() {
-    let dir = init_repo();
-    setup(&dir);
-    let (a, b, a_id) = waiting_pair(&dir);
-
-    let waits = "topic-b.md: \"Is the decision follow?\" depends on \"Is the decision hold?\" (adrdom/decisions/topic-a.md) which is not answered yet; a question stands only on decisions in force; not yet, after it is answered";
-    for step in 0..2 {
-        let check = stdout(&adr(&dir, &["check"], &[], ""));
-        assert!(check.contains(waits), "{}", check);
-        let out = adr_owner(&dir, &["approve", b.to_str().unwrap()], "");
-        assert!(!out.status.success());
-        assert!(stderr(&out).contains(waits), "{}", stderr(&out));
-        let show = stdout(&adr(&dir, &["show"], &[], ""));
-        assert!(
-            show.contains(&format!("adrdom/decisions/{}", waits)),
-            "{}",
-            show
-        );
-        assert!(!show.contains("agent clears: adrdom/decisions/topic-b.md"), "{}", show);
-        if step == 0 {
-            // Asked and not answered yet: the same line.
-            let ask = adr(&dir, &["ask", a.to_str().unwrap()], &[], "");
-            assert!(ask.status.success(), "{}{}", stdout(&ask), stderr(&ask));
-        }
-    }
-
-    assert!(adr_answer(&dir, &a_id, "A").status.success());
-    let out = adr_owner(&dir, &["approve", b.to_str().unwrap()], "");
-    assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
-}
-
-#[test]
-fn a_depends_entry_naming_a_refused_question_of_another_file_says_so() {
-    let dir = init_repo();
-    setup(&dir);
-    let (a, b, a_id) = waiting_pair(&dir);
-    let ask = adr(&dir, &["ask", a.to_str().unwrap()], &[], "");
-            assert!(ask.status.success(), "{}{}", stdout(&ask), stderr(&ask));
-    let r = adr_answer(&dir, &a_id, "refuse");
-    assert!(r.status.success(), "{}{}", stdout(&r), stderr(&r));
-
-    let refused = "topic-b.md: \"Is the decision follow?\" depends on \"Is the decision hold?\" (adrdom/decisions/topic-a.md) which is refused; a question stands only on decisions in force; agent names another, or drops the entry";
-    let out = adr_owner(&dir, &["approve", b.to_str().unwrap()], "");
-    assert!(!out.status.success());
-    assert!(stderr(&out).contains(refused), "{}", stderr(&out));
-    let check = stdout(&adr(&dir, &["check"], &[], ""));
-    assert!(check.contains(refused), "{}", check);
-    let show = stdout(&adr(&dir, &["show"], &[], ""));
-    assert!(show.contains(&format!("adrdom/decisions/{}", refused)), "{}", show);
 }

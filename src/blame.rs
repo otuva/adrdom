@@ -841,7 +841,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    // adr: ee27fd4c-89b7-411f-a3e4-2535c49b6d1b
+    // adr: a469ecb9-a4f1-4a2a-89c5-7378cc1138b4
     //
     // A question names a row when its blame line writes the file's name or
     // its identifier with exactly the row's range, whatever the question's
@@ -872,7 +872,7 @@ mod tests {
         assert!(decision_rows(index.by_name("x").unwrap(), &index, &[]).iter().all(|&(_, named)| !named));
     }
 
-    // adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+    // adr: 69708a07-469c-406b-9e25-63da1605b432
     // The index names each file by its path under adrdom/blame without
     // `.md`, nested files too, and lists them by path.
     #[test]
@@ -889,7 +889,7 @@ mod tests {
         assert!(index.entries().iter().all(|e| e.status == FileStatus::New));
     }
 
-    // adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+    // adr: 69708a07-469c-406b-9e25-63da1605b432
     // Text that is an identifier names a blame file by its id line alone, and
     // any other text by its name alone: a file whose name is another file's
     // identifier is not found by it.

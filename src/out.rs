@@ -701,7 +701,7 @@ mod tests {
         out.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&")
     }
 
-    // adr: 7857d633-2055-47eb-857f-cb70da9fa7ba
+    // adr: 3cf56867-3918-4ce6-a296-2cc62a91b154
     //
     // A carriage return and an escape sequence in a record never reach the
     // terminal or the page as themselves: both show them written out.
@@ -731,7 +731,7 @@ mod tests {
         ]
     }
 
-    // adr: b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051
+    // adr: 44d02e7a-c902-4b89-973c-cf9d5c67c70e
     //
     // With colour on, each kind of line carries the code of its kind; text
     // from the records still comes out with its escape written out; with
@@ -757,7 +757,7 @@ mod tests {
         assert!(off.iter().all(|l| !l.contains('\u{1b}')));
     }
 
-    // adr: f3c9e736-157c-4197-b49e-19e3674e4e0c
+    // adr: 6875e4df-207a-4b62-8a89-d3179722a6d7
     //
     // A refusal on standard error is a findings group: with shape on it
     // opens with the findings header.
@@ -768,7 +768,7 @@ mod tests {
         assert_eq!(render_lines(&stop, Style::PLAIN), vec!["show: no".to_string()]);
     }
 
-    // adr: f3c9e736-157c-4197-b49e-19e3674e4e0c
+    // adr: 6875e4df-207a-4b62-8a89-d3179722a6d7
     //
     // With shape on, a blank line separates the groups and a header heads
     // the findings and the moves; with shape off the lines are the plain
@@ -790,7 +790,7 @@ mod tests {
         assert_eq!(shaped.iter().filter(|l| !l.is_empty()).filter(|l| *l != "Findings" && *l != "Moves").cloned().collect::<Vec<_>>(), plain);
     }
 
-    // adr: f3c9e736-157c-4197-b49e-19e3674e4e0c
+    // adr: 6875e4df-207a-4b62-8a89-d3179722a6d7
     //
     // A later call on a terminal stream continues the group the stream
     // ended in, and starts another group with a blank line and its header.

@@ -486,8 +486,7 @@ fn is_reference(line: &str) -> bool {
 }
 
 /// A line the records hold with every identifier on it turned back into
-/// the heading or the name it stands for (per "Does a reference in a topic
-/// file carry the identifier of what it names?": show turns it back into
+/// the heading or the name it stands for (per "What does a reference in a topic file carry?": show turns it back into
 /// the name). An identifier no question or term holds stays as it is.
 fn named(line: &str, names: &HashMap<String, String>) -> String {
     const LEN: usize = 36;
@@ -727,7 +726,7 @@ fn replaced_by_lines(r: &Records, sec: &Section) -> Vec<Line> {
 /// out: its depends line is a record of what it stood on, nothing rests on
 /// `sec` through it any more. An entry written as a heading text names
 /// `sec` in its own file, and in another file only while `sec` is a
-/// current decision (per "What does a depends line name?").
+/// current decision (per "What does a depends entry name?").
 fn stood_on_by(rf: &RecordFile, sec: &Section, all: &[RecordFile], led: &Ledger) -> Vec<String> {
     let heading = sec.heading_text.trim();
     let current = sec.id.as_deref().is_some_and(|id| state::is_current(led, id));

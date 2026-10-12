@@ -58,7 +58,7 @@ fn a_path_or_an_id_from_the_records_never_runs_as_shell() {
     assert!(!dir.join("PWNED").exists() && !dir.join("PWNED2").exists());
 }
 
-// adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
+// adr: 80b89c24-7d65-43f4-bb03-55e9d85c327d
 //
 // Two depends entries that name one term (its name, written twice in two
 // cases) are a finding before approval, in every command, and approve
@@ -153,7 +153,7 @@ fn a_term_awaiting_approval_holds_the_topic_files_and_is_named_first() {
     assert!(plan.contains("owner runs: adr approve adrdom/terms.md"), "{}", plan);
 }
 
-// adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
+// adr: 80b89c24-7d65-43f4-bb03-55e9d85c327d
 //
 // A banned word in a term's definition: approve refuses the terms file on
 // it, so check names no owner approve of the terms file beside it, and the
@@ -184,7 +184,7 @@ fn a_banned_word_in_the_terms_file_holds_its_approve_and_names_its_line() {
     assert!(stderr(&out).contains(&format!("adrdom/terms.md:{}:", line)), "{}", stderr(&out));
 }
 
-// adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
+// adr: 80b89c24-7d65-43f4-bb03-55e9d85c327d
 //
 // A hand-written answer line under an approved question never asked: check
 // fails it, so ask refuses it with the same finding.
@@ -259,7 +259,7 @@ fn an_answer_the_ledger_refuses_is_not_half_written() {
     assert!(again.status.success(), "the named command clears it: {}", stderr(&again));
 }
 
-// adr: fe14991d-9715-4ae0-9a23-d314a950d3b9
+// adr: 80b89c24-7d65-43f4-bb03-55e9d85c327d
 //
 // At a commit, the planning records judged are the ones the commit
 // carries: a draft staged without its reader rows is told it has none,

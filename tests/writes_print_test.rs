@@ -85,7 +85,7 @@ fn prints_one_line_per_row(dir: &Path, act: impl FnOnce() -> Output) -> Output {
     out
 }
 
-// adr: 069a6b4a-de35-45f3-8c6c-8e254bf40565
+// adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
 //
 // "What does a command that writes print?" A: the event it wrote, one line
 // each, or the finding that stopped it, and nothing else. Walks approve,
@@ -159,7 +159,7 @@ fn a_writing_command_prints_no_tier_and_no_move() {
     }
 }
 
-// adr: 069a6b4a-de35-45f3-8c6c-8e254bf40565
+// adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
 //
 // A ban after commits, with a line of two words one of which is banned
 // already: one line per row it appends, however many rows that is.

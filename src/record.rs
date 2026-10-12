@@ -22,8 +22,7 @@ pub enum AnswerSet {
 }
 
 /// One `depends:` line, classified only by whether it is a uuid or still
-/// words (per "Does a reference in a topic file carry the identifier of
-/// what it names?"): `Id` is a uuid already written to the file, resolved by
+/// words (per "What does a reference in a topic file carry?"): `Id` is a uuid already written to the file, resolved by
 /// lookup (a heading id in this file, a term id, or a decision id) rather
 /// than by shape, since `approve` is the only command that mints an id and
 /// rewrites a `depends:` line to one. `Text` is anything still unresolved:
@@ -112,20 +111,6 @@ pub enum DeriveError {
     /// A section's own heading text, found as one of its own heading
     /// `depends:` entries.
     SelfDep(String),
-    /// A heading-shaped `depends:` entry (`entry`, on the section whose
-    /// heading text is `section`) naming no heading in this file, but a
-    /// current decision's heading text in more than one *other* topic file
-    /// (`files`, sorted, deduped): set by
-    /// `depends::normalize_cross_file_deps` in place of calling
-    /// `derive_tiers` at all, so this file's one `derive_error` slot always
-    /// carries the real reason (ambiguous, never guessed at) instead of the
-    /// `Dangling` `derive_tiers` alone would otherwise report for an entry
-    /// it has no cross-file knowledge of.
-    AmbiguousHeading {
-        section: String,
-        entry: String,
-        files: Vec<String>,
-    },
 }
 
 #[derive(Debug, Clone)]
@@ -257,8 +242,7 @@ impl RecordFile {
     /// Sections whose heading `depends:` entry names section `idx`'s
     /// heading (by id once approved, by heading text before), paired with
     /// the set they declare on that entry, if any (per "What does a
-    /// depends line name?", updated by "Does a reference in a topic file
-    /// carry the identifier of what it names?": dependents_of keys on
+    /// depends line name?", updated by "What does a reference in a topic file carry?": dependents_of keys on
     /// heading ids once they exist).
     pub fn dependents_of(&self, idx: usize) -> Vec<(usize, Option<&AnswerSet>)> {
         let mut out = Vec::new();
@@ -886,8 +870,7 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
 /// `supersedes:` line (part of the plan, per "Does approve turn the
 /// supersedes line into identifiers?"), an `unrelated:` line, a `blame:`
 /// line (per "What does a question carry of the blame file it came from?"),
-/// and an `id:` line (per "What does a depends line name?" and "Does a reference
-/// in a topic file carry the identifier of what it names?"): needs no id
+/// and an `id:` line (per "What stops a question that has no depends line?" and "What does a reference in a topic file carry?"): needs no id
 /// of its own to stay a skeleton, but `approve` gives every heading an id,
 /// skeletons included,
 /// so a skeleton must stay a skeleton once it has one.
@@ -1215,8 +1198,7 @@ pub fn set_suffix(set: &Option<AnswerSet>) -> String {
 }
 
 /// sha256 of `<dependent key>=<canonical set>` (per "Does a depends entry
-/// carry the answers it holds under?", updated by "Does a reference in a
-/// topic file carry the identifier of what it names?"): an `assumes`
+/// carry the answers it holds under?", updated by "What does a reference in a topic file carry?"): an `assumes`
 /// row's hash, and what `check`'s frozen-set comparison
 /// recomputes against the depends line as currently written. `dependent_key`
 /// is the dependent section's own heading id (`assumes` rows
@@ -1254,6 +1236,10 @@ pub fn version_of(lines: &[String], sec: &Section) -> String {
 /// value is a new question and a new release; no owner command sets it.
 pub const TIER_CAP: usize = 4;
 
+/// The most questions one depends line may name (per "What bounds the
+/// questions a depends line names?"): terms do not count.
+pub const DEPENDS_LINE_CAP: usize = 2;
+
 /// Assigns every section a 1-based tier: a section with no heading
 /// `depends:` entry is tier 1 (a root); otherwise its tier is one more than
 /// the highest tier among the sections its heading entries name. Term and
@@ -1282,8 +1268,7 @@ pub fn derive_tiers(rf: &RecordFile) -> Result<Vec<usize>, DeriveError> {
         for d in &sec.depends {
             match d {
                 // An `Id` entry is a heading dep only when it matches a
-                // heading id in this same file (per "Does a reference in a
-                // topic file carry the identifier of what it names?");
+                // heading id in this same file (per "What does a reference in a topic file carry?");
                 // otherwise it is a
                 // term or decision reference, resolved elsewhere, and never
                 // affects tier -- never a Dangling error either, since it
@@ -1607,7 +1592,7 @@ mod tests {
         );
     }
 
-    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
+    // adr: b0554224-15e4-4e91-a2bb-9ae5667803f4
     // "Does a reference line hold its list on one line?": the supersedes list, like
     // depends, holds several entries as one line of comma-separated values,
     // not one entry per line.
@@ -1810,7 +1795,7 @@ mod tests {
         assert!(sec.parse_errors.is_empty(), "{:?}", sec.parse_errors);
     }
 
-    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
+    // adr: b0554224-15e4-4e91-a2bb-9ae5667803f4
     // "Does a reference line hold its list on one line?": a one-line, comma-
     // separated depends list with three entries parses cleanly (no shape
     // errors) and each entry keeps its own answer set independently: the
@@ -1895,7 +1880,7 @@ mod tests {
         );
     }
 
-    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
+    // adr: b0554224-15e4-4e91-a2bb-9ae5667803f4
     // "Does a reference line hold its list on one line?": two heading-shaped
     // entries on the *same* depends line, each with its own distinct
     // answer set: the sets must not bleed into each other or collapse to
@@ -1979,7 +1964,7 @@ mod tests {
         );
     }
 
-    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
+    // adr: b0554224-15e4-4e91-a2bb-9ae5667803f4
     // "Does a reference line hold its list on one line?": a depends list split
     // across two lines is refused (a shape error), not read as more
     // entries of the same list.
@@ -2053,7 +2038,7 @@ mod tests {
         (e.file, e.ranges)
     }
 
-    // adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+    // adr: 69708a07-469c-406b-9e25-63da1605b432
     // A blame entry is split from the right: the trailing run of range
     // tokens is its ranges, what stands before them its name.
     #[test]
@@ -2061,11 +2046,11 @@ mod tests {
         assert_eq!(entry("old-file 10-14"), ("old-file".to_string(), vec![(10, 14)]));
         assert_eq!(entry("old-file 10-14 31-35 3-3"), ("old-file".to_string(), vec![(10, 14), (31, 35), (3, 3)]));
         assert_eq!(entry("sub/other   3-9"), ("sub/other".to_string(), vec![(3, 9)]));
-        let id = "672201dd-8f22-4dc3-8b21-a73eb7606e83";
+        let id = "69708a07-469c-406b-9e25-63da1605b432";
         assert_eq!(entry(&format!("{} 1-2", id)), (id.to_string(), vec![(1, 2)]));
     }
 
-    // adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+    // adr: 69708a07-469c-406b-9e25-63da1605b432
     #[test]
     fn a_blame_entry_may_lack_its_ranges_or_its_name() {
         assert_eq!(entry("old-file"), ("old-file".to_string(), vec![]));
@@ -2080,7 +2065,7 @@ mod tests {
         assert_eq!(entry("old-file 5-3 1-2"), ("old-file 5-3".to_string(), vec![(1, 2)]));
     }
 
-    // adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+    // adr: 69708a07-469c-406b-9e25-63da1605b432
     #[test]
     fn a_blame_entry_is_quoted_as_the_line_writes_it() {
         for text in ["old-file 10-14 31-35", "old-file", "10-14"] {
@@ -2089,7 +2074,7 @@ mod tests {
         assert_eq!(BlameEntry::parse("old-file   10-14").written(), "old-file 10-14");
     }
 
-    // adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+    // adr: 69708a07-469c-406b-9e25-63da1605b432
     // The line reads in file order, comma separated; the question hash covers
     // it like the depends line, the body hash and the reader never see it.
     #[test]
@@ -2117,7 +2102,7 @@ mod tests {
         assert!(twice.sections[0].shape_errors.iter().any(|e| e == "blame: second blame line, line 6"), "{:?}", twice.sections[0].shape_errors);
     }
 
-    // adr: 672201dd-8f22-4dc3-8b21-a73eb7606e83
+    // adr: 69708a07-469c-406b-9e25-63da1605b432
     // A heading with a depends line and a blame line still has no body.
     #[test]
     fn a_heading_with_a_depends_and_a_blame_line_is_a_skeleton() {
@@ -2132,7 +2117,7 @@ mod tests {
         assert!(typo.sections[0].blame.is_empty());
     }
 
-    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
+    // adr: b0554224-15e4-4e91-a2bb-9ae5667803f4
     // "Does a reference line hold its list on one line?": a supersedes list split
     // across two lines is refused (a shape error), not silently dropped.
     #[test]
@@ -2152,7 +2137,7 @@ mod tests {
         );
     }
 
-    // adr: a82db5b7-969c-44e9-9eec-876ead7099d3
+    // adr: b0554224-15e4-4e91-a2bb-9ae5667803f4
     // "Does a reference line hold its list on one line?": a terms list split
     // across two lines is refused (a shape error), not silently dropped.
     #[test]
@@ -2303,8 +2288,7 @@ mod tests {
 
     #[test]
     fn skeleton_with_an_id_line_is_still_skeleton() {
-        // Per "Does a reference in a topic file carry the identifier of
-        // what it names?": `approve` gives every heading an id, skeletons
+        // Per "What does a reference in a topic file carry?": `approve` gives every heading an id, skeletons
         // included; a skeleton that has picked one up must not suddenly start requiring
         // Problem/Standard/options.
         let rf = rf_from(
