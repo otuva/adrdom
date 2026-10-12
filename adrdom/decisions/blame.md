@@ -273,12 +273,12 @@ Standard: a source is retired after its replacement is verified, and the owner o
 ### What does a question carry of its blame file?
 depends: blame, question, origin, What does a blame file hold of its origin?
 supersedes: What does a question carry of the blame file it came from?, What does check do with a decision row that no question names?
-unrelated: Does a depends entry on a question in its file carry an answer set?, Does ask run on a file whose prose is unapproved?, What does ask put to the owner in one run?, What does check do when an origin differs from its blame file's blob identifier?, What does check do when an origin is absent?, depends, Does a blame file cover its whole origin?, Does check fail a ledger row that was edited?, Does check fail a ledger whose rows changed place?, Does every ledger row carry the tool version?, Does the owner approve a blame file?, What does check do with a decision row no question names?
+unrelated: Does a depends entry on a question in its file carry an answer set?, Does ask run on a file whose prose is unapproved?, What does ask put to the owner in one run?, What does check do when an origin differs from its blame file's blob identifier?, What does check do when an origin is absent?, depends, Does a blame file cover its whole origin?, Does check fail a ledger row that was edited?, Does check fail a ledger whose rows changed place?, Does every ledger row carry the tool version?, Does the owner approve a blame file?, What does check do with a decision row no question names?, What does answer write for a removed question?
 
 Problem: the records need to read, from a question, which lines of which origin it came from, without a change to the approved blame file.
 Standard: traceability runs from the derived artifact to its source by a stable identifier and a location.
 
-- A) One blame line naming each blame file and the rows, by their ranges, the question came from.
+- A) One blame line naming each blame file by identifier and the rows, by their ranges, the question itself came from.
   Why: the agent writes the file's name and the identifier rule turns it; a question from no origin carries none.
   Costs: a line under the heading, approved with the plan and judged then, like a depends entry; never after.
 - B) Nothing: the blame file's rows name the questions.
