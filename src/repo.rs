@@ -20,6 +20,12 @@ pub const ROLES_PATH: &str = "adrdom/state/roles.tsv";
 /// texts (`reader::Row`). `check` holds each row at HEAD byte for byte or gone whole; the tool drops
 /// a row whose text or neighbour is gone from the records when it appends.
 pub const READER_PATH: &str = "adrdom/state/reader.tsv";
+/// The neighbours file: an untracked file holding one row for each neighbour
+/// the tool brought for a heading, the heading hash and the neighbour's
+/// identifier. The reader reads none of them ("Does the reader read a
+/// neighbour of a heading?", 60341be0: no), so the row holds no word.
+/// `install`'s gitignore keeps it out of git.
+pub const NEIGHBOURS_PATH: &str = "adrdom/state/neighbours.tsv";
 /// The repo's own terms file.
 /// Where blame files live, relative to the repo root (per "What does a
 /// blame file hold of its origin?", d2851ea1 A): one `<name>.md` per origin,

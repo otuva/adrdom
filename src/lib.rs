@@ -9,6 +9,7 @@ pub mod index;
 pub mod ledger;
 pub mod moves;
 pub mod msg;
+pub mod neighbours;
 pub mod out;
 pub mod plan;
 pub mod reader;

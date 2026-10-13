@@ -206,9 +206,9 @@ input.filter:focus-visible { outline: 2px solid var(--hold); outline-offset: 1px
 .move { margin: 0.2rem 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); font-size: 0.92rem; }
 .move.owner { color: var(--hold); font-weight: 700; }
 .word { margin: 0.1rem 0 0.1rem 1rem; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); }
-.word.word-inconsistent .word-name, .word.word-same .word-name { font-weight: 700; }
-.word.word-consistent, .word.word-depends, .word.word-unrelated { opacity: 0.75; }
-.word.word-inconsistent { color: var(--refuse); }
+.word.word-inconsistent .word-name, .word.word-closes .word-name, .word.word-same .word-name { font-weight: 700; }
+.word.word-consistent, .word.word-unrelated { opacity: 0.75; }
+.word.word-inconsistent, .word.word-closes { color: var(--refuse); }
 .word.word-same { color: var(--wait); }
 .event { margin: 0.1rem 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--hold); }
 .banner p { margin: 0.15rem 0; }

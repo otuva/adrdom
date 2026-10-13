@@ -71,7 +71,7 @@ fn is_a_kind_show_prints(line: &str) -> bool {
         || line.starts_with("not yet: ")
 }
 
-// adr: c84a4bd9-fc2d-44f0-b333-172978f61544
+// adr: c5e10ae8-258d-4f29-b9fe-13cb7ad2a550
 //
 // With no file named: every current decision as its heading and the option
 // picked, and every move; nothing about a question that is no decision.
@@ -126,7 +126,7 @@ not yet: \"{one}\" is answered and is built once \"{two}\" is answered\n",
 // The unrelated line comes under its own flag.
 #[test]
 fn show_prints_the_unrelated_line_only_under_its_flag() {
-    // adr: a6f41dee-2381-421a-bcc4-b14af243209b
+    // adr: b0acc95b-3dd5-4158-ac5c-65a2159972a9
     let (dir, path) = asked();
     let plain = show(&dir, &[REL]);
     assert!(plain.contains("  depends: widget\n"), "{}", plain);
@@ -154,7 +154,7 @@ fn show_prints_the_unrelated_line_only_under_its_flag() {
 }
 
 //
-// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+// adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
 //
 // Before approve the owner reads, in show, what approve would sign: a new
 // file whole, marked; on a plan change, the question changed with the lines
@@ -234,7 +234,7 @@ fn show_marks_what_a_file_holds_beyond_its_latest_approval() {
     assert!(shown.contains("  + 1-1\tdetail\n"), "{}", shown);
 }
 
-// adr: 36dfbeaa-698d-4a57-b3b0-d425348e14a5
+// adr: cdc905a2-5b58-4c38-beff-4a8bd3b6f42e
 //
 // The neighbours with the reader's word, what stands on a question and what
 // replaced it are computed from the records: the plain listing has none of
@@ -259,25 +259,26 @@ fn a_view_computed_from_the_records_comes_under_its_flag() {
     }
     let all = show(&dir, &["--all"]);
     assert!(!all.contains("neighbour") && !all.contains("dependents:"), "{}", all);
-    // The one carve-out (per "What does show print of the reader's word on
-    // a question?", 332ff0c7 A): a reader's word line, inconsistent or same.
+    // The one carve-out (per "What does show print of a reader's word on a
+    // question?", 6e72f34e A): a reader's word line, inconsistent, same or
+    // closes with its letter.
     for l in plain.lines().filter(|l| l.trim_start().starts_with('[') && l.starts_with(' ')) {
-        assert!(l.starts_with("  [inconsistent] ") || l.starts_with("  [same] "), "{}", plain);
+        assert!(l.starts_with("  [inconsistent] ") || l.starts_with("  [same] ") || l.starts_with("  [closes "), "{}", plain);
     }
 
     let neighbours = show(&dir, &[REL, "--neighbours"]);
-    assert!(neighbours.contains("  term \"widget\": heading "), "{}", neighbours);
-    assert!(!plain.contains("  term \"widget\": heading "), "{}", plain);
+    assert!(neighbours.contains("  term \"widget\": heading"), "{}", neighbours);
+    assert!(!plain.contains("  term \"widget\": heading"), "{}", plain);
     let dependents = show(&dir, &[REL, "--dependents"]);
     assert!(dependents.contains(&format!("  dependents: {}\n", three)), "{}", dependents);
-    assert!(!dependents.contains("  term \"widget\": heading "), "{}", dependents);
+    assert!(!dependents.contains("  term \"widget\": heading"), "{}", dependents);
     assert!(!dependents.contains("replaced by"), "{}", dependents);
 
     let out = adr(&dir, &["show", "--neighbours"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
 }
 
-// adr: 848e1b76-9cfe-483b-94dd-094eb9b2f995
+// adr: 1af76f91-5644-42ef-97ea-8f70f934c26c
 //
 // Show writes nothing, so it prints what it read, statuses, findings and
 // moves: no count, no tier heading, no line on how to read the rest.
@@ -314,7 +315,7 @@ fn a_removed_topic_file_shows_each_question_with_its_own_status() {
     assert!(!shown.contains(&format!("[removed] {}", ONE)), "{}", shown);
 }
 
-// adr: a6f41dee-2381-421a-bcc4-b14af243209b
+// adr: b0acc95b-3dd5-4158-ac5c-65a2159972a9
 //
 // A removed topic file is listed as a live one is: the option picked under
 // a current decision, read by the letter the status line names even when
@@ -356,7 +357,7 @@ fn a_removed_topic_file_prints_the_option_picked_and_superseded_under_its_flag()
     assert!(both.contains(&format!("[answered A] {}\n  Yes the widget holds.\n  depends: widget\n  supersedes: {}\n", d, c)), "{}", both);
 }
 
-// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+// adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
 //
 // Approved and not yet committed, then a question struck: no committed text
 // holds the approved plan, and the struck question still shows, by its
@@ -411,7 +412,7 @@ fn show_into_a_full_device_does_not_pass() {
     assert!(err.contains("runs: adr show --all"), "{}", err);
 }
 
-// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+// adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
 //
 // A question new since the latest approval is marked as a whole, its
 // heading line too, at every stage: a heading alone, its lines written, its
@@ -441,7 +442,7 @@ fn a_question_new_since_approval_marks_its_heading_at_every_stage() {
     assert!(shown.contains(&format!("\n[not asked] {}\n", ONE)), "the approved question is not marked: {}", shown);
 }
 
-// adr: 36dfbeaa-698d-4a57-b3b0-d425348e14a5
+// adr: cdc905a2-5b58-4c38-beff-4a8bd3b6f42e
 //
 // What stands on a term entry is computed from the records: the current
 // decisions whose terms line or depends line names the term come under
@@ -460,7 +461,7 @@ fn the_decisions_standing_on_a_term_come_under_the_dependents_flag() {
     assert!(!entry.contains(TWO), "{}", dependents);
 }
 
-// adr: 83190b10-8060-47c1-8194-f6a5c4f0d703
+// adr: d1d6fed2-4e1a-44bd-b9cb-22f779a00bce
 //
 // The reference lines of an answered question (picked, refused or
 // superseded) stay out of show's listing of a file; --dependents prints
@@ -523,7 +524,7 @@ fn show_prints_no_reference_lines_of_an_answered_question_unless_dependents() {
     assert!(shown.contains(&format!("  replaced by: {}\n", d)), "{}", shown);
 }
 
-// adr: a6f41dee-2381-421a-bcc4-b14af243209b
+// adr: b0acc95b-3dd5-4158-ac5c-65a2159972a9
 //
 // The plain listing of a topic file holds what the next move reads: under
 // an answered question the option the owner picked, as the listing with no
@@ -580,7 +581,7 @@ fn show_of_a_file_prints_the_option_picked_and_superseded_under_its_flag() {
     assert!(both.contains(&format!("[answered A] {}\n  {}\n  depends: widget\n  supersedes: {}\n", d, sentence, c)), "{}", both);
 }
 
-// adr: 83190b10-8060-47c1-8194-f6a5c4f0d703
+// adr: d1d6fed2-4e1a-44bd-b9cb-22f779a00bce
 //
 // `--unrelated` alone prints the unrelated line of every question, answered
 // or not; the depends line of an answered question still needs --dependents.

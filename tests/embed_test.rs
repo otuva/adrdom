@@ -156,7 +156,7 @@ mod pool {
 fn install_writes_the_ignore_file_and_check_holds_it() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    assert_eq!(std::fs::read_to_string(dir.join(IGNORE_PATH)).unwrap(), "cache/\nstate/roles.tsv\n");
+    assert_eq!(std::fs::read_to_string(dir.join(IGNORE_PATH)).unwrap(), "cache/\nstate/roles.tsv\nstate/neighbours.tsv\n");
     // A second install leaves it as it is.
     let again = adr(&dir, &["install"], &[], "");
     assert!(!stdout(&again).contains("adrdom/.gitignore"), "{}", stdout(&again));
@@ -184,7 +184,7 @@ fn install_writes_the_ignore_file_and_check_holds_it() {
         stdout(&out)
     );
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    assert_eq!(std::fs::read_to_string(dir.join(IGNORE_PATH)).unwrap(), "cache/\nstate/roles.tsv\n");
+    assert_eq!(std::fs::read_to_string(dir.join(IGNORE_PATH)).unwrap(), "cache/\nstate/roles.tsv\nstate/neighbours.tsv\n");
     assert!(adr(&dir, &["check"], &[], "").status.success());
 
     // Git ignores what the tool writes under the cache.

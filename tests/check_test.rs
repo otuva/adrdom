@@ -46,7 +46,7 @@ fn answer_one_question(dir: &std::path::Path) -> (std::path::PathBuf, String) {
 
 #[test]
 fn check_passes_on_a_clean_repo() {
-    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
+    // adr: bd83aa22-94fc-49ac-b215-a82990ff8c65
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let (_record, id) = answer_one_question(&dir);
@@ -80,7 +80,7 @@ fn check_parse_failure() {
 #[test]
 fn check_ids_failure_missing_id() {
     // a missing id means the plan was never approved; an unapproved file
-    // is no failure, and its status is no line of check's (3fc35d4f).
+    // is no failure, and its status is no line of check's (bd83aa22).
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     write_record(&dir, "adrdom/decisions/example.md", ONE_QUESTION);
@@ -1176,7 +1176,7 @@ fn check_passes_a_body_under_an_unapproved_heading() {
 //
 // A plan with no body under any heading (a bare skeleton) awaits approval:
 // nothing in it fails check, approve refuses the heading with no body, and
-// check names that with its move, as a note (fe14991d, 3fc35d4f); no count
+// check names that with its move, as a note (fe14991d, bd83aa22); no count
 // of files awaiting approval.
 #[test]
 fn check_notes_a_heading_with_no_body_in_a_draft() {
@@ -1211,7 +1211,7 @@ fn check_notes_a_heading_with_no_body_in_a_draft() {
 // The prose edited after approve, with the heading (and its `approved`
 // row) untouched: `check` still passes -- the heading itself is approved,
 // so no body lives under an unapproved heading -- and prints no line for
-// the file awaiting approval (3fc35d4f).
+// the file awaiting approval (bd83aa22).
 #[test]
 fn check_passes_a_file_whose_context_prose_alone_is_stale() {
     let dir = init_repo();
@@ -1565,10 +1565,10 @@ fn check_fails_a_withdrawn_id_still_present_in_a_record() {
 }
 
 // A topic file whose every question is answered and tested is no line of
-// check's: "done" names no move (3fc35d4f supersedes d981f6b0).
+// check's: "done" names no move (bd83aa22 supersedes d981f6b0).
 #[test]
 fn check_prints_no_done_line_for_a_fully_answered_file() {
-    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
+    // adr: bd83aa22-94fc-49ac-b215-a82990ff8c65
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let (_record, id) = answer_one_question(&dir);
@@ -1973,7 +1973,7 @@ fn check_passes_when_a_new_term_would_now_match_words_already_answered_in_text()
 
 #[test]
 fn check_prints_no_line_for_a_term_paired_by_nothing() {
-    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
+    // adr: bd83aa22-94fc-49ac-b215-a82990ff8c65
     // A term no question pairs names no move: check prints nothing of it.
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
@@ -2394,7 +2394,7 @@ agent fixes the file so it can be read as text (e.g. its encoding)"
     );
 }
 
-// adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
+// adr: bd83aa22-94fc-49ac-b215-a82990ff8c65
 //
 // The commit hooks run check with no flag: a pass prints nothing, by hand
 // or in a hook, and a failure prints the failing line with its move.

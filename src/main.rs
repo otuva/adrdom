@@ -37,7 +37,7 @@ enum Command {
         /// The topic file, adrdom/decisions/<topic>.md.
         topic_file: PathBuf,
     },
-    /// Read every current decision against its ten nearest current decisions and print each pair the reader marks same, inconsistent or depends.
+    /// Read every current decision against its ten nearest current decisions and print each pair the reader marks same or inconsistent.
     Read,
     /// Owner-only: approve the headings and prose of a topic file, the terms file, or a blame file.
     Approve {
@@ -59,7 +59,7 @@ enum Command {
         /// Print every file approve takes, each as with a file named.
         #[arg(long, conflicts_with = "topic_file")]
         all: bool,
-        /// With a file or --all: each neighbour of a question not yet answered, with the reader's word and the agent's line.
+        /// With a file or --all: each neighbour of a question not yet answered, with the agent's line and, for a question with its body, the reader's word.
         #[arg(long, requires = "whole")]
         neighbours: bool,
         /// With a file or --all: what depends on each question or term entry.

@@ -58,9 +58,9 @@ fn repo_with(markers: &[&str]) -> (PathBuf, Vec<Dec>) {
         }
         files.push((path, ()));
     }
-    // The markers go into the answered headings afterwards: the heading and
-    // plan readers accept only same, depends and unrelated, so a marker such
-    // as `inconsistent` would stop planning and approving; and `adr read`
+    // The markers go into the answered headings afterwards: the plan reader
+    // accepts only same and unrelated, so a marker such as `inconsistent`
+    // would stop planning and approving; and `adr read`
     // does not hold answered text to its approved hash the way `check` does.
     for (path, _) in &files {
         let mut text = std::fs::read_to_string(path).unwrap();
@@ -115,17 +115,10 @@ fn ordered<'a>(a: &'a Dec, b: &'a Dec) -> (&'a Dec, &'a Dec) {
 }
 
 fn line_of(word: &str, first: &Dec, second: &Dec) -> String {
-    let mv = if word == "depends" {
-        "not yet, nobody moves on a pair that depends"
-    } else {
-        "agent writes a question that supersedes one of the pair"
-    };
-    let protects = if word == "depends" {
-        "decisions that stand on each other are named"
-    } else {
-        "decisions that repeat or contradict are named"
-    };
-    format!("{}: \"{}\" and \"{}\": {}; {}; {}", word, first.heading, second.heading, REASON, protects, mv)
+    format!(
+        "{}: \"{}\" and \"{}\": {}; decisions that repeat or contradict are named; agent writes a question that supersedes one of the pair",
+        word, first.heading, second.heading, REASON
+    )
 }
 
 /// The move a same or inconsistent pair calls for, as `adr read` prints it.
@@ -137,7 +130,7 @@ fn word_of(a: &Dec, b: &Dec) -> String {
     if first.marker.is_empty() { "unrelated".into() } else { first.marker.clone() }
 }
 
-// adr: 1ab6d6c3-7e44-42de-bc2f-2e5849114aef
+// adr: 48c47c42-6720-44ca-b47d-12a61ba8ee9f
 #[test]
 fn every_pair_of_current_decisions_is_read_once() {
     let (dir, decs) = repo_with(&["", "", "", ""]);
@@ -145,7 +138,7 @@ fn every_pair_of_current_decisions_is_read_once() {
     let out = read_ok(&dir);
     let n = pairs(&decs);
     assert_eq!(n, 6);
-    // Nothing marked: nothing printed, no count (848e1b76 A).
+    // Nothing marked: nothing printed, no count (1af76f91 A).
     assert_eq!(out, "", "a reading that marks nothing prints nothing");
     let all = rows(&dir);
     assert_eq!(all.len(), before + n);
@@ -170,7 +163,7 @@ fn every_pair_of_current_decisions_is_read_once() {
     assert_eq!(rows(&dir).len(), len, "a second run adds no row");
 }
 
-// adr: 4b407ee1-1e64-4ca1-842b-69773fc0e48a
+// adr: ed372cc6-c161-4b90-85bd-c73a6e788c5e
 #[test]
 fn a_pair_is_one_row_the_lower_identifier_first() {
     let (dir, decs) = repo_with(&["", ""]);
@@ -189,7 +182,7 @@ fn a_pair_is_one_row_the_lower_identifier_first() {
     assert_eq!(r.prompt_hash, record::sha256_hex(&prompt));
 }
 
-// adr: 908bddc6-5d30-4bcc-be8d-4c470c6bff11
+// adr: a116a1c5-d6ea-4123-be25-3a222ac661e0
 #[test]
 fn every_word_is_kept_and_a_word_outside_the_set_fails_the_run() {
     let (dir, _) = repo_with(&["consistent", "consistent"]);
@@ -200,17 +193,27 @@ fn every_word_is_kept_and_a_word_outside_the_set_fails_the_run() {
     read_ok(&dir);
     assert!(set_rows(&dir).iter().any(|r| r.word == "inconsistent"));
 
-    let (dir, decs) = repo_with(&["maybe", "maybe"]);
-    let before = rows(&dir);
-    let out = read_with(&dir, &[]);
-    assert!(!out.status.success(), "{}", stdout(&out));
-    assert_eq!(rows(&dir), before, "no row of the failed chunk");
-    let hash_a = record::sha256_hex(&text_of(&decs[0]));
-    let hash_b = record::sha256_hex(&text_of(&decs[1]));
-    assert!(!set_rows(&dir).iter().any(|r| r.text_hash == hash_a || r.text_hash == hash_b));
+    let (dir, _) = repo_with(&["unrelated", "unrelated"]);
+    read_ok(&dir);
+    assert!(set_rows(&dir).iter().any(|r| r.word == "unrelated"));
+    let (dir, _) = repo_with(&["same", "same"]);
+    read_ok(&dir);
+    assert!(set_rows(&dir).iter().any(|r| r.word == "same"));
+
+    // Any other word, depends among them, fails the run and keeps no row.
+    for word in ["maybe", "depends", "closes B"] {
+        let (dir, decs) = repo_with(&[word, word]);
+        let before = rows(&dir);
+        let out = read_with(&dir, &[]);
+        assert!(!out.status.success(), "{}: {}", word, stdout(&out));
+        assert_eq!(rows(&dir), before, "{}: no row of the failed chunk", word);
+        let hash_a = record::sha256_hex(&text_of(&decs[0]));
+        let hash_b = record::sha256_hex(&text_of(&decs[1]));
+        assert!(!set_rows(&dir).iter().any(|r| r.text_hash == hash_a || r.text_hash == hash_b), "{}", word);
+    }
 }
 
-// adr: bc4291c8-98f1-499d-8e02-46e371035e70
+// adr: 8cba4463-6ee3-4590-a819-94462ef80224
 #[test]
 fn a_commit_never_runs_the_reader() {
     let (dir, decs) = repo_with(&["", ""]);
@@ -235,12 +238,12 @@ fn a_commit_never_runs_the_reader() {
     assert!(!dir.join("adrdom/cache").exists(), "the commit created a cache");
 }
 
-// adr: 2db33118-82b4-4edf-a9cb-e92ac62738b9
+// adr: 27bd0855-a6c8-4cda-a82b-bf95022a14b0
 #[test]
 fn marked_pairs_print_their_lines_in_the_order_of_the_words() {
     // Two decisions to each word: that pair is marked by both.
     let (dir, decs) = repo_with(&[
-        "same", "same", "inconsistent", "inconsistent", "depends", "depends", "consistent", "consistent",
+        "same", "same", "inconsistent", "inconsistent", "consistent", "consistent",
     ]);
     let out = read_ok(&dir);
     let lines: Vec<&str> = out.lines().collect();
@@ -251,7 +254,7 @@ fn marked_pairs_print_their_lines_in_the_order_of_the_words() {
         for j in i + 1..decs.len() {
             let w = word_of(&decs[i], &decs[j]);
             let (f, s) = ordered(&decs[i], &decs[j]);
-            if ["same", "inconsistent", "depends"].contains(&w.as_str()) {
+            if ["same", "inconsistent"].contains(&w.as_str()) {
                 marked += 1;
                 expected.push((w.clone(), line_of(&w, f, s)));
             } else {
@@ -265,17 +268,17 @@ fn marked_pairs_print_their_lines_in_the_order_of_the_words() {
         }
     }
     // The pairs both of whose decisions carry one marker are always there.
-    for (a, b, w) in [(0, 1, "same"), (2, 3, "inconsistent"), (4, 5, "depends")] {
+    for (a, b, w) in [(0, 1, "same"), (2, 3, "inconsistent")] {
         let (f, s) = ordered(&decs[a], &decs[b]);
         assert!(lines.contains(&line_of(w, f, s).as_str()), "{}", out);
     }
     // The consistent pair prints nothing.
-    let (f, s) = ordered(&decs[6], &decs[7]);
+    let (f, s) = ordered(&decs[4], &decs[5]);
     assert!(!out.contains(&format!("\"{}\" and \"{}\"", f.heading, s.heading)), "{}", out);
 
-    // Groups in the order same, inconsistent, depends; each line exactly.
+    // Groups in the order same, inconsistent; each line exactly.
     let mut want: Vec<String> = Vec::new();
-    for w in ["same", "inconsistent", "depends"] {
+    for w in ["same", "inconsistent"] {
         let mut g: Vec<String> = expected.iter().filter(|(x, _)| x == w).map(|(_, l)| l.clone()).collect();
         g.sort();
         let mut got: Vec<String> = lines.iter().filter(|l| l.starts_with(&format!("{}: ", w))).map(|l| l.to_string()).collect();
@@ -286,29 +289,28 @@ fn marked_pairs_print_their_lines_in_the_order_of_the_words() {
     let printed: Vec<&str> = lines
         .iter()
         .copied()
-        .filter(|l| ["same: ", "inconsistent: ", "depends: "].iter().any(|p| l.starts_with(p)))
+        .filter(|l| ["same: ", "inconsistent: "].iter().any(|p| l.starts_with(p)))
         .collect();
     assert_eq!(printed.len(), want.len());
-    let rank = |l: &str| ["same", "inconsistent", "depends"].iter().position(|w| l.starts_with(&format!("{}: ", w))).unwrap();
+    let rank = |l: &str| ["same", "inconsistent"].iter().position(|w| l.starts_with(&format!("{}: ", w))).unwrap();
     assert!(printed.windows(2).all(|w| rank(w[0]) <= rank(w[1])), "{}", out);
 
     // The pairs, then the move they call for, and nothing else: no count
-    // (848e1b76 A).
+    // (1af76f91 A).
     assert_eq!(lines.last().unwrap(), &SUPERSEDE_MOVE, "{}", out);
     assert_eq!(lines.len(), marked + 1, "{}", out);
     // Every pair of a decision with every other is read and kept as a row.
     assert_eq!(set_rows(&dir).len(), pairs(&decs));
 }
 
-// adr: 2db33118-82b4-4edf-a9cb-e92ac62738b9
+// adr: 27bd0855-a6c8-4cda-a82b-bf95022a14b0
 #[test]
-fn depends_alone_prints_no_next_move() {
-    let (dir, decs) = repo_with(&["depends", "depends"]);
+fn consistent_and_unrelated_pairs_alone_print_nothing() {
+    let (dir, decs) = repo_with(&["consistent", "consistent", "unrelated", "unrelated"]);
     let out = read_ok(&dir);
-    let (f, s) = ordered(&decs[0], &decs[1]);
-    assert_eq!(out, format!("{}\n", line_of("depends", f, s)), "the pair and nothing else");
-    assert!(!out.contains(SUPERSEDE_MOVE), "{}", out);
-    assert!(!out.contains("agent ") && !out.contains("owner runs:"), "no move is asked of anyone: {}", out);
+    assert_eq!(out, "", "no pair and no move is printed");
+    // Every pair was read and kept all the same.
+    assert_eq!(set_rows(&dir).len(), pairs(&decs));
 }
 
 #[test]
@@ -349,7 +351,7 @@ fn a_planning_run_on_an_unrelated_file_repeats_no_set_row() {
     assert_eq!(set_rows(&dir).len(), n);
 }
 
-// adr: 1ab6d6c3-7e44-42de-bc2f-2e5849114aef
+// adr: 48c47c42-6720-44ca-b47d-12a61ba8ee9f
 #[test]
 fn a_superseded_decision_drops_out_of_the_reading() {
     let (dir, decs) = repo_with(&["same", "same", "same"]);
@@ -382,7 +384,7 @@ fn a_superseded_decision_drops_out_of_the_reading() {
     assert!(set_rows(&dir).iter().any(|r| r.neighbour == id || r.text_hash == record::sha256_hex(&format!("{}\nYes.", h))));
 }
 
-// adr: 1ab6d6c3-7e44-42de-bc2f-2e5849114aef
+// adr: 48c47c42-6720-44ca-b47d-12a61ba8ee9f
 #[test]
 fn a_decision_is_read_against_ten_neighbours_not_every_other() {
     let (dir, decs) = repo_with(&[""; 15]);
@@ -396,7 +398,7 @@ fn a_decision_is_read_against_ten_neighbours_not_every_other() {
     }
 }
 
-// adr: 848e1b76-9cfe-483b-94dd-094eb9b2f995
+// adr: 1af76f91-5644-42ef-97ea-8f70f934c26c
 #[test]
 fn a_stopped_reading_prints_the_stop_and_its_move_and_no_count() {
     let (dir, decs) = repo_with(&["maybe", "maybe", "maybe", "", "", ""]);

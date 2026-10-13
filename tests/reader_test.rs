@@ -42,10 +42,10 @@ fn row(word: &str, n: u32) -> reader::Row {
     reader::Row {
         time: format!("2026-10-05T10:00:{:02}Z", n),
         text_hash: adr::record::sha256_hex(&format!("text {}", n)),
-        neighbour: "62e50382-db1b-4649-9f26-7f44c379d6fe".to_string(),
+        neighbour: "60341be0-fd05-4281-92d7-668584a8539a".to_string(),
         word: word.to_string(),
         reason: "A reason.".to_string(),
-        prompt_hash: Kind::Heading.prompt_hash(),
+        prompt_hash: Kind::Body.prompt_hash(),
         model: reader::MODEL.to_string(),
         version: "0.1.0".to_string(),
     }
@@ -72,7 +72,7 @@ fn committed_repo_with_rows() -> PathBuf {
     dir
 }
 
-// adr: abb6faed-96f7-406d-8384-002ee81bb157
+// adr: 30ca5d13-e68b-465f-aa84-ea4000c9330a
 #[test]
 fn check_passes_a_fresh_repo_and_an_appended_row() {
     let dir = new_repo();
@@ -88,7 +88,7 @@ fn check_passes_a_fresh_repo_and_an_appended_row() {
     assert_eq!(reader_failures(&dir, &[]), Vec::<String>::new());
 }
 
-// adr: abb6faed-96f7-406d-8384-002ee81bb157
+// adr: 30ca5d13-e68b-465f-aa84-ea4000c9330a
 #[test]
 fn check_fails_an_edited_row_at_head_and_passes_a_row_gone_whole() {
     let dir = committed_repo_with_rows();
@@ -114,7 +114,7 @@ fn check_fails_an_edited_row_at_head_and_passes_a_row_gone_whole() {
     assert_eq!(reader_failures(&dir, &[]), Vec::<String>::new());
 }
 
-// adr: abb6faed-96f7-406d-8384-002ee81bb157
+// adr: 30ca5d13-e68b-465f-aa84-ea4000c9330a
 #[test]
 fn check_fails_a_malformed_row() {
     let dir = new_repo();
@@ -122,14 +122,14 @@ fn check_fails_a_malformed_row() {
     let f = reader_failures(&dir, &[]);
     assert!(f.iter().any(|l| l.contains("line 1: malformed row")), "{:?}", f);
 
-    // Also a row with a word outside both sets.
+    // Also a row with a word outside every set.
     let mut r = row("same", 1);
     r.word = "maybe".to_string();
     std::fs::write(reader_path(&dir), format!("{}\n", reader::row_line(&r))).unwrap();
     assert!(!reader_failures(&dir, &[]).is_empty());
 }
 
-// adr: abb6faed-96f7-406d-8384-002ee81bb157
+// adr: 30ca5d13-e68b-465f-aa84-ea4000c9330a
 #[test]
 fn check_since_fails_a_row_the_commit_holds_edited_and_passes_one_gone_whole() {
     let dir = committed_repo_with_rows();
@@ -146,7 +146,7 @@ fn check_since_fails_a_row_the_commit_holds_edited_and_passes_one_gone_whole() {
     assert!(f.iter().any(|l| l.contains(&format!("edits a row {} already holds", sha))), "{:?}", f);
 }
 
-// adr: abb6faed-96f7-406d-8384-002ee81bb157
+// adr: 30ca5d13-e68b-465f-aa84-ea4000c9330a
 #[test]
 fn a_merge_keeps_both_branches_rows_and_check_fails_one_that_edits_them() {
     let dir = new_repo();
@@ -210,7 +210,7 @@ fn a_merge_keeps_both_branches_rows_and_check_fails_one_that_edits_them() {
     assert_eq!(reader_failures(&dir, &[]), Vec::<String>::new());
 }
 
-// adr: abb6faed-96f7-406d-8384-002ee81bb157
+// adr: 30ca5d13-e68b-465f-aa84-ea4000c9330a
 #[test]
 fn install_writes_the_second_merge_rule_and_an_empty_reader_file() {
     let dir = init_repo();
@@ -230,7 +230,7 @@ fn install_writes_the_second_merge_rule_and_an_empty_reader_file() {
     assert!(out.contains("adrdom/.gitattributes differs"), "{}", out);
 }
 
-// adr: abb6faed-96f7-406d-8384-002ee81bb157
+// adr: 30ca5d13-e68b-465f-aa84-ea4000c9330a
 #[test]
 fn the_permission_file_forbids_edits_of_the_reader_file() {
     let dir = init_repo();
@@ -250,6 +250,7 @@ fn pair(kind: Kind, new_text: &str, neighbour: &str) -> Pair {
         new_text: new_text.to_string(),
         neighbour: neighbour.to_string(),
         neighbour_text: format!("text of {}", neighbour),
+        letters: if kind == Kind::Body { vec!['A', 'B'] } else { Vec::new() },
     }
 }
 
@@ -274,7 +275,7 @@ fn section<'a>(rf: &'a adr::record::RecordFile, heading: &str) -> &'a adr::recor
     rf.sections.iter().find(|s| s.heading_text == heading).unwrap()
 }
 
-// adr: 08a1b488-32fc-4dc7-b4b3-93a6e768725f
+// adr: 55a6a2d8-03af-4db9-a4c7-e2790e38357e
 #[test]
 fn the_fake_reader_writes_one_row_per_pair_and_skips_pairs_on_record() {
     let (dir, rf) = repo_with_records();
@@ -299,7 +300,7 @@ fn the_fake_reader_writes_one_row_per_pair_and_skips_pairs_on_record() {
     assert_eq!(r.model, reader::MODEL);
     assert!(!r.reason.is_empty());
     assert!(rows[3].neighbour.starts_with("text:"));
-    // The text hash is that of the new side alone: the heading for a heading pair.
+    // The text hash is that of the new side alone: the question's heading for a plan pair.
     assert_eq!(rows[3].text_hash, adr::record::sha256_hex("Does W?"));
 
     let file = reader::read_file(&dir);
@@ -327,7 +328,7 @@ fn live_row(text: &str, neighbour: &str, word: &str, n: u32) -> reader::Row {
     r
 }
 
-// adr: 90714223-52e3-4bb9-b0b4-2a8b87d74145
+// adr: a8034401-420c-45d7-8f43-60c1b9f3baf9
 #[test]
 fn an_append_drops_rows_whose_text_or_neighbour_is_gone_and_keeps_the_rest_byte_for_byte() {
     let (dir, rf) = repo_with_records();
@@ -366,18 +367,18 @@ fn an_append_drops_rows_whose_text_or_neighbour_is_gone_and_keeps_the_rest_byte_
     assert_eq!(std::fs::read_to_string(reader_path(&dir)).unwrap(), format!("{}\n", reader::row_line(&text_gone)));
 }
 
-// adr: 90714223-52e3-4bb9-b0b4-2a8b87d74145
+// adr: a8034401-420c-45d7-8f43-60c1b9f3baf9
 #[test]
 fn a_read_drops_rows_of_gone_texts() {
     let (dir, _rf) = repo_with_records();
     let old = live_row("Does a question that was struck?", "id-1", "same", 1);
     std::fs::write(reader_path(&dir), format!("{}\n", reader::row_line(&old))).unwrap();
-    let rows = reader::read_with(&dir, &reader::Fake, &[pair(Kind::Heading, "Does X?", "id-2")]).unwrap();
+    let rows = reader::read_with(&dir, &reader::Fake, &[pair(Kind::Plan, "Does X?", "id-2")]).unwrap();
     let file = reader::read_file(&dir);
     assert_eq!(file.rows, rows);
 }
 
-// adr: 90714223-52e3-4bb9-b0b4-2a8b87d74145
+// adr: a8034401-420c-45d7-8f43-60c1b9f3baf9
 #[test]
 fn a_union_merge_brings_back_a_dropped_row_and_check_passes() {
     let (dir, _rf) = repo_with_records();
@@ -411,7 +412,7 @@ fn a_union_merge_brings_back_a_dropped_row_and_check_passes() {
     assert_eq!(reader_failures(&dir, &[]), Vec::<String>::new());
 }
 
-// adr: abb6faed-96f7-406d-8384-002ee81bb157
+// adr: 30ca5d13-e68b-465f-aa84-ea4000c9330a
 #[test]
 fn check_judges_a_new_line_by_its_shape_alone() {
     let dir = committed_repo_with_rows();
@@ -435,46 +436,82 @@ fn check_judges_a_new_line_by_its_shape_alone() {
     }
 }
 
-// adr: 62e50382-db1b-4649-9f26-7f44c379d6fe
 #[test]
-fn a_word_outside_the_heading_set_is_an_error_and_keeps_no_row() {
+fn a_word_outside_the_plan_set_is_an_error_and_keeps_no_row() {
     let dir = new_repo();
     let p = vec![
-        pair(Kind::Heading, "Does X?", "id-1"),
-        pair(Kind::Heading, "Does Y? [word:consistent]", "id-2"),
+        pair(Kind::Plan, "Does X?", "id-1"),
+        pair(Kind::Plan, "Does Y? [word:consistent]", "id-2"),
     ];
     let err = reader::read_with(&dir, &reader::Fake, &p).unwrap_err();
-    assert!(err.contains("id-2") && err.contains("not one of same, depends, unrelated"), "{}", err);
+    assert!(err.contains("id-2") && err.contains("not one of same, unrelated"), "{}", err);
     // The whole batch is kept or none of it: the pair that was fine is not written.
     assert!(reader::read_file(&dir).rows.is_empty());
 }
 
-// adr: c6e0b7d6-cdec-46da-b2bc-cda218673868
+// adr: d10dab89-1d42-4764-9d72-22d6fd6a9260
 #[test]
-fn the_body_set_accepts_its_five_words_and_nothing_else() {
+fn the_body_set_accepts_its_four_words_and_closes_with_a_letter_of_the_question() {
     let dir = new_repo();
-    let p: Vec<Pair> = reader::BODY_WORDS
+    let mut p: Vec<Pair> = reader::BODY_WORDS
         .iter()
         .enumerate()
         .map(|(i, w)| pair(Kind::Body, &format!("Q{} [word:{}]", i, w), "id-1"))
         .collect();
+    p.push(pair(Kind::Body, "Q closes [word:closes B]", "id-1"));
     let rows = reader::read_with(&dir, &reader::Fake, &p).unwrap();
-    assert_eq!(
-        rows.iter().map(|r| r.word.as_str()).collect::<Vec<_>>(),
-        reader::BODY_WORDS.to_vec()
-    );
-    let err = reader::read_with(&dir, &reader::Fake, &[pair(Kind::Body, "Q [word:same-ish]", "id-1")]).unwrap_err();
-    assert!(err.contains("not one of same, consistent, inconsistent, depends, unrelated"), "{}", err);
+    let mut want = reader::BODY_WORDS.to_vec();
+    want.push("closes B");
+    assert_eq!(rows.iter().map(|r| r.word.as_str()).collect::<Vec<_>>(), want);
+    assert_eq!(reader::read_file(&dir).rows.len(), 5);
+    assert_eq!(reader_failures(&dir, &[]), Vec::<String>::new());
 }
 
-// adr: 3dba486c-a399-4ce3-a794-e38c4f733403
+// adr: d10dab89-1d42-4764-9d72-22d6fd6a9260
+#[test]
+fn a_body_word_outside_the_set_is_an_error_and_keeps_no_row() {
+    for word in ["same-ish", "depends", "closes", "closes C", "closes AB"] {
+        let dir = new_repo();
+        let p = vec![
+            pair(Kind::Body, "Q fine [word:same]", "id-1"),
+            pair(Kind::Body, &format!("Q bad [word:{}]", word), "id-2"),
+        ];
+        let err = reader::read_with(&dir, &reader::Fake, &p).unwrap_err();
+        assert!(
+            err.contains("id-2") && err.contains("not one of same, consistent, inconsistent, unrelated, closes and the letter of an option"),
+            "{}: {}",
+            word,
+            err
+        );
+        assert!(reader::read_file(&dir).rows.is_empty(), "{}", word);
+    }
+}
+
+// adr: 30ca5d13-e68b-465f-aa84-ea4000c9330a
+#[test]
+fn check_passes_the_words_depends_and_closes_with_a_letter_and_fails_closes_alone() {
+    let dir = new_repo();
+    let line = |w: &str, n| format!("{}\n", reader::row_line(&row(w, n)));
+    std::fs::write(reader_path(&dir), format!("{}{}", line("depends", 1), line("closes B", 2))).unwrap();
+    assert_eq!(reader_failures(&dir, &[]), Vec::<String>::new());
+    commit_all(&dir, "rows with depends and closes B");
+    assert_eq!(reader_failures(&dir, &[]), Vec::<String>::new());
+
+    for bad in ["closes", "closes b"] {
+        std::fs::write(reader_path(&dir), line(bad, 3)).unwrap();
+        let f = reader_failures(&dir, &[]);
+        assert!(f.iter().any(|l| l.contains("malformed row")), "{} {:?}", bad, f);
+    }
+}
+
+// adr: bd94a89f-7142-4dab-b757-6482a718a0a0
 // The only test of this binary that touches the environment.
 #[test]
 fn without_the_reader_the_call_stops_with_a_message_and_writes_nothing() {
     let dir = new_repo();
     std::env::set_var("ADR_NO_READER", "1");
     let loaded = reader::load();
-    let read = reader::read(&dir, &[pair(Kind::Heading, "Does X?", "id-1")]);
+    let read = reader::read(&dir, &[pair(Kind::Body, "Does X?", "id-1")]);
     std::env::remove_var("ADR_NO_READER");
     for e in [loaded.err().expect("load refuses"), read.unwrap_err()] {
         assert!(e.contains("the claude program is missing"), "{}", e);
@@ -486,7 +523,7 @@ fn without_the_reader_the_call_stops_with_a_message_and_writes_nothing() {
     assert!(!stdout(&out).contains("reader:"), "{}", stdout(&out));
 }
 
-// adr: 90714223-52e3-4bb9-b0b4-2a8b87d74145
+// adr: a8034401-420c-45d7-8f43-60c1b9f3baf9
 #[test]
 fn an_append_drops_nothing_when_a_topic_file_cannot_be_read() {
     let (dir, _rf) = repo_with_records();
@@ -500,7 +537,7 @@ fn an_append_drops_nothing_when_a_topic_file_cannot_be_read() {
     assert_eq!(std::fs::read_to_string(reader_path(&dir)).unwrap(), want);
 }
 
-// adr: 90714223-52e3-4bb9-b0b4-2a8b87d74145
+// adr: a8034401-420c-45d7-8f43-60c1b9f3baf9
 #[test]
 fn an_append_starts_a_new_line_when_the_file_does_not_end_with_one() {
     let (dir, _rf) = repo_with_records();
@@ -513,7 +550,7 @@ fn an_append_starts_a_new_line_when_the_file_does_not_end_with_one() {
     assert_eq!(reader::read_file(&dir).rows.len(), 2);
 }
 
-// adr: 90714223-52e3-4bb9-b0b4-2a8b87d74145
+// adr: a8034401-420c-45d7-8f43-60c1b9f3baf9
 #[test]
 fn concurrent_appends_with_drops_lose_no_row() {
     use std::io::Write;
@@ -549,7 +586,7 @@ fn concurrent_appends_with_drops_lose_no_row() {
     assert!(stray.is_empty());
 }
 
-// adr: 90714223-52e3-4bb9-b0b4-2a8b87d74145
+// adr: a8034401-420c-45d7-8f43-60c1b9f3baf9
 #[test]
 fn an_append_removes_the_temporary_files_a_killed_rewrite_left() {
     let (dir, _rf) = repo_with_records();

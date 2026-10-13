@@ -310,8 +310,8 @@ fn check_args(staged: bool, message: Option<&Path>, since: Option<&str>) -> Vec<
 /// adding its one extra ledger comparison on top.
 ///
 /// Every line is a finding with its move, the failures first, then the
-/// notes; a pass prints nothing, by hand or in a hook (per "Does check
-/// print a line that names no move?", 3fc35d4f A).
+/// notes; a pass prints nothing, by hand or in a hook (per "Does check print a
+/// line with no move on it?", bd83aa22 A).
 pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: bool) -> i32 {
     if push {
         return push::run();

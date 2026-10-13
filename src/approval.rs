@@ -1,5 +1,5 @@
 //! What a file the owner approves holds beyond its latest approval (per
-//! "Does show print what a file holds beyond its latest approval?", bceceda8
+//! "Does show print what a file holds past its latest approval?", 91f9652a
 //! A): for a topic file its prose and each question new, changed or struck
 //! since the plan was approved; for the terms file each entry new, changed or
 //! removed; for a blame file its rows. The ledger holds hashes only, so the

@@ -2,8 +2,8 @@
 // edges: a part whose approved text no commit holds, a question put back
 // after a plan change struck it, blank lines and entries reordered, a
 // removed topic file, and identifiers in prose (per "Does show print what a
-// file holds beyond its latest approval?", bceceda8 A, and "What does a
-// command that writes nothing print?", 848e1b76 A).
+// file holds past its latest approval?", 91f9652a A, and "What does a command
+// print when it writes nothing?", 1af76f91 A).
 
 mod common;
 
@@ -41,7 +41,7 @@ fn approved() -> (PathBuf, PathBuf) {
     (dir, path)
 }
 
-// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+// adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
 //
 // An edit of blank lines alone in the prose changes what approve signs, so
 // show marks the line it added: never a changed part with nothing marked.
@@ -55,7 +55,7 @@ fn a_blank_line_edit_of_the_prose_is_marked() {
     assert!(shown.contains("\n  + \n"), "{}", shown);
 }
 
-// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+// adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
 //
 // The approved text no commit holds (approved, not committed, then edited):
 // the change says so above its lines rather than pass them off as new.
@@ -71,7 +71,7 @@ fn a_change_whose_approved_text_no_commit_holds_says_so() {
     assert!(shown.contains("+ Problem: the widget breaks in use."), "{}", shown);
 }
 
-// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+// adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
 //
 // A question a plan change struck and the owner approved, then put back:
 // beyond the latest approved plan, it reads as new.
@@ -90,7 +90,7 @@ fn a_question_put_back_after_a_plan_change_struck_it_reads_as_new() {
     assert!(shown.contains(&format!("+ [not asked] {}\n", TWO)), "{}", shown);
 }
 
-// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+// adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
 //
 // A struck question whose approved plan no commit holds is named by its
 // heading (the one its asked row carries), not by its identifier.
@@ -107,7 +107,7 @@ fn a_question_struck_from_an_uncommitted_asked_plan_is_named_by_its_heading() {
     assert!(shown.contains(&format!("- [removed] {}\n", TWO)), "{}", shown);
 }
 
-// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+// adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
 //
 // When the ledger alone cannot tell which questions approved for the file
 // the latest plan held, every one gone is named, and show says why: a
@@ -132,7 +132,7 @@ fn every_question_gone_is_named_when_the_ledger_cannot_tell_which_were_struck() 
     let _ = path;
 }
 
-// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+// adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
 //
 // The terms file reordered: the file differs from its approval though no
 // entry does, and show prints the whole file's change marked.
@@ -176,7 +176,7 @@ fn an_identifier_in_prose_is_printed_as_the_file_holds_it() {
     assert!(shown.contains(&format!("+ It opens, as {} says.", one)), "{}", shown);
 }
 
-// adr: c84a4bd9-fc2d-44f0-b333-172978f61544
+// adr: c5e10ae8-258d-4f29-b9fe-13cb7ad2a550
 //
 // A topic file gone from disk, its removal not approved: its current
 // decisions are listed under it, as every file's are; its file form prints
@@ -216,7 +216,7 @@ fn an_unreadable_terms_or_topic_file_is_named() {
     assert!(form.contains("agent fixes the file so it can be read as text"), "{}", form);
 }
 
-// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+// adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
 // adr: d2851ea1-fcb6-476a-b321-c813a594d5e5
 //
 // A blame file's change prints each row as the file carries it, `decision`
@@ -233,7 +233,7 @@ fn a_blame_draft_prints_each_row_as_written_with_no_status() {
     }
 }
 
-// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+// adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
 //
 // A repository whose objects are named by sha256 (64 hex characters): the
 // approved text is found in its history all the same, and an edited
@@ -262,7 +262,7 @@ fn an_approved_text_is_found_in_a_sha256_repository() {
     assert!(shown.contains("+ Problem: the widget breaks in use.\n"), "{}", shown);
 }
 
-// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+// adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
 //
 // approve signs a question's `id:` line with the rest of it, so the change
 // show prints of a question holds that line too: an identifier written by
@@ -279,7 +279,7 @@ fn the_change_of_a_question_shows_its_id_line() {
     assert!(shown.contains(&format!("+ id: {}\n", new)), "{}", shown);
 }
 
-// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+// adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
 //
 // A blank line added at the end of the terms file or of a blame file
 // changes what approve signs: show marks the blank line it added, so a
@@ -309,7 +309,7 @@ fn a_blank_line_added_at_the_end_of_a_file_is_marked() {
     assert!(shown.lines().any(|l| l.trim() == "+" || l.trim() == "-"), "{}", shown);
 }
 
-// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+// adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
 //
 // A question struck by a plan change the owner approved and nobody has
 // committed yet, then put back: no commit holds the approved plan, so the

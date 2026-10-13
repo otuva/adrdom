@@ -1,5 +1,7 @@
 // `adr plan <file>` and the lines: the planning steps, the records they
-// leave in adrdom/state/reader.tsv, and what approve refuses without them.
+// leave (the neighbours of a heading in adrdom/state/neighbours.tsv, the
+// reader's rows of a body in adrdom/state/reader.tsv), and what approve
+// refuses without them.
 // The embedding model and the reader are the fakes; nothing here goes
 // through `adr_owner`, whose approve would plan first, so every refusal is
 // the tool's own.
@@ -7,6 +9,7 @@
 mod common;
 
 use adr::reader::{self, Kind};
+use adr::repo;
 use adr::record;
 use common::*;
 use std::path::{Path, PathBuf};
@@ -18,6 +21,7 @@ const BASE_Q: &str = "Does the base hold?";
 const H1: &str = "Does the first thing glow?";
 const H2: &str = "Does the second thing glow?";
 const PAINT_ID: &str = "99999991-9999-9999-9999-999999999999";
+const WIDGET_ID: &str = "99999990-9999-9999-9999-999999999999";
 
 fn body(n: &str) -> String {
     format!(
@@ -71,6 +75,24 @@ fn read(dir: &Path) -> String {
 
 fn rows(dir: &Path) -> Vec<reader::Row> {
     reader::read_file(dir).rows
+}
+
+/// The rows of the neighbours file: the heading hash and the neighbour's id.
+fn neighbour_rows(dir: &Path) -> Vec<(String, String)> {
+    std::fs::read_to_string(dir.join(repo::NEIGHBOURS_PATH))
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| l.split_once('\t'))
+        .map(|(h, id)| (h.to_string(), id.to_string()))
+        .collect()
+}
+
+fn neighbours_text(dir: &Path) -> String {
+    std::fs::read_to_string(dir.join(repo::NEIGHBOURS_PATH)).unwrap_or_default()
+}
+
+fn reader_text(dir: &Path) -> String {
+    std::fs::read_to_string(dir.join("adrdom/state/reader.tsv")).unwrap_or_default()
 }
 
 /// Writes each neighbour `adr plan` printed as on no line, as an
@@ -141,16 +163,19 @@ fn two_headings(dir: &Path) {
 fn the_steps_in_order_from_headings_to_approval() {
     let dir = repo();
     let before = rows(&dir).len();
+    let held_n = neighbour_rows(&dir).len();
     two_headings(&dir);
 
     // Step 2: the neighbours of each heading, ten at most, the current
     // decision and both terms; the heading's own depends line holds one term.
+    // They go to the neighbours file; the reader reads none of them.
     let out = ok(&plan(&dir));
-    assert_eq!(rows(&dir).len() - before, 6, "{}", out);
+    assert_eq!(neighbour_rows(&dir).len() - held_n, 6, "{}", out);
+    assert_eq!(rows(&dir).len(), before, "{}", out);
     assert!(has_line(&out, &format!("[new] Topic ({})", REL)), "{}", out);
     assert!(has_line(&out, &format!("\"{}\": heading", H1)), "{}", out);
-    assert!(out.contains(&format!("  decision \"{}\": heading unrelated; no line", BASE_Q)), "{}", out);
-    assert!(out.contains("  term \"widget\": heading unrelated; on the depends line"), "{}", out);
+    assert!(out.contains(&format!("  decision \"{}\": heading; no line", BASE_Q)), "{}", out);
+    assert!(out.contains("  term \"widget\": heading; on the depends line"), "{}", out);
     assert!(lines_wanted(&out).contains(&(H1.to_string(), BASE_Q.to_string())), "{}", out);
     assert!(lines_wanted(&out).contains(&(H1.to_string(), "paint".to_string())), "{}", out);
     // Each neighbour on no line is a finding that carries the move.
@@ -201,6 +226,52 @@ fn the_steps_in_order_from_headings_to_approval() {
     ok(&out);
 }
 
+// adr: 60341be0-fd05-4281-92d7-668584a8539a
+#[test]
+fn the_reader_reads_no_neighbour_of_a_heading() {
+    let dir = repo();
+    let before = reader_text(&dir);
+    let held_n = neighbour_rows(&dir).len();
+    two_headings(&dir);
+    // The heading step runs on a machine with no reader: it asks none.
+    let out = ok(&plan_with(&dir, &[("ADR_NO_READER", "1")]));
+    assert_eq!(reader_text(&dir), before, "no row was added to the reader file: {}", out);
+    // The neighbours are on record and printed with no word.
+    assert_eq!(neighbour_rows(&dir).len() - held_n, 6, "{}", out);
+    for h in [H1, H2] {
+        assert!(has_line(&out, &format!("\"{}\": heading", h)), "{}", out);
+    }
+    assert!(out.contains(&format!("  decision \"{}\": heading; no line", BASE_Q)), "{}", out);
+    assert!(out.contains("  term \"widget\": heading; on the depends line"), "{}", out);
+    assert!(!out.contains("heading unrelated") && !out.contains("heading same"), "no word at the heading step: {}", out);
+    // The model is still needed for it.
+    let dir = repo();
+    two_headings(&dir);
+    let err = refused(&plan_with(&dir, &[("ADR_NO_MODEL", "1")]));
+    assert!(err.contains("the embedding model is missing"), "{}", err);
+    assert_eq!(neighbour_rows(&dir).len(), held_n, "nothing was written");
+}
+
+// adr: 60341be0-fd05-4281-92d7-668584a8539a
+#[test]
+fn the_neighbours_file_is_not_tracked_and_a_second_run_writes_neither_file() {
+    let dir = repo();
+    two_headings(&dir);
+    let out = ok(&plan(&dir));
+    assert!(dir.join(repo::NEIGHBOURS_PATH).is_file());
+    let status = std::process::Command::new("git").args(["status", "--porcelain", "--untracked-files=all"]).current_dir(&dir).output().unwrap();
+    let status = String::from_utf8_lossy(&status.stdout).to_string();
+    assert!(!status.contains("neighbours.tsv"), "{}", status);
+    // Nothing changed: a second run writes to neither file.
+    write_lines(&dir, &out);
+    ok(&plan(&dir));
+    let (n, r) = (neighbours_text(&dir), reader_text(&dir));
+    ok(&plan(&dir));
+    ok(&plan(&dir));
+    assert_eq!(neighbours_text(&dir), n);
+    assert_eq!(reader_text(&dir), r);
+}
+
 /// The reader file written again with `edit` applied to the rows it picks.
 fn edit_rows(dir: &Path, pick: impl Fn(&reader::Row) -> bool, edit: impl Fn(&mut reader::Row)) {
     let mut text = String::new();
@@ -214,7 +285,7 @@ fn edit_rows(dir: &Path, pick: impl Fn(&reader::Row) -> bool, edit: impl Fn(&mut
     std::fs::write(dir.join("adrdom/state/reader.tsv"), text).unwrap();
 }
 
-/// Two questions with bodies, read at both steps, every neighbour on a line.
+/// Two questions with bodies, planned at both steps, every neighbour on a line.
 fn planned(dir: &Path) {
     write(dir, &format!("# Topic\n{}{}", section(H1, &body("one")), section(H2, &body("two"))));
     for _ in 0..3 {
@@ -224,20 +295,23 @@ fn planned(dir: &Path) {
     assert!(has_line(&ok(&plan(dir)), &format!("owner runs: adr approve {}", REL)));
 }
 
-// adr: 08a1b488-32fc-4dc7-b4b3-93a6e768725f
+// adr: 55a6a2d8-03af-4db9-a4c7-e2790e38357e
 #[test]
 fn rows_from_another_prompt_or_model_are_read_again() {
     let dir = repo();
     planned(&dir);
     let old = sha("the prompt before");
 
-    // Every prompt changed: both steps of both questions are read again,
-    // 3 heading pairs and 4 body pairs each.
+    // The neighbours of the headings are no reader rows: they stay as they are.
+    let held = neighbours_text(&dir);
+
+    // Every prompt changed: the body step of both questions is read again,
+    // 4 body pairs each; the heading neighbours are not read.
     edit_rows(&dir, |_| true, |r| r.prompt_hash = old.clone());
     let before = rows(&dir).len();
     let out = ok(&plan(&dir));
-    assert_eq!(rows(&dir).len() - before, 6 + 8, "{}", out);
-    assert!(has_line(&out, &format!("\"{}\": heading", H1)), "{}", out);
+    assert_eq!(rows(&dir).len() - before, 8, "{}", out);
+    assert!(!has_line(&out, &format!("\"{}\": heading", H1)), "{}", out);
     assert!(has_line(&out, &format!("\"{}\": heading with its body", H2)), "{}", out);
     assert!(has_line(&out, &format!("owner runs: adr approve {}", REL)), "{}", out);
 
@@ -252,17 +326,18 @@ fn rows_from_another_prompt_or_model_are_read_again() {
     assert!(made.iter().all(|r| r.prompt_hash == plan_hash && r.neighbour.starts_with("text:")));
     assert!(!has_line(&out, &format!("\"{}\": heading", H1)) && !has_line(&out, &format!("\"{}\": heading", H2)), "{}", out);
 
-    // Another model: everything is read again.
+    // Another model: every body and plan pair is read again.
     edit_rows(&dir, |_| true, |r| r.model = "an-older-model".to_string());
     let before = rows(&dir).len();
     let out = ok(&plan(&dir));
     let made = &rows(&dir)[before..];
-    assert_eq!(made.len(), 6 + 8, "{}", out);
+    assert_eq!(made.len(), 8, "{}", out);
     assert!(made.iter().all(|r| r.model == reader::MODEL));
     // And nothing more on the next run.
     let again = rows(&dir).len();
     ok(&plan(&dir));
     assert_eq!(rows(&dir).len(), again);
+    assert_eq!(neighbours_text(&dir), held, "the heading neighbours were never read again");
 }
 
 // adr: d3be71e4-ce7b-43b0-86a8-e86868521f99
@@ -272,19 +347,19 @@ fn a_step_needs_the_record_of_the_step_before() {
     // Bodies everywhere and no plan run: approve refuses the missing rows.
     write(&dir, &format!("# Topic\n{}{}", section(H1, &body("one")), section(H2, &body("two"))));
     let err = refused(&approve(&dir));
-    assert!(err.contains(&format!("\"{}\" has no reader rows for its heading;", H1)), "{}", err);
-    // The steps run in order: the body rows wait on the heading rows.
-    assert!(err.contains(&format!("\"{}\" has no reader rows for its heading;", H2)), "{}", err);
+    assert!(err.contains(&format!("\"{}\" has no neighbours on record for its heading; each planning step rests on the record before it;", H1)), "{}", err);
+    // The steps run in order: the body rows wait on the heading's neighbours.
+    assert!(err.contains(&format!("\"{}\" has no neighbours on record for its heading;", H2)), "{}", err);
     assert!(!err.contains("has no reader rows for its heading with its body"), "{}", err);
     assert!(err.contains(&format!("agent runs: adr plan {}", REL)), "{}", err);
 
-    // A step-2 neighbour on no line stops step 5: the heading rows are made,
-    // the body rows are not.
+    // A step-2 neighbour on no line stops step 5: the neighbours are
+    // recorded, the body rows are not made.
     let before = rows(&dir).len();
+    let held_n = neighbour_rows(&dir).len();
     let out = ok(&plan(&dir));
-    let made = &rows(&dir)[before..];
-    assert_eq!(made.len(), 6, "{}", out);
-    assert!(made.iter().all(|r| r.prompt_hash == Kind::Heading.prompt_hash()));
+    assert_eq!(neighbour_rows(&dir).len() - held_n, 6, "{}", out);
+    assert_eq!(rows(&dir).len(), before, "{}", out);
     assert!(!lines_wanted(&out).is_empty(), "{}", out);
     assert!(!out.contains("heading with its body"), "{}", out);
 
@@ -296,6 +371,7 @@ fn a_step_needs_the_record_of_the_step_before() {
     write_lines(&dir, &out);
     let out = ok(&plan(&dir));
     assert!(has_line_starting(&out, &format!("\"{}\": heading with its body", H1)), "{}", out);
+    assert_eq!(rows(&dir).len() - before, 8, "{}", out);
 }
 
 // adr: d3be71e4-ce7b-43b0-86a8-e86868521f99
@@ -313,13 +389,16 @@ fn a_heading_added_after_the_bodies_gets_its_neighbours_first() {
     let out = ok(&plan(&dir));
     assert!(has_line(&out, &format!("owner runs: adr approve {}", REL)), "{}", out);
     let settled = rows(&dir).len();
+    let settled_neighbours = neighbour_rows(&dir).len();
 
     // A third heading, no body yet.
     let h3 = "Does the third thing glow?";
     write(&dir, &format!("{}{}", read(&dir), section(h3, "")));
-    // Step 2 comes first, for that heading alone, with the bodies there.
+    // Step 2 comes first, for that heading alone, with the bodies there: its
+    // neighbours are recorded before any body is read.
     let out = ok(&plan(&dir));
-    assert_eq!(rows(&dir).len() - settled, 3, "{}", out);
+    assert_eq!(neighbour_rows(&dir).len() - settled_neighbours, 3, "{}", out);
+    assert_eq!(rows(&dir).len(), settled, "no body was read: {}", out);
     assert!(has_line(&out, &format!("\"{}\": heading", h3)), "{}", out);
     assert!(!has_line(&out, &format!("\"{}\": heading", H1)), "{}", out);
     assert!(lines_wanted(&out).iter().any(|(h, _)| h == h3), "{}", out);
@@ -340,6 +419,7 @@ fn a_heading_added_after_the_bodies_gets_its_neighbours_first() {
     assert!(has_line(&out, &format!("\"{}\": heading with its body", h3)), "{}", out);
     assert!(!has_line(&out, &format!("\"{}\": heading with its body", H1)), "{}", out);
     assert_eq!(rows(&dir).len() - settled, 3 + 2, "{}", out);
+    assert_eq!(neighbour_rows(&dir).len() - settled_neighbours, 3, "{}", out);
     for _ in 0..3 {
         let out = ok(&plan(&dir));
         write_lines(&dir, &out);
@@ -348,18 +428,18 @@ fn a_heading_added_after_the_bodies_gets_its_neighbours_first() {
     assert!(has_line(&out, &format!("owner runs: adr approve {}", REL)), "{}", out);
 }
 
-// adr: 4838baa4-a5df-49e7-929c-ed63b5adaf4e
+// adr: d984e425-3e88-4756-88fb-18241f9f62a7
 #[test]
 fn the_plans_own_questions_are_neighbours_of_each_other_at_the_body_step() {
     let dir = repo();
-    let h1 = "Does the first [word:depends@text:] thing glow?".to_string();
+    let h1 = "Does the first [word:same@text:] thing glow?".to_string();
     // The marker sits in the first question's text: the plan prompt's word
-    // for the other question is `depends`.
+    // for the other question is `same`.
     write(&dir, &format!("# Topic\n{}{}", section(&h1, &body("one")), section(H2, &body("two"))));
     let out = ok(&plan(&dir));
     write_lines(&dir, &out);
     let out = ok(&plan(&dir));
-    assert!(out.contains(&format!("  question \"{}\": body depends; no line", H2)), "{}", out);
+    assert!(out.contains(&format!("  question \"{}\": body same; no line", H2)), "{}", out);
 
     let rf = record::load(&dir.join(REL)).unwrap();
     let text1 = record::body_text(&rf, &rf.sections[0]);
@@ -372,7 +452,7 @@ fn the_plans_own_questions_are_neighbours_of_each_other_at_the_body_step() {
     // Four neighbours: the decision, two terms, and the other question.
     assert_eq!(of_one.len(), 4, "{:?}", of_one);
     let plan_row = of_one.iter().find(|r| r.neighbour == key2).expect("a row for the other question");
-    assert_eq!(plan_row.word, "depends");
+    assert_eq!(plan_row.word, "same");
     assert_eq!(plan_row.prompt_hash, Kind::Plan.prompt_hash());
     // The other question reads the first one from its side.
     assert!(all.iter().any(|r| r.text_hash == sha(&text2) && r.neighbour == key1 && r.prompt_hash == Kind::Plan.prompt_hash()));
@@ -455,26 +535,29 @@ fn an_unrelated_entry_that_names_nothing_is_refused_and_a_dropped_id_passes() {
     assert!(err.contains("which is not a current decision"), "{}", err);
 }
 
-// adr: 902bd279-e6c1-4a21-9637-a3a43f360bae
+// adr: e78b8297-fd89-4e09-9c3e-9eeb0fd0f654
 #[test]
 fn the_readers_word_never_stops_a_command() {
     let dir = repo();
-    // `same` for every neighbour of the heading, `inconsistent` for every
-    // neighbour of the body: the agent's lines are the ruling.
-    let h1 = "Does the first [word:same] thing glow?".to_string();
-    let b1 = body("one").replace("problem one", "problem one [word:inconsistent@-]");
-    write(&dir, &format!("# Topic\n{}", section(&h1, &b1)));
+    // `inconsistent` for the decision, `same` for the term paint and
+    // `closes B` for the term widget at the body step (a letter the question
+    // has): the agent's lines are the ruling.
+    let id = extract_ids(&std::fs::read_to_string(dir.join(BASE)).unwrap())[0].clone();
+    let b1 = body("one").replace("problem one", &format!("problem one [word:inconsistent@{}] [word:same@{}] [word:closes B@{}]", id, PAINT_ID, WIDGET_ID));
+    write(&dir, &format!("# Topic\n{}", section(H1, &b1)));
     let out = ok(&plan(&dir));
-    assert!(out.contains("decision \"Does the base hold?\": heading same; no line"), "{}", out);
+    assert!(out.contains(&format!("decision \"{}\": heading; no line", BASE_Q)), "{}", out);
     write_lines(&dir, &out);
     let out = ok(&plan(&dir));
     assert!(out.contains(": body inconsistent;"), "{}", out);
+    assert!(out.contains(": body same;"), "{}", out);
+    assert!(out.contains(": body closes B;"), "{}", out);
     write_lines(&dir, &out);
     let out = ok(&plan(&dir));
     assert!(has_line(&out, &format!("owner runs: adr approve {}", REL)), "{}", out);
     let text = read(&dir);
     assert!(text.contains("unrelated: "), "{}", text);
-    // A `same` word with an unrelated line passes approve.
+    // The words never stop approve: the lines are the ruling.
     ok(&approve(&dir));
 }
 
@@ -490,15 +573,19 @@ fn planning_stops_without_the_model() {
     assert_eq!(rows(&dir).len(), before, "nothing was read");
 }
 
-// adr: 3dba486c-a399-4ce3-a794-e38c4f733403
+// adr: bd94a89f-7142-4dab-b757-6482a718a0a0
 #[test]
 fn planning_stops_without_the_reader() {
     let dir = repo();
-    two_headings(&dir);
-    let before = rows(&dir).len();
+    write(&dir, &format!("# Topic\n{}{}", section(H1, &body("one")), section(H2, &body("two"))));
+    // The heading step needs no reader; the body step is the first that does.
+    let out = ok(&plan_with(&dir, &[("ADR_NO_READER", "1")]));
+    write_lines(&dir, &out);
+    let (before, held) = (rows(&dir).len(), reader_text(&dir));
     let err = refused(&plan_with(&dir, &[("ADR_NO_READER", "1")]));
     assert!(err.contains("the claude program is missing"), "{}", err);
     assert_eq!(rows(&dir).len(), before, "nothing was read");
+    assert_eq!(reader_text(&dir), held, "nothing was written");
     // The other commands run without it.
     let shown = adr(&dir, &["show"], &[("ADR_NO_READER", "1")], "");
     assert!(shown.status.success(), "{}", stderr(&shown));
@@ -522,4 +609,69 @@ fn plan_shows_a_set_letter_the_target_lacks_and_does_not_say_ready() {
         write_lines(&dir, &last);
     }
     assert!(!last.contains("owner runs: adr approve"), "{}", last);
+}
+
+// adr: d10dab89-1d42-4764-9d72-22d6fd6a9260
+#[test]
+fn the_body_step_records_closes_and_a_letter_and_refuses_a_word_outside_the_set() {
+    let dir = repo();
+    let id = extract_ids(&std::fs::read_to_string(dir.join(BASE)).unwrap())[0].clone();
+    let b = body("one").replace("problem one", &format!("problem one [word:closes B@{}]", id));
+    write(&dir, &format!("# Topic\n{}", section(H1, &b)));
+    let out = ok(&plan(&dir));
+    write_lines(&dir, &out);
+    let out = ok(&plan(&dir));
+    assert!(out.contains(&format!("  decision \"{}\": body closes B; ", BASE_Q)), "{}", out);
+    let row = rows(&dir).into_iter().find(|r| r.neighbour == id && r.prompt_hash == Kind::Body.prompt_hash()).expect("the body row");
+    assert_eq!(row.word, "closes B");
+
+    // A letter the question does not have, and `depends`: the run fails and
+    // no row is made.
+    for (marker, word) in [("[word:closes C]", "closes C"), ("[word:depends]", "depends")] {
+        let dir = repo();
+        let b = body("one").replace("problem one", &format!("problem one {}", marker));
+        write(&dir, &format!("# Topic\n{}", section(H1, &b)));
+        let out = ok(&plan(&dir));
+        write_lines(&dir, &out);
+        let before = reader_text(&dir);
+        let err = refused(&plan(&dir));
+        assert!(err.contains(word), "{}", err);
+        assert_eq!(reader_text(&dir), before, "{} left no row", word);
+    }
+}
+
+// adr: 60341be0-fd05-4281-92d7-668584a8539a
+#[test]
+fn the_neighbours_file_deleted_brings_back_the_heading_step_only_where_a_body_is_missing() {
+    let dir = repo();
+    write(&dir, &format!("# Topic\n{}{}", section(H1, &body("one")), section(H2, &body("two"))));
+    for _ in 0..4 {
+        let out = ok(&plan(&dir));
+        write_lines(&dir, &out);
+    }
+    let out = ok(&plan(&dir));
+    assert!(has_line(&out, &format!("owner runs: adr approve {}", REL)), "{}", out);
+    let held = reader_text(&dir);
+
+    // Every body step is done: the heading step does not come back.
+    std::fs::remove_file(dir.join(repo::NEIGHBOURS_PATH)).unwrap();
+    let out = ok(&plan_with(&dir, &[("ADR_NO_MODEL", "1")]));
+    assert!(has_line(&out, &format!("owner runs: adr approve {}", REL)), "{}", out);
+    assert!(!out.contains("has no neighbours on record"), "{}", out);
+    assert!(!dir.join(repo::NEIGHBOURS_PATH).exists(), "nothing was written");
+    assert_eq!(reader_text(&dir), held);
+
+    // A heading with no body: its heading step comes back.
+    let h3 = "Does the third thing glow?";
+    write(&dir, &format!("{}{}", read(&dir), section(h3, "")));
+    let out = ok(&plan(&dir));
+    assert!(neighbour_rows(&dir).len() >= 3, "{}", out);
+    std::fs::remove_file(dir.join(repo::NEIGHBOURS_PATH)).unwrap();
+    let shown = adr(&dir, &["show", dir.join(REL).to_str().unwrap()], &[], "");
+    let shown = stdout(&shown);
+    assert!(
+        shown.lines().any(|l| l.contains(&format!("\"{}\" has no neighbours on record for its heading", h3)) && l.ends_with(&format!("agent runs: adr plan {}", REL))),
+        "{}",
+        shown
+    );
 }

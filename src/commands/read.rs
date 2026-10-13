@@ -1,18 +1,18 @@
 //! `adr read`: the agent's command for reading the current decisions
 //! against each other. Every current decision is read against its ten
-//! nearest other current decisions ("Does the tool read every current
-//! decision against its neighbours?", 1ab6d6c3); the reader's word on a
-//! pair is one of same, consistent, inconsistent, depends or unrelated,
-//! after one sentence of reason ("What does the reader say about two
-//! current decisions?", 908bddc6); each pair is read once, in one fixed
-//! order, the decision with the lower identifier first, and the reason
-//! names which stands on which ("Does the tool read a pair of decisions in
-//! both directions?", 4b407ee1); no commit runs it ("Does a commit run the
-//! reading of the set?", bc4291c8); every pair marked same, inconsistent or
-//! depends is printed ("Does the tool print every pair the reader marks?",
-//! 2db33118). Per "What does a command that writes nothing print?"
-//! (848e1b76 A), those pairs and the move they call for are all it prints:
-//! a reading that marks nothing prints nothing.
+//! nearest other current decisions ("Does the tool read each current
+//! decision against its neighbours?", 48c47c42); the reader's word on a
+//! pair is one of same, consistent, inconsistent or unrelated, after one
+//! sentence of reason ("What word does the reader give two current
+//! decisions?", a116a1c5); each pair is read once, in one fixed order, the
+//! decision with the lower identifier first ("Does the tool read a pair of
+//! decisions in each direction?", ed372cc6); no commit runs it ("Does a
+//! commit run the reading of the whole set?", 8cba4463); each pair marked
+//! same or inconsistent is printed, and the move is a question that
+//! supersedes one of the pair ("Does the tool print each pair the reader
+//! marks?", 27bd0855). Per "What does a command print when it writes
+//! nothing?" (1af76f91 A), those pairs and the move they call for are all
+//! it prints: a reading that marks nothing prints nothing.
 //!
 //! The pool is the current decisions only, no term. The reader is asked in
 //! chunks as large as it reads at once, so a failure keeps what earlier
@@ -60,8 +60,8 @@ fn heading_of(text: &str) -> &str {
     text.split('\n').next().unwrap_or(text)
 }
 
-/// Every marked pair as a finding, sorted same, inconsistent, depends, and
-/// the move when a pair is same or inconsistent; or the stop that ended it.
+/// Every marked pair as a finding, sorted same, then inconsistent, and
+/// the move that follows; or the stop that ended it.
 fn read_all(root: &std::path::Path) -> Result<Vec<Line>, String> {
     let led = ledger::read(&root.join(repo::LEDGER_PATH));
     let files = record::load_all(root);
@@ -92,6 +92,7 @@ fn read_all(root: &std::path::Path) -> Result<Vec<Line>, String> {
             new_text: decisions[a].text.clone(),
             neighbour: decisions[b].id.clone(),
             neighbour_text: decisions[b].text.clone(),
+            letters: Vec::new(),
         })
         .collect();
     let mut rows = Vec::new();
@@ -110,14 +111,9 @@ fn read_all(root: &std::path::Path) -> Result<Vec<Line>, String> {
         let group = match row.word.as_str() {
             "same" => 0,
             "inconsistent" => 1,
-            "depends" => 2,
             _ => continue,
         };
-        let next = if group < 2 {
-            "agent writes a question that supersedes one of the pair"
-        } else {
-            crate::moves::PAIR_WAIT
-        };
+        let next = "agent writes a question that supersedes one of the pair";
         let said = msg::read_pair(
             &row.word,
             heading_of(&decisions[a].text),
@@ -129,7 +125,7 @@ fn read_all(root: &std::path::Path) -> Result<Vec<Line>, String> {
     }
     marked.sort_by(|x, y| (x.0, x.1, x.2).cmp(&(y.0, y.1, y.2)));
     let mut out: Vec<Line> = marked.iter().map(|m| Line::Finding(m.3.clone())).collect();
-    if marked.iter().any(|m| m.0 < 2) {
+    if !marked.is_empty() {
         out.push(Line::Move(crate::moves::of_marked_pairs()));
     }
     Ok(out)

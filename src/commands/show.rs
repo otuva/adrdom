@@ -1,27 +1,27 @@
 //! `adr show`: what the records hold and every move. With no file, every
-//! current decision and every move (per "What does show print with no file
-//! named?", c84a4bd9 A). With a file approve takes -- a topic file, the
+//! current decision and every move (per "What does show print when no file
+//! is named?", c5e10ae8 A). With a file approve takes -- a topic file, the
 //! terms file or a blame file -- every question or entry with its
 //! status (a blame file: its origin and each row as written), every depends
 //! and supersedes line and the body of an asked question, with what the file
 //! holds beyond its latest approval marked (per "Does show print what a file
-//! holds beyond its latest approval?", bceceda8 A), then the moves of that
+//! holds past its latest approval?", 91f9652a A), then the moves of that
 //! file. What it computes from the records comes under a flag (per
-//! "Does a command print under a flag what it computes from the records?",
-//! 36dfbeaa A): `--neighbours`, `--dependents`, `--unrelated` and
-//! `--questions`, `--reader` and `--superseded`. The reference lines of an
+//! "Does a command print a computed view under a flag?", cdc905a2 A):
+//! `--neighbours`, `--dependents`, `--unrelated` and `--questions`, `--reader`
+//! and `--superseded`. The reference lines of an
 //! answered question are one of them: printed under `--dependents` (per "Does
-//! show print the reference lines of an answered question?", 83190b10 A).
+//! show print the reference lines of a question that is answered?", d1d6fed2 A).
 //! What the next move on the file reads is in the plain listing, the rest
-//! under a flag (per "What does show print of a file under adrdom?",
-//! a6f41dee A): the option picked prints under an answered question, what
+//! under a flag (per "What does show print for a file under adrdom?",
+//! b0acc95b A): the option picked prints under an answered question, what
 //! the build move reads; a superseded question, which no move reads, prints
 //! under `--superseded` with what replaced it. The reader's word
-//! `inconsistent` or `same` on a neighbour comes under a question not yet
-//! answered in the plain listing, every word under `--reader` (per "What
-//! does show print of the reader's word on a question?", 332ff0c7 A). Every
-//! line goes through
-//! `out` (per "What does a command that writes nothing print?", 848e1b76 A).
+//! `inconsistent`, `same` or `closes` with its letter on a neighbour comes
+//! under a question not yet answered in the plain listing, every word under
+//! `--reader` (per "What does show print of a reader's word on a question?",
+//! 6e72f34e A). Every line goes through
+//! `out` (per "What does a command print when it writes nothing?", 1af76f91 A).
 use crate::rules::Command;
 use crate::approval::{self, Change, Side};
 use crate::blame;
@@ -619,7 +619,7 @@ fn answer_letter(led: &Ledger, sec: &Section) -> Option<char> {
 /// question approved as it stands.
 /// `show_refs` is whether the reference lines print: those of an answered
 /// question do not, unless `--dependents` asks (per "Does show print the
-/// reference lines of an answered question?", 83190b10 A). `--unrelated`
+/// reference lines of a question that is answered?", d1d6fed2 A). `--unrelated`
 /// prints the `unrelated:` line of every question, answered or not.
 fn reference_and_body_lines(
     qlines: &[String],
@@ -649,10 +649,10 @@ fn is_answered(st: QuestionStatus) -> bool {
 
 /// The reader's words under question `idx` of `rf`: with `all`, every word
 /// on every neighbour, the reason a line under at depth 2; otherwise the
-/// neighbours the reader marked `inconsistent` or `same` that the
-/// question's `supersedes:` line does not name (per "What does show print of
-/// the reader's word on a question?", 332ff0c7 A). A view: no move stands on
-/// a line.
+/// neighbours the reader marked `inconsistent`, `same` or `closes` with its
+/// letter that the question's `supersedes:` line does not name (per "What
+/// does show print of a reader's word on a question?", 6e72f34e A). A view: no
+/// move stands on a line.
 fn reader_lines(r: &Records, rf: &RecordFile, idx: usize, all: bool, by_body: &plan::BodyIndex) -> Vec<Line> {
     let words = r.index().planning.reader_words(rf, idx, &r.terms_list, &r.led, by_body);
     let mut lines = Vec::new();
@@ -660,7 +660,7 @@ fn reader_lines(r: &Records, rf: &RecordFile, idx: usize, all: bool, by_body: &p
         if all {
             lines.push(Line::Word { word: w.word, name: w.name });
             lines.push(Line::Record { depth: 2, text: w.reason });
-        } else if matches!(w.word.as_str(), "inconsistent" | "same") && !w.on_supersedes {
+        } else if crate::out::word_is_marked(&w.word) && !w.on_supersedes {
             lines.push(Line::Word { word: w.word, name: w.name });
         }
     }
@@ -673,8 +673,8 @@ fn names_of(text: &str, names: &HashMap<String, String>) -> String {
 }
 
 /// The option the owner picked, under a current decision: the sentence the
-/// build move reads (per "What does show print of a file under adrdom?",
-/// a6f41dee A), the one line the listing with no file named and the file
+/// build move reads (per "What does show print for a file under adrdom?",
+/// b0acc95b A), the one line the listing with no file named and the file
 /// form both print. The letter is the one the status line names
 /// (`answer_letter`): the `**Answer:**` line, or the ledger's when the text
 /// read predates that line.
@@ -757,8 +757,8 @@ fn stood_on_by(rf: &RecordFile, sec: &Section, all: &[RecordFile], led: &Ledger)
 /// pairs a word to it, or whose depends line names it, by its identifier or
 /// by its name or an alias; each by its heading and the path of its file.
 /// What `--dependents` prints under a term entry, the view computed from the
-/// records it is (per "Does a command print under a flag what it computes
-/// from the records?", 36dfbeaa A).
+/// records it is (per "Does a command print a computed view under a flag?",
+/// cdc905a2 A).
 pub(crate) fn term_dependents(r: &Records, t: &Term) -> Vec<String> {
     let names: Vec<String> = std::iter::once(&t.name).chain(&t.aliases).map(|n| n.trim().to_lowercase()).collect();
     let mut out = Vec::new();

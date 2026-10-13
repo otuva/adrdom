@@ -314,6 +314,6 @@ fn plan_lifecycle_end_to_end() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "check should pass: {}", stdout(&out));
-    // Every question answered and tested: a pass prints nothing (3fc35d4f).
+    // Every question answered and tested: a pass prints nothing (bd83aa22).
     assert_eq!(stdout(&out), "", "{}", stdout(&out));
 }

@@ -132,7 +132,7 @@ Standard: s4.\n\n\
 // `[refused] 2.2 Also depends?` and nothing else: the reference lines of an answered question are hidden.
 //
 // adr: b782664f-7465-4e1e-99e0-13f6dd2de774
-// adr: 83190b10-8060-47c1-8194-f6a5c4f0d703
+// adr: d1d6fed2-4e1a-44bd-b9cb-22f779a00bce
 #[test]
 fn show_prints_each_status_and_the_lines_each_question_carries() {
     let dir = init_repo();

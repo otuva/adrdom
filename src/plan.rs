@@ -1,24 +1,27 @@
-//! Planning a topic file: what the reader said about the neighbours of each
-//! question not yet asked, which neighbour is on a line, and what is
-//! missing. `adr plan`, `adr approve` and show all read it.
+//! Planning a topic file: the neighbours of each question not yet asked,
+//! what the reader said about those of its body, which neighbour is on a
+//! line, and what is missing. `adr plan`, `adr approve` and show all read it.
 //!
 //! "What does the agent do to plan a topic file?"
 //! (46fc51ff-66b9-4841-a953-ae0d4c2fc424 A): write headings; get neighbours;
 //! write lines; write bodies; get neighbours of the full questions; ask
 //! approval. "Does a planning step run without the record of the step
 //! before?" (d3be71e4-ce7b-43b0-86a8-e86868521f99 A): no; the records are
-//! the reader file's rows and the lines the agent wrote.
+//! the neighbours file, the reader file's rows and the lines the agent wrote.
 //!
-//! The records of a question are the rows of the reader file at two hashes.
-//! The heading hash (`record::heading_hash`) holds the neighbours of the
-//! heading: current decisions and terms. The body hash (`record::body_hash`)
-//! holds the neighbours of the heading with its body: current decisions and
-//! terms, and the other questions of the file, whose key is `text:` and
-//! their own body hash. A line is a `depends:`, `supersedes:` or
-//! `unrelated:` entry ("Does every neighbour get a line under its
+//! The records of a question are two. The neighbours file holds, at the
+//! heading hash (`record::heading_hash`), the current decisions and terms
+//! brought for the heading, with no word ("Does the reader read a neighbour
+//! of a heading?", 60341be0-fd05-4281-92d7-668584a8539a A: no). The reader
+//! file's rows at the body hash (`record::body_hash`) hold the neighbours of
+//! the heading with its body: current decisions and terms, and the other
+//! questions of the file, whose key is `text:` and their own body hash. A
+//! question whose body rows are on record has its heading step done, whether
+//! or not the neighbours file holds its heading. A line is a `depends:`,
+//! `supersedes:` or `unrelated:` entry ("Does every neighbour get a line under its
 //! heading?", c6451ecc-17a9-447e-a9c9-fe9b35ec789c A). The reader's word
-//! never stops anything ("Does the reader's word stop a command?",
-//! 902bd279-e6c1-4a21-9637-a3a43f360bae A).
+//! never stops anything ("Does a reader's word stop a command?",
+//! e78b8297-fd89-4e09-9c3e-9eeb0fd0f654 A).
 //!
 //! A neighbour that is no longer in the pool, a decision no longer current,
 //! a retired term, a question whose body changed or left the file, needs no
@@ -54,7 +57,7 @@ impl NKind {
     }
 }
 
-/// Which step's rows a neighbour is read from.
+/// Which step's record a neighbour is read from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Step {
     /// Neighbours of the heading.
@@ -87,8 +90,11 @@ pub struct Neighbour {
     pub kind: NKind,
     /// The decision's heading, the term's name, or the question's heading.
     pub name: String,
-    pub word: String,
-    pub reason: String,
+    /// The reader's word, `None` for a neighbour of a heading: the reader
+    /// does not read it.
+    pub word: Option<String>,
+    /// The reader's sentence of reason, `None` with no word.
+    pub reason: Option<String>,
     pub on_line: bool,
     /// The line the neighbour is on, `None` when it is on no line.
     pub line: Option<LineKind>,
@@ -105,7 +111,7 @@ pub struct Question {
     pub has_body: bool,
     /// The hash of the heading and body, when it has a body.
     pub body_hash: Option<String>,
-    /// The heading step has its rows, or needs none.
+    /// The heading step has its neighbours on record, or needs none.
     pub heading_done: bool,
     pub heading_neighbours: Vec<Neighbour>,
     /// The body step has its rows, or needs none (or the question has no
@@ -123,7 +129,7 @@ pub struct Planning {
 /// What the agent or the owner does next, in the order of the steps.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NextMove {
-    /// Some question has no rows at a hash: `adr plan`.
+    /// Some question has no record at a step: `adr plan`.
     Plan,
     /// Some neighbour is on no line: the agent writes the lines.
     WriteLines,
@@ -387,13 +393,16 @@ fn is_waiting(led: &Ledger, sec: &Section) -> bool {
 
 /// What the planning of every topic file of a run reads of the whole
 /// repository, read once: the term phrases, the decision headings of every
-/// topic file, the reader's rows by the hash of the text they read, and
+/// topic file, the neighbours on record for each heading, the reader's rows
+/// by the hash of the text they read, and
 /// whether the pool of neighbours is empty.
 pub struct Shared {
     pub(crate) phrase_lookup: HashMap<String, String>,
     pub(crate) cross: HashMap<String, Vec<(String, String)>>,
     pub(crate) headings: HashMap<String, String>,
     rows: std::sync::Arc<Vec<reader::Row>>,
+    /// The neighbour identifiers on record for each heading hash.
+    heading_ids: HashMap<String, Vec<String>>,
     /// Each text hash's rows written with the prompt and model that would
     /// read the pair now, by index into `rows`.
     by_hash: HashMap<String, Vec<usize>>,
@@ -417,15 +426,13 @@ impl Shared {
         let mut by_hash: HashMap<String, Vec<usize>> = HashMap::new();
         let mut stale: HashMap<Kind, HashSet<String>> = HashMap::new();
         let current: HashMap<Kind, String> =
-            [Kind::Heading, Kind::Body, Kind::Plan].into_iter().map(|k| (k, k.prompt_hash())).collect();
+            [Kind::Body, Kind::Plan].into_iter().map(|k| (k, k.prompt_hash())).collect();
         for (i, r) in rows.iter().enumerate() {
-            let kinds = [row_kind(Kind::Heading, &r.neighbour), row_kind(Kind::Body, &r.neighbour)];
-            if r.model == reader::MODEL && kinds.iter().any(|k| current[k] == r.prompt_hash) {
+            let kind = row_kind(&r.neighbour);
+            if r.model == reader::MODEL && current[&kind] == r.prompt_hash {
                 by_hash.entry(r.text_hash.clone()).or_default().push(i);
             } else {
-                for k in kinds {
-                    stale.entry(k).or_default().insert(r.text_hash.clone());
-                }
+                stale.entry(kind).or_default().insert(r.text_hash.clone());
             }
         }
         Shared {
@@ -433,6 +440,7 @@ impl Shared {
             cross: depends::cross_file_heading_index(all, led),
             headings: decision_headings(all),
             rows,
+            heading_ids: crate::neighbours::read(root),
             by_hash,
             stale,
             current,
@@ -470,13 +478,16 @@ impl BodyIndex {
 
 impl Shared {
     /// Every word the reader gave on the question at `idx` of `rf`, whatever
-    /// its status: its rows are those at the hash of its body, or of its
-    /// heading when it has none, written with the prompt and model that
-    /// would read the pair now, the latest row for each neighbour. A
-    /// neighbour that names nothing now is left out.
+    /// its status: its rows are those at the hash of its body, written with
+    /// the prompt and model that would read the pair now, the latest row for
+    /// each neighbour; a question with no body has none. A neighbour that
+    /// names nothing now is left out.
     pub fn reader_words(&self, rf: &RecordFile, idx: usize, terms_list: &[Term], led: &Ledger, by_body: &BodyIndex) -> Vec<ReaderWord> {
         let sec = &rf.sections[idx];
-        let hash = if sec.is_skeleton { record::heading_hash(sec) } else { record::body_hash(rf, sec) };
+        if sec.is_skeleton {
+            return Vec::new();
+        }
+        let hash = record::body_hash(rf, sec);
         let Some(at) = self.by_hash.get(&hash) else { return Vec::new() };
         let mut order: Vec<&str> = Vec::new();
         let mut last: HashMap<&str, &reader::Row> = HashMap::new();
@@ -510,7 +521,7 @@ fn load_inner(
     shared: &Shared,
     with_asked: bool,
 ) -> Planning {
-    let Shared { phrase_lookup, cross, headings, rows, by_hash, stale, current, pool_empty } = shared;
+    let Shared { phrase_lookup, cross, headings, rows, heading_ids, by_hash, stale, current, pool_empty } = shared;
     let pool_empty = *pool_empty;
     // Borrowed from the shared index: no copy per lookup.
     let rows_at = |hash: &str| by_hash.get(hash).map(|is| is.iter().map(|&i| &rows[i]));
@@ -548,8 +559,27 @@ fn load_inner(
             out.push(Neighbour {
                 kind,
                 name,
-                word: r.word.clone(),
-                reason: r.reason.clone(),
+                word: Some(r.word.clone()),
+                reason: Some(r.reason.clone()),
+                on_line: targets.contains_key(&target),
+                line: targets.get(&target).copied(),
+            });
+        }
+        Some(out)
+    };
+    // The neighbours on record for a heading hash: no word, no reason.
+    let heading_neighbours = |hash: &str, targets: &HashMap<Target, LineKind>| -> Option<Vec<Neighbour>> {
+        let ids = heading_ids.get(hash)?;
+        let mut out = Vec::new();
+        for key in ids {
+            let Some((kind, name, target)) = describe(key, rf, &|h| by_body.get(h).copied(), terms_list, headings, led) else {
+                continue;
+            };
+            out.push(Neighbour {
+                kind,
+                name,
+                word: None,
+                reason: None,
                 on_line: targets.contains_key(&target),
                 line: targets.get(&target).copied(),
             });
@@ -561,8 +591,6 @@ fn load_inner(
         let sec = &rf.sections[i];
         let targets = line_targets(i, rf, terms_list, phrase_lookup, cross, led);
         let heading_hash = record::heading_hash(sec);
-        let h_rows = neighbours(&heading_hash, &targets);
-        let heading_done = (h_rows.is_some() && !is_stale(&heading_hash, Kind::Heading)) || pool_empty;
         let has_body = !sec.is_skeleton;
         let body_hash = has_body.then(|| record::body_hash(rf, sec));
         let others = unasked.iter().filter(|&&j| j != i && !rf.sections[j].is_skeleton).count();
@@ -571,6 +599,10 @@ fn load_inner(
             (!pool_empty && is_stale(h, Kind::Body)) || (others > 0 && is_stale(h, Kind::Plan))
         });
         let body_done = has_body && !body_stale && (b_rows.is_some() || (pool_empty && others == 0));
+        // A question whose body step is done has its heading step done, with
+        // no neighbours of its own when none is on record.
+        let h_rows = heading_neighbours(&heading_hash, &targets);
+        let heading_done = h_rows.is_some() || pool_empty || body_done;
         questions.push(Question {
             idx: i,
             heading: sec.heading_text.clone(),
@@ -590,7 +622,7 @@ fn load_inner(
 }
 
 impl Planning {
-    /// Questions whose heading has no rows.
+    /// Questions whose heading has no neighbours on record.
     pub fn missing_heading(&self) -> Vec<&Question> {
         self.questions.iter().filter(|q| !q.heading_done).collect()
     }
@@ -658,29 +690,30 @@ impl Planning {
         out
     }
 
-    /// The rows missing at the step `adr plan` takes next: every heading's
-    /// rows while one heading lacks them, else every body's. A body's rows
-    /// wait on the heading step, as `next` reads the steps in order.
+    /// The records missing at the step `adr plan` takes next: every heading's
+    /// neighbours while one heading lacks them, else every body's rows. A
+    /// body's rows wait on the heading step, as `next` reads the steps in
+    /// order.
     pub fn rows_missing_at_step(&self) -> Vec<msg::Said> {
         if !self.missing_heading().is_empty() {
             return self
                 .questions
                 .iter()
                 .filter(|q| !q.heading_done)
-                .map(|q| msg::plan_rows_missing(&self.rel, &q.heading, "heading"))
+                .map(|q| msg::plan_neighbours_missing(&self.rel, &q.heading))
                 .collect();
         }
         self.questions
             .iter()
             .filter(|q| q.has_body && !q.body_done)
-            .map(|q| msg::plan_rows_missing(&self.rel, &q.heading, "heading with its body"))
+            .map(|q| msg::plan_rows_missing(&self.rel, &q.heading))
             .collect()
     }
 }
 
 /// The lines `show --neighbours` prints under an open question: each
 /// neighbour on record at the heading step, then at the body step, each
-/// with the reader's word, the agent's line and the reader's reason; and,
+/// with the agent's line and, at the body step, the reader's word and reason; and,
 /// for a question not yet asked that has no records, one line saying so. Nothing for an
 /// asked question with no records (planned before the records existed).
 pub fn neighbour_lines(q: &Question) -> Vec<String> {
@@ -692,7 +725,7 @@ pub fn neighbour_lines(q: &Question) -> Vec<String> {
     out
 }
 
-/// The neighbours of `q` read at `step`, one line each, by the one
+/// The neighbours of `q` on record at `step`, one line each, by the one
 /// renderer of a neighbour (`msg::neighbour`): what `adr plan` prints for
 /// the step it read, and `adr show --neighbours` for both steps.
 pub fn neighbour_lines_at(q: &Question, step: Step) -> Vec<String> {
@@ -702,7 +735,14 @@ pub fn neighbour_lines_at(q: &Question, step: Step) -> Vec<String> {
     };
     ns.iter()
         .map(|n| {
-            msg::neighbour(n.kind.label(), &n.name, label, &n.word, n.line.map(LineKind::label), &reader::flatten(&n.reason))
+            msg::neighbour(
+                n.kind.label(),
+                &n.name,
+                label,
+                n.word.as_deref(),
+                n.line.map(LineKind::label),
+                &reader::flatten(n.reason.as_deref().unwrap_or("")),
+            )
         })
         .collect()
 }
@@ -712,34 +752,23 @@ pub fn heading_text(sec: &Section) -> String {
     sec.heading_text.clone()
 }
 
-/// The reader's pairs for the heading of `sec`: each neighbour of the pool.
-pub fn heading_pairs(sec: &Section, near: &[index::Neighbour]) -> Vec<Pair> {
-    let new_text = heading_text(sec);
-    near.iter()
-        .map(|n| Pair {
-            kind: Kind::Heading,
-            new_text: new_text.clone(),
-            neighbour: n.id.clone(),
-            neighbour_text: n.text.clone(),
-        })
-        .collect()
-}
-
-/// The kind of prompt a row at a hash of `step` was read with: at a body
-/// hash, `Plan` for another question of the file, `Body` for the rest.
-fn row_kind(step: Kind, neighbour: &str) -> Kind {
-    match step {
-        Kind::Heading => Kind::Heading,
-        _ if neighbour.starts_with("text:") => Kind::Plan,
-        _ => Kind::Body,
+/// The kind of prompt a row at a body hash was read with: `Plan` for
+/// another question of the file, `Body` for the rest.
+fn row_kind(neighbour: &str) -> Kind {
+    if neighbour.starts_with("text:") {
+        Kind::Plan
+    } else {
+        Kind::Body
     }
 }
 
 /// The reader's pairs for the question at `idx` with its body: each
 /// neighbour of the pool (`near`), then each of the other questions of the
-/// file given in `own` as (index, text) nearest first.
+/// file given in `own` as (index, text) nearest first. A pair carries the
+/// letters of the question's options.
 pub fn body_pairs(rf: &RecordFile, idx: usize, near: &[index::Neighbour], own: &[usize]) -> Vec<Pair> {
     let new_text = record::body_text(rf, &rf.sections[idx]);
+    let letters: Vec<char> = rf.sections[idx].options.iter().map(|o| o.letter).collect();
     let mut out: Vec<Pair> = near
         .iter()
         .map(|n| Pair {
@@ -747,6 +776,7 @@ pub fn body_pairs(rf: &RecordFile, idx: usize, near: &[index::Neighbour], own: &
             new_text: new_text.clone(),
             neighbour: n.id.clone(),
             neighbour_text: n.text.clone(),
+            letters: letters.clone(),
         })
         .collect();
     for &j in own {
@@ -756,6 +786,7 @@ pub fn body_pairs(rf: &RecordFile, idx: usize, near: &[index::Neighbour], own: &
             new_text: new_text.clone(),
             neighbour: reader::neighbour_key_of_text(&other),
             neighbour_text: other,
+            letters: Vec::new(),
         });
     }
     out

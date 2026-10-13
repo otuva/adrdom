@@ -279,8 +279,8 @@ fn check_card(r: &Records, files: &[File], shown: &[String]) -> String {
 
 /// The change beyond the latest approval of `path` as `adr show <path>`
 /// prints it, the move that approves it and its button: the page never
-/// offers to approve what it does not show (per "Does show print what a
-/// file holds beyond its latest approval?"). `rf` is the topic file, whose
+/// offers to approve what it does not show (per "Does show print what a file
+/// holds past its latest approval?"). `rf` is the topic file, whose
 /// questions carry their neighbours under them.
 pub(super) fn approve_block(r: &Records, path: &str, rf: Option<&RecordFile>, label: &str, token: &str) -> String {
     let mut s = change_block(r, path, rf);

@@ -52,7 +52,7 @@ fn build_line(heading: &str, id: &str, who: &str) -> String {
     format!("{} builds \"{}\" and puts \"adr: {}\" in a test that shows it", who, heading, id)
 }
 
-// adr: 8f81dee1-9c19-447d-baa8-d7d0af691db8
+// adr: 9a2ff21b-c20b-4c63-95f2-a7a3cbe236b8
 #[test]
 fn a_build_move_opens_with_builder_in_a_planners_session_and_agent_elsewhere() {
     let (dir, _record, id) = repo_with_first();
