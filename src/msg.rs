@@ -1124,16 +1124,20 @@ pub fn blame_range_of_no_row(rel: &str, heading: &str, blame_rel: &str, from: us
     )
 }
 
-/// A question not yet asked has no neighbours on record for its heading, or
-/// no rows of the reader at its body hash (`what` is `heading` or `heading
-/// with its body`).
-pub fn plan_rows_missing(rel: &str, heading: &str, what: &str) -> Said {
+/// A question not yet asked has no neighbours on record for its heading.
+pub fn plan_neighbours_missing(rel: &str, heading: &str) -> Said {
     said(
         &rule::PLAN_STEP_HAS_ITS_RECORD,
-        match what {
-            "heading" => format!("{}: \"{}\" has no neighbours on record for its heading", rel, heading),
-            _ => format!("{}: \"{}\" has no reader rows for its {}", rel, heading, what),
-        },
+        format!("{}: \"{}\" has no neighbours on record for its heading", rel, heading),
+        crate::moves::clause(MoveKind::Plan { rel: rel.to_string() }),
+    )
+}
+
+/// A question not yet asked has no rows of the reader at its body hash.
+pub fn plan_rows_missing(rel: &str, heading: &str) -> Said {
+    said(
+        &rule::PLAN_STEP_HAS_ITS_RECORD,
+        format!("{}: \"{}\" has no reader rows for its heading with its body", rel, heading),
         crate::moves::clause(MoveKind::Plan { rel: rel.to_string() }),
     )
 }
@@ -2736,7 +2740,8 @@ mod tests {
             blame_entry_without_range("x.md", "Does X?", "notes").text(),
             blame_names_no_file("x.md", "Does X?", "notes").text(),
             blame_range_of_no_row("x.md", "Does X?", "adrdom/blame/notes.md", 3, 4).text(),
-            plan_rows_missing("x.md", "Does X?", "heading").text(),
+            plan_neighbours_missing("x.md", "Does X?").text(),
+            plan_rows_missing("x.md", "Does X?").text(),
             plan_line_missing("x.md", "Does X?", "term", "widget").text(),
             reader_failed("id-1", "no answer"),
             reader_write_failed("disk full"),

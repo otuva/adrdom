@@ -36,28 +36,22 @@ fn parse(content: &str) -> HashMap<String, Vec<String>> {
 
 /// Records `entries`, each a heading hash and the identifiers of its
 /// neighbours: the rows of a heading already on record are replaced, and the
-/// rows of a heading in no topic file are dropped. The file is locked for the
-/// read and the write, and written in place, so two sessions that record at
-/// once keep each other's rows.
+/// rows of a heading in no topic file are dropped. The file is locked as the
+/// reader file is, written whole to a temporary file and renamed over the
+/// neighbours file, so two sessions that record at once keep each other's
+/// rows and a reader never meets half a file.
 pub fn record(root: &Path, entries: &[(String, Vec<String>)], live: &Live) -> Result<(), String> {
-    use std::io::{Read, Seek, Write};
+    use std::io::Read;
     if entries.is_empty() {
         return Ok(());
     }
-    // The records are read before the lock is taken, not under it.
-    live.has_text("");
+    live.preload();
     let path = root.join(repo::NEIGHBOURS_PATH);
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .read(true)
-        .write(true)
-        .truncate(false)
-        .open(&path)
-        .map_err(msg::neighbours_write_failed)?;
-    file.lock().map_err(msg::neighbours_write_failed)?;
+    let mut handle = crate::reader::lock_file(&path).map_err(msg::neighbours_write_failed)?;
+    crate::reader::remove_stale_tmp(&path);
     let mut old = String::new();
     // Bytes that are no text read as no rows.
-    if file.read_to_string(&mut old).is_err() {
+    if handle.read_to_string(&mut old).is_err() {
         old.clear();
     }
     let mut text = String::new();
@@ -73,10 +67,13 @@ pub fn record(root: &Path, entries: &[(String, Vec<String>)], live: &Live) -> Re
             text.push_str(&format!("{}\t{}\n", hash, id));
         }
     }
-    file.set_len(0)
-        .and_then(|_| file.rewind())
-        .and_then(|_| file.write_all(text.as_bytes()))
-        .map_err(msg::neighbours_write_failed)
+    let tmp = path.with_file_name(format!("neighbours.tsv.{}.tmp", uuid::Uuid::new_v4()));
+    let done = std::fs::write(&tmp, text).and_then(|_| std::fs::rename(&tmp, &path));
+    if let Err(e) = done {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(msg::neighbours_write_failed(e));
+    }
+    Ok(())
 }
 
 #[cfg(test)]

@@ -700,13 +700,13 @@ impl Planning {
                 .questions
                 .iter()
                 .filter(|q| !q.heading_done)
-                .map(|q| msg::plan_rows_missing(&self.rel, &q.heading, "heading"))
+                .map(|q| msg::plan_neighbours_missing(&self.rel, &q.heading))
                 .collect();
         }
         self.questions
             .iter()
             .filter(|q| q.has_body && !q.body_done)
-            .map(|q| msg::plan_rows_missing(&self.rel, &q.heading, "heading with its body"))
+            .map(|q| msg::plan_rows_missing(&self.rel, &q.heading))
             .collect()
     }
 }

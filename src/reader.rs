@@ -350,6 +350,12 @@ impl Live {
         LiveSets { texts, neighbours, complete }
     }
 
+    /// Reads the records now, so that a caller about to take a lock does not
+    /// read them under it.
+    pub fn preload(&self) {
+        self.sets.get_or_init(|| Live::load(&self.root));
+    }
+
     /// Whether a heading's or a question's text of this hash is in a topic
     /// file. True when the records could not all be read.
     pub fn has_text(&self, hash: &str) -> bool {
@@ -390,28 +396,7 @@ pub fn append_live(root: &Path, rows: &[Row], live: &Live) -> Result<(), String>
         text.push_str(&row_line(r));
         text.push('\n');
     }
-    // Lock the file, then check the path still names the locked file: a
-    // rewrite by another session renames a new file over it.
-    let mut handle = None;
-    for _ in 0..LOCK_TRIES {
-        let h = std::fs::OpenOptions::new()
-            .create(true)
-            .read(true)
-            .append(true)
-            .open(&path)
-            .map_err(msg::reader_write_failed)?;
-        h.lock().map_err(msg::reader_write_failed)?;
-        if same_file(&h, &path) {
-            handle = Some(h);
-            break;
-        }
-    }
-    let Some(mut handle) = handle else {
-        return Err(msg::reader_write_failed(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "the reader file kept changing under the lock",
-        )));
-    };
+    let mut handle = lock_file(&path).map_err(msg::reader_write_failed)?;
     // Under the lock no other writer is mid-rewrite, so a temporary file a
     // killed process left is stale.
     remove_stale_tmp(&path);
@@ -447,14 +432,30 @@ pub fn append_live(root: &Path, rows: &[Row], live: &Live) -> Result<(), String>
 /// another session renames a new file over it, before it gives up.
 const LOCK_TRIES: usize = 50;
 
-/// Removes every `reader.tsv.*.tmp` beside the reader file `path`.
-fn remove_stale_tmp(path: &Path) {
-    let Some(dir) = path.parent() else { return };
+/// Opens `path`, making it when it is missing, and locks it for one
+/// writer. A rewrite by another session renames a new file over the path, so
+/// the lock counts only when the path still names the locked file.
+pub(crate) fn lock_file(path: &Path) -> std::io::Result<std::fs::File> {
+    for _ in 0..LOCK_TRIES {
+        let h = std::fs::OpenOptions::new().create(true).read(true).append(true).open(path)?;
+        h.lock()?;
+        if same_file(&h, path) {
+            return Ok(h);
+        }
+    }
+    Err(std::io::Error::new(std::io::ErrorKind::Other, "the file kept changing under the lock"))
+}
+
+/// Removes every `<name>.*.tmp` beside the file `path`, `<name>` its file
+/// name.
+pub(crate) fn remove_stale_tmp(path: &Path) {
+    let (Some(dir), Some(own)) = (path.parent(), path.file_name()) else { return };
+    let prefix = format!("{}.", own.to_string_lossy());
     let Ok(entries) = std::fs::read_dir(dir) else { return };
     for e in entries.flatten() {
         let name = e.file_name();
         let name = name.to_string_lossy();
-        if name.starts_with("reader.tsv.") && name.ends_with(".tmp") {
+        if name.starts_with(&prefix) && name.ends_with(".tmp") {
             let _ = std::fs::remove_file(e.path());
         }
     }
