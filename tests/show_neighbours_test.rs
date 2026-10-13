@@ -1,6 +1,6 @@
 // What `adr show --neighbours` and the page print under each open question:
-// one line for each neighbour the reader recorded, with its word at each step
-// and the agent's line, a view computed from the records and so printed under
+// one line for each neighbour brought at the heading step (no word) and at the
+// body step (the reader's word), with the agent's line, a view computed from the records and so printed under
 // its flag (per "Does a command print under a flag what it computes from the
 // records?"). The embedding model and the reader are the fakes; show and the
 // page read the records only.
@@ -70,14 +70,14 @@ fn base_id(dir: &Path) -> String {
     extract_ids(&std::fs::read_to_string(dir.join(BASE)).unwrap())[0].clone()
 }
 
-/// The reader's word for the base decision at both steps of `heading`,
-/// written as newer rows than the ones the fake reader made.
-fn reader_says(dir: &Path, heading: &str, heading_word: &str, body_word: &str) {
+/// The reader's word for the base decision at the body step of `heading`,
+/// written as a newer row than the one the fake reader made.
+fn reader_says(dir: &Path, heading: &str, body_word: &str) {
     let rf = record::load(&dir.join(REL)).unwrap();
     let sec = rf.sections.iter().find(|s| s.heading_text == heading).unwrap();
     let id = base_id(dir);
     let mut new = Vec::new();
-    for (hash, word) in [(record::heading_hash(sec), heading_word), (record::body_hash(&rf, sec), body_word)] {
+    for (hash, word) in [(record::body_hash(&rf, sec), body_word)] {
         let mut row = reader::read_file(dir)
             .rows
             .into_iter()
@@ -100,20 +100,20 @@ fn show_prints_a_line_for_each_neighbour_with_both_words_and_the_agents_line() {
     for h in [H1, H2] {
         assert_eq!(
             under(&shown, h).last().unwrap(),
-            "neighbours: no reader records yet",
+            "neighbours: none on record yet",
             "{}",
             shown
         );
     }
 
-    // The heading step is on record, and no neighbour is on a line but the
-    // term the depends line names.
+    // The heading step is on record, with no word: no neighbour is on a line
+    // but the term the depends line names.
     assert!(adr(&dir, &["plan", dir.join(REL).to_str().unwrap()], &[], "").status.success());
     let shown = show(&dir, &NO_TOOLS);
     let lines = under(&shown, H1);
-    assert!(lines.iter().any(|l| l.starts_with(&format!("decision \"{}\": heading unrelated; no line; ", BASE_Q))), "{}", shown);
-    assert!(lines.iter().any(|l| l.starts_with("term \"widget\": heading unrelated; on the depends line; ")), "{}", shown);
-    assert!(lines.iter().any(|l| l.starts_with("term \"paint\": heading unrelated; no line; ")), "{}", shown);
+    assert!(lines.iter().any(|l| l.starts_with(&format!("decision \"{}\": heading; no line", BASE_Q))), "{}", shown);
+    assert!(lines.iter().any(|l| l.starts_with("term \"widget\": heading; on the depends line")), "{}", shown);
+    assert!(lines.iter().any(|l| l.starts_with("term \"paint\": heading; no line")), "{}", shown);
 
     // Both steps on record: one line for a neighbour at each step, each with
     // the reader's word and reason and the agent's line.
@@ -130,12 +130,13 @@ fn show_prints_a_line_for_each_neighbour_with_both_words_and_the_agents_line() {
         "{}",
         shown
     );
-    assert!(!lines.iter().any(|l| l.contains("no reader records")), "{}", shown);
+    assert!(!lines.iter().any(|l| l.contains("none on record")), "{}", shown);
     assert_eq!(lines.iter().filter(|l| l.starts_with("decision ") && l.contains(BASE_Q)).count(), 2, "{}", shown);
-    assert!(lines.iter().filter(|l| l.starts_with("decision ")).all(|l| l.ends_with("The fake reader's reason.")), "{}", shown);
+    assert!(lines.iter().filter(|l| l.starts_with("decision ") && l.contains(": body ")).all(|l| l.ends_with("The fake reader's reason.")), "{}", shown);
+    assert!(lines.iter().filter(|l| l.contains(": heading;")).all(|l| !l.contains("reason")), "a heading neighbour has no word and no reason: {}", shown);
 
-    // The reader's own words, and a supersedes line.
-    reader_says(&dir, H1, "same", "consistent");
+    // The reader's own word at the body step, and a supersedes line.
+    reader_says(&dir, H1, "consistent");
     let text = std::fs::read_to_string(dir.join(REL)).unwrap();
     std::fs::write(
         dir.join(REL),
@@ -147,13 +148,9 @@ fn show_prints_a_line_for_each_neighbour_with_both_words_and_the_agents_line() {
     )
     .unwrap();
     let shown = show(&dir, &NO_TOOLS);
-    assert!(
-        under(&shown, H1)
-            .iter()
-            .any(|l| l.starts_with(&format!("decision \"{}\": heading same; on the supersedes line; ", BASE_Q))),
-        "{}",
-        shown
-    );
+    let lines = under(&shown, H1);
+    assert!(lines.iter().any(|l| l.starts_with(&format!("decision \"{}\": heading; on the supersedes line", BASE_Q))), "{}", shown);
+    assert!(lines.iter().any(|l| l.starts_with(&format!("decision \"{}\": body consistent; on the supersedes line; ", BASE_Q))), "{}", shown);
     // `--all` prints the same lines under the same flag.
     let all = stdout(&adr(&dir, &["show", "--all", "--neighbours"], &NO_TOOLS, ""));
     assert_eq!(under(&all, H1), under(&shown, H1));

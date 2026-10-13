@@ -351,7 +351,7 @@ no tier holds more than four questions; agent rewrites the depends lines of thes
         next(&dir),
         vec![
             refusal.clone(),
-            format!("{}: \"{}\" has no reader rows for its heading; each planning step rests on the reader's rows; {}", REL, five, plan_for()),
+            format!("{}: \"{}\" has no neighbours on record for its heading; each planning step rests on the record before it; {}", REL, five, plan_for()),
         ]
     );
 
@@ -367,7 +367,7 @@ no tier holds more than four questions; agent rewrites the depends lines of thes
         .map(|l| l.to_string())
         .collect();
     assert_eq!(plan_lines.first(), Some(&refusal), "{:?}", plan_lines);
-    assert!(plan_lines.iter().any(|l| l.contains("has no reader rows for its heading")), "{:?}", plan_lines);
+    assert!(plan_lines.iter().any(|l| l.contains("has no neighbours on record for its heading")), "{:?}", plan_lines);
 }
 
 // adr: f4f667ad-8714-4e65-897b-c7002e423c28

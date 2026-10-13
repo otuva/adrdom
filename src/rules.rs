@@ -1379,7 +1379,7 @@ pub fn planning_rules_apply(led: &Ledger, rf: &RecordFile, rel: &str) -> bool {
 /// headings, a heading in another topic file, an answer-set letter its
 /// target has no option for, and, while `planning_rules_apply`, a question
 /// not yet asked with no body and the planning records of a question not
-/// yet asked (the reader's rows at each step and every neighbour on a
+/// yet asked (the record of each step and every neighbour on a
 /// line). The one judgement `approve` refuses
 /// on (per "Does a command refuse what check passes?", fe14991d A).
 pub fn judge_topic_file(j: &TopicFileJudge) -> Vec<Finding> {

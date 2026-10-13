@@ -1073,7 +1073,7 @@ pub fn question_hashes(rf: &RecordFile) -> Vec<String> {
 }
 
 /// sha256 of a question's heading text alone: what the planning steps key
-/// the reader's rows of a heading by ("What does the agent do to plan a
+/// the neighbours of a heading by ("What does the agent do to plan a
 /// topic file?").
 pub fn heading_hash(sec: &Section) -> String {
     sha256_hex(&sec.heading_text)

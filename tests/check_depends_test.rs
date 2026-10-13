@@ -1,6 +1,6 @@
 // The `## ` tier-heading shape error, the "no depends line" rule, entry
 // resolution (term/decision/dangling/cycle), and the tier cap; the tiers
-// are no line of check's (3fc35d4f). Fixtures are hand-written and approved via
+// are no line of check's (bd83aa22). Fixtures are hand-written and approved via
 // hand-written ledger rows (`approve_via_ledger`, `approve_minimal_terms`),
 // never through a real `adr ask`/`adr approve`.
 
@@ -536,7 +536,7 @@ fn check_tier_cap_ignores_a_refused_question() {
 
 #[test]
 fn check_prints_no_tiers_line_for_a_chain() {
-    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
+    // adr: bd83aa22-94fc-49ac-b215-a82990ff8c65
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");

@@ -36,7 +36,7 @@ fn ledger_rows(dir: &std::path::Path, event: &str) -> Vec<Vec<String>> {
 }
 
 /// Whether the file at `REL` differs from its latest approval, read through
-/// the one status the tool holds (check prints no line for it, 3fc35d4f).
+/// the one status the tool holds (check prints no line for it, bd83aa22).
 fn awaits_approval(dir: &std::path::Path) -> bool {
     let led = adr::ledger::read(&dir.join("adrdom/state/ledger.tsv"));
     let rf = adr::record::load(&dir.join(REL)).unwrap();
@@ -201,7 +201,7 @@ fn approve_refuses_a_set_on_an_entry_naming_an_answered_question() {
 //
 // "Does check fail a topic file awaiting approval?" (No): a file with its
 // bodies, committed before approval, is never failed, and its status is no
-// line of check's (3fc35d4f): what it owes before approve are notes.
+// line of check's (bd83aa22): what it owes before approve are notes.
 #[test]
 fn check_passes_a_file_awaiting_approval() {
     let dir = setup(&file_of(&[Q1, Q2]));
@@ -323,7 +323,7 @@ fn approve_refuses_a_set_on_an_entry_naming_a_term() {
 //
 // "Does approve hash each question on its own?": a changed question and a
 // struck one each put the file back to the owner, and check still passes;
-// which questions differ is no line of check's (3fc35d4f).
+// which questions differ is no line of check's (bd83aa22).
 #[test]
 fn a_changed_and_a_struck_question_each_await_approval() {
     let dir = setup(&file_of(&[Q1, Q2]));

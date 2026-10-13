@@ -109,7 +109,7 @@ fn a_removed_file_holding_only_superseded_sections_is_approved_away() {
     std::fs::remove_file(&record).unwrap();
 
     // Nothing holds the removal: it is a status, no line of check's
-    // (3fc35d4f); the file stands removed until the owner approves.
+    // (bd83aa22); the file stands removed until the owner approves.
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
     assert!(!stdout(&out).contains(REL), "{}", stdout(&out));

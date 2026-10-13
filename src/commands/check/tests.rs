@@ -86,7 +86,7 @@ pub(super) fn check_tests(
     for id in untested {
         // Per "What does check do with an untested current decision?": a
         // note on every run, never a failure, with the move that builds it
-        // (per "Does check print a line that names no move?", 3fc35d4f A).
+        // (per "Does check print a line with no move on it?", bd83aa22 A).
         let Some(&(rf, i)) = place.get(id.as_str()) else { continue };
         // Two standing answers: nothing stands to build; the conflict's own
         // finding names the move, as `show` names it.

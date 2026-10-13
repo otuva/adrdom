@@ -84,8 +84,8 @@ fn check_one_ref(root: &Path, line: &str, stops: &mut Vec<String>) -> Vec<Failur
     }
 
     // The ledger keeps every row; the reader's file keeps every row byte for
-    // byte or gone whole ("What does check hold of the reader's file?",
-    // abb6faed-96f7-406d-8384-002ee81bb157).
+    // byte or gone whole ("What does check hold of a reader's file?",
+    // 30ca5d13-e68b-465f-aa84-ea4000c9330a).
     let mut out = Vec::new();
     // The ledger's drop rule.
     if let Some(remote_content) = repo::git(root, &["show", &format!("{}:{}", remote_sha, repo::LEDGER_PATH)]) {

@@ -37,8 +37,9 @@ it.
 `adr show <file>` takes every file `adr approve` takes: a topic file, the
 terms file, a blame file. For a topic file it prints every question with its
 status; under a question not yet answered, its depends, supersedes and blame
-lines, and `[inconsistent]` or `[same]` with each neighbour the reader marks
-so that no supersedes line of the question names; and the body of a question
+lines, and `[inconsistent]`, `[same]` or `[closes <letter>]` with each
+neighbour the reader marks so that no supersedes line of the question names;
+and the body of a question
 that waits for the owner's answer; what the file holds beyond its latest approval is printed marked,
 `+` for a line added and `-` for a line gone, and a question new or struck
 as a whole carries the mark on its own line too; then the findings and the
@@ -111,8 +112,7 @@ is refused as two questions. A heading written from a decision row of a blame
 file carries a blame line under it (see Blame).
 
 **2. Run `adr plan <file>`.** For each heading it brings the ten nearest
-current decisions and term definitions, and the reader's word on each: same,
-depends or unrelated, after one sentence of reason.
+current decisions and term definitions.
 
 **3. Write the lines.** Every neighbour gets a line under its heading, one
 entry on one of three lines, comma separated:
@@ -123,7 +123,7 @@ entry on one of three lines, comma separated:
 - `supersedes:` the question replaces that current decision.
 - `unrelated:` neither.
 
-The reader's word is not a ruling; your line is. Write a `depends:` entry for
+Write a `depends:` entry for
 every term the question stands on and for each question of this file it
 stands on, a neighbour or not, and none that is not.
 Run `adr plan <file>` again: it names every neighbour on no line.
@@ -136,7 +136,7 @@ the `id:` line under that heading in its topic file.
 ```
 ### Does the pre-commit hook run the tests?
 depends: hook, Does check read staged files only?
-unrelated: Does check print a line that names no move?
+unrelated: Does check print a line with no move on it?
 ```
 
 **4. Walk each question, then write its body.** Write the body of every
@@ -179,9 +179,11 @@ still makes sense.
 
 **5. Run `adr plan <file>` again.** For each question with its body it brings
 the ten nearest current decisions and term definitions, with the reader's
-word: same, consistent, inconsistent, depends or unrelated; and the nearest
-other questions of this file, with same, depends or unrelated. Write a line
-for each new neighbour. A heading or a body changed after its step is read
+word after one sentence of reason: same, consistent, inconsistent, unrelated,
+or closes with a letter, when the record leaves only that option standing; and
+the nearest other questions of this file, with same or unrelated. The reader's
+word is not a ruling; your line is. Write a line for each new neighbour. A
+heading or a body changed after its step is read
 again: run `adr plan <file>` until the move it prints is the owner's
 `adr approve`.
 

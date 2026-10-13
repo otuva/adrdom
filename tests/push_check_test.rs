@@ -306,14 +306,14 @@ fn e_an_all_zero_remote_sha_and_an_all_zero_local_sha_both_pass() {
     );
 }
 
-// adr: abb6faed-96f7-406d-8384-002ee81bb157
+// adr: 30ca5d13-e68b-465f-aa84-ea4000c9330a
 #[test]
 fn g_a_force_push_that_edits_a_remote_reader_row_is_refused_and_one_that_drops_it_passes() {
     let (dir, _remote, branch) = new_repo_with_remote();
 
     let row = "2026-10-05T10:00:00Z\t".to_string()
         + &"a".repeat(64)
-        + "\t62e50382-db1b-4649-9f26-7f44c379d6fe\tsame\tA reason.\t"
+        + "\t60341be0-fd05-4281-92d7-668584a8539a\tsame\tA reason.\t"
         + &"b".repeat(64)
         + "\tclaude-sonnet-5-5\t0.1.0\n";
     std::fs::write(dir.join("adrdom/state/reader.tsv"), &row).unwrap();

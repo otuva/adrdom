@@ -645,8 +645,8 @@ pub fn depends_line_over_limit(rel: &str, heading: &str, names: &[String], cap: 
 }
 
 /// `show <file>` on a file that is not one of the topic files.
-/// `show` names a path approve does not take (per "Does show print what a
-/// file holds beyond its latest approval?": show takes every file approve
+/// `show` names a path approve does not take (per "Does show print what a file
+/// holds past its latest approval?": show takes every file approve
 /// takes).
 /// `ask` names a path that is no topic file: it asks the questions of topic
 /// files alone.
@@ -1124,12 +1124,16 @@ pub fn blame_range_of_no_row(rel: &str, heading: &str, blame_rel: &str, from: us
     )
 }
 
-/// A question not yet asked has no rows of the reader at one of its hashes
-/// (`what` is `heading` or `heading with its body`).
+/// A question not yet asked has no neighbours on record for its heading, or
+/// no rows of the reader at its body hash (`what` is `heading` or `heading
+/// with its body`).
 pub fn plan_rows_missing(rel: &str, heading: &str, what: &str) -> Said {
     said(
-        &rule::PLAN_STEP_HAS_READER_ROWS,
-        format!("{}: \"{}\" has no reader rows for its {}", rel, heading, what),
+        &rule::PLAN_STEP_HAS_ITS_RECORD,
+        match what {
+            "heading" => format!("{}: \"{}\" has no neighbours on record for its heading", rel, heading),
+            _ => format!("{}: \"{}\" has no reader rows for its {}", rel, heading, what),
+        },
         crate::moves::clause(MoveKind::Plan { rel: rel.to_string() }),
     )
 }
@@ -1152,14 +1156,19 @@ pub fn plan_question_read(heading: &str, what: &str) -> String {
 
 /// One neighbour of a question as every command prints it (`adr plan` for
 /// what it read, `adr show --neighbours`): its kind and name, the step whose
-/// text the reader read and the reader's word, the line the agent put it
-/// on, and the reader's sentence of reason.
-pub fn neighbour(kind: &str, name: &str, step: &str, word: &str, line: Option<&str>, reason: &str) -> String {
+/// text it was brought for and the reader's word (a neighbour of a heading
+/// has none), the line the agent put it on, and the reader's sentence of
+/// reason (the same).
+pub fn neighbour(kind: &str, name: &str, step: &str, word: Option<&str>, line: Option<&str>, reason: &str) -> String {
     let on = match line {
         Some(l) => format!("on the {} line", l),
         None => "no line".to_string(),
     };
-    let text = format!("{} \"{}\": {} {}; {}", kind, name, step, word, on);
+    let at = match word {
+        Some(w) => format!("{} {}", step, w),
+        None => step.to_string(),
+    };
+    let text = format!("{} \"{}\": {}; {}", kind, name, at, on);
     if reason.is_empty() {
         text
     } else {
@@ -1171,8 +1180,7 @@ pub fn neighbour(kind: &str, name: &str, step: &str, word: &str, line: Option<&s
 pub fn read_pair(word: &str, first: &str, second: &str, reason: &str, next: &str) -> Said {
     let rule = match word {
         "same" => &crate::rule::READ_PAIR_SAME,
-        "inconsistent" => &crate::rule::READ_PAIR_INCONSISTENT,
-        _ => &crate::rule::READ_PAIR_DEPENDS,
+        _ => &crate::rule::READ_PAIR_INCONSISTENT,
     };
     said_raw(rule, format!("{}: \"{}\" and \"{}\": {}", word, first, second, reason), next)
 }
@@ -1325,11 +1333,12 @@ pub fn show_question_of(heading: &str, rel: &str) -> String {
 }
 
 
-/// Under a question not yet asked: the reader has recorded nothing for it.
+/// Under a question not yet asked: no neighbour of its heading and no word of
+/// the reader on its body is on record.
 /// The move that reads them is the file's own (`moves::of_planning`), not
 /// computed here a second time.
 pub fn show_no_records() -> String {
-    "neighbours: no reader records yet".to_string()
+    "neighbours: none on record yet".to_string()
 }
 
 /// After the rows of a blame file under `show --questions`: how many of its
@@ -2359,7 +2368,7 @@ pub fn missing_answer_selection(id: &str, version: &str) -> String {
 
 /// An untested current decision, a note and never a failure (per "What does
 /// check do with an untested current decision?"), with its move (per "Does
-/// check print a line that names no move?", 3fc35d4f A): `mv` is the move's
+/// check print a line with no move on it?", bd83aa22 A): `mv` is the move's
 /// text, `moves::of_untested`.
 pub fn untested(rel: &str, heading: &str, mv: &str) -> Said {
     said_raw(
@@ -2485,6 +2494,10 @@ pub fn reader_failed(neighbour: &str, e: impl Display) -> String {
 
 pub fn reader_write_failed(e: impl Display) -> String {
     write_failed(crate::repo::READER_PATH, e, fix_then_same_command("the reader file"))
+}
+
+pub fn neighbours_write_failed(e: impl Display) -> String {
+    write_failed(crate::repo::NEIGHBOURS_PATH, e, fix_then_same_command("the neighbours file"))
 }
 
 pub fn malformed_reader_row(lineno: usize, raw: &str) -> Said {

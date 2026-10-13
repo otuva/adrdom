@@ -1990,7 +1990,7 @@ fn a_supersedes_line_added_after_approval_waits_for_approval() {
     std::fs::write(&record, &edited).unwrap();
 
     // A plan awaiting approval is a status, not a finding: check passes it
-    // and prints no line for it (3fc35d4f); ask waits for the approval.
+    // and prints no line for it (bd83aa22); ask waits for the approval.
     let checked = adr(&dir, &["check"], &[], "");
     assert!(checked.status.success(), "{}", stdout(&checked));
     let asked = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
