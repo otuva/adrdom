@@ -1176,8 +1176,10 @@ pub fn neighbour(kind: &str, name: &str, step: &str, word: Option<&str>, line: O
     }
 }
 
-/// One pair of current decisions the reader marked, as `adr read` prints it.
+/// One pair of current decisions the reader marked same or inconsistent,
+/// as `adr read` prints it; no other word marks a pair.
 pub fn read_pair(word: &str, first: &str, second: &str, reason: &str, next: &str) -> Said {
+    debug_assert!(matches!(word, "same" | "inconsistent"), "{}", word);
     let rule = match word {
         "same" => &crate::rule::READ_PAIR_SAME,
         _ => &crate::rule::READ_PAIR_INCONSISTENT,

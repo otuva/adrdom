@@ -44,6 +44,8 @@ pub fn record(root: &Path, entries: &[(String, Vec<String>)], live: &Live) -> Re
     if entries.is_empty() {
         return Ok(());
     }
+    // The records are read before the lock is taken, not under it.
+    live.has_text("");
     let path = root.join(repo::NEIGHBOURS_PATH);
     let mut file = std::fs::OpenOptions::new()
         .create(true)
