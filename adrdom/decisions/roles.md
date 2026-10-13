@@ -238,3 +238,21 @@ Standard: every diagnostic carries a stable code that documentation and tests ke
   Costs: a message with no decision behind it passes every gate and is caught at review alone.
 
 **Answer:** A
+
+### What does the tool print for a build move in a planner session?
+depends: move, planner, builder, What makes a session a planner?, Does check fail a planner's commit that reaches outside adrdom?
+supersedes: What does the tool print for a build move in a planner's session?
+unrelated: Does check print a line that names no move?, Does the tool colour its terminal output?, Does the tool mark a builder?, Does the ui show what the commands print?, What does show print of a file under adrdom?, What does show print with no file named?, Does the agent build what no current decision covers?, Does the agent write the plan?, Does the tool rewrite the ban list from the ledger?, What does check do with a fault on a file awaiting approval?, What does check do with a test that names a decision that is not current?, What does the ban scan read?
+
+Problem: a planner reads a build move as its own, builds, and is refused at the commit, after the work.
+Standard: a listing tells the reader which items are theirs before they act.
+
+- A) The move with builder in place of agent, on every builds line show and check print.
+  Why: the planner reads that the move is another session's before any work.
+  Costs: the move reads the role file, and the mover gains a builder beside agent and owner.
+- B) The move as in any session.
+  Why: one output whoever runs show or check.
+  Costs: the refusal comes at the commit, after the build.
+- C) No build move.
+  Why: the planner sees its own moves alone.
+  Costs: the planner cannot read what waits on a builder, and check hides untested decisions from it.

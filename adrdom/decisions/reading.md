@@ -91,3 +91,81 @@ Standard: a scan prints its findings and the move for each; the store is for the
   Costs: the agent reads show for a hundred decisions to find three findings.
 
 **Answer:** A
+
+### Does the tool read each current decision against its neighbours?
+depends: decision, current, neighbour, reader
+supersedes: Does the tool read every current decision against its neighbours?, Does the tool print every pair the reader marks?, Does the tool read a pair of decisions in both directions?, What does the reader say about two current decisions?, Does a commit run the reading of the set?, What does show print of the reader's word on a question?, Does a command print under a flag what it computes from the records?, What does a command that writes nothing print?, Does check print a line that names no move?, Does show print what a file holds beyond its latest approval?, What does show print with no file named?, What does the tool print for a build move in a planner's session?, What does show print of a file under adrdom?, Does show print the reference lines of an answered question?
+unrelated: Does a finding hold the identifier of the decision it judges?, Does a supersedes line name every current decision standing on its target?, Does the agent build what no current decision covers?, Does the tool bring the plan's own questions as neighbours of each other?, Does the tool take the order of ledger rows from their time?, Does the ui show what the commands print?, What does check do with a test that names a decision that is not current?, Does check read the words of an answered question again?, Does a commit run the reading of the whole set?, Does the tool print each pair the reader marks?, Does the tool read a pair of decisions in each direction?, What word does the reader give two current decisions?
+
+Problem: the set holds decisions that repeat or contradict each other and nothing reads them together; a new question meets them, two old ones never meet.
+Standard: periodic deduplication of a store with the same comparator used at insert.
+
+- A) Yes.
+  Why: the pairs planning never sees, old against old, get the same word and reason as a new question's neighbours.
+  Costs: ten reader calls per current decision; rows in the reader's file keyed by text hash and neighbour identifier.
+- B) No.
+  Why: the set is read only where a new question touches it; no cost beyond planning.
+  Costs: known duplicates and contradictions in the set stay until a new question lands beside them.
+
+### What word does the reader give two current decisions?
+depends: reader, current, decision, Does the tool read each current decision against its neighbours?=A
+supersedes: What does the reader say about two current decisions?, Does the tool print every pair the reader marks?, Does the tool read a pair of decisions in both directions?, What does show print of the reader's word on a question?, Does a command print under a flag what it computes from the records?, What does a command that writes nothing print?, Does check print a line that names no move?, Does show print what a file holds beyond its latest approval?, What does show print with no file named?, What does the tool print for a build move in a planner's session?, What does show print of a file under adrdom?, Does show print the reference lines of an answered question?
+unrelated: What binds in an answered question?, answer, depends, option, question, supersede, Does check fail a question answered with two different options?, Does one decision supersede several?, What does the reader say about a neighbour of a heading?, What does the reader say about a neighbour of a question with its body?, Does a commit run the reading of the whole set?, Does the tool print each pair the reader marks?, Does the tool read a pair of decisions in each direction?
+
+Problem: both sides are answered, so the whole relation can be read; the words must be ones the agent can act on, and the pair has no new side.
+Standard: the same closed set as for a question with its body, applied to two settled texts.
+
+- A) One of same, consistent, inconsistent, unrelated, after one sentence of reason.
+  Why: one set for the reader, one file of rows, the same moves: same and inconsistent become a supersede question.
+  Costs: a bundled decision gets one word for several rules; the reason names the clause.
+- B) One of same, inconsistent, unrelated, after one sentence of reason.
+  Why: only the words that lead to a move; fewer wrong words to read.
+  Costs: consistent is never recorded, so a pair read as fine and a pair unread look the same.
+- C) One of same, consistent, inconsistent, depends, unrelated, after one sentence of reason.
+  Why: a missing tie between two old decisions is named.
+  Costs: depends between two decisions is a finding with no line to write, on an order two texts do not show.
+
+### Does the tool print each pair the reader marks?
+depends: reader, finding, move, What word does the reader give two current decisions?=*
+supersedes: Does the tool print every pair the reader marks?, What does show print of the reader's word on a question?, Does a command print under a flag what it computes from the records?, What does a command that writes nothing print?, Does check print a line that names no move?, Does show print what a file holds beyond its latest approval?, What does show print with no file named?, What does the tool print for a build move in a planner's session?, What does show print of a file under adrdom?, Does show print the reference lines of an answered question?
+unrelated: Does the tool colour its terminal output?, Does the tool mark a builder?, Does the tool read a pair of decisions in both directions?, Does the ui show what the commands print?, What does the tool keep of the reader's word?, Does check fail a ledger row that was edited?, Does check read the words of an answered question again?, Does the reader's file keep a row whose text is gone from the records?, What does check do with a fault on a file awaiting approval?, What does check hold of the reader's file?, Does a commit run the reading of the whole set?, Does the tool read a pair of decisions in each direction?, Does the tool read each current decision against its neighbours?
+
+Problem: the rows go to a file nobody opens; a pair the reader marks, same or inconsistent, has to reach the agent as a list it can act on.
+Standard: a scan prints its findings and the move for each; the store is for the record.
+
+- A) Yes.
+  Why: one line per marked pair: both headings, the word, the reason; the move is a supersede question.
+  Costs: a long list on a set with many ties.
+- B) No.
+  Why: the rows are the record; show prints them under each decision.
+  Costs: the agent reads show for a hundred decisions to find three findings.
+
+### Does the tool read a pair of decisions in each direction?
+depends: reader, decision, What word does the reader give two current decisions?=*
+supersedes: Does the tool read a pair of decisions in both directions?
+unrelated: Does a decision change after it is answered?, Does a finding hold the identifier of the decision it judges?, Does one decision supersede several?, Does the tool bring the plan's own questions as neighbours of each other?, Does the tool print every pair the reader marks?, Does the tool read every current decision against its neighbours?, Does the ui show what the commands print?, What does the reader say about two current decisions?, builder, Does a supersedes line name every current decision standing on its target?, Does check at a merge look for the ledger rows of both branches?, Does check fail a question answered with two different options?, Does check fail two ledger rows on one subject with the same time?, Does check read the words of an answered question again?, Does the tool take the order of ledger rows from their time?, Does a commit run the reading of the whole set?, Does the tool print each pair the reader marks?, Does the tool read each current decision against its neighbours?
+
+Problem: two decisions have no new side; one reading gives one row, two readings double the cost and may disagree.
+Standard: read a symmetric relation once.
+
+- A) No.
+  Why: each pair is read once in one fixed order; the reader's sentence names what it compared.
+  Costs: the row sits under the pair's first text only.
+- B) Yes.
+  Why: each decision has its own row for the pair, as in planning.
+  Costs: twice the reader calls, and two words that may disagree for one pair.
+
+### Does a commit run the reading of the whole set?
+depends: agent, reader, Does the tool read each current decision against its neighbours?=A
+supersedes: Does a commit run the reading of the set?
+unrelated: Does an owner command commit?, Does check at a commit read the staged files?, Does check at a merge look for the ledger rows of both branches?, Does check fail a ledger row that was edited?, Does check fail a planner's commit that reaches outside adrdom?, Does check hold the merge rule install writes for the ledger?, Does check in CI compare the ledger with the commit before the push?, Does check look at the ledger before a push?, What does check do with a fault on a file awaiting approval?, Does install write a merge rule for the ledger?, Does install write outside adrdom?, Does the agent build what no current decision covers?, Does the tool rewrite the ban list from the ledger?, What does the ban scan read?, Does the tool print each pair the reader marks?, Does the tool read a pair of decisions in each direction?, What word does the reader give two current decisions?
+
+Problem: the reading needs the model and the reader and takes minutes; a commit runs on every machine, with neither, in seconds.
+Standard: expensive advisory analyses run on demand, not in a commit hook.
+
+- A) No.
+  Why: the agent runs it at its own call, after a merge or a round of answers; hooks stay model-free.
+  Costs: a set nobody reads stays unread; nothing reminds the agent.
+- B) Yes.
+  Why: the set is never stale; every commit reads what changed.
+  Costs: every commit needs the model and the reader and waits minutes; a hook without them fails.

@@ -493,3 +493,132 @@ Standard: one view model, two renderings.
   Costs: two sets of lines to hold right, and a line on the page with no decision behind it.
 
 **Answer:** A
+
+### What does a command print when it writes nothing?
+depends: move, finding, check, Does a command compute a move of its own?
+supersedes: What does a command that writes nothing print?, Does a command print under a flag what it computes from the records?, Does check print a line that names no move?, Does show print what a file holds beyond its latest approval?, What does show print with no file named?, What does the tool print for a build move in a planner's session?, What does show print of a file under adrdom?, What does show print of the reader's word on a question?, Does show print the reference lines of an answered question?
+unrelated: Does a command name a status of its own?, Does a command stop when the environment gives no session identifier?, Does the reader's word stop a command?, Does the ui show what the commands print?, What does a writing command print?, Does ban refuse a word that appears in the repository?, Does check at a commit read the staged files?, What does check do with a fault on a file awaiting approval?, What does the ban scan read?, Does a command print a computed view under a flag?, Does check print a line with no move on it?, Does show print the reference lines of a question that is answered?, Does show print what a file holds past its latest approval?, What does show print for a file under adrdom?, What does show print of a reader's word on a question?, What does show print when no file is named?
+
+Problem: show, check, plan and read each print lines the one who runs them has no move on, and the move hides among them.
+Standard: a read-only command prints what it read and what follows from it, as git status does.
+
+- A) What it reads from the records, its status, the findings, and the move that follows, and nothing else.
+  Why: every line is read for a move; the record names each actor's inputs at each step.
+  Costs: counts, pass notes and the hint line go; a passing check prints nothing.
+- B) Everything it computed on the way: statuses, findings, counts, notes and the move.
+  Why: the one who runs it sees that the command ran and what it covered.
+  Costs: hundreds of lines around one move; each new command adds lines no decision names.
+
+### Does check print a line with no move on it?
+depends: check, move, finding, What does a command print when it writes nothing?=A
+supersedes: Does check print a line that names no move?
+unrelated: Does a command print under a flag what it computes from the records?, Does a command refuse what check lets pass?, Does check read the words of an answered question again?, Does show print the reference lines of an answered question?, What does a command that writes nothing print?, What does a writing command print?, What does check do with a fault on a file awaiting approval?, What does check do with an untested current decision?, What does show print with no file named?, Does check at a commit read the staged files?, Does check fail a ledger whose rows changed place?, What does check do with a decision row no question names?, What does check do with a test that names a decision that is not current?, Does a command print a computed view under a flag?, Does show print the reference lines of a question that is answered?, Does show print what a file holds past its latest approval?, What does show print for a file under adrdom?, What does show print of a reader's word on a question?, What does show print when no file is named?
+
+Problem: on a pass check prints a tier line and a done line per topic file and counts of tested decisions and files awaiting approval, and none carries a move.
+Standard: a checker prints its findings, each with the fix, and is silent on a pass.
+
+- A) No.
+  Why: every line of check is a finding with its move; a pass prints nothing, by hand or in a hook.
+  Costs: hook flag, done, tier and tested lines go; no decision holds that a waiting blame file stops nothing.
+- B) Yes.
+  Why: the one who runs check sees what it covered.
+  Costs: dozens of lines with no move on every run, and twice per commit without a flag.
+
+### Does a command print a computed view under a flag?
+depends: move, neighbour, What does a command print when it writes nothing?=A
+supersedes: Does a command print under a flag what it computes from the records?, What does show print of the reader's word on a question?, What does show print of a file under adrdom?, What does show print with no file named?, What does the tool print for a build move in a planner's session?, Does show print the reference lines of an answered question?
+unrelated: Does a command compute a move of its own?, Does a command name a status of its own?, Does show print what a file holds beyond its latest approval?, Does the tool colour its terminal output?, Does the ui show what the commands print?, What does a writing command print?, Does an answer carry the version of the question the owner read?, Does check at a commit read the staged files?, What does a command that writes nothing print?, What does check do with a decision row no question names?, Does check print a line with no move on it?, Does show print the reference lines of a question that is answered?, Does show print what a file holds past its latest approval?, What does show print for a file under adrdom?, What does show print of a reader's word on a question?, What does show print when no file is named?
+
+Problem: show prints the neighbours of every unasked question with the reader's word in its plain listing, five lines per heading that no move reads.
+Standard: a computed view is printed on request, under a flag named for it, as git log --graph and ls -l do.
+
+- A) Yes.
+  Why: status and move in the listing; a computed view under a flag, or inside a finding or move needing it.
+  Costs: a flag per view; a view with no flag is read from the files the tool writes.
+- B) No.
+  Why: a command prints the status and the move, and nothing computed, flag or not.
+  Costs: the nearest decisions and the reader's word are read from plan's output or the reader's file alone.
+
+### Does show print what a file holds past its latest approval?
+depends: approve, owner, topic file, What does a command print when it writes nothing?=A
+supersedes: Does show print what a file holds beyond its latest approval?, What does show print of a file under adrdom?, What does show print of the reader's word on a question?, Does show print the reference lines of an answered question?, What does the tool print for a build move in a planner's session?
+unrelated: Does a command print under a flag what it computes from the records?, Does ask run on a file with unapproved prose?, Does check fail a topic file awaiting approval?, Does the reader's file keep a row whose text is gone from the records?, Does the tool stop while the terms file waits for approval?, What does check do with a fault on a file awaiting approval?, What does show print with no file named?, Does an answer carry the version of the question the owner read?, Does check at a commit read the staged files?, Does the owner approve a blame file?, Does the ui perform every owner act?, Does a command print a computed view under a flag?, Does check print a line with no move on it?, Does show print the reference lines of a question that is answered?, What does show print for a file under adrdom?, What does show print of a reader's word on a question?, What does show print when no file is named?
+
+Problem: the owner runs approve without a view of what it approves: show prints a topic file the same before and after approval, never its bodies, and refuses the terms file and a blame path.
+Standard: a diff before a commit: the change is read before it is signed.
+
+- A) Yes.
+  Why: show takes every file approve takes and prints the headings, lines, bodies, entries or rows beyond its latest approval, marked.
+  Costs: show parses the terms file and a blame file; a plan change prints the change, not the file.
+- B) No.
+  Why: show prints status, and a draft is read with git diff.
+  Costs: the owner leaves the tool to see what approve will sign.
+
+### What does show print when no file is named?
+depends: decision, current, option, move, Does a command print a computed view under a flag?=A
+supersedes: What does show print with no file named?, What does the tool print for a build move in a planner's session?
+unrelated: Does a command print under a flag what it computes from the records?, Does check print a line that names no move?, Does show print the reference lines of an answered question?, Does show print what a file holds beyond its latest approval?, Does the ui show what the commands print?, What does a command that writes nothing print?, What does a writing command print?, What does check do with a decision row no question names?, What does show print of a file under adrdom?, Does the agent build what no current decision covers?, Does check print a line with no move on it?, Does show print the reference lines of a question that is answered?, Does show print what a file holds past its latest approval?, What does a command print when it writes nothing?, What does show print for a file under adrdom?, What does show print of a reader's word on a question?
+
+Problem: an agent runs show to find its move and to read the decisions it builds on; a listing of everything runs to hundreds of lines, and a listing of moves alone leaves the decisions to a second form.
+Standard: a listing command prints a summary and takes a flag or an argument for the whole.
+
+- A) Every current decision as its heading and the option picked, and every move.
+  Why: the agent reads the move first and the decisions it builds on second, in one run.
+  Costs: a few lines per decision; the file form and the whole are a second run.
+- B) Every move, and the decisions under a flag.
+  Why: the shortest listing; the decisions come when asked for.
+  Costs: the agent runs show twice before it builds.
+- C) Every question of every file with its status and ties.
+  Why: one listing holds everything.
+  Costs: hundreds of lines to find one move, growing with every question.
+
+### What does show print for a file under adrdom?
+depends: move, Does a command print a computed view under a flag?=A, Does show print what a file holds past its latest approval?=A
+supersedes: What does show print of a file under adrdom?, What does show print of the reader's word on a question?, Does show print the reference lines of an answered question?, What does the tool print for a build move in a planner's session?
+unrelated: Does a command print under a flag what it computes from the records?, Does install write outside adrdom?, Does show print what a file holds beyond its latest approval?, Does the tool keep everything it owns under one directory?, Does the ui show what the commands print?, What does show print with no file named?, What does the tool keep of the reader's word?, ledger, topic file, Does check print a line that names no move?, What does check do with a decision row no question names?, What does check do with a fault on a file awaiting approval?, Does check print a line with no move on it?, Does show print the reference lines of a question that is answered?, What does a command print when it writes nothing?, What does show print of a reader's word on a question?, What does show print when no file is named?
+
+Problem: show exists so that the one who runs it reads what their next move on the file needs, whatever kind of file it is.
+Standard: a listing prints what the next move reads and takes a flag for the rest.
+
+- A) What the next move on the file reads, and the rest under a flag.
+  Why: a question with its status, the lines approve reads, an asked body; a new line or file kind changes nothing.
+  Costs: which lines a move reads is derived from that move's decision, not listed in this one.
+- B) Everything the file holds, with the status of each thing.
+  Why: the whole file in one run, nothing under a flag.
+  Costs: twenty unrelated names per question that no move reads, over half the output.
+- C) Each thing's status only, and every line and body under a flag.
+  Why: the shortest listing.
+  Costs: the owner approves lines and answers bodies without seeing them.
+
+### Does show print the reference lines of a question that is answered?
+depends: depends, answer, What does show print for a file under adrdom?=A
+supersedes: Does show print the reference lines of an answered question?
+unrelated: Does a command print under a flag what it computes from the records?, Does a depends entry on a question in its file carry an answer set?, Does a reference line keep its list on one line?, Does an answer carry the version of the question the owner read?, Does check read the words of an answered question again?, Does show print what a file holds beyond its latest approval?, Does the ui show what the commands print?, Does the word limit read the text of an answered question?, What does show print of the reader's word on a question?, Does a supersedes line name every current decision standing on its target?, What does show print of a file under adrdom?, Does a command print a computed view under a flag?, Does check print a line with no move on it?, Does show print what a file holds past its latest approval?, What does a command print when it writes nothing?, What does show print of a reader's word on a question?, What does show print when no file is named?
+
+Problem: the depends, supersedes and blame lines of every answered question fill half of show's listing of a file, and no move on an answered question reads them.
+Standard: a listing prints what the next step reads; what stands behind a closed item is shown on request.
+
+- A) No.
+  Why: the lines of an unanswered question are what approve reads; those of an answered one print under --dependents.
+  Costs: an agent after an answered question's lines runs --dependents or reads the file.
+- B) Yes.
+  Why: every line of every question in one listing.
+  Costs: lines no move reads make most of the listing of a settled file.
+
+### What does show print of a reader's word on a question?
+depends: reader, question, neighbour, What does show print for a file under adrdom?=A, Does a command print a computed view under a flag?=A
+supersedes: What does show print of the reader's word on a question?
+unrelated: Does an answer carry the version of the question the owner read?, Does check read the words of an answered question again?, Does show print the reference lines of an answered question?, Does show print what a file holds beyond its latest approval?, Does the tool print every pair the reader marks?, Does the ui show what the commands print?, Does the word limit read the text of an answered question?, What does answer write for a removed question?, What does show print of a file under adrdom?, Does approve withdraw an asked question struck from the plan?, Does the agent build what no current decision covers?, Does the ui perform every owner act?, What does check do with a fault on a file awaiting approval?, What does the tool print for a build move in a planner's session?, Does check print a line with no move on it?, Does show print the reference lines of a question that is answered?, Does show print what a file holds past its latest approval?, What does a command print when it writes nothing?, What does show print when no file is named?
+
+Problem: the owner approves a plan reading the agent's lines, and the reader's word on those lines, inconsistent, same or closes, is printed to the agent alone.
+Standard: a review listing shows a disputed item beside the item, and the full analysis on request.
+
+- A) Under the question, inconsistent, same or closes with its letter, beside a neighbour no supersedes line names; all under --reader.
+  Why: the owner sees a disputed line and the option the record forces before approving; the rest stays under the flag.
+  Costs: a view with no move on its line; show reads the reader's file for each question.
+- B) Every word under --reader, nothing in the plain listing.
+  Why: the plain listing stays the agent's lines and the moves.
+  Costs: the owner runs the flag before each approval, or approves a disputed line unseen.
+- C) Nothing: the reader's word is read in plan's output alone.
+  Why: no new line form.
+  Costs: the owner never sees the reader's word; the agent's line stands alone at approval.

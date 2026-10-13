@@ -395,3 +395,132 @@ Standard: a machine-written cache is verified for shape and against edits; remov
   Costs: a row edited by hand passes as the reader's word.
 
 **Answer:** A
+
+### What word does the reader give a neighbour of a question with its body?
+depends: reader, neighbour, question, decision, What does the agent do to plan a topic file?
+supersedes: What does the reader say about a neighbour of a question with its body?, What does the tool keep of the reader's word?, What does show print of the reader's word on a question?, What does the reader say about a neighbour of a heading?, Does the reader's word stop a command?, What does the reader say about two current decisions?, Does the tool print every pair the reader marks?, Does the tool read a pair of decisions in both directions?, Does a command print under a flag what it computes from the records?, What does a command that writes nothing print?, Does check print a line that names no move?, Does show print what a file holds beyond its latest approval?, What does show print with no file named?, What does the tool print for a build move in a planner's session?, What does show print of a file under adrdom?, Does show print the reference lines of an answered question?, Does planning stop without the reader?, Does the tool bring the plan's own questions as neighbours of each other?, Does the tool read every current decision against its neighbours?, Does the reader's file keep a row whose text is gone from the records?, What does check hold of the reader's file?, Does a commit run the reading of the set?
+unrelated: Does an answer carry the version of the question the owner read?, Does every neighbour get a line under its heading?, Does the word limit read the text of an answered question?, answer set, Does check read the words of an answered question again?, Does the agent build what no current decision covers?, Does the owner answer a question with a refusal?, What binds in an answered question?, Does a reader's word stop a command?, Does planning stop with no reader on the machine?, Does the reader read a neighbour of a heading?, Does the reader's file keep a row whose text left the records?, Does the tool bring a plan's own questions as neighbours of each other?, What does check hold of a reader's file?, What does the tool keep of a reader's word?, answer
+
+Problem: with the options in view the relation to a decision can be read, and a free sentence cannot be acted on; a word from a closed set can.
+Standard: classification into a closed set with an explicit none-of-these, so the reader is never forced.
+
+- A) One of same, consistent, inconsistent, unrelated, or closes with the letter it leaves standing, after one sentence of reason.
+  Why: each word is read off the two texts; closes names the option the record forces, and unrelated is the exit.
+  Costs: a bundled decision gets one word for several rules; the reason sentence names the clause it matched.
+- B) One of same, consistent, inconsistent, depends, unrelated, after one sentence of reason.
+  Why: a missing tie is named by the reader beside the agent's line.
+  Costs: depends is a claim about order two texts do not show, and the word gets copied into the lines.
+- C) A free sentence on how the two relate, no word.
+  Why: nothing is forced into a set; every nuance of a bundled decision survives.
+  Costs: nothing in the record can be compared or counted; the agent reads a sentence per neighbour and rules alone.
+
+### Does the reader read a neighbour of a heading?
+depends: reader, neighbour, What word does the reader give a neighbour of a question with its body?=A|B
+supersedes: What does the reader say about a neighbour of a heading?, Does planning stop without the reader?, Does the tool bring the plan's own questions as neighbours of each other?
+unrelated: Does every neighbour get a line under its heading?, Does the reader's word stop a command?, Does the word limit read the text of an answered question?, What does show print of the reader's word on a question?, What does the reader say about a neighbour of a question with its body?, What does the tool bring as neighbours for a new heading?, option, question, Does a question keep its identifier when its heading is reworded?, Does check read the words of an answered question again?, Does the agent build what no current decision covers?, What does the agent do to plan a topic file?, Does a reader's word stop a command?, Does planning stop with no reader on the machine?, Does the reader's file keep a row whose text left the records?, Does the tool bring a plan's own questions as neighbours of each other?, What does check hold of a reader's file?, What does the tool keep of a reader's word?
+
+Problem: at the heading step the new side has no options and no answer; a word given there is copied into the lines the agent writes.
+Standard: a classifier gets only the labels its input can support.
+
+- A) No.
+  Why: the agent reads the ten neighbours itself and writes its lines; the reader reads the question with its body.
+  Costs: a heading a decision settles gets a body before it drops.
+- B) Yes.
+  Why: a heading a decision settles drops before its body is written.
+  Costs: ten reader calls per heading, repeated at the body step, and a word on hierarchy the text cannot support.
+
+### What does the tool keep of a reader's word?
+depends: reader, neighbour, What word does the reader give a neighbour of a question with its body?=*
+supersedes: What does the tool keep of the reader's word?, Does the tool read every current decision against its neighbours?, Does the tool print every pair the reader marks?, What does show print of the reader's word on a question?, Does the reader's file keep a row whose text is gone from the records?, What does check hold of the reader's file?, Does a command print under a flag what it computes from the records?, What does a command that writes nothing print?, Does check print a line that names no move?, Does show print what a file holds beyond its latest approval?, What does show print with no file named?, What does the tool print for a build move in a planner's session?, What does show print of a file under adrdom?, Does show print the reference lines of an answered question?, Does the tool read a pair of decisions in both directions?, What does the reader say about two current decisions?, Does a commit run the reading of the set?
+unrelated: Does the reader's word stop a command?, Does the tool write a terms brief for the agent?, What holds the list of loaded phrases?, embedding index, status, Does a question keep its identifier when its heading is reworded?, Does a term carry its own banned words?, Does check read the words of an answered question again?, Does the owner lift a ban?, Does the tool keep everything it owns under one directory?, Does the tool rewrite the ban list from the ledger?, Does the tool stop while the terms file waits for approval?, Does a reader's word stop a command?, Does planning stop with no reader on the machine?, Does the reader read a neighbour of a heading?, Does the reader's file keep a row whose text left the records?, Does the tool bring a plan's own questions as neighbours of each other?, What does check hold of a reader's file?
+
+Problem: a word that stays in the terminal is gone at approval; the owner sees the agent's line with nothing against it, and a pair whose texts did not change is read again.
+Standard: expensive judgments are stored keyed by their inputs, in a file the tool owns.
+
+- A) A row in its own file under adrdom/state: text hash, neighbour identifier, word, reason, prompt hash, model.
+  Why: the neighbour list is the same rows, so approve reads them anywhere; word and reason meet the agent's line.
+  Costs: a second append-only file beside the ledger, hundreds of rows per plan, held like the ledger.
+- B) A row in the ledger: the same fields in the ledger's columns.
+  Why: one log, one set of rules, nothing new to hold.
+  Costs: hundreds of reader rows around tens of owner events, and two keys forced into one identifier column.
+- C) Only the word, in its own file, no reason.
+  Why: short rows; the reason is read once in the terminal.
+  Costs: the owner sees a word against the agent's line, no reason; a bundled decision's clause is not named.
+
+### Does a reader's word stop a command?
+depends: reader, agent, What word does the reader give a neighbour of a question with its body?=*
+supersedes: Does the reader's word stop a command?
+unrelated: Does a command name a status of its own?, Does a command refuse what check lets pass?, Does a command stop when the environment gives no session identifier?, Does approve stop a terms edit that moves a word an answered question pairs?, Does the owner lift a ban?, Does the tool stop while the terms file waits for approval?, Does the ui show what the commands print?, Does the word limit read the text of an answered question?, What does a writing command print?, Does a banned word pass when it is only quoted?, Does a refusal name the command that clears it?, Does ban refuse a word that appears in the repository?, Does check read the words of an answered question again?, Does the agent build what no current decision covers?, Does the tool guard against an agent that works around it on purpose?, Does planning stop with no reader on the machine?, Does the reader read a neighbour of a heading?, Does the reader's file keep a row whose text left the records?, Does the tool bring a plan's own questions as neighbours of each other?, What does check hold of a reader's file?, What does the tool keep of a reader's word?
+
+Problem: a reader is a model; a wrong word that stops a command has no exit but rewording the text, and a word that is only a line leaves a trace.
+Standard: advisory checks inform; blocking checks are deterministic.
+
+- A) No.
+  Why: the agent's line is the ruling; the reader's word beside it shows the owner where they disagree.
+  Costs: a wrong line of the agent passes approve; it is seen, not stopped.
+- B) Yes.
+  Why: a same from the reader stops the heading until it is reworded or dropped.
+  Costs: a wrong same has no exit but rewording; the model's word becomes a rule that cannot be checked again.
+
+### Does planning stop with no reader on the machine?
+depends: reader, plan, Does the reader read a neighbour of a heading?=*
+supersedes: Does planning stop without the reader?
+unrelated: Does a planning step run without the record of the step before?, Does planning stop without the embedding model?, Does the agent build what no current decision covers?, Does the ledger hold the planners?, Does the reader's file keep a row whose text is gone from the records?, Does the reader's word stop a command?, What makes a session a planner?, What stops a depends entry that resolves to nothing?, planner, Does check print a line that names no move?, What does a command that writes nothing print?, What does the tool keep of the reader's word?, What does the tool print for a build move in a planner's session?, Does a reader's word stop a command?, Does the reader's file keep a row whose text left the records?, Does the tool bring a plan's own questions as neighbours of each other?, What does check hold of a reader's file?, What does the tool keep of a reader's word?, What word does the reader give a neighbour of a question with its body?
+
+Problem: the reader is a program apart from the tool; a machine without it brings neighbours with no word, and a plan with wordless rows is a plan with a hole.
+Standard: a step whose input is missing stops and names it; no degraded mode.
+
+- A) Yes.
+  Why: one shape of row; every neighbour read with a body carries a word.
+  Costs: planning needs the reader on the machine; every other command runs without it.
+- B) No.
+  Why: the agent reads the neighbours itself; the word is a line, not a gate, so its absence stops nothing.
+  Costs: two shapes of row, and the owner sees agent lines with nothing against them.
+
+### Does the tool bring a plan's own questions as neighbours of each other?
+depends: plan, neighbour, Does the reader read a neighbour of a heading?=*
+supersedes: Does the tool bring the plan's own questions as neighbours of each other?
+unrelated: Does the agent that asks a question build its decision?, Does the tool guard against an agent that works around it on purpose?, Does the tool read a pair of decisions in both directions?, Does the tool read every current decision against its neighbours?, What bounds the questions a depends line names?, What bounds the questions at one tier?, What does the tool bring as neighbours for a new heading?, What makes a session a planner?, planner, Does a question keep its identifier when its heading is reworded?, Does every neighbour get a line under its heading?, Does one question heading stand in two topic files?, What does the reader say about a neighbour of a heading?, What does the reader say about a neighbour of a question with its body?, Does a reader's word stop a command?, Does planning stop with no reader on the machine?, Does the reader's file keep a row whose text left the records?, What does check hold of a reader's file?, What does the tool keep of a reader's word?, What word does the reader give a neighbour of a question with its body?, question
+
+Problem: two new headings in one plan are never each other's neighbour when the pool is the records; the tie between them is written by hand and forgotten.
+Standard: deduplicate a batch against itself as well as against the store.
+
+- A) Yes.
+  Why: at the body step each question is read against the plan's nearest questions with the heading set.
+  Costs: a few more reader calls per question; two unanswered questions give no consistent or inconsistent.
+- B) No.
+  Why: the pool is the records; the agent wrote both headings and knows their tie.
+  Costs: two headings on one rule in one plan pass; the tier cap is the only net.
+
+### Does the reader's file keep a row whose text left the records?
+depends: reader, neighbour, What does the tool keep of a reader's word?=*
+supersedes: Does the reader's file keep a row whose text is gone from the records?, What does check hold of the reader's file?
+unrelated: Does a reference line keep its list on one line?, Does check fail a ledger row that was edited?, Does check fail a ledger whose rows changed place?, Does show print what a file holds beyond its latest approval?, Does the tool take the order of ledger rows from their time?, Does the word limit read the text of an answered question?, What does the tool keep of the reader's word?, Does check at a merge look for the ledger rows of both branches?, Does check fail an answered question whose text changed?, Does every ledger row carry the tool version?, What does a ledger row hold?, Does a reader's word stop a command?, Does planning stop with no reader on the machine?, Does the reader read a neighbour of a heading?, Does the tool bring a plan's own questions as neighbours of each other?, What does check hold of a reader's file?, What word does the reader give a neighbour of a question with its body?
+
+Problem: the file grows by a row for every reading of a text since edited away, and a row nothing can look up again is weight on every read.
+Standard: a cache keyed by content hash is pruned of entries whose key no longer resolves; the record of events is kept elsewhere.
+
+- A) No.
+  Why: when it appends, the tool drops each row whose text or neighbour is gone from the records; git keeps them.
+  Costs: a merge brings a dropped row back from the other branch until the next append drops it again.
+- B) Yes.
+  Why: every reading ever made stays; the file is a record like the ledger.
+  Costs: a row per edited draft text for ever, read on every command.
+
+### What does check hold of a reader's file?
+depends: check, reader, Does the reader's file keep a row whose text left the records?=A|B, What does the tool keep of a reader's word?=*
+supersedes: What does check hold of the reader's file?
+unrelated: Does check at a commit read the staged files?, Does check hold the files install writes?, Does check hold the terms brief to the terms file?, Does check read the words of an answered question again?, Does show print what a file holds beyond its latest approval?, Does the reader's file keep a row whose text is gone from the records?, What does check do with a fault on a file awaiting approval?, What does show print of a file under adrdom?, What does the tool keep of the reader's word?, Does a question keep its identifier when its heading is reworded?, Does check fail a ledger row that was edited?, Does check fail a ledger whose rows changed place?, What does a blame file hold of its origin?, What does a ledger row hold?, Does a reader's word stop a command?, Does planning stop with no reader on the machine?, Does the reader read a neighbour of a heading?, Does the tool bring a plan's own questions as neighbours of each other?, What word does the reader give a neighbour of a question with its body?
+
+Problem: a file the tool writes and the agent may edit is a file the agent will edit; a rule that holds every row at HEAD byte for byte holds a row the tool itself drops.
+Standard: a machine-written cache is verified for shape and against edits; removal is the writer's act.
+
+- A) Every row at HEAD stays byte for byte or is gone whole; no row is edited or added by hand.
+  Why: a hand-edited row never passes as the reader's word; the tool's own drop passes.
+  Costs: a row deleted by hand passes as a drop; a hand-written row is caught by its shape alone.
+- B) Every row at HEAD stays byte for byte.
+  Why: the file is held like the ledger.
+  Costs: the tool cannot drop a row, so the file keeps every reading ever made.
+- C) The shape of each row alone.
+  Why: nothing to compare with history.
+  Costs: a row edited by hand passes as the reader's word.
