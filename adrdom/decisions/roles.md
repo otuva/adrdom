@@ -240,9 +240,11 @@ Standard: every diagnostic carries a stable code that documentation and tests ke
 **Answer:** A
 
 ### What does the tool print for a build move in a planner session?
-depends: move, planner, builder, What makes a session a planner?, Does check fail a planner's commit that reaches outside adrdom?
-supersedes: What does the tool print for a build move in a planner's session?
-unrelated: Does check print a line that names no move?, Does the tool colour its terminal output?, Does the tool mark a builder?, Does the ui show what the commands print?, What does show print of a file under adrdom?, What does show print with no file named?, Does the agent build what no current decision covers?, Does the agent write the plan?, Does the tool rewrite the ban list from the ledger?, What does check do with a fault on a file awaiting approval?, What does check do with a test that names a decision that is not current?, What does the ban scan read?
+depends: d904dc0d-231f-4e93-ac74-7babe888107d, 3aedf314-f25f-49cb-b7b3-d2302e4543ca, c49997ee-10e7-48e0-b66b-43f8b09758a6, 6c406624-b874-4697-9a44-91941019b7d1, db07a54d-4d80-4035-a9ef-eabcc0c872b3
+supersedes: 8f81dee1-9c19-447d-baa8-d7d0af691db8
+unrelated: 3fc35d4f-90f3-4425-9dac-951a89631fdf, 44d02e7a-c902-4b89-973c-cf9d5c67c70e, 8d3337b9-6fb3-4756-80f1-b388fe81d856, 3cf56867-3918-4ce6-a296-2cc62a91b154, a6f41dee-2381-421a-bcc4-b14af243209b, c84a4bd9-fc2d-44f0-b333-172978f61544, c3127af2-4c96-48d5-a164-bac49a9a09ec, 23d53545-c238-48cc-ae5e-21a2c7aab83e, f422c5db-13d0-4ff7-9e43-b68ab44a7cb9, 05141f49-d9d2-407c-b60c-ebb195a05864, 2381d759-f85f-484e-9031-fadbe6ea045a, d8a9dfff-de89-442c-a08c-8276efab3f36
+id: 9a2ff21b-c20b-4c63-95f2-a7a3cbe236b8
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, builder=c49997ee-10e7-48e0-b66b-43f8b09758a6, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, decisions=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, move=d904dc0d-231f-4e93-ac74-7babe888107d, moves=d904dc0d-231f-4e93-ac74-7babe888107d, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, planner=3aedf314-f25f-49cb-b7b3-d2302e4543ca, reader=be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, refusal=0942e445-0163-423e-8ba7-84dd8ac07045, refused=0942e445-0163-423e-8ba7-84dd8ac07045, session=3afef03f-9017-4638-9759-e010d44d536b
 
 Problem: a planner reads a build move as its own, builds, and is refused at the commit, after the work.
 Standard: a listing tells the reader which items are theirs before they act.
