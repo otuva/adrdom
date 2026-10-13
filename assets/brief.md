@@ -181,18 +181,19 @@ the ten nearest current decisions and term definitions, with the reader's
 word after one sentence of reason: same, consistent, inconsistent, unrelated,
 or closes with a letter, when the record leaves only that option standing; and
 the nearest other questions of this file, with same or unrelated. The reader's
-word is not a ruling; your line is. Write a line for each new neighbour.
-Under a neighbour marked closes with a letter the record leaves that option
-alone standing, so the question is decided: strike the heading, or, when the
-question is there to change that decision, write the neighbour on its
-`supersedes:` line; when you read the neighbour and find more than one
-option standing, keep your line and say why in chat. Under a neighbour
-marked inconsistent, write it on `supersedes:`, reword the question so the
-two agree, or keep your line and say why in chat. A question is never asked
-over a mark you did not read. A
+word is not a ruling; your line is. Write a line for each new neighbour. A
 heading or a body changed after its step is read
 again: run `adr plan <file>` until the move it prints is the owner's
 `adr approve`.
+
+Under a neighbour marked closes with a letter the record leaves that option
+alone standing, so the question is decided: strike the heading, or, when the
+neighbour is a decision the question is there to change, write it on the
+`supersedes:` line; when you read the neighbour and find more than one
+option standing, keep your line and say why in chat. Under a neighbour
+marked inconsistent, write it on `supersedes:` when it is a decision the
+question is there to change, reword the question so the two agree, or keep
+your line and say why in chat.
 
 **6. Ask approval.** Say the plan is ready, post
 `owner runs: adr approve <file>` and stop. The owner reads headings, lines
