@@ -510,7 +510,8 @@ fn closes_letter(kind: Kind, letters: &[char], word: &str) -> Option<char> {
     if kind != Kind::Body {
         return None;
     }
-    let mut parts = word.split_whitespace();
+    // `closes: b` and `closes (b)` name the letter as `closes b` does.
+    let mut parts = word.split(|c: char| !c.is_alphanumeric()).filter(|t| !t.is_empty());
     let (Some(CLOSES), Some(l), None) = (parts.next(), parts.next(), parts.next()) else { return None };
     let mut cs = l.chars();
     let (Some(c), None) = (cs.next(), cs.next()) else { return None };
@@ -841,11 +842,11 @@ mod tests {
         assert!(parse_reply(Kind::Body, &['A', 'B'], "r\ndepends").is_err());
         assert!(parse_reply(Kind::Body, &['A', 'B'], "r\nconsistently").is_err());
         assert!(parse_reply(Kind::Body, &[], "inconsistent").is_ok());
-        for reply in ["r\ncloses B", "r\nCloses b.", "r\n  closes   B  "] {
+        for reply in ["r\ncloses B", "r\nCloses b.", "r\n  closes   B  ", "r\nCloses: B", "r\ncloses (B)", "r\n**closes B**"] {
             assert_eq!(parse_reply(Kind::Body, &['A', 'B'], reply).unwrap().1, "closes B");
         }
         // No letter, a letter the question lacks, two letters, or another kind.
-        for reply in ["r\ncloses", "r\ncloses C", "r\ncloses AB", "r\ncloses 1", "r\ncloses B or A"] {
+        for reply in ["r\ncloses", "r\ncloses C", "r\ncloses AB", "r\ncloses 1", "r\ncloses B or A", "r\ncloses option B"] {
             assert!(parse_reply(Kind::Body, &['A', 'B'], reply).is_err(), "{}", reply);
         }
         assert!(parse_reply(Kind::Body, &[], "r\ncloses A").is_err());
