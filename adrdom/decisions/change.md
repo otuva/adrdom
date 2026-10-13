@@ -172,3 +172,20 @@ Standard: version control keeps old text; a working document drops what is repla
   Costs: a second copy of what git keeps.
 
 **Answer:** A
+
+### What strikes the section of a superseded question from its topic file?
+depends: topic file, answer, supersede, check, question, What may leave a topic file by a plan change?
+unrelated: Does a refused question stay in its topic file?, What does answer write for a removed question?, What is the shape of a topic file?, What does a depends entry name?, Does one question heading stand in two topic files?, Does check fail a topic file awaiting approval?, depends, topic, Does a question keep its identifier when its heading is reworded?, Does a supersedes line name every current decision standing on its target?, Does approve withdraw an asked question struck from the plan?, Does check at a commit read the staged files?, Does check fail an answered question whose text changed?, Does the repository hold a banned word in plain text?, What does a reference in a topic file carry?
+
+Problem: a superseded section may leave by a plan change, and no command makes one, so topic files fill with sections show hides.
+Standard: a working document drops what is replaced the moment it is replaced; version control keeps the old text.
+
+- A) Answer: every run strikes each superseded section from every topic file, and check reports one still there.
+  Why: the command that supersedes leaves no dead section behind, and the ones that piled up go at the next answer.
+  Costs: answer writes topic files beyond the one answered; a file's approved hash is read without the struck sections.
+- B) The agent, as a plan change the owner approves.
+  Why: every edit of a topic file stays an edit the owner reads.
+  Costs: nothing makes the change, so dead sections pile up until someone strikes them and the owner approves each file.
+- C) Approve: it strikes each superseded section of the file it approves.
+  Why: a file is cleaned by the owner's act, when the owner reads it anyway.
+  Costs: a file with no plan change keeps its dead sections for good.
