@@ -246,7 +246,7 @@ fn check_prints_the_tree_refusal_once_for_an_approved_unasked_replacement_whose_
     );
 }
 
-// adr: 36dfbeaa-698d-4a57-b3b0-d425348e14a5
+// adr: cdc905a2-5b58-4c38-beff-4a8bd3b6f42e
 //
 // A decision several newer decisions supersede (per "Does one decision
 // supersede several?": several newer decisions may name the same older

@@ -40,8 +40,8 @@ pub(crate) const CLAUDE_MD_MARKER: &str =
 pub(crate) const CLAUDE_MD_IMPORT: &str = "@AGENTS.md";
 
 /// The commit hooks run check as it is by hand: a pass prints nothing, and
-/// every line is a finding with its move (per "Does check print a line that
-/// names no move?", 3fc35d4f A).
+/// every line is a finding with its move (per "Does check print a line with no
+/// move on it?", bd83aa22 A).
 pub(crate) const PRE_COMMIT_HOOK: &str = "#!/bin/sh\nadr check --staged\nexit $?\n";
 pub(crate) const COMMIT_MSG_HOOK: &str = "#!/bin/sh\nadr check --message \"$1\"\nexit $?\n";
 /// Decision P (19e1c023-a678-4842-a414-bb0e45c41601): a plain `sh` script,
@@ -53,8 +53,8 @@ pub(crate) const PRE_PUSH_HOOK: &str = "#!/bin/sh\nadr check --push\nexit $?\n";
 /// `adrdom/.gitattributes`'s whole content (Decision 7,
 /// db56a285-946f-48b1-b073-bb1e90192185): the one merge rule that keeps
 /// both branches' rows at a merge for the ledger, and a second one for the
-/// reader's file ("Does the reader's file keep a row whose text is gone from
-/// the records?", 90714223-52e3-4bb9-b0b4-2a8b87d74145: a merge brings a
+/// reader's file ("Does the reader's file keep a row whose text left the
+/// records?", a8034401-420c-45d7-8f43-60c1b9f3baf9: a merge brings a
 /// dropped row back until the next append drops it again). The ban list gets no
 /// such rule -- a merge conflict there is left for the owner to resolve,
 /// same as any other file `install` doesn't cover. `check`'s `install`
@@ -65,8 +65,8 @@ pub(crate) const GITATTRIBUTES_CONTENT: &str = "state/ledger.tsv merge=union\nst
 /// `adrdom/.gitignore`'s whole content: the index and the model files under
 /// `adrdom/cache` stay out of git ("Does git track a file the tool can get
 /// again without the owner?"), and so does the roles file, which is
-/// untracked (1cec44fc).
-pub(crate) const GITIGNORE_CONTENT: &str = "cache/\nstate/roles.tsv\n";
+/// untracked (1cec44fc), and the neighbours file (60341be0).
+pub(crate) const GITIGNORE_CONTENT: &str = "cache/\nstate/roles.tsv\nstate/neighbours.tsv\n";
 
 /// `.codex/rules/adrdom.rules`'s content: one `prefix_rule` block per
 /// `OWNER_COMMANDS` entry (`commands::OWNER_COMMANDS`), `decision =

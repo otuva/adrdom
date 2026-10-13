@@ -3,7 +3,7 @@
 //! (`html`), so the page shows what the terminal prints (per "Does the ui
 //! show what the terminal prints?", 7857d633 A). A command that writes
 //! nothing prints what it read, statuses, findings and moves (per "What does
-//! a command that writes nothing print?", 848e1b76 A); a command that writes
+//! a command print when it writes nothing?", 1af76f91 A); a command that writes
 //! prints one event per row or file it wrote, or the finding that stopped it
 //! (per "What does a command that writes print?", 069a6b4a A).
 use crate::approval::Side;
@@ -148,12 +148,12 @@ pub enum Line {
     /// A thing in the records and its status; `mark` is the side of a
     /// change beyond its latest approval the thing is on as a whole: a thing
     /// new since that approval (`Added`) or struck from it (`Removed`), the
-    /// marks of a diff (per "Does show print what a file holds beyond its
-    /// latest approval?", bceceda8 A).
+    /// marks of a diff (per "Does show print what a file holds past its latest
+    /// approval?", 91f9652a A).
     Status { subject: String, status: Status, mark: Option<Side> },
     /// The reader's word on a neighbour of a question, one line under the
-    /// question (per "What does show print of the reader's word on a
-    /// question?", 332ff0c7 A). A view: no move stands on it. The reader's
+    /// question (per "What does show print of a reader's word on a
+    /// question?", 6e72f34e A). A view: no move stands on it. The reader's
     /// words are not statuses (a closed list), so the line is no `Status`.
     Word { word: String, name: String },
     /// A rule one thing in the records breaks: found, what the rule
@@ -236,7 +236,7 @@ pub fn html(line: &Line) -> String {
             esc(subject)
         ),
         Line::Word { word, name } => {
-            let class: String = word.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect();
+            let class: String = word_class(word).chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect();
             format!("<p class=\"word word-{}\"><span class=\"word-name\">[{}]</span> {}</p>", class, esc(word), esc(name))
         }
         Line::Finding(f) => format!("<p class=\"finding\">{}</p>", esc(&f.text())),
@@ -246,6 +246,22 @@ pub fn html(line: &Line) -> String {
         Line::Move(m) => format!("<p class=\"move {}\">{}</p>", mover_class(m), esc(&m.text())),
         Line::Event(e) => format!("<p class=\"event\">{}</p>", esc(&e.text())),
     }
+}
+
+/// The page class of a reader's word: the word itself, but a `closes` word
+/// with its letter (`closes B`) is the one class `closes`.
+fn word_class(word: &str) -> &str {
+    if word.starts_with("closes ") {
+        "closes"
+    } else {
+        word
+    }
+}
+
+/// Whether the plain listing of `show` marks a neighbour with this word:
+/// `inconsistent`, `same`, or `closes` with its letter.
+pub(crate) fn word_is_marked(word: &str) -> bool {
+    matches!(word_class(word), "inconsistent" | "same" | "closes")
 }
 
 /// The first word of a status name, as the page's class: `answered`, `asked`.
@@ -488,8 +504,8 @@ fn painted(line: &Line) -> String {
                 None => t,
             }
         }
-        Line::Word { word, .. } => match word.as_str() {
-            "inconsistent" => sgr("1;31", &t),
+        Line::Word { word, .. } => match word_class(word) {
+            "inconsistent" | "closes" => sgr("1;31", &t),
             "same" => sgr("1;33", &t),
             _ => sgr(DIM, &t),
         },
@@ -653,6 +669,15 @@ mod tests {
         assert_eq!(answered.text(), "answered: \"Does it?\" A");
         let plan = Event::from_row(&row("approved", "-", "h", "adrdom/decisions/x.md"), &names).unwrap();
         assert_eq!(plan.text(), "approved: plan of adrdom/decisions/x.md");
+    }
+
+    #[test]
+    fn a_closes_word_prints_with_its_letter_in_red_and_one_page_class() {
+        let l = Line::Word { word: "closes B".to_string(), name: "Does it?".to_string() };
+        assert_eq!(text(&l), "  [closes B] Does it?");
+        assert_eq!(painted(&l), format!("\x1b[1;31m{}\x1b[0m", text(&l)));
+        assert!(html(&l).starts_with("<p class=\"word word-closes\">"), "{}", html(&l));
+        assert!(word_is_marked("closes B") && word_is_marked("same") && !word_is_marked("unrelated"));
     }
 
     #[test]

@@ -5,23 +5,28 @@
 //! run without the record of the step before?",
 //! d3be71e4-ce7b-43b0-86a8-e86868521f99 A).
 //!
-//! 1. Every heading not yet asked with no reader rows at its heading hash
-//!    gets the ten nearest neighbours of the pool, read with the heading
-//!    prompt, whatever state the rest of the file is in.
+//! 1. Every heading not yet asked with no neighbours on record at its
+//!    heading hash gets the ten nearest neighbours of the pool recorded in
+//!    the neighbours file, whatever state the rest of the file is in. The
+//!    reader reads none of them ("Does the reader read a neighbour of a
+//!    heading?", 60341be0-fd05-4281-92d7-668584a8539a A: no).
 //! 2. A neighbour on no line is a finding, and no body is read.
 //! 3. While a heading has no body, no body is read.
 //! 4. When every heading has a body, each question with no rows at its body
 //!    hash gets the ten nearest neighbours of the pool, read with the body
-//!    prompt, and the ten nearest other questions of the file, read with
-//!    the plan prompt ("Does the tool bring the plan's own questions as
-//!    neighbours of each other?", 4838baa4-a5df-49e7-929c-ed63b5adaf4e A).
+//!    prompt ("What word does the reader give a neighbour of a question with
+//!    its body?", d10dab89-1d42-4764-9d72-22d6fd6a9260 A), and the ten
+//!    nearest other questions of the file, read with the plan prompt
+//!    ("Does the tool bring a plan's own questions as neighbours of each
+//!    other?", d984e425-3e88-4756-88fb-18241f9f62a7 A).
 //! 5. What it prints is the file's status, what it read, the findings on the
 //!    file and the file's moves, the one computation `show` reads too.
 //!
-//! The model and the reader are loaded only when there is something to read.
-//! Planning stops without them ("Does planning stop without the embedding
-//! model?", 21cdad59-4f0c-42a5-b4f3-6af946637df3; "Does planning stop
-//! without the reader?", 3dba486c-a399-4ce3-a794-e38c4f733403 A); `adr read`
+//! The model is loaded when a heading has no neighbours on record, and the
+//! reader only when a body is to be read. Planning stops without them
+//! ("Does planning stop without the embedding model?",
+//! 21cdad59-4f0c-42a5-b4f3-6af946637df3; "Does planning stop with no reader
+//! on the machine?", bd94a89f-7142-4dab-b757-6482a718a0a0 A); `adr read`
 //! loads them too.
 use crate::rules::Command;
 use crate::index;
@@ -35,10 +40,10 @@ use crate::repo;
 use crate::state;
 use std::path::{Path, PathBuf};
 
-/// Per "What does a command that writes nothing print?" (848e1b76 A): the
-/// file's status, the neighbours it read with the reader's word and whether
-/// a line carries each, the findings on the file, and its moves, and
-/// nothing else.
+/// Per "What does a command print when it writes nothing?" (1af76f91 A): the
+/// file's status, the neighbours it brought (with the reader's word for a
+/// body) and whether a line carries each, the findings on the file, and its
+/// moves, and nothing else.
 pub fn run(file: PathBuf) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
@@ -113,15 +118,16 @@ fn env(root: &Path) -> Env {
 }
 
 /// The planning records of `rf` as they stand, against the records `e`
-/// and the ledger `led` loaded once for the run: `adr plan` writes reader
-/// rows, never a topic file, the terms or the ledger.
+/// and the ledger `led` loaded once for the run: `adr plan` writes
+/// neighbours and reader rows, never a topic file, the terms or the ledger.
 fn planning(root: &Path, rf: &RecordFile, e: &Env, led: &ledger::Ledger) -> Planning {
     plan::load(root, rf, &e.all, &e.terms, led)
 }
 
-/// What the questions in `idxs` read at `step`: each question, then each of
-/// its neighbours with the reader's word, whether a line carries it, and the
-/// reader's sentence of reason, which the move on its lines needs.
+/// What the questions in `idxs` brought at `step`: each question, then each
+/// of its neighbours with, for a body, the reader's word, whether a line
+/// carries it, and the reader's sentence of reason, which the move on its lines
+/// needs.
 fn did(pl: &Planning, idxs: &[usize], step: Step, out: &mut Vec<Line>) {
     for q in pl.questions.iter().filter(|q| idxs.contains(&q.idx)) {
         let what = match step {
@@ -155,9 +161,12 @@ fn plan_file(root: &Path, rf: &RecordFile) -> Result<Vec<Line>, Vec<Line>> {
     if !todo.is_empty() {
         let queries: Vec<String> = todo.iter().map(|&i| plan::heading_text(&rf.sections[i])).collect();
         let near = index::nearest(root, &led, &queries, index::NEIGHBOURS).map_err(stop)?;
-        for (&i, n) in todo.iter().zip(&near) {
-            reader::read_live(root, &plan::heading_pairs(&rf.sections[i], n), &live).map_err(stop)?;
-        }
+        let entries: Vec<(String, Vec<String>)> = todo
+            .iter()
+            .zip(&near)
+            .map(|(&i, n)| (record::heading_hash(&rf.sections[i]), n.iter().map(|x| x.id.clone()).collect()))
+            .collect();
+        crate::neighbours::record(root, &entries, &live).map_err(stop)?;
         pl = planning(root, rf, &e, &led);
         did(&pl, &todo, Step::Heading, &mut read);
     }

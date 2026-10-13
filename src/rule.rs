@@ -655,38 +655,38 @@ pub const LEDGER_LATEST_ROW_IS_ONE: Rule = Rule {
     protects: "one subject never has two latest ledger rows",
 };
 
-/// Decision: What does the tool keep of the reader's word?
+/// Decision: What does the tool keep of a reader's word?
 pub const READER_ROW_FIELDS: Rule = Rule {
     name: "reader_row_fields",
-    decisions: &["08a1b488-32fc-4dc7-b4b3-93a6e768725f"],
+    decisions: &["55a6a2d8-03af-4db9-a4c7-e2790e38357e"],
     protects: "the reader's word on a pair stays readable",
 };
 
-/// Decision: What does check hold of the reader's file?
+/// Decision: What does check hold of a reader's file?
 pub const READER_ROWS_UNEDITED: Rule = Rule {
     name: "reader_rows_unedited",
-    decisions: &["abb6faed-96f7-406d-8384-002ee81bb157"],
+    decisions: &["30ca5d13-e68b-465f-aa84-ea4000c9330a"],
     protects: "a reader row is never changed by hand",
 };
 
-/// Decision: What does check hold of the reader's file?
+/// Decision: What does check hold of a reader's file?
 pub const MERGE_LEAVES_READER_ROWS_UNEDITED: Rule = Rule {
     name: "merge_leaves_reader_rows_unedited",
-    decisions: &["abb6faed-96f7-406d-8384-002ee81bb157"],
+    decisions: &["30ca5d13-e68b-465f-aa84-ea4000c9330a"],
     protects: "a merge changes no reader row of a merged branch",
 };
 
-/// Decision: What does check hold of the reader's file?
+/// Decision: What does check hold of a reader's file?
 pub const PUSH_LEAVES_READER_ROWS_UNEDITED: Rule = Rule {
     name: "push_leaves_reader_rows_unedited",
-    decisions: &["abb6faed-96f7-406d-8384-002ee81bb157"],
+    decisions: &["30ca5d13-e68b-465f-aa84-ea4000c9330a"],
     protects: "a push changes no reader row the remote holds",
 };
 
-/// Decision: What does check hold of the reader's file?
+/// Decision: What does check hold of a reader's file?
 pub const SINCE_LEAVES_READER_ROWS_UNEDITED: Rule = Rule {
     name: "since_leaves_reader_rows_unedited",
-    decisions: &["abb6faed-96f7-406d-8384-002ee81bb157"],
+    decisions: &["30ca5d13-e68b-465f-aa84-ea4000c9330a"],
     protects: "no reader row of an earlier commit is changed since",
 };
 
@@ -760,29 +760,21 @@ pub const BAN_NOT_ON_USED_WORD: Rule = Rule {
     protects: "a ban never lands on a word the repository holds",
 };
 
-/// Decision: Does the tool print every pair the reader marks? A pair the
-/// reader marks the same. The three pair rules stand in `ALL` in the order
-/// of the reader's words, so `adr read` prints same, inconsistent, depends.
+/// Decision: Does the tool print each pair the reader marks? A pair the
+/// reader marks the same. The two pair rules stand in `ALL` in the order
+/// of the reader's words, so `adr read` prints same, then inconsistent.
 pub const READ_PAIR_SAME: Rule = Rule {
     name: "read_pair_same",
-    decisions: &["2db33118-82b4-4edf-a9cb-e92ac62738b9"],
+    decisions: &["27bd0855-a6c8-4cda-a82b-bf95022a14b0"],
     protects: "decisions that repeat or contradict are named",
 };
 
-/// Decision: Does the tool print every pair the reader marks? A pair the
+/// Decision: Does the tool print each pair the reader marks? A pair the
 /// reader marks inconsistent.
 pub const READ_PAIR_INCONSISTENT: Rule = Rule {
     name: "read_pair_inconsistent",
-    decisions: &["2db33118-82b4-4edf-a9cb-e92ac62738b9"],
+    decisions: &["27bd0855-a6c8-4cda-a82b-bf95022a14b0"],
     protects: "decisions that repeat or contradict are named",
-};
-
-/// Decision: Does the tool print every pair the reader marks? A pair the
-/// reader marks as one depending on the other.
-pub const READ_PAIR_DEPENDS: Rule = Rule {
-    name: "read_pair_depends",
-    decisions: &["2db33118-82b4-4edf-a9cb-e92ac62738b9"],
-    protects: "decisions that stand on each other are named",
 };
 
 /// Decision: Does an owner command commit?
@@ -817,10 +809,10 @@ pub const BLAME_ROW_RANGE_WITHIN_ORIGIN: Rule = Rule {
 
 /// Decision: What does the agent do to plan a topic file?
 /// Decision: Does a planning step run without the record of the step before?
-pub const PLAN_STEP_HAS_READER_ROWS: Rule = Rule {
-    name: "plan_step_has_reader_rows",
+pub const PLAN_STEP_HAS_ITS_RECORD: Rule = Rule {
+    name: "plan_step_has_its_record",
     decisions: &["46fc51ff-66b9-4841-a953-ae0d4c2fc424", "d3be71e4-ce7b-43b0-86a8-e86868521f99"],
-    protects: "each planning step rests on the reader's rows",
+    protects: "each planning step rests on the record before it",
 };
 
 /// Decision: What does answer write for a removed question?
@@ -1180,12 +1172,11 @@ pub const ALL: &[&Rule] = &[
     &BAN_NOT_ON_USED_WORD,
     &READ_PAIR_SAME,
     &READ_PAIR_INCONSISTENT,
-    &READ_PAIR_DEPENDS,
     &ANSWER_LINE_HAS_ROW,
     &REFUSAL_LINE_HAS_ROW,
     &REFUSED_TEXT_FROZEN,
     &BLAME_ROW_RANGE_WITHIN_ORIGIN,
-    &PLAN_STEP_HAS_READER_ROWS,
+    &PLAN_STEP_HAS_ITS_RECORD,
     &DROP_NAMES_AN_IDENTIFIER,
     &DROP_HAS_APPROVED_TEXT,
     &DROPPED_QUESTION_LEAVES_FILES,

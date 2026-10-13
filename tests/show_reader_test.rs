@@ -1,8 +1,8 @@
-// What `adr show` prints of the reader's word on a question (per "What does
-// show print of the reader's word on a question?"): under a question not yet
-// answered, a line for each neighbour the reader marked inconsistent or same
-// that no supersedes line names; every word, with its reason, under
-// --reader. A view: no move stands on a line. The embedding model and the
+// What `adr show` prints of a reader's word on a question (per "What does
+// show print of a reader's word on a question?"): under a question not yet
+// answered, a line for each neighbour the reader marked inconsistent, same or
+// closes with a letter that no supersedes line names; every word, with its
+// reason, under --reader. A view: no move stands on a line. The embedding model and the
 // reader are the fakes; the rows are then set to the words the test wants.
 
 mod common;
@@ -31,8 +31,8 @@ fn section(heading: &str, body: &str) -> String {
 }
 
 /// A repository with two terms, one current decision, and the topic file
-/// planned, its reader rows set: the base decision inconsistent, the other
-/// question `same`, one term `depends`, the other term `consistent`.
+/// planned, its reader rows set: the base decision `closes B`, the other
+/// question `same`, one term `inconsistent`, the other term `consistent`.
 fn repo() -> PathBuf {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
@@ -67,11 +67,11 @@ fn reader_says(dir: &Path, base_id: &str) {
             terms.push(row.neighbour.clone());
         }
         row.word = if row.neighbour == base_id {
-            "inconsistent"
+            "closes B"
         } else if row.neighbour.starts_with("text:") {
             "same"
         } else if terms.len() == 1 {
-            "depends"
+            "inconsistent"
         } else {
             "consistent"
         }
@@ -103,18 +103,20 @@ fn under(shown: &str, heading: &str) -> Vec<String> {
         .collect()
 }
 
-// adr: 332ff0c7-0769-45ac-8f89-00aeff318467
+// adr: 6e72f34e-d484-4c63-8332-d284857176fc
 //
-// Plain show: [inconsistent] and [same] under a question not yet answered,
-// after its reference lines, nothing for the other words.
+// Plain show: [inconsistent], [same] and [closes B] under a question not yet
+// answered, after its reference lines, nothing for the other words.
 #[test]
-fn plain_show_prints_inconsistent_and_same_under_a_question_not_answered() {
+fn plain_show_prints_inconsistent_same_and_closes_under_a_question_not_answered() {
     let dir = repo();
     let shown = show(&dir, &[]);
     let lines = under(&shown, H1);
-    assert!(lines.contains(&format!("  [inconsistent] {}", BASE_Q)), "{}", shown);
+    assert!(lines.contains(&format!("  [closes B] {}", BASE_Q)), "{}", shown);
     assert!(lines.contains(&format!("  [same] {}", H2)), "{}", shown);
-    assert_eq!(lines.iter().filter(|l| l.trim_start().starts_with('[')).count(), 2, "{}", shown);
+    let marks: Vec<&String> = lines.iter().filter(|l| l.starts_with("  [")).collect();
+    assert_eq!(marks.len(), 3, "{}", shown);
+    assert_eq!(marks.iter().filter(|l| l.starts_with("  [inconsistent] ")).count(), 1, "{}", shown);
     assert!(lines.iter().position(|l| l == "  depends: widget").unwrap() < lines.iter().position(|l| l.starts_with("  [")).unwrap());
     for word in ["[consistent]", "[depends]", "[unrelated]", "Reason for"] {
         assert!(!shown.contains(word), "{}: {}", word, shown);
@@ -123,9 +125,10 @@ fn plain_show_prints_inconsistent_and_same_under_a_question_not_answered() {
     assert!(under(&shown, H2).iter().all(|l| !l.starts_with("  [")), "{}", shown);
 }
 
-// adr: 332ff0c7-0769-45ac-8f89-00aeff318467
+// adr: 6e72f34e-d484-4c63-8332-d284857176fc
 //
-// A supersedes line that names the neighbour leaves its line out.
+// A supersedes line that names the neighbour leaves its line out, a closes
+// line too.
 #[test]
 fn a_supersedes_line_that_names_the_neighbour_leaves_its_word_out() {
     let dir = repo();
@@ -139,11 +142,12 @@ fn a_supersedes_line_that_names_the_neighbour_leaves_its_word_out() {
     let shown = show(&dir, &[]);
     let lines = under(&shown, H1);
     assert!(lines.contains(&format!("  + supersedes: {}", BASE_Q)), "{}", shown);
-    assert!(!lines.iter().any(|l| l.starts_with("  [inconsistent]")), "{}", shown);
+    assert!(!lines.iter().any(|l| l.starts_with("  [closes")), "{}", shown);
+    assert!(lines.iter().any(|l| l.starts_with("  [inconsistent] ")), "{}", shown);
     assert!(lines.contains(&format!("  [same] {}", H2)), "{}", shown);
 }
 
-// adr: 332ff0c7-0769-45ac-8f89-00aeff318467
+// adr: 6e72f34e-d484-4c63-8332-d284857176fc
 //
 // An answered question prints no word in the plain listing; --reader prints
 // every word on it, the reason a line under, and the plain lines once.
@@ -153,9 +157,9 @@ fn reader_prints_every_word_with_its_reason_and_an_answered_question_none_plain(
     let plain = show(&dir, &[]);
     let all = show(&dir, &["--reader"]);
     let lines = under(&all, H1);
-    let term_words: Vec<&String> = lines.iter().filter(|l| l.starts_with("  [depends] ") || l.starts_with("  [consistent] ")).collect();
+    let term_words: Vec<&String> = lines.iter().filter(|l| l.starts_with("  [inconsistent] ") || l.starts_with("  [consistent] ")).collect();
     assert_eq!(term_words.len(), 2, "{}", all);
-    for (word, name) in [("inconsistent", BASE_Q), ("same", H2)] {
+    for (word, name) in [("closes B", BASE_Q), ("same", H2)] {
         let at = lines.iter().position(|l| *l == format!("  [{}] {}", word, name));
         let at = at.unwrap_or_else(|| panic!("{} {}: {}", word, name, all));
         assert_eq!(lines[at + 1], format!("    Reason for {}.", word), "{}", all);
@@ -174,9 +178,9 @@ fn reader_prints_every_word_with_its_reason_and_an_answered_question_none_plain(
     assert!(adr_answer(&dir, &id, "A").status.success());
     let plain = show(&dir, &[]);
     assert!(plain.contains(&format!("[answered A] {}", H1)), "{}", plain);
-    assert!(!plain.contains("[inconsistent]") && !plain.contains("[same]"), "{}", plain);
+    assert!(!plain.contains("[inconsistent]") && !plain.contains("[same]") && !plain.contains("[closes"), "{}", plain);
     let all = show(&dir, &["--reader"]);
-    assert!(all.contains(&format!("  [inconsistent] {}\n    Reason for inconsistent.\n", BASE_Q)), "{}", all);
+    assert!(all.contains(&format!("  [closes B] {}\n    Reason for closes B.\n", BASE_Q)), "{}", all);
 
     // A flag that needs a file.
     assert!(!adr(&dir, &["show", "--reader"], &[], "").status.success());

@@ -664,7 +664,7 @@ pub fn do_approve(root: &Path, file: &Path) -> Result<Outcome, Stops> {
     // (relative to the directory the command ran in): approve takes the
     // files `show` takes and no other, so it never writes a ledger row for
     // a path no other command reads (per "Does show print what a file holds
-    // beyond its latest approval?", which has show take every file approve
+    // past its latest approval?", which has show take every file approve
     // takes).
     let rel = approved_rel(root, file)?;
     let file = &root.join(&rel);

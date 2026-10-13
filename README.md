@@ -76,8 +76,8 @@ runtime dependencies beyond `git` on `PATH`.
   covers, a missing origin, or a `blob:` line the origin no longer matches.
   Once a blame file is approved its origin may leave the repository.
 - `adr read` — reads every current decision against its ten nearest current
-  decisions and prints each pair the reader marks same, inconsistent or
-  depends.
+  decisions and prints each pair the reader marks same or
+  inconsistent.
 - `adr unban` — owner-only. Read lines from stdin and remove them (and
   their tokens) from the ban list.
 - `adr ban` — read lines from stdin and ban them (and their tokens) from
@@ -91,12 +91,14 @@ runtime dependencies beyond `git` on `PATH`.
   `refused`, `superseded`, `withdrawn`, `dropped`; a file is `new`,
   `changed`, `approved` or `removed`), for a blame file its origin and rows,
   the depends, supersedes and blame lines of a question not yet answered
-  with `[inconsistent]` or `[same]` and each neighbour the reader marks so
-  that no supersedes line names, the option picked under an answered
+  with `[inconsistent]`, `[same]` or `[closes <letter>]` and each neighbour
+  the reader marks so that no supersedes line names, the option picked under
+  an answered
   question, the body of an asked question, and what the file holds beyond its latest approval,
   marked `+` and `-` (a question new or struck as a whole carries the mark
   on its own line too); then the file's findings and moves. `--all` prints every such file
-  that way; `--neighbours` adds each neighbour with the reader's word, and
+  that way; `--neighbours` adds each neighbour with the agent's line and, for a
+  question with its body, the reader's word, and
   `--dependents` the depends, supersedes and blame lines of an answered
   question and what stands on each question or term entry; `--superseded`
   each superseded question, left out otherwise, with what replaced it;
@@ -104,9 +106,10 @@ runtime dependencies beyond `git` on `PATH`.
   its reason on the line under; `--unrelated` adds the unrelated line of each
   question; `--questions` adds, for a blame file, how many of its decision
   rows a question names and how many none names.
-- `adr plan <topic_file>` — do the planning step the file is at (read its
-  headings, then its bodies, against their nearest current decisions and
-  terms) and print what it read, the findings on the file and its next
+- `adr plan <topic_file>` — do the planning step the file is at (bring the
+  nearest current decisions and terms for its headings, then read its bodies
+  against theirs) and print what it read, the findings on the file and its
+  next
   move.
 - `adr serve [--port N]` — owner-only. Serve the owner's page on
   `127.0.0.1` (default port 7357), gated by a per-start token printed to
@@ -236,6 +239,10 @@ row whose text or neighbour is gone from the records is dropped first; git
 keeps the old rows. `check` fails a row of HEAD, of a merged branch, of
 `--since` or of the remote that is edited by hand; a row gone whole passes,
 and a new row is judged by its shape.
+
+`adrdom/state/neighbours.tsv` holds, for each heading, the hash of the heading
+and the identifier of each neighbour `adr plan` brought for it. `adr plan`
+writes it; git does not track it.
 
 ## Tests
 

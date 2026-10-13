@@ -16,7 +16,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mover {
     Agent,
-    /// The agent in a planner's session, for a build move (8f81dee1).
+    /// The agent in a planner's session, for a build move (9a2ff21b).
     Builder,
     Owner,
     NotYet,
@@ -204,7 +204,7 @@ impl Move {
 /// follow from its status: what every command that reads the thing prints,
 /// each finding whole with the move that clears it, then the moves (per
 /// "Does a command compute a move of its own?", aac5c313 A, and "What does
-/// a command that writes nothing print?", 848e1b76 A). A finding is never
+/// a command print when it writes nothing?", 1af76f91 A). A finding is never
 /// turned into a move of its own: it carries its move.
 #[derive(Debug, Clone, Default)]
 pub struct Report {
@@ -226,10 +226,6 @@ impl Report {
         self.moves.iter().map(Move::clause_text).collect::<Vec<_>>().join(", ")
     }
 }
-
-/// The move of a pair of decisions the reader marks as depending on one
-/// another: nobody moves on it.
-pub const PAIR_WAIT: &str = "not yet, nobody moves on a pair that depends";
 
 /// The tail of a finding whose only move is to wait for an answer
 /// elsewhere: nobody moves on it yet.
@@ -844,7 +840,7 @@ mod tests {
         assert!(crate::msg::edited_after_asking("x.md", "h", &empty).text().ends_with("agent restores x.md from git"));
     }
 
-    // adr: 848e1b76-9cfe-483b-94dd-094eb9b2f995
+    // adr: 1af76f91-5644-42ef-97ea-8f70f934c26c
     //
     // A blame file's report is read once for `show`: a draft with
     // nothing to clear is the owner's approve, a draft with a finding has

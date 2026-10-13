@@ -54,7 +54,7 @@ fn show_of_a_topic_file_prints_an_unreadable_terms_file_and_offers_no_approve() 
     assert!(!text.contains("adr ask"), "{}", text);
 }
 
-// adr: 848e1b76-9cfe-483b-94dd-094eb9b2f995
+// adr: 1af76f91-5644-42ef-97ea-8f70f934c26c
 //
 // An origin that cannot be read as text stops the approve of its blame file;
 // show prints the stop and does not offer the owner's approve.

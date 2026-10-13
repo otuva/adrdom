@@ -1,8 +1,8 @@
 // What `adr plan` and `adr read` print: the move is the one computation
 // `show` reads ("Does a command compute a move of its own?", aac5c313 A),
 // and a command that writes nothing prints what it reads, its status, the
-// findings and the move, and nothing else ("What does a command that writes
-// nothing print?", 848e1b76 A). The embedding model and the reader are the
+// findings and the move, and nothing else ("What does a command print when it
+// writes nothing?", 1af76f91 A). The embedding model and the reader are the
 // fakes.
 
 mod common;
@@ -169,7 +169,7 @@ fn plan_line_kind(line: &str) -> Option<&'static str> {
     }
 }
 
-// adr: 848e1b76-9cfe-483b-94dd-094eb9b2f995
+// adr: 1af76f91-5644-42ef-97ea-8f70f934c26c
 #[test]
 fn plan_prints_the_status_what_it_read_the_findings_and_the_moves_and_nothing_else() {
     let dir = repo();
@@ -194,7 +194,7 @@ fn plan_prints_the_status_what_it_read_the_findings_and_the_moves_and_nothing_el
     assert_eq!(outs.last().unwrap(), &format!("[new] Topic ({})\nowner runs: adr approve {}\n", REL, REL));
 }
 
-// adr: 848e1b76-9cfe-483b-94dd-094eb9b2f995
+// adr: 1af76f91-5644-42ef-97ea-8f70f934c26c
 #[test]
 fn read_prints_the_marked_pairs_and_the_move_and_nothing_else() {
     let dir = repo();

@@ -16,8 +16,8 @@ fn commit_all(dir: &Path, message: &str) {
 
 // adr: d2851ea1-fcb6-476a-b321-c813a594d5e5
 //
-// What `adr show` prints for an approved blame file (per "Does show print
-// what a file holds beyond its latest approval?" and "What does a blame file
+// What `adr show` prints for an approved blame file (per "Does show print what
+// a file holds past its latest approval?" and "What does a blame file
 // hold of its origin?"): its status, its origin and every row as the file
 // carries it, `decision` or `detail`, with no status tag on a row, no `id:`
 // line, no count per destination and no line under a decision naming the
@@ -189,10 +189,10 @@ fn short_show_names_the_approval_a_blame_file_waits_for() {
 }
 
 // adr: a469ecb9-a4f1-4a2a-89c5-7378cc1138b4
-// adr: 36dfbeaa-698d-4a57-b3b0-d425348e14a5
+// adr: cdc905a2-5b58-4c38-beff-4a8bd3b6f42e
 //
 // "the count of decision rows with and without a question is printed for the
-// owner" (ee27fd4c A), "a computed view under a flag" (36dfbeaa A): with
+// owner" (ee27fd4c A), "a computed view under a flag" (cdc905a2 A): with
 // `--questions` the listing of a blame file ends in one line counting its
 // decision rows a question names and the ones none names, the same by the name
 // of the blame file in the question and by its identifier; without the flag
@@ -272,7 +272,7 @@ fn a_blame_id_never_replaces_the_name_of_a_question() {
     assert!(!shown.contains("depends: widget, x"), "{}", shown);
 }
 
-// adr: a6f41dee-2381-421a-bcc4-b14af243209b
+// adr: b0acc95b-3dd5-4158-ac5c-65a2159972a9
 //
 // "what the next move on the file reads, and the rest under a flag": show of
 // a draft blame file prints its rows, which approve reads, and the move; the

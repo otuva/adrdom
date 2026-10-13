@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 const REL: &str = "adrdom/decisions/gate.md";
 
-// adr: 848e1b76-9cfe-483b-94dd-094eb9b2f995
+// adr: 1af76f91-5644-42ef-97ea-8f70f934c26c
 // adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
 //
 // Every line a command prints goes through the one printer in src/out.rs,
@@ -307,8 +307,8 @@ fn report_of(out: &str) -> Vec<String> {
 /// Asserts show, plan (when `plan_out` is given) and check print one set of
 /// findings for the file, and show and plan one list of moves: a finding
 /// renders one way in every command (per "Does a command compute a move of
-/// its own?", aac5c313 A, and "What does a command that writes nothing
-/// print?", 848e1b76 A).
+/// its own?", aac5c313 A, and "What does a command print when it writes
+/// nothing?", 1af76f91 A).
 fn assert_one_report(dir: &Path, plan_out: Option<&str>, stage: &str) -> Vec<String> {
     let show = report_of(&stdout(&adr(dir, &["show", REL], &[], "")));
     let check: Vec<String> = stdout(&adr(dir, &["check"], &[], "")).lines().filter(|l| l.contains(REL)).map(str::to_string).collect();
@@ -325,7 +325,7 @@ fn assert_one_report(dir: &Path, plan_out: Option<&str>, stage: &str) -> Vec<Str
 }
 
 // adr: aac5c313-dedd-466b-a0c3-ead5e99ce913
-// adr: 848e1b76-9cfe-483b-94dd-094eb9b2f995
+// adr: 1af76f91-5644-42ef-97ea-8f70f934c26c
 //
 // At every planning stage -- headings only, the lines written, the bodies
 // written, ready -- show, plan and check print the same findings, each

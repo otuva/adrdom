@@ -9,7 +9,7 @@
 //! `check` holds a blame file to its origin's blob (6f6e7f4a A) and to its
 //! origin staying until the file is approved (0c3d498a A) --
 //! `commands::check::blame`; `show` prints a blame file in the form every
-//! file approve takes is printed (bceceda8 A, 848e1b76 A -- `commands::show`).
+//! file approve takes is printed (91f9652a A, 1af76f91 A -- `commands::show`).
 use crate::ledger::Ledger;
 use crate::msg;
 use crate::record;

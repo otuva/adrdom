@@ -1,6 +1,6 @@
 // What `adr check` prints: every line a finding with its move, nothing on a
-// pass, by hand or in a hook (3fc35d4f "Does check print a line that names no
-// move?"); and every rule `approve` or `ask` refuses on is one judgement
+// pass, by hand or in a hook (bd83aa22 "Does check print a line with no move on
+// it?"); and every rule `approve` or `ask` refuses on is one judgement
 // check reads, so what they refuse, check reports with the same move
 // (fe14991d "Does a command refuse what check passes?").
 mod common;
@@ -33,7 +33,7 @@ fn assert_check_reports(dir: &Path, refused: &[String], case: &str) {
 
 #[test]
 fn a_passing_check_prints_nothing() {
-    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
+    // adr: bd83aa22-94fc-49ac-b215-a82990ff8c65
     let dir = repo();
     let (ok, out, err) = check(&dir);
     assert!(ok, "{}{}", out, err);
@@ -43,7 +43,7 @@ fn a_passing_check_prints_nothing() {
 
 #[test]
 fn a_passing_check_prints_nothing_with_a_file_awaiting_approval() {
-    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
+    // adr: bd83aa22-94fc-49ac-b215-a82990ff8c65
     // A draft with no finding is a status, not a finding: its move is in
     // `adr show`, and check prints no count of it.
     let dir = repo();
@@ -56,7 +56,7 @@ fn a_passing_check_prints_nothing_with_a_file_awaiting_approval() {
 
 #[test]
 fn every_line_check_prints_names_a_move() {
-    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
+    // adr: bd83aa22-94fc-49ac-b215-a82990ff8c65
     // An untested decision, a draft finding and a failing approved file at
     // once: each line is a finding with the move that clears it.
     let dir = repo();
@@ -82,7 +82,7 @@ fn every_line_check_prints_names_a_move() {
 
 #[test]
 fn an_untested_decision_carries_the_move_that_builds_it() {
-    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
+    // adr: bd83aa22-94fc-49ac-b215-a82990ff8c65
     let dir = repo();
     let rec = write_record(&dir, REL, &format!("# Gate\n\n{}", q("Does the widget hold?", "the widget breaks.")));
     approve_record(&dir, REL);
@@ -103,7 +103,7 @@ fn an_untested_decision_carries_the_move_that_builds_it() {
 
 #[test]
 fn check_takes_no_flag_that_hides_lines() {
-    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
+    // adr: bd83aa22-94fc-49ac-b215-a82990ff8c65
     let dir = repo();
     let out = adr(&dir, &["check", "--quiet"], &[], "");
     assert!(!out.status.success(), "--quiet is no flag of check");
@@ -111,7 +111,7 @@ fn check_takes_no_flag_that_hides_lines() {
 
 #[test]
 fn the_hooks_install_writes_run_check_with_no_flag_that_hides_lines() {
-    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
+    // adr: bd83aa22-94fc-49ac-b215-a82990ff8c65
     let dir = repo();
     for hook in [".githooks/pre-commit", ".githooks/commit-msg", ".githooks/pre-push"] {
         let text = std::fs::read_to_string(dir.join(hook)).unwrap();
@@ -122,7 +122,7 @@ fn the_hooks_install_writes_run_check_with_no_flag_that_hides_lines() {
 
 #[test]
 fn a_passing_commit_prints_nothing_from_the_hooks() {
-    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
+    // adr: bd83aa22-94fc-49ac-b215-a82990ff8c65
     let dir = repo();
     run_git(&dir, &["add", "-A"]);
     let out = run_git(&dir, &["commit", "-q", "-m", "chore: install"]);
@@ -243,7 +243,7 @@ fn an_approved_file_is_not_judged_by_the_planning_rules_by_approve_or_check() {
 
 #[test]
 fn check_prints_every_finding_on_standard_output_whatever_its_exit() {
-    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
+    // adr: bd83aa22-94fc-49ac-b215-a82990ff8c65
     // One kind, one routing: a finding goes to standard output whether
     // check passes with notes or fails; standard error is for a stop of
     // check itself.
@@ -275,7 +275,7 @@ fn check_prints_every_finding_on_standard_output_whatever_its_exit() {
 
 #[test]
 fn a_commit_prints_each_finding_once_and_the_message_hook_reads_the_message_alone() {
-    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
+    // adr: bd83aa22-94fc-49ac-b215-a82990ff8c65
     // The pre-commit hook judges the staged files; the commit-msg hook reads
     // the message alone, for banned words (per "What does the ban scan
     // read?"), so an untested decision is named once a commit.

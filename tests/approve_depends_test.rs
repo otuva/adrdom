@@ -739,7 +739,7 @@ fn ask_and_check_refuse_a_depends_line_reverted_by_hand_after_approve() {
 
     let check_out = adr(&dir, &["check"], &[], "");
     // An unapproved file is never a failure of its own, and its status is no
-    // line of check's (3fc35d4f).
+    // line of check's (bd83aa22).
     let checked = stdout(&check_out);
     assert!(check_out.status.success(), "{}", checked);
     assert!(!checked.contains("awaiting approval"), "{}", checked);

@@ -505,7 +505,7 @@ fn get_next_with_cookie_shows_question_heading() {
     let _ = child.wait();
 }
 
-// adr: bceceda8-133a-4c9b-b439-b5c1a4414a02
+// adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
 //
 // Wherever the page offers the owner's approve, what the approve signs
 // stands above the form: on `/`, a file with an asked question and a
@@ -600,8 +600,8 @@ id: 11111111-1111-1111-1111-111111111111\n\
 definition: A choice the owner answers in, once, in writing.\n\
 aliases: \n";
 
-// Per "Does show print what a file holds beyond its latest approval?"
-// (bceceda8 A) and "Does the ui show what the terminal prints?" (7857d633
+// Per "Does show print what a file holds past its latest approval?"
+// (91f9652a A) and "Does the ui show what the terminal prints?" (7857d633
 // A): a terms edit not yet approved shows on the page as `adr show
 // adrdom/terms.md` prints it -- the file changed, the entry's change marked
 // -- with the owner's approve move and the form that makes it.

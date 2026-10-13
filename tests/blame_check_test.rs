@@ -444,10 +444,10 @@ fn check_is_silent_on_a_decision_row_no_question_names() {
 //
 // A draft blame file with no fault (its origin still present) never fails
 // `check`, and its status is no line of check's: its move is in `adr show`
-// (3fc35d4f).
+// (bd83aa22).
 #[test]
 fn check_passes_an_unapproved_blame_file_and_prints_nothing_of_it() {
-    // adr: 3fc35d4f-90f3-4425-9dac-951a89631fdf
+    // adr: bd83aa22-94fc-49ac-b215-a82990ff8c65
     let dir = blame_setup();
     let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
     let rows = "1-1\tdetail\n2-2\tdetail\n";

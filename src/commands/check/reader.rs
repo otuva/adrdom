@@ -7,8 +7,8 @@ use crate::repo::{self, Source};
 use std::collections::HashSet;
 use std::path::Path;
 
-/// "What does check hold of the reader's file?"
-/// (abb6faed-96f7-406d-8384-002ee81bb157 A): every row at HEAD, at the other
+/// "What does check hold of a reader's file?"
+/// (30ca5d13-e68b-465f-aa84-ea4000c9330a A): every row at HEAD, at the other
 /// side of a merge, at `--since` and at the remote of a push stays byte for
 /// byte or is gone whole; no row is edited or added by hand. A malformed row
 /// fails; a line new to every comparison point is judged by its shape alone.
