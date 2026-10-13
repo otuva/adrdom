@@ -41,3 +41,17 @@ fn the_brief_has_the_builder_move_a_tie_that_names_a_decision_not_current() {
     let b = flat();
     assert!(b.contains("It reports a test whose `adr: <id>` names a decision that is not current, and fails nothing: the builder points the tie at the decision that took its place, or removes it."), "{}", b);
 }
+
+// A reader's word stops nothing, a decision changes only through a
+// supersedes line, and what the record settles is not built or asked
+// without it: so a closes or inconsistent mark has the agent strike,
+// supersede or object, and the brief says so.
+// adr: e78b8297-fd89-4e09-9c3e-9eeb0fd0f654
+// adr: dad5273c-afe2-4ab1-a451-e2a5d4d9a26d
+// adr: c3127af2-4c96-48d5-a164-bac49a9a09ec
+#[test]
+fn the_brief_has_the_agent_strike_supersede_or_object_on_a_closes_or_inconsistent_mark() {
+    let b = flat();
+    assert!(b.contains("Under a neighbour marked closes with a letter the record leaves that option alone standing, so the question is decided: strike the heading, or, when the question is there to change that decision, write the neighbour on its `supersedes:` line; when you read the neighbour and find more than one option standing, keep your line and say why in chat."), "{}", b);
+    assert!(b.contains("Under a neighbour marked inconsistent, write it on `supersedes:`, reword the question so the two agree, or keep your line and say why in chat."), "{}", b);
+}
