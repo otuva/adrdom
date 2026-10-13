@@ -109,6 +109,8 @@ Standard: periodic deduplication of a store with the same comparator used at ins
   Why: the set is read only where a new question touches it; no cost beyond planning.
   Costs: known duplicates and contradictions in the set stay until a new question lands beside them.
 
+**Answer:** A
+
 ### What word does the reader give two current decisions?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, e2533580-1486-4dc9-8697-e6c53605fe72, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, 48c47c42-6720-44ca-b47d-12a61ba8ee9f=A
 supersedes: 908bddc6-5d30-4bcc-be8d-4c470c6bff11, 2db33118-82b4-4edf-a9cb-e92ac62738b9, 4b407ee1-1e64-4ca1-842b-69773fc0e48a, 332ff0c7-0769-45ac-8f89-00aeff318467, 36dfbeaa-698d-4a57-b3b0-d425348e14a5, 848e1b76-9cfe-483b-94dd-094eb9b2f995, 3fc35d4f-90f3-4425-9dac-951a89631fdf, bceceda8-133a-4c9b-b439-b5c1a4414a02, c84a4bd9-fc2d-44f0-b333-172978f61544, 8f81dee1-9c19-447d-baa8-d7d0af691db8, a6f41dee-2381-421a-bcc4-b14af243209b, 83190b10-8060-47c1-8194-f6a5c4f0d703
@@ -129,6 +131,8 @@ Standard: the same closed set as for a question with its body, applied to two se
   Why: a missing tie between two old decisions is named.
   Costs: depends between two decisions is a finding with no line to write, on an order two texts do not show.
 
+**Answer:** A
+
 ### Does the tool print each pair the reader marks?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, d904dc0d-231f-4e93-ac74-7babe888107d, a116a1c5-d6ea-4123-be25-3a222ac661e0=*
 supersedes: 2db33118-82b4-4edf-a9cb-e92ac62738b9, 332ff0c7-0769-45ac-8f89-00aeff318467, 36dfbeaa-698d-4a57-b3b0-d425348e14a5, 848e1b76-9cfe-483b-94dd-094eb9b2f995, 3fc35d4f-90f3-4425-9dac-951a89631fdf, bceceda8-133a-4c9b-b439-b5c1a4414a02, c84a4bd9-fc2d-44f0-b333-172978f61544, 8f81dee1-9c19-447d-baa8-d7d0af691db8, a6f41dee-2381-421a-bcc4-b14af243209b, 83190b10-8060-47c1-8194-f6a5c4f0d703
@@ -145,6 +149,8 @@ Standard: a scan prints its findings and the move for each; the store is for the
 - B) No.
   Why: the rows are the record; show prints them under each decision.
   Costs: the agent reads show for a hundred decisions to find three findings.
+
+**Answer:** A
 
 ### Does the tool read a pair of decisions in each direction?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, a116a1c5-d6ea-4123-be25-3a222ac661e0=*
@@ -163,6 +169,8 @@ Standard: read a symmetric relation once.
   Why: each decision has its own row for the pair, as in planning.
   Costs: twice the reader calls, and two words that may disagree for one pair.
 
+**Answer:** A
+
 ### Does a commit run the reading of the whole set?
 depends: f90dbd5b-8fbe-4899-8588-f8762795c2e2, be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 48c47c42-6720-44ca-b47d-12a61ba8ee9f=A
 supersedes: bc4291c8-98f1-499d-8e02-46e371035e70
@@ -179,3 +187,5 @@ Standard: expensive advisory analyses run on demand, not in a commit hook.
 - B) Yes.
   Why: the set is never stale; every commit reads what changed.
   Costs: every commit needs the model and the reader and waits minutes; a hook without them fails.
+
+**Answer:** A

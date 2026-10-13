@@ -258,3 +258,5 @@ Standard: a listing tells the reader which items are theirs before they act.
 - C) No build move.
   Why: the planner sees its own moves alone.
   Costs: the planner cannot read what waits on a builder, and check hides untested decisions from it.
+
+**Answer:** A

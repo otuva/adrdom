@@ -511,6 +511,8 @@ Standard: a read-only command prints what it read and what follows from it, as g
   Why: the one who runs it sees that the command ran and what it covered.
   Costs: hundreds of lines around one move; each new command adds lines no decision names.
 
+**Answer:** A
+
 ### Does check print a line with no move on it?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, d904dc0d-231f-4e93-ac74-7babe888107d, ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, 1af76f91-5644-42ef-97ea-8f70f934c26c=A
 supersedes: 3fc35d4f-90f3-4425-9dac-951a89631fdf
@@ -527,6 +529,8 @@ Standard: a checker prints its findings, each with the fix, and is silent on a p
 - B) Yes.
   Why: the one who runs check sees what it covered.
   Costs: dozens of lines with no move on every run, and twice per commit without a flag.
+
+**Answer:** A
 
 ### Does a command print a computed view under a flag?
 depends: d904dc0d-231f-4e93-ac74-7babe888107d, daec9ffd-676f-4111-a359-2827bfd4527c, 1af76f91-5644-42ef-97ea-8f70f934c26c=A
@@ -545,6 +549,8 @@ Standard: a computed view is printed on request, under a flag named for it, as g
   Why: a command prints the status and the move, and nothing computed, flag or not.
   Costs: the nearest decisions and the reader's word are read from plan's output or the reader's file alone.
 
+**Answer:** A
+
 ### Does show print what a file holds past its latest approval?
 depends: e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 1d7e59ea-99e3-4d4b-9928-5dabca62723d, 08193e75-dd89-4857-8e9f-b19e1a9e75e6, 1af76f91-5644-42ef-97ea-8f70f934c26c=A
 supersedes: bceceda8-133a-4c9b-b439-b5c1a4414a02, a6f41dee-2381-421a-bcc4-b14af243209b, 332ff0c7-0769-45ac-8f89-00aeff318467, 83190b10-8060-47c1-8194-f6a5c4f0d703, 8f81dee1-9c19-447d-baa8-d7d0af691db8
@@ -561,6 +567,8 @@ Standard: a diff before a commit: the change is read before it is signed.
 - B) No.
   Why: show prints status, and a draft is read with git diff.
   Costs: the owner leaves the tool to see what approve will sign.
+
+**Answer:** A
 
 ### What does show print when no file is named?
 depends: 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, e2533580-1486-4dc9-8697-e6c53605fe72, 43778946-d44c-4acf-a766-0a4915fce199, d904dc0d-231f-4e93-ac74-7babe888107d, cdc905a2-5b58-4c38-beff-4a8bd3b6f42e=A
@@ -582,6 +590,8 @@ Standard: a listing command prints a summary and takes a flag or an argument for
   Why: one listing holds everything.
   Costs: hundreds of lines to find one move, growing with every question.
 
+**Answer:** A
+
 ### What does show print for a file under adrdom?
 depends: d904dc0d-231f-4e93-ac74-7babe888107d, cdc905a2-5b58-4c38-beff-4a8bd3b6f42e=A, 91f9652a-f053-4b32-9534-c9c39e7639a4=A
 supersedes: a6f41dee-2381-421a-bcc4-b14af243209b, 332ff0c7-0769-45ac-8f89-00aeff318467, 83190b10-8060-47c1-8194-f6a5c4f0d703, 8f81dee1-9c19-447d-baa8-d7d0af691db8
@@ -602,6 +612,8 @@ Standard: a listing prints what the next move reads and takes a flag for the res
   Why: the shortest listing.
   Costs: the owner approves lines and answers bodies without seeing them.
 
+**Answer:** A
+
 ### Does show print the reference lines of a question that is answered?
 depends: aef1b384-2b33-47a2-92a8-ec7f8fb258ef, b36113a1-1384-4e4c-a798-8399f4181366, b0acc95b-3dd5-4158-ac5c-65a2159972a9=A
 supersedes: 83190b10-8060-47c1-8194-f6a5c4f0d703
@@ -618,6 +630,8 @@ Standard: a listing prints what the next step reads; what stands behind a closed
 - B) Yes.
   Why: every line of every question in one listing.
   Costs: lines no move reads make most of the listing of a settled file.
+
+**Answer:** A
 
 ### What does show print of a reader's word on a question?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 277a8338-c57a-43cc-8b28-6b42e9347f6a, daec9ffd-676f-4111-a359-2827bfd4527c, b0acc95b-3dd5-4158-ac5c-65a2159972a9=A, cdc905a2-5b58-4c38-beff-4a8bd3b6f42e=A
@@ -638,3 +652,5 @@ Standard: a review listing shows a disputed item beside the item, and the full a
 - C) Nothing: the reader's word is read in plan's output alone.
   Why: no new line form.
   Costs: the owner never sees the reader's word; the agent's line stands alone at approval.
+
+**Answer:** A

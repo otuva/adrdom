@@ -416,6 +416,8 @@ Standard: classification into a closed set with an explicit none-of-these, so th
   Why: nothing is forced into a set; every nuance of a bundled decision survives.
   Costs: nothing in the record can be compared or counted; the agent reads a sentence per neighbour and rules alone.
 
+**Answer:** A
+
 ### Does the reader read a neighbour of a heading?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, daec9ffd-676f-4111-a359-2827bfd4527c, d10dab89-1d42-4764-9d72-22d6fd6a9260=A|B
 supersedes: 62e50382-db1b-4649-9f26-7f44c379d6fe, 3dba486c-a399-4ce3-a794-e38c4f733403, 4838baa4-a5df-49e7-929c-ed63b5adaf4e
@@ -432,6 +434,8 @@ Standard: a classifier gets only the labels its input can support.
 - B) Yes.
   Why: a heading a decision settles drops before its body is written.
   Costs: ten reader calls per heading, repeated at the body step, and a word on hierarchy the text cannot support.
+
+**Answer:** A
 
 ### What does the tool keep of a reader's word?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, daec9ffd-676f-4111-a359-2827bfd4527c, d10dab89-1d42-4764-9d72-22d6fd6a9260=*
@@ -453,6 +457,8 @@ Standard: expensive judgments are stored keyed by their inputs, in a file the to
   Why: short rows; the reason is read once in the terminal.
   Costs: the owner sees a word against the agent's line, no reason; a bundled decision's clause is not named.
 
+**Answer:** A
+
 ### Does a reader's word stop a command?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, f90dbd5b-8fbe-4899-8588-f8762795c2e2, d10dab89-1d42-4764-9d72-22d6fd6a9260=*
 supersedes: 902bd279-e6c1-4a21-9637-a3a43f360bae
@@ -469,6 +475,8 @@ Standard: advisory checks inform; blocking checks are deterministic.
 - B) Yes.
   Why: a same from the reader stops the heading until it is reworded or dropped.
   Costs: a wrong same has no exit but rewording; the model's word becomes a rule that cannot be checked again.
+
+**Answer:** A
 
 ### Does planning stop with no reader on the machine?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, 94677ed8-eaf6-46e2-bc71-7392fa0805bf, 60341be0-fd05-4281-92d7-668584a8539a=*
@@ -487,6 +495,8 @@ Standard: a step whose input is missing stops and names it; no degraded mode.
   Why: the agent reads the neighbours itself; the word is a line, not a gate, so its absence stops nothing.
   Costs: two shapes of row, and the owner sees agent lines with nothing against them.
 
+**Answer:** A
+
 ### Does the tool bring a plan's own questions as neighbours of each other?
 depends: 94677ed8-eaf6-46e2-bc71-7392fa0805bf, daec9ffd-676f-4111-a359-2827bfd4527c, 60341be0-fd05-4281-92d7-668584a8539a=*
 supersedes: 4838baa4-a5df-49e7-929c-ed63b5adaf4e
@@ -504,6 +514,8 @@ Standard: deduplicate a batch against itself as well as against the store.
   Why: the pool is the records; the agent wrote both headings and knows their tie.
   Costs: two headings on one rule in one plan pass; the tier cap is the only net.
 
+**Answer:** A
+
 ### Does the reader's file keep a row whose text left the records?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, daec9ffd-676f-4111-a359-2827bfd4527c, 55a6a2d8-03af-4db9-a4c7-e2790e38357e=*
 supersedes: 90714223-52e3-4bb9-b0b4-2a8b87d74145, abb6faed-96f7-406d-8384-002ee81bb157
@@ -520,6 +532,8 @@ Standard: a cache keyed by content hash is pruned of entries whose key no longer
 - B) Yes.
   Why: every reading ever made stays; the file is a record like the ledger.
   Costs: a row per edited draft text for ever, read on every command.
+
+**Answer:** A
 
 ### What does check hold of a reader's file?
 depends: 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, a8034401-420c-45d7-8f43-60c1b9f3baf9=A|B, 55a6a2d8-03af-4db9-a4c7-e2790e38357e=*
@@ -540,3 +554,5 @@ Standard: a machine-written cache is verified for shape and against edits; remov
 - C) The shape of each row alone.
   Why: nothing to compare with history.
   Costs: a row edited by hand passes as the reader's word.
+
+**Answer:** A
