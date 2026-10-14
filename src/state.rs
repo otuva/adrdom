@@ -129,35 +129,55 @@ pub fn plan_approved_hashes(led: &Ledger, rel: &str, question_hashes: &[String])
     }
     // A superseded section struck from the file (per "What strikes the
     // section of a superseded question from its topic file?") takes its
-    // hash with it and nothing else moves: the file counts as approved
-    // when some set of the struck sections, put back, makes the approved
-    // hash. adr-code: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
-    let mut struck: Vec<String> = Vec::new();
-    for id in superseded_ids(led) {
-        if let Some(r) = led.rows.iter().rfind(|r| r.event == "approved" && r.id == id && r.detail == rel) {
-            if !base.contains(&r.hash) && !struck.contains(&r.hash) {
-                struck.push(r.hash.clone());
+    // hash with it and nothing else moves. A candidate is a superseded
+    // question whose latest per-question `approved` row names this file and
+    // which the file does not hold. One superseded after the file's latest
+    // approval was in the file at that approval, so it is put back; one
+    // superseded before it was absent from a file approved since the strike
+    // and is put back only for a file approved while it still held it.
+    // adr-code: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
+    let file_row = led.rows.iter().rposition(|r| r.event == "approved" && r.detail == rel && r.id == "-");
+    let Some(file_row) = file_row else { return false };
+    let latest = &led.rows[file_row].hash;
+    let (mut after, mut before): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
+    // One pass: the latest state event of each id, the latest per-question
+    // `approved` row naming `rel`, and the latest `superseded` position.
+    let mut state: std::collections::BTreeMap<&str, &str> = Default::default();
+    let mut approved: std::collections::BTreeMap<&str, &Row> = Default::default();
+    let mut sup_at: std::collections::BTreeMap<&str, usize> = Default::default();
+    for (i, r) in led.rows.iter().enumerate() {
+        if crate::ledger::STATE_EVENTS.contains(&r.event.as_str()) {
+            state.insert(&r.id, &r.event);
+            if r.event == "superseded" {
+                sup_at.insert(&r.id, i);
             }
         }
+        if r.event == "approved" && r.detail == rel {
+            approved.insert(&r.id, r);
+        }
     }
-    if struck.is_empty() {
-        return false;
+    for (id, ev) in &state {
+        if *ev != "superseded" {
+            continue;
+        }
+        let Some(r) = approved.get(id) else { continue };
+        if base.contains(&r.hash) || after.contains(&r.hash) || before.contains(&r.hash) {
+            continue;
+        }
+        let at = sup_at.get(id).copied().unwrap_or(0);
+        if at > file_row {
+            after.push(r.hash.clone());
+        } else {
+            before.push(r.hash.clone());
+        }
     }
-    let Some(latest) = led.latest_for_path("approved", rel).map(|r| r.hash.clone()) else { return false };
-    if struck.len() > STRUCK_SUBSET_CAP {
-        let mut all = base;
-        all.extend(struck);
-        return record::derive_file_hash(&all) == latest;
+    base.extend(after);
+    if !before.is_empty() && record::derive_file_hash(&base) == *latest {
+        return true;
     }
-    (1u32..(1 << struck.len())).any(|mask| {
-        let mut all = base.clone();
-        all.extend(struck.iter().enumerate().filter(|(i, _)| mask & (1 << i) != 0).map(|(_, h)| h.clone()));
-        record::derive_file_hash(&all) == latest
-    })
+    base.extend(before);
+    record::derive_file_hash(&base) == *latest
 }
-
-/// The most struck sections whose every combination is tried.
-const STRUCK_SUBSET_CAP: usize = 12;
 
 /// Every id whose latest state is `superseded`, sorted: the questions whose
 /// section no topic file keeps (per "What strikes the section of a

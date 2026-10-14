@@ -27,7 +27,7 @@ pub struct Outcome {
 }
 
 impl Outcome {
-    /// The events of `rows`, each named in words by `names` (`event_names`).
+    /// The events of `rows`, each named in words by `names` (`event_names_in`).
     pub fn of_rows(rows: &[ledger::Row], names: &HashMap<String, String>) -> Outcome {
         Outcome {
             events: rows.iter().filter_map(|r| crate::out::Event::from_row(r, names)).collect(),
@@ -57,12 +57,7 @@ fn findings_of(findings: Vec<Finding>) -> Stops {
 
 /// Every question heading of `all` and term name of `terms` by
 /// identifier: what turns the identifiers of the rows an act wrote into
-/// words, from what the act already holds.
-pub fn event_names(all: &[RecordFile], terms: &[terms::Term]) -> HashMap<String, String> {
-    event_names_in(all, terms, &Ledger::default())
-}
-
-/// `event_names`, and for a question no topic file holds (a superseded
+/// words, from what the act already holds; and for a question no topic file holds (a superseded
 /// section struck) the heading its `asked` row carries.
 pub fn event_names_in(all: &[RecordFile], terms: &[terms::Term], led: &Ledger) -> HashMap<String, String> {
     let mut names = crate::view::heading_names(all, led);
@@ -377,7 +372,7 @@ fn answer_leaf(rf: &RecordFile, t: usize) -> Result<usize, usize> {
 /// letter, `"refuse"` for a refusal). When the ledger cannot take the rows
 /// the topic file is put back as it was, so the answer is all written or
 /// not at all and the command the refusal names runs as printed (per "Does
-/// a refusal name the command that clears it?"). Eight plain, once-each
+/// a refusal name the command that clears it?"). Ten plain, once-each
 /// arguments over a params struct: the same shape `check_plan` accepts
 /// this same lint for.
 #[allow(clippy::too_many_arguments)]
@@ -436,12 +431,14 @@ fn finish_answer(
             let was = record::join_lines(&other.lines);
             let (opath, orel) = (other.path.clone(), other.rel.clone());
             let cut = without_sections(other, strike_ids);
+            // Recorded before the save: a save that fails after truncating
+            // the file leaves it to be put back with the others.
+            others.push((opath, was, orel));
             if let Err(e) = record::save(&cut) {
                 restore_files(&others);
                 let _ = std::fs::write(&path, &before);
                 return Err(stop(Command::Answer, msg::write_failed("topic file", e, again())));
             }
-            others.push((opath, was, orel));
         }
     }
 

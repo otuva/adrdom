@@ -187,8 +187,8 @@ fn two_questions_naming_one_old_decision_both_answer_and_print_the_heading() {
     put(&dir, "a", Q1, None);
     answer_ok(&dir, "a", Q1, "A");
     let id1 = id_of(&dir.join(rel("a")), Q1);
-    let b = write_record(&dir, &rel("b"), &format!("# B\n{}", sec(Q4, Some(Q1))));
-    let c = write_record(&dir, &rel("c"), &format!("# C\n{}", sec(Q5, Some(Q1))));
+    write_record(&dir, &rel("b"), &format!("# B\n{}", sec(Q4, Some(Q1))));
+    write_record(&dir, &rel("c"), &format!("# C\n{}", sec(Q5, Some(Q1))));
     approve_ok(&dir, "b");
     approve_ok(&dir, "c");
     ask_ok(&dir, "b");
@@ -203,7 +203,6 @@ fn two_questions_naming_one_old_decision_both_answer_and_print_the_heading() {
     let out = adr_owner(&dir, &["answer", &format!("{}@00000000", id1), "A"], "");
     assert!(!out.status.success());
     assert!(stderr(&out).contains("already superseded"), "{}", stderr(&out));
-    let _ = (b, c);
 }
 
 // adr: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
@@ -251,4 +250,84 @@ fn show_superseded_reads_a_struck_section_from_the_ledger_and_git() {
     assert!(s.contains(&format!("[superseded] {}\n  replaced by: {}\n", Q1, Q4)), "{}", s);
     let s = show(&["--superseded", "--dependents"]);
     assert!(s.contains(&format!("[superseded] {}\n  depends: widget\n  replaced by: {}\n", Q1, Q4)), "{}", s);
+}
+
+fn many_heading(i: usize) -> String {
+    format!("Is the widget part {} sound?", i)
+}
+
+fn replacement_heading(i: usize) -> String {
+    format!("Is the widget part {} sturdy?", i)
+}
+
+/// The file `name` holding `count` questions in chains of four, each after
+/// the first depending on the one before, approved and asked.
+fn put_many(dir: &Path, name: &str, count: usize) {
+    let mut text = format!("# {}\n", name.to_uppercase());
+    for i in 0..count {
+        let dep = if i % 4 == 0 { "widget".to_string() } else { format!("widget, {}=*", many_heading(i - 1)) };
+        text.push_str(&format!("\n### {}\ndepends: {}\n{}", many_heading(i), dep, BODY));
+    }
+    write_record(dir, &rel(name), &text);
+    approve_ok(dir, name);
+    ask_ok(dir, name);
+}
+
+/// The file `name` holding one question that supersedes the four questions
+/// of chain `k` of the file "m", approved and asked.
+fn put_replacement(dir: &Path, name: &str, k: usize) {
+    let sup: Vec<String> = (4 * k..4 * k + 4).map(many_heading).collect();
+    write_record(dir, &rel(name), &format!("# {}\n{}", name.to_uppercase(), sec(&replacement_heading(k), Some(&sup.join(", ")))));
+    approve_ok(dir, name);
+    ask_ok(dir, name);
+}
+
+// adr: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
+#[test]
+fn a_file_with_more_than_twelve_struck_sections_in_its_history_stays_approved() {
+    let dir = setup();
+    put_many(&dir, "m", 16);
+    for i in 0..16 {
+        answer_ok(&dir, "m", &many_heading(i), "A");
+    }
+    for k in 0..4 {
+        put_replacement(&dir, &["ra", "rb", "rc", "rd"][k], k);
+    }
+    answer_ok(&dir, "ra", &replacement_heading(0), "A");
+    answer_ok(&dir, "rb", &replacement_heading(1), "A");
+    assert!(!read(&dir, "m").contains(&many_heading(7)), "{}", read(&dir, "m"));
+    // the file is approved again with eight sections struck, then four more
+    // and a last four go: sixteen struck in its history
+    let m = dir.join(rel("m"));
+    std::fs::write(&m, read(&dir, "m").replace("# M\n", "# M\n\nParts of the widget.\n")).unwrap();
+    approve_ok(&dir, "m");
+    answer_ok(&dir, "rc", &replacement_heading(2), "A");
+    assert!(show_file(&dir, "m").contains("approved"), "{}", show_file(&dir, "m"));
+    answer_ok(&dir, "rd", &replacement_heading(3), "A");
+    assert!(!read(&dir, "m").contains(&many_heading(15)), "{}", read(&dir, "m"));
+    let s = show_file(&dir, "m");
+    assert!(s.starts_with("[approved]"), "{}", s);
+    no_superseded_failure(&dir);
+}
+
+// adr: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
+#[test]
+fn a_file_approved_while_holding_superseded_sections_reads_approved_after_they_are_removed() {
+    let dir = setup();
+    put(&dir, "a", Q1, None);
+    answer_ok(&dir, "a", Q1, "A");
+    put(&dir, "b", Q2, None);
+    answer_ok(&dir, "b", Q2, "A");
+    let a_with = read(&dir, "a");
+    put(&dir, "c", Q4, Some(Q1));
+    answer_ok(&dir, "c", Q4, "A");
+    // the file as it was before any strike: Q1 superseded, still in the
+    // file, and the file approved so
+    std::fs::write(dir.join(rel("a")), &a_with).unwrap();
+    approve_ok(&dir, "a");
+    assert!(show_file(&dir, "a").starts_with("[approved]"), "{}", show_file(&dir, "a"));
+    // removed by hand
+    std::fs::write(dir.join(rel("a")), "# A\n").unwrap();
+    let s = show_file(&dir, "a");
+    assert!(s.starts_with("[approved]"), "{}", s);
 }

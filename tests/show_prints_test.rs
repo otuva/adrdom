@@ -77,7 +77,7 @@ fn is_a_kind_show_prints(line: &str) -> bool {
 // findings and moves of all files follow, once.
 #[test]
 fn show_with_no_file_prints_all_moves_after_all_decisions() {
-    let (dir, path) = asked();
+    let (dir, _) = asked();
     let rel2 = "adrdom/decisions/door.md";
     let three = "Is the widget door open?";
     let path2 = write_record(&dir, rel2, &format!("# Door\n\n{}", q(three)));
@@ -87,7 +87,14 @@ fn show_with_no_file_prints_all_moves_after_all_decisions() {
     commit_all(&dir, "the door, asked");
     let text = show(&dir, &[]);
     let lines: Vec<&str> = text.lines().collect();
-    let last_decision = lines.iter().rposition(|l| l.starts_with("    ")).unwrap();
+    let last_decision = lines
+        .iter()
+        .enumerate()
+        .rposition(|(i, l)| {
+            // an option line: four spaces, under a two-space heading line
+            l.starts_with("    ") && i > 0 && lines[i - 1].starts_with("  ") && !lines[i - 1].starts_with("   ")
+        })
+        .unwrap();
     let first_move = lines
         .iter()
         .position(|l| l.starts_with("agent ") || l.starts_with("owner runs: ") || l.starts_with("not yet: "))
@@ -96,7 +103,6 @@ fn show_with_no_file_prints_all_moves_after_all_decisions() {
     assert!(lines.iter().any(|l| l.starts_with("# Door") ), "{}", text);
     assert!(text.contains("owner runs: adr answer"), "{}", text);
     assert!(lines.iter().any(|l| l.starts_with("agent builds")), "{}", text);
-    let _ = path;
 }
 
 // adr: c5e10ae8-258d-4f29-b9fe-13cb7ad2a550
@@ -638,4 +644,25 @@ fn unrelated_prints_the_unrelated_line_of_an_answered_question() {
     let after_a: Vec<&str> = shown.lines().skip_while(|l| !l.ends_with(&format!("] {}", a))).skip(1).take(2).collect();
     assert_eq!(after_a, vec!["  Yes the widget holds.".to_string(), format!("  unrelated: {}", b)], "{}", shown);
     assert!(!shown.contains(&format!("] {}\n  depends:", a)), "{}", shown);
+}
+
+// The terms file waits for approval and two topic files carry findings with
+// agent moves: the terms file's move is the first move after the decisions.
+// adr: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
+#[test]
+fn show_prints_the_terms_move_before_the_topic_files_moves() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    std::fs::write(
+        dir.join("adrdom/terms.md"),
+        "# Terms\n\n## widget\ndefinition: A part of a gate.\naliases: widgets\n",
+    )
+    .unwrap();
+    write_record(&dir, "adrdom/decisions/a.md", "# A\n\nprose\n\n### Is the widget red?\n\n### Is the widget blue?\n");
+    write_record(&dir, "adrdom/decisions/b.md", "# B\n\nprose\n\n### Is the widget glossy?\n");
+    let shown = show(&dir, &[]);
+    let terms = shown.find("owner runs: adr approve adrdom/terms.md").expect(&shown);
+    let first_agent = shown.find("agent ").expect(&shown);
+    assert!(terms < first_agent, "{}", shown);
+    assert!(shown.find("[new] adrdom/terms.md").unwrap() < terms, "{}", shown);
 }

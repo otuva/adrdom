@@ -241,16 +241,16 @@ pub(crate) fn summary(r: &Records) -> Vec<Line> {
     let mut lines = unreadable_topic_lines(r);
     // The reports of every file, merged and printed once after all decisions.
     let mut merged = Report::default();
+    let mut terms_part = None;
     // The terms file first: while it waits for its approval, approve, ask
     // and answer stop on it in every topic file (per "Does the tool stop
     // while the terms file waits for approval?"), so its move comes before
-    // theirs, and the topic files below do not name it again.
+    // theirs, after the decisions; the topic files do not name it again.
     lines.extend(r.terms_unreadable_finding());
     if let Some(tf) = &r.terms_file {
         let (st, report) = terms_report(r, tf);
         if !out::report(&report).is_empty() {
-            lines.push(file_status(repo::TERMS_PATH, st));
-            absorb(&mut merged, report);
+            terms_part = Some((st, report));
         }
     }
     // A finding on the records as a whole is in every topic file's report;
@@ -261,8 +261,18 @@ pub(crate) fn summary(r: &Records) -> Vec<Line> {
         lines.extend(decision_lines(rf, &r.led));
         absorb(&mut merged, listed_report(r, rf, &mut printed));
     }
-    lines.extend(rest_into(r, Some(&mut merged)));
+    let mut blame_part = Vec::new();
+    lines.extend(rest_into(r, Some((&mut merged, &mut blame_part))));
+    // The terms file's report comes before the merged one: its move is the
+    // first the reader takes.
+    if let Some((st, report)) = terms_part {
+        lines.push(file_status(repo::TERMS_PATH, st));
+        lines.extend(out::report(&report));
+    }
     lines.extend(out::report(&merged));
+    // A blame file's status line stands with its report at the end, as the
+    // terms file's does.
+    lines.extend(blame_part);
     lines
 }
 
@@ -330,9 +340,10 @@ pub(crate) fn rest(r: &Records) -> Vec<Line> {
     rest_into(r, None)
 }
 
-/// `rest`; with `merged`, the reports of those files go into it and not
-/// among the lines.
-fn rest_into(r: &Records, mut merged: Option<&mut Report>) -> Vec<Line> {
+/// `rest`; with `merged`, the reports of the removed files go into its report
+/// and each blame file's status line and report into its lines, not among
+/// the lines returned.
+fn rest_into(r: &Records, mut merged: Option<(&mut Report, &mut Vec<Line>)>) -> Vec<Line> {
     let mut lines = Vec::new();
     for rel in r.removed_topic_files() {
         lines.push(file_status(&rel, FileStatus::Removed));
@@ -341,18 +352,24 @@ fn rest_into(r: &Records, mut merged: Option<&mut Report>) -> Vec<Line> {
         if let Some(old) = rules::latest_approved_version(&r.root, &rel, &r.led) {
             lines.extend(decision_lines(&old, &r.led));
         }
-        match merged.as_deref_mut() {
-            Some(m) => absorb(m, removed_report(r, &rel)),
+        match merged.as_mut() {
+            Some((m, _)) => absorb(m, removed_report(r, &rel)),
             None => lines.extend(out::report(&removed_report(r, &rel))),
         }
     }
     for e in r.blame.entries() {
         let report = blame_report(r, e);
         if !out::report(&report).is_empty() {
-            lines.push(file_status(e.rel(), e.status));
-            match merged.as_deref_mut() {
-                Some(m) => absorb(m, report),
-                None => lines.extend(out::report(&report)),
+            let status = file_status(e.rel(), e.status);
+            match merged.as_mut() {
+                Some((_, tail)) => {
+                    tail.push(status);
+                    tail.extend(out::report(&report));
+                }
+                None => {
+                    lines.push(status);
+                    lines.extend(out::report(&report));
+                }
             }
         }
     }
@@ -731,7 +748,7 @@ fn stood_on_lines(r: &Records, rf: &RecordFile, sec: &Section) -> Vec<Line> {
 /// keeps (per "What strikes the section of a superseded question from its
 /// topic file?"): every id whose latest state is `superseded` and whose
 /// latest per-question `approved` row names this file, in the order of
-/// their latest `superseded` rows. The heading is the latest `asked` row's;
+/// their first `superseded` rows. The heading is the latest `asked` row's;
 /// the reference lines (with `--dependents`) are those of the newest
 /// committed version of the file that holds the question, none when no
 /// commit does. adr-code: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
