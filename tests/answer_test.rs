@@ -691,10 +691,13 @@ fn answer_refuses_a_supersedes_target_already_superseded() {
     assert!(err.contains(old_id.as_str()), "{}", err);
     assert!(err.contains("is not a current decision"), "{}", err);
 
+    // Answering 1.2 struck 1.1's section (per "What strikes the section of
+    // a superseded question from its topic file?"): one answer line is left,
+    // 1.2's, and none is written for 1.3.
     let after = std::fs::read_to_string(&record).unwrap();
     assert_eq!(
         after.matches("**Answer:**").count(),
-        2,
+        1,
         "answer must not have written an answer for 1.3: {}",
         after
     );

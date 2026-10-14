@@ -17,8 +17,8 @@ path, and some agents load the file from it at the start of a session:
 ## What is next
 
 Run `adr show`. It prints every current decision, its heading and under it
-the answer the owner picked, and after the decisions of each topic file its
-findings and its moves. A finding opens with the rule it breaks and ends
+the answer the owner picked, and after all of them the findings and the
+moves of every file. A finding opens with the rule it breaks and ends
 with the move that clears it; a move is one line, opening with who makes
 it.
 
@@ -217,6 +217,8 @@ its decision from the record alone. Build the decisions the moves name. Tie
 each one to a test: put a comment `adr: <id>` inside a test, outside
 `adrdom/`, that shows the code follows the decision. Write the test if none
 exists, and add it to git. The answers are committed as they are given.
+An answer also strikes the section of every superseded question from every
+topic file; those files are committed with it.
 `adr check` reports each untested decision until a test names it; the build
 and its tests follow. It reports a test whose `adr: <id>` names a decision
 that is not current, and fails nothing: the builder points the tie at the

@@ -2017,6 +2017,15 @@ pub fn ledger_dropped_still_in_file(id: &str, rel: &str) -> Said {
     )
 }
 
+/// A superseded question whose section is still in a topic file.
+pub fn ledger_superseded_still_in_file(heading: &str, rel: &str) -> Said {
+    said(
+        &crate::rule::SUPERSEDED_QUESTION_LEAVES_FILES,
+        format!("\"{}\" is superseded but its section is still in {}", heading, rel),
+        Next::agent("removes the question from the file"),
+    )
+}
+
 /// At the commit that removes a dropped question: HEAD's text hashes to something else.
 pub fn ledger_dropped_text_differs(id: &str) -> Said {
     said(
@@ -2822,6 +2831,7 @@ mod tests {
             ledger_dropped_not_approved("id-1").text(),
             ledger_dropped_closed("id-1", "answered").text(),
             ledger_dropped_still_in_file("id-1", "x.md").text(),
+            ledger_superseded_still_in_file("Q?", "x.md").text(),
             ledger_dropped_text_differs("id-1").text(),
             ledger_dropped_set_holds_letter("id-1", "A").text(),
             ledger_dropped_not_standing_on("id-1", "id-2").text(),

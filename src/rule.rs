@@ -836,6 +836,13 @@ pub const DROPPED_QUESTION_LEAVES_FILES: Rule = Rule {
     protects: "a dropped question is gone from every topic file",
 };
 
+/// Decision: What strikes the section of a superseded question from its topic file?
+pub const SUPERSEDED_QUESTION_LEAVES_FILES: Rule = Rule {
+    name: "superseded_question_leaves_files",
+    decisions: &["b5ca161f-c88c-4f02-a9d9-1d406cf3a252"],
+    protects: "a superseded question is gone from every topic file",
+};
+
 /// Decision: What are the tiers derived from?
 pub const DEPENDS_LINES_HAVE_NO_CYCLE: Rule = Rule {
     name: "depends_lines_have_no_cycle",
@@ -1180,6 +1187,7 @@ pub const ALL: &[&Rule] = &[
     &DROP_NAMES_AN_IDENTIFIER,
     &DROP_HAS_APPROVED_TEXT,
     &DROPPED_QUESTION_LEAVES_FILES,
+    &SUPERSEDED_QUESTION_LEAVES_FILES,
     &DEPENDS_LINES_HAVE_NO_CYCLE,
     &QUESTION_NOT_ON_ITSELF,
     &HOOK_MATCHES_INSTALL,

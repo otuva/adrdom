@@ -22,6 +22,11 @@ pub enum DepTarget {
     Heading(usize),
     Term(String),
     Decision(String),
+    /// The identifier of a superseded question of this file whose section
+    /// is struck (adr-code: b5ca161f-c88c-4f02-a9d9-1d406cf3a252): the
+    /// ledger alone holds it, and the entry resolves as it did when the
+    /// section stood in the file.
+    Struck(String),
 }
 
 /// Why a `depends:` entry did not resolve, carrying just what
@@ -103,6 +108,9 @@ pub fn resolve_dep(
                     return Ok(Some(DepTarget::Term(id.clone())));
                 }
                 return Err(DepError::RetiredTermId(id.clone()));
+            }
+            if state::is_struck_from(led, id, &rf.rel) {
+                return Ok(Some(DepTarget::Struck(id.clone())));
             }
             if state::is_current(led, id) {
                 if status::open_to_ask_text(led, rf, sec) {

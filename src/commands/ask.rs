@@ -59,7 +59,12 @@ pub fn run(given: PathBuf) -> i32 {
     let terms_list: Vec<terms::Term> = tf.terms.clone();
 
     let mut rf = match loaded {
-        Ok(rf) => rf,
+        Ok(mut rf) => {
+            // `record::load` leaves the path as given; the ledger names the
+            // file by its path from the repository root.
+            rf.rel = rel.clone();
+            rf
+        }
         Err(e) => {
             out::eprint_stop(Command::Ask, &msg::read_failed(&rel, &e, msg::topic_file_unread("ask", &rel, &e)));
             return 1;
@@ -101,7 +106,7 @@ pub fn run(given: PathBuf) -> i32 {
 
     // Every heading by its identifier, any state: a refusal names the
     // question beside an identifier.
-    let names = crate::view::heading_texts(&all_records);
+    let names = crate::view::heading_names(&all_records, &led);
     // `all_records` is still as loaded, so its plan hashes are the raw ones.
     let replaced_base = depends::replaced_base(
         &all_records,

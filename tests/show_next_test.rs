@@ -31,6 +31,12 @@ fn q(heading: &str, depends: &str) -> String {
     format!("### {}\ndepends: {}\n{}\n", heading, depends, BODY)
 }
 
+fn commit_all(dir: &Path, message: &str) {
+    run_git(dir, &["add", "-A"]);
+    let out = run_git(dir, &["commit", "-q", "-m", message]);
+    assert!(out.status.success(), "commit failed: {}", stderr(&out));
+}
+
 fn setup() -> (PathBuf, PathBuf) {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
@@ -405,6 +411,9 @@ fn show_names_what_replaced_a_superseded_question() {
     );
     let asked = adr(&dir, &["ask", p], &[], "");
     assert!(asked.status.success(), "{}", stderr(&asked));
+    // The approved plan is committed before the answer strikes the section of
+    // the superseded question: its reference lines come from git.
+    commit_all(&dir, "the replacement, asked");
     assert!(adr_answer(&dir, &two, "A").status.success());
 
     // What replaced a superseded question is computed from the records:
