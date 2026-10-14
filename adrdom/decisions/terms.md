@@ -90,26 +90,6 @@ Standard: terminology tools scan the whole document, not one sentence of it.
 
 **Answer:** A
 
-### Does the owner approve the terms file as a whole?
-depends: 7c306235-6243-4d79-b9aa-08ed19662779=*, e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 528fe6f6-6d77-42d5-9086-017048d1448d
-id: 767a1402-b079-4565-bf21-467236732478
-terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, approval=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approves=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, current=e2533580-1486-4dc9-8697-e6c53605fe72, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, decisions=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, definition=607cb55f-c0fa-40af-b290-c17f3ba0f812, options=43778946-d44c-4acf-a766-0a4915fce199, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, retire=c584a68d-e54a-4ad2-8a6b-9d64ed098ae5, supersede=2bae531b-c4df-48a0-89a0-3d52726741ea, term=f590059d-b681-40ec-8a1c-c8916d71f6bb, terms file=528fe6f6-6d77-42d5-9086-017048d1448d
-
-Problem: vocabulary that moves without the owner is the same failure as a decision that moves, but a term has no options, so a question per term turns every rename into a supersede.
-Standard: governed glossaries take changes as diffs signed off by a named approver, with tests on shape, uniqueness and references.
-
-- A) Yes: the agent edits the terms file and the owner approves the whole file with approve, which writes one event over its hash; check fails a terms file that differs from its latest approval, ask stops while it does, and on a definition change approve prints the current decisions paired to that term.
-  Why: one command the owner has, one event, and one glance at a diff where a new noun stands out.
-  Costs: one approval can cover many term edits at once.
-- B) No: separate owner commands add, rename and retire a term, each writing its own event.
-  Why: each change is its own act.
-  Costs: three commands for what a diff shows.
-- C) No: the agent edits freely and check holds only shape and uniqueness.
-  Why: nothing for the owner to do.
-  Costs: vocabulary moves under the owner.
-
-**Answer:** A
-
 ### Does approve stop a terms edit that moves a word an answered question pairs?
 depends: 6108b8b2-911e-443b-abe0-4c6f8b407384=A, e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd
 id: 7cf81ded-be48-4777-b83e-f8a2998c1ab5
@@ -124,23 +104,6 @@ Standard: referential integrity; a change that would leave a stored reference me
 - B) No: approve accepts the move, and the frozen identifiers keep the old meaning.
   Why: vocabulary moves freely.
   Costs: a decision's word and its paired meaning part ways, and only the terms line shows it.
-
-**Answer:** A
-
-### Does a retired term keep its words?
-depends: 7c306235-6243-4d79-b9aa-08ed19662779=*, c584a68d-e54a-4ad2-8a6b-9d64ed098ae5
-id: 05af74a6-36be-4923-b66f-1467b323816a
-terms: answered=b36113a1-1384-4e4c-a798-8399f4181366, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, identifier=e877e4a9-2caf-4fe6-9f82-5476a2abb00b, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, retired=c584a68d-e54a-4ad2-8a6b-9d64ed098ae5, retiring=c584a68d-e54a-4ad2-8a6b-9d64ed098ae5, term=f590059d-b681-40ec-8a1c-c8916d71f6bb, terms=f590059d-b681-40ec-8a1c-c8916d71f6bb
-
-Problem: splitting a term or merging two needs the old one retired; if it keeps its words, the new terms cannot take them and new questions cannot use them.
-Standard: terminology systems let a deprecated term's label pass to a new concept while old records still point at the old identifier.
-
-- A) No: retiring frees its words and a new term may take them; answered questions keep the retired term's identifier on their terms line, so their meaning does not move.
-  Why: the right word passes to the new term on a split or merge.
-  Costs: one word can mean one thing in an old decision and another in a new one, and the terms line says which.
-- B) Yes: the word stays the retired term's for good; no new question may use it and no new term may take it.
-  Why: a word never carries two meanings anywhere in the records.
-  Costs: a split or merge loses the word.
 
 **Answer:** A
 
@@ -161,44 +124,6 @@ Standard: controlled vocabulary indexing gives every indexed record at least one
 
 **Answer:** A
 
-### Does check fail a terms file that differs from its latest approval?
-depends: 7cf81ded-be48-4777-b83e-f8a2998c1ab5, 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, 528fe6f6-6d77-42d5-9086-017048d1448d, 607cb55f-c0fa-40af-b290-c17f3ba0f812
-id: 03b2853b-4379-4f4b-9cbf-ec6e06aad7fd
-terms: agents=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answered=b36113a1-1384-4e4c-a798-8399f4181366, approval=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approved=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approves=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, current=e2533580-1486-4dc9-8697-e6c53605fe72, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, decisions=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, definition=607cb55f-c0fa-40af-b290-c17f3ba0f812, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, term=f590059d-b681-40ec-8a1c-c8916d71f6bb, terms=f590059d-b681-40ec-8a1c-c8916d71f6bb, terms file=528fe6f6-6d77-42d5-9086-017048d1448d, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
-supersedes: 767a1402-b079-4565-bf21-467236732478
-
-Problem: failing every commit while the terms file waits for approval holds work that has nothing to do with terms, yet a changed definition under answered questions moves what those decisions mean.
-Standard: change control gates the step that uses a change, such as merge, submit or apply, not the recording of a draft.
-
-- A) Only when the definition of a term a current decision pairs, directly or through another term's definition, differs from its approved text; otherwise check reports the file as waiting, ask stops until the owner approves the whole file with approve, and approve writes one event over its hash and prints the current decisions paired to a changed term.
-  Why: a draft term is committed like a draft plan, and the one edit that moves an answered decision's meaning still stops.
-  Costs: check needs each term's approved text and not only the file hash, and a typo in a paired definition still waits for the owner.
-- B) Yes: check fails every terms file that differs from its latest approval, whether or not a topic file exists, and approve and ask work as in A.
-  Why: nothing in the terms file is committed without the owner.
-  Costs: every commit waits while a terms edit waits for approval, including work that has nothing to do with terms.
-- C) No: check only reports a terms file that differs from its latest approval, and approve and ask work as in A.
-  Why: a terms draft never holds a commit.
-  Costs: a changed definition under answered questions lands unapproved, and agents build on it.
-
-**Answer:** A
-
-### Does answer stop while the terms file waits for approval?
-depends: b36113a1-1384-4e4c-a798-8399f4181366, 528fe6f6-6d77-42d5-9086-017048d1448d, 03b2853b-4379-4f4b-9cbf-ec6e06aad7fd
-id: cd450764-bacd-4378-82ba-19edfc5a9edb
-terms: answer=b36113a1-1384-4e4c-a798-8399f4181366, answers=b36113a1-1384-4e4c-a798-8399f4181366, approval=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approved=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approves=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, checks=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, current=e2533580-1486-4dc9-8697-e6c53605fe72, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, terms=f590059d-b681-40ec-8a1c-c8916d71f6bb, terms file=528fe6f6-6d77-42d5-9086-017048d1448d, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6
-
-Problem: a terms edit waiting for approval blocks answers to questions whose terms it does not touch.
-Standard: change control gates the step that uses a change, not steps that never read it.
-
-- A) Yes: answer stops until the owner approves the terms file.
-  Why: every answer is written while the terms file matches its approval.
-  Costs: a terms edit for one topic file holds every open answer in the others.
-- B) No: answer checks the question's terms line against the approved terms and proceeds.
-  Why: an unrelated terms edit never holds an answer, and approve still stops an edit that moves a word a current decision pairs.
-  Costs: the owner may answer while a terms edit waits unread.
-
-**Answer:** B
-
 ### Does the tool stop while the terms file waits for approval?
 depends: 7cf81ded-be48-4777-b83e-f8a2998c1ab5, 528fe6f6-6d77-42d5-9086-017048d1448d, 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, b36113a1-1384-4e4c-a798-8399f4181366
 id: aa475aa3-05b2-429a-b33a-46b1dcb52049
@@ -214,26 +139,6 @@ Standard: a single source of truth; a pending change is either approved or block
 - B) No: the tool keeps the approved text beside the ledger and works from it while the edit waits.
   Why: an unrelated terms edit never holds an answer or a commit.
   Costs: a second copy of the terms file, and the code that keeps it in step with the ledger.
-
-**Answer:** A
-
-### Does the owner retire a term that a question names?
-depends: 05af74a6-36be-4923-b66f-1467b323816a=A, c584a68d-e54a-4ad2-8a6b-9d64ed098ae5, f590059d-b681-40ec-8a1c-c8916d71f6bb, 277a8338-c57a-43cc-8b28-6b42e9347f6a
-id: db58d4b8-9e64-44b0-99a2-acb7f05d5b4e
-terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, answer=b36113a1-1384-4e4c-a798-8399f4181366, answered=b36113a1-1384-4e4c-a798-8399f4181366, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approved=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, asked=3c8d4c9c-abca-4faa-b7c1-aae39951376c, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, current=e2533580-1486-4dc9-8697-e6c53605fe72, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, decisions=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, refuses=0942e445-0163-423e-8ba7-84dd8ac07045, retire=c584a68d-e54a-4ad2-8a6b-9d64ed098ae5, retired=c584a68d-e54a-4ad2-8a6b-9d64ed098ae5, supersede=2bae531b-c4df-48a0-89a0-3d52726741ea, superseded=2bae531b-c4df-48a0-89a0-3d52726741ea, term=f590059d-b681-40ec-8a1c-c8916d71f6bb
-
-Problem: a term is retired while questions name it; check then fails them, ask has nothing to ask, answer refuses, and no command stops the retire itself.
-Standard: a record that others reference is not removed while the references stand.
-
-- A) No: approve refuses the retire while any question that is answered, asked, or a heading of an approved plan names the term, and names those questions.
-  Why: no question loses a word under it; the move is a supersede or a plan change first.
-  Costs: approve pairs the words of headings whose body is not asked; a term in wide use is retired only once every question naming it is superseded or struck.
-- B) No while a current decision pairs it; an asked question or a plan heading that names it is reworded by the agent and asked again.
-  Why: the guard covers current decisions, and an open question is the agent's to reword.
-  Costs: the owner's retire lands the agent with rework: an asked question's version moves and it is asked again, a plan heading changes and the plan is approved again.
-- C) Yes: retire is free, and check reports every question that names a retired term.
-  Why: the owner's word on a term is not held by questions.
-  Costs: the records fail after an owner command, and the move to clear them is a supersede of each named decision.
 
 **Answer:** A
 
