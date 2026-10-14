@@ -34,6 +34,7 @@ pub(super) fn check_ledger(
 
     out.extend(check_same_time_competition(led));
     out.extend(check_dropped(led, records, root));
+    out.extend(check_superseded_struck(led, records));
 
     for row in &led.rows {
         if row.event == "answered" {
@@ -50,6 +51,24 @@ pub(super) fn check_ledger(
         }
     }
 
+    out
+}
+
+/// Per "What strikes the section of a superseded question from its topic
+/// file?": no topic file holds the section of a question whose latest state
+/// is `superseded`. adr-code: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
+fn check_superseded_struck(led: &Ledger, records: &[RecordFile]) -> Vec<Failure> {
+    let mut out = Vec::new();
+    for rf in records {
+        for sec in &rf.sections {
+            if sec.id.as_deref().is_some_and(|id| crate::state::is_superseded(led, id)) {
+                out.push(Failure::said(
+                    Class::Ledger,
+                    msg::ledger_superseded_still_in_file(&sec.heading_text, &rf.rel),
+                ));
+            }
+        }
+    }
     out
 }
 

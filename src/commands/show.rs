@@ -239,6 +239,8 @@ pub fn run(record_arg: Option<PathBuf>, all: bool, views: Views) -> i32 {
 /// the terms file and each blame file.
 pub(crate) fn summary(r: &Records) -> Vec<Line> {
     let mut lines = unreadable_topic_lines(r);
+    // The reports of every file, merged and printed once after all decisions.
+    let mut merged = Report::default();
     // The terms file first: while it waits for its approval, approve, ask
     // and answer stop on it in every topic file (per "Does the tool stop
     // while the terms file waits for approval?"), so its move comes before
@@ -246,10 +248,9 @@ pub(crate) fn summary(r: &Records) -> Vec<Line> {
     lines.extend(r.terms_unreadable_finding());
     if let Some(tf) = &r.terms_file {
         let (st, report) = terms_report(r, tf);
-        let report = out::report(&report);
-        if !report.is_empty() {
+        if !out::report(&report).is_empty() {
             lines.push(file_status(repo::TERMS_PATH, st));
-            lines.extend(report);
+            absorb(&mut merged, report);
         }
     }
     // A finding on the records as a whole is in every topic file's report;
@@ -258,10 +259,24 @@ pub(crate) fn summary(r: &Records) -> Vec<Line> {
     for rf in &r.topic_files {
         lines.push(topic_heading(rf));
         lines.extend(decision_lines(rf, &r.led));
-        lines.extend(out::report(&listed_report(r, rf, &mut printed)));
+        absorb(&mut merged, listed_report(r, rf, &mut printed));
     }
-    lines.extend(rest(r));
+    lines.extend(rest_into(r, Some(&mut merged)));
+    lines.extend(out::report(&merged));
     lines
+}
+
+/// Appends the stops, findings and moves of `more` to `into`, finding texts
+/// already in `into` left out.
+fn absorb(into: &mut Report, more: Report) {
+    into.stops.extend(more.stops);
+    for f in more.findings {
+        let text = f.text();
+        if !into.findings.iter().any(|g| g.text() == text) {
+            into.findings.push(f);
+        }
+    }
+    into.moves.extend(more.moves);
 }
 
 /// The findings of the topic files that cannot be read.
@@ -312,6 +327,12 @@ pub(crate) fn listed_report_judged(r: &Records, rf: &RecordFile, printed: &mut V
 /// What the listing prints after the topic files: each removed topic file,
 /// each blame file, and the blame files that cannot be read.
 pub(crate) fn rest(r: &Records) -> Vec<Line> {
+    rest_into(r, None)
+}
+
+/// `rest`; with `merged`, the reports of those files go into it and not
+/// among the lines.
+fn rest_into(r: &Records, mut merged: Option<&mut Report>) -> Vec<Line> {
     let mut lines = Vec::new();
     for rel in r.removed_topic_files() {
         lines.push(file_status(&rel, FileStatus::Removed));
@@ -320,13 +341,19 @@ pub(crate) fn rest(r: &Records) -> Vec<Line> {
         if let Some(old) = rules::latest_approved_version(&r.root, &rel, &r.led) {
             lines.extend(decision_lines(&old, &r.led));
         }
-        lines.extend(out::report(&removed_report(r, &rel)));
+        match merged.as_deref_mut() {
+            Some(m) => absorb(m, removed_report(r, &rel)),
+            None => lines.extend(out::report(&removed_report(r, &rel))),
+        }
     }
     for e in r.blame.entries() {
-        let report = out::report(&blame_report(r, e));
-        if !report.is_empty() {
+        let report = blame_report(r, e);
+        if !out::report(&report).is_empty() {
             lines.push(file_status(e.rel(), e.status));
-            lines.extend(report);
+            match merged.as_deref_mut() {
+                Some(m) => absorb(m, report),
+                None => lines.extend(out::report(&report)),
+            }
         }
     }
     for (rel, _) in &r.unreadable_blame_files {
@@ -540,6 +567,10 @@ fn topic_file_lines(r: &Records, rf: &RecordFile, views: Views) -> Vec<Line> {
     let shown = (views.neighbours).then(|| plan::load_shown_with(rf, &r.terms_list, led, &r.index().planning));
     // Built on the first question that reads the reader's words.
     let by_body = std::cell::OnceCell::new();
+    // Struck superseded questions come first: older than every section left.
+    if views.superseded {
+        lines.extend(struck_superseded_lines(r, rf, views));
+    }
     for (i, sec) in rf.sections.iter().enumerate() {
         let st = status::question_status(led, sec);
         let change = changes.questions.get(i).and_then(Option::as_ref);
@@ -696,13 +727,65 @@ fn stood_on_lines(r: &Records, rf: &RecordFile, sec: &Section) -> Vec<Line> {
     vec![Line::Record { depth: 1, text: format!("dependents: {}", dependents.join(", ")) }]
 }
 
+/// The superseded questions of the file `rf` whose section no topic file
+/// keeps (per "What strikes the section of a superseded question from its
+/// topic file?"): every id whose latest state is `superseded` and whose
+/// latest per-question `approved` row names this file, in the order of
+/// their latest `superseded` rows. The heading is the latest `asked` row's;
+/// the reference lines (with `--dependents`) are those of the newest
+/// committed version of the file that holds the question, none when no
+/// commit does. adr-code: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
+fn struck_superseded_lines(r: &Records, rf: &RecordFile, views: Views) -> Vec<Line> {
+    let led = &r.led;
+    let in_file: std::collections::HashSet<&str> = rf.sections.iter().filter_map(|s| s.id.as_deref()).collect();
+    let mut ids: Vec<&str> = Vec::new();
+    for row in led.rows.iter().filter(|row| row.event == "superseded") {
+        let id = row.id.as_str();
+        if !ids.contains(&id)
+            && !in_file.contains(id)
+            && state::is_superseded(led, id)
+            && led.latest_for_id("approved", id).is_some_and(|a| a.detail == rf.rel)
+        {
+            ids.push(id);
+        }
+    }
+    let mut lines = Vec::new();
+    for id in ids {
+        let heading = led.latest_asked(id).map(|a| a.detail.clone()).unwrap_or_else(|| id.to_string());
+        lines.push(Line::Status {
+            subject: heading,
+            status: Status::Question { status: QuestionStatus::Superseded, letter: None, version: None },
+            mark: None,
+        });
+        if views.dependents {
+            let old = approval::committed_topics(&r.root, &rf.rel).find(|v| v.sections.iter().any(|s| s.id.as_deref() == Some(id)));
+            if let Some((old, sec)) = old.as_ref().and_then(|o| o.sections.iter().find(|s| s.id.as_deref() == Some(id)).map(|s| (o, s))) {
+                lines.extend(reference_and_body_lines(
+                    &approval::question_lines(old, sec),
+                    QuestionStatus::Superseded,
+                    &r.names,
+                    views.unrelated,
+                    true,
+                ));
+            }
+        }
+        lines.extend(replaced_by_lines_of(r, id));
+    }
+    lines
+}
+
 /// What replaced a superseded question: what `--superseded` prints under
 /// it. Each `superseded` row holds the id of a question that replaced it; a
 /// decision several questions supersede has one row for each (per "Does
 /// one decision supersede several?"), named in ledger order.
 fn replaced_by_lines(r: &Records, sec: &Section) -> Vec<Line> {
+    sec.id.as_deref().map(|id| replaced_by_lines_of(r, id)).unwrap_or_default()
+}
+
+/// `replaced_by_lines` of a question named by its identifier.
+fn replaced_by_lines_of(r: &Records, id: &str) -> Vec<Line> {
     let mut by: Vec<String> = Vec::new();
-    if let Some(id) = sec.id.as_deref() {
+    {
         for row in r.led.rows.iter().filter(|row| row.id == id && row.event == "superseded") {
             let b = row.detail.trim();
             if b.is_empty() {

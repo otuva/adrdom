@@ -168,7 +168,8 @@ fn short_show_names_the_approval_a_blame_file_waits_for() {
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
     assert!(
-        text.contains("[new] adrdom/blame/x.md\nowner runs: adr approve adrdom/blame/x.md\n"),
+        text.contains("[new] adrdom/blame/x.md\n")
+            && text.trim_end().ends_with("owner runs: adr approve adrdom/blame/x.md"),
         "{}",
         text
     );

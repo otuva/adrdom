@@ -34,6 +34,21 @@ pub fn heading_texts(records: &[RecordFile]) -> HashMap<String, String> {
     out
 }
 
+/// `heading_texts`, and for a question no topic file holds any more (struck
+/// as a superseded section, or dropped) the heading its latest `asked` row
+/// carries (per "What strikes the section of a superseded question from its
+/// topic file?"). adr-code: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
+pub fn heading_names(records: &[RecordFile], led: &Ledger) -> HashMap<String, String> {
+    let mut out: HashMap<String, String> = led
+        .rows
+        .iter()
+        .filter(|r| r.event == "asked" && !r.detail.is_empty())
+        .map(|r| (r.id.clone(), r.detail.clone()))
+        .collect();
+    out.extend(heading_texts(records));
+    out
+}
+
 /// `state::asked_text_stands` for a section of a loaded topic file: the
 /// question `answer` takes, and the one `show` prints a version for.
 pub(crate) fn asked_text_stands(led: &Ledger, rf: &RecordFile, sec: &Section) -> bool {

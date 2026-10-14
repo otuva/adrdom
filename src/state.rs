@@ -120,13 +120,55 @@ pub fn plan_approved_hashes(led: &Ledger, rel: &str, question_hashes: &[String])
     if hash_matches_latest(led, "approved", rel, &record::derive_file_hash(question_hashes)) {
         return true;
     }
+    let mut base: Vec<String> = question_hashes.to_vec();
     let dropped = dropped_hashes(led, rel);
-    if dropped.is_empty() {
+    let has_dropped = !dropped.is_empty();
+    base.extend(dropped);
+    if has_dropped && hash_matches_latest(led, "approved", rel, &record::derive_file_hash(&base)) {
+        return true;
+    }
+    // A superseded section struck from the file (per "What strikes the
+    // section of a superseded question from its topic file?") takes its
+    // hash with it and nothing else moves: the file counts as approved
+    // when some set of the struck sections, put back, makes the approved
+    // hash. adr-code: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
+    let mut struck: Vec<String> = Vec::new();
+    for id in superseded_ids(led) {
+        if let Some(r) = led.rows.iter().rfind(|r| r.event == "approved" && r.id == id && r.detail == rel) {
+            if !base.contains(&r.hash) && !struck.contains(&r.hash) {
+                struck.push(r.hash.clone());
+            }
+        }
+    }
+    if struck.is_empty() {
         return false;
     }
-    let mut all: Vec<String> = question_hashes.to_vec();
-    all.extend(dropped);
-    hash_matches_latest(led, "approved", rel, &record::derive_file_hash(&all))
+    let Some(latest) = led.latest_for_path("approved", rel).map(|r| r.hash.clone()) else { return false };
+    if struck.len() > STRUCK_SUBSET_CAP {
+        let mut all = base;
+        all.extend(struck);
+        return record::derive_file_hash(&all) == latest;
+    }
+    (1u32..(1 << struck.len())).any(|mask| {
+        let mut all = base.clone();
+        all.extend(struck.iter().enumerate().filter(|(i, _)| mask & (1 << i) != 0).map(|(_, h)| h.clone()));
+        record::derive_file_hash(&all) == latest
+    })
+}
+
+/// The most struck sections whose every combination is tried.
+const STRUCK_SUBSET_CAP: usize = 12;
+
+/// Every id whose latest state is `superseded`, sorted: the questions whose
+/// section no topic file keeps (per "What strikes the section of a
+/// superseded question from its topic file?").
+pub fn superseded_ids(led: &Ledger) -> Vec<String> {
+    led.state_ids().into_iter().filter(|id| is_superseded(led, id)).collect()
+}
+
+/// True when the latest state of `id` is `superseded`.
+pub fn is_superseded(led: &Ledger, id: &str) -> bool {
+    led.latest_state(id).is_some_and(|r| r.event == "superseded")
 }
 
 /// True when `context_hash` (computed by the caller) matches the latest

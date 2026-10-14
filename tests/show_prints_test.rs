@@ -73,6 +73,34 @@ fn is_a_kind_show_prints(line: &str) -> bool {
 
 // adr: c5e10ae8-258d-4f29-b9fe-13cb7ad2a550
 //
+// With no file named, every decision of every file comes first and the
+// findings and moves of all files follow, once.
+#[test]
+fn show_with_no_file_prints_all_moves_after_all_decisions() {
+    let (dir, path) = asked();
+    let rel2 = "adrdom/decisions/door.md";
+    let three = "Is the widget door open?";
+    let path2 = write_record(&dir, rel2, &format!("# Door\n\n{}", q(three)));
+    approve_record(&dir, rel2);
+    assert!(adr(&dir, &["ask", path2.to_str().unwrap()], &[], "").status.success());
+    assert!(adr_answer(&dir, &id_of(&path2, three), "A").status.success());
+    commit_all(&dir, "the door, asked");
+    let text = show(&dir, &[]);
+    let lines: Vec<&str> = text.lines().collect();
+    let last_decision = lines.iter().rposition(|l| l.starts_with("    ")).unwrap();
+    let first_move = lines
+        .iter()
+        .position(|l| l.starts_with("agent ") || l.starts_with("owner runs: ") || l.starts_with("not yet: "))
+        .unwrap();
+    assert!(last_decision < first_move, "{}", text);
+    assert!(lines.iter().any(|l| l.starts_with("# Door") ), "{}", text);
+    assert!(text.contains("owner runs: adr answer"), "{}", text);
+    assert!(lines.iter().any(|l| l.starts_with("agent builds")), "{}", text);
+    let _ = path;
+}
+
+// adr: c5e10ae8-258d-4f29-b9fe-13cb7ad2a550
+//
 // With no file named: every current decision as its heading and the option
 // picked, and every move; nothing about a question that is no decision.
 #[test]
@@ -491,6 +519,9 @@ fn show_prints_no_reference_lines_of_an_answered_question_unless_dependents() {
     std::fs::write(&path, text).unwrap();
     approve_record(&dir, REL);
     assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    // The approved plan is committed before the answer strikes the section of
+    // the superseded question: its reference lines come from git.
+    commit_all(&dir, "the replacement, asked");
     assert!(adr_answer(&dir, &id_of(&path, d), "A").status.success());
 
     let first_line_after = |shown: &str, heading: &str| -> String {
@@ -547,6 +578,9 @@ fn show_of_a_file_prints_the_option_picked_and_superseded_under_its_flag() {
     std::fs::write(&path, text).unwrap();
     approve_record(&dir, REL);
     assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    // The approved plan is committed before the answer strikes the section of
+    // the superseded question: its reference lines come from git.
+    commit_all(&dir, "the replacement, asked");
     assert!(adr_answer(&dir, &id_of(&path, d), "A").status.success());
 
     // The option picked, on the line under the current decision, the same

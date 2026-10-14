@@ -11,7 +11,7 @@ use crate::out::Line;
 use crate::rules::{self, empty_plan_hash, is_topic_file_path, removal_holds, terms_refusals, Class, Command, Finding, RemovalHolds};
 use crate::terms;
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 /// What an owner act wrote: one event per ledger row it appended, in the
@@ -59,7 +59,13 @@ fn findings_of(findings: Vec<Finding>) -> Stops {
 /// identifier: what turns the identifiers of the rows an act wrote into
 /// words, from what the act already holds.
 pub fn event_names(all: &[RecordFile], terms: &[terms::Term]) -> HashMap<String, String> {
-    let mut names = crate::view::heading_texts(all);
+    event_names_in(all, terms, &Ledger::default())
+}
+
+/// `event_names`, and for a question no topic file holds (a superseded
+/// section struck) the heading its `asked` row carries.
+pub fn event_names_in(all: &[RecordFile], terms: &[terms::Term], led: &Ledger) -> HashMap<String, String> {
+    let mut names = crate::view::heading_names(all, led);
     names.extend(terms.iter().filter_map(|t| Some((t.id.clone()?, t.name.clone()))));
     names
 }
@@ -168,6 +174,16 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
         }
     }
     let Some((mut rf, idx)) = found else {
+        // A superseded question's section is struck from every file (adr-code:
+        // b5ca161f-c88c-4f02-a9d9-1d406cf3a252): the ledger still says it is
+        // closed, by the heading its `asked` row carries.
+        if unread.is_empty() && state::is_superseded(&led, id) {
+            let heading = led.latest_asked(id).map(|r| r.detail.clone()).unwrap_or_default();
+            return Err(stop(
+                Command::Answer,
+                msg::already_closed(&heading, crate::status::QuestionStatus::Superseded),
+            ));
+        }
         if unread.is_empty() {
             return Err(stop(Command::Answer, msg::id_not_found(id)));
         }
@@ -375,7 +391,8 @@ fn finish_answer(
     answer_text: &str,
     rows: Vec<ledger::Row>,
     drop_ids: &[String],
-) -> Result<(), Stops> {
+    strike_ids: &[String],
+) -> Result<Vec<String>, Stops> {
     let ledger_path = root.join(crate::repo::LEDGER_PATH);
     let before = record::join_lines(&rf.lines);
     let path = rf.path.clone();
@@ -395,24 +412,41 @@ fn finish_answer(
     // Per "Does answer remove a question whose answer set lacks the
     // answer?": each dropped section leaves the file, heading through the
     // line before the next heading, in the same write as the answer line.
-    if !drop_ids.is_empty() {
-        let mut rebuilt = record::build(rf.path.clone(), rf.rel.clone(), rf.lines.clone());
-        let mut ranges: Vec<(usize, usize)> = rebuilt
-            .sections
-            .iter()
-            .filter(|s| s.id.as_ref().is_some_and(|i| drop_ids.contains(i)))
-            .map(|s| (s.start, s.end))
-            .collect();
-        ranges.sort_unstable_by(|a, b| b.cmp(a));
-        for (start, end) in ranges {
-            rebuilt.lines.drain(start..end);
-        }
-        rf = record::build(rebuilt.path.clone(), rebuilt.rel.clone(), rebuilt.lines);
+    // Per "What strikes the section of a superseded question from its topic
+    // file?": each superseded section leaves every topic file in the same
+    // run, the answered file in the same write. adr-code: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
+    let leaving: Vec<String> = drop_ids.iter().chain(strike_ids).cloned().collect();
+    if !leaving.is_empty() {
+        rf = without_sections(rf, &leaving);
     }
 
     record::save(&rf).map_err(|e| stop(Command::Answer, msg::write_failed("topic file", e, again())))?;
 
+    // The other topic files that hold a struck section, each as it was
+    // before, so a ledger that cannot take the rows puts them all back.
+    let mut others: Vec<(PathBuf, String, String)> = Vec::new();
+    if !strike_ids.is_empty() {
+        for other in record::load_all(root) {
+            if other.path == path || other.rel == rf.rel {
+                continue;
+            }
+            if !other.sections.iter().any(|s| s.id.as_ref().is_some_and(|i| strike_ids.contains(i))) {
+                continue;
+            }
+            let was = record::join_lines(&other.lines);
+            let (opath, orel) = (other.path.clone(), other.rel.clone());
+            let cut = without_sections(other, strike_ids);
+            if let Err(e) = record::save(&cut) {
+                restore_files(&others);
+                let _ = std::fs::write(&path, &before);
+                return Err(stop(Command::Answer, msg::write_failed("topic file", e, again())));
+            }
+            others.push((opath, was, orel));
+        }
+    }
+
     if let Err(e) = ledger::append(&ledger_path, &rows) {
+        restore_files(&others);
         // The answer line and the removed questions go back out, so the
         // file waits for the same answer it waited for before.
         if let Err(back) = std::fs::write(&path, &before) {
@@ -429,7 +463,31 @@ fn finish_answer(
         return Err(stop(Command::Answer, msg::update_failed("ledger", e, again())));
     }
 
-    Ok(())
+    Ok(others.into_iter().map(|(_, _, rel)| rel).collect())
+}
+
+/// `rf` without the sections of `ids`, each from its heading through the line
+/// before the next heading.
+fn without_sections(rf: RecordFile, ids: &[String]) -> RecordFile {
+    let mut rebuilt = record::build(rf.path.clone(), rf.rel.clone(), rf.lines.clone());
+    let mut ranges: Vec<(usize, usize)> = rebuilt
+        .sections
+        .iter()
+        .filter(|s| s.id.as_ref().is_some_and(|i| ids.contains(i)))
+        .map(|s| (s.start, s.end))
+        .collect();
+    ranges.sort_unstable_by(|a, b| b.cmp(a));
+    for (start, end) in ranges {
+        rebuilt.lines.drain(start..end);
+    }
+    record::build(rebuilt.path.clone(), rebuilt.rel.clone(), rebuilt.lines)
+}
+
+/// Puts back each file written as it was.
+fn restore_files(files: &[(PathBuf, String, String)]) {
+    for (path, was, _) in files {
+        let _ = std::fs::write(path, was);
+    }
 }
 
 /// One question an answer removes: its id, its hash from approval, and the
@@ -539,7 +597,7 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
     let all = record::load_all(root);
     {
         let cross_file_headings = depends::cross_file_heading_index(&all, &led);
-        let names = crate::view::heading_texts(&all);
+        let names = crate::view::heading_names(&all, &led);
         let refusals = rules::supersedes_refusals(&rf.rel, &rf, &cross_file_headings, &names, &all, &led, Some(idx));
         if !refusals.is_empty() {
             return Err(findings_of(refusals));
@@ -608,7 +666,7 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
     }
 
     // Named before the write: a dropped question leaves the file with it.
-    let names = event_names(&all, &tf.terms);
+    let names = event_names_in(&all, &tf.terms, &led);
     let mut outcome = Outcome::of_rows(&rows, &names);
     for e in &mut outcome.events {
         if let crate::out::Event::Answered { heading, sentence, .. } = e {
@@ -618,7 +676,16 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
     }
 
     let letter_str = letter.to_string();
-    finish_answer(root, id, version, &letter_str, rf, idx, &letter_str, rows, &drop_ids)?;
+    // Every superseded question's section, the ones this run supersedes and
+    // the ones that piled up before it.
+    let mut strike_ids = state::superseded_ids(&led);
+    strike_ids.extend(superseded_ids.iter().cloned());
+    strike_ids.sort();
+    strike_ids.dedup();
+    let written = finish_answer(root, id, version, &letter_str, rf, idx, &letter_str, rows, &drop_ids, &strike_ids)?;
+    for path in written {
+        outcome.events.push(crate::out::Event::FileWritten { path });
+    }
 
     Ok(outcome)
 }
@@ -651,8 +718,12 @@ pub fn do_refuse(root: &Path, id: &str, version: &str) -> Result<Outcome, Stops>
         version: crate::version::VERSION.to_string(),
     };
 
-    let outcome = Outcome::of_rows(std::slice::from_ref(&row), &HashMap::new());
-    finish_answer(root, id, version, "refuse", rf, idx, "refused", vec![row], &[])?;
+    let mut outcome = Outcome::of_rows(std::slice::from_ref(&row), &HashMap::new());
+    let strike_ids = state::superseded_ids(&led);
+    let written = finish_answer(root, id, version, "refuse", rf, idx, "refused", vec![row], &[], &strike_ids)?;
+    for path in written {
+        outcome.events.push(crate::out::Event::FileWritten { path });
+    }
 
     Ok(outcome)
 }
@@ -1147,7 +1218,7 @@ fn do_approve_record(
     // here (`record_refusals`, shared with `check`) instead of returned at
     // the first, so one `approve` call tells the agent everything it owes
     // the owner before asking again.
-    let names = crate::view::heading_texts(&all_records);
+    let names = crate::view::heading_names(&all_records, led);
     // `all_records` is still as loaded, so its plan hashes are the raw ones.
     let replaced_base = depends::replaced_base(
         &all_records,

@@ -144,7 +144,7 @@ fn build(
         .map(|rf| rf.rel.clone())
         .collect();
 
-    let names = crate::view::heading_texts(&records);
+    let names = crate::view::heading_names(&records, &led);
     // Which plans are approved comes from `raw_hashes`, computed once and shared with
     // `check_terms`. The replaced-id set is built once and extended per file with that file's own
     // `supersedes:` lines.
