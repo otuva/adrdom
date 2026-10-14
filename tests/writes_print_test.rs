@@ -52,7 +52,7 @@ fn ledger_rows(dir: &Path) -> Vec<adr::ledger::Row> {
 /// them now.
 fn names_now(dir: &Path) -> std::collections::HashMap<String, String> {
     let terms = adr::state::load_terms(dir).map(|tf| tf.terms).unwrap_or_default();
-    adr::actions::event_names(&adr::record::load_all(dir), &terms)
+    adr::actions::event_names_in(&adr::record::load_all(dir), &terms, &adr::ledger::Ledger::default())
 }
 
 // Runs `act` and holds what it printed to the rows it appended: one line

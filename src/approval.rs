@@ -410,7 +410,7 @@ pub fn topic_file(root: &Path, rf: &RecordFile, led: &Ledger) -> TopicChanges {
         Some(old) => (
             old.sections
                 .iter()
-                .filter(|s| s.id.as_deref().is_some_and(|id| !in_file(id) && !state::is_dropped(led, id)))
+                .filter(|s| s.id.as_deref().is_some_and(|id| !in_file(id) && !state::is_dropped(led, id) && !state::is_superseded(led, id)))
                 .map(|s| (s.heading_text.clone(), Change::new(FileStatus::Removed, removed(&question_lines(old, s)))))
                 .collect(),
             false,
@@ -452,7 +452,7 @@ fn ledger_plan(rf: &RecordFile, led: &Ledger) -> LedgerPlan {
         .collect();
     let mut gone: Vec<(String, String)> = Vec::new();
     for r in led.rows.iter().filter(|r| r.event == "approved" && r.detail == rel && r.id != "-") {
-        if !in_file(&r.id) && !state::is_dropped(led, &r.id) && !gone.iter().any(|(id, _)| *id == r.id) {
+        if !in_file(&r.id) && !state::is_dropped(led, &r.id) && !state::is_superseded(led, &r.id) && !gone.iter().any(|(id, _)| *id == r.id) {
             if let Some(h) = approved_hash(led, rel, &r.id) {
                 gone.push((r.id.clone(), h.to_string()));
             }

@@ -733,12 +733,18 @@ fn approve_refuses_a_text_depends_edit_in_a_superseded_section() {
     // the `superseded` ledger row for 1.1's id.
     assert!(adr_answer(&dir, &new_id, "A").status.success());
 
-    // 1.1's heading is kept in the file (unlike
-    // `approve_allows_a_vanished_heading_once_superseded`), but its
-    // already-resolved `depends: <term id>` line is hand-edited back to
-    // plain text, exactly as an agent might carry an unrelated edit
-    // forward. 1.1's id is now `superseded`, not `answered`/`refused`.
-    let content4 = std::fs::read_to_string(&record).unwrap();
+    // Answering 1.2 struck 1.1's section from the file (per "What strikes
+    // the section of a superseded question from its topic file?"), so it is
+    // put back by hand: its text from before the answer, its already-
+    // resolved `depends: <term id>` line hand-edited back to plain text,
+    // exactly as an agent might carry an unrelated edit forward. 1.1's id
+    // is `superseded`, not `answered`/`refused`.
+    let struck = std::fs::read_to_string(&record).unwrap();
+    assert!(!struck.contains("1.1 Only question?"), "1.1 should be struck: {}", struck);
+    let from = content3.find("### 1.1").unwrap();
+    let to = content3.find("### 1.2").unwrap();
+    let at = struck.find("### 1.2").unwrap();
+    let content4 = format!("{}{}\n{}", &struck[..at], &content3[from..to], &struck[at..]);
     let rewritten = content4.replacen(
         "depends: 99999999-9999-9999-9999-999999999999\n",
         "depends: decision\n",
@@ -1603,13 +1609,14 @@ fn approve_allows_retiring_a_term_once_its_only_current_decision_is_superseded_a
         stderr(&out)
     );
 
-    // The old (superseded) 1.1 section still carries "decision"'s retired
-    // id on its terms line -- untouched -- and `check` reports nothing
-    // about it.
+    // The old (superseded) 1.1 section was struck from the file by the
+    // answer (per "What strikes the section of a superseded question from
+    // its topic file?"), so no line of the file carries "decision"'s retired
+    // id on a terms line any more, and `check` reports nothing about it.
     let final_content = std::fs::read_to_string(&record).unwrap();
     assert!(
-        final_content.lines().any(|l| l == old_terms_line),
-        "1.1's terms line must be unchanged: {}",
+        !final_content.lines().any(|l| l == old_terms_line),
+        "1.1's section must be struck: {}",
         final_content
     );
     let check_out = adr(&dir, &["check"], &[], "");

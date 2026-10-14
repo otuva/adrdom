@@ -680,7 +680,7 @@ pub fn depends_shape_refusals(
             };
             let key = match &target {
                 DepTarget::Heading(idx) => rf.sections[*idx].id.clone().unwrap_or_else(|| format!("heading {}", idx)),
-                DepTarget::Term(id) | DepTarget::Decision(id) => id.clone(),
+                DepTarget::Term(id) | DepTarget::Decision(id) | DepTarget::Struck(id) => id.clone(),
             };
             if seen.contains(&key) {
                 let written = match d {
@@ -693,7 +693,7 @@ pub fn depends_shape_refusals(
             seen.push(key);
             let target_section = match &target {
                 DepTarget::Heading(idx) => Some(&rf.sections[*idx]),
-                DepTarget::Decision(_) | DepTarget::Term(_) => None,
+                DepTarget::Decision(_) | DepTarget::Term(_) | DepTarget::Struck(_) => None,
             };
             // An answer set names the letters of another question: a term has
             // no options (per "Does a depends entry on a question in its file

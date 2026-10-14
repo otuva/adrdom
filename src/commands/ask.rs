@@ -101,7 +101,7 @@ pub fn run(given: PathBuf) -> i32 {
 
     // Every heading by its identifier, any state: a refusal names the
     // question beside an identifier.
-    let names = crate::view::heading_texts(&all_records);
+    let names = crate::view::heading_names(&all_records, &led);
     // `all_records` is still as loaded, so its plan hashes are the raw ones.
     let replaced_base = depends::replaced_base(
         &all_records,

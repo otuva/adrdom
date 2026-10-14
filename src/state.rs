@@ -120,13 +120,84 @@ pub fn plan_approved_hashes(led: &Ledger, rel: &str, question_hashes: &[String])
     if hash_matches_latest(led, "approved", rel, &record::derive_file_hash(question_hashes)) {
         return true;
     }
+    let mut base: Vec<String> = question_hashes.to_vec();
     let dropped = dropped_hashes(led, rel);
-    if dropped.is_empty() {
-        return false;
+    let has_dropped = !dropped.is_empty();
+    base.extend(dropped);
+    if has_dropped && hash_matches_latest(led, "approved", rel, &record::derive_file_hash(&base)) {
+        return true;
     }
-    let mut all: Vec<String> = question_hashes.to_vec();
-    all.extend(dropped);
-    hash_matches_latest(led, "approved", rel, &record::derive_file_hash(&all))
+    // A superseded section struck from the file (per "What strikes the
+    // section of a superseded question from its topic file?") takes its
+    // hash with it and nothing else moves. A candidate is a superseded
+    // question whose latest per-question `approved` row names this file and
+    // which the file does not hold. One superseded after the file's latest
+    // approval was in the file at that approval, so it is put back; one
+    // superseded before it was absent from a file approved since the strike
+    // and is put back only for a file approved while it still held it.
+    // adr-code: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
+    let file_row = led.rows.iter().rposition(|r| r.event == "approved" && r.detail == rel && r.id == "-");
+    let Some(file_row) = file_row else { return false };
+    let latest = &led.rows[file_row].hash;
+    let (mut after, mut before): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
+    // One pass: the latest state event of each id, the latest per-question
+    // `approved` row naming `rel`, and the latest `superseded` position.
+    let mut state: std::collections::BTreeMap<&str, &str> = Default::default();
+    let mut approved: std::collections::BTreeMap<&str, &Row> = Default::default();
+    let mut sup_at: std::collections::BTreeMap<&str, usize> = Default::default();
+    for (i, r) in led.rows.iter().enumerate() {
+        if crate::ledger::STATE_EVENTS.contains(&r.event.as_str()) {
+            state.insert(&r.id, &r.event);
+            if r.event == "superseded" {
+                sup_at.insert(&r.id, i);
+            }
+        }
+        if r.event == "approved" && r.detail == rel {
+            approved.insert(&r.id, r);
+        }
+    }
+    for (id, ev) in &state {
+        if *ev != "superseded" {
+            continue;
+        }
+        let Some(r) = approved.get(id) else { continue };
+        // A hash holds its question's id line, so no two candidates share one.
+        if base.contains(&r.hash) {
+            continue;
+        }
+        let at = sup_at.get(id).copied().unwrap_or(0);
+        if at > file_row {
+            after.push(r.hash.clone());
+        } else {
+            before.push(r.hash.clone());
+        }
+    }
+    base.extend(after);
+    if !before.is_empty() && record::derive_file_hash(&base) == *latest {
+        return true;
+    }
+    base.extend(before);
+    record::derive_file_hash(&base) == *latest
+}
+
+/// Every id whose latest state is `superseded`, sorted: the questions whose
+/// section no topic file keeps (per "What strikes the section of a
+/// superseded question from its topic file?").
+pub fn superseded_ids(led: &Ledger) -> Vec<String> {
+    led.state_ids().into_iter().filter(|id| is_superseded(led, id)).collect()
+}
+
+/// True when the latest state of `id` is `superseded`.
+pub fn is_superseded(led: &Ledger, id: &str) -> bool {
+    led.latest_state(id).is_some_and(|r| r.event == "superseded")
+}
+
+/// True when `id` is a superseded question whose latest per-question
+/// `approved` row names `rel`: its section was in that topic file and is
+/// struck from it (per "What strikes the section of a superseded question
+/// from its topic file?").
+pub fn is_struck_from(led: &Ledger, id: &str, rel: &str) -> bool {
+    is_superseded(led, id) && led.latest_for_id("approved", id).is_some_and(|r| r.detail == rel)
 }
 
 /// True when `context_hash` (computed by the caller) matches the latest

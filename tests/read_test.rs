@@ -379,8 +379,15 @@ fn a_superseded_decision_drops_out_of_the_reading() {
     let out = read_ok(&dir);
     assert!(!out.contains(&decs[0].heading), "the superseded decision is printed: {}", out);
     // The new decision is paired with the two decisions that remain; the
-    // pair of those two was read before and is not read again.
-    assert_eq!(set_rows(&dir).len(), before + 2);
+    // pair of those two was read before and is not read again. The
+    // superseded decision's section is struck from its file (per "What
+    // strikes the section of a superseded question from its topic file?"),
+    // so its text left the records and the two rows it was in are dropped
+    // from the reader file (per "Does the reader's file keep a row whose
+    // text left the records?"): two rows go, two come.
+    assert_eq!(set_rows(&dir).len(), before);
+    let gone = record::sha256_hex(&text_of(&decs[0]));
+    assert!(set_rows(&dir).iter().all(|r| r.text_hash != gone && r.neighbour != decs[0].id));
     assert!(set_rows(&dir).iter().any(|r| r.neighbour == id || r.text_hash == record::sha256_hex(&format!("{}\nYes.", h))));
 }
 

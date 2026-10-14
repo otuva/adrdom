@@ -60,26 +60,6 @@ Standard: issue trackers record a closed item as closed by the person who closed
 
 **Answer:** A
 
-### Does a superseded question leave its topic file?
-depends: dad5273c-afe2-4ab1-a451-e2a5d4d9a26d, 2bae531b-c4df-48a0-89a0-3d52726741ea, 08193e75-dd89-4857-8e9f-b19e1a9e75e6
-id: 1b181f10-97f4-4bbe-8939-d5842192126c
-terms: answered=b36113a1-1384-4e4c-a798-8399f4181366, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approves=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, current=e2533580-1486-4dc9-8697-e6c53605fe72, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, ledger=e18b82d8-5271-4385-bbab-2b89e5da278f, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, superseded=2bae531b-c4df-48a0-89a0-3d52726741ea, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6, topic files=08193e75-dd89-4857-8e9f-b19e1a9e75e6
-
-Problem: a decision leaves force only when superseded, but if its section must stay forever, topic files fill with text no current decision needs, and a topic file can never be removed.
-Standard: version control keeps old text; a working document drops what is replaced.
-
-- A) Yes: once superseded, its section may leave the file as a plan change the owner approves, and approve allows that only for superseded questions; a topic file with no current or open question left may be deleted the same way; the old text stays in git history and its hash in the ledger.
-  Why: the file holds what is in force and what is open, and removal stays the owner's act.
-  Costs: reading an old decision's text means git history.
-- B) No: it stays in the file forever.
-  Why: everything ever answered is readable in the working file.
-  Costs: sections show never prints pile up, and a topic file can never be removed.
-- C) It moves to an archive file the tool owns.
-  Why: out of the way and still in the tree.
-  Costs: a second copy of what git keeps.
-
-**Answer:** A
-
 ### Does a refused question stay in its topic file?
 depends: b782664f-7465-4e1e-99e0-13f6dd2de774=A, 08193e75-dd89-4857-8e9f-b19e1a9e75e6, 94677ed8-eaf6-46e2-bc71-7392fa0805bf
 id: 6b3d8e59-e145-49e1-860d-a79d753d745c
@@ -131,23 +111,6 @@ Standard: referential integrity: a record that others reference is not removed w
 - B) No: the line names what the agent chooses, and check reports every current decision left standing on a superseded one until a question supersedes it.
   Why: a small change stays small; the owner is not made to decide again what would not move.
   Costs: between the answer and the follow-up questions, current decisions stand on nothing; the report is the only guard, and the follow-up rests on the agent.
-
-**Answer:** A
-
-### Does a tier hold its cap by the count after its supersedes lines take effect?
-depends: f4f667ad-8714-4e65-897b-c7002e423c28=A, 15d82e53-e344-4347-b639-3bf6eb9ef1b4, f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, 2bae531b-c4df-48a0-89a0-3d52726741ea
-id: f416062c-211f-4d20-a6bf-23a561b5f59b
-terms: answered=b36113a1-1384-4e4c-a798-8399f4181366, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, ask=3c8d4c9c-abca-4faa-b7c1-aae39951376c, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, refusal=0942e445-0163-423e-8ba7-84dd8ac07045, refused=0942e445-0163-423e-8ba7-84dd8ac07045, superseded=2bae531b-c4df-48a0-89a0-3d52726741ea, supersedes=2bae531b-c4df-48a0-89a0-3d52726741ea, tier=f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c, topic file=08193e75-dd89-4857-8e9f-b19e1a9e75e6, withdrawn=e4a2ef0c-3354-4c9b-a8d9-9e204e544d85
-
-Problem: a question replacing a decision in a full tier is refused on the cap, the old and the new counted together, so a decision in a full tier cannot be replaced in its own file.
-Standard: a limit on a set is judged on the set as the change leaves it.
-
-- A) Yes: a decision named on the supersedes line of a question not yet answered is left out of its tier's count, so the cap holds by what the tier holds once the replacement is answered.
-  Why: a replacement in a full tier is a legal move, and the file that holds a subject keeps holding it.
-  Costs: approve and ask count from the supersedes lines of open questions; a refused or withdrawn replacement puts the old back in the count, and two replacements of one decision count as two.
-- B) No: every question that is not refused, superseded or withdrawn counts, old and new alike, and a replacement in a full tier goes to another topic file.
-  Why: one count, read straight off the file.
-  Costs: a full tier takes no replacement in its own file, so the replacement lands in a file away from the subject it changes, and the refusal names moves that do not fit a replacement.
 
 **Answer:** A
 

@@ -73,6 +73,40 @@ fn is_a_kind_show_prints(line: &str) -> bool {
 
 // adr: c5e10ae8-258d-4f29-b9fe-13cb7ad2a550
 //
+// With no file named, every decision of every file comes first and the
+// findings and moves of all files follow, once.
+#[test]
+fn show_with_no_file_prints_all_moves_after_all_decisions() {
+    let (dir, _) = asked();
+    let rel2 = "adrdom/decisions/door.md";
+    let three = "Is the widget door open?";
+    let path2 = write_record(&dir, rel2, &format!("# Door\n\n{}", q(three)));
+    approve_record(&dir, rel2);
+    assert!(adr(&dir, &["ask", path2.to_str().unwrap()], &[], "").status.success());
+    assert!(adr_answer(&dir, &id_of(&path2, three), "A").status.success());
+    commit_all(&dir, "the door, asked");
+    let text = show(&dir, &[]);
+    let lines: Vec<&str> = text.lines().collect();
+    let last_decision = lines
+        .iter()
+        .enumerate()
+        .rposition(|(i, l)| {
+            // an option line: four spaces, under a two-space heading line
+            l.starts_with("    ") && i > 0 && lines[i - 1].starts_with("  ") && !lines[i - 1].starts_with("   ")
+        })
+        .unwrap();
+    let first_move = lines
+        .iter()
+        .position(|l| l.starts_with("agent ") || l.starts_with("owner runs: ") || l.starts_with("not yet: "))
+        .unwrap();
+    assert!(last_decision < first_move, "{}", text);
+    assert!(lines.iter().any(|l| l.starts_with("# Door") ), "{}", text);
+    assert!(text.contains("owner runs: adr answer"), "{}", text);
+    assert!(lines.iter().any(|l| l.starts_with("agent builds")), "{}", text);
+}
+
+// adr: c5e10ae8-258d-4f29-b9fe-13cb7ad2a550
+//
 // With no file named: every current decision as its heading and the option
 // picked, and every move; nothing about a question that is no decision.
 #[test]
@@ -491,6 +525,9 @@ fn show_prints_no_reference_lines_of_an_answered_question_unless_dependents() {
     std::fs::write(&path, text).unwrap();
     approve_record(&dir, REL);
     assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    // The approved plan is committed before the answer strikes the section of
+    // the superseded question: its reference lines come from git.
+    commit_all(&dir, "the replacement, asked");
     assert!(adr_answer(&dir, &id_of(&path, d), "A").status.success());
 
     let first_line_after = |shown: &str, heading: &str| -> String {
@@ -547,6 +584,9 @@ fn show_of_a_file_prints_the_option_picked_and_superseded_under_its_flag() {
     std::fs::write(&path, text).unwrap();
     approve_record(&dir, REL);
     assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    // The approved plan is committed before the answer strikes the section of
+    // the superseded question: its reference lines come from git.
+    commit_all(&dir, "the replacement, asked");
     assert!(adr_answer(&dir, &id_of(&path, d), "A").status.success());
 
     // The option picked, on the line under the current decision, the same
@@ -604,4 +644,42 @@ fn unrelated_prints_the_unrelated_line_of_an_answered_question() {
     let after_a: Vec<&str> = shown.lines().skip_while(|l| !l.ends_with(&format!("] {}", a))).skip(1).take(2).collect();
     assert_eq!(after_a, vec!["  Yes the widget holds.".to_string(), format!("  unrelated: {}", b)], "{}", shown);
     assert!(!shown.contains(&format!("] {}\n  depends:", a)), "{}", shown);
+}
+
+// The terms file waits for approval and two topic files carry findings with
+// agent moves: the terms file's move is the first move after the decisions.
+// adr: c5e10ae8-258d-4f29-b9fe-13cb7ad2a550
+#[test]
+fn show_prints_the_terms_move_before_the_topic_files_moves() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    std::fs::write(
+        dir.join("adrdom/terms.md"),
+        "# Terms\n\n## widget\ndefinition: A part of a gate.\naliases: widgets\n",
+    )
+    .unwrap();
+    write_record(&dir, "adrdom/decisions/a.md", "# A\n\nprose\n\n### Is the widget red?\n\n### Is the widget blue?\n");
+    write_record(&dir, "adrdom/decisions/b.md", "# B\n\nprose\n\n### Is the widget glossy?\n");
+    let shown = show(&dir, &[]);
+    let terms = shown.find("owner runs: adr approve adrdom/terms.md").expect(&shown);
+    let first_agent = shown.find("agent ").expect(&shown);
+    assert!(terms < first_agent, "{}", shown);
+    assert!(shown.find("[new] adrdom/terms.md").unwrap() < terms, "{}", shown);
+}
+
+// The refusal of a file that cannot be read carries a move: it stands after
+// the decisions, in the end block.
+// adr: c5e10ae8-258d-4f29-b9fe-13cb7ad2a550
+#[test]
+fn show_prints_the_refusal_of_an_unreadable_file_after_the_decisions() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    write_record(&dir, "adrdom/decisions/z.md", "# Z\n\nprose\n\n### Is the widget red?\n");
+    std::fs::write(dir.join("adrdom/decisions/a-bad.md"), [0x23u8, 0x20, 0xff, 0xfe, 0x0a]).unwrap();
+    std::fs::create_dir_all(dir.join("adrdom/blame")).unwrap();
+    std::fs::write(dir.join("adrdom/blame/bad.md"), [0x23u8, 0x20, 0xff, 0xfe, 0x0a]).unwrap();
+    let shown = show(&dir, &[]);
+    let topic = shown.find("# Z (adrdom/decisions/z.md)").expect(&shown);
+    let bad = shown.find("adrdom/decisions/a-bad.md: cannot be read").expect(&shown);
+    assert!(topic < bad, "{}", shown);
 }

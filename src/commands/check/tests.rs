@@ -112,7 +112,12 @@ pub(super) fn check_tests(
         test_ids.iter().filter(|(id, _)| !current.contains(*id)).collect();
     stale.sort();
     for (id, locations) in stale {
-        let heading = place.get(id.as_str()).map(|&(rf, i)| rf.sections[i].heading_text.as_str());
+        // A superseded question no file holds is named by the heading its
+        // `asked` row carries (adr-code: b5ca161f-c88c-4f02-a9d9-1d406cf3a252).
+        let heading = place
+            .get(id.as_str())
+            .map(|&(rf, i)| rf.sections[i].heading_text.as_str())
+            .or_else(|| led.latest_asked(id).map(|r| r.detail.as_str()).filter(|d| !d.is_empty()));
         // The tie moves to the current decisions that took the decision's
         // place, or goes when none did (2381d759): a note, never a failure.
         let to: Vec<(String, String)> = crate::state::current_successors(led, id)

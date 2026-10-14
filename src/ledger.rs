@@ -33,6 +33,7 @@ pub struct Row {
     pub version: String,
 }
 
+#[derive(Default)]
 pub struct Ledger {
     pub rows: Vec<Row>,
     pub malformed: Vec<(usize, String)>,

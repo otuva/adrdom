@@ -170,7 +170,7 @@ fn question_target(rf: &RecordFile, i: usize, led: &Ledger) -> Target {
 /// (never `self_idx`, the question the line is under), a current decision
 /// by id or by heading, a term by id, name or alias (a retired one too: the line says it is
 /// unrelated, and that stays true), or
-/// the identifier of a dropped question.
+/// the identifier of a dropped or superseded question.
 pub fn resolve_ref(
     entry: &str,
     rf: &RecordFile,
@@ -200,7 +200,10 @@ pub fn resolve_ref(
             return Ok(Target::Term(key));
         }
     }
-    if state::is_dropped(led, entry) {
+    // A superseded question's section is struck from every file (adr-code:
+    // b5ca161f-c88c-4f02-a9d9-1d406cf3a252): the ledger alone holds it, as
+    // it holds a dropped one.
+    if state::is_dropped(led, entry) || state::is_superseded(led, entry) {
         return Ok(Target::Dropped(entry.to_string()));
     }
     match cross_file_headings.get(entry).map(|v| v.as_slice()).unwrap_or(&[]) {
@@ -306,6 +309,7 @@ fn line_targets(
                 DepTarget::Heading(i) => question_target(rf, i, led),
                 DepTarget::Term(id) => Target::Term(id),
                 DepTarget::Decision(id) => Target::Decision(id),
+                DepTarget::Struck(id) => Target::Dropped(id),
             })
             .or_insert(LineKind::Depends);
         }
