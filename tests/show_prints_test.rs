@@ -648,7 +648,7 @@ fn unrelated_prints_the_unrelated_line_of_an_answered_question() {
 
 // The terms file waits for approval and two topic files carry findings with
 // agent moves: the terms file's move is the first move after the decisions.
-// adr: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
+// adr: c5e10ae8-258d-4f29-b9fe-13cb7ad2a550
 #[test]
 fn show_prints_the_terms_move_before_the_topic_files_moves() {
     let dir = init_repo();
@@ -665,4 +665,21 @@ fn show_prints_the_terms_move_before_the_topic_files_moves() {
     let first_agent = shown.find("agent ").expect(&shown);
     assert!(terms < first_agent, "{}", shown);
     assert!(shown.find("[new] adrdom/terms.md").unwrap() < terms, "{}", shown);
+}
+
+// The refusal of a file that cannot be read carries a move: it stands after
+// the decisions, in the end block.
+// adr: c5e10ae8-258d-4f29-b9fe-13cb7ad2a550
+#[test]
+fn show_prints_the_refusal_of_an_unreadable_file_after_the_decisions() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    write_record(&dir, "adrdom/decisions/z.md", "# Z\n\nprose\n\n### Is the widget red?\n");
+    std::fs::write(dir.join("adrdom/decisions/a-bad.md"), [0x23u8, 0x20, 0xff, 0xfe, 0x0a]).unwrap();
+    std::fs::create_dir_all(dir.join("adrdom/blame")).unwrap();
+    std::fs::write(dir.join("adrdom/blame/bad.md"), [0x23u8, 0x20, 0xff, 0xfe, 0x0a]).unwrap();
+    let shown = show(&dir, &[]);
+    let topic = shown.find("# Z (adrdom/decisions/z.md)").expect(&shown);
+    let bad = shown.find("adrdom/decisions/a-bad.md: cannot be read").expect(&shown);
+    assert!(topic < bad, "{}", shown);
 }

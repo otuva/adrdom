@@ -238,7 +238,7 @@ pub fn run(record_arg: Option<PathBuf>, all: bool, views: Views) -> i32 {
 /// topic file, and every move: of each topic file, each removed topic file,
 /// the terms file and each blame file.
 pub(crate) fn summary(r: &Records) -> Vec<Line> {
-    let mut lines = unreadable_topic_lines(r);
+    let mut lines = Vec::new();
     // The reports of every file, merged and printed once after all decisions.
     let mut merged = Report::default();
     let mut terms_part = None;
@@ -246,7 +246,6 @@ pub(crate) fn summary(r: &Records) -> Vec<Line> {
     // and answer stop on it in every topic file (per "Does the tool stop
     // while the terms file waits for approval?"), so its move comes before
     // theirs, after the decisions; the topic files do not name it again.
-    lines.extend(r.terms_unreadable_finding());
     if let Some(tf) = &r.terms_file {
         let (st, report) = terms_report(r, tf);
         if !out::report(&report).is_empty() {
@@ -263,6 +262,11 @@ pub(crate) fn summary(r: &Records) -> Vec<Line> {
     }
     let mut blame_part = Vec::new();
     lines.extend(rest_into(r, Some((&mut merged, &mut blame_part))));
+    // The refusals of files that cannot be read carry moves: they stand in
+    // the end block, a topic file's first and the terms file's after it (a
+    // stop on everything), before the terms file's own report.
+    lines.extend(unreadable_topic_lines(r));
+    lines.extend(r.terms_unreadable_finding());
     // The terms file's report comes before the merged one: its move is the
     // first the reader takes.
     if let Some((st, report)) = terms_part {
@@ -273,7 +277,13 @@ pub(crate) fn summary(r: &Records) -> Vec<Line> {
     // A blame file's status line stands with its report at the end, as the
     // terms file's does.
     lines.extend(blame_part);
+    lines.extend(unreadable_blame_lines(r));
     lines
+}
+
+/// The findings of the blame files that cannot be read.
+fn unreadable_blame_lines(r: &Records) -> Vec<Line> {
+    r.unreadable_blame_files.iter().map(|(rel, _)| out::refusal(Command::Show, &msg::blame_file_unreadable(rel))).collect()
 }
 
 /// Appends the stops, findings and moves of `more` to `into`, finding texts
@@ -373,8 +383,9 @@ fn rest_into(r: &Records, mut merged: Option<(&mut Report, &mut Vec<Line>)>) -> 
             }
         }
     }
-    for (rel, _) in &r.unreadable_blame_files {
-        lines.push(out::refusal(Command::Show, &msg::blame_file_unreadable(rel)));
+    // In the listing (`merged` given) they stand in its end block.
+    if merged.is_none() {
+        lines.extend(unreadable_blame_lines(r));
     }
     lines
 }
@@ -400,9 +411,7 @@ fn whole(r: &Records, views: Views) -> Vec<Line> {
     for e in r.blame.entries() {
         lines.extend(blame_file(r, e, views));
     }
-    for (rel, _) in &r.unreadable_blame_files {
-        lines.push(out::refusal(Command::Show, &msg::blame_file_unreadable(rel)));
-    }
+    lines.extend(unreadable_blame_lines(r));
     lines
 }
 
@@ -802,16 +811,14 @@ fn replaced_by_lines(r: &Records, sec: &Section) -> Vec<Line> {
 /// `replaced_by_lines` of a question named by its identifier.
 fn replaced_by_lines_of(r: &Records, id: &str) -> Vec<Line> {
     let mut by: Vec<String> = Vec::new();
-    {
-        for row in r.led.rows.iter().filter(|row| row.id == id && row.event == "superseded") {
-            let b = row.detail.trim();
-            if b.is_empty() {
-                continue;
-            }
-            let name = r.names.get(b).cloned().unwrap_or_else(|| b.to_string());
-            if !by.contains(&name) {
-                by.push(name);
-            }
+    for row in r.led.rows.iter().filter(|row| row.id == id && row.event == "superseded") {
+        let b = row.detail.trim();
+        if b.is_empty() {
+            continue;
+        }
+        let name = r.names.get(b).cloned().unwrap_or_else(|| b.to_string());
+        if !by.contains(&name) {
+            by.push(name);
         }
     }
     if by.is_empty() {

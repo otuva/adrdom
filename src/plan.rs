@@ -309,6 +309,7 @@ fn line_targets(
                 DepTarget::Heading(i) => question_target(rf, i, led),
                 DepTarget::Term(id) => Target::Term(id),
                 DepTarget::Decision(id) => Target::Decision(id),
+                DepTarget::Struck(id) => Target::Dropped(id),
             })
             .or_insert(LineKind::Depends);
         }

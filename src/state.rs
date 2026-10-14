@@ -161,7 +161,8 @@ pub fn plan_approved_hashes(led: &Ledger, rel: &str, question_hashes: &[String])
             continue;
         }
         let Some(r) = approved.get(id) else { continue };
-        if base.contains(&r.hash) || after.contains(&r.hash) || before.contains(&r.hash) {
+        // A hash holds its question's id line, so no two candidates share one.
+        if base.contains(&r.hash) {
             continue;
         }
         let at = sup_at.get(id).copied().unwrap_or(0);
@@ -189,6 +190,14 @@ pub fn superseded_ids(led: &Ledger) -> Vec<String> {
 /// True when the latest state of `id` is `superseded`.
 pub fn is_superseded(led: &Ledger, id: &str) -> bool {
     led.latest_state(id).is_some_and(|r| r.event == "superseded")
+}
+
+/// True when `id` is a superseded question whose latest per-question
+/// `approved` row names `rel`: its section was in that topic file and is
+/// struck from it (per "What strikes the section of a superseded question
+/// from its topic file?").
+pub fn is_struck_from(led: &Ledger, id: &str, rel: &str) -> bool {
+    is_superseded(led, id) && led.latest_for_id("approved", id).is_some_and(|r| r.detail == rel)
 }
 
 /// True when `context_hash` (computed by the caller) matches the latest

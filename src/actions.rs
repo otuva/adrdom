@@ -1563,7 +1563,7 @@ fn rewrite_dep_entry(
                 .flatten()
                 .and_then(|target| match target {
                     DepTarget::Heading(idx) => work_rf.sections[idx].id.clone(),
-                    DepTarget::Term(id) | DepTarget::Decision(id) => Some(id),
+                    DepTarget::Term(id) | DepTarget::Decision(id) | DepTarget::Struck(id) => Some(id),
                 });
             match resolved {
                 Some(id) => format!("{}{}", id, record::set_suffix(set)),

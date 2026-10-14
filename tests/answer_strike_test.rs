@@ -331,3 +331,46 @@ fn a_file_approved_while_holding_superseded_sections_reads_approved_after_they_a
     let s = show_file(&dir, "a");
     assert!(s.starts_with("[approved]"), "{}", s);
 }
+
+// A question standing on a question whose section is struck keeps its depends
+// entry, answers, and carries a new question standing on it, as it did while
+// the section stood in the file.
+// adr: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
+#[test]
+fn a_question_standing_on_a_struck_sibling_behaves_as_before_the_strike() {
+    let dir = setup();
+    let tall = "Is the widget tall?";
+    let wide = "Is the widget wide?";
+    let a = write_record(
+        &dir,
+        &rel("a"),
+        &format!("# A\n\n### {}\ndepends: widget\n{}\n### {}\ndepends: widget, {}=A\n{}", Q1, BODY, tall, Q1, BODY),
+    );
+    approve_ok(&dir, "a");
+    ask_ok(&dir, "a");
+    answer_ok(&dir, "a", Q1, "A");
+    put(&dir, "b", Q4, Some(Q1));
+    answer_ok(&dir, "b", Q4, "A");
+    assert!(!read(&dir, "a").contains(&format!("### {}", Q1)), "{}", read(&dir, "a"));
+    // check, show and show <file> name no depends failure
+    for args in [vec!["check"], vec!["show"], vec!["show", a.to_str().unwrap()]] {
+        let o = adr(&dir, &args, &[], "");
+        let all = format!("{}{}", stdout(&o), stderr(&o));
+        assert!(!all.contains("names no term and no question"), "{:?}: {}", args, all);
+    }
+    assert!(show_file(&dir, "a").contains(&format!("[asked")), "{}", show_file(&dir, "a"));
+    // a new question standing on the sibling is approved and asked, and
+    // waits for it
+    let c = std::fs::read_to_string(&a).unwrap();
+    write_record(&dir, &rel("a"), &format!("{}\n### {}\ndepends: widget, {}=A\n{}", c, wide, tall, BODY));
+    approve_ok(&dir, "a");
+    ask_ok(&dir, "a");
+    let early = adr_answer(&dir, &id_of(&a, wide), "A");
+    assert!(!early.status.success());
+    assert!(stderr(&early).contains("has no decision yet"), "{}", stderr(&early));
+    // the sibling is answered, then the question above it
+    answer_ok(&dir, "a", tall, "A");
+    answer_ok(&dir, "a", wide, "A");
+    let o = adr(&dir, &["check"], &[], "");
+    assert!(!format!("{}{}", stdout(&o), stderr(&o)).contains("names no term"), "{}{}", stdout(&o), stderr(&o));
+}
