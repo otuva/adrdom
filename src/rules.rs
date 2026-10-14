@@ -702,6 +702,17 @@ pub fn depends_shape_refusals(
                 out.push(msg::set_on_term(rel, &sec.heading_text));
                 continue;
             }
+            // A question struck from the file is answered and was a question of
+            // the file: its entry is judged as before the strike (per "What
+            // strikes the section of a superseded question from its topic
+            // file?"): a set stays only when frozen at ask.
+            if let (DepTarget::Struck(tid), Some(set)) = (&target, d.set()) {
+                if !sec.id.as_deref().is_some_and(|sid| set_frozen_ids(led, sid, tid, set)) {
+                    let name = led.latest_for_id("asked", tid).map(|r| r.detail.clone()).unwrap_or_else(|| tid.clone());
+                    out.push(msg::set_on_answered_question(rel, &sec.heading_text, &name));
+                }
+                continue;
+            }
             let Some(ts) = target_section else { continue };
             match d.set() {
                 None if ts.answer_letter().is_none() => {
@@ -1238,8 +1249,12 @@ pub fn missing_answered_refusals_except(records: &[RecordFile], led: &Ledger, sk
 /// such row, so it is a shape error.
 pub(crate) fn set_frozen_at_ask(led: &Ledger, sec: &record::Section, d: &record::Dep, target: &record::Section) -> bool {
     let (Some(id), Some(tid), Some(set)) = (&sec.id, &target.id, d.set()) else { return false };
+    set_frozen_ids(led, id, tid, set)
+}
+
+fn set_frozen_ids(led: &Ledger, id: &str, tid: &str, set: &record::AnswerSet) -> bool {
     let hash = record::assumes_hash(id, set);
-    led.assumes_for(tid).iter().any(|r| &r.detail == id && r.hash == hash)
+    led.assumes_for(tid).iter().any(|r| r.detail == id && r.hash == hash)
 }
 
 /// The rule on the tiers of `rf` (per "What are the tiers derived from?"):
@@ -1300,16 +1315,25 @@ pub fn depends_line_cap_findings(rel: &str, rf: &RecordFile, led: &Ledger) -> Ve
         if !status::open_to_ask_text(led, rf, sec) {
             continue;
         }
-        let mut targets: Vec<usize> = Vec::new();
+        // A question struck from the file still counts as one it names.
+        let mut targets: Vec<(String, String)> = Vec::new();
         for d in &sec.depends {
-            if let Some(idx) = rf.dep_target(d) {
-                if !targets.contains(&idx) {
-                    targets.push(idx);
+            let named = match (rf.dep_target(d), d) {
+                (Some(idx), _) => Some((format!("#{}", idx), rf.sections[idx].heading_text.trim().to_string())),
+                (None, record::Dep::Id { id, .. }) if state::is_struck_from(led, id, rel) => {
+                    let name = led.latest_for_id("asked", id).map(|r| r.detail.clone()).unwrap_or_else(|| id.clone());
+                    Some((id.clone(), name))
+                }
+                _ => None,
+            };
+            if let Some(n) = named {
+                if !targets.iter().any(|t| t.0 == n.0) {
+                    targets.push(n);
                 }
             }
         }
         if targets.len() > record::DEPENDS_LINE_CAP {
-            let names: Vec<String> = targets.iter().map(|&i| rf.sections[i].heading_text.trim().to_string()).collect();
+            let names: Vec<String> = targets.into_iter().map(|t| t.1).collect();
             out.push(
                 Finding::said(
                     Class::Plan,

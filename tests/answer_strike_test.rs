@@ -374,3 +374,82 @@ fn a_question_standing_on_a_struck_sibling_behaves_as_before_the_strike() {
     let o = adr(&dir, &["check"], &[], "");
     assert!(!format!("{}{}", stdout(&o), stderr(&o)).contains("names no term"), "{}{}", stdout(&o), stderr(&o));
 }
+
+/// File a with Q1 asked, then answered and struck by Q4 in file b; returns
+/// Q1's id. `before` is written into a between Q1's ask and its answer.
+fn struck_q1(before: Option<&str>) -> (PathBuf, String, PathBuf) {
+    let dir = setup();
+    let a = put(&dir, "a", Q1, None);
+    let q1 = id_of(&a, Q1);
+    if let Some(h) = before {
+        let c = read(&dir, "a");
+        write_record(&dir, &rel("a"), &format!("{}\n### {}\ndepends: widget, {}=A\n{}", c, h, q1, BODY));
+        approve_ok(&dir, "a");
+    }
+    answer_ok(&dir, "a", Q1, "A");
+    put(&dir, "b", Q4, Some(Q1));
+    answer_ok(&dir, "b", Q4, "A");
+    assert!(!read(&dir, "a").contains(&format!("### {}", Q1)));
+    (dir, q1, a)
+}
+
+// adr: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
+#[test]
+fn approved_unasked_question_on_a_struck_one_is_asked_and_answered() {
+    let (dir, _q1, a) = struck_q1(Some(Q3));
+    // ask reads the file by its absolute path, as a shell may give it
+    let o = adr(&dir, &["ask", a.to_str().unwrap()], &[], "");
+    assert!(o.status.success(), "{}{}", stdout(&o), stderr(&o));
+    assert!(stdout(&o).contains("asked:"), "{}", stdout(&o));
+    let o = adr_answer(&dir, &id_of(&a, Q3), "A");
+    assert!(o.status.success(), "{}", stderr(&o));
+}
+
+// adr: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
+#[test]
+fn new_question_on_a_struck_one_under_a_set_is_refused() {
+    let (dir, q1, a) = struck_q1(None);
+    let c = read(&dir, "a");
+    write_record(&dir, &rel("a"), &format!("{}\n### {}\ndepends: widget, {}=A\n{}", c, Q3, q1, BODY));
+    let o = adr_owner(&dir, &["approve", a.to_str().unwrap()], "");
+    assert!(!o.status.success(), "{}{}", stdout(&o), stderr(&o));
+    assert!(
+        stderr(&o).contains("which is answered, under an answer set"),
+        "{}{}",
+        stdout(&o),
+        stderr(&o)
+    );
+}
+
+// adr: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
+#[test]
+fn new_question_on_a_struck_one_without_a_set_is_approved_asked_answered() {
+    let (dir, q1, a) = struck_q1(None);
+    let c = read(&dir, "a");
+    write_record(&dir, &rel("a"), &format!("{}\n### {}\ndepends: widget, {}\n{}", c, Q3, q1, BODY));
+    approve_ok(&dir, "a");
+    ask_ok(&dir, "a");
+    answer_ok(&dir, "a", Q3, "A");
+    let _ = a;
+}
+
+// adr: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
+#[test]
+fn a_struck_question_counts_toward_the_two_question_cap() {
+    let dir = setup();
+    let a = write_record(&dir, &rel("a"), &format!("# A\n{}{}{}", sec(Q1, None), sec(Q2, None), sec(Q3, None)));
+    approve_ok(&dir, "a");
+    ask_ok(&dir, "a");
+    let q1 = id_of(&a, Q1);
+    let q2 = id_of(&a, Q2);
+    let q3 = id_of(&a, Q3);
+    answer_ok(&dir, "a", Q1, "A");
+    put(&dir, "b", Q4, Some(Q1));
+    answer_ok(&dir, "b", Q4, "A");
+    assert!(!read(&dir, "a").contains(&format!("### {}", Q1)));
+    let c = read(&dir, "a");
+    write_record(&dir, &rel("a"), &format!("{}\n### {}\ndepends: widget, {}, {}=A, {}=A\n{}", c, Q5, q1, q2, q3, BODY));
+    let o = adr_owner(&dir, &["approve", a.to_str().unwrap()], "");
+    assert!(!o.status.success());
+    assert!(stderr(&o).contains("the most is"), "{}{}", stdout(&o), stderr(&o));
+}

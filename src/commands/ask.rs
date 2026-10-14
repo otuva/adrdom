@@ -59,7 +59,12 @@ pub fn run(given: PathBuf) -> i32 {
     let terms_list: Vec<terms::Term> = tf.terms.clone();
 
     let mut rf = match loaded {
-        Ok(rf) => rf,
+        Ok(mut rf) => {
+            // `record::load` leaves the path as given; the ledger names the
+            // file by its path from the repository root.
+            rf.rel = rel.clone();
+            rf
+        }
         Err(e) => {
             out::eprint_stop(Command::Ask, &msg::read_failed(&rel, &e, msg::topic_file_unread("ask", &rel, &e)));
             return 1;
