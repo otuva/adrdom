@@ -42,7 +42,7 @@ A question holds nothing that ties it to the day it was written: no word on what
 Under each heading, every neighbour `adr plan` brings goes on one line: `depends:`, `supersedes:` or `unrelated:`.
 A question stands on what it loses its meaning without: a term, or a question of the same file; a depends line names at most two questions. An entry on an open question carries its answer set, `=A`, `=A|B` or `=*`: the letters under which the question still makes sense.
 A question that replaces a current decision names it on `supersedes:`, with every current decision standing on it; each leaves force once the question is answered.
-A tier holds at most four questions; tiers are unlimited: a question that stands on a question of its file sits a tier above it.
+A tier holds at most four questions; tiers are unlimited: a question that stands on a question of its file sits a tier above it. The question a tier stands on is the one each of its questions loses its meaning without.
 `adr plan <file>` does the step the file is at and prints the next move, until the move is `owner runs: adr approve <file>`.
 The owner reads the whole plan at each approval, so a plan changes as a whole, not line by line.
 `adr ask <file>` asks every unanswered question of the file at once; a question carries no lean, the agent's lean goes in chat.
