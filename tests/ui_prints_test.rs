@@ -1,4 +1,4 @@
-// adr: 3cf56867-3918-4ce6-a296-2cc62a91b154
+// adr: a9e9e370-7768-4a79-b67b-7fe0926b5670
 //
 // "Does the ui show what the terminal prints?" A: the page renders the same
 // statuses, findings, moves and events the commands print, from the one
@@ -225,7 +225,7 @@ fn draft() -> std::path::PathBuf {
 
 #[test]
 fn every_page_shows_what_the_terminal_prints_at_each_status() {
-    // adr: 3cf56867-3918-4ce6-a296-2cc62a91b154
+    // adr: a9e9e370-7768-4a79-b67b-7fe0926b5670
     let dir = draft();
     let page = Page::start(&dir);
 
@@ -259,7 +259,7 @@ fn every_page_shows_what_the_terminal_prints_at_each_status() {
     assert!(refused.status.success(), "{}", stderr(&refused));
     let show = cli(&dir, &["show", "--all"], false, false);
     assert!(show.iter().any(|l| l.starts_with("[refused] ")), "{:?}", show);
-    assert!(show.iter().any(|l| l.starts_with("agent changes the plan: ")), "{:?}", show);
+    assert!(show.iter().any(|l| l.starts_with("agent writes the plan change that drops or replaces ")), "{:?}", show);
     assert_page_is_terminal(&dir, &page);
 
     // A finding: a loaded word in a new draft is check's note on the page.
@@ -275,7 +275,7 @@ fn every_page_shows_what_the_terminal_prints_at_each_status() {
 
 #[test]
 fn an_act_from_the_page_shows_the_lines_the_command_prints() {
-    // adr: 3cf56867-3918-4ce6-a296-2cc62a91b154
+    // adr: a9e9e370-7768-4a79-b67b-7fe0926b5670
     // Two repositories with the same records: one acts from the page, the
     // other from the terminal.
     let on_page = draft();

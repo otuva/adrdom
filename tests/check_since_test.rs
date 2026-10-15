@@ -72,7 +72,7 @@ fn b_fails_when_a_row_of_commit_is_gone() {
     assert!(!out.status.success(), "check --since must fail when a row of <commit> is gone");
     let text = stdout(&out);
     assert!(text.contains(SINCE_DROPS_ROWS_TEXT), "{}", text);
-    assert!(text.contains("no ledger row is lost between pushes; owner adds the missing rows back from that commit"), "{}", text);
+    assert!(text.contains("owner restores the missing rows of the ledger from git"), "{}", text);
 }
 
 // adr: a26876ba-5789-4d05-965e-853d00d9edd2
@@ -110,7 +110,7 @@ fn c_fails_when_a_row_of_commit_changed() {
     assert!(!out.status.success(), "check --since must fail when a row of <commit> changed");
     let text = stdout(&out);
     assert!(text.contains(SINCE_DROPS_ROWS_TEXT), "{}", text);
-    assert!(text.contains("no ledger row is lost between pushes; owner adds the missing rows back from that commit"), "{}", text);
+    assert!(text.contains("owner restores the missing rows of the ledger from git"), "{}", text);
 }
 
 // adr: a26876ba-5789-4d05-965e-853d00d9edd2
@@ -142,5 +142,5 @@ fn e_an_unknown_commit_fails_with_its_own_message() {
     let text = stdout(&out);
     assert!(text.contains("check: "), "{}", text);
     assert!(text.contains(SINCE_UNREADABLE_TEXT), "{}", text);
-    assert!(text.contains("; agent fetches that commit first"), "{}", text);
+    assert!(text.contains("; agent runs: git fetch"), "{}", text);
 }

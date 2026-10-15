@@ -186,14 +186,14 @@ fn show_prints_each_status_and_the_lines_each_question_carries() {
     Why: w.
     Costs: c.
 [refused] 2.2 Also depends?
-adrdom/decisions/tiered-topic.md: \"1.1 Root?\" has no depends line; every question carries a depends line; agent writes the depends line of \"1.1 Root?\"
-adrdom/decisions/tiered-topic.md: \"1.2 Unasked root?\" has no depends line; every question carries a depends line; agent writes the depends line of \"1.2 Unasked root?\"
-adrdom/decisions/tiered-topic.md: \"1.3 Skeleton?\" has no depends line; every question carries a depends line; agent writes the depends line of \"1.3 Skeleton?\"
-adrdom/decisions/tiered-topic.md: \"2.2 Also depends?\" is [refused] and its depends line was edited; an answered decision's depends line stays as approved; agent restores the line from git
+adrdom/decisions/tiered-topic.md: \"1.1 Root?\" has no depends line; agent writes the depends line of \"1.1 Root?\"
+adrdom/decisions/tiered-topic.md: \"1.2 Unasked root?\" has no depends line; agent writes the depends line of \"1.2 Unasked root?\"
+adrdom/decisions/tiered-topic.md: \"1.3 Skeleton?\" has no depends line; agent writes the depends line of \"1.3 Skeleton?\"
+adrdom/decisions/tiered-topic.md: \"2.2 Also depends?\" is [refused] and its depends line was edited; agent restores the line from git
 agent runs: adr plan adrdom/decisions/tiered-topic.md
 agent runs: adr ask adrdom/decisions/tiered-topic.md  # \"1.2 Unasked root?\"
 owner runs: adr answer aaaaaaaa-0000-4000-8000-000000000002@{V} <letter>  # \"2.1 Depends on root?\"
-agent changes the plan: \"2.2 Also depends?\" is refused and holds the questions that come after it
+agent writes the plan change that drops or replaces \"2.2 Also depends?\"
 not yet: \"1.1 Root?\" is answered and is built once \"1.2 Unasked root?\" is answered
 ";
     let expected = expected.replace("{V}", &version);
@@ -289,7 +289,7 @@ fn show_names_a_heading_of_another_file_in_the_depends_line_of_an_unapproved_fil
         shown
     );
     assert!(
-        shown.contains("\"1.1 Is B stand on A?\" depends on \"1.1 Is A do a thing?\", a decision of another topic file; a question stands on terms and questions of its file; agent rewrites the depends line"),
+        shown.contains("\"1.1 Is B stand on A?\" depends on \"1.1 Is A do a thing?\", a decision of another topic file; agent rewrites the depends line"),
         "{}",
         shown
     );
@@ -345,7 +345,7 @@ fn show_prints_no_guess_for_a_heading_naming_decisions_of_two_other_files() {
     let b_block = shown[b_start..b_end].trim_end();
     assert!(b_block.contains("  + depends: 1.1 Shared heading?"), "{}", shown);
     assert!(
-        b_block.contains("adrdom/decisions/topic-b.md: \"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\", a decision of another topic file; a question stands on terms and questions of its file; agent rewrites the depends line of"),
+        b_block.contains("adrdom/decisions/topic-b.md: \"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\", a decision of another topic file; agent rewrites the depends line of"),
         "an ambiguous cross-file dependency names the agent's move and no guess: {}",
         shown
     );

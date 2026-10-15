@@ -50,7 +50,7 @@ fn check_fails_when_a_dependents_answer_set_changed_after_ask() {
     let text = stdout(&out);
     assert!(
         text.contains(
-            "adrdom/decisions/colors.md: 1.2 Depends on color? answer set on 1.1 Which color? changed after ask; a depends entry's answer set stays as asked; agent restores the answer set from git"
+            "adrdom/decisions/colors.md: 1.2 Depends on color? answer set on 1.1 Which color? changed after ask; agent restores the answer set from git"
         ),
         "{}",
         text

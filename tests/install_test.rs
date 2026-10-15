@@ -2,6 +2,8 @@ mod common;
 
 use common::*;
 
+const BRIEF_TAG: &str = "<!-- adrdom brief begin -->\n# adrdom\nThis repository is governed by `adr`. Read its brief before you write a question, code or a reply:\n@adrdom/state/brief.md\n<!-- adrdom brief end -->\n";
+
 const ALL_DENY_ENTRIES: &[&str] = &[
     "Bash(adr answer*)",
     "Bash(* adr answer*)",
@@ -370,6 +372,57 @@ fn install_replaces_a_stale_brief_section_in_place() {
     assert!(content.contains("This repository is governed by `adr`."));
 }
 
+// adr: 4f925b13-ad16-48b8-acd1-3e30d6e308b6
+// Install writes the tag into the marked section of AGENTS.md and the whole
+// brief to adrdom/state/brief.md; a second install writes nothing.
+#[test]
+fn install_writes_the_tag_to_agents_md_and_the_brief_to_state() {
+    let dir = init_repo();
+    let out = adr(&dir, &["install"], &[], "");
+    assert!(out.status.success(), "install failed: {}", stderr(&out));
+    assert!(stdout(&out).contains("written: adrdom/state/brief.md"), "{}", stdout(&out));
+
+    assert_eq!(
+        std::fs::read_to_string(dir.join("AGENTS.md")).unwrap(),
+        BRIEF_TAG
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.join("adrdom/state/brief.md")).unwrap(),
+        adr::commands::install::brief()
+    );
+
+    let again = adr(&dir, &["install"], &[], "");
+    assert!(again.status.success());
+    assert!(
+        !stdout(&again).contains("adrdom/state/brief.md"),
+        "{}",
+        stdout(&again)
+    );
+    let check = adr(&dir, &["check"], &[], "");
+    assert!(check.status.success(), "{}", stdout(&check));
+}
+
+// adr: 4f925b13-ad16-48b8-acd1-3e30d6e308b6
+// A marked section holding old text is replaced in place by the tag.
+#[test]
+fn install_replaces_an_old_full_brief_section_with_the_tag() {
+    let dir = init_repo();
+    let old: String = (0..40).map(|i| format!("old brief line {}\n", i)).collect();
+    std::fs::write(
+        dir.join("AGENTS.md"),
+        format!(
+            "# My repo\n\nBefore.\n\n<!-- adrdom brief begin -->\n{}<!-- adrdom brief end -->\n\nAfter.\n",
+            old
+        ),
+    )
+    .unwrap();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    assert_eq!(
+        std::fs::read_to_string(dir.join("AGENTS.md")).unwrap(),
+        format!("# My repo\n\nBefore.\n\n{}\nAfter.\n", BRIEF_TAG)
+    );
+}
+
 // --- CLAUDE.md -----------------------------------------------------------
 
 // adr: 4f925b13-ad16-48b8-acd1-3e30d6e308b6
@@ -559,6 +612,80 @@ fn uninstall_leaves_an_owner_edited_codex_rules_file_alone() {
     );
 }
 
+// adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
+// check holds adrdom/state/brief.md to this binary's brief; install
+// restores it.
+#[test]
+fn check_fails_when_the_state_brief_differs_or_is_missing_and_install_restores_it() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let path = dir.join("adrdom/state/brief.md");
+    let tail = "; agent runs: adr install";
+
+    let mut text = std::fs::read_to_string(&path).unwrap();
+    text.push_str("an extra line\n");
+    std::fs::write(&path, text).unwrap();
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    assert!(
+        stdout(&out).contains(&format!("adrdom/state/brief.md differs from this binary's brief{}", tail)),
+        "{}",
+        stdout(&out)
+    );
+
+    std::fs::remove_file(&path).unwrap();
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(!out.status.success());
+    assert!(
+        stdout(&out).contains(&format!("adrdom/state/brief.md is missing{}", tail)),
+        "{}",
+        stdout(&out)
+    );
+
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        adr::commands::install::brief()
+    );
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "{}", stdout(&out));
+}
+
+// adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
+// A brief file with CRLF line ends (a checkout's) is current to both check
+// and install: check passes and install leaves it as it is.
+#[test]
+fn a_crlf_brief_file_is_current_to_check_and_install() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let path = dir.join("adrdom/state/brief.md");
+    let crlf = adr::commands::install::brief().replace('\n', "\r\n");
+    std::fs::write(&path, &crlf).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "{}", stdout(&out));
+    let again = adr(&dir, &["install"], &[], "");
+    assert!(again.status.success());
+    assert!(!stdout(&again).contains("adrdom/state/brief.md"), "{}", stdout(&again));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), crlf);
+}
+
+// adr: 292359a4-0512-465b-b6a7-79838e66e5a5
+// uninstall removes the tag section and leaves adrdom/state/brief.md.
+#[test]
+fn uninstall_removes_the_tag_section_and_leaves_the_state_brief() {
+    let dir = init_repo();
+    std::fs::write(dir.join("AGENTS.md"), "# Notes\n").unwrap();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let out = adr_owner(&dir, &["uninstall"], "");
+    assert!(out.status.success(), "uninstall failed: {}", stderr(&out));
+    assert_eq!(
+        std::fs::read_to_string(dir.join("AGENTS.md")).unwrap(),
+        "# Notes\n"
+    );
+    assert!(dir.join("adrdom/state/brief.md").is_file());
+}
+
 // adr: 292359a4-0512-465b-b6a7-79838e66e5a5
 // The brief section of AGENTS.md follows the same rule: edited by hand, it
 // stays, and uninstall prints nothing for it.
@@ -568,7 +695,11 @@ fn uninstall_leaves_a_hand_edited_brief_section_alone() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let path = dir.join("AGENTS.md");
     let text = std::fs::read_to_string(&path).unwrap();
-    let edited = text.replacen("## What is next", "## What is next, edited by hand", 1);
+    let edited = text.replacen(
+        "Read its brief before you write",
+        "Read its brief, edited by hand, before you write",
+        1,
+    );
     assert_ne!(edited, text);
     std::fs::write(&path, &edited).unwrap();
 
@@ -859,4 +990,21 @@ fn install_prints_one_line_per_file_written_and_nothing_else() {
     let again = adr(&dir, &["install", "--claude", "--codex"], &[], "");
     assert!(again.status.success(), "{}", stderr(&again));
     assert_eq!(stdout(&again), "", "{}", stdout(&again));
+}
+
+// adr: de5ed5b1-3a83-4403-8953-941cb7e94390
+// Install writes the brief without the tie comments the asset carries.
+#[test]
+fn install_writes_the_brief_without_its_tie_comments() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let written = std::fs::read_to_string(dir.join("adrdom/state/brief.md")).unwrap();
+    assert_eq!(written, adr::commands::install::strip_ties(include_str!("../assets/brief.md")));
+    assert!(!written.contains("<!--"), "{}", written);
+    assert_eq!(adr::commands::install::strip_ties("a <!-- from: x -->\r\nb\nc <!-- keep -->\n"), "a\r\nb\nc <!-- keep -->\n");
+    // A fenced line keeps its comment, as check leaves fenced lines unread.
+    assert_eq!(
+        adr::commands::install::strip_ties("```\nx <!-- from: y -->\n```\nz <!-- from: w -->\n"),
+        "```\nx <!-- from: y -->\n```\nz\n"
+    );
 }

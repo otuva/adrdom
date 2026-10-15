@@ -87,8 +87,8 @@ fn remove_agents_md_section(root: &Path) -> Result<Option<Event>, String> {
     // Each piece leaves only while it still matches what install wrote (per
     // "Does uninstall belong to the owner?"): a section edited by hand is
     // left, compared the way check compares it.
-    let brief_lines: Vec<&str> = install::BRIEF.lines().collect();
-    if !crate::text::lines_match_trimmed(&parts[begin + 1..end], &brief_lines) {
+    let tag_lines: Vec<&str> = install::TAG.lines().collect();
+    if !crate::text::lines_match_trimmed(&parts[begin + 1..end], &tag_lines) {
         return Ok(None);
     }
 
@@ -253,7 +253,7 @@ fn remove_settings_deny(root: &Path, events: &mut Vec<Event>) -> Result<(), Stri
     }
     let mut value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|e| {
-            msg::parse_failed(REL, e, Next::agent(format!("fixes {} so it parses as JSON", REL)).and_owner_runs(crate::moves::Cmd::fixed("adr uninstall")))
+            msg::parse_failed(REL, e, Next::agent(msg::Act::Rewrites(REL.to_string())).and_owner_runs(crate::moves::Cmd::fixed("adr uninstall")))
         })?;
 
     let mut any_removed = false;

@@ -56,7 +56,7 @@ fn an_entry_on_a_question_of_another_file_is_refused_in_both_states() {
         ),
     );
     let refusal = format!(
-        "{}: \"Is the widget beta hold?\" depends on \"Is the widget alpha hold?\" which is no heading in this file; a depends entry names something that exists; agent rewrites the entry",
+        "{}: \"Is the widget beta hold?\" depends on \"Is the widget alpha hold?\" which is no heading in this file; agent rewrites the entry",
         B
     );
     let out = adr(&dir, &["check"], &[], "");
@@ -72,7 +72,7 @@ fn an_entry_on_a_question_of_another_file_is_refused_in_both_states() {
     assert!(!out.status.success());
     assert!(
         stderr(&out).contains(&format!(
-            "{}: \"Is the widget beta hold?\" depends on \"Is the widget alpha hold?\", a decision of another topic file; a question stands on terms and questions of its file; agent rewrites the depends line of \"Is the widget beta hold?\" to name terms and questions of this file; a decision of another file it relies on goes on no depends line",
+            "{}: \"Is the widget beta hold?\" depends on \"Is the widget alpha hold?\", a decision of another topic file; agent rewrites the depends line of \"Is the widget beta hold?\" to name terms and questions of this file",
             B
         )),
         "{}",
@@ -150,7 +150,7 @@ fn the_cap_refusal_names_the_questions_and_the_move() {
         "{}: 5 questions in one tier, the most is 4: \
 \"Is the widget one hold?\", \"Is the widget two hold?\", \"Is the widget three hold?\", \
 \"Is the widget four hold?\", \"{}\"; \
-no tier holds more than four questions; agent rewrites the depends lines of these questions",
+agent writes the question these stand on",
         rel, FIFTH
     );
     let out = adr(&dir, &["check"], &[], "");
@@ -193,7 +193,7 @@ fn the_cap_refusal_names_only_the_questions_not_answered() {
 
     let refusal = format!(
         "{}: 5 questions in one tier, 4 answered, the most is 4: \"Is the widget five hold?\"; \
-no tier holds more than four questions; agent rewrites the depends lines of these questions",
+agent writes the question these stand on",
         rel
     );
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
@@ -231,7 +231,7 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(
         stdout(&out).contains(&format!(
-            "{}: {} is answered and no tracked file holds its tie; a current decision is reported until a test names it; agent builds \"{}\" and puts \"adr: {}\" in a test that shows it",
+            "{}: {} is answered and no tracked file holds its tie; agent builds \"{}\" and puts \"adr: {}\" in a test that shows it",
             A, ALPHA, ALPHA, alpha
         )),
         "{}",
@@ -272,7 +272,7 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     let text = stdout(&out);
     assert!(
         text.contains(&format!(
-            "{} (\"{}\") tied to a test and not a current decision, at tested.txt:1; a test tie names the decision in force; agent moves the tie to the current decision \"{}\" (\"adr: {}\")",
+            "{} (\"{}\") tied to a test and not a current decision, at tested.txt:1; agent rewrites the tie comment to \"{}\" (\"adr: {}\")",
             alpha, ALPHA, GAMMA, gamma
         )),
         "{}",
@@ -291,7 +291,7 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     assert!(!out.status.success());
     assert!(
         stderr(&out).contains(&format!(
-            "{}: \"Is the widget delta hold?\": supersedes {} (\"{}\"), which is not a current decision; a question supersedes only a current decision; agent rewrites the supersedes entry",
+            "{}: \"Is the widget delta hold?\": supersedes {} (\"{}\"), which is not a current decision; agent rewrites the supersedes entry",
             A,
             alpha, ALPHA
         )),
@@ -360,7 +360,7 @@ fn a_settings_file_that_does_not_parse_names_its_fix_once() {
     let out = adr(&dir, &["install", "--claude"], &[], "");
     assert!(!out.status.success());
     let err = stderr(&out);
-    let fix = "agent fixes .claude/settings.json so it parses as JSON, then runs: adr install --claude";
+    let fix = "agent rewrites .claude/settings.json, then runs: adr install --claude";
     assert!(err.contains(fix), "{}", err);
     assert_eq!(err.matches("agent ").count(), 1, "{}", err);
     assert_one_clearing_move(err.trim_end(), "adr install --claude");
@@ -372,7 +372,7 @@ fn a_settings_file_that_does_not_parse_names_its_fix_once() {
     let out = adr_owner(&dir, &["uninstall"], "");
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("agent fixes .claude/settings.json so it parses as JSON, owner runs: adr uninstall"), "{}", err);
+    assert!(err.contains("agent rewrites .claude/settings.json, owner runs: adr uninstall"), "{}", err);
     assert_eq!(err.matches("owner runs: adr uninstall").count(), 1, "{}", err);
     assert_one_clearing_move(err.trim_end(), "adr uninstall");
 }
@@ -424,7 +424,7 @@ fn outside_a_repository_every_command_names_the_step_that_clears_it() {
         let quoted: Vec<String> =
             args.iter().map(|a| if a.contains(' ') { format!("'{}'", a) } else { a.to_string() }).collect();
         let command = format!("adr {}", quoted.join(" "));
-        assert!(line.ends_with(&format!("changes into a git repository and runs: {}", command)), "{:?}: {}", args, err);
+        assert!(line.ends_with(&format!("changes into a git repository, then runs: {}", command)), "{:?}: {}", args, err);
         assert!(line.starts_with(&format!("{}: not inside", args[0])), "{:?}: {}", args, err);
         assert_one_clearing_move(line, &command);
     }
@@ -470,7 +470,7 @@ fn ask_and_plan_on_a_missing_topic_file_name_the_command_that_clears_it() {
         let err = stderr(&out);
         let line = err.lines().next().unwrap_or_default();
         assert!(
-            line.ends_with(&format!("agent gives adr {} a topic file under adrdom/decisions that exists", cmd)),
+            line.ends_with(&format!("agent rewrites the topic file given to adr {} to one under adrdom/decisions that exists", cmd)),
             "{}: {}",
             cmd,
             err

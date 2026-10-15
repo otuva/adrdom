@@ -102,7 +102,7 @@ pub(super) fn check_tests(
             crate::moves::of_untested(rf, i, id, role)
         };
         notes.push(
-            Finding::said(Class::Untested, msg::untested(&rf.rel, &rf.sections[i].heading_text, &mv.text()))
+            Finding::said(Class::Untested, msg::untested(&rf.rel, &rf.sections[i].heading_text, mv.clause()))
                 .about(Subject::TopicFile(rf.rel.clone()))
                 .in_section(i),
         );
@@ -125,7 +125,7 @@ pub(super) fn check_tests(
             .filter_map(|n| place.get(n.as_str()).map(|&(rf, i)| (rf.sections[i].heading_text.clone(), n.clone())))
             .collect();
         let mv = crate::moves::Move::new(crate::moves::MoveKind::Retie { to }).in_session(role);
-        notes.push(Finding::said(Class::Tested, msg::stale_test(id, heading, locations, &mv.clause_text())));
+        notes.push(Finding::said(Class::Tested, msg::stale_test(id, heading, locations, mv.clause())));
     }
 
     notes

@@ -1,6 +1,7 @@
 mod answers;
 mod banned;
 mod blame;
+mod brief;
 mod ids;
 mod install;
 mod ledger;
@@ -256,13 +257,17 @@ fn build(
         plan::check_plan(root, &source, &records, &led, &per_record_findings, &awaiting);
     push_failures(&mut failures, plan_failures);
     push_failures(&mut notes, plan_notes);
-    push_failures(&mut failures, terms::check_terms(root, &records, &led, &source, &approved_rels));
+    let (terms_failures, terms_waits) = terms::check_terms(root, &records, &led, &source, &approved_rels);
+    push_failures(&mut failures, terms_failures);
     let (blame_failures, blame_notes) = blame::check_blame(root, &source, blame_index, &blame_unreadable, &mut stops);
     push_failures(&mut failures, blame_failures);
     notes.extend(blame_notes);
     if staged || message.is_some() {
         push_failures(&mut failures, planner::check_commit(root));
     }
+    let (brief_failures, brief_notes) = brief::check_brief(root, &source, &records, &terms_list, &led, crate::session::role(root));
+    push_failures(&mut failures, brief_failures);
+    notes.extend(brief_notes);
     let untested = tests::check_tests(root, &records, &led, tests, &source, crate::session::role(root));
     let (tells_failures, tells_notes) = parse::check_rule(Class::Tells, &records, &per_record_findings, &awaiting, &led);
     push_failures(&mut failures, tells_failures);
@@ -271,7 +276,10 @@ fn build(
     // on every run, never a failure, each with the move that builds it.
     notes.extend(untested);
 
-    view::CheckReport { failures, notes, stops }
+    // While the terms file waits for the owner's approval, the hook refuses
+    // a commit: its move is `not yet`.
+    let moves = if terms_waits { vec![crate::moves::Move::new(crate::moves::MoveKind::CommitWaits)] } else { Vec::new() };
+    view::CheckReport { failures, notes, stops, moves }
 }
 
 /// What `check` reports of one topic file of the records: the judgement
@@ -349,6 +357,7 @@ pub fn run(staged: bool, message: Option<PathBuf>, since: Option<String>, push: 
     let exit_code = if report.failures.is_empty() && report.stops.is_empty() { 0 } else { 1 };
     let mut lines: Vec<Line> = report.stops.into_iter().map(stopped).collect();
     lines.extend(report.failures.into_iter().chain(report.notes).map(Line::Finding));
+    lines.extend(report.moves.into_iter().map(Line::Move));
     out::print(&lines);
     exit_code
 }

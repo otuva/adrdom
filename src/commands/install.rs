@@ -28,9 +28,47 @@ fn install_words(claude: bool, codex: bool) -> Vec<&'static str> {
 }
 
 /// The agent brief, final at `assets/brief.md`. `adr install` writes it
-/// into AGENTS.md between the marker lines below; `adr check`'s `install`
-/// check compares AGENTS.md's marked section against this text.
+/// whole to `repo::BRIEF_PATH`; `adr check`'s `install` check compares that
+/// file against this text.
 pub const BRIEF: &str = include_str!("../../assets/brief.md");
+
+/// The marker a brief sentence's trailing tie comment opens with.
+pub const TIE_OPEN: &str = " <!-- from:";
+
+/// `text` with each trailing ` <!-- from: ... -->` removed from every line
+/// that ends in one; everything else, line ends included, stays byte for
+/// byte (adr-code: de5ed5b1-3a83-4403-8953-941cb7e94390).
+pub fn strip_ties(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut fenced = false;
+    for line in text.split_inclusive('\n') {
+        let body = line.trim_end_matches(['\n', '\r']);
+        let ends = &line[body.len()..];
+        // A fenced line is left as it is, as `check` leaves it unread.
+        if body.starts_with("```") {
+            fenced = !fenced;
+        }
+        match body.rfind(TIE_OPEN) {
+            Some(at) if !fenced && body.ends_with("-->") && body[at..].matches("-->").count() == 1 => {
+                out.push_str(&body[..at]);
+                out.push_str(ends);
+            }
+            _ => out.push_str(line),
+        }
+    }
+    out
+}
+
+/// The brief `install` writes: `BRIEF` without its tie comments.
+pub fn brief() -> String {
+    strip_ties(BRIEF)
+}
+
+/// The marked section of AGENTS.md: the lines `adr install` writes between
+/// the marker lines below, naming the brief's file with an @ line, the same
+/// shape the brief names the terms brief with (adee66f2 A). `adr check`
+/// compares AGENTS.md's marked section against this text.
+pub(crate) const TAG: &str = "# adrdom\nThis repository is governed by `adr`. Read its brief before you write a question, code or a reply:\n@adrdom/state/brief.md\n";
 
 pub(crate) const BRIEF_BEGIN: &str = "<!-- adrdom brief begin -->";
 pub(crate) const BRIEF_END: &str = "<!-- adrdom brief end -->";
@@ -73,7 +111,7 @@ pub(crate) const GITIGNORE_CONTENT: &str = "cache/\nstate/roles.tsv\nstate/neigh
 /// "forbidden"`. `check`'s `install`
 /// check compares the file on disk against this text (see
 /// `commands/check/install.rs`), the same way it compares AGENTS.md against
-/// `BRIEF`.
+/// `TAG`.
 pub(crate) fn codex_rules_content() -> String {
     let mut out = String::new();
     for cmd in OWNER_COMMANDS {
@@ -128,6 +166,7 @@ fn install_all(root: &Path, claude: bool, codex: bool, events: &mut Vec<Event>) 
 
     events.extend(install_gitattributes(root).map_err(|e| msg::write_failed(repo::GITATTRIBUTES_PATH, e, msg::after_fix_agent_runs(cmd.clone())))?);
     events.extend(install_gitignore(root).map_err(|e| msg::write_failed(repo::GITIGNORE_PATH, e, msg::after_fix_agent_runs(cmd.clone())))?);
+    events.extend(install_brief(root).map_err(|e| msg::write_failed(repo::BRIEF_PATH, e, msg::after_fix_agent_runs(cmd.clone())))?);
 
     let hooks = root.join(".githooks");
     fs::create_dir_all(&hooks).map_err(|e| msg::create_failed(&hooks.display().to_string(), e, msg::after_fix_agent_runs(cmd.clone())))?;
@@ -251,6 +290,26 @@ fn write_whole(root: &Path, rel: &str, content: &str) -> Result<Option<Event>, S
     Ok(written(rel))
 }
 
+/// Whether a brief file holding `existing` is the brief install writes: the
+/// same lines, a checkout's `\r` aside. The one comparison `install` and
+/// `check` judge the brief's file by.
+pub(crate) fn brief_is_current(existing: &str) -> bool {
+    let existing_lines: Vec<&str> = existing.lines().collect();
+    let want = brief();
+    let want_lines: Vec<&str> = want.lines().collect();
+    crate::text::lines_match_trimmed(&existing_lines, &want_lines)
+}
+
+/// Writes the brief to `repo::BRIEF_PATH` unless the file there is current.
+fn install_brief(root: &Path) -> Result<Option<Event>, String> {
+    let path = root.join(repo::BRIEF_PATH);
+    if fs::read_to_string(&path).is_ok_and(|c| brief_is_current(&c)) {
+        return Ok(None);
+    }
+    fs::write(&path, brief()).map_err(|e| e.to_string())?;
+    Ok(written(repo::BRIEF_PATH))
+}
+
 /// Locates the marker lines in `lines` (as produced by `content.split('\n')`,
 /// so indices line up with a raw reconstruction). Both markers must match
 /// exactly (no trimming), and the end marker must come after the begin
@@ -277,12 +336,12 @@ pub(crate) fn hook_is_current(existing: &str, content: &str) -> bool {
     !existing.contains('\r') && crate::text::lines_match_trimmed(&existing_lines, &want_lines)
 }
 
-/// The marker lines plus the brief's own lines, in file order, as they
-/// should appear in AGENTS.md (begin marker, then every brief line, then
+/// The marker lines plus the tag's own lines, in file order, as they
+/// should appear in AGENTS.md (begin marker, then every tag line, then
 /// end marker).
 fn section_lines() -> Vec<&'static str> {
     let mut v = vec![BRIEF_BEGIN];
-    v.extend(BRIEF.lines());
+    v.extend(TAG.lines());
     v.push(BRIEF_END);
     v
 }
@@ -387,7 +446,7 @@ fn install_claude_md(root: &Path, create: bool) -> Result<Option<Event>, String>
 fn merge_settings(root: &Path, cmd: &Cmd) -> Result<Option<Event>, String> {
     const REL: &str = ".claude/settings.json";
     let failed = |e: String| msg::update_failed(REL, e, msg::after_fix_agent_runs(cmd.clone()));
-    let fix = |so: &str| msg::fix_then(REL, so, cmd.clone());
+    let fix = || msg::fix_then(REL, cmd.clone());
     let dir = root.join(".claude");
     fs::create_dir_all(&dir).map_err(|e| failed(e.to_string()))?;
     let path = dir.join("settings.json");
@@ -398,14 +457,14 @@ fn merge_settings(root: &Path, cmd: &Cmd) -> Result<Option<Event>, String> {
             serde_json::json!({})
         } else {
             serde_json::from_str(&content)
-                .map_err(|e| msg::parse_failed(REL, e, fix("it parses as JSON")))?
+                .map_err(|e| msg::parse_failed(REL, e, fix()))?
         }
     } else {
         serde_json::json!({})
     };
 
     if !value.is_object() {
-        return Err(msg::settings_not_json_object(REL, fix("it holds a JSON object")));
+        return Err(msg::settings_not_json_object(REL, fix()));
     }
     let obj = value.as_object_mut().unwrap();
 
@@ -413,7 +472,7 @@ fn merge_settings(root: &Path, cmd: &Cmd) -> Result<Option<Event>, String> {
         .entry("permissions")
         .or_insert_with(|| serde_json::json!({}));
     if !permissions.is_object() {
-        return Err(msg::settings_permissions_not_object(REL, fix("permissions is an object")));
+        return Err(msg::settings_permissions_not_object(REL, fix()));
     }
     let permissions_obj = permissions.as_object_mut().unwrap();
 
@@ -421,7 +480,7 @@ fn merge_settings(root: &Path, cmd: &Cmd) -> Result<Option<Event>, String> {
         .entry("deny")
         .or_insert_with(|| serde_json::json!([]));
     if !deny.is_array() {
-        return Err(msg::settings_deny_not_array(REL, fix("permissions.deny is an array")));
+        return Err(msg::settings_deny_not_array(REL, fix()));
     }
     let deny_arr = deny.as_array_mut().unwrap();
 

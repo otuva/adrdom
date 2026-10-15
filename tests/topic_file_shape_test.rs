@@ -58,7 +58,7 @@ fn text_under_a_tier_heading_between_questions_is_reported_by_plan_approve_and_c
     let content = format!("# Gate\n\n{}\n## Tier two\n\nText that sits in no question.\n\n{}", q("Does the widget hold?"), q("Does the widget stay?"));
 
     let n = content.lines().position(|l| l == "Text that sits in no question.").unwrap() + 1;
-    reported_by_all(&content, &format!("{}: stray line {}; a topic file holds a heading, prose and questions only; agent rewrites the file", REL, n));
+    reported_by_all(&content, &format!("{}: stray line {}; agent rewrites the file", REL, n));
 }
 
 
@@ -69,6 +69,6 @@ fn a_heading_line_without_a_question_mark_is_reported_by_plan_approve_and_check(
     let n = content.lines().position(|l| l == "### Not a question").unwrap() + 1;
     reported_by_all(
         &content,
-        &format!("{}: line {}: a heading is not a question; every third-level heading is a question ending in ?; agent rewrites the line", REL, n),
+        &format!("{}: line {}: a heading is not a question ending in ?; agent rewrites the line", REL, n),
     );
 }

@@ -21,14 +21,15 @@ use std::path::Path;
 /// asked/answered section's terms line, and every non-retired term's own
 /// terms line, is checked for an existing, non-retired uuid on each pair --
 /// never by re-resolving the underlying text. Circular definitions fail.
-/// Returns the failures.
+/// Returns the failures, and whether the terms file is there and differs
+/// from its latest approval: a commit waits on it.
 pub(super) fn check_terms(
     root: &Path,
     records: &[RecordFile],
     led: &Ledger,
     source: &Source,
     approved_plans: &std::collections::HashSet<String>,
-) -> Vec<Failure> {
+) -> (Vec<Failure>, bool) {
     let mut out = Vec::new();
     let has_records = !repo::list_decision_files_via(root, source).is_empty();
 
@@ -36,7 +37,7 @@ pub(super) fn check_terms(
         if has_records {
             out.push(Failure::said(Class::Terms, msg::terms_missing()));
         }
-        return out;
+        return (out, false);
     };
 
     let lines = record::split_lines(&content);
@@ -84,10 +85,19 @@ pub(super) fn check_terms(
     if !approved || missing_ids {
         // The owner's move is named only when `approve` would take the
         // file: with a refusal above, the agent's move comes first.
+        // One finding per entry that waits, each with its own approve (per
+        // "What does approve take for a terms file holding several entries
+        // that wait?", da0dc8b1 A); the file as a whole when none does.
         if !refused {
-            out.push(Failure::said(Class::Terms, msg::terms_file_not_approved(crate::status::terms_file_status(led, &tf))));
+            let waiting = crate::state::waiting_terms(led, &tf);
+            if waiting.is_empty() {
+                out.push(Failure::said(Class::Terms, msg::terms_file_not_approved(crate::status::terms_file_status(led, &tf))));
+            }
+            for (name, status) in &waiting {
+                out.push(Failure::said(Class::Terms, msg::terms_entry_waits(None, name, *status)));
+            }
         }
-        return out;
+        return (out, !approved);
     }
 
     // Per "Does check hold the terms brief to the terms file?" (ec3f875c
@@ -132,11 +142,11 @@ pub(super) fn check_terms(
             // functions below need this to pick a legal next move.
             let answered = st == Some("answered");
             let Some(tl) = sec.terms_line else {
-                out.push(Failure::said(Class::Terms, msg::section_no_terms_line(&rel, &sec.heading_text, id, answered)));
+                out.push(Failure::said(Class::Terms, msg::section_no_terms_line(&rel, &sec.heading_text, answered)));
                 continue;
             };
             match terms::validate_pairs(rf.lines[tl].trim_end(), &tf) {
-                Err(_) => out.push(Failure::said(Class::Terms, msg::section_terms_line_malformed(&rel, &sec.heading_text, id, answered))),
+                Err(_) => out.push(Failure::said(Class::Terms, msg::section_terms_line_malformed(&rel, &sec.heading_text, answered))),
                 Ok(problems) => {
                     for p in problems {
                         match p.kind {
@@ -144,10 +154,9 @@ pub(super) fn check_terms(
                                     &rel,
                                     &sec.heading_text,
                                     &p.word,
-                                    id,
                                     answered,
                                 ))),
-                            terms::ProblemKind::Retired(name) => out.push(Failure::said(Class::Terms, msg::section_term_retired(&rel, &sec.heading_text, &name, id, answered))),
+                            terms::ProblemKind::Retired(name) => out.push(Failure::said(Class::Terms, msg::section_term_retired(&rel, &sec.heading_text, &name, answered))),
                         }
                     }
                 }
@@ -174,5 +183,5 @@ pub(super) fn check_terms(
         }
     }
 
-    out
+    (out, false)
 }

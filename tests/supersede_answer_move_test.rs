@@ -1,5 +1,5 @@
-// The move an answer refusal prints works: the agent adds the missing headings to
-// the supersedes line, the owner approves, the agent asks again and the owner
+// The move an answer refusal prints works: the agent rewrites the supersedes line to add the missing headings,
+// the owner approves, the agent asks again and the owner
 // answers. (Follows the supersedes line names every current decision standing on its target
 // (in every topic file, and through the decisions standing on those), and no
 // heading of a plan stands on what the same plan supersedes. The guard runs
@@ -134,7 +134,7 @@ fn the_move_printed_by_a_refused_answer_leads_to_a_successful_answer() {
     let id1 = id_of(&a, Q1);
     let id4 = id_of(&a, Q4);
     let out = adr_owner(&dir, &["answer", &id_at_version(&dir, &id4), "A"], "");
-    assert_refused_naming(&out, &[Q7, "c.md", "agent adds adrdom/decisions/c.md", "to the supersedes line, then runs: adr ask adrdom/decisions/a.md"]);
+    assert_refused_naming(&out, &[Q7, "c.md", "agent rewrites the supersedes line of", "to add adrdom/decisions/c.md", "then runs: adr ask adrdom/decisions/a.md"]);
 
     let c = std::fs::read_to_string(&a).unwrap();
     let edited = c.replace(

@@ -204,7 +204,7 @@ fn b_merge_dropping_the_other_branchs_row_fails_staged() {
     );
     let text = stdout(&staged);
     assert!(text.contains(MERGE_DROPS_ROWS_TEXT), "{}", text);
-    assert!(text.contains("no ledger row is lost in a merge; owner adds the missing rows back from that branch"), "{}", text);
+    assert!(text.contains("owner restores the missing rows of the ledger from git"), "{}", text);
 }
 
 // adr: 1c27f2d6-ab62-4c5a-91b2-1488722f3c48
@@ -238,7 +238,7 @@ fn c_committed_merge_that_dropped_a_branchs_row_fails_plain_check() {
     );
     let text = stdout(&out);
     assert!(text.contains(MERGE_DROPS_ROWS_TEXT), "{}", text);
-    assert!(text.contains("no ledger row is lost in a merge; owner adds the missing rows back from that branch"), "{}", text);
+    assert!(text.contains("owner restores the missing rows of the ledger from git"), "{}", text);
 }
 
 /// A fresh, otherwise-empty directory to clone into: its own path, never a
@@ -521,7 +521,7 @@ fn c_a_missing_or_changed_head_row_still_fails() {
 
     let clean = adr(&dir, &["check"], &[], "");
     assert!(
-        !stdout(&clean).contains("past ledger rows stay byte for byte"),
+        !stdout(&clean).contains("owner restores the missing or changed row from git"),
         "unexpected ledger failure before tampering: {}",
         stdout(&clean)
     );
@@ -533,12 +533,12 @@ fn c_a_missing_or_changed_head_row_still_fails() {
     std::fs::write(&ledger_path, "").unwrap();
     let removed = adr(&dir, &["check"], &[], "");
     assert!(!removed.status.success());
-    assert!(stdout(&removed).contains("past ledger rows stay byte for byte"), "{}", stdout(&removed));
+    assert!(stdout(&removed).contains("owner restores the missing or changed row from git"), "{}", stdout(&removed));
 
     // Restore, then change one byte in the middle of the row.
     let changed = committed.replace("some-detail", "some-detait");
     std::fs::write(&ledger_path, &changed).unwrap();
     let byte_changed = adr(&dir, &["check"], &[], "");
     assert!(!byte_changed.status.success());
-    assert!(stdout(&byte_changed).contains("past ledger rows stay byte for byte"), "{}", stdout(&byte_changed));
+    assert!(stdout(&byte_changed).contains("owner restores the missing or changed row from git"), "{}", stdout(&byte_changed));
 }

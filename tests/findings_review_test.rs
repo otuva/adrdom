@@ -70,7 +70,7 @@ fn show_of_a_blame_file_prints_an_unreadable_origin_and_offers_no_approve() {
     let out = adr(&dir, &["show", "adrdom/blame/x.md"], &[], "");
     let text = format!("{}{}", stdout(&out), stderr(&out));
     assert!(text.contains("cannot be read as text"), "{}", text);
-    assert!(text.contains("agent fixes docs/x.md"), "{}", text);
+    assert!(text.contains("agent rewrites docs/x.md"), "{}", text);
     assert!(!text.contains("owner runs: adr approve adrdom/blame/x.md"), "{}", text);
 }
 
@@ -96,12 +96,11 @@ fn the_terms_file_errors_name_both_entries_and_the_repeated_identifier_rule() {
         "# Terms\n\n## one\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A thing.\naliases: \n\n## two\nid: 11111111-1111-1111-1111-111111111111\ndefinition: Another thing.\naliases: \n",
     );
     let text = format!("{}{}", stdout(&adr(&dir, &["check"], &[], "")), stderr(&adr(&dir, &["check"], &[], "")));
-    assert!(text.contains("duplicate id"), "{}", text);
-    assert!(text.contains("one identifier names one term"), "{}", text);
-    assert!(!text.contains("every term has an identifier, name, definition and aliases"), "{}", text);
+    assert!(text.contains("duplicate id \"11111111-1111-1111-1111-111111111111\" (also used at line 4); agent rewrites the entry"), "{}", text);
+    assert!(!text.contains("missing field"), "{}", text);
 }
 
-// adr: 343d0d28-2c5d-40fc-99aa-22bfba4ea79f
+// adr: 50b31713-4fea-4aa3-842a-79c2750660ba
 //
 // A heading written twice in a topic file prints each finding once.
 #[test]
@@ -221,7 +220,7 @@ fn assert_no_repeats(lines: &[String], what: &str) {
     }
 }
 
-// adr: 343d0d28-2c5d-40fc-99aa-22bfba4ea79f
+// adr: 50b31713-4fea-4aa3-842a-79c2750660ba
 //
 // A finding line prints once on standard error and on the page too.
 #[test]
@@ -237,7 +236,7 @@ fn identical_finding_lines_print_once_on_standard_error_and_on_the_page() {
     assert_no_repeats(&page, "page");
 }
 
-// adr: 343d0d28-2c5d-40fc-99aa-22bfba4ea79f
+// adr: 50b31713-4fea-4aa3-842a-79c2750660ba
 //
 // The moves of a stop that lists findings, and of a failed read or write,
 // name an act on a thing, never "clears the findings below", "fixes what the
@@ -249,7 +248,7 @@ fn generic_moves_name_an_act_on_a_thing() {
     use adr::rules::Finding;
     let held = Report {
         stops: Vec::new(),
-        findings: vec![Finding::new(&adr::rule::TERMS_FILE_EXISTS, "x".to_string(), "agent y".to_string())],
+        findings: vec![Finding::new(&adr::rule::TERMS_FILE_EXISTS, "x".to_string(), adr::msg::Next::agent(adr::msg::Act::Writes("y".into())))],
         moves: Vec::new(),
     };
     let said = [
@@ -269,10 +268,10 @@ fn generic_moves_name_an_act_on_a_thing() {
         "owner runs: adr approve x.md",
         "owner runs: adr approve x.md",
         "agent writes adrdom/terms.md, owner runs: adr approve adrdom/terms.md",
-        "agent fixes adrdom/ledger.tsv, then runs: adr ask x.md",
-        "agent fixes x.md, owner runs: adr approve x.md",
-        "agent fixes what is piped to adr, owner runs: adr unban",
-        "agent fixes the git configuration of core.hooksPath, then runs: adr install",
+        "agent rewrites adrdom/ledger.tsv, then runs: adr ask x.md",
+        "agent rewrites x.md, owner runs: adr approve x.md",
+        "agent rewrites what is piped to adr, owner runs: adr unban",
+        "agent rewrites the git configuration of core.hooksPath, then runs: adr install",
     ];
     for (got, want) in said.iter().zip(wants) {
         assert!(got.ends_with(want), "{} should end with {}", got, want);
@@ -288,11 +287,11 @@ fn generic_moves_name_an_act_on_a_thing() {
             Waits::Asking { heading: "B?".into(), report: held.clone() },
         ],
     );
-    assert!(waits.0.next.contains("agent writes the body of \"A?\", agent rewrites \"B?\""), "{}", waits.0.next);
-    assert!(!waits.0.next.contains("clears the findings"), "{}", waits.0.next);
+    assert!(waits.0.next.render().contains("agent writes the body of \"A?\", agent rewrites \"B?\""), "{}", waits.0.next);
+    assert!(!waits.0.next.render().contains("clears the findings"), "{}", waits.0.next);
 }
 
-// adr: 343d0d28-2c5d-40fc-99aa-22bfba4ea79f
+// adr: 50b31713-4fea-4aa3-842a-79c2750660ba
 //
 // The same findings print in the same order under check, show, plan, ask,
 // approve and on the page.

@@ -313,7 +313,7 @@ fn ask_refuses_when_terms_md_is_missing() {
     assert!(!out.status.success());
     assert_eq!(
         stderr(&out).trim_end(),
-        "adrdom/terms.md missing; the terms file exists once a topic file does; agent writes adrdom/terms.md, owner runs: adr approve adrdom/terms.md"
+        "adrdom/terms.md missing; agent writes adrdom/terms.md, owner runs: adr approve adrdom/terms.md"
     );
 
     // Nothing written.
@@ -484,7 +484,8 @@ fn ask_refuses_a_candidate_that_pairs_no_term() {
         err
     );
     // The refusal names the next move, and it is the agent's to make.
-    assert!(err.contains("adds the term to adrdom/terms.md"), "{}", err);
+    assert!(err.contains("agent writes the depends line of \"1.1 Is this pass?\""), "{}", err);
+    assert!(err.contains("agent writes the term in adrdom/terms.md"), "{}", err);
     assert!(err.contains("agent "), "{}", err);
 
     // No terms line written to the record...

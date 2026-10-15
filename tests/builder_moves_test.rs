@@ -86,7 +86,7 @@ fn a_tie_to_a_superseded_decision_names_the_current_successor_and_fails_nothing(
     assert!(ok, "{}", text);
     let line = text.lines().find(|l| l.contains(&old) && l.contains("tied to a test and not a current decision")).unwrap_or_else(|| panic!("{}", text));
     assert!(
-        line.contains(&format!("agent moves the tie to the current decision \"2.1 What is the second unit of authority called?\" (\"adr: {}\")", new)),
+        line.contains(&format!("agent rewrites the tie comment to \"2.1 What is the second unit of authority called?\" (\"adr: {}\")", new)),
         "{}",
         line
     );
@@ -95,7 +95,7 @@ fn a_tie_to_a_superseded_decision_names_the_current_successor_and_fails_nothing(
     make_planner(&dir, "s1");
     let (ok, text) = check_text(&dir, Some("s1"));
     assert!(ok, "{}", text);
-    assert!(text.lines().any(|l| l.contains(&old) && l.contains("builder moves the tie to the current decision")), "{}", text);
+    assert!(text.lines().any(|l| l.contains(&old) && l.contains("builder rewrites the tie comment to")), "{}", text);
 }
 
 // adr: 2381d759-f85f-484e-9031-fadbe6ea045a

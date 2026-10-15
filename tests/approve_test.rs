@@ -134,8 +134,7 @@ fn approve_refuses_a_question_with_one_option() {
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
-    assert!(err.contains("\"1.1 One option?\": 1 options, at least two"), "{}", err);
-    assert!(err.contains("a question holds Problem, Standard and two or three options; agent rewrites the question"), "{}", err);
+    assert!(err.contains("\"1.1 One option?\": 1 options, at least two; agent rewrites the question"), "{}", err);
 
     let after = std::fs::read_to_string(&record).unwrap();
     assert_eq!(after, content, "approve must not modify the file when it refuses");
@@ -160,8 +159,7 @@ fn approve_refuses_a_question_with_four_options() {
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
-    assert!(err.contains("\"1.1 Four options?\": 4 options, at most three"), "{}", err);
-    assert!(err.contains("a question holds Problem, Standard and two or three options; agent rewrites the question"), "{}", err);
+    assert!(err.contains("\"1.1 Four options?\": 4 options, at most three; agent rewrites the question"), "{}", err);
 
     let after = std::fs::read_to_string(&record).unwrap();
     assert_eq!(after, content, "approve must not modify the file when it refuses");
@@ -760,7 +758,7 @@ fn approve_refuses_a_text_depends_edit_in_a_superseded_section() {
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(
-        err.contains("\"1.1 Only question?\" is [superseded] and its depends line was edited; an answered decision's depends line stays as approved; agent restores the line from git"),
+        err.contains("\"1.1 Only question?\" is [superseded] and its depends line was edited; agent restores the line from git"),
         "{}",
         err
     );
@@ -793,8 +791,8 @@ fn ask_refuses_while_terms_unapproved() {
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("adrdom/terms.md is new"), "{}", err);
-    assert!(err.contains("adr approve adrdom/terms.md"), "{}", err);
+    assert!(err.contains("adrdom/terms.md: \"decision\" is new"), "{}", err);
+    assert!(err.contains("owner runs: adr approve adrdom/terms.md decision"), "{}", err);
 }
 
 // --- approve fills missing term ids -------------------------------------
@@ -927,8 +925,7 @@ Standard: plain words.
 // decision by heading text, and the terms.md ledger row count below shows
 // nothing was written on the refusal. The decision behind it is answered
 // (current), so it can never be re-asked -- the next move named is
-// restoring the wording in adrdom/terms.md or superseding the decision by
-// id, never "re-asks" (per "Does a refusal name the command that clears
+// rewriting the entry so the word names the term again, never "re-asks" (per "Does a refusal name the command that clears
 // it?": a refusal about an answered question never tells the agent to
 // re-ask it, since that can't clear it).
 #[test]
@@ -965,17 +962,14 @@ fn approve_refuses_a_terms_edit_that_moves_a_word_off_a_term_carried_by_a_curren
     let err = stderr(&out);
     assert!(
         err.contains(
-            "word \"choice\" no longer names term \"decision\", used by adrdom/decisions/example.md: \"1.1 What is the choice?\"; a word a decision uses keeps its term"
+            "word \"choice\" no longer names term \"decision\", used by adrdom/decisions/example.md: \"1.1 What is the choice?\"; agent rewrites the entry of \"decision\" so \"choice\" names it"
         ),
         "{}",
         err
     );
     assert!(
-        err.contains(&format!(
-            "agent restores the wording in adrdom/terms.md so \"choice\" still names \"decision\", or writes a question that supersedes {}",
-            id
-        )),
-        "an answered decision's next move must be restore-or-supersede, never re-ask: {}",
+        !err.contains(" or writes a question") && !err.contains("re-ask"),
+        "an answered decision's next move puts the wording back, never re-asks: {}",
         err
     );
     assert!(!err.contains("re-asks"), "an answered decision can never be re-asked: {}", err);
@@ -1053,7 +1047,7 @@ fn approve_refuses_a_heading_used_twice_in_one_file_with_the_check_line() {
         q = WIDGET_Q
     );
     let record = write_record(&dir, "adrdom/decisions/topic.md", &twice);
-    let line = "adrdom/decisions/topic.md: the heading \"Is it repeat?\" appears twice; a heading appears once in its file; agent rewrites one of the headings";
+    let line = "adrdom/decisions/topic.md: the heading \"Is it repeat?\" appears twice; agent rewrites one of the headings";
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success(), "{}", stdout(&out));
@@ -1073,7 +1067,7 @@ fn approve_refuses_a_file_name_that_is_not_its_topic_with_the_check_line() {
     let dir = widget_repo();
     let content = format!("# Other\n\n### Is it match?\ndepends: widget\n\n{}", WIDGET_Q);
     let record = write_record(&dir, "adrdom/decisions/topic.md", &content);
-    let line = "adrdom/decisions/topic.md: file name does not match its topic \"Other\"; a file name is its topic in lowercase words; agent renames the file or rewrites the topic line, owner runs: adr approve adrdom/decisions/topic.md";
+    let line = "adrdom/decisions/topic.md: file name does not match its topic \"Other\" in lowercase words joined by hyphens; agent rewrites the topic line, owner runs: adr approve adrdom/decisions/topic.md";
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success(), "{}", stdout(&out));
@@ -1092,7 +1086,7 @@ fn a_heading_line_without_a_question_mark_is_refused_by_check_and_approve() {
     let dir = widget_repo();
     let bad = "# Topic\n\nProse.\n\n### Not a question\n";
     let record = write_record(&dir, "adrdom/decisions/topic.md", bad);
-    let line = "adrdom/decisions/topic.md: line 5: a heading is not a question; every third-level heading is a question ending in ?; agent rewrites the line";
+    let line = "adrdom/decisions/topic.md: line 5: a heading is not a question ending in ?; agent rewrites the line";
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success(), "{}", stdout(&out));
@@ -1116,7 +1110,7 @@ fn an_empty_depends_line_is_refused_as_a_missing_depends_line_and_nothing_else()
     for empty in ["depends:", "depends: "] {
         let content = format!("# Topic\n\n### Is it stand on nothing?\n{}\n\n{}", empty, WIDGET_Q);
         let record = write_record(&dir, "adrdom/decisions/topic.md", &content);
-        let line = "adrdom/decisions/topic.md: \"Is it stand on nothing?\" has no depends line; every question carries a depends line; agent writes the depends line of \"Is it stand on nothing?\"";
+        let line = "adrdom/decisions/topic.md: \"Is it stand on nothing?\" has no depends line; agent writes the depends line of \"Is it stand on nothing?\"";
 
         let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
         assert!(!out.status.success(), "{}", stdout(&out));
@@ -1186,7 +1180,7 @@ fn approve_refuses_a_circular_definition() {
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(
-        err.contains("circular definition: a cycle runs through alpha, beta and alpha; a definition does not lead back to itself; agent rewrites one of these definitions"),
+        err.contains("circular definition: a cycle runs through alpha, beta and alpha; agent rewrites one of these definitions"),
         "{}",
         err
     );
@@ -1225,14 +1219,14 @@ fn approve_and_check_report_a_cycle_and_a_shape_error() {
     let out = adr(&dir, &["approve", terms.to_str().unwrap()], &[("ADR_OWNER_BYPASS", "1")], "");
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
-    assert!(err.contains("circular definition: a cycle runs through alpha and alpha; a definition does not lead back to itself"), "{}", err);
+    assert!(err.contains("circular definition: a cycle runs through alpha and alpha; agent rewrites one of these definitions"), "{}", err);
     assert!(err.contains("missing field \"aliases\""), "{}", err);
 
     let check_out = adr(&dir, &["check"], &[], "");
     assert!(!check_out.status.success());
     let text = stdout(&check_out);
     assert!(
-        text.contains("adrdom/terms.md: circular definition: a cycle runs through alpha and alpha; a definition does not lead back to itself; agent rewrites one of these definitions"),
+        text.contains("adrdom/terms.md: circular definition: a cycle runs through alpha and alpha; agent rewrites one of these definitions"),
         "{}",
         text
     );
@@ -1341,7 +1335,7 @@ fn approve_refuses_removing_a_term_carried_by_a_current_decision() {
     );
     assert!(err.contains("What is the decision?"), "{}", err);
     assert!(
-        err.contains(&format!("a term a decision uses stays in the terms file; agent restores the term in adrdom/terms.md, then supersedes {} (\"1.1 What is the decision?\") with a new question", id)),
+        err.contains(&format!("agent restores the term in adrdom/terms.md from git, then writes a question that supersedes {} (\"1.1 What is the decision?\")", id)),
         "{}",
         err
     );
@@ -1378,7 +1372,7 @@ fn approve_refuses_retiring_a_term_carried_by_a_current_decision() {
     );
     assert!(err.contains("What is the decision?"), "{}", err);
     assert!(
-        err.contains(&format!("no question names a retired term; agent takes `retired: yes` off")) && err.contains(&format!("then supersedes {} (", id)),
+        err.contains(&format!("agent rewrites the entry of")) && err.contains(&format!("then writes a question that supersedes {} (", id)),
         "{}",
         err
     );
@@ -1478,7 +1472,7 @@ fn approve_refuses_retiring_a_term_named_only_by_a_current_decisions_depends_lin
     assert!(err.contains("term \"flag\" retired but used by"), "{}", err);
     assert!(err.contains("What comes next?"), "{}", err);
     assert!(
-        err.contains(&format!("no question names a retired term; agent takes `retired: yes` off")) && err.contains(&format!("then supersedes {} (", id)),
+        err.contains(&format!("agent rewrites the entry of")) && err.contains(&format!("then writes a question that supersedes {} (", id)),
         "{}",
         err
     );
@@ -1878,7 +1872,7 @@ fn approve_refuses_retiring_a_term_carried_by_another_terms_definition() {
     let err = stderr(&out);
     assert!(
         err.contains(
-            "term \"decision\" retired but used by term \"question\"; a definition names no retired term; agent rewrites the definition, owner runs: adr approve adrdom/terms.md"
+            "term \"decision\" retired but used by term \"question\"; agent rewrites the definition, owner runs: adr approve adrdom/terms.md"
         ),
         "{}",
         err
@@ -1929,7 +1923,7 @@ fn approve_refuses_retiring_a_term_while_a_new_term_takes_its_word_and_another_s
     let err = stderr(&out);
     assert!(
         err.contains(
-            "term \"decision\" retired but used by term \"question\"; a definition names no retired term; agent rewrites the definition, owner runs: adr approve adrdom/terms.md"
+            "term \"decision\" retired but used by term \"question\"; agent rewrites the definition, owner runs: adr approve adrdom/terms.md"
         ),
         "{}",
         err

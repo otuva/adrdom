@@ -1,12 +1,14 @@
-// A terms edit that adds, changes or removes more than one entry is refused
-// by approve and reported by check; each approve here is the raw command,
-// never the one-entry-at-a-time helper of `adr_owner`.
+// Approve of the terms file takes the name of one entry that waits, new,
+// changed or removed, in any order; each approve here is the raw command,
+// never the entry-by-entry helper of `adr_owner`.
 mod common;
 
 use common::*;
 
-fn raw_approve(dir: &std::path::Path) -> std::process::Output {
-    adr(dir, &["approve", "adrdom/terms.md"], &[("ADR_OWNER_BYPASS", "1")], "")
+fn approve(dir: &std::path::Path, entry: Option<&str>) -> std::process::Output {
+    let mut args = vec!["approve", "adrdom/terms.md"];
+    args.extend(entry);
+    adr(dir, &args, &[("ADR_OWNER_BYPASS", "1")], "")
 }
 
 fn entry(name: &str, def: &str) -> String {
@@ -20,92 +22,204 @@ fn repo() -> (std::path::PathBuf, std::path::PathBuf) {
     (dir, path)
 }
 
-// adr: d16be877-9422-4f2e-a6a1-e099be9e3b2b
-#[test]
-fn approve_refuses_a_terms_edit_that_changes_more_than_one_entry() {
-    let (dir, path) = repo();
+fn three(path: &std::path::Path) {
+    std::fs::write(
+        path,
+        format!("# Terms\n{}{}{}", entry("alpha", "A first thing."), entry("beta item", "A second thing."), entry("gamma", "A third thing.")),
+    )
+    .unwrap();
+}
 
-    // A first terms file of two entries is two edits.
-    std::fs::write(&path, format!("# Terms\n{}{}", entry("alpha", "A first thing."), entry("beta", "A second thing."))).unwrap();
-    let out = raw_approve(&dir);
+fn owner_lines(text: &str) -> Vec<String> {
+    text.lines().filter(|l| l.starts_with("owner runs: adr approve adrdom/terms.md")).map(String::from).collect()
+}
+
+fn write_topic_file(dir: &std::path::Path, name: &str, text: &str) {
+    std::fs::create_dir_all(dir.join("adrdom/decisions")).unwrap();
+    std::fs::write(dir.join("adrdom/decisions").join(name), text).unwrap();
+}
+
+const TOPIC: &str = "# Alpha\n\nWhat alpha does.\n\n### Does alpha name gamma?\n";
+
+// adr: da0dc8b1-58cd-4a16-8e64-234e4bfd5320
+#[test]
+fn show_prints_one_approve_per_waiting_entry_and_each_named_approve_takes_one() {
+    let (dir, path) = repo();
+    three(&path);
+    let shown = stdout(&adr(&dir, &["show"], &[], ""));
+    assert_eq!(
+        owner_lines(&shown),
+        vec![
+            "owner runs: adr approve adrdom/terms.md alpha",
+            "owner runs: adr approve adrdom/terms.md 'beta item'",
+            "owner runs: adr approve adrdom/terms.md gamma",
+        ],
+        "{}",
+        shown
+    );
+
+    // Any order: the last entry first, then the one with a space.
+    let out = approve(&dir, Some("gamma"));
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(stdout(&out).contains("approved: term \"gamma\""), "{}", stdout(&out));
+    assert!(!stdout(&out).contains("approved: adrdom/terms.md"), "the file waits while entries do: {}", stdout(&out));
+    let shown = stdout(&adr(&dir, &["show"], &[], ""));
+    assert_eq!(owner_lines(&shown).len(), 2, "{}", shown);
+    assert!(!shown.contains("adrdom/terms.md gamma"), "{}", shown);
+
+    assert!(approve(&dir, Some("beta item")).status.success());
+    let out = approve(&dir, Some("alpha"));
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(stdout(&out).contains("approved: adrdom/terms.md"), "the last entry approves the file: {}", stdout(&out));
+    let shown = stdout(&adr(&dir, &["show"], &[], ""));
+    assert!(owner_lines(&shown).is_empty(), "{}", shown);
+    let check = adr(&dir, &["check"], &[], "");
+    assert!(check.status.success(), "{}", stdout(&check));
+}
+
+// adr: da0dc8b1-58cd-4a16-8e64-234e4bfd5320
+#[test]
+fn the_gate_names_each_entry_still_waiting_until_the_last_is_approved() {
+    let (dir, path) = repo();
+    three(&path);
+    write_topic_file(&dir, "alpha.md", TOPIC);
+    assert!(approve(&dir, Some("alpha")).status.success());
+    assert!(approve(&dir, Some("gamma")).status.success());
+    let plan = stdout(&adr(&dir, &["plan", "adrdom/decisions/alpha.md"], &[], ""));
+    assert!(plan.contains("adrdom/terms.md: \"beta item\" is new"), "{}", plan);
+    assert!(plan.contains("owner runs: adr approve adrdom/terms.md 'beta item'"), "{}", plan);
+    assert!(!plan.contains("\"alpha\" is new"), "{}", plan);
+    assert!(approve(&dir, Some("beta item")).status.success());
+    let plan = stdout(&adr(&dir, &["plan", "adrdom/decisions/alpha.md"], &[], ""));
+    assert!(!plan.contains("adr approve adrdom/terms.md"), "the terms gate is gone: {}", plan);
+}
+
+// adr: da0dc8b1-58cd-4a16-8e64-234e4bfd5320
+#[test]
+fn approve_with_no_name_refuses_and_names_every_waiting_entry() {
+    let (dir, path) = repo();
+    three(&path);
+    let before = std::fs::read_to_string(&path).unwrap();
+    let out = approve(&dir, None);
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("\"alpha\", \"beta\" are new, and the file has no approval yet"), "{}", err);
-    assert!(err.contains("agent restores all but one of these entries from git"), "{}", err);
-    assert_eq!(err.matches("owner runs").count(), 0, "{}", err);
-    assert_eq!(std::fs::read_to_string(&path).unwrap().matches("\nid: ").count(), 0, "a refusal writes nothing");
-
-    // One entry passes, then the second as its own approve.
-    std::fs::write(&path, format!("# Terms\n{}", entry("alpha", "A first thing."))).unwrap();
-    assert!(raw_approve(&dir).status.success());
-    let one = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, format!("{}{}", one, entry("beta", "A second thing."))).unwrap();
-    assert!(raw_approve(&dir).status.success());
-
-    // Changing one definition and adding an entry is two edits; removing
-    // one and changing another is two edits.
-    let two = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, format!("{}{}", two.replace("A first thing.", "A first item."), entry("gamma", "A third thing."))).unwrap();
-    let out = raw_approve(&dir);
-    assert!(!out.status.success());
-    assert!(stderr(&out).contains("\"alpha\", \"gamma\" differ from the last approval"), "{}", stderr(&out));
-    let start = two.find("## beta").unwrap();
-    std::fs::write(&path, two[..start].replace("A first thing.", "A first item.")).unwrap();
-    let out = raw_approve(&dir);
-    assert!(!out.status.success());
-    assert!(stderr(&out).contains("differ from the last approval; an approval covers one terms entry"), "{}", stderr(&out));
-
-    // One change alone passes.
-    std::fs::write(&path, two.replace("A first thing.", "A first item.")).unwrap();
-    assert!(raw_approve(&dir).status.success());
+    assert!(err.contains("\"alpha\", \"beta item\", \"gamma\" wait, and approve names none of them"), "{}", err);
+    assert!(err.contains("owner runs: adr approve adrdom/terms.md <name>"), "{}", err);
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), before, "a refusal writes nothing");
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap_or_default();
+    assert!(!ledger.contains("\tterm\t"), "{}", ledger);
 }
 
-// adr: d16be877-9422-4f2e-a6a1-e099be9e3b2b
+// adr: da0dc8b1-58cd-4a16-8e64-234e4bfd5320
 #[test]
-fn an_approved_removal_does_not_count_against_a_later_edit() {
+fn approve_of_a_name_that_does_not_wait_refuses() {
     let (dir, path) = repo();
-    std::fs::write(&path, format!("# Terms\n{}", entry("alpha", "A first thing."))).unwrap();
-    assert!(raw_approve(&dir).status.success());
-    let one = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, format!("{}{}", one, entry("beta", "A second thing."))).unwrap();
-    assert!(raw_approve(&dir).status.success());
-    // Remove beta: one edit, approved.
-    std::fs::write(&path, &one).unwrap();
-    let out = raw_approve(&dir);
-    assert!(out.status.success(), "{}", stderr(&out));
-    // Add gamma alone: one edit, so it passes.
-    std::fs::write(&path, format!("{}{}", one, entry("gamma", "A third thing."))).unwrap();
-    let out = raw_approve(&dir);
-    assert!(out.status.success(), "{}", stderr(&out));
+    three(&path);
+    assert!(approve(&dir, Some("alpha")).status.success());
+    for name in ["alpha", "delta"] {
+        let out = approve(&dir, Some(name));
+        assert!(!out.status.success());
+        let err = stderr(&out);
+        assert!(err.contains(&format!("\"{}\" does not wait; \"beta item\", \"gamma\" wait", name)), "{}", err);
+        assert!(err.contains("owner runs: adr approve adrdom/terms.md <name>"), "{}", err);
+    }
+    // A name given to approve of another file is refused.
+    write_topic_file(&dir, "alpha.md", TOPIC);
+    let out = adr(&dir, &["approve", "adrdom/decisions/alpha.md", "alpha"], &[("ADR_OWNER_BYPASS", "1")], "");
+    assert!(!out.status.success());
+    assert!(stderr(&out).contains("approve takes an entry name for adrdom/terms.md only"), "{}", stderr(&out));
 }
 
-// adr: d16be877-9422-4f2e-a6a1-e099be9e3b2b
+// adr: da0dc8b1-58cd-4a16-8e64-234e4bfd5320
 #[test]
-fn a_ledger_with_terms_rows_and_no_term_rows_approves_the_unchanged_file() {
+fn a_change_and_a_removal_wait_as_entries_and_are_approved_by_name() {
     let (dir, path) = repo();
-    approve_terms_with(&dir, &["alpha", "beta"]);
-    let out = raw_approve(&dir);
+    three(&path);
+    for name in ["alpha", "beta item", "gamma"] {
+        assert!(approve(&dir, Some(name)).status.success());
+    }
+    let approved = std::fs::read_to_string(&path).unwrap();
+    let start = approved.find("## gamma").unwrap();
+    std::fs::write(&path, approved[..start].replace("A first thing.", "A first item.")).unwrap();
+
+    let shown = stdout(&adr(&dir, &["show"], &[], ""));
+    assert_eq!(owner_lines(&shown).len(), 2, "{}", shown);
+    let check = stdout(&adr(&dir, &["check"], &[], ""));
+    assert!(check.contains("adrdom/terms.md: \"alpha\" is changed"), "{}", check);
+    assert!(check.contains("adrdom/terms.md: \"gamma\" is removed"), "{}", check);
+
+    let out = approve(&dir, Some("gamma"));
     assert!(out.status.success(), "{}", stderr(&out));
-    assert!(dir.join("adrdom/state/terms-brief.md").exists());
-    // The catch-up approve is also what takes one edit to either entry.
+    assert!(stdout(&out).contains("removed: term \"gamma\""), "{}", stdout(&out));
+    let out = approve(&dir, Some("alpha"));
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(adr(&dir, &["check"], &[], "").status.success());
+}
+
+// adr: da0dc8b1-58cd-4a16-8e64-234e4bfd5320
+#[test]
+fn a_file_that_differs_with_no_entry_waiting_is_approved_with_no_name() {
+    let (dir, path) = repo();
+    three(&path);
+    for name in ["alpha", "beta item", "gamma"] {
+        assert!(approve(&dir, Some(name)).status.success());
+    }
     let text = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, text.replacen("A fixture term for tests.", "A changed term.", 1)).unwrap();
-    let out = raw_approve(&dir);
-    assert!(out.status.success(), "{}", stderr(&out));
+    std::fs::write(&path, format!("{}\n\n", text)).unwrap();
+    let shown = stdout(&adr(&dir, &["show"], &[], ""));
+    assert_eq!(owner_lines(&shown), vec!["owner runs: adr approve adrdom/terms.md"], "{}", shown);
+    let out = approve(&dir, Some("alpha"));
+    assert!(!out.status.success());
+    assert!(stderr(&out).contains("\"alpha\" does not wait, and no entry does"), "{}", stderr(&out));
+    assert!(approve(&dir, None).status.success());
 }
 
-// adr: d16be877-9422-4f2e-a6a1-e099be9e3b2b
+// adr: da0dc8b1-58cd-4a16-8e64-234e4bfd5320
 #[test]
-fn check_reports_a_two_entry_edit_with_the_agent_move() {
+fn plan_check_and_show_name_the_commit_that_waits_while_the_terms_file_waits() {
     let (dir, path) = repo();
-    std::fs::write(&path, format!("# Terms\n{}", entry("alpha", "A first thing."))).unwrap();
-    assert!(raw_approve(&dir).status.success());
-    let one = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, format!("{}{}{}", one, entry("beta", "A second thing."), entry("gamma", "A third thing."))).unwrap();
-    let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success());
-    let text = stdout(&out);
-    assert!(text.contains("\"beta\", \"gamma\" differ from the last approval"), "{}", text);
-    assert!(text.contains("agent restores all but one of these entries from git"), "{}", text);
-    assert!(!text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
+    three(&path);
+    write_topic_file(&dir, "alpha.md", TOPIC);
+    let line = "not yet: commit, after the owner approves adrdom/terms.md";
+    let plan = stdout(&adr(&dir, &["plan", "adrdom/decisions/alpha.md"], &[], ""));
+    assert_eq!(plan.lines().filter(|l| *l == line).count(), 1, "{}", plan);
+    let check = stdout(&adr(&dir, &["check"], &[], ""));
+    assert_eq!(check.lines().filter(|l| *l == line).count(), 1, "{}", check);
+    let shown = stdout(&adr(&dir, &["show"], &[], ""));
+    assert_eq!(shown.lines().filter(|l| *l == line).count(), 1, "{}", shown);
+
+    for name in ["alpha", "beta item", "gamma"] {
+        assert!(approve(&dir, Some(name)).status.success());
+    }
+    assert!(!stdout(&adr(&dir, &["plan", "adrdom/decisions/alpha.md"], &[], "")).contains(line));
+    assert!(!stdout(&adr(&dir, &["check"], &[], "")).contains(line));
+    assert!(!stdout(&adr(&dir, &["show"], &[], "")).contains(line));
+}
+
+// adr: fcab4bf9-c02d-4094-b3cb-688c4ec312dc
+// The terms brief holds approved definitions only: a named approve that
+// leaves entries waiting writes no brief, the one that settles the file does.
+#[test]
+fn the_terms_brief_is_written_once_the_file_settles_and_holds_no_waiting_entry() {
+    let (dir, path) = repo();
+    let brief = dir.join("adrdom/state/terms-brief.md");
+    three(&path);
+    assert!(approve(&dir, Some("alpha")).status.success());
+    assert!(!brief.exists(), "a brief written while beta and gamma wait");
+    assert!(approve(&dir, Some("beta item")).status.success());
+    assert!(!brief.exists(), "a brief written while gamma waits");
+    let out = approve(&dir, Some("gamma"));
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let text = std::fs::read_to_string(&brief).unwrap();
+    assert!(stdout(&out).contains("adrdom/state/terms-brief.md"), "{}", stdout(&out));
+    for name in ["alpha", "beta item", "gamma"] {
+        assert!(text.contains(name), "{}", text);
+    }
+    // A changed entry leaves the brief at the last approval until approved.
+    let file = std::fs::read_to_string(&path).unwrap().replace("A second thing.", "A changed thing.");
+    std::fs::write(&path, file).unwrap();
+    let before = std::fs::read_to_string(&brief).unwrap();
+    assert_eq!(before, text);
+    assert!(approve(&dir, Some("beta item")).status.success());
+    assert!(std::fs::read_to_string(&brief).unwrap().contains("A changed thing."));
 }

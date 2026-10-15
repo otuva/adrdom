@@ -187,7 +187,7 @@ fn the_steps_in_order_from_headings_to_approval() {
 
     // Approve refuses what is still missing, and names the move.
     let err = refused(&approve(&dir));
-    assert!(err.contains(&format!("is on no line; every neighbour of a question is on a line; agent writes the missing line under \"{}\"", H1)), "{}", err);
+    assert!(err.contains(&format!("is on no line; agent writes the missing line under \"{}\"", H1)), "{}", err);
 
     // Step 3: the lines. Step 4 has not come: no heading has a body.
     assert_eq!(write_lines(&dir, &out), 4);
@@ -347,9 +347,9 @@ fn a_step_needs_the_record_of_the_step_before() {
     // Bodies everywhere and no plan run: approve refuses the missing rows.
     write(&dir, &format!("# Topic\n{}{}", section(H1, &body("one")), section(H2, &body("two"))));
     let err = refused(&approve(&dir));
-    assert!(err.contains(&format!("\"{}\" has no neighbours on record for its heading; each planning step rests on the record before it;", H1)), "{}", err);
+    assert!(err.contains(&format!("\"{}\" has no neighbours on record for its heading; agent runs: adr plan", H1)), "{}", err);
     // The steps run in order: the body rows wait on the heading's neighbours.
-    assert!(err.contains(&format!("\"{}\" has no neighbours on record for its heading;", H2)), "{}", err);
+    assert!(err.contains(&format!("\"{}\" has no neighbours on record for its heading; agent runs: adr plan", H2)), "{}", err);
     assert!(!err.contains("has no reader rows for its heading with its body"), "{}", err);
     assert!(err.contains(&format!("agent runs: adr plan {}", REL)), "{}", err);
 
@@ -481,7 +481,7 @@ fn approve_refuses_a_neighbour_on_no_line_and_turns_the_names_into_identifiers()
     assert_eq!(wanted.len(), 2);
     write(&dir, &add_unrelated(&read(&dir), &wanted[1..]));
     let err = refused(&approve(&dir));
-    assert!(err.contains(&format!("\"{}\" is a neighbour of \"{}\" and is on no line; every neighbour of a question is on a line; agent writes the missing line under \"{}\"", wanted[0].1, wanted[0].0, wanted[0].0)), "{}", err);
+    assert!(err.contains(&format!("\"{}\" is a neighbour of \"{}\" and is on no line; agent writes the missing line under \"{}\"", wanted[0].1, wanted[0].0, wanted[0].0)), "{}", err);
     assert!(!err.contains("no reader rows"), "{}", err);
     // The refusal changed nothing.
     let held = read(&dir);
@@ -569,7 +569,7 @@ fn planning_stops_without_the_model() {
     let before = rows(&dir).len();
     let err = refused(&plan_with(&dir, &[("ADR_NO_MODEL", "1")]));
     assert!(err.contains("the embedding model is missing"), "{}", err);
-    assert!(err.contains("agent fetches it"), "{}", err);
+    assert!(err.contains("agent builds adr with the model feature"), "{}", err);
     assert_eq!(rows(&dir).len(), before, "nothing was read");
 }
 

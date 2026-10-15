@@ -219,7 +219,7 @@ fn show_names_the_next_move_at_every_step() {
     assert_eq!(
         next(&dir),
         vec![format!(
-            "agent changes the plan: \"{}\" is refused and holds the questions that come after it",
+            "agent writes the plan change that drops or replaces \"{}\"",
             THREE
         )]
     );
@@ -289,7 +289,7 @@ fn show_names_the_plan_change_an_answered_decision_waits_for() {
     assert!(adr_answer(&dir, &id_of(&path, TWO), "refuse").status.success());
 
     let refused = format!(
-        "agent changes the plan: \"{}\" is refused and holds the questions that come after it",
+        "agent writes the plan change that drops or replaces \"{}\"",
         TWO
     );
     let waits_for_plan = |heading: &str| {
@@ -349,7 +349,7 @@ fn show_prints_the_refusal_of_a_plan_as_the_next_move() {
 
     let refusal = format!(
         "{}: 5 questions in one tier, 4 answered, the most is 4: \"Is the widget gate five hold?\"; \
-no tier holds more than four questions; agent rewrites the depends lines of these questions, or moves one to another file",
+agent writes the question these stand on",
         REL
     );
     let five = "Is the widget gate five hold?";
@@ -357,7 +357,7 @@ no tier holds more than four questions; agent rewrites the depends lines of thes
         next(&dir),
         vec![
             refusal.clone(),
-            format!("{}: \"{}\" has no neighbours on record for its heading; each planning step rests on the record before it; {}", REL, five, plan_for()),
+            format!("{}: \"{}\" has no neighbours on record for its heading; {}", REL, five, plan_for()),
         ]
     );
 
@@ -436,7 +436,7 @@ fn show_names_what_replaced_a_superseded_question() {
     assert!(!approved.status.success());
     assert!(
         stderr(&approved).contains(&format!(
-            "{}: \"{}\": supersedes \"{}\", which is not a current decision; a question supersedes only a current decision; agent rewrites the supersedes entry",
+            "{}: \"{}\": supersedes \"{}\", which is not a current decision; agent rewrites the supersedes entry",
             REL, THREE, ONE
         )),
         "{}",
@@ -625,7 +625,7 @@ fn show_refuses_a_file_approve_does_not_take() {
     assert!(!out.status.success());
     assert_eq!(
         stderr(&out).trim_end(),
-        "show: README.md is not a file approve takes; agent names a topic file under adrdom/decisions, adrdom/terms.md or a blame file under adrdom/blame"
+        "show: README.md is not a file approve takes; agent rewrites the path to a topic file under adrdom/decisions, adrdom/terms.md or a blame file under adrdom/blame"
     );
     let terms = adr(&dir, &["show", "adrdom/terms.md"], &[], "");
     assert!(terms.status.success(), "{}", stderr(&terms));

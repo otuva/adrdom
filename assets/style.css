@@ -264,6 +264,10 @@ dl.decisions dt .status { margin: 0; }
 .chgd summary { cursor: pointer; }
 .chgd .record { margin: 0.1rem 0; }
 .chgd .record.depth-1 { padding-left: 0.6rem; }
+.entry-approve { margin: 0.6rem 0; padding: 0.5rem 0.7rem; border: 1px solid var(--rule); border-radius: 6px; }
+.entry-approve .name { font-weight: 700; }
+.entry-approve .def { margin: 0.2rem 0 0.4rem; }
+.entry-approve .def.muted { color: var(--muted); }
 .open-list li .st, .refused-list li .st { display: inline; }
 .open-list li .st .subject a { text-decoration-color: var(--rule); }
 

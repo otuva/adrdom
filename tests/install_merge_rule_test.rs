@@ -261,7 +261,7 @@ fn check_fails_when_the_gitattributes_file_is_missing() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("adrdom/.gitattributes is missing; a merge keeps both branches' ledger rows; agent runs: adr install"),
+        stdout(&out).contains("adrdom/.gitattributes is missing; agent runs: adr install"),
         "unexpected check output: {}",
         stdout(&out)
     );
@@ -287,7 +287,7 @@ fn check_fails_when_the_gitattributes_file_holds_an_extra_line() {
     assert!(!out.status.success());
     assert!(
         stdout(&out).contains(
-            "adrdom/.gitattributes differs from what install writes; a merge keeps both branches' ledger rows; agent runs: adr install"
+            "adrdom/.gitattributes differs from what install writes; agent runs: adr install"
         ),
         "unexpected check output: {}",
         stdout(&out)

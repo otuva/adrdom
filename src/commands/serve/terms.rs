@@ -2,9 +2,7 @@
 //! and the decisions that stand on it, a filter box, and the approval of
 //! the file with the change it signs above its button.
 use super::html::{banner, esc, page, plural, st};
-use super::overview::approve_block;
 use crate::commands::show::{self, Records};
-use crate::moves::MoveKind;
 use crate::out::{self, Line, Status};
 use crate::repo;
 use crate::status;
@@ -19,7 +17,7 @@ pub(super) fn render_terms(r: &Records, last: &[Line], token: &str) -> String {
             Some(l) => body.push_str(&format!("{}\n", out::html(&l))),
             None => body.push_str(&format!("{}\n", out::html(&out::refusal(
                 crate::rules::Command::Show,
-                &crate::msg::read_failed(repo::TERMS_PATH, "no such file", crate::msg::Next::agent("names a file that exists")),
+                &crate::msg::read_failed(repo::TERMS_PATH, "no such file", crate::msg::Next::agent(crate::msg::Act::Rewrites("the file name to a file that exists".to_string()))),
             )))),
         }
         body.push_str("</header>\n");
@@ -46,13 +44,7 @@ pub(super) fn render_terms(r: &Records, last: &[Line], token: &str) -> String {
         "<input class=\"filter\" type=\"search\" placeholder=\"Filter by word, alias, or definition\" aria-label=\"Filter terms\">",
     );
     body.push_str("</div>\n");
-    for m in &report.moves {
-        if let MoveKind::Approve { path } = &m.kind {
-            body.push_str(&approve_block(r, path, None, "Approve the terms", token));
-        } else {
-            body.push_str(&format!("{}\n", out::html(&Line::Move(m.clone()))));
-        }
-    }
+    body.push_str(&super::overview::terms_moves(r, tf, &report.moves, "Approve the terms", token));
     body.push_str("</header>\n");
 
     if !report.findings.is_empty() {

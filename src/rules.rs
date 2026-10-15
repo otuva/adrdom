@@ -40,8 +40,8 @@ pub enum Subject {
 
 /// The class a finding is filed under inside the tool: what `check` sorts
 /// failures from notes by, and what `approve` and `ask` pick the findings
-/// they refuse on by. Never printed: a finding prints its found text, what
-/// its rule protects and its move, with no tag.
+/// they refuse on by. Never printed: a finding prints its found text and
+/// its move, with no tag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Class {
     Parse,
@@ -58,6 +58,7 @@ pub enum Class {
     Install,
     Tested,
     Untested,
+    Brief,
     /// A finding of no class `check` or a command picks it by.
     Other,
 }
@@ -107,9 +108,8 @@ impl std::fmt::Display for Command {
 }
 
 /// One rule a thing in the records breaks: the rule, what was found, and
-/// the move that clears it. Printed as `<found>; <protects>; <move>`, the
-/// protects words from the rule alone, with no leading tag, so the same line
-/// reads the same under every command.
+/// the move that clears it. Printed as `<found>; <move>`, with no leading
+/// tag, so the same line reads the same under every command.
 #[derive(Debug, Clone)]
 pub struct Finding {
     pub subject: Subject,
@@ -120,7 +120,7 @@ pub struct Finding {
     pub found: String,
     /// The move that clears it, whole (`agent ...`, `owner runs: ...`,
     /// `not yet ...`).
-    pub next: String,
+    pub next: msg::Next,
     /// The questions of the file the finding is about, by index; empty for
     /// a finding about the file as a whole (its prose, headings, tiers).
     /// `check` reads it to tell a finding in text that can still change from
@@ -130,7 +130,7 @@ pub struct Finding {
 
 impl Finding {
     /// A finding about the records of no class; `about` names its subject.
-    pub fn new(rule: &'static Rule, found: String, next: String) -> Finding {
+    pub fn new(rule: &'static Rule, found: String, next: msg::Next) -> Finding {
         Finding { subject: Subject::Records, rule, class: Class::Other, found, next, sections: Vec::new() }
     }
     /// A finding of `class` from what a message function said.
@@ -153,10 +153,9 @@ impl Finding {
         self.sections = indexes;
         self
     }
-    /// The finding as one line: what was found, what the rule protects, the
-    /// move that clears it. The one rendering every command prints.
+    /// The finding as one line: what was found and the move that clears it. The one rendering every command prints.
     pub fn text(&self) -> String {
-        msg::finding_line(&self.found, self.rule, &self.next)
+        msg::finding_line(&self.found, &self.next)
     }
 }
 
@@ -381,15 +380,6 @@ pub fn terms_refusals(
     approved_plans: &std::collections::HashSet<String>,
 ) -> (Vec<Finding>, Vec<Vec<(String, String)>>) {
     let mut refusals: Vec<Finding> = Vec::new();
-
-    // Per "Does approve accept a terms edit that changes more than one
-    // entry?": more than one entry added, changed or removed since the
-    // latest approval is refused, here for `approve` and `check` alike.
-    let differing = state::terms_edit_entries(led, tf);
-    if differing.len() > 1 {
-        let approved_before = led.latest_for_path("terms", crate::repo::TERMS_PATH).is_some();
-        refusals.push(terms_finding(msg::terms_edit_too_wide(&differing, approved_before)));
-    }
 
     // Step 1 (shape): "missing id" cannot appear here, since `tf` is
     // already minted.
@@ -634,7 +624,7 @@ pub fn closed_findings(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<Finding>
                 // A genuine row exists: the ruling is real and the
                 // question's text moved since.
                 state::ClosedMatch::Edited if sec.is_refused() => push(msg::refused_text_changed(rel, &sec.heading_text)),
-                state::ClosedMatch::Edited => push(msg::answered_text_changed(rel, &sec.heading_text, id)),
+                state::ClosedMatch::Edited => push(msg::answered_text_changed(rel, &sec.heading_text)),
                 state::ClosedMatch::NotClosed if sec.is_refused() => push(msg::refusal_without_row(rel, &sec.heading_text)),
                 state::ClosedMatch::NotClosed => push(msg::answer_without_row(rel, &sec.heading_text)),
             }
@@ -1678,6 +1668,7 @@ pub fn judged_terms(tf: Option<&terms::TermsFile>) -> Vec<terms::Term> {
 /// and no move those commands would refuse.
 pub fn terms_gate(root: &Path, led: &Ledger, rel: &str) -> TermsGate {
     let mut gate = TermsGate::default();
+    gate.waits = crate::terms::load(&root.join(crate::repo::TERMS_PATH)).is_ok_and(|tf| !state::terms_approved(led, &tf));
     if let Err(lines) = crate::actions::require_terms(root, led, rel, Command::Show) {
         for l in lines {
             match l {
@@ -1698,6 +1689,9 @@ pub fn terms_gate(root: &Path, led: &Ledger, rel: &str) -> TermsGate {
 pub struct TermsGate {
     pub findings: Vec<Finding>,
     pub stops: Vec<crate::out::Line>,
+    /// The terms file is there and differs from its latest approval: a
+    /// commit waits for the owner's approve.
+    pub waits: bool,
 }
 
 impl TermsGate {

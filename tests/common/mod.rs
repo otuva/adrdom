@@ -196,24 +196,12 @@ pub fn adr_as(dir: &Path, args: &[&str], envs: &[(&str, &str)], session: Option<
             assert_eq!(e.kind(), std::io::ErrorKind::BrokenPipe, "{}", e);
         }
     }
-    let out = child.wait_with_output().expect("adr should finish");
-    // A successful approve of the terms file is the baseline a later
-    // one-entry-at-a-time approve (see `adr_owner`) starts from.
-    if out.status.success()
-        && args.len() == 2
-        && args[0] == "approve"
-        && Path::new(args[1]).ends_with("adrdom/terms.md")
-    {
-        if let Ok(now) = std::fs::read_to_string(dir.join("adrdom/terms.md")) {
-            let _ = std::fs::write(terms_prior_path(dir), now);
-        }
-    }
-    out
+    child.wait_with_output().expect("adr should finish")
 }
 
 pub fn adr_owner(dir: &Path, args: &[&str], stdin: &str) -> Output {
     if args.len() == 2 && args[0] == "approve" && Path::new(args[1]).ends_with("adrdom/terms.md") {
-        return approve_terms_one_entry_at_a_time(dir, args[1], stdin);
+        return approve_terms_by_entry(dir, args[1], stdin);
     }
     // Approve of a topic file needs the planning records first: the agent's
     // moves of `adr plan`, done by `plan_record`.
@@ -232,108 +220,35 @@ pub fn adr_owner(dir: &Path, args: &[&str], stdin: &str) -> Output {
     adr(dir, args, &[("ADR_OWNER_BYPASS", "1")], stdin)
 }
 
-// Per "Does approve accept a terms edit that changes more than one entry?":
-// approve takes one entry at a time. A fixture that writes a terms file
-// holding several new or changed entries is approved the way the owner
-// would: one entry per approve, the last approve on the file as written.
-// The terms file as last approved is kept in the repository's git
-// directory so the next call knows the baseline.
-fn terms_prior_path(dir: &Path) -> PathBuf {
-    dir.join(".git").join("terms-prior-approved")
-}
-
-fn terms_blocks(tf: &terms::TermsFile) -> (Vec<String>, Vec<(terms::Term, String)>) {
-    let starts: Vec<usize> = tf.terms.iter().map(|t| t.start_line - 1).collect();
-    let first = starts.first().copied().unwrap_or(tf.lines.len());
-    let header = tf.lines[..first].to_vec();
-    let mut blocks = Vec::new();
-    for (i, t) in tf.terms.iter().enumerate() {
-        let end = starts.get(i + 1).copied().unwrap_or(tf.lines.len());
-        blocks.push((t.clone(), tf.lines[starts[i]..end].join("\n")));
-    }
-    (header, blocks)
-}
-
-fn same_entry(a: &terms::Term, b: &terms::Term) -> bool {
-    match (&a.id, &b.id) {
-        (Some(x), Some(y)) => x == y,
-        _ => a.name == b.name,
-    }
-}
-
-enum TermsStep {
-    Put(terms::Term, String),
-    Drop(terms::Term),
-}
-
-fn render_terms(header: &[String], blocks: &[(terms::Term, String)]) -> String {
-    let mut text = header.join("\n");
-    for (_, b) in blocks {
-        text.push('\n');
-        text.push_str(b);
-    }
-    text
-}
-
-fn approve_terms_one_entry_at_a_time(dir: &Path, arg: &str, stdin: &str) -> Output {
-    let path = dir.join("adrdom/terms.md");
-    let run = || adr(dir, &["approve", arg], &[("ADR_OWNER_BYPASS", "1")], stdin);
-    let target_text = std::fs::read_to_string(&path).unwrap();
-    let target = terms::parse(&record::split_lines(&target_text));
-    let prior_text = std::fs::read_to_string(terms_prior_path(dir)).unwrap_or_default();
-    let prior = terms::parse(&record::split_lines(&prior_text));
-    let (header, target_blocks) = terms_blocks(&target);
-    let (_, mut cur) = terms_blocks(&prior);
-
-    // The steps: each target entry that is new or differs, then each prior
-    // entry the target no longer holds.
-    let mut steps: Vec<TermsStep> = Vec::new();
-    for (t, text) in &target_blocks {
-        let same = cur.iter().find(|(c, _)| same_entry(c, t));
-        if same.map_or(true, |(c, _)| terms::term_hash(c) != terms::term_hash(t)) {
-            steps.push(TermsStep::Put(t.clone(), text.clone()));
-        }
-    }
-    for (c, _) in &cur {
-        if !target_blocks.iter().any(|(t, _)| same_entry(c, t)) {
-            steps.push(TermsStep::Drop(c.clone()));
-        }
-    }
-    if steps.len() <= 1 {
-        return run();
-    }
-
-    // Every step but the last is approved on its own, on the file as the
-    // approve before it wrote it.
-    steps.pop();
-    for step in steps {
-        match step {
-            TermsStep::Put(t, text) => match cur.iter().position(|(c, _)| same_entry(c, &t)) {
-                Some(i) => cur[i] = (t, text),
-                None => cur.push((t, text)),
-            },
-            TermsStep::Drop(t) => cur.retain(|(c, _)| !same_entry(c, &t)),
-        }
-        std::fs::write(&path, render_terms(&header, &cur)).unwrap();
-        let o = run();
+// Per "What does approve take for a terms file holding several entries that
+// wait?" (da0dc8b1 A): approve takes the name of one entry that waits. A
+// fixture that writes a terms file holding several new, changed or removed
+// entries is approved the way the owner would: one named approve per entry
+// that waits, then, with none waiting, the file itself when it still
+// differs. The output is the last approve's.
+fn approve_terms_by_entry(dir: &Path, arg: &str, stdin: &str) -> Output {
+    let run = |entry: Option<&str>| {
+        let mut args = vec!["approve", arg];
+        args.extend(entry);
+        adr(dir, &args, &[("ADR_OWNER_BYPASS", "1")], stdin)
+    };
+    let mut last = None;
+    for _ in 0..1000 {
+        let led = ledger::read(&dir.join("adrdom/state/ledger.tsv"));
+        let Ok(tf) = terms::load(&dir.join("adrdom/terms.md")) else {
+            return run(None);
+        };
+        let waiting = adr::state::waiting_terms(&led, &tf);
+        let Some((name, _)) = waiting.first() else {
+            return last.unwrap_or_else(|| run(None));
+        };
+        let o = run(Some(name));
         if !o.status.success() {
             return o;
         }
-        let now = std::fs::read_to_string(&path).unwrap();
-        cur = terms_blocks(&terms::parse(&record::split_lines(&now))).1;
+        last = Some(o);
     }
-
-    // The last approve holds the target's order and its last step's text;
-    // every other entry keeps what the approve before wrote.
-    let fin: Vec<(terms::Term, String)> = target_blocks
-        .iter()
-        .map(|(t, text)| match cur.iter().find(|(c, _)| same_entry(c, t)) {
-            Some((c, b)) if terms::term_hash(c) == terms::term_hash(t) => (c.clone(), b.clone()),
-            _ => (t.clone(), text.clone()),
-        })
-        .collect();
-    std::fs::write(&path, render_terms(&header, &fin)).unwrap();
-    run()
+    panic!("approve_terms_by_entry: entries still wait after 1000 approves");
 }
 
 /// The version the owner would read off `adr show` for `id` right now (per
@@ -800,7 +715,6 @@ pub fn approve_terms_via_ledger(dir: &Path, content: &str) {
     let tf = terms::load(&path)
         .unwrap_or_else(|e| panic!("approve_terms_via_ledger: failed to load terms.md: {}", e));
     let hash = terms::file_hash(&tf);
-    let _ = std::fs::write(terms_prior_path(dir), content);
     append_ledger_row(dir, "terms", "-", &hash, "adrdom/terms.md");
     std::fs::create_dir_all(dir.join("adrdom/state")).unwrap();
     std::fs::write(dir.join("adrdom/state/terms-brief.md"), terms::brief_text(&tf)).unwrap();
@@ -1059,7 +973,16 @@ pub fn assert_owner_move_shown(line: &str, body: &str) {
             body
         );
     } else if let Some(path) = line.strip_prefix("owner runs: adr approve ") {
-        assert!(body.contains(&format!("name=\"file\" value=\"{}\"", path)), "no approve form for {:?}: {}", line, body);
+        // `adrdom/terms.md <name>` is one entry's approve: the form carries
+        // the file and the entry; the name is shell-quoted when it holds a space.
+        let (file, entry) = match path.split_once(' ') {
+            Some((f, e)) => (f, Some(e.trim_matches('\''))),
+            None => (path, None),
+        };
+        assert!(body.contains(&format!("name=\"file\" value=\"{}\"", file)), "no approve form for {:?}: {}", line, body);
+        if let Some(e) = entry {
+            assert!(body.contains(&format!("name=\"entry\" value=\"{}\"", e)), "no entry approve form for {:?}: {}", line, body);
+        }
     } else {
         panic!("an owner move this test does not know: {:?}", line);
     }

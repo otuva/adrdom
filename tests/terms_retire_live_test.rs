@@ -83,7 +83,7 @@ fn assert_retire_refused(dir: &Path, terms: &Path, rows_before: usize, heading: 
     let err = stderr(&out);
     assert!(err.contains(heading), "stderr should name {:?}: {}", heading, err);
     assert!(
-        err.contains("term \"decision\" retired but used by") && err.contains("no question names a retired term"),
+        err.contains("term \"decision\" retired but used by") && err.contains("; agent rewrites the "),
         "stderr should name the retired term in use: {}",
         err
     );

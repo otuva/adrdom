@@ -300,7 +300,7 @@ fn answered_question_text_is_immutable_until_a_later_decision_supersedes_it() {
         stdout(&check_out)
     );
     assert!(
-        stdout(&check_out).contains("an answered question's text stays as it was answered"),
+        stdout(&check_out).contains("text changed since being answered; agent restores adrdom/decisions/example.md from git"),
         "{}",
         stdout(&check_out)
     );
@@ -310,11 +310,9 @@ fn answered_question_text_is_immutable_until_a_later_decision_supersedes_it() {
         stdout(&check_out)
     );
     assert!(
-        stdout(&check_out).contains(&format!(
-            "agent restores adrdom/decisions/example.md from git, or writes a question that supersedes {}",
-            old_id
-        )),
-        "next move must be restore-from-git or supersede, never re-ask or remove the (genuine) answer line: {}",
+        stdout(&check_out).contains("agent restores adrdom/decisions/example.md from git")
+            && !stdout(&check_out).contains(&format!("supersedes {}", old_id)),
+        "next move must be restore-from-git, never re-ask or remove the (genuine) answer line: {}",
         stdout(&check_out)
     );
     assert!(
@@ -860,7 +858,7 @@ fn approve_refuses_a_heading_whose_supersedes_target_is_stale() {
     assert!(!err.starts_with("approve: "), "{}", err);
     assert!(err.contains("1.3 What is the third unit of authority called?"), "{}", err);
     assert!(err.contains(old_id.as_str()), "{}", err);
-    assert!(err.contains("which is not a current decision; a question supersedes only a current decision"), "{}", err);
+    assert!(err.contains("which is not a current decision; agent rewrites the supersedes entry"), "{}", err);
     assert!(err.contains("agent rewrites the supersedes entry"), "{}", err);
 
     let after = std::fs::read_to_string(&record).unwrap();
@@ -938,7 +936,7 @@ fn answer_refuses_when_terms_md_is_missing() {
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
-        "adrdom/terms.md missing; the terms file exists once a topic file does; agent writes adrdom/terms.md, owner runs: adr approve adrdom/terms.md"
+        "adrdom/terms.md missing; agent writes adrdom/terms.md, owner runs: adr approve adrdom/terms.md"
     );
 }
 
@@ -981,7 +979,7 @@ fn answer_refuses_when_terms_md_holds_an_unapproved_added_term_with_a_shape_erro
     let out = adr_answer(&dir, &id, "A");
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     let err = stderr(&out);
-    assert!(err.contains("adrdom/terms.md is changed; commands read only the approved terms file; owner runs: adr approve adrdom/terms.md"), "{}", err);
+    assert!(err.contains("adrdom/terms.md: \"widget\" is new; owner runs: adr approve adrdom/terms.md widget"), "{}", err);
     assert!(!err.contains("agent fixes"), "{}", err);
 }
 
@@ -1024,11 +1022,11 @@ fn answer_and_refuse_stop_while_terms_md_holds_an_unapproved_added_term() {
 
     let answer_out = adr_answer(&dir, &id1, "A");
     assert!(!answer_out.status.success(), "answer should have refused: {}", stdout(&answer_out));
-    assert!(stderr(&answer_out).contains("adrdom/terms.md is changed"), "{}", stderr(&answer_out));
+    assert!(stderr(&answer_out).contains("adrdom/terms.md: \"widget\" is new; owner runs: adr approve adrdom/terms.md widget"), "{}", stderr(&answer_out));
 
     let refuse_out = adr_answer(&dir, &id2, "refuse");
     assert!(!refuse_out.status.success(), "refuse should have refused: {}", stdout(&refuse_out));
-    assert!(stderr(&refuse_out).contains("adrdom/terms.md is changed"), "{}", stderr(&refuse_out));
+    assert!(stderr(&refuse_out).contains("adrdom/terms.md: \"widget\" is new; owner runs: adr approve adrdom/terms.md widget"), "{}", stderr(&refuse_out));
 }
 
 // adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
@@ -1086,7 +1084,7 @@ fn answer_refuses_while_a_draft_sits_on_top_of_a_real_retirement() {
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
-        "adrdom/decisions/example.md: adrdom/terms.md is changed; commands read only the approved terms file; owner runs: adr approve adrdom/terms.md"
+        "adrdom/decisions/example.md: adrdom/terms.md: \"widget\" is new; owner runs: adr approve adrdom/terms.md widget"
     );
 }
 
@@ -1135,7 +1133,7 @@ fn answer_refuses_a_section_with_no_terms_line() {
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
-        format!("{} (\"1.1 What is the authority?\"): no terms line; an asked question keeps the terms it was asked with; agent runs: adr ask adrdom/decisions/example.md", id)
+        format!("{} (\"1.1 What is the authority?\"): no terms line; agent runs: adr ask adrdom/decisions/example.md", id)
     );
 }
 
@@ -1189,7 +1187,7 @@ fn answer_refuses_a_malformed_terms_line() {
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
-        format!("{} (\"1.1 What is the unit of authority called?\"): malformed terms line; an answered question keeps the meaning it was asked with; agent runs: adr ask adrdom/decisions/example.md", id)
+        format!("{} (\"1.1 What is the unit of authority called?\"): malformed terms line; agent runs: adr ask adrdom/decisions/example.md", id)
     );
 }
 
@@ -1219,7 +1217,7 @@ fn answer_refuses_a_terms_line_naming_a_nonexistent_term() {
     assert_eq!(
         stderr(&out).trim_end(),
         format!(
-            "{} (\"1.1 What is the unit of authority called?\"): terms line names term 00000000-0000-0000-0000-000000000000 (\"authority\") that no longer exists; an answered question keeps the meaning it was asked with; agent runs: adr ask adrdom/decisions/example.md",
+            "{} (\"1.1 What is the unit of authority called?\"): terms line names term 00000000-0000-0000-0000-000000000000 (\"authority\") that no longer exists; agent runs: adr ask adrdom/decisions/example.md",
             id
         )
     );
@@ -1251,7 +1249,7 @@ fn answer_refuses_a_terms_line_naming_a_retired_term() {
     assert_eq!(
         stderr(&out).trim_end(),
         format!(
-            "{} (\"1.1 What is the unit of authority called?\"): terms line names retired term \"authority\"; an answered question keeps the meaning it was asked with; agent runs: adr ask adrdom/decisions/example.md",
+            "{} (\"1.1 What is the unit of authority called?\"): terms line names retired term \"authority\"; agent runs: adr ask adrdom/decisions/example.md",
             id
         )
     );
