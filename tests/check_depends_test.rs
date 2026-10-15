@@ -473,7 +473,7 @@ fn check_fails_a_tier_over_the_cap() {
         text
     );
     assert!(
-        text.contains("agent rewrites the depends lines of these questions"),
+        text.contains("agent writes the question these stand on"),
         "{}",
         text
     );
