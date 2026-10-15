@@ -112,7 +112,8 @@ Standard: package uninstallers remove the files they created and leave the files
 
 ### Does install fetch the embedding model?
 depends: a7b0b910-57f6-4c59-b904-b42f78db63f7, 1b98cdea-dc1b-4789-8f67-68d130d7a49d, 4f925b13-ad16-48b8-acd1-3e30d6e308b6
-unrelated: 21cdad59-4f0c-42a5-b4f3-6af946637df3, 19e1c023-a678-4842-a414-bb0e45c41601, 99619e27-19b6-47ef-83b9-c79ac30ee2f0, db56a285-946f-48b1-b073-bb1e90192185, bf7da2dd-d8a7-41b8-9898-11cf68d0e833, fa0b0e24-b7cf-471b-94b6-6d167e8ad269, daec9ffd-676f-4111-a359-2827bfd4527c, 0d977e39-a657-4596-8eca-8ceb335f3081, 34e81f57-9b3c-4dc4-a2ba-ca227523177d, 6ef9eca6-fd8b-4211-aae7-00b37a2a9245, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c, Does install put the embedding model outside the repository?, What does the reader run?
+unrelated: 21cdad59-4f0c-42a5-b4f3-6af946637df3, 19e1c023-a678-4842-a414-bb0e45c41601, 99619e27-19b6-47ef-83b9-c79ac30ee2f0, db56a285-946f-48b1-b073-bb1e90192185, bf7da2dd-d8a7-41b8-9898-11cf68d0e833, fa0b0e24-b7cf-471b-94b6-6d167e8ad269, daec9ffd-676f-4111-a359-2827bfd4527c, 0d977e39-a657-4596-8eca-8ceb335f3081, 34e81f57-9b3c-4dc4-a2ba-ca227523177d, 6ef9eca6-fd8b-4211-aae7-00b37a2a9245, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c, 459c1b77-82dd-469f-a60c-784b6f3d7b81, 5418b256-dfae-439a-96c1-57d82380cd1e
+id: e1c305af-af94-494a-9fdb-3faffafa0e06
 
 Problem: the embedding model is a large file outside git; a plan that fetches it mid-command stops halfway without the network, and nothing names the step that gets it.
 Standard: a setup step fetches what a command needs; a command does not install its own dependencies.
@@ -125,8 +126,9 @@ Standard: a setup step fetches what a command needs; a command does not install 
   Costs: a plan starts with a long download, and stops halfway without the network.
 
 ### Does install put the embedding model outside the repository?
-depends: a7b0b910-57f6-4c59-b904-b42f78db63f7, 1b98cdea-dc1b-4789-8f67-68d130d7a49d, 4f925b13-ad16-48b8-acd1-3e30d6e308b6, Does install fetch the embedding model?=A
-unrelated: 21cdad59-4f0c-42a5-b4f3-6af946637df3, db07a54d-4d80-4035-a9ef-eabcc0c872b3, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c, 99619e27-19b6-47ef-83b9-c79ac30ee2f0, db56a285-946f-48b1-b073-bb1e90192185, fcc5b6fe-9072-42ea-a25b-2be72e094bac, daec9ffd-676f-4111-a359-2827bfd4527c, 16a71892-b348-4b9b-82c5-a9d375187bd3, 292359a4-0512-465b-b6a7-79838e66e5a5, ae63df95-0643-4108-af65-1e7a0009d631, 149c9a73-16eb-46aa-9806-2950423ee1a2, 0d977e39-a657-4596-8eca-8ceb335f3081, What does the reader run?
+depends: a7b0b910-57f6-4c59-b904-b42f78db63f7, 1b98cdea-dc1b-4789-8f67-68d130d7a49d, 4f925b13-ad16-48b8-acd1-3e30d6e308b6, e1c305af-af94-494a-9fdb-3faffafa0e06=A
+unrelated: 21cdad59-4f0c-42a5-b4f3-6af946637df3, db07a54d-4d80-4035-a9ef-eabcc0c872b3, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c, 99619e27-19b6-47ef-83b9-c79ac30ee2f0, db56a285-946f-48b1-b073-bb1e90192185, fcc5b6fe-9072-42ea-a25b-2be72e094bac, daec9ffd-676f-4111-a359-2827bfd4527c, 16a71892-b348-4b9b-82c5-a9d375187bd3, 292359a4-0512-465b-b6a7-79838e66e5a5, ae63df95-0643-4108-af65-1e7a0009d631, 149c9a73-16eb-46aa-9806-2950423ee1a2, 0d977e39-a657-4596-8eca-8ceb335f3081, 5418b256-dfae-439a-96c1-57d82380cd1e
+id: 459c1b77-82dd-469f-a60c-784b6f3d7b81
 
 Problem: a model fetched into each repository's cache is one copy per repository, hundreds of megabytes each, fetched again for every clone.
 Standard: a downloaded artefact shared by projects lives in one user cache directory, such as ~/.cache or ~/.cargo.
@@ -140,7 +142,8 @@ Standard: a downloaded artefact shared by projects lives in one user cache direc
 
 ### What does the reader run?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, ae63df95-0643-4108-af65-1e7a0009d631
-unrelated: bd94a89f-7142-4dab-b757-6482a718a0a0, e78b8297-fd89-4e09-9c3e-9eeb0fd0f654, 60341be0-fd05-4281-92d7-668584a8539a, a8034401-420c-45d7-8f43-60c1b9f3baf9, 27bd0855-a6c8-4cda-a82b-bf95022a14b0, a9e9e370-7768-4a79-b67b-7fe0926b5670, 1af76f91-5644-42ef-97ea-8f70f934c26c, 30ca5d13-e68b-465f-aa84-ea4000c9330a, 55a6a2d8-03af-4db9-a4c7-e2790e38357e, f90dbd5b-8fbe-4899-8588-f8762795c2e2, e53b805c-9272-4b89-985d-61426fb5fa48, 98d5d389-8315-41da-9970-666e31f3a94d, c3127af2-4c96-48d5-a164-bac49a9a09ec, 9a2ff21b-c20b-4c63-95f2-a7a3cbe236b8, 4f925b13-ad16-48b8-acd1-3e30d6e308b6, 6ef9eca6-fd8b-4211-aae7-00b37a2a9245, Does install fetch the embedding model?, Does install put the embedding model outside the repository?
+unrelated: bd94a89f-7142-4dab-b757-6482a718a0a0, e78b8297-fd89-4e09-9c3e-9eeb0fd0f654, 60341be0-fd05-4281-92d7-668584a8539a, a8034401-420c-45d7-8f43-60c1b9f3baf9, 27bd0855-a6c8-4cda-a82b-bf95022a14b0, a9e9e370-7768-4a79-b67b-7fe0926b5670, 1af76f91-5644-42ef-97ea-8f70f934c26c, 30ca5d13-e68b-465f-aa84-ea4000c9330a, 55a6a2d8-03af-4db9-a4c7-e2790e38357e, f90dbd5b-8fbe-4899-8588-f8762795c2e2, e53b805c-9272-4b89-985d-61426fb5fa48, 98d5d389-8315-41da-9970-666e31f3a94d, c3127af2-4c96-48d5-a164-bac49a9a09ec, 9a2ff21b-c20b-4c63-95f2-a7a3cbe236b8, 4f925b13-ad16-48b8-acd1-3e30d6e308b6, 6ef9eca6-fd8b-4211-aae7-00b37a2a9245, e1c305af-af94-494a-9fdb-3faffafa0e06, 459c1b77-82dd-469f-a60c-784b6f3d7b81
+id: 5418b256-dfae-439a-96c1-57d82380cd1e
 
 Problem: the reader is a program on the machine; a reader fixed to one program stops planning on a machine that runs another agent.
 Standard: a tool that integrates with several agents calls the one configured for the repository.
