@@ -618,7 +618,7 @@ fn check_install_fails_when_agents_md_is_missing() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("AGENTS.md lacks the adrdom brief; AGENTS.md carries the brief text install writes; agent runs: adr install"),
+        stdout(&out).contains("AGENTS.md lacks the adrdom brief; AGENTS.md carries the tag and adrdom/state/brief.md the brief install writes; agent runs: adr install"),
         "{}",
         stdout(&out)
     );
@@ -666,7 +666,7 @@ fn check_install_fails_when_agents_md_has_no_marked_section() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("AGENTS.md lacks the adrdom brief; AGENTS.md carries the brief text install writes; agent runs: adr install"),
+        stdout(&out).contains("AGENTS.md lacks the adrdom brief; AGENTS.md carries the tag and adrdom/state/brief.md the brief install writes; agent runs: adr install"),
         "{}",
         stdout(&out)
     );
@@ -693,7 +693,7 @@ fn check_install_fails_when_agents_md_brief_differs() {
     assert!(!out.status.success());
     assert!(
         stdout(&out)
-            .contains("AGENTS.md brief differs from this binary's; AGENTS.md carries the brief text install writes; agent runs: adr install"),
+            .contains("AGENTS.md brief differs from this binary's; AGENTS.md carries the tag and adrdom/state/brief.md the brief install writes; agent runs: adr install"),
         "{}",
         stdout(&out)
     );
@@ -871,7 +871,7 @@ fn installed_brief_tells_the_agent_to_build_only_a_fully_answered_tier() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
-    let agents = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
+    let agents = std::fs::read_to_string(dir.join("adrdom/state/brief.md")).unwrap();
     assert!(
         agents.contains(
             "Build a decision when a move\n   names it, and not before."
@@ -889,7 +889,7 @@ fn installed_brief_tells_the_owner_may_edit_or_write_the_plan() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
-    let agents = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
+    let agents = std::fs::read_to_string(dir.join("adrdom/state/brief.md")).unwrap();
     let flat = agents.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(
         flat.contains(
@@ -914,7 +914,7 @@ fn installed_brief_tells_the_agent_not_to_build_without_a_covering_decision() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
-    let agents = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
+    let agents = std::fs::read_to_string(dir.join("adrdom/state/brief.md")).unwrap();
     assert!(
         agents.contains(
             "If no current decision covers what you are about to build, do not build\n   it. Write the question (below) and stop until the owner answers."

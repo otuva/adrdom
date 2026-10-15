@@ -28,9 +28,15 @@ fn install_words(claude: bool, codex: bool) -> Vec<&'static str> {
 }
 
 /// The agent brief, final at `assets/brief.md`. `adr install` writes it
-/// into AGENTS.md between the marker lines below; `adr check`'s `install`
-/// check compares AGENTS.md's marked section against this text.
+/// whole to `repo::BRIEF_PATH`; `adr check`'s `install` check compares that
+/// file against this text.
 pub const BRIEF: &str = include_str!("../../assets/brief.md");
+
+/// The marked section of AGENTS.md: the lines `adr install` writes between
+/// the marker lines below, naming the brief's file with an @ line, the same
+/// shape the brief names the terms brief with (adee66f2 A). `adr check`
+/// compares AGENTS.md's marked section against this text.
+pub(crate) const TAG: &str = "# adrdom\nThis repository is governed by `adr`. Read its brief before you write a question, code or a reply:\n@adrdom/state/brief.md\n";
 
 pub(crate) const BRIEF_BEGIN: &str = "<!-- adrdom brief begin -->";
 pub(crate) const BRIEF_END: &str = "<!-- adrdom brief end -->";
@@ -128,6 +134,7 @@ fn install_all(root: &Path, claude: bool, codex: bool, events: &mut Vec<Event>) 
 
     events.extend(install_gitattributes(root).map_err(|e| msg::write_failed(repo::GITATTRIBUTES_PATH, e, msg::after_fix_agent_runs(cmd.clone())))?);
     events.extend(install_gitignore(root).map_err(|e| msg::write_failed(repo::GITIGNORE_PATH, e, msg::after_fix_agent_runs(cmd.clone())))?);
+    events.extend(write_whole(root, repo::BRIEF_PATH, BRIEF).map_err(|e| msg::write_failed(repo::BRIEF_PATH, e, msg::after_fix_agent_runs(cmd.clone())))?);
 
     let hooks = root.join(".githooks");
     fs::create_dir_all(&hooks).map_err(|e| msg::create_failed(&hooks.display().to_string(), e, msg::after_fix_agent_runs(cmd.clone())))?;
@@ -277,12 +284,12 @@ pub(crate) fn hook_is_current(existing: &str, content: &str) -> bool {
     !existing.contains('\r') && crate::text::lines_match_trimmed(&existing_lines, &want_lines)
 }
 
-/// The marker lines plus the brief's own lines, in file order, as they
-/// should appear in AGENTS.md (begin marker, then every brief line, then
+/// The marker lines plus the tag's own lines, in file order, as they
+/// should appear in AGENTS.md (begin marker, then every tag line, then
 /// end marker).
 fn section_lines() -> Vec<&'static str> {
     let mut v = vec![BRIEF_BEGIN];
-    v.extend(BRIEF.lines());
+    v.extend(TAG.lines());
     v.push(BRIEF_END);
     v
 }

@@ -154,6 +154,7 @@ fn check_at_a_commit_reads_the_staged_terms_brief() {
             "adrdom/.gitignore",
             "adrdom/.gitattributes",
             "AGENTS.md",
+            "adrdom/state/brief.md",
             ".githooks",
         ],
     );
@@ -171,14 +172,14 @@ fn check_at_a_commit_reads_the_staged_terms_brief() {
 // adr: adee66f2-c8ff-477f-8ac4-a497f694c912
 //
 // "Does the brief name the terms brief?" (A): the brief install writes
-// into AGENTS.md holds a line with @ and the path of the terms brief, on
+// into adrdom/state/brief.md holds a line with @ and the path of the terms brief, on
 // its own and outside any code block, and a sentence telling the agent to
 // read that file.
 #[test]
 fn the_brief_names_the_terms_brief() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    let agents = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
+    let agents = std::fs::read_to_string(dir.join("adrdom/state/brief.md")).unwrap();
 
     let mut fenced = false;
     let mut found = false;

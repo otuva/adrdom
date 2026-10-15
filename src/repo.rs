@@ -39,6 +39,10 @@ pub const TERMS_PATH: &str = "adrdom/terms.md";
 /// ec0b9293 A): the file `approve` writes from the terms file, `check`
 /// holds to it, and the brief names for the agent to read.
 pub const TERMS_BRIEF_PATH: &str = "adrdom/state/terms-brief.md";
+/// The brief's text (per "Does install write outside adrdom?", 4f925b13 A):
+/// the file `install` writes under adrdom, which the marked section of
+/// AGENTS.md names with an @ line, and `check` holds to.
+pub const BRIEF_PATH: &str = "adrdom/state/brief.md";
 /// Where the hashed ban list lives, relative to the repo root: the one
 /// literal for this path, used by every site that reads or writes it
 /// (`ban`, `unban`, `ask`, `check --banned`, `terms_refusals`, `install`).

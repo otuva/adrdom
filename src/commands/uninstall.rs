@@ -87,8 +87,8 @@ fn remove_agents_md_section(root: &Path) -> Result<Option<Event>, String> {
     // Each piece leaves only while it still matches what install wrote (per
     // "Does uninstall belong to the owner?"): a section edited by hand is
     // left, compared the way check compares it.
-    let brief_lines: Vec<&str> = install::BRIEF.lines().collect();
-    if !crate::text::lines_match_trimmed(&parts[begin + 1..end], &brief_lines) {
+    let tag_lines: Vec<&str> = install::TAG.lines().collect();
+    if !crate::text::lines_match_trimmed(&parts[begin + 1..end], &tag_lines) {
         return Ok(None);
     }
 
