@@ -55,13 +55,6 @@ pub fn model_present() -> Result<bool, String> {
     Ok(MODEL_FILES.iter().all(|f| snap.join(f).is_file()))
 }
 
-/// fastembed lets `HF_HOME` override the cache directory it is given; ours is
-/// the only place the model lives, so the variable is dropped from this
-/// process before fastembed reads it.
-pub fn own_the_model_dir() {
-    std::env::remove_var("HF_HOME");
-}
-
 /// Loads the onnxruntime library at `lib` into this process, once; the
 /// first call decides, a later call is a no-op.
 pub fn init_ort(lib: &std::path::Path) -> Result<(), String> {

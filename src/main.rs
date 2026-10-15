@@ -117,6 +117,10 @@ enum Command {
 }
 
 fn main() {
+    // fastembed lets `HF_HOME` override the cache directory it is given; ours
+    // is the only place the model lives, so the variable is dropped before
+    // anything spawns a thread (removing it later is not thread-safe).
+    std::env::remove_var("HF_HOME");
     let shown: &'static str = Box::leak(
         adr::msg::version_shown(VERSION, cfg!(feature = "owner-bypass")).into_boxed_str(),
     );

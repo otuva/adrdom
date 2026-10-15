@@ -43,7 +43,6 @@ impl Model {
             return Err(msg::model_not_installed(&dir.display().to_string()));
         }
         cache::init_ort(&lib).map_err(|e| msg::model_load_failed(&lib.display().to_string(), e))?;
-        cache::own_the_model_dir();
         let opts = fastembed::TextInitOptions::new(fastembed::EmbeddingModel::BGEBaseENV15Q)
             .with_cache_dir(dir.clone())
             .with_show_download_progress(false);

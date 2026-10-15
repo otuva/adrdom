@@ -110,7 +110,7 @@ mod stubs {
         let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let dir = installed(&["--claude"]);
         let bin = init_repo();
-        stub(&bin, "claude", &format!("#!/bin/sh\ncat > {}/stdin.txt\nprintf '%s\\n' '{{\"result\":\"They ask the same.\\nsame\"}}'\n", bin.display()));
+        stub(&bin, "claude", &format!("#!/bin/sh\ncat > {0}/stdin.txt\nprintf '%s\\n' \"$@\" > {0}/args.txt\nprintf '%s\\n' '{{\"result\":\"They ask the same.\\nsame\"}}'\n", bin.display()));
         let r = reader::load_in(&dir, bin.as_os_str()).ok().expect("claude found");
         assert_eq!(r.model(), reader::MODEL);
         let rows = reader::read_with(&dir, r.as_ref(), &[pair()]).unwrap();
@@ -118,6 +118,10 @@ mod stubs {
         assert_eq!(rows[0].model, reader::MODEL);
         let got = std::fs::read_to_string(bin.join("stdin.txt")).unwrap();
         assert!(got.contains("Does the widget glow?") && got.contains("Does the widget shine?"), "{}", got);
+        // The system prompt goes by file, never as an argument.
+        let args = std::fs::read_to_string(bin.join("args.txt")).unwrap();
+        assert!(args.lines().any(|l| l == "--system-prompt-file"), "{}", args);
+        assert!(!args.lines().any(|l| l == "--system-prompt"), "{}", args);
     }
 
     // adr: 5418b256-dfae-439a-96c1-57d82380cd1e

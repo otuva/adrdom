@@ -72,7 +72,15 @@ fn planning_and_reading_refuse_without_the_model_and_download_nothing() {
     let dir = repo();
     let cache = empty_cache();
     let cache_s = cache.display().to_string();
-    let envs = [("ADR_FAKE_MODEL", "0"), ("XDG_CACHE_HOME", cache_s.as_str())];
+    // The reader loads before the model: an installed agent whose program is
+    // on PATH (a stub, never run) makes the model refusal the one reported.
+    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    let bin = empty_cache();
+    let stub = bin.join("claude");
+    std::fs::write(&stub, "#!/bin/sh\nexit 1\n").unwrap();
+    std::fs::set_permissions(&stub, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap_or_default());
+    let envs = [("ADR_FAKE_MODEL", "0"), ("XDG_CACHE_HOME", cache_s.as_str()), ("PATH", path.as_str())];
 
     write_record(
         &dir,
@@ -95,6 +103,7 @@ fn planning_and_reading_refuse_without_the_model_and_download_nothing() {
     assert!(!dir.join("adrdom/cache/model").exists());
     std::fs::remove_dir_all(&dir).unwrap();
     std::fs::remove_dir_all(&cache).unwrap();
+    std::fs::remove_dir_all(&bin).unwrap();
 }
 
 #[test]

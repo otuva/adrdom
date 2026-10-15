@@ -10,6 +10,7 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{Read, Write};
 use std::path::Path;
+use std::time::Duration;
 
 /// Microsoft's onnxruntime release archives; the version is `cache::ORT_VERSION`.
 const RELEASE_URL: &str = "https://github.com/microsoft/onnxruntime/releases/download/v1.28.0/";
@@ -66,50 +67,104 @@ pub fn run(events: &mut Vec<Event>) -> Result<(), String> {
     if !cache::model_present()? {
         let dir = cache::model_dir()?;
         cache::init_ort(&lib).map_err(|e| msg::model_load_failed(&lib.display().to_string(), e))?;
-        cache::own_the_model_dir();
         let opts = fastembed::TextInitOptions::new(fastembed::EmbeddingModel::BGEBaseENV15Q)
             .with_cache_dir(dir.clone())
             .with_show_download_progress(false);
         fastembed::TextEmbedding::try_new(opts).map_err(|e| msg::model_fetch_failed("the embedding model", e))?;
+        if !cache::model_present()? {
+            return Err(msg::model_fetch_failed(
+                "the embedding model",
+                format!("the fetched files are not where adr looks: {}", dir.display()),
+            ));
+        }
         events.push(Event::FileWritten { path: dir.display().to_string() });
     }
     Ok(())
+}
+
+/// A file removed when it goes out of scope unless it was renamed into place.
+struct Temp(std::path::PathBuf);
+
+impl Temp {
+    /// A name in `dir` no other run shares, so two installs at once do not
+    /// write one file.
+    fn new(dir: &Path, stem: &str) -> Temp {
+        Temp(dir.join(format!(".{}.{}.tmp", stem, uuid::Uuid::new_v4())))
+    }
+}
+
+impl Drop for Temp {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.0);
+    }
 }
 
 /// Downloads the release archive, checks its SHA-256, and writes the library
 /// file alone to `lib` (through a temporary name, then a rename).
 fn fetch_library(root: &Path, lib: &Path) -> Result<(), String> {
     let arc = ARCHIVE.as_ref().ok_or("the 1.28.0 release has no archive for this platform")?;
-    let archive = root.join(format!(".{}.download", arc.name));
-    let partial = root.join(format!(".{}.partial", cache::ORT_FILE));
-    let result = download(&format!("{}{}", RELEASE_URL, arc.name), arc.sha256, &archive)
-        .and_then(|()| extract(arc, &archive, &partial))
-        .and_then(|()| fs::rename(&partial, lib).map_err(|e| e.to_string()));
-    let _ = fs::remove_file(&archive);
-    let _ = fs::remove_file(&partial);
-    result
+    let archive = Temp::new(root, arc.name);
+    let partial = Temp::new(root, cache::ORT_FILE);
+    download(&format!("{}{}", RELEASE_URL, arc.name), arc.sha256, &archive.0)?;
+    extract(arc, &archive.0, &partial.0)?;
+    // A rename that loses a race with another install leaves the same file.
+    fs::rename(&partial.0, lib).map_err(|e| e.to_string())
 }
 
-/// Streams `url` into `to`, failing when the bytes do not hash to `sha256`.
+/// How long a transfer may deliver no byte before it is given up on, and how
+/// long the connection and the response headers may take. The whole transfer
+/// has no limit: the archive is over 200 MB.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+const STALL_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Streams `url` into `to`, failing when the bytes do not hash to `sha256`
+/// or when no byte arrives for `STALL_TIMEOUT`.
 fn download(url: &str, sha256: &str, to: &Path) -> Result<(), String> {
-    use ureq::tls::{TlsConfig, TlsProvider};
     let agent: ureq::Agent = ureq::Agent::config_builder()
-        .tls_config(TlsConfig::builder().provider(TlsProvider::NativeTls).build())
+        .timeout_resolve(Some(CONNECT_TIMEOUT))
+        .timeout_connect(Some(CONNECT_TIMEOUT))
+        .timeout_recv_response(Some(STALL_TIMEOUT))
         .build()
         .into();
     let resp = agent.get(url).call().map_err(|e| format!("{}: {}", url, e))?;
-    let mut body = resp.into_body();
-    let mut reader = body.as_reader();
+    // ureq's body timeout is a total, not a per-read one, so the reads run in
+    // a thread and this one gives up when no chunk comes.
+    let (tx, rx) = std::sync::mpsc::sync_channel::<Result<Vec<u8>, String>>(8);
+    let owned = url.to_string();
+    std::thread::spawn(move || {
+        let mut body = resp.into_body();
+        let mut reader = body.as_reader();
+        let mut buf = vec![0u8; 1 << 16];
+        loop {
+            match reader.read(&mut buf) {
+                Ok(0) => {
+                    let _ = tx.send(Ok(Vec::new()));
+                    return;
+                }
+                Ok(n) => {
+                    if tx.send(Ok(buf[..n].to_vec())).is_err() {
+                        return;
+                    }
+                }
+                Err(e) => {
+                    let _ = tx.send(Err(format!("{}: {}", owned, e)));
+                    return;
+                }
+            }
+        }
+    });
     let mut file = fs::File::create(to).map_err(|e| e.to_string())?;
     let mut hash = Sha256::new();
-    let mut buf = vec![0u8; 1 << 16];
     loop {
-        let n = reader.read(&mut buf).map_err(|e| format!("{}: {}", url, e))?;
-        if n == 0 {
+        let chunk = match rx.recv_timeout(STALL_TIMEOUT) {
+            Ok(c) => c?,
+            Err(_) => return Err(format!("{}: no data for {} seconds", url, STALL_TIMEOUT.as_secs())),
+        };
+        if chunk.is_empty() {
             break;
         }
-        hash.update(&buf[..n]);
-        file.write_all(&buf[..n]).map_err(|e| e.to_string())?;
+        hash.update(&chunk);
+        file.write_all(&chunk).map_err(|e| e.to_string())?;
     }
     let got = format!("{:x}", hash.finalize());
     if got != sha256 {

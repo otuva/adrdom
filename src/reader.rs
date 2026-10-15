@@ -685,6 +685,8 @@ impl Reader for Claude {
         // A private directory made for this run: another local user cannot
         // plant settings or a CLAUDE.md in it.
         let cwd = PrivateDir::create()?;
+        let prompt_file = cwd.0.join("system-prompt.txt");
+        std::fs::write(&prompt_file, pair.kind.prompt()).map_err(|e| format!("cannot write the reader's prompt: {}", e))?;
         let mut cmd = Command::new(&self.exe);
         cmd.args([
             "-p",
@@ -700,9 +702,10 @@ impl Reader for Claude {
             "project",
             "--tools",
             "",
-            "--system-prompt",
-            pair.kind.prompt(),
-        ]);
+            // A file, not an argument: a Windows .cmd shim refuses a multi-line one.
+            "--system-prompt-file",
+        ])
+        .arg(&prompt_file);
         let stdout = run(cmd, "claude", user, &cwd.0)?;
         let v: serde_json::Value = serde_json::from_str(&stdout).map_err(|e| format!("reply is not JSON: {}", e))?;
         v.get("result")
