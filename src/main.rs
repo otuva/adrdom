@@ -24,6 +24,9 @@ enum Command {
         /// Also write .codex/rules/adrdom.rules against the owner's commands
         #[arg(long)]
         codex: bool,
+        /// Also fetch the embedding model and the onnxruntime library into the user cache
+        #[arg(long)]
+        planning: bool,
     },
     /// Owner: remove what install wrote outside adrdom/
     Uninstall,
@@ -120,7 +123,7 @@ fn main() {
     let matches = Cli::command().version(shown).get_matches();
     let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
     let code = match cli.command {
-        Command::Install { claude, codex } => commands::install::run(claude, codex),
+        Command::Install { claude, codex, planning } => commands::install::run(claude, codex, planning),
         Command::Uninstall => commands::uninstall::run(),
         Command::Ask { topic_file } => commands::ask::run(topic_file),
         Command::Plan { topic_file } => commands::plan::run(topic_file),

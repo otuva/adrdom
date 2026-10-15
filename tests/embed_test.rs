@@ -231,12 +231,12 @@ fn the_loader_refuses_when_the_model_is_missing() {
     let r = adr::embed::load(&dir);
     std::env::remove_var("ADR_NO_MODEL");
     let e = r.err().expect("the model is absent");
-    assert!(e.contains("the embedding model is missing"), "{}", e);
-    assert!(e.contains("agent builds adr with the model feature"), "{}", e);
+    assert!(e.contains("the embedding model is not installed"), "{}", e);
+    assert!(e.contains("agent runs: adr install --planning"), "{}", e);
 }
 
 // adr: de8ef568-3a8d-42ba-bef7-d7fd467b27be
-// Needs the network the first time (about 100 MB into adrdom/cache/model).
+// Needs the model in the user cache directory (`adr install --planning` puts it there).
 #[test]
 #[ignore]
 #[cfg(feature = "model")]

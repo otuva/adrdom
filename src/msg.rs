@@ -2670,8 +2670,8 @@ pub fn gitignore_missing() -> Said {
     )
 }
 
-/// The embedding model is not on this machine and this build cannot fetch it.
-#[cfg(any(not(feature = "model"), feature = "fake-model"))]
+/// The embedding model is not in this build.
+#[cfg(not(feature = "model"))]
 pub fn model_missing() -> String {
     refuse(
         "model: the embedding model is missing".to_string(),
@@ -2679,13 +2679,47 @@ pub fn model_missing() -> String {
     )
 }
 
-/// The embedding model cannot be loaded from, or downloaded into, the cache directory.
+/// The one step that fetches what planning needs ("Does install fetch the
+/// embedding model?", e1c305af A).
+#[cfg(feature = "model")]
+fn install_planning() -> Next {
+    Next::agent_runs(Cmd::fixed("adr install --planning"))
+}
+
+/// The embedding model is not in the user cache directory.
+#[cfg(feature = "model")]
+pub fn model_not_installed(path: &str) -> String {
+    refuse(format!("model: the embedding model is not installed; looked in {}", path), install_planning())
+}
+
+/// The onnxruntime library is not in the user cache directory.
+#[cfg(feature = "model")]
+pub fn onnxruntime_not_installed(path: &str) -> String {
+    refuse(format!("model: the onnxruntime library is not installed; looked for {}", path), install_planning())
+}
+
+/// No user cache directory can be found on this machine.
+#[cfg(feature = "model")]
+pub fn cache_dir_missing() -> String {
+    refuse(
+        "model: no user cache directory is known; set HOME or XDG_CACHE_HOME".to_string(),
+        Next::agent(Act::RunsAgain),
+    )
+}
+
+/// The embedding model, present in the user cache directory, cannot be loaded.
 #[cfg(feature = "model")]
 pub fn model_load_failed(cache: &str, e: impl Display) -> String {
     refuse(
-        format!("model: cannot load the embedding model from {}, which needs the network once: {}", cache, e),
+        format!("model: cannot load the embedding model from {}: {}", cache, e),
         Next::agent(Act::RunsAgain),
     )
+}
+
+/// Fetching the onnxruntime library or the model failed.
+#[cfg(feature = "model")]
+pub fn model_fetch_failed(what: &str, e: impl Display) -> String {
+    refuse(format!("model: cannot fetch {}: {}", what, e), Next::agent(Act::RunsAgain))
 }
 
 pub fn embed_failed(e: impl Display) -> String {
@@ -2978,10 +3012,18 @@ mod tests {
             gitattributes_missing().text(),
             gitignore_differs().text(),
             gitignore_missing().text(),
-            #[cfg(any(not(feature = "model"), feature = "fake-model"))]
+            #[cfg(not(feature = "model"))]
             model_missing(),
             #[cfg(feature = "model")]
-            model_load_failed("adrdom/cache/model", "no network"),
+            model_not_installed("/home/x/.cache/adrdom/model"),
+            #[cfg(feature = "model")]
+            onnxruntime_not_installed("/home/x/.cache/adrdom/libonnxruntime.so.1.28.0"),
+            #[cfg(feature = "model")]
+            cache_dir_missing(),
+            #[cfg(feature = "model")]
+            model_load_failed("/home/x/.cache/adrdom/model", "bad file"),
+            #[cfg(feature = "model")]
+            model_fetch_failed("the onnxruntime library", "no network"),
             embed_failed("x"),
             reader_missing(),
             unrelated_names_nothing("x.md", "Does X?", "Y").text(),

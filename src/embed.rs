@@ -2,9 +2,9 @@
 //! meaning. `Model` is bge-base (quantized) run by fastembed; `Fake`, built
 //! only with the `fake-model` feature and used only when `ADR_FAKE_MODEL=1`,
 //! is a hashed bag of words, so tests need no download.
-use crate::msg;
 #[cfg(feature = "model")]
-use crate::repo;
+use crate::cache;
+use crate::msg;
 use std::path::Path;
 
 pub trait Embedder {
@@ -30,14 +30,25 @@ pub struct Model {
 
 #[cfg(feature = "model")]
 impl Model {
-    fn load(root: &Path) -> Result<Model, String> {
-        let cache = root.join(repo::CACHE_DIR).join("model");
+    /// Loads what install put in the user cache directory, never fetches
+    /// ("Does install fetch the embedding model?", e1c305af A): a missing
+    /// library or model is a refusal naming the install step.
+    fn load() -> Result<Model, String> {
+        let lib = cache::ort_library()?;
+        if !lib.is_file() {
+            return Err(msg::onnxruntime_not_installed(&lib.display().to_string()));
+        }
+        let dir = cache::model_dir()?;
+        if !cache::model_present()? {
+            return Err(msg::model_not_installed(&dir.display().to_string()));
+        }
+        cache::init_ort(&lib).map_err(|e| msg::model_load_failed(&lib.display().to_string(), e))?;
+        cache::own_the_model_dir();
         let opts = fastembed::TextInitOptions::new(fastembed::EmbeddingModel::BGEBaseENV15Q)
-            .with_cache_dir(cache)
+            .with_cache_dir(dir.clone())
             .with_show_download_progress(false);
-        let m = fastembed::TextEmbedding::try_new(opts).map_err(|e| {
-            msg::model_load_failed(&format!("{}/model", repo::CACHE_DIR), e)
-        })?;
+        let m = fastembed::TextEmbedding::try_new(opts)
+            .map_err(|e| msg::model_load_failed(&dir.display().to_string(), e))?;
         Ok(Model { inner: std::sync::Mutex::new(m) })
     }
 }
@@ -89,10 +100,13 @@ impl Embedder for Fake {
 }
 
 /// The fake model when the feature is on and `ADR_FAKE_MODEL=1`, else bge-base.
-/// With the feature on, `ADR_NO_MODEL=1` is a build that has no model.
+/// With the feature on, `ADR_NO_MODEL=1` is a machine that has no model installed.
 pub fn load(root: &Path) -> Result<Box<dyn Embedder>, String> {
     #[cfg(feature = "fake-model")]
     if std::env::var("ADR_NO_MODEL").as_deref() == Ok("1") {
+        #[cfg(feature = "model")]
+        return Err(msg::model_not_installed(&cache::model_dir()?.display().to_string()));
+        #[cfg(not(feature = "model"))]
         return Err(msg::model_missing());
     }
     #[cfg(feature = "fake-model")]
@@ -101,7 +115,8 @@ pub fn load(root: &Path) -> Result<Box<dyn Embedder>, String> {
     }
     #[cfg(feature = "model")]
     {
-        Ok(Box::new(Model::load(root)?))
+        let _ = root;
+        Ok(Box::new(Model::load()?))
     }
     #[cfg(not(feature = "model"))]
     {

@@ -248,7 +248,8 @@ fn the_reader_reads_no_neighbour_of_a_heading() {
     let dir = repo();
     two_headings(&dir);
     let err = refused(&plan_with(&dir, &[("ADR_NO_MODEL", "1")]));
-    assert!(err.contains("the embedding model is missing"), "{}", err);
+    assert!(err.contains("the embedding model is not installed"), "{}", err);
+    assert!(err.contains("agent runs: adr install --planning"), "{}", err);
     assert_eq!(neighbour_rows(&dir).len(), held_n, "nothing was written");
 }
 
@@ -568,8 +569,8 @@ fn planning_stops_without_the_model() {
     two_headings(&dir);
     let before = rows(&dir).len();
     let err = refused(&plan_with(&dir, &[("ADR_NO_MODEL", "1")]));
-    assert!(err.contains("the embedding model is missing"), "{}", err);
-    assert!(err.contains("agent builds adr with the model feature"), "{}", err);
+    assert!(err.contains("the embedding model is not installed"), "{}", err);
+    assert!(err.contains("agent runs: adr install --planning"), "{}", err);
     assert_eq!(rows(&dir).len(), before, "nothing was read");
 }
 

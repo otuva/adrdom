@@ -319,7 +319,8 @@ fn reading_stops_without_the_model() {
     let before = rows(&dir);
     let out = read_with(&dir, &[("ADR_NO_MODEL", "1")]);
     assert!(!out.status.success(), "{}", stdout(&out));
-    assert!(stderr(&out).contains("the embedding model is missing"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("the embedding model is not installed"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("agent runs: adr install --planning"), "{}", stderr(&out));
     assert_eq!(rows(&dir), before);
 }
 
