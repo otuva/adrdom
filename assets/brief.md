@@ -12,7 +12,7 @@ line for each: its name, its other forms in brackets, its definition. Read
 that file before you write a question, code or a reply. The next line is its
 path, and some agents load the file from it at the start of a session:
 
-@adrdom/state/terms-brief.md
+@terms-brief.md
 
 ## What is next
 

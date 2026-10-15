@@ -79,7 +79,7 @@ pub(crate) const GITIGNORE_CONTENT: &str = "cache/\nstate/roles.tsv\nstate/neigh
 /// "forbidden"`. `check`'s `install`
 /// check compares the file on disk against this text (see
 /// `commands/check/install.rs`), the same way it compares AGENTS.md against
-/// `BRIEF`.
+/// `TAG`.
 pub(crate) fn codex_rules_content() -> String {
     let mut out = String::new();
     for cmd in OWNER_COMMANDS {

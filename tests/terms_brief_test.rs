@@ -172,7 +172,7 @@ fn check_at_a_commit_reads_the_staged_terms_brief() {
 // adr: adee66f2-c8ff-477f-8ac4-a497f694c912
 //
 // "Does the brief name the terms brief?" (A): the brief install writes
-// into adrdom/state/brief.md holds a line with @ and the path of the terms brief, on
+// into adrdom/state/brief.md holds a line with @ and the path of the terms brief from that file, on
 // its own and outside any code block, and a sentence telling the agent to
 // read that file.
 #[test]
@@ -187,7 +187,7 @@ fn the_brief_names_the_terms_brief() {
         if line.trim_start().starts_with("```") {
             fenced = !fenced;
         }
-        if line.trim_end() == "@adrdom/state/terms-brief.md" {
+        if line.trim_end() == "@terms-brief.md" {
             assert!(!fenced, "the @ line sits inside a code block");
             found = true;
         }

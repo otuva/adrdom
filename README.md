@@ -22,10 +22,10 @@ runtime dependencies beyond `git` on `PATH`.
 
 - `adr install` — set up `adrdom/decisions/`, `adrdom/state/`, and git hooks
   in the current repository (writing or rewriting each hook to match what
-  it writes, and leaving an already-current one untouched), and write the
-  agent brief into AGENTS.md (the
-  file agents read) between marker lines, refreshing it in place on a later
-  run. Idempotent. `adr install --claude` additionally creates CLAUDE.md
+  it writes, and leaving an already-current one untouched), write the
+  agent brief to `adrdom/state/brief.md`, and write into AGENTS.md (the
+  file agents read) between marker lines a three-line section naming that
+  file with an @ line, refreshing both on a later run. Idempotent. `adr install --claude` additionally creates CLAUDE.md
   holding a line importing AGENTS.md when the file is missing (or adds that
   import to an existing CLAUDE.md), and merges a set of deny entries into
   `.claude/settings.json`'s `permissions.deny`. `adr install --codex`
@@ -34,7 +34,7 @@ runtime dependencies beyond `git` on `PATH`.
   for a project the owner has marked trusted, so the guard holds only
   there. Not owner-only.
 - `adr uninstall` — owner-only. Removes everything `adr install` wrote
-  outside `adrdom/`: the marked brief section from AGENTS.md (deleting the
+  outside `adrdom/`: the marked section from AGENTS.md (deleting the
   file if nothing else is in it), the AGENTS.md import it added to
   CLAUDE.md (deleting that file too if nothing else is in it), the git hooks and `core.hooksPath` (only if unchanged since
   install), the deny entries from `.claude/settings.json`, and
@@ -208,7 +208,8 @@ as `terms: <name>=<uuid>, <name>=<uuid>`.
 into `.claude/settings.json`'s `permissions.deny` (covering `adr answer`,
 `adr approve`, `adr unban`, `adr serve`, `adr uninstall`, and edits to
 `adrdom/state/`). `adr check`'s `install` check always verifies that
-AGENTS.md holds the current brief between its marker lines, and that
+AGENTS.md holds the current section between its marker lines, that
+`adrdom/state/brief.md` holds the current brief, and that
 `.githooks/pre-commit` and `.githooks/commit-msg` each hold what `adr
 install` writes; either failure names `adr install` as the fix (this does
 not cover `git config core.hooksPath` itself, which is not a file `check`

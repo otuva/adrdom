@@ -95,11 +95,14 @@ fn judge(root: &Path, source: &Source) -> Vec<(&'static str, Failure)> {
         None => out.push((repo::GITIGNORE_PATH, Failure::said(Class::Install, msg::gitignore_missing()))),
     }
 
-    // The brief's text, held whole like the files above: install writes it
-    // on every install, and the marked section of AGENTS.md names it.
+    // The brief's text: install writes it on every install, and the marked
+    // section of AGENTS.md names it. Compared line by line like the terms
+    // brief, so a checkout's `\r` is not a difference.
     match source.read(root, repo::BRIEF_PATH) {
         Some(content) => {
-            if content != crate::commands::install::BRIEF {
+            let lines: Vec<&str> = content.lines().collect();
+            let brief_lines: Vec<&str> = crate::commands::install::BRIEF.lines().collect();
+            if !crate::text::lines_match_trimmed(&lines, &brief_lines) {
                 out.push((repo::BRIEF_PATH, Failure::said(Class::Install, msg::brief_file_differs())));
             }
         }
