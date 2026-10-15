@@ -424,6 +424,7 @@ impl Shared {
     /// `new` with the reader's rows as `source` holds them.
     pub fn new_via(root: &Path, all: &[RecordFile], terms_list: &[Term], led: &Ledger, source: &crate::repo::Source) -> Shared {
         let rows = reader::rows_via(root, source);
+        let model = reader::model_of(root);
         // A row counts only when it was written with the prompt and the
         // model that would read its pair now; a row from another prompt or
         // model is kept apart, and its kind at that hash is read again.
@@ -433,7 +434,7 @@ impl Shared {
             [Kind::Body, Kind::Plan].into_iter().map(|k| (k, k.prompt_hash())).collect();
         for (i, r) in rows.iter().enumerate() {
             let kind = row_kind(&r.neighbour);
-            if r.model == reader::MODEL && current[&kind] == r.prompt_hash {
+            if r.model == model && current[&kind] == r.prompt_hash {
                 by_hash.entry(r.text_hash.clone()).or_default().push(i);
             } else {
                 stale.entry(kind).or_default().insert(r.text_hash.clone());

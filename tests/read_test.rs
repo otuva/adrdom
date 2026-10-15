@@ -330,6 +330,7 @@ fn reading_stops_without_the_reader() {
     let before = rows(&dir);
     let out = read_with(&dir, &[("ADR_NO_READER", "1")]);
     assert!(!out.status.success(), "{}", stdout(&out));
+    assert!(stderr(&out).contains("no agent is installed for this repository"), "{}", stderr(&out));
     assert_eq!(rows(&dir), before);
 }
 

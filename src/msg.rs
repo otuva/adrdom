@@ -2729,11 +2729,21 @@ pub fn embed_failed(e: impl Display) -> String {
     )
 }
 
-/// The reader is not on this machine: no `claude` program on PATH.
-pub fn reader_missing() -> String {
+/// The reader is not on this machine: the program of the installed agent
+/// (`claude` or `codex`) is not on PATH.
+pub fn reader_missing(program: &str) -> String {
     refuse(
-        "reader: the claude program is missing".to_string(),
-        Next::agent(Act::Installs("the claude program".into())),
+        format!("reader: the {} program is missing", program),
+        Next::agent(Act::Installs(format!("the {} program", program))),
+    )
+}
+
+/// The repository was installed for no agent, so there is no program to
+/// read with.
+pub fn reader_no_agent() -> String {
+    refuse(
+        "reader: no agent is installed for this repository".to_string(),
+        Next::agent(Act::Installs("an agent's files with adr install --claude or adr install --codex".into())),
     )
 }
 
@@ -3025,7 +3035,9 @@ mod tests {
             #[cfg(feature = "model")]
             model_fetch_failed("the onnxruntime library", "no network"),
             embed_failed("x"),
-            reader_missing(),
+            reader_missing("claude"),
+            reader_missing("codex"),
+            reader_no_agent(),
             unrelated_names_nothing("x.md", "Does X?", "Y").text(),
             unrelated_ambiguous("x.md", "Does X?", "Y", &["a.md".to_string(), "b.md".to_string()]).text(),
             blame_entry_without_range("x.md", "Does X?", "notes").text(),

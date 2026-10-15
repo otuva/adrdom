@@ -509,8 +509,9 @@ fn check_passes_the_words_depends_and_closes_with_a_letter_and_fails_closes_alon
 #[test]
 fn without_the_reader_the_call_stops_with_a_message_and_writes_nothing() {
     let dir = new_repo();
+    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
     std::env::set_var("ADR_NO_READER", "1");
-    let loaded = reader::load();
+    let loaded = reader::load(&dir);
     let read = reader::read(&dir, &[pair(Kind::Body, "Does X?", "id-1")]);
     std::env::remove_var("ADR_NO_READER");
     for e in [loaded.err().expect("load refuses"), read.unwrap_err()] {
