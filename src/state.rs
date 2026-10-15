@@ -357,24 +357,25 @@ pub fn removed_terms(led: &Ledger, tf: &TermsFile) -> Vec<(String, String)> {
     out
 }
 
-/// The names of the entries a terms edit adds, changes or removes against
-/// the latest `term` rows (per "Does approve accept a terms edit that
-/// changes more than one entry?"): empty while the file equals its latest
-/// approval. A ledger that holds `terms` rows and no `term` rows yet (the
-/// catch-up approve) has no baseline per entry, so an entry with no row is
-/// not counted there.
-pub fn terms_edit_entries(led: &Ledger, tf: &TermsFile) -> Vec<String> {
+/// The entries of a terms edit that wait for the owner's approve, each by
+/// name with its status, new, changed or removed, against the latest `term`
+/// rows (per "What does approve take for a terms file holding several
+/// entries that wait?", da0dc8b1 A: approve takes one of these names per
+/// run): empty while the file equals its latest approval. A ledger that
+/// holds `terms` rows and no `term` rows yet (the catch-up approve) has no
+/// baseline per entry, so an entry with no row is not counted there.
+pub fn waiting_terms(led: &Ledger, tf: &TermsFile) -> Vec<(String, crate::status::TermStatus)> {
     if terms_approved(led, tf) {
         return Vec::new();
     }
     use crate::status::TermStatus;
-    let mut out: Vec<String> = tf
+    let mut out: Vec<(String, TermStatus)> = tf
         .terms
         .iter()
-        .filter(|t| matches!(crate::status::term_status(led, tf, t), TermStatus::New | TermStatus::Changed))
-        .map(|t| t.name.clone())
+        .map(|t| (t.name.clone(), crate::status::term_status(led, tf, t)))
+        .filter(|(_, st)| matches!(st, TermStatus::New | TermStatus::Changed))
         .collect();
-    out.extend(removed_terms(led, tf).into_iter().map(|(_, name)| name));
+    out.extend(removed_terms(led, tf).into_iter().map(|(_, name)| (name, TermStatus::Removed)));
     out
 }
 

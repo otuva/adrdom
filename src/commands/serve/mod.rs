@@ -252,7 +252,9 @@ fn act_lines(result: Result<actions::Outcome, actions::Stops>) -> Vec<Line> {
 
 fn handle_approve(root: &Path, form: &HashMap<String, String>) -> Vec<Line> {
     let file = form.get("file").cloned().unwrap_or_default();
-    act_lines(actions::do_approve(root, &root.join(&file)))
+    // The one entry of the terms file a control approves (da0dc8b1).
+    let entry = form.get("entry").map(String::as_str).filter(|e| !e.is_empty());
+    act_lines(actions::do_approve(root, &root.join(&file), entry))
 }
 
 fn handle_answer(root: &Path, form: &HashMap<String, String>) -> Vec<Line> {

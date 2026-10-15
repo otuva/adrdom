@@ -101,7 +101,11 @@ pub fn require_terms(root: &Path, led: &Ledger, rel: &str, cmd: Command) -> Resu
         if !findings.is_empty() {
             return Err(findings_of(findings));
         }
-        return Err(finding(Class::Terms, msg::terms_not_approved(rel, crate::status::terms_file_status(led, &tf))));
+        let waiting = state::waiting_terms(led, &tf);
+        if waiting.is_empty() {
+            return Err(finding(Class::Terms, msg::terms_not_approved(rel, crate::status::terms_file_status(led, &tf))));
+        }
+        return Err(waiting.iter().flat_map(|(name, st)| finding(Class::Terms, msg::terms_entry_waits(Some(rel), name, *st))).collect());
     }
     Ok(tf)
 }
@@ -725,7 +729,10 @@ pub fn do_refuse(root: &Path, id: &str, version: &str) -> Result<Outcome, Stops>
     Ok(outcome)
 }
 
-pub fn do_approve(root: &Path, file: &Path) -> Result<Outcome, Stops> {
+/// `entry` is the name of the one entry of the terms file to approve (per
+/// "What does approve take for a terms file holding several entries that
+/// wait?", da0dc8b1 A); approve of any other file takes none.
+pub fn do_approve(root: &Path, file: &Path, entry: Option<&str>) -> Result<Outcome, Stops> {
     let ledger_path = root.join(crate::repo::LEDGER_PATH);
     let led = ledger::read(&ledger_path);
     // The path as the repository names it, read from where it was given
@@ -738,8 +745,12 @@ pub fn do_approve(root: &Path, file: &Path) -> Result<Outcome, Stops> {
     let file = &root.join(&rel);
 
     if rel == crate::repo::TERMS_PATH {
-        do_approve_terms(root, file, &led, &ledger_path)
-    } else if rules::is_blame_file_path(&rel) {
+        return do_approve_terms(root, file, &led, &ledger_path, entry);
+    }
+    if entry.is_some() {
+        return Err(finding(Class::Terms, msg::approve_entry_on_other_file(&rel)));
+    }
+    if rules::is_blame_file_path(&rel) {
         do_approve_blame(root, file, &rel, &led, &ledger_path)
     } else if is_topic_file_path(&rel) && !file.exists() {
         do_approve_removal(root, &rel, &led, &ledger_path)
@@ -955,13 +966,16 @@ fn do_approve_terms(
     file: &Path,
     led: &Ledger,
     ledger_path: &Path,
+    entry: Option<&str>,
 ) -> Result<Outcome, Stops> {
+    // The command that runs this approve again, named after a failure.
+    let again = || entry.map(msg::approve_entry_cmd).unwrap_or_else(|| crate::moves::Cmd::fixed("adr approve adrdom/terms.md"));
     // Step 1: parse.
     let mut tf = terms::load(file).map_err(|e| {
         stop(Command::Approve, msg::read_failed(
             &file.display().to_string(),
             e,
-            msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr approve adrdom/terms.md")),
+            msg::after_fix_owner_runs(again()),
         ))
     })?;
 
@@ -995,14 +1009,35 @@ fn do_approve_terms(
         return Err(findings_of(refusals));
     }
 
+    // Per "What does approve take for a terms file holding several entries
+    // that wait?" (da0dc8b1 A): the name of one entry that waits, new,
+    // changed or removed, in any order; with no name, only a file none of
+    // whose entries waits (it differs in order or blank lines alone).
+    let waiting: Vec<String> = state::waiting_terms(led, &tf).into_iter().map(|(name, _)| name).collect();
+    match entry {
+        None if !waiting.is_empty() => {
+            return Err(finding(Class::Terms, msg::approve_terms_names_no_entry(&waiting)));
+        }
+        Some(name) if !waiting.iter().any(|w| w == name) => {
+            return Err(finding(Class::Terms, msg::approve_terms_entry_not_waiting(name, &waiting)));
+        }
+        _ => {}
+    }
+    let named = |name: &str| entry.is_none_or(|e| e == name);
+    // The whole file is approved once no entry waits after this run.
+    let file_settles = waiting.iter().all(|w| entry == Some(w.as_str()));
+
     // Which terms need a new `term` row: new ones, and those changed since
-    // their latest row.
+    // their latest row; of a named approve, the named entry alone.
     let term_rows_due: Vec<(String, String, String)> = tf
         .terms
         .iter()
+        .filter(|t| named(&t.name))
         .filter_map(|t| t.id.clone().map(|id| (id, t.name.clone(), terms::term_hash(t))))
         .filter(|(id, _, hash)| led.latest_for_id("term", id).is_none_or(|r| r.hash != *hash))
         .collect();
+    let removed_rows_due: Vec<(String, String)> =
+        state::removed_terms(led, &tf).into_iter().filter(|(_, name)| named(name)).collect();
 
     // Step 6: write the file. `terms:` lines use the fresh pairs computed
     // above, one term at a time, in the same order as `tf.terms`.
@@ -1018,7 +1053,7 @@ fn do_approve_terms(
         stop(Command::Approve, msg::write_failed(
             &file.display().to_string(),
             e,
-            msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr approve adrdom/terms.md")),
+            msg::after_fix_owner_runs(again()),
         ))
     })?;
 
@@ -1038,7 +1073,7 @@ fn do_approve_terms(
         stop(Command::Approve, msg::write_failed(
             crate::repo::TERMS_BRIEF_PATH,
             e,
-            msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr approve adrdom/terms.md")),
+            msg::after_fix_owner_runs(again()),
         ))
     })?;
 
@@ -1058,26 +1093,31 @@ fn do_approve_terms(
         stop(Command::Approve, msg::update_failed(
             "ledger",
             e,
-            msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr approve adrdom/terms.md")),
+            msg::after_fix_owner_runs(again()),
         ))
     };
 
     // The file already matching the ledger's latest `terms` row writes
     // nothing. A ledger from before `term` rows existed gets them at its
-    // next real approval (no migration code in the tool).
+    // next real approval (no migration code in the tool). The file's own
+    // `terms` row is written once no entry waits: until then ask, answer
+    // and check stop on it (per "Does the tool stop while the terms file
+    // waits for approval?", aa475aa3 A).
     let mut written: Vec<ledger::Row> = Vec::new();
     if !state::terms_approved(led, &tf) {
-        let row = ledger::Row {
-            time: write_time.clone(),
-            event: "terms".to_string(),
-            id: "-".to_string(),
-            hash: terms::file_hash(&tf),
-            detail: crate::repo::TERMS_PATH.to_string(),
-            version: crate::version::VERSION.to_string(),
-        };
-        let mut rows = vec![row];
+        let mut rows = Vec::new();
+        if file_settles {
+            rows.push(ledger::Row {
+                time: write_time.clone(),
+                event: "terms".to_string(),
+                id: "-".to_string(),
+                hash: terms::file_hash(&tf),
+                detail: crate::repo::TERMS_PATH.to_string(),
+                version: crate::version::VERSION.to_string(),
+            });
+        }
         rows.extend(term_rows);
-        for (id, name) in state::removed_terms(led, &tf) {
+        for (id, name) in removed_rows_due {
             rows.push(ledger::Row {
                 time: write_time.clone(),
                 event: "term".to_string(),

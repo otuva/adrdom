@@ -382,15 +382,6 @@ pub fn terms_refusals(
 ) -> (Vec<Finding>, Vec<Vec<(String, String)>>) {
     let mut refusals: Vec<Finding> = Vec::new();
 
-    // Per "Does approve accept a terms edit that changes more than one
-    // entry?": more than one entry added, changed or removed since the
-    // latest approval is refused, here for `approve` and `check` alike.
-    let differing = state::terms_edit_entries(led, tf);
-    if differing.len() > 1 {
-        let approved_before = led.latest_for_path("terms", crate::repo::TERMS_PATH).is_some();
-        refusals.push(terms_finding(msg::terms_edit_too_wide(&differing, approved_before)));
-    }
-
     // Step 1 (shape): "missing id" cannot appear here, since `tf` is
     // already minted.
     for e in &tf.errors {
@@ -1678,6 +1669,7 @@ pub fn judged_terms(tf: Option<&terms::TermsFile>) -> Vec<terms::Term> {
 /// and no move those commands would refuse.
 pub fn terms_gate(root: &Path, led: &Ledger, rel: &str) -> TermsGate {
     let mut gate = TermsGate::default();
+    gate.waits = crate::terms::load(&root.join(crate::repo::TERMS_PATH)).is_ok_and(|tf| !state::terms_approved(led, &tf));
     if let Err(lines) = crate::actions::require_terms(root, led, rel, Command::Show) {
         for l in lines {
             match l {
@@ -1698,6 +1690,9 @@ pub fn terms_gate(root: &Path, led: &Ledger, rel: &str) -> TermsGate {
 pub struct TermsGate {
     pub findings: Vec<Finding>,
     pub stops: Vec<crate::out::Line>,
+    /// The terms file is there and differs from its latest approval: a
+    /// commit waits for the owner's approve.
+    pub waits: bool,
 }
 
 impl TermsGate {

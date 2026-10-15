@@ -2423,15 +2423,70 @@ pub fn file_unreadable(path: &str, e: impl Display) -> String {
     )
 }
 
-/// A terms edit that adds, changes or removes more than one entry (per
-/// "Does approve accept a terms edit that changes more than one entry?").
-pub fn terms_edit_too_wide(names: &[String], approved_before: bool) -> Said {
-    let list = names.iter().map(|n| format!("\"{}\"", n)).collect::<Vec<_>>().join(", ");
-    let what = if approved_before { "differ from the last approval" } else { "are new, and the file has no approval yet" };
+/// The owner's approve of one entry that waits, `adr approve adrdom/terms.md
+/// <name>` (per "What does approve take for a terms file holding several
+/// entries that wait?", da0dc8b1 A).
+pub fn approve_entry_cmd(name: &str) -> Cmd {
+    command(&["adr", "approve", crate::repo::TERMS_PATH, name])
+}
+
+/// The owner's approve of one entry of those the finding names: the owner
+/// writes the name in place of `<name>`, as `<letter>` in an answer.
+fn approve_one_of() -> Next {
+    Next::owner_runs(Cmd::fixed("adr approve adrdom/terms.md").then("<name>"))
+}
+
+fn quoted_list(names: &[String]) -> String {
+    names.iter().map(|n| format!("\"{}\"", n)).collect::<Vec<_>>().join(", ")
+}
+
+/// One entry of `adrdom/terms.md` waits for the owner's approve (per "Does
+/// the tool stop while the terms file waits for approval?", aa475aa3 A, and
+/// "What does approve take for a terms file holding several entries that
+/// wait?", da0dc8b1 A): one finding per entry, each with its own approve.
+/// `rel` is the topic file a gated command named, as `terms_not_approved`.
+pub fn terms_entry_waits(rel: Option<&str>, name: &str, status: crate::status::TermStatus) -> Said {
+    let at = rel.map(|r| format!("{}: ", r)).unwrap_or_default();
     said(
-        &crate::rule::ONE_TERM_ENTRY_PER_APPROVAL,
-        format!("adrdom/terms.md: {} {}", list, what),
-        Next::agent("restores all but one of these entries from git"),
+        &crate::rule::TERMS_FILE_APPROVED,
+        format!("{}adrdom/terms.md: \"{}\" is {}", at, name, status.name()),
+        Next::owner_runs(approve_entry_cmd(name)),
+    )
+}
+
+/// `adr approve adrdom/terms.md` with no name while entries wait: the
+/// owner names one (per da0dc8b1 A).
+pub fn approve_terms_names_no_entry(waiting: &[String]) -> Said {
+    said(
+        &crate::rule::APPROVE_NAMES_ONE_TERM_ENTRY,
+        format!("adrdom/terms.md: {} wait, and approve names none of them", quoted_list(waiting)),
+        approve_one_of(),
+    )
+}
+
+/// `adr approve adrdom/terms.md <name>` for a name no entry that waits
+/// holds; with none waiting, the file is approved as a whole.
+pub fn approve_terms_entry_not_waiting(name: &str, waiting: &[String]) -> Said {
+    let (found, next) = if waiting.is_empty() {
+        (
+            format!("adrdom/terms.md: \"{}\" does not wait, and no entry does", name),
+            Next::owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
+        )
+    } else {
+        (
+            format!("adrdom/terms.md: \"{}\" does not wait; {} wait", name, quoted_list(waiting)),
+            approve_one_of(),
+        )
+    };
+    said(&crate::rule::APPROVE_NAMES_ONE_TERM_ENTRY, found, next)
+}
+
+/// An entry name given to approve of a file other than the terms file.
+pub fn approve_entry_on_other_file(rel: &str) -> Said {
+    said(
+        &crate::rule::APPROVE_NAMES_ONE_TERM_ENTRY,
+        format!("{}: approve takes an entry name for adrdom/terms.md only", rel),
+        Next::owner_runs(command(&["adr", "approve", rel])),
     )
 }
 
@@ -2620,8 +2675,12 @@ mod tests {
             terms_brief_differs().text(),
             terms_brief_not_staged().text(),
             circular_definition(&["a".to_string(), "b".to_string()]).text(),
-            terms_edit_too_wide(&["a".to_string(), "b".to_string()], true).text(),
-            terms_edit_too_wide(&["a".to_string(), "b".to_string()], false).text(),
+            terms_entry_waits(None, "a", crate::status::TermStatus::New).text(),
+            terms_entry_waits(Some("x.md"), "a b", crate::status::TermStatus::Removed).text(),
+            approve_terms_names_no_entry(&["a".to_string(), "b".to_string()]).text(),
+            approve_terms_entry_not_waiting("c", &["a".to_string()]).text(),
+            approve_terms_entry_not_waiting("c", &[]).text(),
+            approve_entry_on_other_file("adrdom/decisions/x.md").text(),
             too_long("x.md", 3, "heading", crate::tells::LengthKind::Option, 21).text(),
             term_removed_but_carried("uuid-1", Some("word"), "term \"x\"", None).text(),
             term_retired_but_carried("x", "term \"y\"", RetiredUser::Definition).text(),

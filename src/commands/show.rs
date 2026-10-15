@@ -341,6 +341,10 @@ pub(crate) fn listed_report_judged(r: &Records, rf: &RecordFile, printed: &mut V
         printed.push(text);
         true
     });
+    // The terms file's own report names the commit that waits on it.
+    if r.terms_file.is_some() {
+        report.moves.retain(|m| m.kind != moves::MoveKind::CommitWaits);
+    }
     (report, judged)
 }
 
@@ -1044,7 +1048,8 @@ pub(crate) fn terms_report(r: &Records, tf: &TermsFile) -> (FileStatus, Report) 
         return (st, Report::default());
     }
     let findings = rules::terms_file_findings(&r.root, &r.topic_files, minted, &r.led);
-    (st, moves::of_terms_file(findings, st))
+    let waiting: Vec<String> = crate::state::waiting_terms(&r.led, tf).into_iter().map(|(name, _)| name).collect();
+    (st, moves::of_terms_file(findings, st, &waiting))
 }
 
 /// The findings and moves of a blame file (`moves::of_blame_file`).

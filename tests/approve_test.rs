@@ -793,8 +793,8 @@ fn ask_refuses_while_terms_unapproved() {
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("adrdom/terms.md is new"), "{}", err);
-    assert!(err.contains("adr approve adrdom/terms.md"), "{}", err);
+    assert!(err.contains("adrdom/terms.md: \"decision\" is new"), "{}", err);
+    assert!(err.contains("owner runs: adr approve adrdom/terms.md decision"), "{}", err);
 }
 
 // --- approve fills missing term ids -------------------------------------

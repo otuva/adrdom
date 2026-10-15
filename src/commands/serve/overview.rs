@@ -241,13 +241,7 @@ fn terms_card(r: &Records, token: &str, shown: &mut Vec<String>) -> Option<Strin
         if status.awaits_approval() { "waiting" } else { "done" },
         st(&st_line, false, None)
     ));
-    for m in &report.moves {
-        if let MoveKind::Approve { path } = &m.kind {
-            s.push_str(&approve_block(r, path, None, "Approve terms", token));
-        } else {
-            s.push_str(&format!("{}\n", out::html(&Line::Move(m.clone()))));
-        }
-    }
+    s.push_str(&terms_moves(r, tf, &report.moves, "Approve terms", token));
     if !report.findings.is_empty() {
         shown.extend(report.findings.iter().map(|f| out::text(&Line::Finding(f.clone()))));
         let fl: Vec<Line> = report.findings.iter().cloned().map(Line::Finding).collect();
@@ -291,6 +285,52 @@ pub(super) fn approve_block(r: &Records, path: &str, rf: Option<&RecordFile>, la
         esc(label)
     ));
     s
+}
+
+/// The moves of the terms file's report as the page shows them: the change
+/// beyond its latest approval once, then one control per entry that waits,
+/// its name, its definition and the button that runs the owner's approve of
+/// that entry (per "What does approve take for a terms file holding several
+/// entries that wait?", da0dc8b1 A); the file's own control, labelled
+/// `label`, only when no entry waits.
+pub(super) fn terms_moves(r: &Records, tf: &crate::terms::TermsFile, moves: &[Move], label: &str, token: &str) -> String {
+    let mut s = String::new();
+    let mut change_shown = false;
+    for m in moves {
+        match &m.kind {
+            MoveKind::Approve { path } => s.push_str(&approve_block(r, path, None, label, token)),
+            MoveKind::ApproveEntry { name } => {
+                if !change_shown {
+                    s.push_str(&change_block(r, repo::TERMS_PATH, None));
+                    change_shown = true;
+                }
+                s.push_str(&entry_approve_form(tf, name, token));
+            }
+            _ => s.push_str(&format!("{}\n", out::html(&Line::Move(m.clone())))),
+        }
+    }
+    s
+}
+
+/// The control that approves the one entry `name` of the terms file: its
+/// name, its definition (none for an entry the file no longer holds) and
+/// the button.
+fn entry_approve_form(tf: &crate::terms::TermsFile, name: &str, token: &str) -> String {
+    let def = tf
+        .terms
+        .iter()
+        .find(|t| t.name == name)
+        .map(|t| format!("<p class=\"def\">{}</p>", esc(&t.definition)))
+        .unwrap_or_else(|| "<p class=\"def muted\">removed from the file</p>".to_string());
+    format!(
+        "<div class=\"entry-approve\"><div class=\"name\">{}</div>{}<form method=\"post\" action=\"/approve\" class=\"inline\"><input type=\"hidden\" name=\"file\" value=\"{}\"><input type=\"hidden\" name=\"entry\" value=\"{}\"><input type=\"hidden\" name=\"t\" value=\"{}\"><button type=\"submit\">Approve {}</button></form></div>\n",
+        esc(name),
+        def,
+        esc(repo::TERMS_PATH),
+        esc(name),
+        esc(token),
+        esc(name)
+    )
 }
 
 /// The parts of `path` that stand beyond its latest approval, one line each:

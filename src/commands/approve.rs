@@ -5,7 +5,7 @@ use crate::out;
 use crate::repo;
 use std::path::PathBuf;
 
-pub fn run(file: PathBuf) -> i32 {
+pub fn run(file: PathBuf, entry: Option<String>) -> i32 {
     if !repo::owner_authorized() {
         out::eprint_stop(Command::Approve, &msg::owner_refusal("approve", &[&file.display().to_string()]));
         return 2;
@@ -21,7 +21,7 @@ pub fn run(file: PathBuf) -> i32 {
 
     // One line per ledger row written, or the findings that stopped it (per
     // "What does a command that writes print?", 069a6b4a A).
-    match actions::do_approve(&root, &file) {
+    match actions::do_approve(&root, &file, entry.as_deref()) {
         Ok(outcome) => {
             out::print_events(&outcome.events);
             0

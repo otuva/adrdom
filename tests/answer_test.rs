@@ -981,7 +981,7 @@ fn answer_refuses_when_terms_md_holds_an_unapproved_added_term_with_a_shape_erro
     let out = adr_answer(&dir, &id, "A");
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     let err = stderr(&out);
-    assert!(err.contains("adrdom/terms.md is changed; commands read only the approved terms file; owner runs: adr approve adrdom/terms.md"), "{}", err);
+    assert!(err.contains("adrdom/terms.md: \"widget\" is new; commands read only the approved terms file; owner runs: adr approve adrdom/terms.md widget"), "{}", err);
     assert!(!err.contains("agent fixes"), "{}", err);
 }
 
@@ -1024,11 +1024,11 @@ fn answer_and_refuse_stop_while_terms_md_holds_an_unapproved_added_term() {
 
     let answer_out = adr_answer(&dir, &id1, "A");
     assert!(!answer_out.status.success(), "answer should have refused: {}", stdout(&answer_out));
-    assert!(stderr(&answer_out).contains("adrdom/terms.md is changed"), "{}", stderr(&answer_out));
+    assert!(stderr(&answer_out).contains("adrdom/terms.md: \"widget\" is new; commands read only the approved terms file; owner runs: adr approve adrdom/terms.md widget"), "{}", stderr(&answer_out));
 
     let refuse_out = adr_answer(&dir, &id2, "refuse");
     assert!(!refuse_out.status.success(), "refuse should have refused: {}", stdout(&refuse_out));
-    assert!(stderr(&refuse_out).contains("adrdom/terms.md is changed"), "{}", stderr(&refuse_out));
+    assert!(stderr(&refuse_out).contains("adrdom/terms.md: \"widget\" is new; commands read only the approved terms file; owner runs: adr approve adrdom/terms.md widget"), "{}", stderr(&refuse_out));
 }
 
 // adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
@@ -1086,7 +1086,7 @@ fn answer_refuses_while_a_draft_sits_on_top_of_a_real_retirement() {
     assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
     assert_eq!(
         stderr(&out).trim_end(),
-        "adrdom/decisions/example.md: adrdom/terms.md is changed; commands read only the approved terms file; owner runs: adr approve adrdom/terms.md"
+        "adrdom/decisions/example.md: adrdom/terms.md: \"widget\" is new; commands read only the approved terms file; owner runs: adr approve adrdom/terms.md widget"
     );
 }
 

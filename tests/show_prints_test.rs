@@ -258,7 +258,11 @@ fn show_marks_what_a_file_holds_beyond_its_latest_approval() {
         "{}",
         shown
     );
-    assert!(shown.ends_with("owner runs: adr approve adrdom/terms.md\n"), "{}", shown);
+    assert!(
+        shown.ends_with("owner runs: adr approve adrdom/terms.md widget\nnot yet: commit; adrdom/terms.md waits for the owner's approval\n"),
+        "{}",
+        shown
+    );
 
     // A new blame file: its lines, marked.
     let blob = write_origin(&dir, "docs/x.md", "one\n");
