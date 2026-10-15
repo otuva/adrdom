@@ -32,6 +32,33 @@ fn install_words(claude: bool, codex: bool) -> Vec<&'static str> {
 /// file against this text.
 pub const BRIEF: &str = include_str!("../../assets/brief.md");
 
+/// The marker a brief sentence's trailing tie comment opens with.
+pub const TIE_OPEN: &str = " <!-- from:";
+
+/// `text` with each trailing ` <!-- from: ... -->` removed from every line
+/// that ends in one; everything else, line ends included, stays byte for
+/// byte (adr-code: de5ed5b1-3a83-4403-8953-941cb7e94390).
+pub fn strip_ties(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for line in text.split_inclusive('\n') {
+        let body = line.trim_end_matches(['\n', '\r']);
+        let ends = &line[body.len()..];
+        match body.rfind(TIE_OPEN) {
+            Some(at) if body.ends_with("-->") && body[at..].matches("-->").count() == 1 => {
+                out.push_str(&body[..at]);
+                out.push_str(ends);
+            }
+            _ => out.push_str(line),
+        }
+    }
+    out
+}
+
+/// The brief `install` writes: `BRIEF` without its tie comments.
+pub fn brief() -> String {
+    strip_ties(BRIEF)
+}
+
 /// The marked section of AGENTS.md: the lines `adr install` writes between
 /// the marker lines below, naming the brief's file with an @ line, the same
 /// shape the brief names the terms brief with (adee66f2 A). `adr check`
@@ -263,7 +290,8 @@ fn write_whole(root: &Path, rel: &str, content: &str) -> Result<Option<Event>, S
 /// `check` judge the brief's file by.
 pub(crate) fn brief_is_current(existing: &str) -> bool {
     let existing_lines: Vec<&str> = existing.lines().collect();
-    let want_lines: Vec<&str> = BRIEF.lines().collect();
+    let want = brief();
+    let want_lines: Vec<&str> = want.lines().collect();
     crate::text::lines_match_trimmed(&existing_lines, &want_lines)
 }
 
@@ -273,7 +301,7 @@ fn install_brief(root: &Path) -> Result<Option<Event>, String> {
     if fs::read_to_string(&path).is_ok_and(|c| brief_is_current(&c)) {
         return Ok(None);
     }
-    fs::write(&path, BRIEF).map_err(|e| e.to_string())?;
+    fs::write(&path, brief()).map_err(|e| e.to_string())?;
     Ok(written(repo::BRIEF_PATH))
 }
 

@@ -2241,6 +2241,48 @@ pub fn stale_test(id: &str, heading: Option<&str>, locations: &[String], mv: Nex
     )
 }
 
+/// Where a line of the brief asset sits, for a finding about it.
+pub const BRIEF_ASSET: &str = "assets/brief.md";
+
+/// A sentence line of the brief asset with no from-comment.
+pub fn brief_line_unmarked(line: usize, mv: Next) -> Said {
+    said(
+        &crate::rule::BRIEF_SENTENCE_HAS_SOURCE,
+        format!("{} is a sentence with no from-comment", location(BRIEF_ASSET, line)),
+        mv,
+    )
+}
+
+/// A from-comment that is empty or not the end of its line.
+pub fn brief_comment_malformed(line: usize, what: &str, mv: Next) -> Said {
+    said(
+        &crate::rule::BRIEF_SENTENCE_HAS_SOURCE,
+        format!("{} holds a from-comment that {}", location(BRIEF_ASSET, line), what),
+        mv,
+    )
+}
+
+/// A from-comment entry that is not an identifier, or names nothing.
+pub fn brief_comment_unknown(line: usize, token: &str, is_id: bool, mv: Next) -> Said {
+    let what = if is_id { "which names no decision or term" } else { "which is no identifier" };
+    said(
+        &crate::rule::BRIEF_SOURCE_NAMES_CURRENT,
+        format!("{} holds \"{}\" in its from-comment, {}", location(BRIEF_ASSET, line), token, what),
+        mv,
+    )
+}
+
+/// A from-comment entry naming a decision that is not current, or a
+/// retired term.
+pub fn brief_comment_stale(line: usize, id: &str, name: Option<&str>, retired_term: bool, mv: Next) -> Said {
+    let what = if retired_term { "a retired term" } else { "not a current decision" };
+    said(
+        &crate::rule::BRIEF_SOURCE_NAMES_CURRENT,
+        format!("{} names {} in its from-comment, {}", location(BRIEF_ASSET, line), named(id, name), what),
+        mv,
+    )
+}
+
 pub fn duplicate_heading_in_file(heading: &str, rel: &str) -> Said {
     said(
         &rule::HEADING_ONCE_IN_FILE,
@@ -2968,6 +3010,10 @@ mod tests {
             ledger_since_unreadable("abc123"),
             ledger_same_time_competition("2024-01-01T00:00:00Z", "id id-1").text(),
             stale_test("id-1", None, &["x.rs:3".to_string()], Next::agent(Act::Removes("the tie comment from the test".into()))).text(),
+            brief_line_unmarked(3, Next::agent(Act::Writes("the from-comment".into()))).text(),
+            brief_comment_malformed(3, "is empty", Next::agent(Act::Rewrites("the from-comment".into()))).text(),
+            brief_comment_unknown(3, "x", false, Next::agent(Act::Rewrites("the from-comment".into()))).text(),
+            brief_comment_stale(3, "id-1", None, false, Next::agent(Act::Removes("the from-comment".into()))).text(),
             duplicate_heading_in_file("heading", "x.md").text(),
             duplicate_heading_across_files("heading", "x.md", "y.md").text(),
             bad_topic_file_name("adrdom/decisions/Bad_Name.md", "adrdom/decisions/bad-name.md").text(),

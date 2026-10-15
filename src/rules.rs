@@ -58,6 +58,7 @@ pub enum Class {
     Install,
     Tested,
     Untested,
+    Brief,
     /// A finding of no class `check` or a command picks it by.
     Other,
 }

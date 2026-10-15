@@ -442,6 +442,18 @@ pub const ASKED_QUESTION_HAS_TERMS_LINE: Rule = Rule {
     decisions: &["f571a454-3e6c-46c1-b754-0822a5d1d667"],
 };
 
+/// Decision: Does every sentence of the brief come from a decision?
+pub const BRIEF_SENTENCE_HAS_SOURCE: Rule = Rule {
+    name: "brief_sentence_has_source",
+    decisions: &["de5ed5b1-3a83-4403-8953-941cb7e94390"],
+};
+
+/// Decision: Does every sentence of the brief come from a decision?
+pub const BRIEF_SOURCE_NAMES_CURRENT: Rule = Rule {
+    name: "brief_source_names_current",
+    decisions: &["de5ed5b1-3a83-4403-8953-941cb7e94390"],
+};
+
 /// Decision: Does check read the words of an answered question again?
 pub const ASKED_TERMS_LINE_TERM_EXISTS: Rule = Rule {
     name: "asked_terms_line_term_exists",
@@ -1022,6 +1034,8 @@ pub const ALL: &[&Rule] = &[
     &ANSWER_SET_FROZEN_AT_ASK,
     &DECISION_HAS_TEST_TIE,
     &TEST_TIE_NAMES_CURRENT_DECISION,
+    &BRIEF_SENTENCE_HAS_SOURCE,
+    &BRIEF_SOURCE_NAMES_CURRENT,
     &ASKED_TERMS_LINE_PARSES,
     &ANSWERED_TERMS_LINE_TERM_EXISTS,
     &ANSWERED_TERMS_LINE_TERM_IS_LIVE,

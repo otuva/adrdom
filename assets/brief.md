@@ -1,160 +1,31 @@
-# adrdom: how an agent works in this repository
+# adrdom
 
-This repository is governed by `adr`. Every choice about how the code behaves
-is a decision the owner made by answering a question. You write the
-questions; only the owner answers them, from their own terminal. The git
-hooks run `adr check` on every commit and refuse what breaks a decision.
+This repository is governed by `adr`. What the code does is a decision: the option the owner picked when they answered a question. <!-- from: c3127af2-4c96-48d5-a164-bac49a9a09ec, 125ee772-d011-4dab-b53e-97a09ec03198, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, b36113a1-1384-4e4c-a798-8399f4181366 -->
+Agents write the questions. Only the owner approves a plan and answers a question, at their own terminal. <!-- from: 23d53545-c238-48cc-ae5e-21a2c7aab83e, aa275fac-def5-42a2-8a61-660142acad8e, e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, b36113a1-1384-4e4c-a798-8399f4181366 -->
+The git hooks run `adr check` at every commit and push; check refuses what breaks a decision. <!-- from: 34e81f57-9b3c-4dc4-a2ba-ca227523177d, 19e1c023-a678-4842-a414-bb0e45c41601, 4f925b13-ad16-48b8-acd1-3e30d6e308b6, 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de -->
 
-## Words
+## agents
 
-Every word the owner has given a fixed meaning is in the terms brief, one
-line for each: its name, its other forms in brackets, its definition. Read
-that file before you write a question, code or a reply. The next line is its
-path, and some agents load the file from it at the start of a session:
+`adr show` prints every current decision, then the findings and the moves. <!-- from: c5e10ae8-258d-4f29-b9fe-13cb7ad2a550, 1af76f91-5644-42ef-97ea-8f70f934c26c -->
+A move opens with who makes it: `agent`, `builder` (another session), `owner runs: <command>` (the owner, at their terminal), or `not yet`. <!-- from: b0e865b4-9204-4c55-9f5b-dcb755b3a03b, 9a2ff21b-c20b-4c63-95f2-a7a3cbe236b8, d904dc0d-231f-4e93-ac74-7babe888107d -->
+A finding is what the tool found and the one move that clears it; an owner command clears nothing a finding did not name. <!-- from: 50b31713-4fea-4aa3-842a-79c2750660ba, b0e865b4-9204-4c55-9f5b-dcb755b3a03b, 48f4647d-8c81-4e8a-a936-6b32f5fb0699, ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862 -->
+Behaviour no current decision covers is a question for the owner before it is built; a decision never changes once answered, a later question supersedes it. <!-- from: c3127af2-4c96-48d5-a164-bac49a9a09ec, dad5273c-afe2-4ab1-a451-e2a5d4d9a26d, 2bae531b-c4df-48a0-89a0-3d52726741ea -->
+A session that runs `adr plan` or `adr ask` is a planner until it ends: it does not build the decisions it asked, and its commits hold only paths under `adrdom/`. A subagent runs under the session's identifier and carries its role. <!-- from: 6c406624-b874-4697-9a44-91941019b7d1, 1ee664a1-cac0-4917-9e46-8199a387d235, 9ba58b6a-bc85-44a5-a720-d8e7a6ff7b31, db07a54d-4d80-4035-a9ef-eabcc0c872b3, e53b805c-9272-4b89-985d-61426fb5fa48 -->
+A builder is another session; it builds from the record alone, and a decision is built once a test outside `adrdom/` carries the comment `adr: <id>` and shows the code follows it. <!-- from: 9ba58b6a-bc85-44a5-a720-d8e7a6ff7b31, 4319a653-6901-446c-94ab-6420ef472134, 3460d220-e523-448b-aeff-baa8051b7d06, c49997ee-10e7-48e0-b66b-43f8b09758a6 -->
+In a review of a build, a behaviour with no decision behind it is a finding. <!-- from: 125ee772-d011-4dab-b53e-97a09ec03198 -->
+The tool writes `adrdom/state/`; its tracked files are staged with the commit, never edited. Approve writes the `id:` lines, ask the `terms:` line, answer the `**Answer:**` line. <!-- from: bf6697e3-8832-4b90-b036-8fecedb55406, 06b7e003-4d9f-427a-a798-c1af97865411, ec3f875c-a0f8-4085-8da1-fec9dcb14377, 30ca5d13-e68b-465f-aa84-ea4000c9330a, 7a1e7b81-0967-4ed2-8a8a-c7153056836f, f571a454-3e6c-46c1-b754-0822a5d1d667, b36113a1-1384-4e4c-a798-8399f4181366 -->
+`adr ban` bans a word the owner does not want in the repository; only the owner unbans. <!-- from: ef7ec04d-9cdd-40a1-8246-42a4a0200828, 4f04bae4-98e3-48eb-9403-3257268e2d87, ef83beae-6857-4200-b251-a0fcc3c72f9d -->
+
+## decisions
+
+Every word the owner gave a fixed meaning is a term, and in the records it means the term only. The terms brief holds one line per term; every agent reads it before it writes a question, code or a reply: <!-- from: 521e6211-344a-4b56-a1aa-07be956b3b29, f1294391-48b0-4ba3-82b4-c1d6b1c2c884, adee66f2-c8ff-477f-8ac4-a497f694c912, f590059d-b681-40ec-8a1c-c8916d71f6bb, 7d44030a-3589-4f29-aaa6-12fa09908ab8 -->
 
 @terms-brief.md
 
-## What is next
-
-Run `adr show`. It prints every current decision, its heading and under it
-the answer the owner picked, and after all of them the findings and the
-moves of every file. A finding opens with the rule it breaks and ends
-with the move that clears it; a move is one line, opening with who makes
-it.
-
-- A line that opens with `agent` is yours. A line with `builds` in it is for
-  an agent that did not write the question. Make these moves in the order
-  printed. When such a line ends with `owner runs: ...`, make your move,
-  then post that command in chat and stop.
-- A line that opens with `builder` is for a builder, another session. Leave
-  it.
-- A line that opens with `owner runs:` is the owner's. Post the command in
-  chat and stop.
-- A line that opens with `not yet` names something whose turn has not come.
-  Leave it.
-
-`adr show <file>` takes every file `adr approve` takes: a topic file, the
-terms file, a blame file. For a topic file it prints every question with its
-status; under a question not yet answered, its depends, supersedes and blame
-lines, and `[inconsistent]`, `[same]` or `[closes <letter>]` with each
-neighbour the reader marks so that no supersedes line of the question names;
-and the body of a question
-that waits for the owner's answer; what the file holds beyond its latest approval is printed marked,
-`+` for a line added and `-` for a line gone, and a question new or struck
-as a whole carries the mark on its own line too; then the findings and the
-moves of the file. The file itself, a term entry and the prose open with
-their status in brackets: `[new]`, `[changed]`, `[approved]`, `[removed]`,
-and `[retired]` for a term. Under an answered question stands the option
-the owner picked; a superseded question is left out. `adr show --dependents
-<file>` also prints the depends, supersedes and blame lines of an answered
-question and what stands on each question or term entry. `adr show
---superseded <file>` also prints each superseded question, and under it
-what took its place; with `--dependents` its lines too. `adr show --reader
-<file>` also prints the reader's word on every
-neighbour of each question, with its reason on the line under. `adr show --unrelated <file>` also prints the unrelated
-lines. `adr show --questions <file>` also prints, for a blame file, how many
-of its decision rows a question names and how many none names. Each question
-opens with where it stands, in brackets:
-
-- `[no body]`: a heading of the plan, its body not written.
-- `[not asked]`: the body is written, `adr ask` has not run on it.
-- `[asked @<version>]`: it waits for the owner's answer; the version is
-  what the owner writes after the id in `adr answer`.
-- `[changed since asked]`: it was asked and its text was edited since;
-  `adr ask` puts it to the owner again.
-- `[answered A]`: a current decision, the owner picked option A.
-- `[refused]`: the owner ruled that it cannot be settled as asked.
-- `[superseded]`: a later decision took its place.
-- `[withdrawn]`: it was asked and then struck from the plan.
-
-## Before you build anything
-
-1. Read every current decision in `adr show`. Build a decision when a move
-   names it, and not before. Never build a decision whose question you wrote:
-   another agent builds it.
-2. A session that runs `adr plan` or `adr ask` on a topic file is a planner
-   until the session ends. The tool keeps the session's identifier, read from
-   the environment the agent program sets, in an untracked file under
-   `adrdom/state`. In a planner's session every build move opens with
-   `builder`, and check refuses a commit that holds a path outside `adrdom/`:
-   a builder commits it. With no session identifier in the environment, none
-   of this applies.
-3. If no current decision covers what you are about to build, do not build
-   it. Write the question (below) and stop until the owner answers.
-4. If a current decision looks wrong, say so in chat and stop. Never edit an
-   answered question and never work around a decision.
-
-## Asking a question
-
-The plan is made in six steps, each on the record of the one before. Run
-`adr plan <file>` at each step: it reads the file, does the step the file is
-at, and prints what it read, what it found and the next move.
-
-**1. Write the headings.** A topic file, `adrdom/decisions/<topic>.md`, holds
-the questions on one subject: one `# <Topic>` line, a few lines of prose,
-then the headings.
-
-```
-# Hooks
-
-What the git hooks run and when.
-
-### Does the pre-commit hook run the tests?
-
-### Does check read staged files only?
-```
-
-Ask "does X" or "what does X do". A heading that opens with "which",
-"where", "how many" or "how much" is refused: it assumes an answer the owner
-has not given. One question per heading: a heading with "and" or "or" in it
-is refused as two questions. A heading written from a decision row of a blame
-file carries a blame line under it (see Blame).
-
-**2. Run `adr plan <file>`.** For each heading it brings the ten nearest
-current decisions and term definitions.
-
-**3. Write the lines.** Every neighbour gets a line under its heading, one
-entry on one of three lines, comma separated:
-
-- `depends:` the question stands on it: its options make sense only after
-  the other is answered. A term by its name, or another heading in this file
-  by its text. A line names at most two questions.
-- `supersedes:` the question replaces that current decision.
-- `unrelated:` neither.
-
-Write a `depends:` entry for
-every term the question stands on and for each question of this file it
-stands on, a neighbour or not, and none that is not.
-Run `adr plan <file>` again: it names every neighbour on no line.
-
-When a question replaces a current decision, write the heading of that
-decision on its `supersedes:` line. When a refusal says a heading names more
-than one decision, write the id of the one you mean in its place: it is on
-the `id:` line under that heading in its topic file.
-
-```
-### Does the pre-commit hook run the tests?
-depends: hook, Does check read staged files only?
-unrelated: Does check print a line with no move on it?
-```
-
-**4. Walk each question, then write its body.** Write the body of every
-heading. Before you write an option, read the code and the decisions it meets
-and find out what the option asks for: what the code has to keep, which part
-of it has to look and at what moment, and which current decision the option
-touches. That is what the option costs: write it on its Costs line. When you
-find a second question on the way, add its heading and run `adr plan <file>`.
-
-A question, its prose and its options hold what is asked and nothing about
-the day they were written. Three kinds of words are refused:
-
-- what the code does now: "already", "currently", "today", "right now", "at
-  the moment", "as built", "as implemented", "as is", "as it is",
-  "unchanged", "no change", "keep it", "nothing to build";
-- who said it: "said", "told", "agreed", "chose", "decided", "wants",
-  "prefers", "in chat", "in the chat", "this session", "as agreed",
-  "as discussed", "as decided", and the name of an agent;
-- a date.
+Every question holds at least one term. A new word enters `adrdom/terms.md`, as `## <name>`, a `definition:` line and an `aliases:` line; a definition says what the thing is, never what it does. Terms are approved before any topic file that names them. <!-- from: 711a7636-9f4d-402d-ae62-265208adf0ac, 7c306235-6243-4d79-b9aa-08ed19662779, fcc1c1ec-d8e8-428e-9731-9817cdeb8e76, aa475aa3-05b2-429a-b33a-46b1dcb52049, da0dc8b1-58cd-4a16-8e64-234e4bfd5320, 528fe6f6-6d77-42d5-9086-017048d1448d -->
+A topic file, `adrdom/decisions/<topic>.md`, holds the questions of one subject: a `# <Topic>` line, a few lines of prose, then the headings. <!-- from: 9913568f-6b85-4d26-946b-c6e108f9aa51, 625dea67-13a7-4e8e-913f-e997081a120c, 08193e75-dd89-4857-8e9f-b19e1a9e75e6 -->
+A heading is one question: "Does X ..." or "What does X ...". One that opens with which, where, how many or how much assumes its answer; one with "and" or "or" is two questions. <!-- from: 149c9a73-16eb-46aa-9806-2950423ee1a2, b3cb190d-d6f1-4930-bdcd-7827e31ac62a, 277a8338-c57a-43cc-8b28-6b42e9347f6a -->
+The body: <!-- from: 178a232e-b51c-4122-a1a9-9e9ed6970748, f5eeaacf-1c9f-478b-8a97-2df1aaf39458 -->
 
 ```
 Problem: what breaks, in one line.
@@ -166,167 +37,13 @@ Standard: the named practice for this, stated flat.
 - B) ...
 ```
 
-Two or three options. Under a heading that opens with Does, an option holds
-one word. Any other option, and every Why and Costs line, holds twenty words
-at most; `adr plan` and `adr check` report a longer line, and `adr approve`
-and `adr ask` refuse it. Strip each option to its answer to the heading and
-compare them: two options that answer it the same way are one option.
-
-A `depends:` entry on another question of this file carries its answer set:
-`=A`, `=A|B` or `=*`, the letters of the other question under which this one
-still makes sense.
-
-**5. Run `adr plan <file>` again.** For each question with its body it brings
-the ten nearest current decisions and term definitions, with the reader's
-word after one sentence of reason: same, consistent, inconsistent, unrelated,
-or closes with a letter, when the record leaves only that option standing; and
-the nearest other questions of this file, with same or unrelated. The reader's
-word is not a ruling; your line is. Write a line for each new neighbour. A
-heading or a body changed after its step is read
-again: run `adr plan <file>` until the move it prints is the owner's
-`adr approve`.
-
-Under a neighbour marked closes with a letter the record leaves that option
-alone standing, so the question is decided: strike the heading, or, when the
-neighbour is a decision the question is there to change, write it on the
-`supersedes:` line; when you read the neighbour and find more than one
-option standing, keep your line and say why in chat. Under a neighbour
-marked inconsistent, write it on `supersedes:` when it is a decision the
-question is there to change, reword the question so the two agree, or keep
-your line and say why in chat.
-
-**6. Ask approval.** Say the plan is ready, post
-`owner runs: adr approve <file>` and stop. The owner reads headings, lines
-and bodies once. The owner may strike, add or reorder headings before
-approving, or write the plan itself and approve it the same way. After
-approval every heading has an `id:` line and the entries of its lines are
-ids.
-
-**Then run `adr ask <file>`.** It asks the questions and prints one line
-for each ledger row it writes: `asked:` for each question, and `assumes:`
-for a question that stands on another under an answer set; or it prints in
-one run everything that stops it, each line with the move that clears it.
-Make every move before you run it again. Commit, post your lean for each
-question in chat, post the `owner runs: adr answer ...` lines `adr show`
-prints, and stop. The owner puts a letter, or the word `refuse`, in place of
-`<letter>`. When the answer is not in a question's answer set, the answer
-removes that question and every question standing on it from the file.
-
-**After the answer.** If you wrote the question, stop: another agent builds
-its decision from the record alone. Build the decisions the moves name. Tie
-each one to a test: put a comment `adr: <id>` inside a test, outside
-`adrdom/`, that shows the code follows the decision. Write the test if none
-exists, and add it to git. The answers are committed as they are given.
-An answer also strikes the section of every superseded question from every
-topic file; those files are committed with it.
-`adr check` reports each untested decision until a test names it; the build
-and its tests follow. It reports a test whose `adr: <id>` names a decision
-that is not current, and fails nothing: the builder points the tie at the
-decision that took its place, or removes it.
-
-Code that follows a decision may carry a comment `adr-code: <id>`, found by
-text search; it is never a test tie, and no rule judges it.
-
-Never write or edit `id:`, `terms:` or `**Answer:**` lines yourself.
-
-## Reviewing a build
-
-When you review a build, name the decision behind each behaviour. A behaviour
-with no decision behind it is a finding.
-
-## Changing a plan
-
-To add, strike or reword a heading, or change a line or a body: edit the
-file, run `adr plan <file>` until the move it prints is the owner's
-`adr approve`, say in chat what changed and why, and stop. The owner
-approves a plan as a whole, and every change costs them a full re-read: when one heading
-turns out wrong, check every heading in the file for the same flaw and
-propose all the changes together, once.
-
-## Terms
-
-`adrdom/terms.md` fixes the meaning of words. Every question uses at least
-one term. Terms are approved before any topic file that names them. When a
-question needs a word no term defines, add an entry and stop:
-
-```
-## <name>
-definition: What the thing is, never what it does.
-aliases: other forms, comma separated
-```
-
-The file starts with a `# Terms` line. To stop using a term, add
-`retired: yes` to its entry. The owner runs `adr approve adrdom/terms.md`
-after any edit.
-
-## Blame
-
-An old prose file (an origin) enters the records through a blame file,
-`adrdom/blame/<name>.md`: the line ranges of the origin, and for each range
-whether it holds a decision. Git keeps the text; the blame file copies none
-of it. Blame comes first, then planning: write the blame file before any
-heading.
-
-```
-origin: docs/adr/old-file.md
-blob: <git hash-object docs/adr/old-file.md>
-
-1-9	detail
-10-14	decision
-15-22	detail
-23-30	decision
-```
-
-A row is a line range, a tab, and one word. `decision` marks a range the
-owner settles by picking an option; `detail` is every other range. Lines are
-counted as an editor shows them, so a last line with no newline still counts
-(`wc -l` misses it). The ranges must reach every line of the origin; a range
-may appear in more than one row. Whether a decision is in the records, or
-contradicts one, is found in planning, not in the row. Nothing else is
-accepted. Say the blame file is ready, post
-`owner runs: adr approve adrdom/blame/<name>.md` and stop. Approval writes an
-`id:` line under the `blob:` line: leave that line as it is. Verification
-passes by other agents edit the rows; the owner approves once at the end.
-
-Then write the headings from the decision rows, each in the topic file of
-its subject, and under each heading a blame line: the name of the blame file,
-which is its path under `adrdom/blame` without `.md`, then the range of each
-row the question came from. `adr show --questions adrdom/blame/<name>.md`
-prints how many decision rows a question names and how many none names.
-
-```
-### Does the pre-commit hook run the tests?
-blame: old-file 10-14
-```
-
-A heading holds one blame line; a question that came from two blame files
-names both on it, comma separated: `blame: old-file 10-14 23-30, other 3-9`.
-Each range is the range of a row of an approved blame file. A question that
-replaces another carries only the ranges it came from itself. `adr check`
-reports no decision row that no question names: a row that planning merges
-into another heading, or drops as a copy, needs no heading of its own. From
-there the plan is made in its six steps.
-
-While the origin is in the repository, `adr check` compares it with the
-`blob:` line: when the origin changes, write the rows and the `blob:` line
-again, keep the `id:` line, and the owner approves again. Once the blame file
-is approved the origin may leave the repository: the owner deletes it.
-
-## When a command refuses
-
-Each line of the message names what failed and the move that clears it. Make
-the move it names and no other. A line ending in `owner runs: ...` is the
-owner's move: post that command in chat and stop. The owner is not a way
-past a refusal: never change a file just so the owner's command clears it,
-and never ask for an approval or an answer the refusal did not name. Never
-pass `--no-verify`, never edit anything under `adrdom/state/`, and never
-remove or edit the hooks.
-
-## Commands
-
-Yours: `adr show`, `adr plan`, `adr read`, `adr ask`, `adr check`,
-`adr install`, `adr ban` (only when the owner says a word is banned) and
-`adr ban --rebuild` (only when a refusal names it).
-
-The owner's, refused when you run them: `adr approve`, `adr answer`,
-`adr unban`, `adr serve`, `adr uninstall`.
+Under a heading that opens with Does, an option is one word. Two options that answer the heading the same way are one option. <!-- from: b3cb190d-d6f1-4930-bdcd-7827e31ac62a, 43778946-d44c-4acf-a766-0a4915fce199 -->
+A question holds nothing that ties it to the day it was written: no word on what the code does now, who said what, or a date. <!-- from: 149c9a73-16eb-46aa-9806-2950423ee1a2 -->
+Under each heading, every neighbour `adr plan` brings goes on one line: `depends:`, `supersedes:` or `unrelated:`. <!-- from: c6451ecc-17a9-447e-a9c9-fe9b35ec789c, de8ef568-3a8d-42ba-bef7-d7fd467b27be, daec9ffd-676f-4111-a359-2827bfd4527c -->
+A question stands on what it loses its meaning without: a term, or a question of the same file; a depends line names at most two questions. An entry on an open question carries its answer set, `=A`, `=A|B` or `=*`: the letters under which the question still makes sense. <!-- from: 9afe335c-2a7a-4625-b115-f74d3f091cac, 010901e0-c02d-49eb-98bc-d584756d7f51, 946263aa-519a-47aa-b743-5cdcf52f5d35, aef1b384-2b33-47a2-92a8-ec7f8fb258ef, 9d634996-475e-4ddc-8113-05c404ad9d5c -->
+A question that replaces a current decision names it on `supersedes:`, with every current decision standing on it; each leaves force once the question is answered. <!-- from: 796a2544-43e5-43db-b5d3-8a4e737ec9c6, f4f667ad-8714-4e65-897b-c7002e423c28, 2bae531b-c4df-48a0-89a0-3d52726741ea -->
+A tier holds at most four questions; tiers are unlimited: a question that stands on a question of its file sits a tier above it. <!-- from: 0e38f001-0226-4927-9a78-2e9fc1ec18d4, f1b4c4cc-97bd-446f-87b4-df5f1b6f4da2, f4819229-0bf1-4ca0-a2a7-bd2f318fbe8c -->
+`adr plan <file>` does the step the file is at and prints the next move, until the move is `owner runs: adr approve <file>`. <!-- from: 46fc51ff-66b9-4841-a953-ae0d4c2fc424, d3be71e4-ce7b-43b0-86a8-e86868521f99 -->
+The owner reads the whole plan at each approval, so a plan changes as a whole, not line by line. <!-- from: 796a2544-43e5-43db-b5d3-8a4e737ec9c6, f5eeaacf-1c9f-478b-8a97-2df1aaf39458, 23d53545-c238-48cc-ae5e-21a2c7aab83e, e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd -->
+`adr ask <file>` asks every unanswered question of the file at once; a question carries no lean, the agent's lean goes in chat. <!-- from: 1d7c758d-1fd5-4e0c-8559-517315b15aaa, 0a742360-83c2-479d-b858-4bea646c9b36 -->
+An old prose file enters the records through a blame file under `adrdom/blame/`, which the owner approves before any heading is written from it. <!-- from: e879fe72-ec07-48cd-9902-2b158aaae726, d2851ea1-fcb6-476a-b321-c813a594d5e5, ecb18413-cb3e-437e-9444-3cdd406ed67d, 108053a8-c2c3-4561-874c-2f573a5409f2 -->
