@@ -623,7 +623,7 @@ pub fn closed_findings(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<Finding>
                 // A genuine row exists: the ruling is real and the
                 // question's text moved since.
                 state::ClosedMatch::Edited if sec.is_refused() => push(msg::refused_text_changed(rel, &sec.heading_text)),
-                state::ClosedMatch::Edited => push(msg::answered_text_changed(rel, &sec.heading_text, id)),
+                state::ClosedMatch::Edited => push(msg::answered_text_changed(rel, &sec.heading_text)),
                 state::ClosedMatch::NotClosed if sec.is_refused() => push(msg::refusal_without_row(rel, &sec.heading_text)),
                 state::ClosedMatch::NotClosed => push(msg::answer_without_row(rel, &sec.heading_text)),
             }

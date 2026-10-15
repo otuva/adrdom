@@ -925,8 +925,7 @@ Standard: plain words.
 // decision by heading text, and the terms.md ledger row count below shows
 // nothing was written on the refusal. The decision behind it is answered
 // (current), so it can never be re-asked -- the next move named is
-// restoring the wording in adrdom/terms.md or superseding the decision by
-// id, never "re-asks" (per "Does a refusal name the command that clears
+// rewriting the entry so the word names the term again, never "re-asks" (per "Does a refusal name the command that clears
 // it?": a refusal about an answered question never tells the agent to
 // re-ask it, since that can't clear it).
 #[test]
@@ -963,14 +962,14 @@ fn approve_refuses_a_terms_edit_that_moves_a_word_off_a_term_carried_by_a_curren
     let err = stderr(&out);
     assert!(
         err.contains(
-            "word \"choice\" no longer names term \"decision\", used by adrdom/decisions/example.md: \"1.1 What is the choice?\"; agent restores adrdom/terms.md from git"
+            "word \"choice\" no longer names term \"decision\", used by adrdom/decisions/example.md: \"1.1 What is the choice?\"; agent rewrites the entry of \"decision\" so \"choice\" names it"
         ),
         "{}",
         err
     );
     assert!(
-        err.contains("agent restores adrdom/terms.md from git") && !err.contains(" or writes a question") && !err.contains("re-ask"),
-        "an answered decision's next move must be a restore from git, never re-ask: {}",
+        !err.contains(" or writes a question") && !err.contains("re-ask"),
+        "an answered decision's next move puts the wording back, never re-asks: {}",
         err
     );
     assert!(!err.contains("re-asks"), "an answered decision can never be re-asked: {}", err);

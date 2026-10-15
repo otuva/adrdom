@@ -94,6 +94,11 @@ enum Clause {
     NotYet(String),
 }
 
+/// The thing the fix helpers (`after_fix_agent_runs`, `after_fix_owner_runs`)
+/// rewrite is named by the failure that carries them; `Next::on` puts the
+/// thing in its place.
+const FIX_THE_THING: &str = "\u{1}";
+
 /// One or more next-move clauses, joined with `, `. `Next::agent(..)`
 /// reads as `agent <act>`; `Next::owner_runs(..)` as `owner runs:
 /// <command>`. A clause that names a command to run takes it as a
@@ -101,11 +106,6 @@ enum Clause {
 /// taken from the records is quoted as a shell reads it and the command
 /// runs as printed (per "Does a refusal name the command that clears
 /// it?"). Every clause is one act of `Act`.
-/// The thing the fix helpers (`after_fix_agent_runs`, `after_fix_owner_runs`)
-/// rewrite is named by the failure that carries them; `Next::on` puts the
-/// thing in its place.
-const FIX_THE_THING: &str = "\u{1}";
-
 #[derive(Clone, Debug)]
 pub struct Next(Vec<Clause>);
 
@@ -168,7 +168,7 @@ impl Next {
     pub fn then(mut self, act: impl Into<Act>) -> Next {
         let actor = match self.0.last() {
             Some(Clause::Do { actor, .. }) => *actor,
-            _ => Actor::Agent,
+            _ => panic!("then follows a clause somebody takes"),
         };
         self.0.push(Clause::Do { actor, act: act.into(), then: true });
         self
@@ -530,8 +530,8 @@ pub enum RetiredUser<'a> {
 pub fn word_moved_off_term(word: &str, term_name: &str, source: &str, decision_id: Option<&str>) -> Said {
     let next = match decision_id {
         // A current decision is never re-asked: the wording in the terms
-        // file returns, or a new question supersedes the decision.
-        Some(_) => Next::agent(Act::Restores(crate::repo::TERMS_PATH.to_string())),
+        // file returns.
+        Some(_) => Next::agent(Act::Rewrites(format!("the entry of \"{}\" so \"{}\" names it", term_name, word))),
         None => Next::agent(Act::Rewrites("the definition".into())).and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
     };
     said(
@@ -1556,7 +1556,7 @@ pub fn fix_then_same_command(what: &str) -> Next {
 
 /// The agent's move on a file a command cannot take as it stands: fix the
 /// file at `path` so `so` holds, then run `command` again.
-pub fn fix_then(path: &str, _so: &str, command: Cmd) -> Next {
+pub fn fix_then(path: &str, command: Cmd) -> Next {
     Next::agent_then_runs(Act::Rewrites(path.to_string()), command)
 }
 
@@ -1668,7 +1668,7 @@ pub fn answer_without_row(rel: &str, heading: &str) -> Said {
 /// decision change after it is answered?"), so the fix is to restore the
 /// text as it was answered, from git, or to write a new question that
 /// supersedes it when the change is meant.
-pub fn answered_text_changed(rel: &str, heading: &str, _id: &str) -> Said {
+pub fn answered_text_changed(rel: &str, heading: &str) -> Said {
     said(
         &crate::rule::ANSWERED_TEXT_FROZEN,
         format!("{}: {}: text changed since being answered", rel, heading),
@@ -1798,7 +1798,7 @@ pub fn banned_unbanned_but_in_file(hash_prefix: &str) -> Said {
 /// only asked (`ask` will write the line the next time it runs), or
 /// restoring the edit from git / superseding once it's answered (per "Does
 /// check fail an answered question whose text changed?").
-pub fn section_no_terms_line(rel: &str, heading: &str, _id: &str, answered: bool) -> Said {
+pub fn section_no_terms_line(rel: &str, heading: &str, answered: bool) -> Said {
     let next = if answered {
         Next::agent(Act::Restores("the terms line".into()))
     } else {
@@ -1820,7 +1820,7 @@ pub fn asked_terms_line_unreadable(rel: &str, heading: &str) -> Said {
 /// A section's `terms:` line is present but doesn't parse (per
 /// `terms::validate_pairs`'s `Malformed`). Same answered/asked split as
 /// `section_no_terms_line`.
-pub fn section_terms_line_malformed(rel: &str, heading: &str, _id: &str, answered: bool) -> Said {
+pub fn section_terms_line_malformed(rel: &str, heading: &str, answered: bool) -> Said {
     let next = if answered {
         Next::agent(Act::Restores("the terms line".into()))
     } else {
@@ -1834,7 +1834,7 @@ pub fn section_terms_line_malformed(rel: &str, heading: &str, _id: &str, answere
 /// still be re-asked; an answered one is frozen, so the fix moves to
 /// restoring the term in `adrdom/terms.md` (mirrors `term_removed_but_carried`)
 /// or superseding the decision.
-pub fn section_term_not_found(rel: &str, heading: &str, word: &str, _id: &str, answered: bool) -> Said {
+pub fn section_term_not_found(rel: &str, heading: &str, word: &str, answered: bool) -> Said {
     let next = if answered {
         Next::agent(Act::Restores("the term in adrdom/terms.md".into()))
     } else {
@@ -1850,7 +1850,7 @@ pub fn section_term_not_found(rel: &str, heading: &str, word: &str, _id: &str, a
 /// A section's `terms:` line names a term that is now retired. Same split
 /// as `section_no_terms_line`/`section_term_not_found`; the answered fix
 /// mirrors `term_retired_but_carried`'s decision-dependent branch.
-pub fn section_term_retired(rel: &str, heading: &str, name: &str, _id: &str, answered: bool) -> Said {
+pub fn section_term_retired(rel: &str, heading: &str, name: &str, answered: bool) -> Said {
     let next = if answered {
         Next::agent(Act::Rewrites("the term in adrdom/terms.md".into()))
     } else {
@@ -2222,7 +2222,7 @@ pub fn ledger_same_time_competition(time: &str, subject: &str) -> Said {
     said(
         &crate::rule::LEDGER_LATEST_ROW_IS_ONE,
         format!("two ledger rows at {} compete for {}", time, subject),
-        Next::owner(Act::Rewrites("the ledger".into())),
+        Next::owner(Act::RunsAgain),
     )
 }
 
@@ -2649,7 +2649,7 @@ pub fn model_load_failed(cache: &str, e: impl Display) -> String {
 pub fn embed_failed(e: impl Display) -> String {
     refuse(
         format!("model: cannot embed the texts: {}", e),
-        Next::agent(Act::Removes("adrdom/cache".into())),
+        Next::agent(Act::RunsAgain),
     )
 }
 
@@ -2816,14 +2816,14 @@ mod tests {
             tell("x.md", 3, "context", "claude", crate::tells::TellKind::Provenance).text(),
             no_depends_line("x.md", "heading").text(),
             no_depends_line_bare("heading").text(),
-            section_no_terms_line("x.md", "heading", "id-1", false).text(),
-            section_no_terms_line("x.md", "heading", "id-1", true).text(),
-            section_terms_line_malformed("x.md", "heading", "id-1", false).text(),
-            section_terms_line_malformed("x.md", "heading", "id-1", true).text(),
-            section_term_not_found("x.md", "heading", "word", "id-1", false).text(),
-            section_term_not_found("x.md", "heading", "word", "id-1", true).text(),
-            section_term_retired("x.md", "heading", "term", "id-1", false).text(),
-            section_term_retired("x.md", "heading", "term", "id-1", true).text(),
+            section_no_terms_line("x.md", "heading", false).text(),
+            section_no_terms_line("x.md", "heading", true).text(),
+            section_terms_line_malformed("x.md", "heading", false).text(),
+            section_terms_line_malformed("x.md", "heading", true).text(),
+            section_term_not_found("x.md", "heading", "word", false).text(),
+            section_term_not_found("x.md", "heading", "word", true).text(),
+            section_term_retired("x.md", "heading", "term", false).text(),
+            section_term_retired("x.md", "heading", "term", true).text(),
             term_definition_term_not_found("term", "word").text(),
             term_definition_term_retired("term", "retired-term").text(),
             term_definition_terms_line_malformed("term").text(),
@@ -2898,7 +2898,7 @@ mod tests {
             withdrawn_id_present("id-1", "heading", "x.md").text(),
             refusal_without_row("x.md", "heading").text(),
             answer_without_row("x.md", "heading").text(),
-            answered_text_changed("x.md", "heading", "id-1").text(),
+            answered_text_changed("x.md", "heading").text(),
             answered_row_without_line("x.md", "heading").text(),
             refused_row_without_line("x.md", "heading").text(),
             edited_after_asking(
@@ -3126,7 +3126,7 @@ mod tests {
     // (live), or write a question that supersedes the decision.
     #[test]
     fn section_term_not_found_answered_never_suggests_restoring_as_retired() {
-        let out = section_term_not_found("x.md", "heading", "word", "id-1", true).text();
+        let out = section_term_not_found("x.md", "heading", "word", true).text();
         assert!(!out.contains("retired"), "{}", out);
         assert!(out.contains("agent restores the term in adrdom/terms.md"), "{}", out);
     }
@@ -3180,9 +3180,9 @@ mod tests {
         let removed = term_removed_but_carried("u", Some("w"), "id-1", Some(("id-1", "H?"))).text();
         assert!(removed.contains("then writes a question that supersedes id-1 (\"H?\")"), "{}", removed);
         let moved = word_moved_off_term("w", "t", "id-1", Some("id-1")).text();
-        assert!(moved.ends_with("agent restores adrdom/terms.md from git"), "{}", moved);
+        assert!(moved.ends_with("agent rewrites the entry of \"t\" so \"w\" names it"), "{}", moved);
         assert!(!moved.contains("or writes a question"), "{}", moved);
-        assert!(section_no_terms_line("x.md", "H?", "id-1", true).text().contains("agent restores the terms line from git"));
+        assert!(section_no_terms_line("x.md", "H?", true).text().contains("agent restores the terms line from git"));
         let no_term = dep_no_term("x.md", "H?", "w").text();
         assert!(no_term.ends_with("agent writes the term in adrdom/terms.md"), "{}", no_term);
         assert!(!no_term.contains("or names another"), "{}", no_term);
@@ -3233,7 +3233,7 @@ pub fn removal_not_a_topic_file(rel: &str) -> String {
             "{} is absent and was never approved: its removal needs no owner act and there is nothing to approve",
             rel
         ),
-        Next::agent_runs(Cmd::fixed("git commit")),
+        Next::agent_runs(command(&["git", "commit", rel])),
     )
 }
 
@@ -3262,7 +3262,7 @@ pub fn planner_commit_outside(paths: &[String], named: usize) -> Said {
     said(
         &crate::rule::PLANNER_COMMIT_STAYS_IN_ADRDOM,
         format!("this planner's commit stages {}{} outside adrdom", shown, more),
-        Next::builder(Act::Runs(Cmd::fixed("git commit"))),
+        Next::builder(Act::Runs(command(&["git", "commit", "--", ":!adrdom"]))),
     )
 }
 
@@ -3270,7 +3270,7 @@ pub fn planner_commit_outside(paths: &[String], named: usize) -> Said {
 pub fn planner_roles_unreadable(path: &str, err: &std::io::Error) -> Said {
     said(
         &crate::rule::PLANNER_COMMIT_STAYS_IN_ADRDOM,
-        format!("{} cannot be read: {}; the role of this session is unknown", path, err),
+        format!("{} cannot be read, so the role of this session is unknown: {}", path, err),
         Next::owner(Act::Rewrites(path.to_string())),
     )
 }

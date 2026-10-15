@@ -413,7 +413,7 @@ fn install_claude_md(root: &Path, create: bool) -> Result<Option<Event>, String>
 fn merge_settings(root: &Path, cmd: &Cmd) -> Result<Option<Event>, String> {
     const REL: &str = ".claude/settings.json";
     let failed = |e: String| msg::update_failed(REL, e, msg::after_fix_agent_runs(cmd.clone()));
-    let fix = |so: &str| msg::fix_then(REL, so, cmd.clone());
+    let fix = || msg::fix_then(REL, cmd.clone());
     let dir = root.join(".claude");
     fs::create_dir_all(&dir).map_err(|e| failed(e.to_string()))?;
     let path = dir.join("settings.json");
@@ -424,14 +424,14 @@ fn merge_settings(root: &Path, cmd: &Cmd) -> Result<Option<Event>, String> {
             serde_json::json!({})
         } else {
             serde_json::from_str(&content)
-                .map_err(|e| msg::parse_failed(REL, e, fix("it parses as JSON")))?
+                .map_err(|e| msg::parse_failed(REL, e, fix()))?
         }
     } else {
         serde_json::json!({})
     };
 
     if !value.is_object() {
-        return Err(msg::settings_not_json_object(REL, fix("it holds a JSON object")));
+        return Err(msg::settings_not_json_object(REL, fix()));
     }
     let obj = value.as_object_mut().unwrap();
 
@@ -439,7 +439,7 @@ fn merge_settings(root: &Path, cmd: &Cmd) -> Result<Option<Event>, String> {
         .entry("permissions")
         .or_insert_with(|| serde_json::json!({}));
     if !permissions.is_object() {
-        return Err(msg::settings_permissions_not_object(REL, fix("permissions is an object")));
+        return Err(msg::settings_permissions_not_object(REL, fix()));
     }
     let permissions_obj = permissions.as_object_mut().unwrap();
 
@@ -447,7 +447,7 @@ fn merge_settings(root: &Path, cmd: &Cmd) -> Result<Option<Event>, String> {
         .entry("deny")
         .or_insert_with(|| serde_json::json!([]));
     if !deny.is_array() {
-        return Err(msg::settings_deny_not_array(REL, fix("permissions.deny is an array")));
+        return Err(msg::settings_deny_not_array(REL, fix()));
     }
     let deny_arr = deny.as_array_mut().unwrap();
 
