@@ -142,23 +142,6 @@ Standard: a single source of truth; a pending change is either approved or block
 
 **Answer:** A
 
-### Does approve accept a terms edit that changes more than one entry?
-depends: e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 528fe6f6-6d77-42d5-9086-017048d1448d, f590059d-b681-40ec-8a1c-c8916d71f6bb, aa475aa3-05b2-429a-b33a-46b1dcb52049
-id: d16be877-9422-4f2e-a6a1-e099be9e3b2b
-terms: approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, definition=607cb55f-c0fa-40af-b290-c17f3ba0f812, definitions=607cb55f-c0fa-40af-b290-c17f3ba0f812, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, refused=0942e445-0163-423e-8ba7-84dd8ac07045, terms=f590059d-b681-40ec-8a1c-c8916d71f6bb, terms file=528fe6f6-6d77-42d5-9086-017048d1448d
-
-Problem: ten definitions in one approve are not read one by one, and a definition that states a rule passes.
-Standard: a change is reviewed as one unit, and a batch hides the item that should have been refused.
-
-- A) No.
-  Why: the owner reads one definition at each approve, and a definition that states a rule stands alone.
-  Costs: a repository's first terms file needs one approve per entry.
-- B) Yes.
-  Why: one approve covers a whole edit, as it does for a plan.
-  Costs: the entry that should have been refused passes in the batch.
-
-**Answer:** A
-
 ### Does a retired term hold its words?
 depends: c584a68d-e54a-4ad2-8a6b-9d64ed098ae5, f590059d-b681-40ec-8a1c-c8916d71f6bb, 7c306235-6243-4d79-b9aa-08ed19662779
 supersedes: 05af74a6-36be-4923-b66f-1467b323816a, db58d4b8-9e64-44b0-99a2-acb7f05d5b4e
@@ -218,3 +201,5 @@ Standard: a change set is reviewed item by item from one submission, as a review
 - C) The file; one run approves every waiting entry.
   Why: one approve, one commit, like a plan.
   Costs: ten definitions read as one, and a definition that states a rule passes in the batch.
+
+**Answer:** A
