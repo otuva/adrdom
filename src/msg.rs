@@ -813,7 +813,7 @@ pub fn tier_cap_exceeded(rel: &str, open: &[String], answered: usize, cap: usize
             names
         )
     };
-    let next = Next::agent(Act::Rewrites("the depends lines of these questions".into()));
+    let next = Next::agent(Act::Writes("the question these stand on".into()));
     said(&rule::TIER_QUESTION_LIMIT, found, next)
 }
 

@@ -150,7 +150,7 @@ fn the_cap_refusal_names_the_questions_and_the_move() {
         "{}: 5 questions in one tier, the most is 4: \
 \"Is the widget one hold?\", \"Is the widget two hold?\", \"Is the widget three hold?\", \
 \"Is the widget four hold?\", \"{}\"; \
-agent rewrites the depends lines of these questions",
+agent writes the question these stand on",
         rel, FIFTH
     );
     let out = adr(&dir, &["check"], &[], "");
@@ -193,7 +193,7 @@ fn the_cap_refusal_names_only_the_questions_not_answered() {
 
     let refusal = format!(
         "{}: 5 questions in one tier, 4 answered, the most is 4: \"Is the widget five hold?\"; \
-agent rewrites the depends lines of these questions",
+agent writes the question these stand on",
         rel
     );
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");

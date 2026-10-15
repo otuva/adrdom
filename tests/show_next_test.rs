@@ -349,7 +349,7 @@ fn show_prints_the_refusal_of_a_plan_as_the_next_move() {
 
     let refusal = format!(
         "{}: 5 questions in one tier, 4 answered, the most is 4: \"Is the widget gate five hold?\"; \
-agent rewrites the depends lines of these questions",
+agent writes the question these stand on",
         REL
     );
     let five = "Is the widget gate five hold?";
