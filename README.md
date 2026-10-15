@@ -48,7 +48,7 @@ adr install --planning # on a machine that plans: fetch the embedding model and 
 adr uninstall          # owner-only: remove what install wrote outside adrdom/
 ```
 
-`adr install --planning` fetches the embedding model and the onnxruntime library into the user cache, once per machine: `~/.cache/adrdom` on Linux, `~/Library/Caches/adrdom` on macOS, `%LOCALAPPDATA%\adrdom` on Windows. `adr plan` and `adr read` stop and name this command when those files are missing.
+`adr install --planning` fetches the embedding model and the onnxruntime library into the user cache, once per machine: `~/.cache/adrdom` on Linux, `~/Library/Caches/adrdom` on macOS, `%LOCALAPPDATA%\adrdom` on Windows. `adr plan` and `adr read` stop and name this command when those files are missing. onnxruntime 1.28.0 has no build for Intel Macs, so `adr install --planning` refuses there; every other command works.
 
 `adr install` writes these files and one git setting:
 
