@@ -1384,3 +1384,7 @@
 2026-10-15T19:23:02Z	approved	459c1b77-82dd-469f-a60c-784b6f3d7b81	ef215f2568e4ba66fbacf07b890777d504b17ca5c6cb2c50f7c90c91a7be3c6b	adrdom/decisions/install.md	0.3.0
 2026-10-15T19:23:02Z	approved	5418b256-dfae-439a-96c1-57d82380cd1e	f7ef21ecf390785fb2e4660f66063b2db63e14c9a958b86091295d5b36184a8a	adrdom/decisions/install.md	0.3.0
 2026-10-15T19:23:02Z	approved	-	9c13fe26c31dc34c17b4439332b31481af35f07a098ddbc098a9111aaf9fd642	adrdom/decisions/install.md	0.3.0
+2026-10-15T19:23:28Z	asked	e1c305af-af94-494a-9fdb-3faffafa0e06	878ede94f35defffc139cfe3b0d808cb8eb4e1edd1fcf062011be799d522faf9	Does install fetch the embedding model?	0.3.0
+2026-10-15T19:23:28Z	assumes	e1c305af-af94-494a-9fdb-3faffafa0e06	b8d7aee30c7bfc778540e3899ae6d109cbb80a5973245f752c94c8223c363170	459c1b77-82dd-469f-a60c-784b6f3d7b81	0.3.0
+2026-10-15T19:23:28Z	asked	459c1b77-82dd-469f-a60c-784b6f3d7b81	d1cac21e717209fe88bdaa0dbf663dbae7f95462b8e4a1aca5463a7c3baa881c	Does install put the embedding model outside the repository?	0.3.0
+2026-10-15T19:23:28Z	asked	5418b256-dfae-439a-96c1-57d82380cd1e	f848626c394e4adc8e9773b3e6786234b233e026feac7c00921b97cac295925f	What does the reader run?	0.3.0
