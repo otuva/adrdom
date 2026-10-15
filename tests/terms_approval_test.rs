@@ -81,8 +81,16 @@ fn check_fails_naming_the_owners_move_while_terms_is_unapproved() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     let text = stdout(&out);
-    assert!(text.contains("adrdom/terms.md is new"), "{}", text);
-    assert!(text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
+    assert!(
+        text.contains("adrdom/terms.md: \"pass\" is new; commands read only the approved terms file; owner runs: adr approve adrdom/terms.md pass"),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains("not yet: commit; adrdom/terms.md waits for the owner's approval"),
+        "{}",
+        text
+    );
 }
 
 // adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
@@ -103,7 +111,11 @@ fn ask_refuses_while_terms_is_unapproved() {
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("adrdom/terms.md is changed"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("adrdom/terms.md: \"spare\" is new; commands read only the approved terms file; owner runs: adr approve adrdom/terms.md spare"),
+        "{}",
+        stderr(&out)
+    );
 }
 
 // adr: aa475aa3-05b2-429a-b33a-46b1dcb52049
@@ -135,11 +147,19 @@ fn answer_and_refuse_stop_while_terms_is_unapproved() {
 
     let answer_out = adr_answer(&dir, &id1, "A");
     assert!(!answer_out.status.success(), "{}", stdout(&answer_out));
-    assert!(stderr(&answer_out).contains("adrdom/terms.md is changed"), "{}", stderr(&answer_out));
+    assert!(
+        stderr(&answer_out).contains("adrdom/terms.md: \"spare\" is new; commands read only the approved terms file; owner runs: adr approve adrdom/terms.md spare"),
+        "{}",
+        stderr(&answer_out)
+    );
 
     let refuse_out = adr_answer(&dir, &id2, "refuse");
     assert!(!refuse_out.status.success(), "{}", stdout(&refuse_out));
-    assert!(stderr(&refuse_out).contains("adrdom/terms.md is changed"), "{}", stderr(&refuse_out));
+    assert!(
+        stderr(&refuse_out).contains("adrdom/terms.md: \"spare\" is new; commands read only the approved terms file; owner runs: adr approve adrdom/terms.md spare"),
+        "{}",
+        stderr(&refuse_out)
+    );
 }
 
 // adr: aa475aa3-05b2-429a-b33a-46b1dcb52049

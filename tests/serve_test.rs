@@ -657,7 +657,7 @@ fn terms_page_shows_an_unapproved_edit_marked_with_the_approve_form() {
     assert_eq!(resp.status, 200, "body: {}", resp.body);
     let shown = cli_lines(&dir, &["show", "adrdom/terms.md"]);
     assert_page_shows(&resp.body, &shown);
-    assert!(shown.contains(&"owner runs: adr approve adrdom/terms.md".to_string()), "{:?}", shown);
+    assert!(shown.contains(&"owner runs: adr approve adrdom/terms.md decision".to_string()), "{:?}", shown);
     assert!(
         shown.iter().any(|l| l.contains("A choice the owner answers in, once, in writing.")),
         "{:?}",
@@ -665,7 +665,8 @@ fn terms_page_shows_an_unapproved_edit_marked_with_the_approve_form() {
     );
     assert!(
         resp.body.contains("action=\"/approve\"")
-            && resp.body.contains("name=\"file\" value=\"adrdom/terms.md\""),
+            && resp.body.contains("name=\"file\" value=\"adrdom/terms.md\"")
+            && resp.body.contains("name=\"entry\" value=\"decision\""),
         "approve form missing: {}",
         resp.body
     );
@@ -1087,7 +1088,7 @@ fn post_approve_with_cookie_and_token_approves_terms_from_the_page() {
     let (port, token) = read_open_line(&mut child);
     let cookie = format!("adr_t={}", token);
 
-    let form = format!("file=adrdom/terms.md&t={}", token);
+    let form = format!("file=adrdom/terms.md&entry=decision&t={}", token);
     let resp = post(port, "/approve", Some(&cookie), &form);
     assert_eq!(resp.status, 302, "body: {}", resp.body);
     assert!(header(&resp, "Location").is_some_and(|l| l.starts_with("/?r=")), "{:?}", header(&resp, "Location"));
@@ -2030,4 +2031,52 @@ fn answer_page_keys_leave_enter_to_buttons_links_and_radios() {
     // radio never submits twice.
     assert_eq!(js.matches("requestSubmit").count(), 1, "{}", js);
     assert!(enter_branch.find("return;").unwrap() < enter_branch.find("requestSubmit").unwrap(), "{}", enter_branch);
+}
+
+// adr: da0dc8b1-58cd-4a16-8e64-234e4bfd5320
+//
+// While several entries of the terms file wait, the page gives each its own
+// control, its definition beside it, and no control approves the file as a
+// whole; a post names one entry and approves that one alone.
+#[test]
+fn terms_page_gives_each_waiting_entry_its_own_approve_control() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    write_record(
+        &dir,
+        "adrdom/terms.md",
+        "# Terms\n\n## alpha\ndefinition: A first thing.\naliases: \n\n## beta item\ndefinition: A second thing.\naliases: \n",
+    );
+    let mut child = spawn_owner(&dir, &["serve", "--port", "0"]);
+    let (port, token) = read_open_line(&mut child);
+    let cookie = format!("adr_t={}", token);
+
+    for path in ["/", "/terms"] {
+        let resp = get(port, path, Some(&cookie));
+        assert_eq!(resp.status, 200, "body: {}", resp.body);
+        for (name, def) in [("alpha", "A first thing."), ("beta item", "A second thing.")] {
+            let field = format!("name=\"entry\" value=\"{}\"", name);
+            assert_eq!(resp.body.matches(&field).count(), 1, "{}: {}", path, resp.body);
+            let control = &resp.body[resp.body[..resp.body.find(&field).unwrap()].rfind("<div class=\"entry-approve\">").unwrap()..];
+            assert!(control[..control.find("</form>").unwrap()].contains(def), "{}: {}", path, control);
+        }
+        assert_eq!(
+            resp.body.matches("name=\"file\" value=\"adrdom/terms.md\"").count(),
+            2,
+            "one file field per entry control, none apart: {}",
+            resp.body
+        );
+    }
+
+    let resp = post(port, "/approve", Some(&cookie), &format!("file=adrdom/terms.md&entry=beta+item&t={}", token));
+    assert_eq!(resp.status, 302, "body: {}", resp.body);
+    let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
+    assert!(ledger.contains("\tbeta item\t"), "{}", ledger);
+    assert!(!ledger.contains("\tterms\t"), "the file waits while alpha does: {}", ledger);
+    let page = get(port, "/terms", Some(&cookie));
+    assert!(!page.body.contains("name=\"entry\" value=\"beta item\""), "{}", page.body);
+    assert!(page.body.contains("name=\"entry\" value=\"alpha\""), "{}", page.body);
+
+    let _ = child.kill();
+    let _ = child.wait();
 }

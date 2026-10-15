@@ -143,7 +143,8 @@ fn check_does_not_report_no_term_for_a_real_term_in_an_unapproved_terms_file() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     let text = stdout(&out);
-    assert!(text.contains("adrdom/terms.md is new; commands read only the approved terms file; owner runs: adr approve adrdom/terms.md"), "{}", text);
+    assert!(text.contains("adrdom/terms.md: \"widget\" is new; commands read only the approved terms file; owner runs: adr approve adrdom/terms.md widget"), "{}", text);
+    assert!(text.contains("not yet: commit; adrdom/terms.md waits for the owner's approval"), "{}", text);
     assert!(!text.contains("no term"), "{}", text);
 }
 

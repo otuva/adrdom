@@ -359,11 +359,11 @@ pub const HEADING_IN_ONE_FILE: Rule = Rule {
     protects: "a question heading stands in one topic file",
 };
 
-/// Decision: Does approve accept a terms edit that changes more than one entry?
-pub const ONE_TERM_ENTRY_PER_APPROVAL: Rule = Rule {
-    name: "one_term_entry_per_approval",
-    decisions: &["d16be877-9422-4f2e-a6a1-e099be9e3b2b"],
-    protects: "an approval covers one terms entry",
+/// Decision: What does approve take for a terms file holding several entries that wait?
+pub const APPROVE_NAMES_ONE_TERM_ENTRY: Rule = Rule {
+    name: "approve_names_one_term_entry",
+    decisions: &["da0dc8b1-58cd-4a16-8e64-234e4bfd5320"],
+    protects: "approve of the terms file names one entry that waits",
 };
 
 /// Decision: What does a term hold?
@@ -1120,7 +1120,7 @@ pub const ALL: &[&Rule] = &[
     &FILE_NAME_MATCHES_TOPIC,
     &TOPIC_HAS_A_FILE_NAME,
     &HEADING_IN_ONE_FILE,
-    &ONE_TERM_ENTRY_PER_APPROVAL,
+    &APPROVE_NAMES_ONE_TERM_ENTRY,
     &TERM_ENTRY_FIELDS,
     &TERM_IDENTIFIER_IS_UNIQUE,
     &WORD_NAMES_ONE_TERM,

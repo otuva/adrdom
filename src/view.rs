@@ -16,6 +16,9 @@ pub struct CheckReport {
     /// What stopped `check` reading a file or a commit, apart from the
     /// findings: each prints as `check: <what>; <move>`.
     pub stops: Vec<String>,
+    /// The moves no finding carries: a commit that waits while the terms
+    /// file waits for the owner's approval.
+    pub moves: Vec<crate::moves::Move>,
 }
 
 

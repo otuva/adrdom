@@ -44,6 +44,9 @@ pub enum MoveKind {
     WriteBodies { headings: Vec<String> },
     /// The owner approves the file at `path`.
     Approve { path: String },
+    /// The owner approves one entry of the terms file that waits, by its
+    /// name (da0dc8b1).
+    ApproveEntry { name: String },
     /// The agent asks these questions of `rel`.
     Ask { rel: String, headings: Vec<String> },
     /// The owner answers this asked question.
@@ -69,6 +72,9 @@ pub enum MoveKind {
     /// The agent writes a question that supersedes one decision of each pair
     /// the reader marked same or inconsistent.
     SupersedeMarkedPairs,
+    /// A commit waits while the terms file waits for the owner's approval:
+    /// the hook's check refuses it until then.
+    CommitWaits,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,8 +112,9 @@ impl Move {
             return Mover::Builder;
         }
         match &self.kind {
-            MoveKind::Approve { .. } | MoveKind::Answer { .. } => Mover::Owner,
-            MoveKind::AnswerWaits { .. }
+            MoveKind::Approve { .. } | MoveKind::ApproveEntry { .. } | MoveKind::Answer { .. } => Mover::Owner,
+            MoveKind::CommitWaits
+            | MoveKind::AnswerWaits { .. }
             | MoveKind::BuildWaits { .. }
             | MoveKind::BuildWaitsRefused { .. }
             | MoveKind::BuildWaitsTiers { .. } => Mover::NotYet,
@@ -134,6 +141,7 @@ impl Move {
             MoveKind::WriteLines { headings } => Next::agent(format!("writes lines for {}", quoted(headings))),
             MoveKind::WriteBodies { headings } => Next::agent(format!("writes the body of {}", quoted(headings))),
             MoveKind::Approve { path } => Next::owner_runs(command(&["adr", "approve", path])),
+            MoveKind::ApproveEntry { name } => Next::owner_runs(crate::msg::approve_entry_cmd(name)),
             MoveKind::Ask { rel, .. } => Next::agent_runs(command(&["adr", "ask", rel])),
             MoveKind::Answer { id, version, .. } => {
                 Next::owner_runs(command(&["adr", "answer", &format!("{}@{}", id, version)]).then("<letter>"))
@@ -159,7 +167,8 @@ impl Move {
             MoveKind::SupersedeMarkedPairs => {
                 Next::agent("writes a question that supersedes one decision of each same or inconsistent pair")
             }
-            MoveKind::AnswerWaits { .. }
+            MoveKind::CommitWaits
+            | MoveKind::AnswerWaits { .. }
             | MoveKind::BuildWaits { .. }
             | MoveKind::BuildWaitsRefused { .. }
             | MoveKind::BuildWaitsTiers { .. } => return None,
@@ -194,6 +203,7 @@ impl Move {
             MoveKind::BuildWaitsTiers { heading } => {
                 format!("not yet: \"{}\" is answered and is built once the tiers of its file derive", heading)
             }
+            MoveKind::CommitWaits => format!("not yet: commit; {} waits for the owner's approval", crate::repo::TERMS_PATH),
             _ => self.next().expect("a move with a mover").render(),
         }
     }
@@ -507,6 +517,9 @@ pub fn of_unasked_question_in(j: &Judging, rf: &RecordFile, heading: &str, unwri
         findings.splice(0..0, gate.findings);
         stops = gate.stops;
     }
+    if gate.waits {
+        moves.push(Move::new(MoveKind::CommitWaits));
+    }
     Report { stops, findings, moves }
 }
 
@@ -576,6 +589,9 @@ pub fn of_topic_file_judged(
         moves.retain(|m| !matches!(m.kind, MoveKind::Approve { .. } | MoveKind::Ask { .. } | MoveKind::Answer { .. }));
         findings.splice(0..0, gate.findings);
         stops = gate.stops;
+    }
+    if gate.waits {
+        moves.push(Move::new(MoveKind::CommitWaits));
     }
     // A question asked and struck from the plan is cleared by the owner's
     // approve the moves above already name, so it joins the findings only
@@ -683,11 +699,20 @@ pub fn of_blame_file(
 
 /// The report of the terms file: the findings of the rules on it, and, for
 /// a file that differs from its latest approval with nothing left to clear,
-/// the owner's approval.
-pub fn of_terms_file(findings: Vec<Finding>, status: status::TermsFileStatus) -> Report {
+/// the owner's approval of each entry that waits (`waiting`, per "What does
+/// approve take for a terms file holding several entries that wait?",
+/// da0dc8b1 A), or of the file when no entry waits; while it differs, a
+/// commit waits.
+pub fn of_terms_file(findings: Vec<Finding>, status: status::TermsFileStatus, waiting: &[String]) -> Report {
     let mut moves = Vec::new();
     if findings.is_empty() && status.awaits_approval() {
-        moves.push(Move::new(MoveKind::Approve { path: crate::repo::TERMS_PATH.to_string() }));
+        if waiting.is_empty() {
+            moves.push(Move::new(MoveKind::Approve { path: crate::repo::TERMS_PATH.to_string() }));
+        }
+        moves.extend(waiting.iter().map(|name| Move::new(MoveKind::ApproveEntry { name: name.clone() })));
+    }
+    if status.awaits_approval() {
+        moves.push(Move::new(MoveKind::CommitWaits));
     }
     Report { stops: Vec::new(), findings, moves }
 }

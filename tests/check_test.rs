@@ -1669,12 +1669,12 @@ fn check_fails_outright_when_terms_is_unapproved_even_if_nothing_pairs_it() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     assert!(
-        stdout(&out).contains("adrdom/terms.md is new; commands read only the approved terms file; owner runs: adr approve adrdom/terms.md"),
+        stdout(&out).contains("adrdom/terms.md: \"decision\" is new; commands read only the approved terms file; owner runs: adr approve adrdom/terms.md decision"),
         "{}",
         stdout(&out)
     );
     assert!(
-        stdout(&out).contains("owner runs: adr approve adrdom/terms.md"),
+        stdout(&out).contains("not yet: commit; adrdom/terms.md waits for the owner's approval"),
         "{}",
         stdout(&out)
     );

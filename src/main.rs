@@ -39,10 +39,12 @@ enum Command {
     },
     /// Read every current decision against its ten nearest current decisions and print each pair the reader marks same or inconsistent.
     Read,
-    /// Owner-only: approve the headings and prose of a topic file, the terms file, or a blame file.
+    /// Owner-only: approve the headings and prose of a topic file, one entry of the terms file, or a blame file.
     Approve {
         /// A topic file, adrdom/terms.md, or a blame file under adrdom/blame.
         file: PathBuf,
+        /// For adrdom/terms.md: the name of the one entry that waits to approve, as `adr show` prints it.
+        entry: Option<String>,
     },
     /// Owner-only: answer a question, identified by `<id>@<version>`, with an option letter or `refuse`.
     Answer {
@@ -127,7 +129,7 @@ fn main() {
         Command::Ask { topic_file } => commands::ask::run(topic_file),
         Command::Plan { topic_file } => commands::plan::run(topic_file),
         Command::Read => commands::read::run(),
-        Command::Approve { file } => commands::approve::run(file),
+        Command::Approve { file, entry } => commands::approve::run(file, entry),
         Command::Answer { id, letter } => commands::answer::run(id, letter),
         Command::Show { topic_file, all, neighbours, dependents, unrelated, questions, reader, superseded } => commands::show::run(
             topic_file,
