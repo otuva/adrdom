@@ -40,8 +40,8 @@ pub enum Subject {
 
 /// The class a finding is filed under inside the tool: what `check` sorts
 /// failures from notes by, and what `approve` and `ask` pick the findings
-/// they refuse on by. Never printed: a finding prints its found text, what
-/// its rule protects and its move, with no tag.
+/// they refuse on by. Never printed: a finding prints its found text and
+/// its move, with no tag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Class {
     Parse,
@@ -107,9 +107,8 @@ impl std::fmt::Display for Command {
 }
 
 /// One rule a thing in the records breaks: the rule, what was found, and
-/// the move that clears it. Printed as `<found>; <protects>; <move>`, the
-/// protects words from the rule alone, with no leading tag, so the same line
-/// reads the same under every command.
+/// the move that clears it. Printed as `<found>; <move>`, with no leading
+/// tag, so the same line reads the same under every command.
 #[derive(Debug, Clone)]
 pub struct Finding {
     pub subject: Subject,
@@ -120,7 +119,7 @@ pub struct Finding {
     pub found: String,
     /// The move that clears it, whole (`agent ...`, `owner runs: ...`,
     /// `not yet ...`).
-    pub next: String,
+    pub next: msg::Next,
     /// The questions of the file the finding is about, by index; empty for
     /// a finding about the file as a whole (its prose, headings, tiers).
     /// `check` reads it to tell a finding in text that can still change from
@@ -130,7 +129,7 @@ pub struct Finding {
 
 impl Finding {
     /// A finding about the records of no class; `about` names its subject.
-    pub fn new(rule: &'static Rule, found: String, next: String) -> Finding {
+    pub fn new(rule: &'static Rule, found: String, next: msg::Next) -> Finding {
         Finding { subject: Subject::Records, rule, class: Class::Other, found, next, sections: Vec::new() }
     }
     /// A finding of `class` from what a message function said.
@@ -153,10 +152,9 @@ impl Finding {
         self.sections = indexes;
         self
     }
-    /// The finding as one line: what was found, what the rule protects, the
-    /// move that clears it. The one rendering every command prints.
+    /// The finding as one line: what was found and the move that clears it. The one rendering every command prints.
     pub fn text(&self) -> String {
-        msg::finding_line(&self.found, self.rule, &self.next)
+        msg::finding_line(&self.found, &self.next)
     }
 }
 

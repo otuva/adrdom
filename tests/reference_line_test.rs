@@ -76,6 +76,6 @@ fn a_second_blame_line_is_refused() {
     refused_everywhere(
         &dir,
         &record,
-        "adrdom/decisions/example.md: \"1.1 What is a decision?\": blame second line, line 6; each reference line appears once, on one line; agent rewrites the blame line",
+        "adrdom/decisions/example.md: \"1.1 What is a decision?\": blame second line, line 6; agent rewrites the blame line",
     );
 }

@@ -33,7 +33,7 @@ fn show_names_a_topic_file_it_cannot_read() {
     let out = adr(&dir, &["show"], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     assert!(
-        stdout(&out).contains("show: adrdom/decisions/bad.md: cannot be read: "),
+        stdout(&out).contains("show: adrdom/decisions/bad.md: cannot be read as text"),
         "{}",
         stdout(&out)
     );
@@ -47,7 +47,7 @@ fn show_refuses_a_topic_file_argument_it_cannot_read() {
     let out = adr(&dir, &["show", "adrdom/decisions/bad.md"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     assert!(
-        stderr(&out).starts_with("show: adrdom/decisions/bad.md: cannot be read: "),
+        stderr(&out).starts_with("show: adrdom/decisions/bad.md: cannot be read as text"),
         "{}",
         stderr(&out)
     );

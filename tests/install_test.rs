@@ -620,7 +620,7 @@ fn check_fails_when_the_state_brief_differs_or_is_missing_and_install_restores_i
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let path = dir.join("adrdom/state/brief.md");
-    let tail = "; AGENTS.md carries the tag and adrdom/state/brief.md the brief install writes; agent runs: adr install";
+    let tail = "; agent runs: adr install";
 
     let mut text = std::fs::read_to_string(&path).unwrap();
     text.push_str("an extra line\n");

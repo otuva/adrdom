@@ -282,7 +282,7 @@ fn ask_asks_a_candidate_standing_on_a_refused_question_and_the_plan_change_works
     assert_eq!(
         moves_of(&shown),
         vec![
-            "agent changes the plan: \"1.1 What color is the widget?\" is refused and holds the questions that come after it".to_string(),
+            "agent writes the plan change that drops or replaces \"1.1 What color is the widget?\"".to_string(),
             "not yet: \"1.2 Does the widget's paint match its color?\" is asked and waits for \"1.1 What color is the widget?\"".to_string(),
         ],
         "{}",
@@ -393,7 +393,7 @@ Standard: plain words.
         err
     );
     let next = nothing_to_ask_and_show(&dir, &record);
-    assert!(next.contains("agent changes the plan: \"1.0 Is the widget on backorder?\" is refused"), "{}", next);
+    assert!(next.contains("agent writes the plan change that drops or replaces \"1.0 Is the widget on backorder?\""), "{}", next);
     assert!(
         next.contains("not yet: \"1.2 Does the widget's paint match its color?\" is asked and waits for \"1.0 Is the widget on backorder?\""),
         "{}",
@@ -536,7 +536,7 @@ Standard: plain words.
             qx_id,
             current_version(&dir, &qx_id)
         ),
-        "agent changes the plan: \"1.1 What color is the widget?\" is refused and holds the questions that come after it".to_string(),
+        "agent writes the plan change that drops or replaces \"1.1 What color is the widget?\"".to_string(),
         "not yet: \"1.2 Does the widget's paint match its color?\" is asked and waits for \"1.1 What color is the widget?\"".to_string(),
     ];
     assert_eq!(moves_of(&shown), expected, "{}", shown);
@@ -587,7 +587,7 @@ fn answer_takes_a_question_in_the_order_it_stands_on() {
         assert_eq!(
             stderr(&out).trim_end(),
             format!(
-                "\"1.2 Does the widget's paint match its color?\" waits: \"1.1 What color is the widget?\" has no decision yet; no question is answered above one with no decision; owner runs: adr answer {}@{} <letter>",
+                "\"1.2 Does the widget's paint match its color?\" waits: \"1.1 What color is the widget?\" has no decision yet; owner runs: adr answer {}@{} <letter>",
                 q1_id,
                 current_version(&dir, &q1_id)
             )
@@ -623,7 +623,7 @@ fn answer_refuses_a_question_standing_on_a_refused_question() {
         assert!(!out.status.success(), "{}", letter);
         assert_eq!(
             stderr(&out).trim_end(),
-            "\"1.2 Does the widget's paint match its color?\" waits: \"1.1 What color is the widget?\" is refused and the question stands on it; nothing is asked above a refused question; agent writes the plan change that drops or replaces \"1.1 What color is the widget?\", owner runs: adr approve adrdom/decisions/example.md"
+            "\"1.2 Does the widget's paint match its color?\" waits: \"1.1 What color is the widget?\" is refused and the question stands on it; agent writes the plan change that drops or replaces \"1.1 What color is the widget?\", owner runs: adr approve adrdom/decisions/example.md"
         );
     }
 }
@@ -797,7 +797,7 @@ fn ask_refuses_when_a_refused_section_was_edited_since_refusal() {
     // rule, with its move.
     assert_eq!(
         stderr(&out).trim_end(),
-        "adrdom/decisions/example.md: 1.1 What color is the widget?: text changed since being refused; a refused question keeps the text it was refused with; agent restores adrdom/decisions/example.md from git"
+        "adrdom/decisions/example.md: 1.1 What color is the widget?: text changed since being refused; agent restores adrdom/decisions/example.md from git"
     );
     let checked = stdout(&adr(&dir, &["check"], &[], ""));
     assert!(checked.contains("adrdom/decisions/example.md: 1.1 What color is the widget?: text changed since being refused;"), "{}", checked);

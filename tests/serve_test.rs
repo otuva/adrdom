@@ -797,7 +797,7 @@ fn overview_shows_the_move_of_a_refused_question() {
     let resp = get(port, "/", Some(&cookie));
     assert_eq!(resp.status, 200, "body: {}", resp.body);
     let shown = cli_lines(&dir, &["show"]);
-    assert!(shown.iter().any(|l| l.contains("\"1.1 Root?\" is refused")), "{:?}", shown);
+    assert!(shown.iter().any(|l| l.contains("agent writes the plan change that drops or replaces \"1.1 Root?\"")), "{:?}", shown);
     assert_on_page(&shown, &resp.body);
 
     let _ = child.kill();
@@ -1648,7 +1648,7 @@ fn page_shows_a_reverted_depends_line_as_not_approved() {
     let _ = child.wait();
 }
 
-// adr: 3cf56867-3918-4ce6-a296-2cc62a91b154
+// adr: a9e9e370-7768-4a79-b67b-7fe0926b5670
 //
 // An act that wrote events and has findings on its input (an unban with one
 // word banned and one not): the banner shows both, each as its own kind,
@@ -1721,7 +1721,7 @@ fn two_asked() -> std::path::PathBuf {
     dir
 }
 
-// adr: 3cf56867-3918-4ce6-a296-2cc62a91b154
+// adr: a9e9e370-7768-4a79-b67b-7fe0926b5670
 //
 // The overview is a card per topic file under the heading "Overview": the
 // count of open questions, a link to the answer page, the file's status
@@ -1760,7 +1760,7 @@ fn overview_is_one_card_per_topic_with_the_asked_questions() {
     assert!(b.contains("action=\"/unban\""), "{}", b);
 }
 
-// adr: 3cf56867-3918-4ce6-a296-2cc62a91b154
+// adr: a9e9e370-7768-4a79-b67b-7fe0926b5670
 //
 // The answer page is one question at a time: its position among the open
 // questions and their count, the options with Why and Costs, the terms its
@@ -1808,7 +1808,7 @@ fn next_is_one_question_with_the_count_and_the_others_linked() {
     assert!(next.body.contains("What is the second unit called?") && next.body.contains("Question 1 of 1 open."), "{}", next.body);
 }
 
-// adr: 3cf56867-3918-4ce6-a296-2cc62a91b154
+// adr: a9e9e370-7768-4a79-b67b-7fe0926b5670
 //
 // A stop on an answer shows the same question again, the findings that
 // stopped it above it as a refused banner.
@@ -1917,7 +1917,7 @@ fn focus_heading(body: &str) -> String {
     unhtml(h1).trim().to_string()
 }
 
-// adr: 3cf56867-3918-4ce6-a296-2cc62a91b154
+// adr: a9e9e370-7768-4a79-b67b-7fe0926b5670
 //
 // Skip moves on in the order of the file and comes back to the one skipped
 // last; an answer moves on from the place of the question answered, though
@@ -1990,7 +1990,7 @@ fn answer_script(body: &str) -> &str {
     &body[from..from + to]
 }
 
-// adr: 3cf56867-3918-4ce6-a296-2cc62a91b154
+// adr: a9e9e370-7768-4a79-b67b-7fe0926b5670
 //
 // The keys of the answer page, read off the script it emits: a letter and S
 // work while a radio, a button or a link holds focus (only a field that takes

@@ -102,7 +102,7 @@ fn an_option_under_a_does_heading_holds_one_word() {
     let (dir, rec) = setup(&question("Does the decision hold?", "Yes: because.", "w.", "c."));
     let out = ask(&dir, &rec);
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("an option under a Does heading holds one word"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("the option has 2 words, the most is 1; agent rewrites the option"), "{}", stderr(&out));
 
     let (dir, rec) = setup(&question("Does the decision hold?", "Yes.", "w.", "c."));
     let out = ask(&dir, &rec);
@@ -194,7 +194,7 @@ fn check_approve_and_plan_find_a_too_long_option_before_approval() {
 fn check_and_approve_find_a_many_word_option_under_a_does_heading() {
     let (dir, rec) = unapproved(&question("Does the decision hold?", "Yes: because.", "w.", "c."));
     let out = both(&adr(&dir, &["check"], &[], ""));
-    assert!(out.contains("an option under a Does heading holds one word"), "{}", out);
+    assert!(out.contains("the option has 2 words, the most is 1; agent rewrites the option"), "{}", out);
     let out = adr_owner(&dir, &["approve", rec.to_str().unwrap()], "");
     assert!(!out.status.success());
     assert!(stderr(&out).contains("agent rewrites the option"), "{}", stderr(&out));

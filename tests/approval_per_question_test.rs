@@ -156,7 +156,7 @@ fn approve_refuses_a_depends_on_a_question_in_its_file_without_a_set() {
     let err = stderr(&out);
     assert!(err.contains("without an answer set"), "{}", err);
     assert!(
-        err.contains("agent writes =A, =A|B or =*") && err.contains("owner runs: adr approve"),
+        err.contains("agent writes an answer set (=A, =A|B or =*) on that depends entry") && err.contains("owner runs: adr approve"),
         "{}",
         err
     );
@@ -314,7 +314,7 @@ fn approve_refuses_a_set_on_an_entry_naming_a_term() {
     let out = approve(&dir);
     assert!(!out.status.success(), "{}", stdout(&out));
     let err = stderr(&out);
-    assert!(err.contains("a term has none"), "{}", err);
+    assert!(err.contains("depends on a term under an answer set"), "{}", err);
     assert!(err.contains("agent removes the answer set from that entry"), "{}", err);
     assert!(ledger_rows(&dir, "approved").is_empty());
 }

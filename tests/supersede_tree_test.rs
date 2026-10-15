@@ -235,7 +235,7 @@ fn check_prints_the_tree_refusal_once_for_an_approved_unasked_replacement_whose_
     let out = adr(&dir, &["check"], &[], "");
     let all = format!("{}{}", stdout(&out), stderr(&out));
     assert!(!out.status.success(), "check should fail: {}", all);
-    for n in [Q7, "c.md", "agent adds adrdom/decisions/c.md", "to the supersedes line"] {
+    for n in [Q7, "c.md", "agent rewrites the supersedes line of", "to add adrdom/decisions/c.md"] {
         assert!(all.contains(n), "check output should name {:?}: {}", n, all);
     }
     assert_eq!(

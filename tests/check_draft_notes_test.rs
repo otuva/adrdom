@@ -30,7 +30,7 @@ fn cases(tid: &str) -> Vec<(&'static str, String, &'static str)> {
     let long = "- A) Yes.\n  Why: one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twentyone.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n";
     let does2 = "- A) Yes indeed.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n";
     vec![
-        ("long why", format!("# Gate\n\n{}", q("Does the widget hold?", "widget", "the widget breaks.", long)), "at most twenty words"),
+        ("long why", format!("# Gate\n\n{}", q("Does the widget hold?", "widget", "the widget breaks.", long)), "the Why line has 21 words, the most is 20; agent rewrites the Why line"),
         ("does option two words", format!("# Gate\n\n{}", q("Does the widget hold?", "widget", "the widget breaks.", does2)), "Does"),
         ("loaded phrase in body", format!("# Gate\n\n{}", q("Does the widget hold?", "widget", "the widget currently breaks.", OPTS)), "\"currently\""),
         ("loaded heading", format!("# Gate\n\n{}", q("Which widget holds?", "widget", "the widget breaks.", OPTS)), "\"which\""),
@@ -45,19 +45,26 @@ fn cases(tid: &str) -> Vec<(&'static str, String, &'static str)> {
 }
 
 
-/// The words of the rule each shape fault of a case below breaks.
+/// The found text each shape fault of a case below prints.
 fn shape_want(name: &str) -> &'static str {
     match name {
-        "no decision sentence" | "two sentences" => "an option holds exactly one sentence",
-        "second depends line" | "second supersedes line" | "second unrelated line" | "second terms line" => "each reference line appears once, on one line",
-        "duplicate depends entry" => "a depends line names each thing once",
-        "duplicate id line" => "an identifier is assigned once, by the tool",
-        "second answer line" | "answer line not last" => "the answer line is the last line of a question",
-        "answer names a missing option" => "an answer names an option the question has",
-        "missing h1" | "second h1" | "text before h1" => "a topic file holds a heading, prose and questions only",
-        "tier heading" => "tiers come only from the depends lines",
-        "heading without a question mark" => "every third-level heading is a question ending in ?",
-        _ => panic!("no rule words for {}", name),
+        "no decision sentence" => "has no decision sentence; agent rewrites the option",
+        "two sentences" => "decision text has 2 sentences, more than one; agent rewrites the option",
+        "second depends line" => "depends second line, line 5; agent rewrites the depends line",
+        "second supersedes line" => "supersedes second line, line 6; agent rewrites the supersedes line",
+        "second unrelated line" => "unrelated second line, line 6; agent rewrites the unrelated line",
+        "second terms line" => "terms second line, line 8; agent rewrites the terms line",
+        "duplicate depends entry" => "depends: duplicate entry, line 4; agent removes the entry",
+        "duplicate id line" => "duplicate id line; agent removes the id line",
+        "second answer line" => "second answer line, line 19; agent removes the second answer line",
+        "answer line not last" => "answer line not last, line 17; agent removes the lines after the answer line",
+        "answer names a missing option" => "answer names missing option C; agent restores the answer line from git",
+        "missing h1" => "missing h1; agent rewrites the file",
+        "second h1" => "duplicate h1, line 17; agent rewrites the file",
+        "text before h1" => "text before h1, line 1; agent rewrites the file",
+        "tier heading" => "tier heading, line 3; agent removes the heading",
+        "heading without a question mark" => "line 17: a heading is not a question ending in ?; agent rewrites the line",
+        _ => panic!("no finding text for {}", name),
     }
 }
 
@@ -269,10 +276,10 @@ fn a_body_shape_finding_is_a_note_in_a_draft_and_a_failure_when_approved() {
         write_record(&dir, REL, &content);
         let (ok, text) = check(&dir);
         assert!(ok, "{}", text);
-        assert!(text.contains("a question holds Problem, Standard and two or three options"), "{}", text);
+        assert!(text.contains("agent rewrites the question"), "{}", text);
         let dir = repo();
         approve_via_ledger(&dir, REL, &content);
-        assert!(failures(&dir).contains("a question holds Problem, Standard and two or three options"), "{}", content);
+        assert!(failures(&dir).contains("agent rewrites the question"), "{}", content);
     }
 }
 

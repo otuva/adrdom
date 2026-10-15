@@ -239,7 +239,7 @@ fn plan_refuses_a_path_that_is_no_topic_file() {
         assert!(stdout(&out).is_empty(), "{}: {}", path, stdout(&out));
         assert_eq!(
             stderr(&out).trim_end(),
-            format!("plan: {} is not a topic file; agent names a topic file under adrdom/decisions", path)
+            format!("plan: {} is not a topic file; agent rewrites the path to a topic file under adrdom/decisions", path)
         );
     }
 }

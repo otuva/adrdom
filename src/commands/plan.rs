@@ -79,7 +79,7 @@ pub fn run(file: PathBuf) -> i32 {
     // (6c406624), whatever the run finds after.
     if let Err(e) = crate::session::mark_planner(&root) {
         out::eprint(&[out::refusal(Command::Plan,
-            &msg::write_failed(repo::ROLES_PATH, &e, msg::Next::owner("repairs or removes the file")),
+            &msg::write_failed(repo::ROLES_PATH, &e, msg::Next::owner(msg::Act::Rewrites(repo::ROLES_PATH.to_string()))),
         )]);
         return 1;
     }

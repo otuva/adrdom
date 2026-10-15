@@ -40,7 +40,7 @@ pub fn run(given: PathBuf) -> i32 {
     let loaded = record::load(&record_path);
     if loaded.is_ok() {
         if let Err(e) = crate::session::mark_planner(&root) {
-            out::eprint_stop(Command::Ask, &msg::write_failed(repo::ROLES_PATH, &e, msg::Next::owner("repairs or removes the file")));
+            out::eprint_stop(Command::Ask, &msg::write_failed(repo::ROLES_PATH, &e, msg::Next::owner(msg::Act::Rewrites(repo::ROLES_PATH.to_string()))));
             return 1;
         }
     }

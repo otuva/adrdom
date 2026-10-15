@@ -156,8 +156,7 @@ pub enum Line {
     /// question?", 6e72f34e A). A view: no move stands on it. The reader's
     /// words are not statuses (a closed list), so the line is no `Status`.
     Word { word: String, name: String },
-    /// A rule one thing in the records breaks: found, what the rule
-    /// protects, the move.
+    /// A rule one thing in the records breaks: found and the move.
     Finding(Finding),
     /// What stopped a command on its own input, files, environment or gate:
     /// `<command>: <what>; <move>`.
@@ -690,7 +689,7 @@ mod tests {
                 mark: Some(Side::Added),
             },
             Line::Word { word: "inconsistent".to_string(), name: "Does <it>?".to_string() },
-            Line::Finding(Finding::new(&crate::rule::TOPIC_FILE_SHAPE, "x.md: a <fault>".to_string(), "agent rewrites the file".to_string())),
+            Line::Finding(Finding::new(&crate::rule::TOPIC_FILE_SHAPE, "x.md: a <fault>".to_string(), crate::msg::Next::agent(crate::msg::Act::Rewrites("the file".into())))),
             Line::Stop { command: Command::Show, text: "x.md is not a file; agent names one".to_string() },
             Line::Move(Move::new(MoveKind::Approve { path: "x.md".to_string() })),
             Line::Event(Event::Asked { heading: "Does it?".to_string() }),
@@ -726,7 +725,7 @@ mod tests {
         out.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&")
     }
 
-    // adr: 3cf56867-3918-4ce6-a296-2cc62a91b154
+    // adr: a9e9e370-7768-4a79-b67b-7fe0926b5670
     //
     // A carriage return and an escape sequence in a record never reach the
     // terminal or the page as themselves: both show them written out.
@@ -749,14 +748,14 @@ mod tests {
                 mark: None,
             },
             Line::Word { word: "inconsistent".to_string(), name: "Does it not?".to_string() },
-            Line::Finding(Finding::new(&crate::rule::TOPIC_FILE_SHAPE, "x.md: a fault".to_string(), "agent rewrites the file".to_string())),
+            Line::Finding(Finding::new(&crate::rule::TOPIC_FILE_SHAPE, "x.md: a fault".to_string(), crate::msg::Next::agent(crate::msg::Act::Rewrites("the file".into())))),
             Line::Move(Move::new(MoveKind::Approve { path: "x.md".to_string() })),
             Line::Topic { text: "# Other (y.md)".to_string() },
             Line::Event(Event::Asked { heading: "Does it?".to_string() }),
         ]
     }
 
-    // adr: 44d02e7a-c902-4b89-973c-cf9d5c67c70e
+    // adr: 17059963-8eb3-479c-8f12-1df7b25b19f6
     //
     // With colour on, each kind of line carries the code of its kind; text
     // from the records still comes out with its escape written out; with
@@ -782,7 +781,7 @@ mod tests {
         assert!(off.iter().all(|l| !l.contains('\u{1b}')));
     }
 
-    // adr: 6875e4df-207a-4b62-8a89-d3179722a6d7
+    // adr: a5503032-f7f1-45a2-874a-5580d1211d37
     //
     // A refusal on standard error is a findings group: with shape on it
     // opens with the findings header.
@@ -793,7 +792,7 @@ mod tests {
         assert_eq!(render_lines(&stop, Style::PLAIN), vec!["show: no".to_string()]);
     }
 
-    // adr: 6875e4df-207a-4b62-8a89-d3179722a6d7
+    // adr: a5503032-f7f1-45a2-874a-5580d1211d37
     //
     // With shape on, a blank line separates the groups and a header heads
     // the findings and the moves; with shape off the lines are the plain
@@ -815,7 +814,7 @@ mod tests {
         assert_eq!(shaped.iter().filter(|l| !l.is_empty()).filter(|l| *l != "Findings" && *l != "Moves").cloned().collect::<Vec<_>>(), plain);
     }
 
-    // adr: 6875e4df-207a-4b62-8a89-d3179722a6d7
+    // adr: a5503032-f7f1-45a2-874a-5580d1211d37
     //
     // A later call on a terminal stream continues the group the stream
     // ended in, and starts another group with a blank line and its header.

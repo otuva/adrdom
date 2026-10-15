@@ -113,7 +113,7 @@ fn read_all(root: &std::path::Path) -> Result<Vec<Line>, String> {
             "inconsistent" => 1,
             _ => continue,
         };
-        let next = "agent writes a question that supersedes one of the pair";
+        let next = msg::Next::agent(msg::Act::Writes("a question that supersedes one of the pair".to_string()));
         let said = msg::read_pair(
             &row.word,
             heading_of(&decisions[a].text),

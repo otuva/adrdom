@@ -75,8 +75,8 @@ fn piped(dir: &Path, args: &[&str]) -> String {
 
 #[test]
 fn a_terminal_gets_colour_and_groups_and_a_pipe_gets_plain_lines() {
-    // adr: 44d02e7a-c902-4b89-973c-cf9d5c67c70e
-    // adr: 6875e4df-207a-4b62-8a89-d3179722a6d7
+    // adr: 17059963-8eb3-479c-8f12-1df7b25b19f6
+    // adr: a5503032-f7f1-45a2-874a-5580d1211d37
     if !script_present() {
         eprintln!("skipped: `script` is not installed");
         return;
