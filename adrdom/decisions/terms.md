@@ -198,3 +198,23 @@ Standard: a record that others reference is not removed while the references sta
   Costs: the records fail after an owner command, and the move to clear them is a supersede of each named decision.
 
 **Answer:** A
+
+### What does approve take for a terms file holding several entries that wait?
+depends: e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, 528fe6f6-6d77-42d5-9086-017048d1448d, aa475aa3-05b2-429a-b33a-46b1dcb52049
+supersedes: d16be877-9422-4f2e-a6a1-e099be9e3b2b
+unrelated: fcab4bf9-c02d-4094-b3cb-688c4ec312dc, 7cf81ded-be48-4777-b83e-f8a2998c1ab5, 912f4f3b-1213-435a-af0d-7617017fcff4, ec3f875c-a0f8-4085-8da1-fec9dcb14377, 91f9652a-f053-4b32-9534-c9c39e7639a4, 1cdec741-98e1-4715-a7a5-94f7a73cd425, 0487a1cf-eb61-4bf8-bd16-eed899d22d2c, 4f04bae4-98e3-48eb-9403-3257268e2d87, e879fe72-ec07-48cd-9902-2b158aaae726, ec0b9293-916e-4ced-a3d7-3b862ab7b069, 05141f49-d9d2-407c-b60c-ebb195a05864
+id: da0dc8b1-58cd-4a16-8e64-234e4bfd5320
+terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, approval=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approve=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, approves=e9a1ecc6-f300-4b04-ae85-f4b88c1ba9bd, definition=607cb55f-c0fa-40af-b290-c17f3ba0f812, definitions=607cb55f-c0fa-40af-b290-c17f3ba0f812, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, plan=94677ed8-eaf6-46e2-bc71-7392fa0805bf, refused=0942e445-0163-423e-8ba7-84dd8ac07045, terms=f590059d-b681-40ec-8a1c-c8916d71f6bb, terms file=528fe6f6-6d77-42d5-9086-017048d1448d
+
+Problem: a repository's first terms file needs several entries, and one approve per agent round makes the agent drop terms.
+Standard: a change set is reviewed item by item from one submission, as a review tool lists each file for its own approval.
+
+- A) The name of one entry; each run approves that entry, new or changed, in any order.
+  Why: the owner reads one definition per approve, and the agent writes every entry once.
+  Costs: approve takes an argument for the terms file, and show prints one line per waiting entry.
+- B) The file; each run approves the first waiting entry in file order.
+  Why: the command keeps its shape, no argument.
+  Costs: the owner cannot pick an entry, and one refused entry blocks the ones after it.
+- C) The file; one run approves every waiting entry.
+  Why: one approve, one commit, like a plan.
+  Costs: ten definitions read as one, and a definition that states a rule passes in the batch.
