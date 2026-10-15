@@ -1002,4 +1002,9 @@ fn install_writes_the_brief_without_its_tie_comments() {
     assert_eq!(written, adr::commands::install::strip_ties(include_str!("../assets/brief.md")));
     assert!(!written.contains("<!--"), "{}", written);
     assert_eq!(adr::commands::install::strip_ties("a <!-- from: x -->\r\nb\nc <!-- keep -->\n"), "a\r\nb\nc <!-- keep -->\n");
+    // A fenced line keeps its comment, as check leaves fenced lines unread.
+    assert_eq!(
+        adr::commands::install::strip_ties("```\nx <!-- from: y -->\n```\nz <!-- from: w -->\n"),
+        "```\nx <!-- from: y -->\n```\nz\n"
+    );
 }

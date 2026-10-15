@@ -40,11 +40,16 @@ pub const TIE_OPEN: &str = " <!-- from:";
 /// byte (adr-code: de5ed5b1-3a83-4403-8953-941cb7e94390).
 pub fn strip_ties(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
+    let mut fenced = false;
     for line in text.split_inclusive('\n') {
         let body = line.trim_end_matches(['\n', '\r']);
         let ends = &line[body.len()..];
+        // A fenced line is left as it is, as `check` leaves it unread.
+        if body.starts_with("```") {
+            fenced = !fenced;
+        }
         match body.rfind(TIE_OPEN) {
-            Some(at) if body.ends_with("-->") && body[at..].matches("-->").count() == 1 => {
+            Some(at) if !fenced && body.ends_with("-->") && body[at..].matches("-->").count() == 1 => {
                 out.push_str(&body[..at]);
                 out.push_str(ends);
             }

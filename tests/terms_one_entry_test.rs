@@ -195,3 +195,31 @@ fn plan_check_and_show_name_the_commit_that_waits_while_the_terms_file_waits() {
     assert!(!stdout(&adr(&dir, &["check"], &[], "")).contains(line));
     assert!(!stdout(&adr(&dir, &["show"], &[], "")).contains(line));
 }
+
+// adr: fcab4bf9-c02d-4094-b3cb-688c4ec312dc
+// The terms brief holds approved definitions only: a named approve that
+// leaves entries waiting writes no brief, the one that settles the file does.
+#[test]
+fn the_terms_brief_is_written_once_the_file_settles_and_holds_no_waiting_entry() {
+    let (dir, path) = repo();
+    let brief = dir.join("adrdom/state/terms-brief.md");
+    three(&path);
+    assert!(approve(&dir, Some("alpha")).status.success());
+    assert!(!brief.exists(), "a brief written while beta and gamma wait");
+    assert!(approve(&dir, Some("beta item")).status.success());
+    assert!(!brief.exists(), "a brief written while gamma waits");
+    let out = approve(&dir, Some("gamma"));
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let text = std::fs::read_to_string(&brief).unwrap();
+    assert!(stdout(&out).contains("adrdom/state/terms-brief.md"), "{}", stdout(&out));
+    for name in ["alpha", "beta item", "gamma"] {
+        assert!(text.contains(name), "{}", text);
+    }
+    // A changed entry leaves the brief at the last approval until approved.
+    let file = std::fs::read_to_string(&path).unwrap().replace("A second thing.", "A changed thing.");
+    std::fs::write(&path, file).unwrap();
+    let before = std::fs::read_to_string(&brief).unwrap();
+    assert_eq!(before, text);
+    assert!(approve(&dir, Some("beta item")).status.success());
+    assert!(std::fs::read_to_string(&brief).unwrap().contains("A changed thing."));
+}
