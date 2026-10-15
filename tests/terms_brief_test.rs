@@ -193,5 +193,5 @@ fn the_brief_names_the_terms_brief() {
         }
     }
     assert!(found, "no @ line for the terms brief:\n{}", agents);
-    assert!(agents.contains("Read\nthat file before you write"), "{}", agents);
+    assert!(agents.contains("every agent reads it before it writes a question, code or a reply:"), "{}", agents);
 }

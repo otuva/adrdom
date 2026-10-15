@@ -859,39 +859,17 @@ fn check_staged_judges_the_staged_hook_not_the_working_tree_copy() {
     );
 }
 
-// adr: f8d92841-aef7-4cd7-bd94-0e07c03e4cb6
-// The installed brief tells the agent to build a decision when `show`
-// names it and not before; `show` names it once every question beside it
-// is answered (tests/show_next_test.rs holds that half).
-#[test]
-fn installed_brief_tells_the_agent_to_build_only_a_fully_answered_tier() {
-    let dir = init_repo();
-    assert!(adr(&dir, &["install"], &[], "").status.success());
-
-    let agents = std::fs::read_to_string(dir.join("adrdom/state/brief.md")).unwrap();
-    assert!(
-        agents.contains(
-            "Build a decision when a move\n   names it, and not before."
-        ),
-        "{}",
-        agents
-    );
-}
-
 // adr: 23d53545-c238-48cc-ae5e-21a2c7aab83e
-// The installed brief tells the agent that the owner may strike, add or
-// reorder headings before approving, or write the plan itself.
+// The installed brief says the agents write the questions and the owner
+// approves the plan.
 #[test]
-fn installed_brief_tells_the_owner_may_edit_or_write_the_plan() {
+fn installed_brief_says_agents_write_the_questions_and_the_owner_approves() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let agents = std::fs::read_to_string(dir.join("adrdom/state/brief.md")).unwrap();
-    let flat = agents.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(
-        flat.contains(
-            "The owner may strike, add or reorder headings before approving, or write the plan itself and approve it the same way."
-        ),
+        agents.contains("Agents write the questions. Only the owner approves a plan and answers a question"),
         "{}",
         agents
     );
@@ -901,11 +879,8 @@ fn installed_brief_tells_the_owner_may_edit_or_write_the_plan() {
 //
 // "Does the agent build what no current decision covers?": the tool
 // cannot enforce this itself (there is no build step it runs), so the
-// decision is implemented entirely as the installed brief's instruction to
-// the agent -- checked here the same way `check` verifies the rest of the
-// brief's text landed in AGENTS.md verbatim. Three things the brief must
-// say: don't build without a covering decision, write the question and
-// stop, and say so and stop when a current decision looks wrong.
+// decision stands in the installed brief: behaviour no current decision
+// covers is a question before it is built.
 #[test]
 fn installed_brief_tells_the_agent_not_to_build_without_a_covering_decision() {
     let dir = init_repo();
@@ -913,16 +888,7 @@ fn installed_brief_tells_the_agent_not_to_build_without_a_covering_decision() {
 
     let agents = std::fs::read_to_string(dir.join("adrdom/state/brief.md")).unwrap();
     assert!(
-        agents.contains(
-            "If no current decision covers what you are about to build, do not build\n   it. Write the question (below) and stop until the owner answers."
-        ),
-        "{}",
-        agents
-    );
-    assert!(
-        agents.contains(
-            "If a current decision looks wrong, say so in chat and stop. Never edit an\n   answered question and never work around a decision."
-        ),
+        agents.contains("Behaviour no current decision covers is a question for the owner before it is built"),
         "{}",
         agents
     );

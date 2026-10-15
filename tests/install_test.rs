@@ -388,7 +388,7 @@ fn install_writes_the_tag_to_agents_md_and_the_brief_to_state() {
     );
     assert_eq!(
         std::fs::read_to_string(dir.join("adrdom/state/brief.md")).unwrap(),
-        include_str!("../assets/brief.md")
+        adr::commands::install::brief()
     );
 
     let again = adr(&dir, &["install"], &[], "");
@@ -645,7 +645,7 @@ fn check_fails_when_the_state_brief_differs_or_is_missing_and_install_restores_i
     assert!(adr(&dir, &["install"], &[], "").status.success());
     assert_eq!(
         std::fs::read_to_string(&path).unwrap(),
-        include_str!("../assets/brief.md")
+        adr::commands::install::brief()
     );
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
@@ -659,7 +659,7 @@ fn a_crlf_brief_file_is_current_to_check_and_install() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let path = dir.join("adrdom/state/brief.md");
-    let crlf = include_str!("../assets/brief.md").replace('\n', "\r\n");
+    let crlf = adr::commands::install::brief().replace('\n', "\r\n");
     std::fs::write(&path, &crlf).unwrap();
 
     let out = adr(&dir, &["check"], &[], "");
@@ -990,4 +990,16 @@ fn install_prints_one_line_per_file_written_and_nothing_else() {
     let again = adr(&dir, &["install", "--claude", "--codex"], &[], "");
     assert!(again.status.success(), "{}", stderr(&again));
     assert_eq!(stdout(&again), "", "{}", stdout(&again));
+}
+
+// adr: de5ed5b1-3a83-4403-8953-941cb7e94390
+// Install writes the brief without the tie comments the asset carries.
+#[test]
+fn install_writes_the_brief_without_its_tie_comments() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let written = std::fs::read_to_string(dir.join("adrdom/state/brief.md")).unwrap();
+    assert_eq!(written, adr::commands::install::strip_ties(include_str!("../assets/brief.md")));
+    assert!(!written.contains("<!--"), "{}", written);
+    assert_eq!(adr::commands::install::strip_ties("a <!-- from: x -->\r\nb\nc <!-- keep -->\n"), "a\r\nb\nc <!-- keep -->\n");
 }

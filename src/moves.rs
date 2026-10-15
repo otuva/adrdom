@@ -61,6 +61,15 @@ pub enum MoveKind {
     /// the current decisions (heading, id) that took its place, or removes it
     /// when none did (2381d759).
     Retie { to: Vec<(String, String)> },
+    /// The agent writes the from-comment a sentence of the brief lacks.
+    BriefTieWrite,
+    /// The agent rewrites a from-comment of the brief that names no
+    /// decision or term, or is malformed.
+    BriefTieFix,
+    /// The agent moves a from-comment of the brief from a decision that is
+    /// not current to the current decisions (heading, id) that took its
+    /// place, or removes it when none did.
+    BriefTieRetie { to: Vec<(String, String)> },
     /// An answered decision built once the question beside it is answered.
     BuildWaits { heading: String, beside: String },
     /// An answered decision built once the plan changes: the question
@@ -108,7 +117,12 @@ impl Move {
     /// Who takes the move, fixed by its kind (and, for a build, the role of
     /// the session).
     pub fn actor(&self) -> Mover {
-        if matches!(self.kind, MoveKind::Build { .. } | MoveKind::Retie { .. }) && self.session == crate::session::Role::Planner {
+        if matches!(self.kind, MoveKind::Build { .. }
+                | MoveKind::Retie { .. }
+                | MoveKind::BriefTieWrite
+                | MoveKind::BriefTieFix
+                | MoveKind::BriefTieRetie { .. }
+            ) && self.session == crate::session::Role::Planner {
             return Mover::Builder;
         }
         match &self.kind {
@@ -126,6 +140,9 @@ impl Move {
             | MoveKind::Refused { .. }
             | MoveKind::Build { .. }
             | MoveKind::Retie { .. }
+            | MoveKind::BriefTieWrite
+            | MoveKind::BriefTieFix
+            | MoveKind::BriefTieRetie { .. }
             | MoveKind::SupersedeMarkedPairs => Mover::Agent,
         }
     }
@@ -161,6 +178,21 @@ impl Move {
                     let list: Vec<String> =
                         to.iter().map(|(h, id)| format!("\"{}\" (\"adr: {}\")", h, id)).collect();
                     Act::Rewrites(format!("the tie comment to {}", list.join(" and ")))
+                };
+                self.build_mover(action)
+            }
+            MoveKind::BriefTieWrite => {
+                self.build_mover(Act::Writes("the from-comment naming the decision or term the sentence states".to_string()))
+            }
+            MoveKind::BriefTieFix => {
+                self.build_mover(Act::Rewrites("the from-comment to name a decision or term of the records".to_string()))
+            }
+            MoveKind::BriefTieRetie { to } => {
+                let action = if to.is_empty() {
+                    Act::Removes("the from-comment from the brief".to_string())
+                } else {
+                    let list: Vec<String> = to.iter().map(|(h, id)| format!("\"{}\" ({})", h, id)).collect();
+                    Act::Rewrites(format!("the from-comment to {}", list.join(" and ")))
                 };
                 self.build_mover(action)
             }

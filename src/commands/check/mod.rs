@@ -1,6 +1,7 @@
 mod answers;
 mod banned;
 mod blame;
+mod brief;
 mod ids;
 mod install;
 mod ledger;
@@ -264,6 +265,9 @@ fn build(
     if staged || message.is_some() {
         push_failures(&mut failures, planner::check_commit(root));
     }
+    let (brief_failures, brief_notes) = brief::check_brief(root, &source, &records, &terms_list, &led, crate::session::role(root));
+    push_failures(&mut failures, brief_failures);
+    notes.extend(brief_notes);
     let untested = tests::check_tests(root, &records, &led, tests, &source, crate::session::role(root));
     let (tells_failures, tells_notes) = parse::check_rule(Class::Tells, &records, &per_record_findings, &awaiting, &led);
     push_failures(&mut failures, tells_failures);
