@@ -167,7 +167,7 @@ fn install_writes_the_ignore_file_and_check_holds_it() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("adrdom/.gitignore is missing; the adrdom gitignore equals what install writes; agent runs: adr install"),
+        stdout(&out).contains("adrdom/.gitignore is missing; agent runs: adr install"),
         "{}",
         stdout(&out)
     );
@@ -179,7 +179,7 @@ fn install_writes_the_ignore_file_and_check_holds_it() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("adrdom/.gitignore differs from what install writes; the adrdom gitignore equals what install writes; agent runs: adr install"),
+        stdout(&out).contains("adrdom/.gitignore differs from what install writes; agent runs: adr install"),
         "{}",
         stdout(&out)
     );
@@ -232,7 +232,7 @@ fn the_loader_refuses_when_the_model_is_missing() {
     std::env::remove_var("ADR_NO_MODEL");
     let e = r.err().expect("the model is absent");
     assert!(e.contains("the embedding model is missing"), "{}", e);
-    assert!(e.contains("agent fetches it"), "{}", e);
+    assert!(e.contains("agent builds adr with the model feature"), "{}", e);
 }
 
 // adr: de8ef568-3a8d-42ba-bef7-d7fd467b27be

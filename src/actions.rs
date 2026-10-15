@@ -456,7 +456,7 @@ fn finish_answer(
                 msg::update_failed(
                     "ledger",
                     format!("{}; {} holds the answer line and could not be put back: {}", e, rf.rel, back),
-                    Next::agent(format!("fixes the ledger and removes the answer line from {}", rf.rel))
+                    Next::agent(msg::Act::Rewrites("the ledger".to_string())).then(msg::Act::Removes(format!("the answer line from {}", rf.rel)))
                         .and_owner_runs(crate::moves::command(&["adr", "answer", &format!("{}@{}", id, version), given])),
                 ),
             ));

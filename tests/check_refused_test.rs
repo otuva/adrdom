@@ -40,7 +40,7 @@ fn check_fails_a_refusal_line_without_a_ledger_row() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains("adrdom/decisions/example.md: 1.1 Q?: refusal line without ledger row; a refusal line needs the owner's refusal row; agent removes the answer line"),
+        text.contains("adrdom/decisions/example.md: 1.1 Q?: refusal line without ledger row; agent removes the answer line"),
         "{}",
         text
     );
@@ -58,7 +58,7 @@ fn check_fails_a_refused_row_without_the_line() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains("adrdom/decisions/example.md: 1.1 Q?: refused row without answer line; a refused question keeps its refusal line; agent restores adrdom/decisions/example.md from git"),
+        text.contains("adrdom/decisions/example.md: 1.1 Q?: refused row without answer line; agent restores adrdom/decisions/example.md from git"),
         "{}",
         text
     );
@@ -129,7 +129,7 @@ fn check_a_refused_id_is_never_untested_but_a_tie_to_it_is_reported() {
     );
     assert!(
         line_with(&text, &REFUSABLE_ID, " tied to a test and not a current decision")
-            && text.contains("a test tie names the decision in force; agent removes the tie comment from the test"),
+            && text.contains("agent removes the tie comment from the test"),
         "a tie to a refused id must be reported: {}",
         text
     );
@@ -193,7 +193,7 @@ fn check_names_the_file_when_an_asked_heading_is_dropped_by_an_unapproved_edit()
     let text = stdout(&out);
     assert!(
         text.contains(&format!(
-            "{} (\"1.1 Q?\", asked) was removed from the plan; an asked question leaves only by the owner's approval; owner runs: adr approve {}",
+            "{} (\"1.1 Q?\", asked) was removed from the plan; owner runs: adr approve {}",
             REFUSABLE_ID, rel
         )),
         "{}",

@@ -221,7 +221,7 @@ fn show_and_plan_do_not_crash_on_a_removed_file() {
     assert_ne!(out.status.code(), Some(101), "plan must not panic: {}", text);
     // A named refusal, an exit code of 1: the file is not there to plan.
     assert_eq!(out.status.code(), Some(1), "{}", text);
-    assert!(text.contains(&format!("plan: cannot read {}:", REL)) && text.contains("agent gives adr plan a topic file under adrdom/decisions that exists"), "{}", text);
+    assert!(text.contains(&format!("plan: cannot read {}:", REL)) && text.contains("agent rewrites the topic file given to adr plan to one under adrdom/decisions that exists"), "{}", text);
 }
 
 #[test]
@@ -309,7 +309,7 @@ fn deleting_a_draft_never_approved_needs_no_owner_act() {
     let out = approve_removal(&dir);
     assert!(!out.status.success(), "{}", stdout(&out));
     assert!(stderr(&out).contains("never approved") && stderr(&out).contains("nothing to approve"), "{}", stderr(&out));
-    assert!(stderr(&out).contains("agent commits the deletion"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("agent runs: git commit"), "{}", stderr(&out));
     assert_eq!(ledger(&dir), before);
 
     let out = adr(&dir, &["check"], &[], "");

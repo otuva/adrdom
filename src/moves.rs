@@ -4,7 +4,7 @@
 //! command that prints a move reads it from here, and `Move::text` is the
 //! one place a move becomes words.
 use crate::ledger::Ledger;
-use crate::msg::Next;
+use crate::msg::{Act, Next};
 use crate::record::{self, RecordFile};
 use crate::rules::Finding;
 use crate::state;
@@ -98,7 +98,7 @@ impl Move {
 
     /// A build move's words open with the mover `actor` names: builder in a
     /// planner's session, agent in any other.
-    fn build_mover(&self, action: String) -> Next {
+    fn build_mover(&self, action: Act) -> Next {
         match self.actor() {
             Mover::Builder => Next::builder(action),
             _ => Next::agent(action),
@@ -135,37 +135,37 @@ impl Move {
     pub fn next(&self) -> Option<Next> {
         Some(match &self.kind {
             MoveKind::PlanUnresolved => {
-                Next::all(vec![Next::agent_runs(Cmd::fixed("adr check")), Next::agent("rewrites the headings and lines of the plan that adr check names")])
+                Next::all(vec![Next::agent_runs(Cmd::fixed("adr check")), Next::agent(Act::Rewrites("the headings and lines of the plan".to_string()))])
             }
             MoveKind::Plan { rel } => Next::agent_runs(command(&["adr", "plan", rel])),
-            MoveKind::WriteLines { headings } => Next::agent(format!("writes lines for {}", quoted(headings))),
-            MoveKind::WriteBodies { headings } => Next::agent(format!("writes the body of {}", quoted(headings))),
+            MoveKind::WriteLines { headings } => Next::agent(Act::Writes(format!("lines for {}", quoted(headings)))),
+            MoveKind::WriteBodies { headings } => Next::agent(Act::Writes(format!("the body of {}", quoted(headings)))),
             MoveKind::Approve { path } => Next::owner_runs(command(&["adr", "approve", path])),
             MoveKind::ApproveEntry { name } => Next::owner_runs(crate::msg::approve_entry_cmd(name)),
             MoveKind::Ask { rel, .. } => Next::agent_runs(command(&["adr", "ask", rel])),
             MoveKind::Answer { id, version, .. } => {
                 Next::owner_runs(command(&["adr", "answer", &format!("{}@{}", id, version)]).then("<letter>"))
             }
-            MoveKind::Refused { heading } => Next::agent(format!(
-                "changes the plan: \"{}\" is refused and holds the questions that come after it",
+            MoveKind::Refused { heading } => Next::agent(Act::Writes(format!(
+                "the plan change that drops or replaces \"{}\"",
                 heading
-            )),
+            ))),
             MoveKind::Build { heading, id } => {
-                let action = format!("builds \"{}\" and puts \"adr: {}\" in a test that shows it", heading, id);
+                let action = Act::Builds(format!("\"{}\" and puts \"adr: {}\" in a test that shows it", heading, id));
                 self.build_mover(action)
             }
             MoveKind::Retie { to } => {
                 let action = if to.is_empty() {
-                    "removes the tie comment from the test".to_string()
+                    Act::Removes("the tie comment from the test".to_string())
                 } else {
                     let list: Vec<String> =
                         to.iter().map(|(h, id)| format!("\"{}\" (\"adr: {}\")", h, id)).collect();
-                    format!("moves the tie to the current decision {}", list.join(" and "))
+                    Act::Rewrites(format!("the tie comment to {}", list.join(" and ")))
                 };
                 self.build_mover(action)
             }
             MoveKind::SupersedeMarkedPairs => {
-                Next::agent("writes a question that supersedes one decision of each same or inconsistent pair")
+                Next::agent(Act::Writes("a question that supersedes one decision of each same or inconsistent pair".to_string()))
             }
             MoveKind::CommitWaits
             | MoveKind::AnswerWaits { .. }
@@ -189,22 +189,29 @@ impl Move {
     /// The move as one clause among others in a refusal's tail: no `#`
     /// comment, so the clauses after it are never read as part of one.
     pub fn clause_text(&self) -> String {
+        self.clause().render()
+    }
+
+    /// The clauses of the move, a wait nobody takes yet among them.
+    pub fn clause(&self) -> Next {
         match &self.kind {
             MoveKind::AnswerWaits { heading, on } => {
-                format!("not yet: \"{}\" is asked and waits for {}", heading, quoted(on))
+                Next::not_yet(format!("\"{}\" is asked and waits for {}", heading, quoted(on)))
             }
             MoveKind::BuildWaits { heading, beside } => {
-                format!("not yet: \"{}\" is answered and is built once \"{}\" is answered", heading, beside)
+                Next::not_yet(format!("\"{}\" is answered and is built once \"{}\" is answered", heading, beside))
             }
-            MoveKind::BuildWaitsRefused { heading, beside } => format!(
-                "not yet: \"{}\" is answered and is built once the plan changes, \"{}\" beside it is refused",
+            MoveKind::BuildWaitsRefused { heading, beside } => Next::not_yet(format!(
+                "\"{}\" is answered and is built once the plan changes, \"{}\" beside it is refused",
                 heading, beside
-            ),
+            )),
             MoveKind::BuildWaitsTiers { heading } => {
-                format!("not yet: \"{}\" is answered and is built once the tiers of its file derive", heading)
+                Next::not_yet(format!("\"{}\" is answered and is built once the tiers of its file derive", heading))
             }
-            MoveKind::CommitWaits => format!("not yet: commit; {} waits for the owner's approval", crate::repo::TERMS_PATH),
-            _ => self.next().expect("a move with a mover").render(),
+            MoveKind::CommitWaits => {
+                Next::not_yet(format!("commit, after the owner approves {}", crate::repo::TERMS_PATH))
+            }
+            _ => self.next().expect("a move with a mover"),
         }
     }
 
@@ -228,22 +235,20 @@ pub struct Report {
 impl Report {
     /// The moves alone, joined with `, `: the findings are printed apart,
     /// each on its own line. With no move, `fallback` names the act.
-    pub fn moves_tail(&self, fallback: Next) -> String {
+    pub fn moves_tail(&self, fallback: Next) -> Next {
         if self.moves.is_empty() {
             debug_assert!(!self.findings.is_empty(), "a refusal names at least one move");
-            return fallback.render();
+            return fallback;
         }
-        self.moves.iter().map(Move::clause_text).collect::<Vec<_>>().join(", ")
+        Next::all(self.moves.iter().map(Move::clause).collect())
     }
 }
 
-/// The tail of a finding whose only move is to wait for an answer
-/// elsewhere: nobody moves on it yet.
-pub const WAIT_TAIL: &str = "; not yet, after it is answered";
-
-/// The tail of a finding whose only move is to wait for the approval of a
+/// The move of a finding whose only move is to wait for the approval of a
 /// file elsewhere: nobody moves on it yet.
-pub const APPROVAL_WAIT_TAIL: &str = "; not yet, after it is approved";
+pub fn approval_wait() -> Next {
+    Next::not_yet("after it is approved")
+}
 
 /// The clauses of the move `kind` names, for a refusal that stops in a state
 /// whose move this module computes: the refusal names the same move every
@@ -352,18 +357,20 @@ pub fn removal_next(rel: &str, holds: &[RemovalHold]) -> Next {
     if holds.is_empty() {
         return Next::owner_runs(command(&["adr", "approve", rel]));
     }
-    let steps: Vec<String> = holds
+    let steps: Vec<Act> = holds
         .iter()
         .map(|h| {
             let q = crate::msg::named(&h.id, Some(&h.heading));
             if h.status == QuestionStatus::Answered {
-                format!("supersedes {} with a new question", q)
+                Act::Writes(format!("a question that supersedes {}", q))
             } else {
-                format!("strikes {} from the plan", q)
+                Act::Writes(format!("the plan change that strikes {}", q))
             }
         })
         .collect();
-    Next::agent(format!("restores {}, then {}, by a plan change", rel, steps.join(", ")))
+    steps
+        .into_iter()
+        .fold(Next::agent(Act::Restores(rel.to_string())), |n, a| n.then(a))
         .and_owner_runs(command(&["adr", "approve", rel]))
 }
 
@@ -820,25 +827,25 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> (crate::msg:
     }
     // One owner move, last: the plan's approval when a refused question has
     // to go or the plan waits for it, else the first answer owed.
-    let mut clauses: Vec<String> = Vec::new();
-    clauses.extend(agent.iter().map(Move::clause_text));
+    let mut clauses: Vec<Next> = Vec::new();
+    clauses.extend(agent.iter().map(Move::clause));
     if !refused.is_empty() {
         clauses.push(
-            Next::agent(format!("writes the plan change that drops or replaces {}", quoted(&refused))).render(),
+            Next::agent(Act::Writes(format!("the plan change that drops or replaces {}", quoted(&refused)))),
         );
         owner = Some(Move::new(MoveKind::Approve { path: rel.to_string() }));
     }
     if owner.is_none() {
         owner = answer;
     }
-    clauses.extend(owner.map(|m| m.clause_text()));
+    clauses.extend(owner.map(|m| m.clause()));
     if clauses.is_empty() {
         // No move of the questions it waits on: the act on each of them.
         if !unwritten.is_empty() {
-            clauses.push(Next::agent(format!("writes the body of {}", quoted(&unwritten))).render());
+            clauses.push(Next::agent(Act::Writes(format!("the body of {}", quoted(&unwritten)))));
         }
         if !asking.is_empty() {
-            clauses.push(Next::agent(format!("rewrites {} as the findings below name", quoted(&asking))).render());
+            clauses.push(Next::agent(Act::Rewrites(quoted(&asking))));
         }
     }
     // What the rules find in the files it waits on is returned apart: each
@@ -848,19 +855,19 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> (crate::msg:
     } else {
         &crate::rule::ANSWER_NEEDS_NO_REFUSED_BELOW
     };
-    (crate::msg::said_raw(rule, format!("\"{}\" waits: {}", heading, parts.join(", ")), clauses.join(", ")), found)
+    (crate::msg::said(rule, format!("\"{}\" waits: {}", heading, parts.join(", ")), Next::all(clauses)), found)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // adr: 343d0d28-2c5d-40fc-99aa-22bfba4ea79f
+    // adr: 50b31713-4fea-4aa3-842a-79c2750660ba
     #[test]
     fn a_report_with_no_move_names_the_fallback_act() {
         let mut empty = Report::default();
-        empty.findings.push(Finding::new(&crate::rule::ASKED_TEXT_FROZEN, "f".into(), "agent m".into()));
-        assert_eq!(empty.moves_tail(Next::agent("restores x.md from git")), "agent restores x.md from git");
+        empty.findings.push(Finding::new(&crate::rule::ASKED_TEXT_FROZEN, "f".into(), Next::agent(Act::Writes("m".to_string()))));
+        assert_eq!(empty.moves_tail(Next::agent(Act::Restores("x.md".to_string()))).render(), "agent restores x.md from git");
         assert!(!crate::msg::edited_after_asking("x.md", "h", &empty).text().contains("each finding of the file names"));
         assert!(crate::msg::edited_after_asking("x.md", "h", &empty).text().ends_with("agent restores x.md from git"));
     }
@@ -986,9 +993,9 @@ mod tests {
                 Move::new(MoveKind::Approve { path: "x.md".into() }),
             ],
         };
-        let tail = report.moves_tail(Next::agent("restores x.md from git"));
-        assert_eq!(tail, "agent runs: adr ask x.md, owner runs: adr approve x.md");
-        assert!(!tail.contains('#'), "{}", tail);
+        let tail = report.moves_tail(Next::agent(Act::Restores("x.md".to_string())));
+        assert_eq!(tail.render(), "agent runs: adr ask x.md, owner runs: adr approve x.md");
+        assert!(!tail.render().contains('#'), "{}", tail);
     }
 
     #[test]
@@ -1010,7 +1017,7 @@ mod tests {
             ],
         );
         assert_eq!(said.found, "\"heading\" waits: \"a\" has no decision yet, \"b\" has no decision yet");
-        assert_eq!(said.next, "agent runs: adr ask x.md, owner runs: adr approve x.md");
+        assert_eq!(said.next.render(), "agent runs: adr ask x.md, owner runs: adr approve x.md");
     }
 
     #[test]

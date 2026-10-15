@@ -180,7 +180,7 @@ fn plan_check_and_show_name_the_commit_that_waits_while_the_terms_file_waits() {
     let (dir, path) = repo();
     three(&path);
     write_topic_file(&dir, "alpha.md", TOPIC);
-    let line = "not yet: commit; adrdom/terms.md waits for the owner's approval";
+    let line = "not yet: commit, after the owner approves adrdom/terms.md";
     let plan = stdout(&adr(&dir, &["plan", "adrdom/decisions/alpha.md"], &[], ""));
     assert_eq!(plan.lines().filter(|l| *l == line).count(), 1, "{}", plan);
     let check = stdout(&adr(&dir, &["check"], &[], ""));

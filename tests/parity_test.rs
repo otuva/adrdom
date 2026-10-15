@@ -81,7 +81,7 @@ fn parity_tell_in_heading() {
     let content = "# Example\n\nContext prose.\n\n### How many stores exist?\ndepends: decision\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
-    assert_parity_note(&dir, &record, "a heading opens without assuming an answer");
+    assert_parity_note(&dir, &record, "the heading opens with \"how many\"; agent rewrites the heading");
 }
 
 #[test]
@@ -200,7 +200,7 @@ fn parity_definition_over_two_sentences() {
     assert_parity(
         &dir,
         &terms,
-        "term \"decision\" definition has 3 sentences; a definition holds one or two sentences",
+        "term \"decision\" definition has 3 sentences, the most is 2; agent rewrites the definition",
     );
 }
 

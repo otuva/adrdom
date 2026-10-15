@@ -205,7 +205,7 @@ fn plan_lifecycle_end_to_end() {
     assert!(!out.status.success(), "check should have failed: {}", stdout(&out));
     assert!(
         stdout(&out).contains(
-            "answer set on 1.1 What color is the widget? changed after ask; a depends entry's answer set stays as asked; agent restores the answer set from git"
+            "answer set on 1.1 What color is the widget? changed after ask; agent restores the answer set from git"
         ),
         "{}",
         stdout(&out)

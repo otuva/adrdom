@@ -142,11 +142,11 @@ pub(super) fn check_terms(
             // functions below need this to pick a legal next move.
             let answered = st == Some("answered");
             let Some(tl) = sec.terms_line else {
-                out.push(Failure::said(Class::Terms, msg::section_no_terms_line(&rel, &sec.heading_text, id, answered)));
+                out.push(Failure::said(Class::Terms, msg::section_no_terms_line(&rel, &sec.heading_text, answered)));
                 continue;
             };
             match terms::validate_pairs(rf.lines[tl].trim_end(), &tf) {
-                Err(_) => out.push(Failure::said(Class::Terms, msg::section_terms_line_malformed(&rel, &sec.heading_text, id, answered))),
+                Err(_) => out.push(Failure::said(Class::Terms, msg::section_terms_line_malformed(&rel, &sec.heading_text, answered))),
                 Ok(problems) => {
                     for p in problems {
                         match p.kind {
@@ -154,10 +154,9 @@ pub(super) fn check_terms(
                                     &rel,
                                     &sec.heading_text,
                                     &p.word,
-                                    id,
                                     answered,
                                 ))),
-                            terms::ProblemKind::Retired(name) => out.push(Failure::said(Class::Terms, msg::section_term_retired(&rel, &sec.heading_text, &name, id, answered))),
+                            terms::ProblemKind::Retired(name) => out.push(Failure::said(Class::Terms, msg::section_term_retired(&rel, &sec.heading_text, &name, answered))),
                         }
                     }
                 }

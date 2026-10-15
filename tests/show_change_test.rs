@@ -205,15 +205,15 @@ fn an_unreadable_terms_or_topic_file_is_named() {
     let dir = widget_repo();
     std::fs::write(dir.join("adrdom/terms.md"), [0x23, 0x20, 0xff, 0xfe, 0x0a]).unwrap();
     let listing = show(&dir, &[]);
-    assert!(listing.contains("show: adrdom/terms.md: cannot be read: "), "{}", listing);
+    assert!(listing.contains("show: adrdom/terms.md: cannot be read as text"), "{}", listing);
     let form = show(&dir, &["adrdom/terms.md"]);
-    assert!(form.contains("adrdom/terms.md: cannot be read: "), "{}", form);
+    assert!(form.contains("adrdom/terms.md: cannot be read as text"), "{}", form);
     assert!(!form.contains("no such file"), "{}", form);
 
     std::fs::write(dir.join(REL), [0x23, 0x20, 0xff, 0x0a]).unwrap();
     let form = show(&dir, &[REL]);
-    assert!(form.contains(&format!("{}: cannot be read: ", REL)), "{}", form);
-    assert!(form.contains("agent fixes the file so it can be read as text"), "{}", form);
+    assert!(form.contains(&format!("{}: cannot be read as text", REL)), "{}", form);
+    assert!(form.contains(&format!("agent rewrites {}", REL)), "{}", form);
 }
 
 // adr: 91f9652a-f053-4b32-9534-c9c39e7639a4

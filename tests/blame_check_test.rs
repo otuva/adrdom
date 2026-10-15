@@ -312,7 +312,7 @@ fn check_names_an_origin_gone_while_its_blame_file_awaits_approval() {
 
     std::fs::remove_file(dir.join("docs/x.md")).unwrap();
 
-    let line = "adrdom/blame/x.md: origin docs/x.md is missing while the blame file is new; an origin stays until its blame file is approved; agent restores docs/x.md from git";
+    let line = "adrdom/blame/x.md: origin docs/x.md is missing while the blame file is new; agent restores docs/x.md from git";
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
     assert!(stdout(&out).lines().any(|l| l == line), "{}", stdout(&out));
@@ -345,7 +345,7 @@ fn a_renamed_origin_counts_as_missing_and_names_the_old_path() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
     let text = stdout(&out);
-    let line = "adrdom/blame/x.md: origin docs/x.md is missing while the blame file is changed; an origin stays until its blame file is approved; agent restores docs/x.md from git";
+    let line = "adrdom/blame/x.md: origin docs/x.md is missing while the blame file is changed; agent restores docs/x.md from git";
     assert!(text.lines().any(|l| l == line), "{}", text);
 }
 
@@ -368,7 +368,7 @@ fn check_notes_a_gone_origin_while_the_blame_file_is_unapproved() {
     assert!(out.status.success(), "{}", stdout(&out));
     let text = stdout(&out);
     assert!(text.contains("adrdom/blame/x.md: origin docs/x.md is missing"), "{}", text);
-    assert!(text.contains("until its blame file is approved"), "{}", text);
+    assert!(text.contains("is missing while the blame file is new"), "{}", text);
     assert!(text.contains("agent restores docs/x.md from git"), "{}", text);
 }
 
@@ -560,7 +560,7 @@ fn check_fails_naming_a_blame_file_that_cannot_be_read() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(text.contains("adrdom/blame/binary.md: cannot be read"), "{}", text);
-    assert!(text.contains("agent fixes the file"), "{}", text);
+    assert!(text.contains("agent rewrites adrdom/blame/binary.md"), "{}", text);
 }
 
 //
@@ -626,7 +626,7 @@ fn check_show_and_approve_print_the_same_line_for_a_bad_row_value() {
     };
     let from_check = blame_lines(&stdout(&check));
     let from_show = blame_lines(&stdout(&show));
-    let line = "adrdom/blame/x.md: line 5: row value \"decision: Is nothing here at all?\" is neither decision nor detail; a blame row says decision or detail; agent writes decision or detail after the tab";
+    let line = "adrdom/blame/x.md: line 5: row value \"decision: Is nothing here at all?\" is neither decision nor detail; agent writes decision or detail after the tab";
     assert_eq!(from_check, vec![line.to_string()], "check:\n{}", stdout(&check));
     assert_eq!(from_check, from_show, "check:\n{}\nshow:\n{}", stdout(&check), stdout(&show));
     // approve refuses the file on that same finding.
@@ -654,7 +654,7 @@ fn of_two_drafts_sharing_an_id_the_first_by_path_keeps_it() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
-    let line = "adrdom/blame/b.md: its id line holds the identifier of adrdom/blame/a.md; one identifier names one blame file; agent removes the id line from adrdom/blame/b.md";
+    let line = "adrdom/blame/b.md: its id line holds the identifier of adrdom/blame/a.md; agent removes the id line from adrdom/blame/b.md";
     assert!(stdout(&out).lines().any(|l| l == line), "{}", stdout(&out));
     assert!(
         !stdout(&out).lines().any(|l| l.starts_with("adrdom/blame/a.md") && l.contains("holds the identifier of")),
@@ -677,7 +677,7 @@ fn check_staged_refuses_a_staged_symlink_origin_as_check_does() {
     let blob = String::from_utf8(run_git(&dir, &["rev-parse", ":docs/link.md"]).stdout).unwrap().trim().to_string();
     write_blame_file(&dir, "adrdom/blame/l.md", "docs/link.md", &blob, "1-1\tdetail\n");
     run_git(&dir, &["add", "adrdom/blame/l.md"]);
-    let line = "adrdom/blame/l.md: \"docs/link.md\" is not a regular file outside adrdom; an origin is a regular file outside adrdom; agent rewrites the origin line";
+    let line = "adrdom/blame/l.md: \"docs/link.md\" is not a regular file outside adrdom; agent rewrites the origin line";
     for args in [&["check", "--staged"][..], &["check"][..]] {
         let out = adr(&dir, args, &[], "");
         assert!(stdout(&out).lines().any(|l| l == line), "{:?}: {}", args, stdout(&out));
@@ -726,7 +726,7 @@ fn a_hand_edited_id_makes_an_approved_file_a_draft_check_notes_it_and_approve_re
     // finding is a note in check, and approve refuses on it.
     let out = adr(&dir, &["check"], &[], "");
     let line = format!(
-        "adrdom/blame/x.md: its id line differs from the identifier of its approval; the tool assigns a blame file's identifier; agent writes back the id line \"id: {}\"",
+        "adrdom/blame/x.md: its id line differs from the identifier of its approval; agent writes back the id line \"id: {}\"",
         id
     );
     assert!(stdout(&out).lines().any(|l| l == line), "{}", stdout(&out));

@@ -86,8 +86,8 @@ fn unban_removes_a_word_once_when_the_ban_list_holds_it_twice() {
 
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 //
-// Outside a repository the move names what clears it, once: changing into a
-// git repository, then the command as it was given.
+// Outside a repository the move names what clears it, once: the command as
+// it was given.
 #[test]
 fn outside_a_repository_the_owners_line_is_the_whole_command() {
     let outside = OutsideDir::new("outside");
@@ -96,7 +96,7 @@ fn outside_a_repository_the_owners_line_is_the_whole_command() {
     assert!(!out.status.success());
     assert_eq!(
         stderr(&out).trim_end(),
-        "approve: not inside a git repository; owner changes into a git repository and runs: adr approve adrdom/decisions/x.md"
+        "approve: not inside a git repository; owner changes into a git repository, then runs: adr approve adrdom/decisions/x.md"
     );
 }
 

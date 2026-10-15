@@ -1,6 +1,6 @@
 // A finding carries the rule it breaks (src/rule.rs), the rule carries the
 // decisions it comes from, and the line a command prints names what was
-// found, what the rule protects and the move.
+// found and the move, from the tool's fixed set of acts.
 mod common;
 
 use adr::rule;
@@ -112,22 +112,6 @@ fn every_finding_is_built_from_a_rule_constant() {
     assert!(bad.is_empty(), "a finding built from something but a rule constant:\n{}", bad.join("\n"));
 }
 
-//
-// Every rule states what it protects in plain words, in at most ten, with no
-// identifier.
-#[test]
-fn every_rule_states_what_it_protects_in_ten_words() {
-    // adr: 343d0d28-2c5d-40fc-99aa-22bfba4ea79f
-    let mut bad = Vec::new();
-    for r in rule::ALL {
-        let words = r.protects.split_whitespace().count();
-        if words == 0 || words > 10 || holds_uuid(r.protects) {
-            bad.push(format!("{}: {:?} ({} words)", r.name, r.protects, words));
-        }
-    }
-    assert!(bad.is_empty(), "protects not in plain words of at most ten:\n{}", bad.join("\n"));
-}
-
 /// Every heading of the questions in this repository's own records.
 fn own_headings() -> Vec<String> {
     adr::record::load_all(&manifest())
@@ -145,37 +129,68 @@ fn question(heading: &str, depends: &str, option: &str) -> String {
     )
 }
 
-/// The lines of `out` that are findings: the ones holding the protects words
-/// of a rule.
+/// The openings of a move clause: who takes it, or a clause that follows
+/// one by the same actor.
+const OPENINGS: [&str; 4] = ["agent ", "builder ", "owner ", "then "];
+
+/// The lines of `out` that are findings: the ones holding a move after `; `.
 fn finding_lines(out: &std::process::Output) -> Vec<String> {
     let text = stdout(out) + &stderr(out);
     text.lines()
-        .filter(|l| rule::ALL.iter().any(|r| l.contains(r.protects)))
+        .filter(|l| {
+            l.split("; ").skip(1).any(|p| {
+                OPENINGS[..3].iter().any(|o| p.starts_with(o)) || p.starts_with(adr::msg::NOT_YET)
+            })
+        })
         .map(str::to_string)
         .collect()
 }
 
-fn assert_finding_shape(command: &str, line: &str, headings: &[String]) {
-    let rule = rule::ALL
-        .iter()
-        .find(|r| line.contains(r.protects))
-        .unwrap_or_else(|| panic!("{}: no rule in {}", command, line));
-    let parts: Vec<&str> = line.split("; ").collect();
-    assert!(parts.len() >= 3, "{}: found; protects; move expected in {}", command, line);
-    assert_eq!(parts[parts.len() - 2], rule.protects, "{}: the protects words sit between found and move: {}", command, line);
-    let mv = parts[parts.len() - 1];
+/// Every clause of `mv` opens with who takes it, or `then`, and goes on with
+/// one act of the tool's fixed set; a clause nobody takes yet opens with
+/// `not yet: `.
+fn assert_move_is_acts(command: &str, mv: &str, line: &str) {
+    let mut at = 0;
+    let mut clauses = 0;
+    while at < mv.len() {
+        let rest = &mv[at..];
+        let clause_starts = at == 0 || mv[..at].ends_with(", ");
+        if clause_starts && rest.starts_with(adr::msg::NOT_YET) {
+            clauses += 1;
+        } else if clause_starts {
+            if let Some(o) = OPENINGS.iter().find(|o| rest.starts_with(**o)) {
+                let act = &rest[o.len()..];
+                assert!(
+                    adr::msg::ACTS.iter().any(|a| act.starts_with(a)),
+                    "{}: a clause opens with no act of the set: {:?} in {}",
+                    command,
+                    rest,
+                    line
+                );
+                clauses += 1;
+            }
+        }
+        at += rest.chars().next().map_or(1, char::len_utf8);
+    }
+    assert!(clauses > 0, "{}: no clause in the move of {}", command, line);
     assert!(
-        mv.starts_with("agent ") || mv.starts_with("builder ") || mv.starts_with("owner ") || mv.starts_with("not yet"),
-        "{}: the last part is no move: {}",
+        OPENINGS.iter().any(|o| mv.starts_with(o)) || mv.starts_with(adr::msg::NOT_YET),
+        "{}: the move opens with no clause: {}",
         command,
         line
     );
+}
+
+fn assert_finding_shape(command: &str, line: &str, headings: &[String]) {
+    let parts: Vec<&str> = line.split("; ").collect();
+    assert_eq!(parts.len(), 2, "{}: found; move expected, nothing on what the rule protects: {}", command, line);
+    let mv = parts[1];
+    assert_move_is_acts(command, mv, line);
     if let Some((tag, _)) = line.split_once(": ") {
         assert!(!OLD_TAGS.contains(&tag), "{}: the line opens with a category tag: {}", command, line);
     }
     // A move that runs a command names the question it acts on by identifier
-    // (`adr answer <id>@<version> <letter>`): the found and protects parts
-    // carry none.
+    // (`adr answer <id>@<version> <letter>`): the found part carries none.
     let before_move = parts[..parts.len() - 1].join("; ");
     assert!(!holds_uuid(&before_move), "{}: an identifier before the move: {}", command, line);
     for h in headings {
@@ -205,14 +220,15 @@ fn first_unanswered_waits(dir: &Path) -> std::process::Output {
 }
 
 //
-// The line a command prints for a finding is one line of three parts: what
-// was found, what the rule protects, and the move as an act. It opens with
-// no category tag and names neither an identifier nor a heading of this
-// repository's own decisions. check, show, plan, approve, ask and answer
-// print it the same way.
+// The line a command prints for a finding is one line of two parts: what
+// was found and the move, every clause of it one act of the tool's fixed
+// set; nothing on what the rule protects. It opens with no category tag and
+// names neither an identifier nor a heading of this repository's own
+// decisions. check, show, plan, approve, ask and answer print it the same
+// way.
 #[test]
-fn a_finding_names_what_it_found_what_it_protects_and_the_move() {
-    // adr: 343d0d28-2c5d-40fc-99aa-22bfba4ea79f
+fn a_finding_names_what_it_found_and_the_move() {
+    // adr: 50b31713-4fea-4aa3-842a-79c2750660ba
     let dir = ready_repo();
     let headings = own_headings();
 

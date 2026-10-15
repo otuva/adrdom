@@ -426,7 +426,7 @@ pub(crate) fn file_form(r: &Records, rel: &str, views: Views) -> Result<Vec<Line
         return match (&r.terms_file, &r.terms_unreadable) {
             (Some(tf), _) => Ok(terms_file(r, tf, views)),
             (None, Some(e)) => Err(msg::file_unreadable(rel, e)),
-            (None, None) => Err(msg::read_failed(rel, "no such file", msg::Next::agent("names a file that exists"))),
+            (None, None) => Err(msg::read_failed(rel, "no such file", msg::Next::agent(msg::Act::Rewrites("the file name to a file that exists".to_string())))),
         };
     }
     if let Some(rf) = r.topic_files.iter().find(|rf| rf.rel == rel) {

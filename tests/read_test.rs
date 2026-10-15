@@ -116,7 +116,7 @@ fn ordered<'a>(a: &'a Dec, b: &'a Dec) -> (&'a Dec, &'a Dec) {
 
 fn line_of(word: &str, first: &Dec, second: &Dec) -> String {
     format!(
-        "{}: \"{}\" and \"{}\": {}; decisions that repeat or contradict are named; agent writes a question that supersedes one of the pair",
+        "{}: \"{}\" and \"{}\": {}; agent writes a question that supersedes one of the pair",
         word, first.heading, second.heading, REASON
     )
 }

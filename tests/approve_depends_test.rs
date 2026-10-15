@@ -32,7 +32,7 @@ fn approve_refuses_a_heading_with_no_depends_line() {
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(
-        err.contains("\"1.1 No depends?\" has no depends line; every question carries a depends line; agent writes the depends line of"),
+        err.contains("\"1.1 No depends?\" has no depends line; agent writes the depends line of"),
         "{}",
         err
     );
@@ -101,7 +101,7 @@ fn one_question(heading: &str, depends: &str) -> String {
     )
 }
 
-const OTHER_FILE_REFUSAL: &str = "a decision of another topic file; a question stands on terms and questions of its file; agent rewrites the depends line of";
+const OTHER_FILE_REFUSAL: &str = "a decision of another topic file; agent rewrites the depends line of";
 
 // adr: 9afe335c-2a7a-4625-b115-f74d3f091cac
 //
@@ -234,7 +234,7 @@ fn approve_refuses_a_depends_line_naming_three_questions_and_counts_no_term() {
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success(), "three questions are refused: {}", stdout(&out));
     let err = stderr(&out);
-    let refusal = "\"Over three?\" depends on 3 questions, the most is 2: \"Root a?\", \"Root b?\", \"Root c?\"; a depends line names at most two questions; agent rewrites the depends line of \"Over three?\" to name at most 2 questions";
+    let refusal = "\"Over three?\" depends on 3 questions, the most is 2: \"Root a?\", \"Root b?\", \"Root c?\"; agent rewrites the depends line of \"Over three?\"";
     assert!(err.contains(refusal), "{}", err);
     assert!(!err.contains("Over two?"), "{}", err);
 
@@ -287,7 +287,7 @@ fn approve_refuses_a_term_entry_that_resolves_to_nothing() {
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(
-        err.contains("\"1.1 Q?\" depends on \"nosuchterm\" which is no term; a depends entry naming a term names an existing one; agent adds the term, or names another"),
+        err.contains("\"1.1 Q?\" depends on \"nosuchterm\" which is no term; agent writes the term in adrdom/terms.md"),
         "{}",
         err
     );
@@ -315,7 +315,7 @@ fn approve_refuses_a_term_entry_that_resolves_to_a_retired_term() {
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(
-        err.contains("\"1.1 Q?\" names the retired term \"gadget\"; a depends entry names no retired term; agent rewrites the entry"),
+        err.contains("\"1.1 Q?\" names the retired term \"gadget\"; agent rewrites the entry"),
         "{}",
         err
     );
@@ -340,7 +340,7 @@ fn approve_refuses_a_decision_entry_that_is_not_current() {
     let err = stderr(&out);
     assert!(
         err.contains(&format!(
-            "\"1.1 Q?\" depends on {} which names no term and no question of this file; a depends entry names something that exists; agent rewrites the entry to name a term or a question of this file, or removes it",
+            "\"1.1 Q?\" depends on {} which names no term and no question of this file; agent rewrites the entry to name a term or a question of this file",
             uuid
         )),
         "{}",
@@ -362,7 +362,7 @@ fn approve_refuses_a_dangling_heading_dependency() {
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(
-        err.contains("\"1.1 Q?\" depends on \"Missing?\" which is no heading in this file; a depends entry names something that exists; agent rewrites the entry"),
+        err.contains("\"1.1 Q?\" depends on \"Missing?\" which is no heading in this file; agent rewrites the entry"),
         "{}",
         err
     );
@@ -400,7 +400,7 @@ fn approve_refuses_a_heading_that_depends_on_itself() {
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     let err = stderr(&out);
     assert!(
-        err.contains("\"A?\" depends on itself; a question never stands on itself; agent removes the entry"),
+        err.contains("\"A?\" depends on itself; agent removes the entry"),
         "{}",
         err
     );
@@ -823,7 +823,7 @@ fn approve_refuses_a_frozen_sections_depends_line_hand_edited_to_a_cross_file_he
     let out = adr_owner(&dir, &["approve", record_x.to_str().unwrap()], "");
     assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
     assert!(
-        stderr(&out).contains("\"1.1 Does X stand on something?\" is [answered] and its depends line was edited; an answered decision's depends line stays as approved; agent restores the line from git"),
+        stderr(&out).contains("\"1.1 Does X stand on something?\" is [answered] and its depends line was edited; agent restores the line from git"),
         "{}",
         stderr(&out)
     );
@@ -837,7 +837,7 @@ fn approve_refuses_a_frozen_sections_depends_line_hand_edited_to_a_cross_file_he
 
     let check = adr(&dir, &["check"], &[], "");
     assert!(
-        stdout(&check).contains("\"1.1 Does X stand on something?\" is [answered] and its depends line was edited; an answered decision's depends line stays as approved; agent restores the line from git"),
+        stdout(&check).contains("\"1.1 Does X stand on something?\" is [answered] and its depends line was edited; agent restores the line from git"),
         "check must report the same frozen-edit refusal: {}",
         stdout(&check)
     );

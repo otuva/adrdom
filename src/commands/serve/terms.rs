@@ -17,7 +17,7 @@ pub(super) fn render_terms(r: &Records, last: &[Line], token: &str) -> String {
             Some(l) => body.push_str(&format!("{}\n", out::html(&l))),
             None => body.push_str(&format!("{}\n", out::html(&out::refusal(
                 crate::rules::Command::Show,
-                &crate::msg::read_failed(repo::TERMS_PATH, "no such file", crate::msg::Next::agent("names a file that exists")),
+                &crate::msg::read_failed(repo::TERMS_PATH, "no such file", crate::msg::Next::agent(crate::msg::Act::Rewrites("the file name to a file that exists".to_string()))),
             )))),
         }
         body.push_str("</header>\n");
