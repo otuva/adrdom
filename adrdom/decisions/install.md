@@ -126,6 +126,8 @@ Standard: a setup step fetches what a command needs; a command does not install 
   Why: no extra step; the first plan fetches it.
   Costs: a plan starts with a long download, and stops halfway without the network.
 
+**Answer:** A
+
 ### Does install put the embedding model outside the repository?
 depends: a7b0b910-57f6-4c59-b904-b42f78db63f7, 1b98cdea-dc1b-4789-8f67-68d130d7a49d, 4f925b13-ad16-48b8-acd1-3e30d6e308b6, e1c305af-af94-494a-9fdb-3faffafa0e06=A
 unrelated: 21cdad59-4f0c-42a5-b4f3-6af946637df3, db07a54d-4d80-4035-a9ef-eabcc0c872b3, 76c6adc6-c018-4df4-b49a-ddcd0a03a48c, 99619e27-19b6-47ef-83b9-c79ac30ee2f0, db56a285-946f-48b1-b073-bb1e90192185, fcc5b6fe-9072-42ea-a25b-2be72e094bac, daec9ffd-676f-4111-a359-2827bfd4527c, 16a71892-b348-4b9b-82c5-a9d375187bd3, 292359a4-0512-465b-b6a7-79838e66e5a5, ae63df95-0643-4108-af65-1e7a0009d631, 149c9a73-16eb-46aa-9806-2950423ee1a2, 0d977e39-a657-4596-8eca-8ceb335f3081, 5418b256-dfae-439a-96c1-57d82380cd1e
@@ -141,6 +143,8 @@ Standard: a downloaded artefact shared by projects lives in one user cache direc
 - B) No.
   Why: everything the tool uses for a repository sits beside it, under adrdom/cache.
   Costs: one copy per repository, fetched again for each clone.
+
+**Answer:** A
 
 ### What does the reader run?
 depends: be0d6f5c-ae1b-4753-8ec7-0f4b03d84641, ae63df95-0643-4108-af65-1e7a0009d631
@@ -160,3 +164,5 @@ Standard: a tool that integrates with several agents calls the one configured fo
 - C) A program named in a setting the owner writes.
   Why: any program the owner picks.
   Costs: one more file to read, and a setting the agent can edit.
+
+**Answer:** A
