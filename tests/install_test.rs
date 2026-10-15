@@ -651,6 +651,25 @@ fn check_fails_when_the_state_brief_differs_or_is_missing_and_install_restores_i
     assert!(out.status.success(), "{}", stdout(&out));
 }
 
+// adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
+// A brief file with CRLF line ends (a checkout's) is current to both check
+// and install: check passes and install leaves it as it is.
+#[test]
+fn a_crlf_brief_file_is_current_to_check_and_install() {
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    let path = dir.join("adrdom/state/brief.md");
+    let crlf = include_str!("../assets/brief.md").replace('\n', "\r\n");
+    std::fs::write(&path, &crlf).unwrap();
+
+    let out = adr(&dir, &["check"], &[], "");
+    assert!(out.status.success(), "{}", stdout(&out));
+    let again = adr(&dir, &["install"], &[], "");
+    assert!(again.status.success());
+    assert!(!stdout(&again).contains("adrdom/state/brief.md"), "{}", stdout(&again));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), crlf);
+}
+
 // adr: 292359a4-0512-465b-b6a7-79838e66e5a5
 // uninstall removes the tag section and leaves adrdom/state/brief.md.
 #[test]

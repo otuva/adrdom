@@ -96,13 +96,11 @@ fn judge(root: &Path, source: &Source) -> Vec<(&'static str, Failure)> {
     }
 
     // The brief's text: install writes it on every install, and the marked
-    // section of AGENTS.md names it. Compared line by line like the terms
-    // brief, so a checkout's `\r` is not a difference.
+    // section of AGENTS.md names it. Judged by the comparison install's own
+    // writer uses, so the two never disagree.
     match source.read(root, repo::BRIEF_PATH) {
         Some(content) => {
-            let lines: Vec<&str> = content.lines().collect();
-            let brief_lines: Vec<&str> = crate::commands::install::BRIEF.lines().collect();
-            if !crate::text::lines_match_trimmed(&lines, &brief_lines) {
+            if !crate::commands::install::brief_is_current(&content) {
                 out.push((repo::BRIEF_PATH, Failure::said(Class::Install, msg::brief_file_differs())));
             }
         }

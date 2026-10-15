@@ -134,7 +134,7 @@ fn install_all(root: &Path, claude: bool, codex: bool, events: &mut Vec<Event>) 
 
     events.extend(install_gitattributes(root).map_err(|e| msg::write_failed(repo::GITATTRIBUTES_PATH, e, msg::after_fix_agent_runs(cmd.clone())))?);
     events.extend(install_gitignore(root).map_err(|e| msg::write_failed(repo::GITIGNORE_PATH, e, msg::after_fix_agent_runs(cmd.clone())))?);
-    events.extend(write_whole(root, repo::BRIEF_PATH, BRIEF).map_err(|e| msg::write_failed(repo::BRIEF_PATH, e, msg::after_fix_agent_runs(cmd.clone())))?);
+    events.extend(install_brief(root).map_err(|e| msg::write_failed(repo::BRIEF_PATH, e, msg::after_fix_agent_runs(cmd.clone())))?);
 
     let hooks = root.join(".githooks");
     fs::create_dir_all(&hooks).map_err(|e| msg::create_failed(&hooks.display().to_string(), e, msg::after_fix_agent_runs(cmd.clone())))?;
@@ -256,6 +256,25 @@ fn write_whole(root: &Path, rel: &str, content: &str) -> Result<Option<Event>, S
     }
     fs::write(&path, content).map_err(|e| e.to_string())?;
     Ok(written(rel))
+}
+
+/// Whether a brief file holding `existing` is the brief install writes: the
+/// same lines, a checkout's `\r` aside. The one comparison `install` and
+/// `check` judge the brief's file by.
+pub(crate) fn brief_is_current(existing: &str) -> bool {
+    let existing_lines: Vec<&str> = existing.lines().collect();
+    let want_lines: Vec<&str> = BRIEF.lines().collect();
+    crate::text::lines_match_trimmed(&existing_lines, &want_lines)
+}
+
+/// Writes the brief to `repo::BRIEF_PATH` unless the file there is current.
+fn install_brief(root: &Path) -> Result<Option<Event>, String> {
+    let path = root.join(repo::BRIEF_PATH);
+    if fs::read_to_string(&path).is_ok_and(|c| brief_is_current(&c)) {
+        return Ok(None);
+    }
+    fs::write(&path, BRIEF).map_err(|e| e.to_string())?;
+    Ok(written(repo::BRIEF_PATH))
 }
 
 /// Locates the marker lines in `lines` (as produced by `content.split('\n')`,
