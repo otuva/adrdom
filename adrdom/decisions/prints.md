@@ -82,88 +82,6 @@ Standard: a command that writes prints one line per event, as git commit does, o
 
 **Answer:** A
 
-### What does a finding line name?
-depends: ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, d904dc0d-231f-4e93-ac74-7babe888107d, 41c41584-1ea3-4f15-b7ec-76a1dc99d32f, 80b89c24-7d65-43f4-bb03-55e9d85c327d=*
-supersedes: 184b5bcb-fa72-436b-92cb-4d4605366c59, de1c5329-e448-45eb-b14c-88b8654447a4
-unrelated: a82db5b7-969c-44e9-9eec-876ead7099d3, 796a2544-43e5-43db-b5d3-8a4e737ec9c6, 3fc35d4f-90f3-4425-9dac-951a89631fdf, 83190b10-8060-47c1-8194-f6a5c4f0d703, 069a6b4a-de35-45f3-8c6c-8e254bf40565, 1259323f-cdec-4101-9d47-a165a286089f, ad9761e2-6d64-4b45-b0ba-5c5d8d2b38bf, 4319a653-6901-446c-94ab-6420ef472134, c84a4bd9-fc2d-44f0-b333-172978f61544, 6108b8b2-911e-443b-abe0-4c6f8b407384, c3127af2-4c96-48d5-a164-bac49a9a09ec, 48f4647d-8c81-4e8a-a936-6b32f5fb0699, ee27fd4c-89b7-411f-a3e4-2535c49b6d1b, 44d02e7a-c902-4b89-973c-cf9d5c67c70e, 3cf56867-3918-4ce6-a296-2cc62a91b154, 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763, 6875e4df-207a-4b62-8a89-d3179722a6d7
-id: 343d0d28-2c5d-40fc-99aa-22bfba4ea79f
-terms: answered=b36113a1-1384-4e4c-a798-8399f4181366, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, finding=ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, identifiers=e877e4a9-2caf-4fe6-9f82-5476a2abb00b, move=d904dc0d-231f-4e93-ac74-7babe888107d, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d
-
-Problem: a finding names the number it measured and the act that lowers the number; the one who reads it clears the number, and the meaning the rule protects changes.
-Standard: a compiler error names the rule a line breaks and leaves the fix to the writer.
-
-- A) What the rule protects, in plain words, what it found, and the move as an act, not a diagnosis.
-  Why: the one who reads it sees what the rule protects and rewrites; the tool never guesses the cause.
-  Costs: the rule's words are the writer's, not the record's, and review alone holds them to it.
-- B) The decision it judges by heading, what it found, and the move.
-  Why: the record itself names the rule, in the words the owner answered.
-  Costs: a terminal in any repository prints the headings and identifiers of this tool's own record.
-- C) What it measured and the act that clears the measurement.
-  Why: the shortest line, and the one the counter gives for free.
-  Costs: the move names the counter, not the rule, and the fix that clears the counter can change the meaning.
-
-**Answer:** A
-
-### Does the tool colour its terminal output?
-depends: 1d7e59ea-99e3-4d4b-9928-5dabca62723d, f90dbd5b-8fbe-4899-8588-f8762795c2e2, 343d0d28-2c5d-40fc-99aa-22bfba4ea79f=*
-supersedes: b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051, f3c9e736-157c-4197-b49e-19e3674e4e0c
-unrelated: f53ac3b9-efde-427c-8027-19988aa8fda7, 36dfbeaa-698d-4a57-b3b0-d425348e14a5, 83190b10-8060-47c1-8194-f6a5c4f0d703, 8d3337b9-6fb3-4756-80f1-b388fe81d856, 2db33118-82b4-4edf-a9cb-e92ac62738b9, 7857d633-2055-47eb-857f-cb70da9fa7ba, 069a6b4a-de35-45f3-8c6c-8e254bf40565, c84a4bd9-fc2d-44f0-b333-172978f61544, 11be073c-ce91-44d8-833a-ef0b5e0b1672, 3fc35d4f-90f3-4425-9dac-951a89631fdf, 848e1b76-9cfe-483b-94dd-094eb9b2f995, aa275fac-def5-42a2-8a61-660142acad8e, 80b89c24-7d65-43f4-bb03-55e9d85c327d, 3cf56867-3918-4ce6-a296-2cc62a91b154, 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763, 6875e4df-207a-4b62-8a89-d3179722a6d7
-id: 44d02e7a-c902-4b89-973c-cf9d5c67c70e
-terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, findings=ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, moves=d904dc0d-231f-4e93-ac74-7babe888107d, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, refusal=0942e445-0163-423e-8ba7-84dd8ac07045, statuses=209081f4-864f-4ef6-8909-65da87f135e5
-
-Problem: statuses, findings and moves print in one shade, and the owner reads a disputed line, a refusal and a settled question alike.
-Standard: a command colours its output when standard output is a terminal, prints plain when piped, and honours NO_COLOR.
-
-- A) Yes.
-  Why: the owner's eye finds the line to act on; an agent and the tests read piped output, plain.
-  Costs: a palette per line kind, a terminal check before every print, and the page's own rendering of it.
-- B) No.
-  Why: one output everywhere; nothing to check.
-  Costs: the owner reads every listing in one shade.
-
-**Answer:** A
-
-### What does the tool add to the shape of its terminal output?
-depends: 1d7e59ea-99e3-4d4b-9928-5dabca62723d, f90dbd5b-8fbe-4899-8588-f8762795c2e2, 44d02e7a-c902-4b89-973c-cf9d5c67c70e=*
-supersedes: f3c9e736-157c-4197-b49e-19e3674e4e0c
-unrelated: b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051, 385a57d5-5f76-454a-ae5d-9b0d6f5c1492, 7857d633-2055-47eb-857f-cb70da9fa7ba, 069a6b4a-de35-45f3-8c6c-8e254bf40565, a6f41dee-2381-421a-bcc4-b14af243209b, c84a4bd9-fc2d-44f0-b333-172978f61544, 08a1b488-32fc-4dc7-b4b3-93a6e768725f, bf7da2dd-d8a7-41b8-9898-11cf68d0e833, a7b0b910-57f6-4c59-b904-b42f78db63f7, a82db5b7-969c-44e9-9eec-876ead7099d3, 3fc35d4f-90f3-4425-9dac-951a89631fdf, 83190b10-8060-47c1-8194-f6a5c4f0d703, 8f81dee1-9c19-447d-baa8-d7d0af691db8, 80b89c24-7d65-43f4-bb03-55e9d85c327d, 3cf56867-3918-4ce6-a296-2cc62a91b154, 343d0d28-2c5d-40fc-99aa-22bfba4ea79f, 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
-id: 6875e4df-207a-4b62-8a89-d3179722a6d7
-terms: agent=f90dbd5b-8fbe-4899-8588-f8762795c2e2, check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, findings=ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, moves=d904dc0d-231f-4e93-ac74-7babe888107d, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, questions=277a8338-c57a-43cc-8b28-6b42e9347f6a, status=209081f4-864f-4ef6-8909-65da87f135e5, statuses=209081f4-864f-4ef6-8909-65da87f135e5
-
-Problem: every line prints at one indent with no break between the questions, the findings and the moves, and a listing of a file runs on as one block.
-Standard: a listing groups its lines, with a blank line between groups and a header per group, as git status does; piped output stays one line per item.
-
-- A) Blank lines and headers between questions, findings and moves on a terminal; piped output one line per item.
-  Why: the groups read apart, coloured or not; a line per item stays for the agent and the tests.
-  Costs: a header per group, a terminal check before every listing, and the page's own rendering of the groups.
-- B) Nothing.
-  Why: one output on a terminal and in a pipe.
-  Costs: the owner reads a file's listing as one block.
-- C) Tables: columns aligned per group with a header row, on a terminal; piped output one line per item.
-  Why: statuses and headings line up.
-  Costs: column widths per group, wrapping of long headings, and a second form of every line.
-
-**Answer:** A
-
-### Does the ui show what the commands print?
-depends: 7127ab1e-c313-4c51-9134-c09d551682cf, 1d7e59ea-99e3-4d4b-9928-5dabca62723d, 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763=*, 6875e4df-207a-4b62-8a89-d3179722a6d7=*
-supersedes: 7857d633-2055-47eb-857f-cb70da9fa7ba, b80e29dc-3f25-4aa8-8fc8-fa5ea57cd051, f3c9e736-157c-4197-b49e-19e3674e4e0c
-unrelated: f53ac3b9-efde-427c-8027-19988aa8fda7, 36dfbeaa-698d-4a57-b3b0-d425348e14a5, 3fc35d4f-90f3-4425-9dac-951a89631fdf, 83190b10-8060-47c1-8194-f6a5c4f0d703, 848e1b76-9cfe-483b-94dd-094eb9b2f995, 069a6b4a-de35-45f3-8c6c-8e254bf40565, a6f41dee-2381-421a-bcc4-b14af243209b, c84a4bd9-fc2d-44f0-b333-172978f61544, 11be073c-ce91-44d8-833a-ef0b5e0b1672, 644b43ce-be10-4e9a-a7d5-71b27c51e365, 80b89c24-7d65-43f4-bb03-55e9d85c327d, 44d02e7a-c902-4b89-973c-cf9d5c67c70e, 343d0d28-2c5d-40fc-99aa-22bfba4ea79f
-id: 3cf56867-3918-4ce6-a296-2cc62a91b154
-terms: check=78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, decision=41c41584-1ea3-4f15-b7ec-76a1dc99d32f, findings=ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, moves=d904dc0d-231f-4e93-ac74-7babe888107d, owner=1d7e59ea-99e3-4d4b-9928-5dabca62723d, question=277a8338-c57a-43cc-8b28-6b42e9347f6a, statuses=209081f4-864f-4ef6-8909-65da87f135e5, ui=7127ab1e-c313-4c51-9134-c09d551682cf
-
-Problem: the ui copies check's whole output into a block, shows one open question at a time with no count of the rest, and its lines have no decision behind them apart from the owner's acts.
-Standard: one view model, two renderings.
-
-- A) Yes.
-  Why: the page renders the same statuses, findings, moves and events the commands print, from the one computation.
-  Costs: the page shows nothing the terminal cannot; a page form for every line kind.
-- B) No.
-  Why: the page is laid out for the owner alone, with its own lines.
-  Costs: two sets of lines to hold right, and a line on the page with no decision behind it.
-
-**Answer:** A
-
 ### What does a command print when it writes nothing?
 depends: d904dc0d-231f-4e93-ac74-7babe888107d, ce1bfaa9-0ae8-4065-b8f5-4dc8a67fa862, 78f2f2d0-cbef-40ef-ae75-cc2ff3f953de, aac5c313-dedd-466b-a0c3-ead5e99ce913
 supersedes: 848e1b76-9cfe-483b-94dd-094eb9b2f995, 36dfbeaa-698d-4a57-b3b0-d425348e14a5, 3fc35d4f-90f3-4425-9dac-951a89631fdf, bceceda8-133a-4c9b-b439-b5c1a4414a02, c84a4bd9-fc2d-44f0-b333-172978f61544, 8f81dee1-9c19-447d-baa8-d7d0af691db8, a6f41dee-2381-421a-bcc4-b14af243209b, 332ff0c7-0769-45ac-8f89-00aeff318467, 83190b10-8060-47c1-8194-f6a5c4f0d703
@@ -345,6 +263,8 @@ Standard: a compiler error names what failed and where, and leaves the fix to th
   Why: the record names the rule in the owner's words, nothing hand-written.
   Costs: a terminal in any repository prints the headings of this tool's own record.
 
+**Answer:** A
+
 ### Does the tool colour what it prints on a terminal?
 depends: 1d7e59ea-99e3-4d4b-9928-5dabca62723d, f90dbd5b-8fbe-4899-8588-f8762795c2e2, 50b31713-4fea-4aa3-842a-79c2750660ba=*
 unrelated: 44d02e7a-c902-4b89-973c-cf9d5c67c70e, 3cf56867-3918-4ce6-a296-2cc62a91b154, 6875e4df-207a-4b62-8a89-d3179722a6d7, 27bd0855-a6c8-4cda-a82b-bf95022a14b0, c5e10ae8-258d-4f29-b9fe-13cb7ad2a550, bd83aa22-94fc-49ac-b215-a82990ff8c65, 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763, d1d6fed2-4e1a-44bd-b9cb-22f779a00bce, cdc905a2-5b58-4c38-beff-4a8bd3b6f42e, b0acc95b-3dd5-4158-ac5c-65a2159972a9, 11be073c-ce91-44d8-833a-ef0b5e0b1672, 1af76f91-5644-42ef-97ea-8f70f934c26c, 9a2ff21b-c20b-4c63-95f2-a7a3cbe236b8, a9e9e370-7768-4a79-b67b-7fe0926b5670, a5503032-f7f1-45a2-874a-5580d1211d37
@@ -360,6 +280,8 @@ Standard: a command colours its output when standard output is a terminal, print
 - B) No.
   Why: one output everywhere; nothing to check.
   Costs: the owner reads every listing in one shade.
+
+**Answer:** A
 
 ### What does the tool add to the shape of a terminal listing?
 depends: 1d7e59ea-99e3-4d4b-9928-5dabca62723d, f90dbd5b-8fbe-4899-8588-f8762795c2e2, 17059963-8eb3-479c-8f12-1df7b25b19f6=*
@@ -380,6 +302,8 @@ Standard: a listing groups its lines, with a blank line between groups and a hea
   Why: statuses and headings line up.
   Costs: column widths per group, wrapping of long headings, and a second form of every line.
 
+**Answer:** A
+
 ### Does the ui render what the commands print?
 depends: 7127ab1e-c313-4c51-9134-c09d551682cf, 1d7e59ea-99e3-4d4b-9928-5dabca62723d, 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763, a5503032-f7f1-45a2-874a-5580d1211d37=*
 unrelated: 3cf56867-3918-4ce6-a296-2cc62a91b154, cdc905a2-5b58-4c38-beff-4a8bd3b6f42e, 44d02e7a-c902-4b89-973c-cf9d5c67c70e, 1af76f91-5644-42ef-97ea-8f70f934c26c, c5e10ae8-258d-4f29-b9fe-13cb7ad2a550, d1d6fed2-4e1a-44bd-b9cb-22f779a00bce, b0acc95b-3dd5-4158-ac5c-65a2159972a9, f53ac3b9-efde-427c-8027-19988aa8fda7, ece60954-56d4-4622-883e-265f3b997c9f, 11be073c-ce91-44d8-833a-ef0b5e0b1672, 644b43ce-be10-4e9a-a7d5-71b27c51e365, bd83aa22-94fc-49ac-b215-a82990ff8c65, 17059963-8eb3-479c-8f12-1df7b25b19f6, 50b31713-4fea-4aa3-842a-79c2750660ba
@@ -395,3 +319,5 @@ Standard: one view model, two renderings.
 - B) No.
   Why: the page is laid out for the owner alone, with its own lines.
   Costs: two sets of lines to hold right, and a line on the page with no decision behind it.
+
+**Answer:** A
