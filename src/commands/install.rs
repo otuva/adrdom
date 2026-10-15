@@ -28,9 +28,15 @@ fn install_words(claude: bool, codex: bool) -> Vec<&'static str> {
 }
 
 /// The agent brief, final at `assets/brief.md`. `adr install` writes it
-/// into AGENTS.md between the marker lines below; `adr check`'s `install`
-/// check compares AGENTS.md's marked section against this text.
+/// whole to `repo::BRIEF_PATH`; `adr check`'s `install` check compares that
+/// file against this text.
 pub const BRIEF: &str = include_str!("../../assets/brief.md");
+
+/// The marked section of AGENTS.md: the lines `adr install` writes between
+/// the marker lines below, naming the brief's file with an @ line, the same
+/// shape the brief names the terms brief with (adee66f2 A). `adr check`
+/// compares AGENTS.md's marked section against this text.
+pub(crate) const TAG: &str = "# adrdom\nThis repository is governed by `adr`. Read its brief before you write a question, code or a reply:\n@adrdom/state/brief.md\n";
 
 pub(crate) const BRIEF_BEGIN: &str = "<!-- adrdom brief begin -->";
 pub(crate) const BRIEF_END: &str = "<!-- adrdom brief end -->";
@@ -73,7 +79,7 @@ pub(crate) const GITIGNORE_CONTENT: &str = "cache/\nstate/roles.tsv\nstate/neigh
 /// "forbidden"`. `check`'s `install`
 /// check compares the file on disk against this text (see
 /// `commands/check/install.rs`), the same way it compares AGENTS.md against
-/// `BRIEF`.
+/// `TAG`.
 pub(crate) fn codex_rules_content() -> String {
     let mut out = String::new();
     for cmd in OWNER_COMMANDS {
@@ -128,6 +134,7 @@ fn install_all(root: &Path, claude: bool, codex: bool, events: &mut Vec<Event>) 
 
     events.extend(install_gitattributes(root).map_err(|e| msg::write_failed(repo::GITATTRIBUTES_PATH, e, msg::after_fix_agent_runs(cmd.clone())))?);
     events.extend(install_gitignore(root).map_err(|e| msg::write_failed(repo::GITIGNORE_PATH, e, msg::after_fix_agent_runs(cmd.clone())))?);
+    events.extend(install_brief(root).map_err(|e| msg::write_failed(repo::BRIEF_PATH, e, msg::after_fix_agent_runs(cmd.clone())))?);
 
     let hooks = root.join(".githooks");
     fs::create_dir_all(&hooks).map_err(|e| msg::create_failed(&hooks.display().to_string(), e, msg::after_fix_agent_runs(cmd.clone())))?;
@@ -251,6 +258,25 @@ fn write_whole(root: &Path, rel: &str, content: &str) -> Result<Option<Event>, S
     Ok(written(rel))
 }
 
+/// Whether a brief file holding `existing` is the brief install writes: the
+/// same lines, a checkout's `\r` aside. The one comparison `install` and
+/// `check` judge the brief's file by.
+pub(crate) fn brief_is_current(existing: &str) -> bool {
+    let existing_lines: Vec<&str> = existing.lines().collect();
+    let want_lines: Vec<&str> = BRIEF.lines().collect();
+    crate::text::lines_match_trimmed(&existing_lines, &want_lines)
+}
+
+/// Writes the brief to `repo::BRIEF_PATH` unless the file there is current.
+fn install_brief(root: &Path) -> Result<Option<Event>, String> {
+    let path = root.join(repo::BRIEF_PATH);
+    if fs::read_to_string(&path).is_ok_and(|c| brief_is_current(&c)) {
+        return Ok(None);
+    }
+    fs::write(&path, BRIEF).map_err(|e| e.to_string())?;
+    Ok(written(repo::BRIEF_PATH))
+}
+
 /// Locates the marker lines in `lines` (as produced by `content.split('\n')`,
 /// so indices line up with a raw reconstruction). Both markers must match
 /// exactly (no trimming), and the end marker must come after the begin
@@ -277,12 +303,12 @@ pub(crate) fn hook_is_current(existing: &str, content: &str) -> bool {
     !existing.contains('\r') && crate::text::lines_match_trimmed(&existing_lines, &want_lines)
 }
 
-/// The marker lines plus the brief's own lines, in file order, as they
-/// should appear in AGENTS.md (begin marker, then every brief line, then
+/// The marker lines plus the tag's own lines, in file order, as they
+/// should appear in AGENTS.md (begin marker, then every tag line, then
 /// end marker).
 fn section_lines() -> Vec<&'static str> {
     let mut v = vec![BRIEF_BEGIN];
-    v.extend(BRIEF.lines());
+    v.extend(TAG.lines());
     v.push(BRIEF_END);
     v
 }

@@ -540,7 +540,7 @@ pub const DEFINITION_TERM_EXISTS: Rule = Rule {
 pub const AGENTS_BRIEF_MATCHES_INSTALL: Rule = Rule {
     name: "agents_brief_matches_install",
     decisions: &["6ef9eca6-fd8b-4211-aae7-00b37a2a9245"],
-    protects: "AGENTS.md carries the brief text install writes",
+    protects: "AGENTS.md carries the tag and adrdom/state/brief.md the brief install writes",
 };
 
 /// Decision: What does install write for one agent?

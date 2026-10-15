@@ -1825,6 +1825,22 @@ pub fn agents_md_missing_brief() -> Said {
     )
 }
 
+pub fn brief_file_differs() -> Said {
+    said(
+        &crate::rule::AGENTS_BRIEF_MATCHES_INSTALL,
+        "adrdom/state/brief.md differs from this binary's brief",
+        Next::agent_runs(Cmd::fixed("adr install")),
+    )
+}
+
+pub fn brief_file_missing() -> Said {
+    said(
+        &crate::rule::AGENTS_BRIEF_MATCHES_INSTALL,
+        "adrdom/state/brief.md is missing",
+        Next::agent_runs(Cmd::fixed("adr install")),
+    )
+}
+
 pub fn claude_md_missing_import() -> Said {
     said(
         &crate::rule::AGENT_FILE_IMPORTS_AGENTS_MD,
@@ -2726,6 +2742,8 @@ mod tests {
             banned_unbanned_but_in_file("abcdef123456").text(),
             agents_md_stale().text(),
             agents_md_missing_brief().text(),
+            brief_file_differs().text(),
+            brief_file_missing().text(),
             claude_md_missing_import().text(),
             missing_deny_entry("Bash(adr approve*)").text(),
             settings_unparseable(".claude/settings.json").text(),

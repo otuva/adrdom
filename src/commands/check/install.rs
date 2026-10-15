@@ -95,6 +95,18 @@ fn judge(root: &Path, source: &Source) -> Vec<(&'static str, Failure)> {
         None => out.push((repo::GITIGNORE_PATH, Failure::said(Class::Install, msg::gitignore_missing()))),
     }
 
+    // The brief's text: install writes it on every install, and the marked
+    // section of AGENTS.md names it. Judged by the comparison install's own
+    // writer uses, so the two never disagree.
+    match source.read(root, repo::BRIEF_PATH) {
+        Some(content) => {
+            if !crate::commands::install::brief_is_current(&content) {
+                out.push((repo::BRIEF_PATH, Failure::said(Class::Install, msg::brief_file_differs())));
+            }
+        }
+        None => out.push((repo::BRIEF_PATH, Failure::said(Class::Install, msg::brief_file_missing()))),
+    }
+
     // AGENTS.md is checked unconditionally; CLAUDE.md's import is checked
     // only when .claude/ exists, the same condition used below for the
     // deny entries (4f925b13-ad16-48b8-acd1-3e30d6e308b6, answer A: the
@@ -106,8 +118,8 @@ fn judge(root: &Path, source: &Source) -> Vec<(&'static str, Failure)> {
             match crate::commands::install::find_markers(&parts) {
                 Some((begin, end)) => {
                     let section = &parts[begin + 1..end];
-                    let brief_lines: Vec<&str> = crate::commands::install::BRIEF.lines().collect();
-                    let matches = crate::text::lines_match_trimmed(section, &brief_lines);
+                    let tag_lines: Vec<&str> = crate::commands::install::TAG.lines().collect();
+                    let matches = crate::text::lines_match_trimmed(section, &tag_lines);
                     if !matches {
                         out.push(("AGENTS.md", Failure::said(Class::Install, msg::agents_md_stale())));
                     }

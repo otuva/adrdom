@@ -628,6 +628,7 @@ fn terms_page_shows_an_unapproved_edit_marked_with_the_approve_form() {
             "adrdom/state/terms-brief.md",
             "adrdom/.gitattributes",
             "AGENTS.md",
+            "adrdom/state/brief.md",
             ".githooks",
         ],
     );
