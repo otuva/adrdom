@@ -30,7 +30,7 @@ enum Command {
     },
     /// Owner: remove what install wrote outside adrdom/
     Uninstall,
-    /// Owner: ask the unasked questions of a topic file
+    /// Ask the owner the unasked questions of a topic file
     Ask {
         /// The topic file, adrdom/decisions/<topic>.md
         topic_file: PathBuf,
