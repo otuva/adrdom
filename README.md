@@ -45,7 +45,7 @@ Limit: the hooks verify a test names the decision, not that the code follows it.
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/otuva/adrdom/releases/latest/download/adrdom-installer.sh | sh
 ```
 
-Windows, untested: `irm https://github.com/otuva/adrdom/releases/latest/download/adrdom-installer.ps1 | iex`. From a clone: `cargo install --path . --force --locked`.
+Windows, untested: `irm https://github.com/otuva/adrdom/releases/latest/download/adrdom-installer.ps1 | iex`. From a clone: `cargo install --path .`.
 
 Inside the repository:
 
