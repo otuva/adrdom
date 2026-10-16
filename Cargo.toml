@@ -2,6 +2,7 @@
 name = "adrdom"
 description = "Command-line tool that governs how AI coding agents work in a git repository"
 repository = "https://github.com/otuva/adrdom"
+license = "Apache-2.0"
 # Placeholder: the tool's version lives in the repo-root VERSION file
 # (see src/version.rs and "Does every ledger row carry the tool version?"),
 # not here. The release workflow writes that version into its checkout of this file, uncommitted.
