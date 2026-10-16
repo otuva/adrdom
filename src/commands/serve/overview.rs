@@ -204,7 +204,7 @@ fn topic_card(r: &Records, f: &File, token: &str, shown: &mut Vec<String>) -> St
     }
 
     // Decisions: the heading and the option picked, as `adr show` lists them.
-    let answered = show::decision_lines(rf, &r.led);
+    let answered = show::decision_lines(rf, &r.led, false);
     let count = answered
         .iter()
         .filter(|l| matches!(l, Line::Record { depth: 1, .. }))

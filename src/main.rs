@@ -82,6 +82,9 @@ enum Command {
         /// Every word the reader gave on each neighbour, with its reason
         #[arg(long, requires = "whole")]
         reader: bool,
+        /// Each decision's id under its heading
+        #[arg(long)]
+        ids: bool,
     },
     /// Ban words read from stdin
     Ban {
@@ -147,6 +150,7 @@ fn main() {
             questions,
             reader,
             superseded,
+            ids,
         } => commands::show::run(
             topic_file,
             all,
@@ -157,6 +161,7 @@ fn main() {
                 questions,
                 reader,
                 superseded,
+                ids,
             },
         ),
         Command::Ban { term, rebuild } => commands::ban::run(term, rebuild),
