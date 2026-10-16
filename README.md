@@ -1,164 +1,134 @@
-# adr
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.svg">
+    <img src="docs/logo-light.svg" alt="adr" width="420">
+  </picture>
+</p>
 
-## What the tool is and the problems it solves
+<p align="center">
+  <a href="https://github.com/otuva/adrdom/actions/workflows/check.yml"><img src="https://github.com/otuva/adrdom/actions/workflows/check.yml/badge.svg" alt="check"></a>
+  <a href="https://github.com/otuva/adrdom/releases/latest"><img src="https://img.shields.io/github/v/release/otuva/adrdom" alt="release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="license"></a>
+</p>
 
-`adr` is a command-line tool that governs how AI coding agents work in a git repository.
+**A condom between production and your AI agent.**
 
-Three problems come up when an agent works in a repository:
+The agent writes the questions. Only you answer. Git hooks refuse what breaks an answer.
 
-- The agent guesses which choices are decisions and which are details.
-- The agent writes loaded questions: a heading that assumes its answer, or two questions in one.
-- The record of decisions drifts from the code.
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/otuva/adrdom/releases/latest/download/adrdom-installer.sh | sh
+cd your-repo && adr install --claude
+adr show        # every current decision, and whose move is next
+```
 
-What `adr` does about them:
+<p align="center"><img src="docs/demo.gif" alt="adr demo: approve, ask, answer, then a refused commit" width="900"></p>
 
-- Decisions are questions in markdown topic files under `adrdom/decisions/`. Agents write the questions. Only the owner approves a plan and answers a question, at their own terminal.
-- Every approval and answer is a row in an append-only ledger, `adrdom/state/ledger.tsv`.
-- Git hooks run `adr check` at every commit and every push. They refuse a change that breaks a decision.
-- A test that carries the comment `adr: <id>` is tied to the decision with that id. `adr check` reports each current decision that no test names.
-- Terms in `adrdom/terms.md` fix the meaning of words used in questions.
+## What it solves
 
-## Install and uninstall
+**The agent decides while it codes.** It picks a design mid-task, changes the spec to fit, forgets the spec, or asks a question that contains its answer. You find out at review, or never.
+> A behaviour with no decision is a question first. Questions have a fixed shape, no lean. The session that asks never builds. Owner commands refuse an agent.
 
-Install the binary from the latest GitHub release. On Linux and macOS:
+**Spec and code drift apart.** Decisions live in chat and prose; nothing at commit time notices. ADRs go stale.
+> Every answer is a ledger row with a hash of what you read. A decision is built once a test carries `adr: <id>`. `adr check` runs at every commit, push and in CI.
+
+**No shared vocabulary.** Each session invents words. Secrets and names leak into the repo.
+> One terms file fixes meaning, frozen at answer time. Every agent reads the brief first. Banned words are stored as hashes and scanned at every commit.
+
+**Decisions don't see each other.** The same decision is taken twice, differently. What stands on what is nowhere.
+> Every question names what it depends on and supersedes. `adr plan` embeds a new question and has the agent read it against its neighbours. `adr read` reads the current set against itself.
+
+Limit: the hooks verify a test names the decision, not that the code follows it. The guard stops an agent that runs an owner command by mistake, not one that impersonates you.
+
+## Install
 
 ```sh
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/otuva/adrdom/releases/latest/download/adrdom-installer.sh | sh
 ```
 
-On Windows (untested), in PowerShell:
+Windows, untested: `irm https://github.com/otuva/adrdom/releases/latest/download/adrdom-installer.ps1 | iex`. From a clone: `cargo install --path . --force --locked`.
 
-```powershell
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/otuva/adrdom/releases/latest/download/adrdom-installer.ps1 | iex"
-```
-
-Or build and install it from a clone (the package is named `adrdom`; the command it installs is `adr`). `--force` is needed because the package was renamed from `adr` to `adrdom`, so a plain reinstall over an old `adr` stops with "binary `adr` already exists":
+Inside the repository:
 
 ```sh
-cargo install --path . --force --locked
+adr install            # adrdom/, hooks, AGENTS.md
+adr install --claude   # + CLAUDE.md, deny rules in .claude/settings.json
+adr install --codex    # + .codex/rules/adrdom.rules
+adr install --planning # once per machine: embedding model + onnxruntime into the user cache
+adr uninstall          # owner only; leaves adrdom/ and the cache
 ```
 
-Then run, inside the repository to govern:
+`--planning` refuses on Intel Macs (no onnxruntime build); everything else works there.
 
-```sh
-adr install            # the repository setup
-adr install --claude   # the setup, plus the Claude Code files
-adr install --codex    # the setup, plus the Codex rules file
-adr install --planning # on a machine that plans: fetch the embedding model and the onnxruntime library
-adr uninstall          # owner-only: remove what install wrote outside adrdom/
-```
-
-`adr install --planning` fetches the embedding model and the onnxruntime library into the user cache, once per machine: `~/.cache/adrdom` on Linux, `~/Library/Caches/adrdom` on macOS, `%LOCALAPPDATA%\adrdom` on Windows. `adr plan` and `adr read` stop and name this command when those files are missing. onnxruntime 1.28.0 has no build for Intel Macs, so `adr install --planning` refuses there; every other command works.
-
-`adr install` writes these files and one git setting:
-
-- `adrdom/state/ledger.tsv`, `adrdom/state/reader.tsv` and `adrdom/state/banned.sha256`, all empty at first.
-- `adrdom/state/brief.md`, the brief an agent reads before it writes a question, code or a reply.
-- `adrdom/.gitattributes` and `adrdom/.gitignore`.
-- `.githooks/pre-commit` (runs `adr check --staged`), `.githooks/commit-msg` (runs `adr check --message`) and `.githooks/pre-push` (runs `adr check --push`), and `git config core.hooksPath .githooks`.
-- `AGENTS.md`, with a short section between `<!-- adrdom brief begin -->` and `<!-- adrdom brief end -->` that imports `adrdom/state/brief.md`.
-
-`adr install --claude` also creates `CLAUDE.md` with an `@AGENTS.md` import when the file is missing, and merges deny entries into `.claude/settings.json`. The entries deny `adr answer`, `adr approve`, `adr unban`, `adr serve` and `adr uninstall`, and edits to `adrdom/state/**`.
-
-`adr install --codex` also writes `.codex/rules/adrdom.rules`, which forbids the owner's commands under Codex's project rules.
-
-`adr uninstall` removes the AGENTS.md section (and the file, if nothing else is in it), the import line it added to `CLAUDE.md`, the three hooks and `core.hooksPath` (only if they are unchanged since install), the deny entries, and `.codex/rules/adrdom.rules`. It leaves `adrdom/` and the user cache as they are.
-
-## The workflow
+## The loop
 
 ```
-agent writes terms in adrdom/terms.md
-        |
-        v
-owner: adr approve adrdom/terms.md <name>      (one entry at a time)
-        |
-        v
-agent writes the headings of a topic file
-        |
-        v
-agent: adr plan <file>   (repeat until the move it prints is the owner's approve)
-        |
-        v
-owner: adr approve <file>
-        |
-        v
-agent: adr ask <file>
-        |
-        v
-owner: adr answer <id>@<version> <letter>
-        |
-        v
-another session builds the decision and ties a test to it (an `adr: <id>` comment)
-        |
-        v
-adr check at every commit and push
+agent                                      owner
+  terms in adrdom/terms.md        ----->    adr approve adrdom/terms.md <name>
+  headings in adrdom/decisions/<topic>.md
+  adr plan <file>                 ----->    adr approve <file>
+  adr ask <file>                  ----->    adr answer <id>@<version> <letter>
+builder
+  code + a test with `adr: <id>`
+  adr check at every commit and push
 ```
 
-The first session in an empty repository:
+Planner and builder are never one session. A planner's commits hold only `adrdom/`. Every command ends with the next move and who makes it: `agent`, `builder`, `owner runs: <command>` or `not yet`.
 
-1. `adr install` sets up the repository.
-2. The agent writes the terms its first questions use into `adrdom/terms.md`.
-3. The owner approves them one entry at a time: `adr approve adrdom/terms.md <name>`.
-4. The agent writes the first topic file, `adrdom/decisions/<topic>.md`, and runs `adr plan` on it until the next move is the owner's.
-5. The owner runs `adr approve` on the topic file. The agent runs `adr ask`. The owner answers.
-6. Another session builds each decision and ties a test to it.
-
-The owner's commands. An agent that runs one is refused:
-
-- `adr approve <file> [entry]` approves the headings and prose of a topic file, one entry of `adrdom/terms.md`, or a blame file.
-- `adr answer <id>@<version> <letter>` answers a question with an option letter, or with `refuse`.
-- `adr serve [--port <port>]` serves the owner's page on 127.0.0.1 (port 7357 by default). The page shows what the terminal prints.
-- `adr unban` reads lines from stdin and removes them from the ban list.
-- `adr uninstall` removes what `adr install` wrote outside `adrdom/`.
-
-## Record shapes and commands
-
-A question in a topic file (from `adrdom/decisions/terms-brief.md`; its `terms:` line and one option are left out):
+## The records
 
 ```
 ### Does the tool write a terms brief for the agent?
-depends: 7d44030a-3589-4f29-aaa6-12fa09908ab8, f90dbd5b-8fbe-4899-8588-f8762795c2e2
-id: ec0b9293-916e-4ced-a3d7-3b862ab7b069
+depends: 7d44030a-…, f90dbd5b-…
+id: ec0b9293-…
 
-Problem: an agent writes questions, code and chat with term words whose definitions it has never read, because nothing puts them in front of it.
-Standard: a shared vocabulary is put in front of every contributor before they write, from one source.
+Problem: an agent writes with term words whose definitions it has never read.
+Standard: a shared vocabulary is put in front of every contributor before they write.
 
 - A) Yes: the tool writes a terms brief from the terms file, a file made for the agent to read.
-  Why: the definitions reach the agent as one short file with nothing in it the agent has no use for.
+  Why: the definitions reach the agent as one short file.
   Costs: one more file, which the tool has to keep equal to the terms file.
-- B) No: show prints the name, the aliases and the definition of every term that is not retired.
-  Why: no new file, and the brief tells the agent to run show before it builds.
-  Costs: the definitions reach the agent only once it runs show, after it has written chat and drafts.
+- B) No: show prints the name, the aliases and the definition of every term.
+  Why: no new file.
+  Costs: the definitions reach the agent only once it runs show.
 
 **Answer:** A
 ```
 
-Output of `adr show adrdom/decisions/terms-brief.md`, first six lines:
-
 ```
+$ adr show adrdom/decisions/terms-brief.md
 [approved] Terms brief (adrdom/decisions/terms-brief.md)
 [answered A] Does the tool write a terms brief for the agent?
   Yes: the tool writes a terms brief from the terms file, a file made for the agent to read.
-[answered A] What does the terms brief hold?
-  One line per term that is not retired, with its name, its aliases and its definition.
-[answered A] Does approve write the terms brief?
 ```
 
-Commands:
+```
+$ tail -1 adrdom/state/ledger.tsv
+2026-10-15T19:24:20Z	answered	459c1b77-…	d1cac21e…	A	0.3.0
+```
 
-- `adr install` sets up `adrdom/`, the hooks and `AGENTS.md`; see `adr install --help`.
-- `adr uninstall` is owner-only and removes what install wrote outside `adrdom/`; see `adr uninstall --help`.
-- `adr ask` asks the owner every question of a topic file that has a body and is not asked yet; see `adr ask --help`.
-- `adr plan` brings the neighbours of a topic file's headings and questions, names the lines still to write, and prints the next move. It judges neighbours with a reader, the program of the agent install was run for: `claude` after `--claude`, `codex` after `--codex`; see `adr plan --help`.
-- `adr read` reads every current decision against its ten nearest and prints each pair marked same or inconsistent; see `adr read --help`.
-- `adr approve` is owner-only and approves a topic file, one terms entry or a blame file; see `adr approve --help`.
-- `adr answer` is owner-only and answers a question by `<id>@<version>`; see `adr answer --help`.
-- `adr show` prints every current decision and every move, or a file's questions with their status; see `adr show --help`.
-- `adr ban` reads lines from stdin and bans them and their tokens from the repository; see `adr ban --help`.
-- `adr unban` is owner-only and removes lines from the ban list; see `adr unban --help`.
-- `adr serve` is owner-only and serves the owner's page on 127.0.0.1; see `adr serve --help`.
-- `adr check` runs all governance checks; see `adr check --help`.
+## Commands
 
-## Releases
+| agent | |
+|---|---|
+| `plan <file>` | do the file's next step, print the move |
+| `ask <file>` | ask the owner the file's open questions |
+| `read` | read current decisions against each other |
+| `show [file]` | decisions and moves |
+| `check` | what the hooks run |
+| `ban` | ban the lines on stdin |
 
-A push to `main` that changes `VERSION` builds the binary for Linux, macOS (Apple silicon and Intel) and Windows, and publishes a GitHub release tagged `v<VERSION>` with the installers. The release notes are generated from the commits. `.github/workflows/release.yml` does this; a release that exists already is skipped.
+| owner | |
+|---|---|
+| `approve <file> [entry]` | topic file, terms entry or blame file |
+| `answer <id>@<version> <letter\|refuse>` | |
+| `serve` | owner's page on 127.0.0.1 |
+| `unban` | lift a ban |
+| `uninstall` | |
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md).
+
+## License
+
+Apache-2.0.
