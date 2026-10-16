@@ -57,10 +57,10 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
           - target: aarch64-apple-darwin
-            os: macos-14
-          # Built on the Apple silicon runner: the Intel macOS runners are retired.
+            os: macos-15
+          # Built natively on an Intel runner.
           - target: x86_64-apple-darwin
-            os: macos-14
+            os: macos-15-intel
           - target: x86_64-pc-windows-msvc
             os: windows-2022
     steps:
@@ -68,7 +68,9 @@ jobs:
 
       - name: Install the Rust target
         shell: bash
-        run: rustup target add ${{ matrix.target }}
+        env:
+          TARGET: ${{ matrix.target }}
+        run: rustup target add "$TARGET"
 
       - name: Install dist
         shell: bash
@@ -83,18 +85,23 @@ jobs:
 
       - name: Write the version into Cargo.toml
         shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          sed -i.bak 's/^version = "0.0.0"$/version = "${{ needs.prepare.outputs.version }}"/' Cargo.toml
+          sed -i.bak "s/^version = \"0.0.0\"$/version = \"$VERSION\"/" Cargo.toml
           rm Cargo.toml.bak
-          grep -q '^version = "${{ needs.prepare.outputs.version }}"$' Cargo.toml
+          grep -q "^version = \"$VERSION\"$" Cargo.toml
           cargo metadata --format-version 1 > /dev/null
 
       - name: Build
         shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          dist build --artifacts=local --target ${{ matrix.target }} --tag v${{ needs.prepare.outputs.version }} --output-format=json > dist-manifest.json
+          dist build --artifacts=local --target "$TARGET" --tag "v$VERSION" --output-format=json > dist-manifest.json
           # The global build reads the local artifacts' manifests from target/distrib.
-          cp dist-manifest.json target/distrib/${{ matrix.target }}-dist-manifest.json
+          cp dist-manifest.json "target/distrib/$TARGET-dist-manifest.json"
 
       - uses: actions/upload-artifact@v7.0.2
         with:
@@ -120,9 +127,11 @@ jobs:
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
       - name: Write the version into Cargo.toml
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          sed -i 's/^version = "0.0.0"$/version = "${{ needs.prepare.outputs.version }}"/' Cargo.toml
-          grep -q '^version = "${{ needs.prepare.outputs.version }}"$' Cargo.toml
+          sed -i "s/^version = \"0.0.0\"$/version = \"$VERSION\"/" Cargo.toml
+          grep -q "^version = \"$VERSION\"$" Cargo.toml
           cargo metadata --format-version 1 > /dev/null
 
       # The global build reads the local artifacts from target/distrib, so the
@@ -134,18 +143,26 @@ jobs:
           merge-multiple: true
 
       - name: Build the installers and checksums
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          dist build --artifacts=global --tag v${{ needs.prepare.outputs.version }}
+          dist build --artifacts=global --tag "v$VERSION"
           rm -f target/distrib/*-dist-manifest.json
 
       # dist cannot make GitHub's generated release notes, so gh makes the release.
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          tag="v${{ needs.prepare.outputs.version }}"
+          tag="v$VERSION"
+          # A version with a suffix (0.2.0-rc1) is a pre-release; any other is the latest.
+          case "$VERSION" in
+            *-*) kind=--prerelease ;;
+            *) kind=--latest ;;
+          esac
           gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "$tag" --generate-notes \
+            --title "$tag" --generate-notes "$kind" \
             target/distrib/adrdom-*.tar.xz \
             target/distrib/adrdom-*.zip \
             target/distrib/adrdom-*.sha256 \
