@@ -1,3 +1,6 @@
+mod common;
+use common::*;
+
 // What the brief tells an agent about who builds and who reviews.
 static BRIEF: std::sync::LazyLock<String> = std::sync::LazyLock::new(adr::commands::install::brief);
 
@@ -81,4 +84,29 @@ fn the_brief_gives_the_shape_of_a_blame_file() {
         "{}",
         b
     );
+}
+
+// adr: aa275fac-def5-42a2-8a61-660142acad8e
+#[test]
+fn the_commands_the_brief_calls_the_owners_refuse_an_agent() {
+    let b = flat();
+    assert!(
+        b.contains("The owner's commands are `adr approve`, `adr answer`, `adr unban`, `adr serve` and `adr uninstall`; they refuse an agent."),
+        "{}",
+        b
+    );
+    let dir = init_repo();
+    assert!(adr(&dir, &["install"], &[], "").status.success());
+    for args in [
+        vec!["approve", "adrdom/terms.md"],
+        vec!["answer", "00000000-0000-0000-0000-000000000000@1", "A"],
+        vec!["unban"],
+        vec!["serve"],
+        vec!["uninstall"],
+    ] {
+        let out = adr(&dir, &args, &[], "");
+        assert!(!out.status.success(), "{:?} ran for an agent", args);
+        let err = stderr(&out);
+        assert!(err.contains("owner's command"), "{:?}: {}", args, err);
+    }
 }
