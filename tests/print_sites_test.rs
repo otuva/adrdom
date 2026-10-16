@@ -47,7 +47,7 @@ fn no_source_file_but_the_printer_writes_to_the_terminal() {
 // adr: aac5c313-dedd-466b-a0c3-ead5e99ce913
 //
 // The words of a move that is no refusal's own clause (who builds, who
-// answers, what waits) are written once, in src/moves.rs. msg.rs's `Next`
+// answers, what waits) are written once, in src/moves. msg.rs's `Next`
 // is the renderer moves.rs calls for a clause; it writes "agent" and
 // "owner" and never a move of its own.
 #[test]
@@ -61,7 +61,7 @@ fn the_words_of_a_move_are_written_only_in_moves() {
     ];
     let mut found = Vec::new();
     for (rel, text) in source_files() {
-        if rel == "src/moves.rs" {
+        if rel.starts_with("src/moves/") {
             continue;
         }
         let mut in_acts = false;
@@ -81,7 +81,7 @@ fn the_words_of_a_move_are_written_only_in_moves() {
     }
     assert!(
         found.is_empty(),
-        "move words outside src/moves.rs:\n{}",
+        "move words outside src/moves:\n{}",
         found.join("\n")
     );
     for (rel, msg) in source_files() {
