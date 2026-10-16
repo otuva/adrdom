@@ -96,7 +96,8 @@ fn reader_says(dir: &Path, heading: &str, body_word: &str) {
         .unwrap();
     let id = base_id(dir);
     let mut new = Vec::new();
-    for (hash, word) in [(record::body_hash(&rf, sec), body_word)] {
+    {
+        let (hash, word) = (record::body_hash(&rf, sec), body_word);
         let mut row = reader::read_file(dir)
             .rows
             .into_iter()

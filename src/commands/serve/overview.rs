@@ -559,7 +559,7 @@ fn change_block(r: &Records, path: &str, rf: Option<&RecordFile>) -> String {
         } else {
             s.push_str("<span class=\"chip\">changed</span> <span class=\"subject\">the file as a whole</span>");
         }
-        s.push_str("\n");
+        s.push('\n');
         if let (Some(rf), Some(q)) = (rf, &g.question) {
             let map: &HashMap<String, Vec<String>> =
                 neighbours_of_file.get_or_init(|| show::neighbours_map(r, rf));

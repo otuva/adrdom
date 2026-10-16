@@ -135,7 +135,7 @@ fn build(
     // "What does a reference in a topic file carry?" left open): built once here too, shared the
     // same way `terms_list`/`phrase_lookup` already are. Built from `records`, already loaded
     // above, rather than re-reading every topic file a second time off disk.
-    let cross_file_headings = depends::cross_file_heading_index(&records, &led);
+    let cross_file_headings = depends::cross_file_heading_index(&records, led);
 
     // Plan/context approval state must be read off each file exactly as it
     // sits on disk: captured here, keyed by `rel` and threaded down to
@@ -156,24 +156,23 @@ fn build(
     // same scope `approve` reads for the planning rules.
     let awaiting: Vec<String> = records
         .iter()
-        .filter(|rf| rules::planning_rules_apply(&led, rf, &rf.rel))
+        .filter(|rf| rules::planning_rules_apply(led, rf, &rf.rel))
         .map(|rf| rf.rel.clone())
         .collect();
 
-    let names = crate::view::heading_names(&records, &led);
+    let names = crate::view::heading_names(&records, led);
     // Which plans are approved comes from `raw_hashes`, computed once and shared with
     // `check_terms`. The replaced-id set is built once and extended per file with that file's own
     // `supersedes:` lines.
     let approved_rels: std::collections::HashSet<String> = raw_hashes
         .iter()
-        .filter(|(rel, (plan_h, _))| state::plan_approved_hashes(&led, rel, plan_h))
+        .filter(|(rel, (plan_h, _))| state::plan_approved_hashes(led, rel, plan_h))
         .map(|(rel, _)| rel.clone())
         .collect();
-    let replaced_base =
-        depends::replaced_base(&records, &approved_rels, &cross_file_headings, &led);
+    let replaced_base = depends::replaced_base(&records, &approved_rels, &cross_file_headings, led);
     let replaced_per_record: Vec<std::collections::HashSet<String>> = records
         .iter()
-        .map(|rf| depends::replaced_ids(&replaced_base, rf, &cross_file_headings, &led))
+        .map(|rf| depends::replaced_ids(&replaced_base, rf, &cross_file_headings, led))
         .collect();
     // Every finding each topic file earns on its own: the one judgement
     // `approve` refuses on (`rules::judge_topic_file`, per "Does a command
@@ -184,7 +183,7 @@ fn build(
     // Built only when a file awaits approval: the planning rules judge no
     // other file (`rules::planning_rules_apply`).
     let built = (held.is_none() && !awaiting.is_empty())
-        .then(|| crate::plan::Shared::new_via(root, &records, &terms_list, &led, &source));
+        .then(|| crate::plan::Shared::new_via(root, &records, &terms_list, led, &source));
     let shared = match held {
         Some((h, _)) if !awaiting.is_empty() => Some(&h.index().planning),
         _ => built.as_ref(),
@@ -201,7 +200,7 @@ fn build(
                 .collect(),
         ),
         None => {
-            read_blame = crate::blame::Index::read(root, &source, &led);
+            read_blame = crate::blame::Index::read(root, &source, led);
             (&read_blame.0, read_blame.1)
         }
     };
@@ -230,7 +229,7 @@ fn build(
                     names: &names,
                     replaced,
                     blame: blame_index,
-                    led: &led,
+                    led,
                     planning: awaiting.contains(&rf.rel),
                     shared,
                     directory: false,
@@ -244,10 +243,10 @@ fn build(
         .map(str::to_string)
         .collect();
     let removed_files: Vec<(String, Vec<crate::moves::RemovalHold>)> =
-        rules::removal_awaiting(&led, &|rel| source.exists(root, rel))
+        rules::removal_awaiting(led, &|rel| source.exists(root, rel))
             .into_iter()
             .map(|rel| {
-                let holds = rules::removal_holds(root, &rel, &led, &present_ids).holds;
+                let holds = rules::removal_holds(root, &rel, led, &present_ids).holds;
                 (rel, holds)
             })
             .collect();
@@ -257,7 +256,7 @@ fn build(
         notes.extend(rules::judge_removed_topic_file(
             root,
             rel,
-            &led,
+            led,
             &present_ids,
         ));
     }
@@ -274,23 +273,18 @@ fn build(
         .map(|r| r.id.clone())
         .collect();
     // The rules on the topic files as a whole (`rules::judge_records`).
-    let missing_answered = rules::judge_records_except(&records, &led, &in_removed_file);
+    let missing_answered = rules::judge_records_except(&records, led, &in_removed_file);
     let mut failures: Vec<rules::Finding> = Vec::new();
     let mut stops: Vec<String> = unreadable_stops;
-    let (parse_failures, parse_notes) = parse::check_rule(
-        Class::Parse,
-        &records,
-        &per_record_findings,
-        &awaiting,
-        &led,
-    );
+    let (parse_failures, parse_notes) =
+        parse::check_rule(Class::Parse, &records, &per_record_findings, &awaiting, led);
     push_failures(&mut failures, parse_failures);
     push_failures(&mut notes, parse_notes);
     push_failures(
         &mut failures,
         ids::check_ids(
             &records,
-            &led,
+            led,
             &missing_answered,
             &raw_hashes,
             &removed_files,
@@ -298,16 +292,16 @@ fn build(
     );
     push_failures(
         &mut failures,
-        ledger::check_ledger(&led, &records, root, &ledger_content, since, &mut stops),
+        ledger::check_ledger(led, &records, root, &ledger_content, since, &mut stops),
     );
     push_failures(&mut failures, reader::check_reader(root, &source, since));
     push_failures(
         &mut failures,
-        banned::check_banned_ledger(&led, root, &source),
+        banned::check_banned_ledger(led, root, &source),
     );
     push_failures(
         &mut failures,
-        answers::check_answers(root, &records, &terms_list, &led, &source),
+        answers::check_answers(root, &records, &terms_list, led, &source),
     );
     push_failures(
         &mut failures,
@@ -318,14 +312,14 @@ fn build(
         root,
         &source,
         &records,
-        &led,
+        led,
         &per_record_findings,
         &awaiting,
     );
     push_failures(&mut failures, plan_failures);
     push_failures(&mut notes, plan_notes);
     let (terms_failures, terms_waits) =
-        terms::check_terms(root, &records, &led, &source, &approved_rels);
+        terms::check_terms(root, &records, led, &source, &approved_rels);
     push_failures(&mut failures, terms_failures);
     let (blame_failures, blame_notes) =
         blame::check_blame(root, &source, blame_index, &blame_unreadable, &mut stops);
@@ -339,7 +333,7 @@ fn build(
         &source,
         &records,
         &terms_list,
-        &led,
+        led,
         crate::session::role(root),
     );
     push_failures(&mut failures, brief_failures);
@@ -347,18 +341,13 @@ fn build(
     let untested = tests::check_tests(
         root,
         &records,
-        &led,
+        led,
         tests,
         &source,
         crate::session::role(root),
     );
-    let (tells_failures, tells_notes) = parse::check_rule(
-        Class::Tells,
-        &records,
-        &per_record_findings,
-        &awaiting,
-        &led,
-    );
+    let (tells_failures, tells_notes) =
+        parse::check_rule(Class::Tells, &records, &per_record_findings, &awaiting, led);
     push_failures(&mut failures, tells_failures);
     push_failures(&mut notes, tells_notes);
     // Per "What does check do with an untested current decision?": reported

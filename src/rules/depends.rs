@@ -225,7 +225,7 @@ pub fn supersedes_refusals(
                 let open = other
                     .id
                     .as_deref()
-                    .map_or(true, |id| !state::is_current(led, id))
+                    .is_none_or(|id| !state::is_current(led, id))
                     && !state::is_dead(led, other);
                 if j != *i && open && other.depends.iter().any(|d| stands_on(d, target)) {
                     out.push(refuse(

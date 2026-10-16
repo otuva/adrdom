@@ -171,9 +171,7 @@ mod stubs {
         let dir = installed(&["--claude"]);
         let bin = init_repo();
         stub(&bin, "claude", &format!("#!/bin/sh\ncat > {0}/stdin.txt\nprintf '%s\\n' \"$@\" > {0}/args.txt\nprintf '%s\\n' '{{\"result\":\"They ask the same.\\nsame\"}}'\n", bin.display()));
-        let r = reader::load_in(&dir, bin.as_os_str())
-            .ok()
-            .expect("claude found");
+        let r = reader::load_in(&dir, bin.as_os_str()).expect("claude found");
         assert_eq!(r.model(), reader::MODEL);
         let rows = reader::read_with(&dir, r.as_ref(), &[pair()]).unwrap();
         assert_eq!(rows[0].word, "same");
@@ -209,9 +207,7 @@ mod stubs {
                 bin.display()
             ),
         );
-        let r = reader::load_in(&dir, bin.as_os_str())
-            .ok()
-            .expect("codex found");
+        let r = reader::load_in(&dir, bin.as_os_str()).expect("codex found");
         assert_eq!(r.model(), reader::CODEX_MODEL);
         let rows = reader::read_with(&dir, r.as_ref(), &[pair()]).unwrap();
         assert_eq!(rows[0].word, "same");

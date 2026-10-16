@@ -1623,7 +1623,7 @@ fn approve_refuses_retiring_a_term_carried_by_a_current_decision() {
     );
     assert!(err.contains("What is the decision?"), "{}", err);
     assert!(
-        err.contains(&format!("agent rewrites the entry of"))
+        err.contains(&"agent rewrites the entry of".to_string())
             && err.contains(&format!("then writes a question that supersedes {} (", id)),
         "{}",
         err
@@ -1736,7 +1736,7 @@ fn approve_refuses_retiring_a_term_named_only_by_a_current_decisions_depends_lin
     assert!(err.contains("term \"flag\" retired but used by"), "{}", err);
     assert!(err.contains("What comes next?"), "{}", err);
     assert!(
-        err.contains(&format!("agent rewrites the entry of"))
+        err.contains(&"agent rewrites the entry of".to_string())
             && err.contains(&format!("then writes a question that supersedes {} (", id)),
         "{}",
         err

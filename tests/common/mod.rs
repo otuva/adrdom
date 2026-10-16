@@ -288,7 +288,7 @@ pub fn current_version(dir: &Path, id: &str) -> String {
                 None
             }
         })
-        .last()
+        .next_back()
         .unwrap_or_else(|| panic!("current_version: no asked row for id {}", id));
     hash[..8].to_string()
 }
@@ -1003,7 +1003,7 @@ pub fn page_lines(body: &str) -> Vec<String> {
         let b = rest.find("<span class=\"st\">");
         match (p, b) {
             (None, None) => break,
-            (Some(i), j) if j.map_or(true, |j| i < j) => {
+            (Some(i), j) if j.is_none_or(|j| i < j) => {
                 let after = &rest[i..];
                 let class = after["<p class=\"".len()..].split('"').next().unwrap_or("");
                 let end = after.find("</p>").unwrap_or(after.len());

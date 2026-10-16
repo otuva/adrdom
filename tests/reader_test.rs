@@ -458,7 +458,7 @@ fn an_append_drops_rows_whose_text_or_neighbour_is_gone_and_keeps_the_rest_byte_
     std::fs::write(reader_path(&dir), file).unwrap();
 
     let new = live_row("Does W?", "id-2", "same", 7);
-    reader::append(&dir, &[new.clone()]).unwrap();
+    reader::append(&dir, std::slice::from_ref(&new)).unwrap();
 
     let mut want = String::new();
     for r in kept {
@@ -687,7 +687,7 @@ fn an_append_drops_nothing_when_a_topic_file_cannot_be_read() {
     )
     .unwrap();
     let new = live_row("Does W?", "id-2", "same", 2);
-    reader::append(&dir, &[new.clone()]).unwrap();
+    reader::append(&dir, std::slice::from_ref(&new)).unwrap();
     let want = format!("{}\n{}\n", reader::row_line(&old), reader::row_line(&new));
     assert_eq!(std::fs::read_to_string(reader_path(&dir)).unwrap(), want);
 }
@@ -699,7 +699,7 @@ fn an_append_starts_a_new_line_when_the_file_does_not_end_with_one() {
     let first = live_row("Does W?", "id-1", "same", 1);
     let second = live_row("Does W?", "id-2", "same", 2);
     std::fs::write(reader_path(&dir), reader::row_line(&first)).unwrap();
-    reader::append(&dir, &[second.clone()]).unwrap();
+    reader::append(&dir, std::slice::from_ref(&second)).unwrap();
     let want = format!(
         "{}\n{}\n",
         reader::row_line(&first),

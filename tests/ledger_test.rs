@@ -419,8 +419,7 @@ fn question_identifier_survives_reword_and_a_move_to_another_file() {
     let after_first_ask = std::fs::read_to_string(&ledger_path).unwrap();
     let first_row = after_first_ask
         .lines()
-        .filter(|l| l.contains("\tasked\t") && l.contains(&id))
-        .next_back()
+        .rfind(|l| l.contains("\tasked\t") && l.contains(&id))
         .expect("a first asked row for this id")
         .to_string();
     let first_fields: Vec<&str> = first_row.split('\t').collect();
@@ -446,8 +445,7 @@ fn question_identifier_survives_reword_and_a_move_to_another_file() {
     let after_reword_ask = std::fs::read_to_string(&ledger_path).unwrap();
     let second_row = after_reword_ask
         .lines()
-        .filter(|l| l.contains("\tasked\t") && l.contains(&id))
-        .next_back()
+        .rfind(|l| l.contains("\tasked\t") && l.contains(&id))
         .expect("a second asked row for this id")
         .to_string();
     let second_fields: Vec<&str> = second_row.split('\t').collect();
@@ -544,8 +542,7 @@ fn version_flag_and_ledger_rows_use_the_repository_version_file() {
     let ledger_content = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let terms_row = ledger_content
         .lines()
-        .filter(|l| l.contains("\tterms\t"))
-        .next_back()
+        .rfind(|l| l.contains("\tterms\t"))
         .expect("a terms ledger row from the real approve above");
     let fields: Vec<&str> = terms_row.split('\t').collect();
     assert_eq!(fields.len(), 6, "{}", terms_row);

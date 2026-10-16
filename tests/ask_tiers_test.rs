@@ -842,7 +842,7 @@ fn ask_prints_a_line_per_row_and_writes_an_assumes_row_per_dependent() {
     let row = ledger
         .lines()
         .find(|l| l.contains("\tassumes\t"))
-        .expect(&format!("no assumes row: {}", ledger));
+        .unwrap_or_else(|| panic!("no assumes row: {}", ledger));
     let fields: Vec<&str> = row.split('\t').collect();
     assert_eq!(fields[1], "assumes");
     assert_eq!(

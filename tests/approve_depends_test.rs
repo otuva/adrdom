@@ -156,7 +156,7 @@ fn approve_refuses_an_entry_naming_a_current_decision_of_another_file() {
         let err = stderr(&out);
         assert!(err.contains("\"Third?\" depends on "), "{}", err);
         assert!(err.contains(OTHER_FILE_REFUSAL), "{}", err);
-        assert!(err.contains(&format!("agent rewrites the depends line of \"Third?\" to name terms and questions of this file")), "{}", err);
+        assert!(err.contains(&"agent rewrites the depends line of \"Third?\" to name terms and questions of this file".to_string()), "{}", err);
         assert!(
             err.contains("Some earlier heading?") || err.contains(&decided_id),
             "{}",

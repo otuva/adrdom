@@ -113,11 +113,9 @@ fn read_all(root: &std::path::Path) -> Result<Vec<Line>, String> {
     // Read once for the run, not once per chunk.
     let live = reader::Live::of(root);
     for chunk in pairs.chunks(CHUNK) {
-        match reader::read_live(root, chunk, &live) {
-            Ok(r) => rows.extend(r),
-            // The rows of earlier chunks are kept; the error names the move.
-            Err(e) => return Err(e),
-        }
+        // The rows of earlier chunks are kept; the error names the move.
+        let r = reader::read_live(root, chunk, &live)?;
+        rows.extend(r)
     }
     // Marked pairs by (group, first id, second id, line).
     let mut marked: Vec<(usize, &str, &str, Finding)> = Vec::new();

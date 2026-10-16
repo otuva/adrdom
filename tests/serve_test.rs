@@ -957,8 +957,7 @@ fn page_answer_and_cli_answer_write_the_same_shaped_file_line_and_ledger_row_and
     let asked_hash = |id: &str| -> String {
         ledger_before
             .lines()
-            .filter(|l| l.contains("\tasked\t") && l.contains(id))
-            .last()
+            .rfind(|l| l.contains("\tasked\t") && l.contains(id))
             .unwrap_or_else(|| panic!("no asked row for {}: {}", id, ledger_before))
             .split('\t')
             .nth(3)
@@ -1007,8 +1006,7 @@ fn page_answer_and_cli_answer_write_the_same_shaped_file_line_and_ledger_row_and
     let answered_row = |id: &str| -> Vec<String> {
         ledger_after
             .lines()
-            .filter(|l| l.contains("\tanswered\t") && l.contains(id))
-            .last()
+            .rfind(|l| l.contains("\tanswered\t") && l.contains(id))
             .unwrap_or_else(|| panic!("no answered row for {}: {}", id, ledger_after))
             .split('\t')
             .map(|s| s.to_string())

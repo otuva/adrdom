@@ -104,7 +104,7 @@ fn planning_and_reading_refuse_without_the_model_and_download_nothing() {
     write_record(
         &dir,
         TOPIC,
-        &format!("# Topic\n\n### Does the first thing glow?\ndepends: widget\n\n### Does the second thing glow?\ndepends: widget\n"),
+        "# Topic\n\n### Does the first thing glow?\ndepends: widget\n\n### Does the second thing glow?\ndepends: widget\n",
     );
     let plan = adr(
         &dir,
@@ -244,7 +244,7 @@ fn install_planning_recovers_from_a_broken_library_and_a_broken_model() {
 
     let onnx = tree(&root.join("model"))
         .into_iter()
-        .find(|p| p.file_name().map_or(false, |n| n == "model_optimized.onnx"))
+        .find(|p| p.file_name().is_some_and(|n| n == "model_optimized.onnx"))
         .unwrap();
     std::fs::remove_file(&onnx).unwrap();
     std::fs::write(&onnx, b"not a model").unwrap();

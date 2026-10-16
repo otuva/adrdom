@@ -556,21 +556,18 @@ fn answer_takes_a_two_id_supersedes_when_a_sibling_replaced_one_target_after_the
     // on 1.4. Both targets are current, so approve accepts the plan.
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(&format!(
-        "{}{}",
+        "{}{}{}",
         FOURTH_QUESTION.replacen(
             "depends: authority\n",
             &format!("depends: authority\nsupersedes: {}\n", old_id_2),
             1
         ),
-        format!(
-            "{}{}",
-            plan_lines(THIRD_QUESTION, &[&old_id_1, &old_id_2]).replacen(
-                "depends: authority\n",
-                "depends: authority, 1.4 What is the fourth unit of authority called?=A\n",
-                1
-            ),
-            body_lines(THIRD_QUESTION)
+        plan_lines(THIRD_QUESTION, &[&old_id_1, &old_id_2]).replacen(
+            "depends: authority\n",
+            "depends: authority, 1.4 What is the fourth unit of authority called?=A\n",
+            1
         ),
+        body_lines(THIRD_QUESTION),
     ));
     std::fs::write(&record, &content).unwrap();
     approve_record(&dir, rel);

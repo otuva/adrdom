@@ -216,9 +216,7 @@ fn check_fails_a_depends_entry_on_a_retired_term_by_id_while_open() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains(&format!(
-            "adrdom/decisions/example.md: \"1.1 Q?\" depends on the term \"widget\", which is retired; agent rewrites the entry to name a term that is not retired"
-        )),
+        text.contains(&"adrdom/decisions/example.md: \"1.1 Q?\" depends on the term \"widget\", which is retired; agent rewrites the entry to name a term that is not retired".to_string()),
         "{}",
         text
     );

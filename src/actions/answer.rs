@@ -98,18 +98,16 @@ fn locate_asked(
         use crate::status::QuestionStatus;
         // Closed by the ledger, the status show prints (per "Does a command
         // name a status of its own?", f53ac3b9 A).
-        match crate::status::question_status(&led, sec) {
-            st @ (QuestionStatus::Answered
-            | QuestionStatus::Refused
-            | QuestionStatus::Superseded
-            | QuestionStatus::Withdrawn
-            | QuestionStatus::Dropped) => {
-                return Err(stop(
-                    Command::Answer,
-                    msg::already_closed(&sec.heading_text, st),
-                ))
-            }
-            _ => {}
+        if let st @ (QuestionStatus::Answered
+        | QuestionStatus::Refused
+        | QuestionStatus::Superseded
+        | QuestionStatus::Withdrawn
+        | QuestionStatus::Dropped) = crate::status::question_status(&led, sec)
+        {
+            return Err(stop(
+                Command::Answer,
+                msg::already_closed(&sec.heading_text, st),
+            ));
         }
         // A closing line the ledger does not hold is hand-written: the
         // finding `check` and `show` print for it, the same move.

@@ -392,7 +392,7 @@ fn a_file_with_more_than_twelve_struck_sections_in_its_history_stays_approved() 
         answer_ok(&dir, "m", &many_heading(i), "A");
     }
     for k in 0..4 {
-        put_replacement(&dir, &["ra", "rb", "rc", "rd"][k], k);
+        put_replacement(&dir, ["ra", "rb", "rc", "rd"][k], k);
     }
     answer_ok(&dir, "ra", &replacement_heading(0), "A");
     answer_ok(&dir, "rb", &replacement_heading(1), "A");
@@ -496,7 +496,7 @@ fn a_question_standing_on_a_struck_sibling_behaves_as_before_the_strike() {
         );
     }
     assert!(
-        show_file(&dir, "a").contains(&format!("[asked")),
+        show_file(&dir, "a").contains(&"[asked".to_string()),
         "{}",
         show_file(&dir, "a")
     );

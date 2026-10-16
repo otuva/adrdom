@@ -81,7 +81,7 @@ fn answer_refuse_writes_the_line_and_the_refused_row() {
     let row = ledger
         .lines()
         .find(|l| l.contains("\trefused\t"))
-        .expect(&format!("no refused row: {}", ledger));
+        .unwrap_or_else(|| panic!("no refused row: {}", ledger));
     let fields: Vec<&str> = row.split('\t').collect();
     assert_eq!(fields[1], "refused");
     assert_eq!(fields[2], id);

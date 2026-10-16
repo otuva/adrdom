@@ -82,8 +82,7 @@ fn last_row_time(dir: &std::path::Path, needle: &str) -> String {
     let content = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let row = content
         .lines()
-        .filter(|l| l.contains(needle))
-        .next_back()
+        .rfind(|l| l.contains(needle))
         .unwrap_or_else(|| panic!("no row matching {} in: {}", needle, content));
     row.split('\t').next().unwrap().to_string()
 }
@@ -186,7 +185,7 @@ fn one_commands_rows_share_one_time() {
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "ask failed: {}", stderr(&out));
 
-    let content = std::fs::read_to_string(&dir.join("adrdom/state/ledger.tsv")).unwrap();
+    let content = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let times: Vec<&str> = content
         .lines()
         .filter(|l| l.contains("\tasked\t"))

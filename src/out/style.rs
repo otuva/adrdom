@@ -387,7 +387,7 @@ mod tests {
             text: "a\u{1b}[2Kb".to_string(),
         };
         assert_eq!(
-            render_lines(&[hostile.clone()], on),
+            render_lines(std::slice::from_ref(&hostile), on),
             vec!["  a\\u{1b}[2Kb".to_string()]
         );
         let off: Vec<String> = render_lines(&sample(), Style::PLAIN);

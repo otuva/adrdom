@@ -212,6 +212,8 @@ pub fn nearest(
     nearest_with_vectors(root, led, queries, n).map(|(near, _)| near)
 }
 
+type NearestVectors = (Vec<Vec<Neighbour>>, Vec<Vec<f32>>);
+
 /// `nearest`, and the vector of each query text as well, so a caller that
 /// ranks the query texts against each other does not embed them again.
 pub fn nearest_with_vectors(
@@ -219,7 +221,7 @@ pub fn nearest_with_vectors(
     led: &Ledger,
     queries: &[String],
     n: usize,
-) -> Result<(Vec<Vec<Neighbour>>, Vec<Vec<f32>>), String> {
+) -> Result<NearestVectors, String> {
     let files = record::load_all(root);
     let terms = state::load_terms(root).map(|t| t.terms).unwrap_or_default();
     let recs = pool(&files, led, &terms);

@@ -143,7 +143,8 @@ pub fn read_file(root: &Path) -> File {
 pub fn rows(root: &Path) -> std::sync::Arc<Vec<Row>> {
     use std::sync::{Arc, Mutex, OnceLock};
     type Key = (std::path::PathBuf, u64, Option<std::time::SystemTime>);
-    static CACHE: OnceLock<Mutex<Option<(Key, Arc<Vec<Row>>)>>> = OnceLock::new();
+    type Cached = Option<(Key, Arc<Vec<Row>>)>;
+    static CACHE: OnceLock<Mutex<Cached>> = OnceLock::new();
     let path = root.join(repo::READER_PATH);
     let meta = std::fs::metadata(&path).ok();
     let key: Key = (
@@ -311,7 +312,7 @@ pub fn append_live(root: &Path, rows: &[Row], live: &Live) -> Result<(), String>
     };
     let kept: Vec<&str> = old
         .lines()
-        .filter(|l| parse_row(l).map_or(true, |r| live.holds(&r)))
+        .filter(|l| parse_row(l).is_none_or(|r| live.holds(&r)))
         .collect();
     if kept.len() == old.lines().count() {
         let text = format!("{}{}", lead, text);
@@ -353,8 +354,7 @@ pub(crate) fn lock_file(path: &Path) -> std::io::Result<std::fs::File> {
             return Ok(h);
         }
     }
-    Err(std::io::Error::new(
-        std::io::ErrorKind::Other,
+    Err(std::io::Error::other(
         "the file kept changing under the lock",
     ))
 }

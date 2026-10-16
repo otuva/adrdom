@@ -411,9 +411,11 @@ pub fn judged_terms(tf: Option<&terms::TermsFile>) -> Vec<terms::Term> {
 /// findings of the file, so `show` and `plan` name the move that clears it
 /// and no move those commands would refuse.
 pub fn terms_gate(root: &Path, led: &Ledger, rel: &str) -> TermsGate {
-    let mut gate = TermsGate::default();
-    gate.waits = crate::terms::load(&root.join(crate::repo::TERMS_PATH))
-        .is_ok_and(|tf| !state::terms_approved(led, &tf));
+    let mut gate = TermsGate {
+        waits: crate::terms::load(&root.join(crate::repo::TERMS_PATH))
+            .is_ok_and(|tf| !state::terms_approved(led, &tf)),
+        ..TermsGate::default()
+    };
     if let Err(lines) = crate::actions::require_terms(root, led, rel, Command::Show) {
         for l in lines {
             match l {

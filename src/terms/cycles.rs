@@ -24,13 +24,13 @@ pub fn cycles(tf: &TermsFile) -> Vec<Vec<String>> {
     }
 
     let mut adj: Vec<BTreeSet<usize>> = vec![BTreeSet::new(); n];
-    for i in 0..n {
+    for (i, edges) in adj.iter_mut().enumerate() {
         if tf.terms[i].id.is_none() {
             continue;
         }
         for (_, id) in definition_pairs(tf, i) {
             if let Some(&j) = id_to_idx.get(id.as_str()) {
-                adj[i].insert(j);
+                edges.insert(j);
             }
         }
     }
@@ -82,6 +82,7 @@ fn tarjan_scc(adj: &[BTreeSet<usize>]) -> Vec<Vec<usize>> {
     sccs
 }
 
+#[allow(clippy::too_many_arguments)]
 fn tarjan_visit(
     u: usize,
     adj: &[BTreeSet<usize>],

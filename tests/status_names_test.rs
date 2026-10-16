@@ -284,7 +284,7 @@ fn show_prints_every_status_by_its_name() {
         .success());
     let terms = std::fs::read_to_string(&terms_path).unwrap();
     let lever = terms.find("## lever").unwrap();
-    std::fs::write(&terms_path, format!("{}retired: yes\n", &terms)).unwrap();
+    std::fs::write(&terms_path, format!("{}retired: yes\n", terms)).unwrap();
     let out = adr_owner(&dir, &["approve", "adrdom/terms.md"], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let shown = show(&dir, &["adrdom/terms.md"]);

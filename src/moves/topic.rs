@@ -258,7 +258,7 @@ pub fn of_topic_file_judged(
     let mut findings = findings;
     findings.extend(index.records().iter().cloned());
     let mut moves = of_topic_file(
-        &rf,
+        rf,
         led,
         plan_ok,
         &findings,

@@ -70,7 +70,7 @@ pub fn retire_unrecorded(led: &Ledger, t: &terms::Term) -> bool {
     match &t.id {
         Some(id) => led
             .latest_for_id("term", id)
-            .map_or(true, |r| r.hash != terms::term_hash(t)),
+            .is_none_or(|r| r.hash != terms::term_hash(t)),
         None => true,
     }
 }

@@ -132,7 +132,7 @@ fn check_a_refused_id_is_never_untested_but_a_tie_to_it_is_reported() {
     assert!(
         line_with(
             &text,
-            &REFUSABLE_ID,
+            REFUSABLE_ID,
             " tied to a test and not a current decision"
         ) && text.contains("agent removes the tie comment from the test"),
         "a tie to a refused id must be reported: {}",

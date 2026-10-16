@@ -314,7 +314,7 @@ fn a_removed_topic_file_lists_its_decisions_and_their_letters() {
         "{}",
         form
     );
-    assert!(form.contains(&format!("[asked @")), "{}", form);
+    assert!(form.contains(&"[asked @".to_string()), "{}", form);
     assert!(form.contains("  Problem: the widget breaks.\n"), "{}", form);
 }
 

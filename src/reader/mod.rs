@@ -69,6 +69,8 @@ use crate::repo;
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
+
+type Answered = (usize, Result<(String, String), String>);
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -292,7 +294,7 @@ pub fn read_with_live(
     let time = ledger::now_rfc3339();
     let mut fresh: Vec<Row> = Vec::new();
     for chunk in todo.chunks(AT_ONCE) {
-        let got: Vec<(usize, Result<(String, String), String>)> = std::thread::scope(|s| {
+        let got: Vec<Answered> = std::thread::scope(|s| {
             let hs: Vec<_> = chunk
                 .iter()
                 .map(|&i| {

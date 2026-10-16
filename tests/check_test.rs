@@ -2003,7 +2003,7 @@ fn check_fails_an_answered_section_with_no_terms_line_by_restoring_or_supersedin
         text
     );
     assert!(
-        text.contains(&format!("text changed since being answered; agent restores adrdom/decisions/example.md from git")),
+        text.contains(&"text changed since being answered; agent restores adrdom/decisions/example.md from git".to_string()),
         "{}",
         text
     );

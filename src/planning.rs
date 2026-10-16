@@ -99,7 +99,7 @@ fn sweep_partials(root: &Path) {
             .filter(|m| m.is_file())
             .and_then(|m| m.modified().ok())
             .and_then(|t| t.elapsed().ok())
-            .map_or(false, |age| age >= Duration::from_secs(3600));
+            .is_some_and(|age| age >= Duration::from_secs(3600));
         if old {
             let _ = fs::remove_file(e.path());
         }
@@ -288,11 +288,11 @@ fn extract(arc: &Archive, archive: &Path, to: &Path) -> Result<(), String> {
         let mut entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path().map_err(|e| e.to_string())?.to_path_buf();
         let is_lib = entry.header().entry_type().is_file()
-            && path.file_name().map_or(false, |n| n == arc.member)
+            && path.file_name().is_some_and(|n| n == arc.member)
             && path
                 .parent()
                 .and_then(|p| p.file_name())
-                .map_or(false, |n| n == "lib");
+                .is_some_and(|n| n == "lib");
         if is_lib {
             let mut out = fs::File::create(to).map_err(|e| e.to_string())?;
             std::io::copy(&mut entry, &mut out).map_err(|e| e.to_string())?;

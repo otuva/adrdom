@@ -103,7 +103,7 @@ fn both(o: &std::process::Output) -> String {
     format!("{}{}", stdout(o), stderr(o))
 }
 
-fn ask(dir: &PathBuf, rec: &PathBuf) -> std::process::Output {
+fn ask(dir: &std::path::Path, rec: &std::path::Path) -> std::process::Output {
     adr(dir, &["ask", rec.to_str().unwrap()], &[], "")
 }
 
@@ -221,7 +221,7 @@ fn the_word_limit_does_not_read_an_answered_question() {
     append_ledger_row_at(&dir, "answered", &id, &hash, "A", "2024-01-01T00:00:01Z");
     let with_answer = format!(
         "{}\n\n**Answer:** A\n{}",
-        &text[..end].trim_end(),
+        text[..end].trim_end(),
         &text[end..]
     );
     std::fs::write(&rec, with_answer).unwrap();
