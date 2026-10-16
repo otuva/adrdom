@@ -35,7 +35,7 @@ powershell -ExecutionPolicy Bypass -c "irm https://github.com/otuva/adrdom/relea
 Or build and install it from a clone (the package is named `adrdom`; the command it installs is `adr`). `--force` is needed because the package was renamed from `adr` to `adrdom`, so a plain reinstall over an old `adr` stops with "binary `adr` already exists":
 
 ```sh
-cargo install --path . --force
+cargo install --path . --force --locked
 ```
 
 Then run, inside the repository to govern:
