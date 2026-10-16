@@ -268,7 +268,8 @@ fn extract(arc: &Archive, archive: &Path, to: &Path) -> Result<(), String> {
     let mut zip = zip::ZipArchive::new(fs::File::open(archive).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
-        if entry.is_file() && entry.name().ends_with(&format!("/lib/{}", arc.member)) {
+        let hit = entry.is_file() && entry.name().map_err(|e| e.to_string())?.ends_with(&format!("/lib/{}", arc.member));
+        if hit {
             let mut out = fs::File::create(to).map_err(|e| e.to_string())?;
             std::io::copy(&mut entry, &mut out).map_err(|e| e.to_string())?;
             return Ok(());
