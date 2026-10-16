@@ -303,6 +303,7 @@ pub fn section_text_excluding_terms_line(lines: &[String], sec: &Section) -> Str
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     // adr: 69708a07-469c-406b-9e25-63da1605b432
     //
