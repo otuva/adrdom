@@ -32,10 +32,10 @@ On Windows (untested), in PowerShell:
 powershell -ExecutionPolicy Bypass -c "irm https://github.com/otuva/adrdom/releases/latest/download/adrdom-installer.ps1 | iex"
 ```
 
-Or build and install it from a clone (the package is named `adrdom`; the command it installs is `adr`):
+Or build and install it from a clone (the package is named `adrdom`; the command it installs is `adr`). `--force` is needed because the package was renamed from `adr` to `adrdom`, so a plain reinstall over an old `adr` stops with "binary `adr` already exists":
 
 ```sh
-cargo install --path .
+cargo install --path . --force
 ```
 
 Then run, inside the repository to govern:
