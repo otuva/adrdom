@@ -247,9 +247,14 @@ fn the_reader_reads_no_neighbour_of_a_heading() {
     // The model is still needed for it.
     let dir = repo();
     two_headings(&dir);
+    let (want, next) = if cfg!(feature = "model") {
+        ("the embedding model is not installed", "agent runs: adr install --planning")
+    } else {
+        ("the embedding model is missing", "agent builds adr with the model feature")
+    };
     let err = refused(&plan_with(&dir, &[("ADR_NO_MODEL", "1")]));
-    assert!(err.contains("the embedding model is not installed"), "{}", err);
-    assert!(err.contains("agent runs: adr install --planning"), "{}", err);
+    assert!(err.contains(want), "{}", err);
+    assert!(err.contains(next), "{}", err);
     assert_eq!(neighbour_rows(&dir).len(), held_n, "nothing was written");
 }
 
@@ -568,9 +573,14 @@ fn planning_stops_without_the_model() {
     let dir = repo();
     two_headings(&dir);
     let before = rows(&dir).len();
+    let (want, next) = if cfg!(feature = "model") {
+        ("the embedding model is not installed", "agent runs: adr install --planning")
+    } else {
+        ("the embedding model is missing", "agent builds adr with the model feature")
+    };
     let err = refused(&plan_with(&dir, &[("ADR_NO_MODEL", "1")]));
-    assert!(err.contains("the embedding model is not installed"), "{}", err);
-    assert!(err.contains("agent runs: adr install --planning"), "{}", err);
+    assert!(err.contains(want), "{}", err);
+    assert!(err.contains(next), "{}", err);
     assert_eq!(rows(&dir).len(), before, "nothing was read");
 }
 

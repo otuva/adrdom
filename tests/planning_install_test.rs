@@ -115,6 +115,95 @@ fn install_help_lists_the_planning_flag() {
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
+const LIB: &str = "libonnxruntime.so.1.28.0";
+
+fn age_two_hours(path: &Path) {
+    let f = std::fs::OpenOptions::new().write(true).open(path).unwrap();
+    f.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(7200)).unwrap();
+}
+
+// adr: e1c305af-af94-494a-9fdb-3faffafa0e06
+// "Does install fetch the embedding model?"
+//
+// A library file in the cache that does not load is removed by the install
+// step, which refuses and names a rerun (a new process fetches a fresh copy:
+// ort cannot load a second library after a failed load). The step first
+// removes the partial files an interrupted run left, and leaves a young one.
+// This one needs no network.
+#[test]
+fn install_planning_removes_a_library_that_does_not_load_and_old_partials() {
+    let dir = init_repo();
+    let cache = empty_cache();
+    let cache_s = cache.display().to_string();
+    let root = cache.join("adrdom");
+    std::fs::create_dir_all(&root).unwrap();
+    let lib = root.join(LIB);
+    std::fs::write(&lib, b"not a shared library").unwrap();
+    let old = root.join(format!(".{}.{}.tmp", LIB, uuid::Uuid::new_v4()));
+    let young = root.join(format!(".{}.{}.tmp", LIB, uuid::Uuid::new_v4()));
+    let other = root.join(".keep.tmp");
+    for f in [&old, &young, &other] {
+        std::fs::write(f, "x").unwrap();
+    }
+    age_two_hours(&old);
+    age_two_hours(&other);
+
+    let out = adr(&dir, &["install", "--planning"], &[("XDG_CACHE_HOME", cache_s.as_str())], "");
+    assert!(!out.status.success(), "{}", stdout(&out));
+    let err = stderr(&out);
+    assert!(err.contains("removed the onnxruntime library"), "{}", err);
+    assert!(err.contains("agent runs: adr install --planning"), "{}", err);
+    assert!(!lib.exists(), "the broken library is gone");
+    assert!(!old.exists(), "an old partial is swept");
+    assert!(young.exists(), "a young partial may be an install at work");
+    assert!(other.exists(), "a name that is not the temp-name pattern stays");
+    std::fs::remove_dir_all(&dir).unwrap();
+    std::fs::remove_dir_all(&cache).unwrap();
+}
+
+// adr: e1c305af-af94-494a-9fdb-3faffafa0e06
+// "Does install fetch the embedding model?"
+//
+// After the broken library was removed, the rerun fetches a fresh one and the
+// model; a model whose files are there but do not load is refused with the
+// model directory to remove, and the rerun after that fetches it again.
+// Needs the network (about 25 MB of onnxruntime and 100 MB of model, twice).
+#[test]
+#[ignore]
+fn install_planning_recovers_from_a_broken_library_and_a_broken_model() {
+    let dir = init_repo();
+    let cache = empty_cache();
+    let cache_s = cache.display().to_string();
+    let envs = [("XDG_CACHE_HOME", cache_s.as_str())];
+    let root = cache.join("adrdom");
+    std::fs::create_dir_all(&root).unwrap();
+    let lib = root.join(LIB);
+    std::fs::write(&lib, b"not a shared library").unwrap();
+
+    let first = adr(&dir, &["install", "--planning"], &envs, "");
+    assert!(!first.status.success());
+    assert!(!lib.exists());
+    let second = adr(&dir, &["install", "--planning"], &envs, "");
+    assert!(second.status.success(), "{}{}", stdout(&second), stderr(&second));
+    assert!(lib.is_file());
+    assert!(root.join("model").is_dir());
+
+    let onnx = tree(&root.join("model")).into_iter().find(|p| p.file_name().map_or(false, |n| n == "model_optimized.onnx")).unwrap();
+    std::fs::remove_file(&onnx).unwrap();
+    std::fs::write(&onnx, b"not a model").unwrap();
+    let third = adr(&dir, &["install", "--planning"], &envs, "");
+    assert!(!third.status.success(), "{}", stdout(&third));
+    let err = stderr(&third);
+    let model = root.join("model").display().to_string();
+    assert!(err.contains(&format!("agent removes {}, then runs: adr install --planning", model)), "{}", err);
+    std::fs::remove_dir_all(root.join("model")).unwrap();
+    let fourth = adr(&dir, &["install", "--planning"], &envs, "");
+    assert!(fourth.status.success(), "{}{}", stdout(&fourth), stderr(&fourth));
+    assert!(stdout(&fourth).contains(&format!("written: {}", model)), "{}", stdout(&fourth));
+    std::fs::remove_dir_all(&dir).unwrap();
+    std::fs::remove_dir_all(&cache).unwrap();
+}
+
 // adr: e1c305af-af94-494a-9fdb-3faffafa0e06
 // "Does install fetch the embedding model?"
 // adr: 459c1b77-82dd-469f-a60c-784b6f3d7b81

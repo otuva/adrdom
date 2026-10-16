@@ -230,9 +230,14 @@ fn the_loader_refuses_when_the_model_is_missing() {
     std::env::set_var("ADR_NO_MODEL", "1");
     let r = adr::embed::load(&dir);
     std::env::remove_var("ADR_NO_MODEL");
+    let (want, next) = if cfg!(feature = "model") {
+        ("the embedding model is not installed", "agent runs: adr install --planning")
+    } else {
+        ("the embedding model is missing", "agent builds adr with the model feature")
+    };
     let e = r.err().expect("the model is absent");
-    assert!(e.contains("the embedding model is not installed"), "{}", e);
-    assert!(e.contains("agent runs: adr install --planning"), "{}", e);
+    assert!(e.contains(want), "{}", e);
+    assert!(e.contains(next), "{}", e);
 }
 
 // adr: de8ef568-3a8d-42ba-bef7-d7fd467b27be

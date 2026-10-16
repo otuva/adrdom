@@ -36,13 +36,16 @@ impl Model {
     fn load() -> Result<Model, String> {
         let lib = cache::ort_library()?;
         if !lib.is_file() {
+            if !crate::planning::has_build() {
+                return Err(msg::onnxruntime_no_build(&crate::planning::platform()));
+            }
             return Err(msg::onnxruntime_not_installed(&lib.display().to_string()));
         }
         let dir = cache::model_dir()?;
         if !cache::model_present()? {
             return Err(msg::model_not_installed(&dir.display().to_string()));
         }
-        cache::init_ort(&lib).map_err(|e| msg::model_load_failed(&lib.display().to_string(), e))?;
+        cache::init_ort(&lib).map_err(|e| msg::onnxruntime_load_failed(&lib.display().to_string(), e))?;
         let opts = fastembed::TextInitOptions::new(fastembed::EmbeddingModel::BGEBaseENV15Q)
             .with_cache_dir(dir.clone())
             .with_show_download_progress(false);

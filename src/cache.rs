@@ -56,11 +56,13 @@ pub fn model_present() -> Result<bool, String> {
 }
 
 /// Loads the onnxruntime library at `lib` into this process, once; the
-/// first call decides, a later call is a no-op.
+/// first call decides, a later call is a no-op. A failure is kept as the
+/// answer on purpose: ort cannot load a second library after a failed load.
 pub fn init_ort(lib: &std::path::Path) -> Result<(), String> {
     static DONE: std::sync::OnceLock<Result<(), String>> = std::sync::OnceLock::new();
     DONE.get_or_init(|| {
-        ort::init_from(lib).map_err(|e| e.to_string())?.commit();
+        // Microsoft's Windows library sends ETW telemetry unless told not to.
+        ort::init_from(lib).map_err(|e| e.to_string())?.with_telemetry(false).commit();
         Ok(())
     })
     .clone()

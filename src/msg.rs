@@ -2707,12 +2707,46 @@ pub fn cache_dir_missing() -> String {
     )
 }
 
-/// The embedding model, present in the user cache directory, cannot be loaded.
+/// The embedding model, present in the user cache directory, cannot be loaded:
+/// its directory goes and the install step fetches it again.
 #[cfg(feature = "model")]
-pub fn model_load_failed(cache: &str, e: impl Display) -> String {
+pub fn model_load_failed(dir: &str, e: impl Display) -> String {
     refuse(
-        format!("model: cannot load the embedding model from {}: {}", cache, e),
-        Next::agent(Act::RunsAgain),
+        format!("model: cannot load the embedding model from {}: {}", dir, e),
+        Next::agent_then_runs(Act::Removes(dir.to_string()), Cmd::fixed("adr install --planning")),
+    )
+}
+
+/// The onnxruntime library, present in the user cache directory, does not
+/// load; the install step checks it and fetches it again.
+#[cfg(feature = "model")]
+pub fn onnxruntime_load_failed(path: &str, e: impl Display) -> String {
+    refuse(format!("model: cannot load the onnxruntime library {}: {}", path, e), install_planning())
+}
+
+/// The install step found the onnxruntime library in the user cache
+/// directory unloadable and removed it.
+#[cfg(feature = "model")]
+pub fn onnxruntime_removed(path: &str, e: impl Display) -> String {
+    refuse(format!("model: removed the onnxruntime library {}, which does not load: {}", path, e), install_planning())
+}
+
+/// The onnxruntime library the install step just fetched, matching its pinned
+/// hash, does not load on this machine.
+#[cfg(feature = "model")]
+pub fn onnxruntime_unusable(path: &str, e: impl Display) -> String {
+    refuse(
+        format!("model: the fetched onnxruntime library {} does not load: {}", path, e),
+        Next::not_yet("an onnxruntime build this machine can load"),
+    )
+}
+
+/// The onnxruntime release has no library for this platform.
+#[cfg(feature = "model")]
+pub fn onnxruntime_no_build(platform: &str) -> String {
+    refuse(
+        format!("model: onnxruntime has no build for {}", platform),
+        Next::not_yet("an onnxruntime build for this platform"),
     )
 }
 
@@ -3033,6 +3067,14 @@ mod tests {
             #[cfg(feature = "model")]
             model_load_failed("/home/x/.cache/adrdom/model", "bad file"),
             #[cfg(feature = "model")]
+            onnxruntime_load_failed("/home/x/.cache/adrdom/libonnxruntime.so.1.28.0", "bad file"),
+            #[cfg(feature = "model")]
+            onnxruntime_removed("/home/x/.cache/adrdom/libonnxruntime.so.1.28.0", "bad file"),
+            #[cfg(feature = "model")]
+            onnxruntime_unusable("/home/x/.cache/adrdom/libonnxruntime.so.1.28.0", "bad file"),
+            #[cfg(feature = "model")]
+            onnxruntime_no_build("macos-x86_64"),
+            #[cfg(feature = "model")]
             model_fetch_failed("the onnxruntime library", "no network"),
             embed_failed("x"),
             reader_missing("claude"),
@@ -3138,7 +3180,7 @@ mod tests {
         ];
         for o in &outputs {
             assert!(
-                o.contains("; agent ") || o.contains("; owner "),
+                o.contains("; agent ") || o.contains("; owner ") || o.contains("; not yet: "),
                 "no next move: {}",
                 o
             );
