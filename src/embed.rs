@@ -45,13 +45,16 @@ impl Model {
         if !cache::model_present()? {
             return Err(msg::model_not_installed(&dir.display().to_string()));
         }
-        cache::init_ort(&lib).map_err(|e| msg::onnxruntime_load_failed(&lib.display().to_string(), e))?;
+        cache::init_ort(&lib)
+            .map_err(|e| msg::onnxruntime_load_failed(&lib.display().to_string(), e))?;
         let opts = fastembed::TextInitOptions::new(fastembed::EmbeddingModel::BGEBaseENV15Q)
             .with_cache_dir(dir.clone())
             .with_show_download_progress(false);
         let m = fastembed::TextEmbedding::try_new(opts)
             .map_err(|e| msg::model_load_failed(&dir.display().to_string(), e))?;
-        Ok(Model { inner: std::sync::Mutex::new(m) })
+        Ok(Model {
+            inner: std::sync::Mutex::new(m),
+        })
     }
 }
 
@@ -62,9 +65,7 @@ impl Embedder for Model {
     }
     fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, String> {
         let mut m = self.inner.lock().map_err(msg::embed_failed)?;
-        let mut out = m
-            .embed(texts, None)
-            .map_err(msg::embed_failed)?;
+        let mut out = m.embed(texts, None).map_err(msg::embed_failed)?;
         for v in out.iter_mut() {
             normalise(v);
         }
@@ -107,7 +108,9 @@ pub fn load(root: &Path) -> Result<Box<dyn Embedder>, String> {
     #[cfg(feature = "fake-model")]
     if std::env::var("ADR_NO_MODEL").as_deref() == Ok("1") {
         #[cfg(feature = "model")]
-        return Err(msg::model_not_installed(&cache::model_dir()?.display().to_string()));
+        return Err(msg::model_not_installed(
+            &cache::model_dir()?.display().to_string(),
+        ));
         #[cfg(not(feature = "model"))]
         return Err(msg::model_missing());
     }

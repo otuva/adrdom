@@ -1,5 +1,3 @@
-use crate::rules::Command;
-use crate::rules;
 use crate::banned;
 use crate::commands::check::collect_targets;
 use crate::ledger;
@@ -7,6 +5,8 @@ use crate::msg::{self, Actor};
 use crate::out::{self, Event};
 use crate::record;
 use crate::repo;
+use crate::rules;
+use crate::rules::Command;
 use crate::state;
 use std::collections::HashSet;
 use std::io::Read;
@@ -74,7 +74,11 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
             };
             match resolve_term_uuid(&tf, name) {
                 Some(u) => {
-                    let held = tf.terms.iter().find(|t| t.id.as_deref() == Some(u.as_str())).map(|t| t.name.clone());
+                    let held = tf
+                        .terms
+                        .iter()
+                        .find(|t| t.id.as_deref() == Some(u.as_str()))
+                        .map(|t| t.name.clone());
                     (Some(u), held.or_else(|| Some(name.clone())))
                 }
                 None => {
@@ -88,7 +92,10 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
 
     let mut input = String::new();
     if std::io::stdin().read_to_string(&mut input).is_err() {
-        out::eprint_stop(Command::Ban, &msg::stdin_read_failed(msg::after_fix_agent_runs(again.clone())));
+        out::eprint_stop(
+            Command::Ban,
+            &msg::stdin_read_failed(msg::after_fix_agent_runs(again.clone())),
+        );
         return 1;
     }
 
@@ -128,12 +135,17 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
         return match bring_list_to(&banned_path, banned_now) {
             Ok(written) => {
                 if written {
-                    out::print_events(&[Event::FileWritten { path: banned::BAN_LIST.to_string() }]);
+                    out::print_events(&[Event::FileWritten {
+                        path: banned::BAN_LIST.to_string(),
+                    }]);
                 }
                 0
             }
             Err(e) => {
-                out::eprint_stop(Command::Ban, &msg::update_failed("banned list", e, msg::after_fix_agent_runs(again.clone())));
+                out::eprint_stop(
+                    Command::Ban,
+                    &msg::update_failed("banned list", e, msg::after_fix_agent_runs(again.clone())),
+                );
                 1
             }
         };
@@ -162,7 +174,10 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     }
 
     if !hits.is_empty() {
-        let mut stop = vec![out::Line::Finding(rules::Finding::said(rules::Class::Banned, msg::already_in_use()))];
+        let mut stop = vec![out::Line::Finding(rules::Finding::said(
+            rules::Class::Banned,
+            msg::already_in_use(),
+        ))];
         stop.extend(hits);
         out::eprint(&stop);
         return 1;
@@ -178,7 +193,10 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
     entries.extend(new_hashes.iter().map(|h| (h.clone(), uuid.clone())));
 
     if let Err(e) = banned::write_sorted(&banned_path, entries) {
-        out::eprint_stop(Command::Ban, &msg::update_failed("banned list", e, msg::after_fix_agent_runs(again.clone())));
+        out::eprint_stop(
+            Command::Ban,
+            &msg::update_failed("banned list", e, msg::after_fix_agent_runs(again.clone())),
+        );
         return 1;
     }
 
@@ -200,13 +218,19 @@ pub fn run(term: Option<String>, rebuild: bool) -> i32 {
         })
         .collect();
     if let Err(e) = ledger::append(&ledger_path, &rows) {
-        out::eprint_stop(Command::Ban, &msg::update_failed("ledger", e, msg::after_fix_agent_runs(again.clone())));
+        out::eprint_stop(
+            Command::Ban,
+            &msg::update_failed("ledger", e, msg::after_fix_agent_runs(again.clone())),
+        );
         return 1;
     }
 
     // A row names a term by its identifier: the term given, when one was.
-    let names: std::collections::HashMap<String, String> =
-        uuid.iter().zip(term_name.iter()).map(|(id, name)| (id.clone(), name.clone())).collect();
+    let names: std::collections::HashMap<String, String> = uuid
+        .iter()
+        .zip(term_name.iter())
+        .map(|(id, name)| (id.clone(), name.clone()))
+        .collect();
     out::print_events(&crate::actions::Outcome::of_rows(&rows, &names).events);
     0
 }
@@ -224,13 +248,20 @@ fn run_rebuild(banned_path: &std::path::Path, ledger_path: &std::path::Path) -> 
     match bring_list_to(banned_path, banned::currently_banned(&led)) {
         Ok(written) => {
             if written {
-                out::print_events(&[Event::FileWritten { path: banned::BAN_LIST.to_string() }]);
+                out::print_events(&[Event::FileWritten {
+                    path: banned::BAN_LIST.to_string(),
+                }]);
             }
             0
         }
         Err(e) => {
-            out::eprint_stop(Command::Ban,
-                &msg::update_failed("banned list", e, msg::after_fix_agent_runs(crate::moves::Cmd::fixed("adr ban --rebuild"))),
+            out::eprint_stop(
+                Command::Ban,
+                &msg::update_failed(
+                    "banned list",
+                    e,
+                    msg::after_fix_agent_runs(crate::moves::Cmd::fixed("adr ban --rebuild")),
+                ),
             );
             1
         }
@@ -243,7 +274,10 @@ fn run_rebuild(banned_path: &std::path::Path, ledger_path: &std::path::Path) -> 
 /// ledger's banned set by, so both treat a missing list alike, and a list
 /// already equal prints nothing (per "What does a command that writes
 /// print?", 069a6b4a A: one line per file written).
-fn bring_list_to(banned_path: &std::path::Path, entries: Vec<(String, Option<String>)>) -> std::io::Result<bool> {
+fn bring_list_to(
+    banned_path: &std::path::Path,
+    entries: Vec<(String, Option<String>)>,
+) -> std::io::Result<bool> {
     if std::fs::read_to_string(banned_path).ok() == Some(banned::sorted_content(&entries)) {
         return Ok(false);
     }
@@ -271,8 +305,14 @@ mod tests {
         assert_eq!(line(None, false), "adr ban");
         assert_eq!(line(None, true), "adr ban --rebuild");
         assert_eq!(line(Some("widget"), false), "adr ban --term widget");
-        assert_eq!(line(Some("answer set"), false), "adr ban --term 'answer set'");
-        assert_eq!(line(Some("owner's act"), false), "adr ban --term 'owner'\\''s act'");
+        assert_eq!(
+            line(Some("answer set"), false),
+            "adr ban --term 'answer set'"
+        );
+        assert_eq!(
+            line(Some("owner's act"), false),
+            "adr ban --term 'owner'\\''s act'"
+        );
         assert_eq!(line(Some("a;b"), false), "adr ban --term 'a;b'");
     }
 }

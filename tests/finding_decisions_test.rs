@@ -11,8 +11,20 @@ use std::path::{Path, PathBuf};
 /// The tags the lines of findings opened with before a finding carried a
 /// rule of its own.
 const OLD_TAGS: [&str; 14] = [
-    "parse", "plan", "plan_frozen", "tells", "answers", "ids", "terms", "blame", "banned", "ledger", "reader",
-    "install", "tested", "untested",
+    "parse",
+    "plan",
+    "plan_frozen",
+    "tells",
+    "answers",
+    "ids",
+    "terms",
+    "blame",
+    "banned",
+    "ledger",
+    "reader",
+    "install",
+    "tested",
+    "untested",
 ];
 
 fn manifest() -> PathBuf {
@@ -56,10 +68,16 @@ fn every_rule_comes_from_current_decisions() {
     let root = manifest();
     let records = adr::record::load_all(&root);
     let led = adr::ledger::read(&root.join(adr::repo::LEDGER_PATH));
-    let held: BTreeSet<&str> =
-        records.iter().flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.as_deref())).collect();
+    let held: BTreeSet<&str> = records
+        .iter()
+        .flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.as_deref()))
+        .collect();
 
-    let without: Vec<&str> = rule::ALL.iter().filter(|r| r.decisions.is_empty()).map(|r| r.name).collect();
+    let without: Vec<&str> = rule::ALL
+        .iter()
+        .filter(|r| r.decisions.is_empty())
+        .map(|r| r.name)
+        .collect();
     let mut not_current: Vec<String> = Vec::new();
     for r in rule::ALL {
         for id in r.decisions {
@@ -90,8 +108,15 @@ fn every_finding_is_built_from_a_rule_constant() {
         .map(|l| l.split(':').next().unwrap().to_string())
         .collect();
     let listed: BTreeSet<String> = rule::ALL.iter().map(|r| r.name.to_uppercase()).collect();
-    assert_eq!(declared, listed, "a constant of src/rule.rs missing from ALL, or the reverse");
-    assert_eq!(rule::ALL.len(), declared.len(), "a rule listed twice in ALL");
+    assert_eq!(
+        declared, listed,
+        "a constant of src/rule.rs missing from ALL, or the reverse"
+    );
+    assert_eq!(
+        rule::ALL.len(),
+        declared.len(),
+        "a rule listed twice in ALL"
+    );
 
     let mut bad = Vec::new();
     for (rel, text) in source_files() {
@@ -101,7 +126,9 @@ fn every_finding_is_built_from_a_rule_constant() {
         for (n, line) in code_lines(&text) {
             if let Some(at) = line.find("Finding::new(") {
                 let arg = line[at + "Finding::new(".len()..].trim_start();
-                let ok = ["&rule::", "&crate::rule::", "said.rule"].iter().any(|p| arg.starts_with(p));
+                let ok = ["&rule::", "&crate::rule::", "said.rule"]
+                    .iter()
+                    .any(|p| arg.starts_with(p));
                 // The call split over lines names its rule on the next one.
                 if !ok && !arg.is_empty() {
                     bad.push(format!("{}:{}: {}", rel, n, line.trim()));
@@ -109,7 +136,11 @@ fn every_finding_is_built_from_a_rule_constant() {
             }
         }
     }
-    assert!(bad.is_empty(), "a finding built from something but a rule constant:\n{}", bad.join("\n"));
+    assert!(
+        bad.is_empty(),
+        "a finding built from something but a rule constant:\n{}",
+        bad.join("\n")
+    );
 }
 
 /// Every heading of the questions in this repository's own records.
@@ -172,7 +203,12 @@ fn assert_move_is_acts(command: &str, mv: &str, line: &str) {
         }
         at += rest.chars().next().map_or(1, char::len_utf8);
     }
-    assert!(clauses > 0, "{}: no clause in the move of {}", command, line);
+    assert!(
+        clauses > 0,
+        "{}: no clause in the move of {}",
+        command,
+        line
+    );
     assert!(
         OPENINGS.iter().any(|o| mv.starts_with(o)) || mv.starts_with(adr::msg::NOT_YET),
         "{}: the move opens with no clause: {}",
@@ -183,18 +219,39 @@ fn assert_move_is_acts(command: &str, mv: &str, line: &str) {
 
 fn assert_finding_shape(command: &str, line: &str, headings: &[String]) {
     let parts: Vec<&str> = line.split("; ").collect();
-    assert_eq!(parts.len(), 2, "{}: found; move expected, nothing on what the rule protects: {}", command, line);
+    assert_eq!(
+        parts.len(),
+        2,
+        "{}: found; move expected, nothing on what the rule protects: {}",
+        command,
+        line
+    );
     let mv = parts[1];
     assert_move_is_acts(command, mv, line);
     if let Some((tag, _)) = line.split_once(": ") {
-        assert!(!OLD_TAGS.contains(&tag), "{}: the line opens with a category tag: {}", command, line);
+        assert!(
+            !OLD_TAGS.contains(&tag),
+            "{}: the line opens with a category tag: {}",
+            command,
+            line
+        );
     }
     // A move that runs a command names the question it acts on by identifier
     // (`adr answer <id>@<version> <letter>`): the found part carries none.
     let before_move = parts[..parts.len() - 1].join("; ");
-    assert!(!holds_uuid(&before_move), "{}: an identifier before the move: {}", command, line);
+    assert!(
+        !holds_uuid(&before_move),
+        "{}: an identifier before the move: {}",
+        command,
+        line
+    );
     for h in headings {
-        assert!(!line.contains(h.as_str()), "{}: a heading of this repository's decisions on the line {}", command, line);
+        assert!(
+            !line.contains(h.as_str()),
+            "{}: a heading of this repository's decisions on the line {}",
+            command,
+            line
+        );
     }
 }
 
@@ -210,11 +267,17 @@ fn first_unanswered_waits(dir: &Path) -> std::process::Output {
     let text = format!(
         "# Chain\n\n{}\n{}",
         question("Is the widget one hold?", "widget", "Yes the widget holds."),
-        question("Is the widget two hold?", "widget, Is the widget one hold?=A", "Yes the widget holds.")
+        question(
+            "Is the widget two hold?",
+            "widget, Is the widget one hold?=A",
+            "Yes the widget holds."
+        )
     );
     let path = write_record(dir, rel, &text);
     approve_record(dir, rel);
-    assert!(adr(dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let ids = extract_ids(&std::fs::read_to_string(&path).unwrap());
     adr_answer(dir, &ids[1], "A")
 }
@@ -257,6 +320,14 @@ fn a_finding_names_what_it_found_and_the_move() {
     take("ask", adr(&dir, &["ask", p], &[], ""));
     take("answer", first_unanswered_waits(&dir));
 
-    let empty: Vec<&str> = seen.iter().filter(|(_, n)| *n == 0).map(|(c, _)| *c).collect();
-    assert!(empty.is_empty(), "the fixture raised no finding under: {:?}", empty);
+    let empty: Vec<&str> = seen
+        .iter()
+        .filter(|(_, n)| *n == 0)
+        .map(|(c, _)| *c)
+        .collect();
+    assert!(
+        empty.is_empty(),
+        "the fixture raised no finding under: {:?}",
+        empty
+    );
 }

@@ -33,7 +33,9 @@ fn repo() -> PathBuf {
     );
     let path = write_record(&dir, rel, &text);
     approve_record(&dir, rel);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     for id in extract_ids(&std::fs::read_to_string(&path).unwrap()) {
         assert!(adr_answer(&dir, &id, "A").status.success());
     }
@@ -42,7 +44,14 @@ fn repo() -> PathBuf {
 
 /// A temporary XDG_CACHE_HOME, empty.
 fn empty_cache() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("adr-cache-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+    let dir = std::env::temp_dir().join(format!(
+        "adr-cache-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
@@ -74,32 +83,59 @@ fn planning_and_reading_refuse_without_the_model_and_download_nothing() {
     let cache_s = cache.display().to_string();
     // The reader loads before the model: an installed agent whose program is
     // on PATH (a stub, never run) makes the model refusal the one reported.
-    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "")
+        .status
+        .success());
     let bin = empty_cache();
     let stub = bin.join("claude");
     std::fs::write(&stub, "#!/bin/sh\nexit 1\n").unwrap();
     std::fs::set_permissions(&stub, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
-    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap_or_default());
-    let envs = [("ADR_FAKE_MODEL", "0"), ("XDG_CACHE_HOME", cache_s.as_str()), ("PATH", path.as_str())];
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let envs = [
+        ("ADR_FAKE_MODEL", "0"),
+        ("XDG_CACHE_HOME", cache_s.as_str()),
+        ("PATH", path.as_str()),
+    ];
 
     write_record(
         &dir,
         TOPIC,
         &format!("# Topic\n\n### Does the first thing glow?\ndepends: widget\n\n### Does the second thing glow?\ndepends: widget\n"),
     );
-    let plan = adr(&dir, &["plan", dir.join(TOPIC).to_str().unwrap()], &envs, "");
+    let plan = adr(
+        &dir,
+        &["plan", dir.join(TOPIC).to_str().unwrap()],
+        &envs,
+        "",
+    );
     assert!(!plan.status.success(), "{}", stdout(&plan));
     let err = stderr(&plan);
-    assert!(err.contains("agent runs: adr install --planning"), "{}", err);
+    assert!(
+        err.contains("agent runs: adr install --planning"),
+        "{}",
+        err
+    );
     assert!(err.contains(&format!("{}/adrdom", cache_s)), "{}", err);
 
     let read = adr(&dir, &["read"], &envs, "");
     assert!(!read.status.success(), "{}", stdout(&read));
     let err = stderr(&read);
-    assert!(err.contains("agent runs: adr install --planning"), "{}", err);
+    assert!(
+        err.contains("agent runs: adr install --planning"),
+        "{}",
+        err
+    );
     assert!(err.contains(&format!("{}/adrdom", cache_s)), "{}", err);
 
-    assert!(tree(&cache).is_empty(), "nothing was made under the cache: {:?}", tree(&cache));
+    assert!(
+        tree(&cache).is_empty(),
+        "nothing was made under the cache: {:?}",
+        tree(&cache)
+    );
     assert!(!dir.join("adrdom/cache/model").exists());
     std::fs::remove_dir_all(&dir).unwrap();
     std::fs::remove_dir_all(&cache).unwrap();
@@ -119,7 +155,8 @@ const LIB: &str = "libonnxruntime.so.1.28.0";
 
 fn age_two_hours(path: &Path) {
     let f = std::fs::OpenOptions::new().write(true).open(path).unwrap();
-    f.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(7200)).unwrap();
+    f.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(7200))
+        .unwrap();
 }
 
 // adr: e1c305af-af94-494a-9fdb-3faffafa0e06
@@ -148,15 +185,27 @@ fn install_planning_removes_a_library_that_does_not_load_and_old_partials() {
     age_two_hours(&old);
     age_two_hours(&other);
 
-    let out = adr(&dir, &["install", "--planning"], &[("XDG_CACHE_HOME", cache_s.as_str())], "");
+    let out = adr(
+        &dir,
+        &["install", "--planning"],
+        &[("XDG_CACHE_HOME", cache_s.as_str())],
+        "",
+    );
     assert!(!out.status.success(), "{}", stdout(&out));
     let err = stderr(&out);
     assert!(err.contains("removed the onnxruntime library"), "{}", err);
-    assert!(err.contains("agent runs: adr install --planning"), "{}", err);
+    assert!(
+        err.contains("agent runs: adr install --planning"),
+        "{}",
+        err
+    );
     assert!(!lib.exists(), "the broken library is gone");
     assert!(!old.exists(), "an old partial is swept");
     assert!(young.exists(), "a young partial may be an install at work");
-    assert!(other.exists(), "a name that is not the temp-name pattern stays");
+    assert!(
+        other.exists(),
+        "a name that is not the temp-name pattern stays"
+    );
     std::fs::remove_dir_all(&dir).unwrap();
     std::fs::remove_dir_all(&cache).unwrap();
 }
@@ -184,22 +233,46 @@ fn install_planning_recovers_from_a_broken_library_and_a_broken_model() {
     assert!(!first.status.success());
     assert!(!lib.exists());
     let second = adr(&dir, &["install", "--planning"], &envs, "");
-    assert!(second.status.success(), "{}{}", stdout(&second), stderr(&second));
+    assert!(
+        second.status.success(),
+        "{}{}",
+        stdout(&second),
+        stderr(&second)
+    );
     assert!(lib.is_file());
     assert!(root.join("model").is_dir());
 
-    let onnx = tree(&root.join("model")).into_iter().find(|p| p.file_name().map_or(false, |n| n == "model_optimized.onnx")).unwrap();
+    let onnx = tree(&root.join("model"))
+        .into_iter()
+        .find(|p| p.file_name().map_or(false, |n| n == "model_optimized.onnx"))
+        .unwrap();
     std::fs::remove_file(&onnx).unwrap();
     std::fs::write(&onnx, b"not a model").unwrap();
     let third = adr(&dir, &["install", "--planning"], &envs, "");
     assert!(!third.status.success(), "{}", stdout(&third));
     let err = stderr(&third);
     let model = root.join("model").display().to_string();
-    assert!(err.contains(&format!("agent removes {}, then runs: adr install --planning", model)), "{}", err);
+    assert!(
+        err.contains(&format!(
+            "agent removes {}, then runs: adr install --planning",
+            model
+        )),
+        "{}",
+        err
+    );
     std::fs::remove_dir_all(root.join("model")).unwrap();
     let fourth = adr(&dir, &["install", "--planning"], &envs, "");
-    assert!(fourth.status.success(), "{}{}", stdout(&fourth), stderr(&fourth));
-    assert!(stdout(&fourth).contains(&format!("written: {}", model)), "{}", stdout(&fourth));
+    assert!(
+        fourth.status.success(),
+        "{}{}",
+        stdout(&fourth),
+        stderr(&fourth)
+    );
+    assert!(
+        stdout(&fourth).contains(&format!("written: {}", model)),
+        "{}",
+        stdout(&fourth)
+    );
     std::fs::remove_dir_all(&dir).unwrap();
     std::fs::remove_dir_all(&cache).unwrap();
 }
@@ -219,18 +292,40 @@ fn install_planning_fills_the_user_cache_once_and_leaves_the_repository_alone() 
     let envs = [("XDG_CACHE_HOME", cache_s.as_str())];
 
     let first = adr(&dir, &["install", "--planning"], &envs, "");
-    assert!(first.status.success(), "{}{}", stdout(&first), stderr(&first));
+    assert!(
+        first.status.success(),
+        "{}{}",
+        stdout(&first),
+        stderr(&first)
+    );
     let out = stdout(&first);
     let lib = format!("{}/adrdom/libonnxruntime.so.1.28.0", cache_s);
     let model = format!("{}/adrdom/model", cache_s);
-    assert!(out.lines().any(|l| l == format!("written: {}", lib)), "{}", out);
-    assert!(out.lines().any(|l| l == format!("written: {}", model)), "{}", out);
+    assert!(
+        out.lines().any(|l| l == format!("written: {}", lib)),
+        "{}",
+        out
+    );
+    assert!(
+        out.lines().any(|l| l == format!("written: {}", model)),
+        "{}",
+        out
+    );
     assert!(Path::new(&lib).is_file());
     assert!(!dir.join("adrdom/cache/model").exists());
 
     let second = adr(&dir, &["install", "--planning"], &envs, "");
-    assert!(second.status.success(), "{}{}", stdout(&second), stderr(&second));
-    assert!(!stdout(&second).contains("written: /"), "second run fetches nothing: {}", stdout(&second));
+    assert!(
+        second.status.success(),
+        "{}{}",
+        stdout(&second),
+        stderr(&second)
+    );
+    assert!(
+        !stdout(&second).contains("written: /"),
+        "second run fetches nothing: {}",
+        stdout(&second)
+    );
 
     // The loader finds what install put there and embeds.
     std::env::set_var("XDG_CACHE_HOME", &cache);

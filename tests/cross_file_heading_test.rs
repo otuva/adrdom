@@ -48,9 +48,16 @@ fn approve_refuses_a_heading_that_stands_in_another_topic_file_and_writes_nothin
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success(), "{}", stdout(&out));
     let err = stderr(&out);
-    assert!(err.contains(LINE) && err.contains("agent rewrites one of the two sections"), "{}", err);
+    assert!(
+        err.contains(LINE) && err.contains("agent rewrites one of the two sections"),
+        "{}",
+        err
+    );
     assert_eq!(ledger(&dir), before, "a refused approve writes no row");
-    assert!(!std::fs::read_to_string(&record).unwrap().contains("id: "), "a refused approve mints no id");
+    assert!(
+        !std::fs::read_to_string(&record).unwrap().contains("id: "),
+        "a refused approve mints no id"
+    );
 
     // The same refusal from the other file's side.
     let dir = repo();
@@ -58,7 +65,11 @@ fn approve_refuses_a_heading_that_stands_in_another_topic_file_and_writes_nothin
     approve_record(&dir, B);
     let record = write_record(&dir, A, &file("A"));
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(!out.status.success() && stderr(&out).contains(LINE), "{}", stderr(&out));
+    assert!(
+        !out.status.success() && stderr(&out).contains(LINE),
+        "{}",
+        stderr(&out)
+    );
 
     // Renamed, it approves.
     let renamed = file("A").replace("Does the widget hold?", "Does the widget stay?");
@@ -75,7 +86,11 @@ fn a_copied_heading_never_reaches_ask_because_approve_refuses_it() {
     approve_record(&dir, A);
     let record = write_record(&dir, B, &file("B"));
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(!out.status.success() && stderr(&out).contains(LINE), "{}", stderr(&out));
+    assert!(
+        !out.status.success() && stderr(&out).contains(LINE),
+        "{}",
+        stderr(&out)
+    );
     // Ask on the unapproved copy refuses on the approval, not on the heading.
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
@@ -96,7 +111,11 @@ fn approve_of_an_unchanged_question_passes_while_a_draft_copies_its_heading() {
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let out = adr_owner(&dir, &["approve", b.to_str().unwrap()], "");
-    assert!(!out.status.success() && stderr(&out).contains(LINE), "{}", stderr(&out));
+    assert!(
+        !out.status.success() && stderr(&out).contains(LINE),
+        "{}",
+        stderr(&out)
+    );
 }
 
 #[test]
@@ -149,7 +168,14 @@ fn answered(dir: &Path, id: &str) -> String {
         o = OPTS.trim_end_matches('\n')
     );
     let hash = mirror_section_hash(&section);
-    append_ledger_row_at(dir, "asked", id, &hash, "Does the widget hold?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(
+        dir,
+        "asked",
+        id,
+        &hash,
+        "Does the widget hold?",
+        "2024-01-01T00:00:00Z",
+    );
     append_ledger_row_at(dir, "answered", id, &hash, "A", "2024-01-01T00:00:01Z");
     format!("{}\n\n**Answer:** A\n", section)
 }
@@ -177,11 +203,21 @@ fn a_draft_question_copying_an_answered_heading_is_a_note_and_two_answered_ones_
 /// `file(title)` with an id on its question, approved by ledger rows the way
 /// `approve` writes them: one row for the question's hash, one for the file.
 fn approved_with_id(dir: &Path, rel: &str, title: &str, id: &str) -> String {
-    let text = file(title).replacen("depends: widget\n", &format!("depends: widget\n\nid: {}\n", id), 1);
+    let text = file(title).replacen(
+        "depends: widget\n",
+        &format!("depends: widget\n\nid: {}\n", id),
+        1,
+    );
     std::fs::write(dir.join(rel), &text).unwrap();
     let rf = adr::record::load(&dir.join(rel)).unwrap();
     for s in &rf.sections {
-        append_ledger_row(dir, "approved", id, &adr::record::question_hash(&rf, s), rel);
+        append_ledger_row(
+            dir,
+            "approved",
+            id,
+            &adr::record::question_hash(&rf, s),
+            rel,
+        );
     }
     approve_via_ledger(dir, rel, &text);
     text
@@ -195,7 +231,11 @@ fn check_fails_a_heading_in_two_files_when_the_draft_holds_it_unchanged() {
     let a = approved_with_id(&dir, A, "A", ID1);
     approved_with_id(&dir, B, "B", ID2);
     // A prose edit makes A a draft; its question is unchanged, so it is no copy.
-    write_record(&dir, A, &a.replacen("# A\n\n", "# A\n\nA line of prose.\n\n", 1));
+    write_record(
+        &dir,
+        A,
+        &a.replacen("# A\n\n", "# A\n\nA line of prose.\n\n", 1),
+    );
     let failed = failures(&dir);
     assert!(failed.contains(LINE), "{}", failed);
 }
@@ -209,7 +249,11 @@ fn check_notes_a_new_heading_in_a_draft_that_copies_an_approved_one() {
     let b = file("B").replacen("### Does the widget hold?", "### Does the widget stay?", 1);
     approve_via_ledger(&dir, B, &b);
     // B gains a question copying A's heading: new, forceless, in a draft.
-    write_record(&dir, B, &format!("{}\n{}", b, file("B").split_once("\n\n").unwrap().1));
+    write_record(
+        &dir,
+        B,
+        &format!("{}\n{}", b, file("B").split_once("\n\n").unwrap().1),
+    );
     let failed = failures(&dir);
     assert!(!failed.contains(LINE), "{}", failed);
     let all = stdout(&adr(&dir, &["check"], &[], ""));

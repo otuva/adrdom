@@ -50,8 +50,17 @@ pub enum Act {
 
 /// The opening words of every act, as a move prints them, and of a clause
 /// nobody takes yet.
-pub const ACTS: &[&str] =
-    &["writes ", "rewrites ", "removes ", "restores ", "runs: ", "runs the same adr command again", "builds ", "installs ", "changes into "];
+pub const ACTS: &[&str] = &[
+    "writes ",
+    "rewrites ",
+    "removes ",
+    "restores ",
+    "runs: ",
+    "runs the same adr command again",
+    "builds ",
+    "installs ",
+    "changes into ",
+];
 
 /// The opening of a clause nobody takes yet.
 pub const NOT_YET: &str = "not yet: ";
@@ -117,7 +126,11 @@ impl std::fmt::Display for Next {
 
 impl Next {
     fn one(actor: Actor, act: Act) -> Next {
-        Next(vec![Clause::Do { actor, act, then: false }])
+        Next(vec![Clause::Do {
+            actor,
+            act,
+            then: false,
+        }])
     }
 
     /// `agent <act>`.
@@ -170,7 +183,11 @@ impl Next {
             Some(Clause::Do { actor, .. }) => *actor,
             _ => panic!("then follows a clause somebody takes"),
         };
-        self.0.push(Clause::Do { actor, act: act.into(), then: true });
+        self.0.push(Clause::Do {
+            actor,
+            act: act.into(),
+            then: true,
+        });
         self
     }
 
@@ -180,7 +197,11 @@ impl Next {
     }
 
     pub fn and_owner_runs(mut self, command: Cmd) -> Next {
-        self.0.push(Clause::Do { actor: Actor::Owner, act: Act::Runs(command), then: false });
+        self.0.push(Clause::Do {
+            actor: Actor::Owner,
+            act: Act::Runs(command),
+            then: false,
+        });
         self
     }
 
@@ -190,9 +211,11 @@ impl Next {
             self.0
                 .into_iter()
                 .map(|c| match c {
-                    Clause::Do { actor, act, then } => {
-                        Clause::Do { actor, act: act.map_thing(|t| t.replace(FIX_THE_THING, thing)), then }
-                    }
+                    Clause::Do { actor, act, then } => Clause::Do {
+                        actor,
+                        act: act.map_thing(|t| t.replace(FIX_THE_THING, thing)),
+                        then,
+                    },
                     w => w,
                 })
                 .collect(),
@@ -203,8 +226,14 @@ impl Next {
         self.0
             .iter()
             .map(|c| match c {
-                Clause::Do { act, then: true, .. } => format!("then {}", act.render()),
-                Clause::Do { actor, act, then: false } => {
+                Clause::Do {
+                    act, then: true, ..
+                } => format!("then {}", act.render()),
+                Clause::Do {
+                    actor,
+                    act,
+                    then: false,
+                } => {
                     let who = match actor {
                         Actor::Agent => "agent",
                         Actor::Owner => "owner",
@@ -245,7 +274,11 @@ pub fn finding_line(found: &str, next: &Next) -> String {
 
 /// A finding of `rule`: `found` and the `next` move that clears it.
 pub fn said(rule: &'static crate::rule::Rule, found: impl Into<String>, next: Next) -> Said {
-    Said { rule, found: found.into(), next }
+    Said {
+        rule,
+        found: found.into(),
+        next,
+    }
 }
 
 fn refuse(what: String, next: Next) -> String {
@@ -259,7 +292,10 @@ fn refuse(what: String, next: Next) -> String {
 // command.
 
 pub fn write_failed(target: &str, e: impl Display, next: Next) -> String {
-    refuse(format!("failed to write {}: {}", target, e), next.on(target))
+    refuse(
+        format!("failed to write {}: {}", target, e),
+        next.on(target),
+    )
 }
 
 pub fn read_failed(target: &str, e: impl Display, next: Next) -> String {
@@ -267,21 +303,33 @@ pub fn read_failed(target: &str, e: impl Display, next: Next) -> String {
 }
 
 pub fn update_failed(target: &str, e: impl Display, next: Next) -> String {
-    refuse(format!("failed to update {}: {}", target, e), next.on(target))
+    refuse(
+        format!("failed to update {}: {}", target, e),
+        next.on(target),
+    )
 }
 
 pub fn create_failed(target: &str, e: impl Display, next: Next) -> String {
-    refuse(format!("failed to create {}: {}", target, e), next.on(target))
+    refuse(
+        format!("failed to create {}: {}", target, e),
+        next.on(target),
+    )
 }
 
 pub fn remove_failed(target: &str, e: impl Display, next: Next) -> String {
-    refuse(format!("failed to remove {}: {}", target, e), next.on(target))
+    refuse(
+        format!("failed to remove {}: {}", target, e),
+        next.on(target),
+    )
 }
 
 /// `git config` did not take the change to `core.hooksPath`. `doing` is
 /// "set" or "unset".
 pub fn hooks_path_failed(doing: &str, next: Next) -> String {
-    refuse(format!("git config failed to {} core.hooksPath", doing), next.on("the git configuration of core.hooksPath"))
+    refuse(
+        format!("git config failed to {} core.hooksPath", doing),
+        next.on("the git configuration of core.hooksPath"),
+    )
 }
 
 pub fn parse_failed(target: &str, e: impl Display, next: Next) -> String {
@@ -289,7 +337,10 @@ pub fn parse_failed(target: &str, e: impl Display, next: Next) -> String {
 }
 
 pub fn stdin_read_failed(next: Next) -> String {
-    refuse("failed to read stdin".to_string(), next.on("what is piped to adr"))
+    refuse(
+        "failed to read stdin".to_string(),
+        next.on("what is piped to adr"),
+    )
 }
 
 /// Standard output refused a line for a cause other than its reader going
@@ -301,7 +352,10 @@ pub fn stdout_write_failed(e: impl Display, actor: Actor, again: Cmd) -> String 
         Actor::Agent | Actor::Builder => Next::agent_runs(again),
         Actor::Owner => Next::owner_runs(again),
     };
-    refuse(format!("output: standard output cannot be written: {}", e), next)
+    refuse(
+        format!("output: standard output cannot be written: {}", e),
+        next,
+    )
 }
 
 // --- repo.rs ----------------------------------------------------------------
@@ -352,7 +406,8 @@ pub fn terms_missing() -> Said {
     said(
         &crate::rule::TERMS_FILE_EXISTS,
         "adrdom/terms.md missing",
-        Next::agent(Act::Writes("adrdom/terms.md".into())).and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
+        Next::agent(Act::Writes("adrdom/terms.md".into()))
+            .and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
     )
 }
 
@@ -360,7 +415,10 @@ pub fn terms_missing() -> Said {
 /// of its shape rules) -- rare enough that the caller's own context decides
 /// who fixes it.
 pub fn terms_load_error(e: &str, next: Next) -> String {
-    refuse(format!("adrdom/terms.md: {}", e), next.on("adrdom/terms.md"))
+    refuse(
+        format!("adrdom/terms.md: {}", e),
+        next.on("adrdom/terms.md"),
+    )
 }
 
 /// One of `adrdom/terms.md`'s shape errors (from `terms::parse`): always
@@ -369,13 +427,32 @@ pub fn terms_shape_error(e: &str) -> Said {
     let fault = e.split_once(": ").map(|(_, f)| f).unwrap_or(e);
     let found = format!("adrdom/terms.md: {}", e);
     if fault.contains("used in both") {
-        said(&crate::rule::WORD_NAMES_ONE_TERM, found, Next::agent(Act::Removes("the word from one of the two entries".into())))
-    } else if fault.starts_with("missing h1") || fault.starts_with("duplicate h1") || fault == "unknown line" {
-        said(&crate::rule::TERMS_FILE_SHAPE, found, Next::agent(Act::Rewrites("the line".into())))
+        said(
+            &crate::rule::WORD_NAMES_ONE_TERM,
+            found,
+            Next::agent(Act::Removes("the word from one of the two entries".into())),
+        )
+    } else if fault.starts_with("missing h1")
+        || fault.starts_with("duplicate h1")
+        || fault == "unknown line"
+    {
+        said(
+            &crate::rule::TERMS_FILE_SHAPE,
+            found,
+            Next::agent(Act::Rewrites("the line".into())),
+        )
     } else if fault.starts_with("duplicate id ") {
-        said(&crate::rule::TERM_IDENTIFIER_IS_UNIQUE, found, Next::agent(Act::Rewrites("the entry".into())))
+        said(
+            &crate::rule::TERM_IDENTIFIER_IS_UNIQUE,
+            found,
+            Next::agent(Act::Rewrites("the entry".into())),
+        )
     } else {
-        said(&crate::rule::TERM_ENTRY_FIELDS, found, Next::agent(Act::Rewrites("the entry".into())))
+        said(
+            &crate::rule::TERM_ENTRY_FIELDS,
+            found,
+            Next::agent(Act::Rewrites("the entry".into())),
+        )
     }
 }
 
@@ -419,7 +496,10 @@ pub fn terms_brief_missing() -> Said {
 pub fn terms_brief_differs() -> Said {
     said(
         &crate::rule::TERMS_BRIEF_MATCHES_TERMS,
-        format!("{} differs from adrdom/terms.md", crate::repo::TERMS_BRIEF_PATH),
+        format!(
+            "{} differs from adrdom/terms.md",
+            crate::repo::TERMS_BRIEF_PATH
+        ),
         Next::owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
     )
 }
@@ -451,10 +531,17 @@ pub fn circular_definition(names: &[String]) -> Said {
         all.push(first.clone());
     }
     let last = all.pop().unwrap_or_default();
-    let run = if all.is_empty() { last } else { format!("{} and {}", all.join(", "), last) };
+    let run = if all.is_empty() {
+        last
+    } else {
+        format!("{} and {}", all.join(", "), last)
+    };
     said(
         &crate::rule::DEFINITION_NOT_CIRCULAR,
-        format!("adrdom/terms.md: circular definition: a cycle runs through {}", run),
+        format!(
+            "adrdom/terms.md: circular definition: a cycle runs through {}",
+            run
+        ),
         Next::agent(Act::Rewrites("one of these definitions".into())),
     )
 }
@@ -468,13 +555,30 @@ pub fn circular_definition(names: &[String]) -> Said {
 /// the dependent stands (per "What holds a retire of a term?"), so the move
 /// is restoring the term as it was, then superseding the decision, named
 /// by its identifier and heading (`named`).
-pub fn term_removed_but_carried(uuid: &str, word: Option<&str>, source: &str, decision: Option<(&str, &str)>) -> Said {
+pub fn term_removed_but_carried(
+    uuid: &str,
+    word: Option<&str>,
+    source: &str,
+    decision: Option<(&str, &str)>,
+) -> Said {
     let next = match decision {
-        Some((id, heading)) => Next::agent(Act::Restores("the term in adrdom/terms.md".into()))
-            .then(Act::Writes(format!("a question that supersedes {}", named(id, Some(heading))))),
-        None => Next::agent(Act::Restores("the term in adrdom/terms.md".into())).and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
+        Some((id, heading)) => {
+            Next::agent(Act::Restores("the term in adrdom/terms.md".into())).then(Act::Writes(
+                format!("a question that supersedes {}", named(id, Some(heading))),
+            ))
+        }
+        None => Next::agent(Act::Restores("the term in adrdom/terms.md".into()))
+            .and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
     };
-    said(&crate::rule::TERM_STAYS_WHILE_USED, format!("adrdom/terms.md: term {} removed but used by {}", named(uuid, word), source), next)
+    said(
+        &crate::rule::TERM_STAYS_WHILE_USED,
+        format!(
+            "adrdom/terms.md: term {} removed but used by {}",
+            named(uuid, word),
+            source
+        ),
+        next,
+    )
 }
 
 /// A dependent still names a term that is now retired. `next` differs by
@@ -484,28 +588,37 @@ pub fn term_removed_but_carried(uuid: &str, word: Option<&str>, source: &str, de
 /// terms are never superseded (per "What holds a retire of a term?"; the fix for a term-dependent is
 /// always this same pair, so it's fixed here).
 pub fn term_retired_but_carried(name: &str, source: &str, user: RetiredUser) -> Said {
-    let found = format!("adrdom/terms.md: term \"{}\" retired but used by {}", name, source);
+    let found = format!(
+        "adrdom/terms.md: term \"{}\" retired but used by {}",
+        name, source
+    );
     match user {
         RetiredUser::Decision(id, heading) => said(
             &crate::rule::TERM_NOT_RETIRED_WHILE_NAMED,
             found,
-            Next::agent(Act::Rewrites(format!("the entry of \"{}\"", name)))
-                .then(Act::Writes(format!("a question that supersedes {}", named(id, Some(heading))))),
+            Next::agent(Act::Rewrites(format!("the entry of \"{}\"", name))).then(Act::Writes(
+                format!("a question that supersedes {}", named(id, Some(heading))),
+            )),
         ),
         RetiredUser::Asked(rel) => said(
             &crate::rule::TERM_NOT_RETIRED_WHILE_NAMED,
             found,
-            Next::agent_then_runs(Act::Rewrites("the question".into()), command(&["adr", "ask", rel])),
+            Next::agent_then_runs(
+                Act::Rewrites("the question".into()),
+                command(&["adr", "ask", rel]),
+            ),
         ),
         RetiredUser::PlanHeading(rel) => said(
             &crate::rule::TERM_NOT_RETIRED_WHILE_NAMED,
             found,
-            Next::agent(Act::Rewrites("the heading".into())).and_owner_runs(command(&["adr", "approve", rel])),
+            Next::agent(Act::Rewrites("the heading".into()))
+                .and_owner_runs(command(&["adr", "approve", rel])),
         ),
         RetiredUser::Definition => said(
             &crate::rule::DEFINITION_USES_LIVE_TERMS,
             found,
-            Next::agent(Act::Rewrites("the definition".into())).and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
+            Next::agent(Act::Rewrites("the definition".into()))
+                .and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
         ),
     }
 }
@@ -522,21 +635,31 @@ pub enum RetiredUser<'a> {
     Definition,
 }
 
-
-
 /// A dependent's pairing (`word=uuid`) no longer resolves that word to
 /// that term at all -- the wording moved, without the term being retired
 /// or removed. `next` mirrors `term_retired_but_carried`'s split.
-pub fn word_moved_off_term(word: &str, term_name: &str, source: &str, decision_id: Option<&str>) -> Said {
+pub fn word_moved_off_term(
+    word: &str,
+    term_name: &str,
+    source: &str,
+    decision_id: Option<&str>,
+) -> Said {
     let next = match decision_id {
         // A current decision is never re-asked: the wording in the terms
         // file returns.
-        Some(_) => Next::agent(Act::Rewrites(format!("the entry of \"{}\" so \"{}\" names it", term_name, word))),
-        None => Next::agent(Act::Rewrites("the definition".into())).and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
+        Some(_) => Next::agent(Act::Rewrites(format!(
+            "the entry of \"{}\" so \"{}\" names it",
+            term_name, word
+        ))),
+        None => Next::agent(Act::Rewrites("the definition".into()))
+            .and_owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
     };
     said(
         &crate::rule::WORD_STAYS_ON_TERM,
-        format!("adrdom/terms.md: word \"{}\" no longer names term \"{}\", used by {}", word, term_name, source),
+        format!(
+            "adrdom/terms.md: word \"{}\" no longer names term \"{}\", used by {}",
+            word, term_name, source
+        ),
         next,
     )
 }
@@ -546,7 +669,10 @@ pub fn word_moved_off_term(word: &str, term_name: &str, source: &str, decision_i
 pub fn definition_too_long(name: &str, count: usize) -> Said {
     said(
         &crate::rule::DEFINITION_SENTENCE_LIMIT,
-        format!("adrdom/terms.md: term \"{}\" definition has {} sentences, the most is 2", name, count),
+        format!(
+            "adrdom/terms.md: term \"{}\" definition has {} sentences, the most is 2",
+            name, count
+        ),
         Next::agent(Act::Rewrites("the definition".into())),
     )
 }
@@ -568,11 +694,16 @@ pub fn shape_error(rel: &str, e: &str) -> Said {
         return said(
             &rule::TIER_HEADING_ABSENT,
             format!("{}: {}", rel, e),
-            Next::agent(Act::Removes("the heading".into()))
-                .then(Act::Writes("what each question stands on in its depends line".into())),
+            Next::agent(Act::Removes("the heading".into())).then(Act::Writes(
+                "what each question stands on in its depends line".into(),
+            )),
         );
     }
-    said(&rule::TOPIC_FILE_SHAPE, format!("{}: {}", rel, e), Next::agent(Act::Rewrites("the file".into())))
+    said(
+        &rule::TOPIC_FILE_SHAPE,
+        format!("{}: {}", rel, e),
+        Next::agent(Act::Rewrites("the file".into())),
+    )
 }
 
 /// A `### ` line that does not end in `?` (per "What does a topic file
@@ -580,7 +711,10 @@ pub fn shape_error(rel: &str, e: &str) -> Said {
 pub fn heading_not_a_question(rel: &str, line: usize) -> Said {
     said(
         &rule::QUESTION_HEADING_ENDS_IN_MARK,
-        format!("{}: line {}: a heading is not a question ending in ?", rel, line),
+        format!(
+            "{}: line {}: a heading is not a question ending in ?",
+            rel, line
+        ),
         Next::agent(Act::Rewrites("the line".into())),
     )
 }
@@ -588,10 +722,18 @@ pub fn heading_not_a_question(rel: &str, line: usize) -> Said {
 pub fn section_shape_error(rel: &str, heading: &str, e: &str) -> Said {
     let at = format!("{}: \"{}\": ", rel, heading);
     if e.starts_with("depends: duplicate entry") {
-        return said(&rule::DEPENDS_ENTRY_ONCE, format!("{}{}", at, e), Next::agent(Act::Removes("the entry".into())));
+        return said(
+            &rule::DEPENDS_ENTRY_ONCE,
+            format!("{}{}", at, e),
+            Next::agent(Act::Removes("the entry".into())),
+        );
     }
     if e.starts_with("second answer line") {
-        return said(&rule::ANSWER_LINE_IS_LAST, format!("{}{}", at, e), Next::agent(Act::Removes("the second answer line".into())));
+        return said(
+            &rule::ANSWER_LINE_IS_LAST,
+            format!("{}{}", at, e),
+            Next::agent(Act::Removes("the second answer line".into())),
+        );
     }
     if e.starts_with("answer line not last") {
         return said(
@@ -601,7 +743,9 @@ pub fn section_shape_error(rel: &str, heading: &str, e: &str) -> Said {
         );
     }
     for kind in ["depends", "supersedes", "unrelated", "blame", "terms"] {
-        let Some(rest) = e.strip_prefix(&format!("{}: ", kind)) else { continue };
+        let Some(rest) = e.strip_prefix(&format!("{}: ", kind)) else {
+            continue;
+        };
         if rest.starts_with("second ") {
             let n = e.rsplit(' ').next().unwrap_or("");
             return said(
@@ -610,41 +754,95 @@ pub fn section_shape_error(rel: &str, heading: &str, e: &str) -> Said {
                 Next::agent(Act::Rewrites(format!("the {} line", kind))),
             );
         }
-        return said(&rule::REFERENCE_LINE_ONCE, format!("{}{}", at, e), Next::agent(Act::Rewrites(format!("the {} line", kind))));
+        return said(
+            &rule::REFERENCE_LINE_ONCE,
+            format!("{}{}", at, e),
+            Next::agent(Act::Rewrites(format!("the {} line", kind))),
+        );
     }
-    said(&rule::QUESTION_SECTION_SHAPE, format!("{}{}", at, e), Next::agent(Act::Rewrites("the question".into())))
+    said(
+        &rule::QUESTION_SECTION_SHAPE,
+        format!("{}{}", at, e),
+        Next::agent(Act::Rewrites("the question".into())),
+    )
 }
 
 /// One provenance/code-state/date/loaded-heading tell (per "Does the tool
 /// stop loaded phrases in a question?").
-pub fn tell(rel: &str, line: usize, label: &str, phrase: &str, kind: crate::tells::TellKind) -> Said {
+pub fn tell(
+    rel: &str,
+    line: usize,
+    label: &str,
+    phrase: &str,
+    kind: crate::tells::TellKind,
+) -> Said {
     use crate::tells::TellKind;
     let at = format!("{}:{}: \"{}\": ", rel, line + 1, label);
     let (r, found, mv) = match kind {
-        TellKind::Provenance => (&rule::TELL_NAMES_SPEAKER, format!("\"{}\" names who said it", phrase), "the line"),
-        TellKind::CodeState => (&rule::TELL_STATES_CODE_NOW, format!("\"{}\" states what the code does", phrase), "the line"),
-        TellKind::Date => (&rule::TELL_CARRIES_DATE, format!("\"{}\" is a date", phrase), "the line"),
-        TellKind::LoadedOpening => {
-            (&rule::TELL_ASSUMES_ANSWER, format!("the heading opens with \"{}\"", phrase), "the heading")
-        }
-        TellKind::Join => (&rule::TELL_JOINS_TWO_QUESTIONS, format!("the heading holds \"{}\"", phrase), "the heading"),
+        TellKind::Provenance => (
+            &rule::TELL_NAMES_SPEAKER,
+            format!("\"{}\" names who said it", phrase),
+            "the line",
+        ),
+        TellKind::CodeState => (
+            &rule::TELL_STATES_CODE_NOW,
+            format!("\"{}\" states what the code does", phrase),
+            "the line",
+        ),
+        TellKind::Date => (
+            &rule::TELL_CARRIES_DATE,
+            format!("\"{}\" is a date", phrase),
+            "the line",
+        ),
+        TellKind::LoadedOpening => (
+            &rule::TELL_ASSUMES_ANSWER,
+            format!("the heading opens with \"{}\"", phrase),
+            "the heading",
+        ),
+        TellKind::Join => (
+            &rule::TELL_JOINS_TWO_QUESTIONS,
+            format!("the heading holds \"{}\"", phrase),
+            "the heading",
+        ),
     };
-    said(r, format!("{}{}", at, found), Next::agent(Act::Rewrites(mv.into())))
+    said(
+        r,
+        format!("{}{}", at, found),
+        Next::agent(Act::Rewrites(mv.into())),
+    )
 }
 
 /// An option, Why line or Costs line over the length rule (per "Does ask
 /// refuse an option over a word limit?"); `words` is the line's word count.
-pub fn too_long(rel: &str, line: usize, label: &str, kind: crate::tells::LengthKind, words: usize) -> Said {
+pub fn too_long(
+    rel: &str,
+    line: usize,
+    label: &str,
+    kind: crate::tells::LengthKind,
+    words: usize,
+) -> Said {
     use crate::tells::LengthKind;
     let (r, thing, most) = match kind {
         LengthKind::Why => (&rule::WHY_WORD_LIMIT, "Why line", crate::tells::WORD_LIMIT),
-        LengthKind::Costs => (&rule::COSTS_WORD_LIMIT, "Costs line", crate::tells::WORD_LIMIT),
+        LengthKind::Costs => (
+            &rule::COSTS_WORD_LIMIT,
+            "Costs line",
+            crate::tells::WORD_LIMIT,
+        ),
         LengthKind::OneWordOption => (&rule::DOES_OPTION_IS_ONE_WORD, "option", 1),
         LengthKind::Option => (&rule::OPTION_WORD_LIMIT, "option", crate::tells::WORD_LIMIT),
     };
     said(
         r,
-        format!("{}:{}: \"{}\": the {} has {} words, the most is {}", rel, line + 1, label, thing, words, most),
+        format!(
+            "{}:{}: \"{}\": the {} has {} words, the most is {}",
+            rel,
+            line + 1,
+            label,
+            thing,
+            words,
+            most
+        ),
         Next::agent(Act::Rewrites(format!("the {}", thing))),
     )
 }
@@ -673,7 +871,12 @@ pub fn no_depends_line_bare(heading: &str) -> Said {
 pub fn frozen_depends_edited(rel: &str, heading: &str, st: crate::status::QuestionStatus) -> Said {
     said(
         &rule::ANSWERED_DEPENDS_LINE_FROZEN,
-        format!("{}: \"{}\" is [{}] and its depends line was edited", rel, heading, st.name()),
+        format!(
+            "{}: \"{}\" is [{}] and its depends line was edited",
+            rel,
+            heading,
+            st.name()
+        ),
         Next::agent(Act::Restores("the line".into())),
     )
 }
@@ -681,8 +884,15 @@ pub fn frozen_depends_edited(rel: &str, heading: &str, st: crate::status::Questi
 pub fn dep_not_current_decision(rel: &str, heading: &str, id: &str, name: Option<&str>) -> Said {
     said(
         &rule::DEPENDS_ENTRY_RESOLVES,
-        format!("{}: \"{}\" depends on {} which names no term and no question of this file", rel, heading, named(id, name)),
-        Next::agent(Act::Rewrites("the entry to name a term or a question of this file".into())),
+        format!(
+            "{}: \"{}\" depends on {} which names no term and no question of this file",
+            rel,
+            heading,
+            named(id, name)
+        ),
+        Next::agent(Act::Rewrites(
+            "the entry to name a term or a question of this file".into(),
+        )),
     )
 }
 
@@ -697,21 +907,31 @@ pub fn dep_retired_term_id(rel: &str, heading: &str, id: &str, name: Option<&str
             heading,
             name.map_or_else(|| id.to_string(), |n| format!("\"{}\"", n))
         ),
-        Next::agent(Act::Rewrites("the entry to name a term that is not retired".into())),
+        Next::agent(Act::Rewrites(
+            "the entry to name a term that is not retired".into(),
+        )),
     )
 }
 
 pub fn dep_no_term(rel: &str, heading: &str, text: &str) -> Said {
     said(
         &rule::DEPENDS_TERM_EXISTS,
-        format!("{}: \"{}\" depends on \"{}\" which is no term", rel, heading, text),
+        format!(
+            "{}: \"{}\" depends on \"{}\" which is no term",
+            rel, heading, text
+        ),
         Next::agent(Act::Writes("the term in adrdom/terms.md".into())),
     )
 }
 
 /// A `depends:` entry, on a question being judged, names a current decision
 /// of another topic file by its identifier.
-pub fn dep_names_decision_of_other_file(rel: &str, heading: &str, id: &str, name: Option<&str>) -> Said {
+pub fn dep_names_decision_of_other_file(
+    rel: &str,
+    heading: &str,
+    id: &str,
+    name: Option<&str>,
+) -> Said {
     dep_names_other_file(rel, heading, &named(id, name))
 }
 
@@ -727,18 +947,35 @@ fn dep_names_other_file(rel: &str, heading: &str, target: &str) -> Said {
             "{}: \"{}\" depends on {}, a decision of another topic file",
             rel, heading, target
         ),
-        Next::agent(Act::Rewrites(format!("the depends line of \"{}\" to name terms and questions of this file", heading))),
+        Next::agent(Act::Rewrites(format!(
+            "the depends line of \"{}\" to name terms and questions of this file",
+            heading
+        ))),
     )
 }
 
 /// The depends line of a question being judged names more questions than the
 /// cap: `names` are the questions its entries name, in line order.
 pub fn depends_line_over_limit(rel: &str, heading: &str, names: &[String], cap: usize) -> Said {
-    let list = names.iter().map(|n| format!("\"{}\"", n)).collect::<Vec<_>>().join(", ");
+    let list = names
+        .iter()
+        .map(|n| format!("\"{}\"", n))
+        .collect::<Vec<_>>()
+        .join(", ");
     said(
         &rule::DEPENDS_LINE_QUESTION_LIMIT,
-        format!("{}: \"{}\" depends on {} questions, the most is {}: {}", rel, heading, names.len(), cap, list),
-        Next::agent(Act::Rewrites(format!("the depends line of \"{}\"", heading))),
+        format!(
+            "{}: \"{}\" depends on {} questions, the most is {}: {}",
+            rel,
+            heading,
+            names.len(),
+            cap,
+            list
+        ),
+        Next::agent(Act::Rewrites(format!(
+            "the depends line of \"{}\"",
+            heading
+        ))),
     )
 }
 
@@ -751,7 +988,9 @@ pub fn depends_line_over_limit(rel: &str, heading: &str, names: &[String], cap: 
 pub fn plan_not_a_topic_file(rel: &str) -> String {
     refuse(
         format!("{} is not a topic file", rel),
-        Next::agent(Act::Rewrites("the path to a topic file under adrdom/decisions".into())),
+        Next::agent(Act::Rewrites(
+            "the path to a topic file under adrdom/decisions".into(),
+        )),
     )
 }
 
@@ -774,7 +1013,10 @@ pub fn show_not_a_file_approve_takes(rel: &str) -> String {
 pub fn dep_retired_term(rel: &str, heading: &str, text: &str) -> Said {
     said(
         &rule::DEPENDS_TERM_IS_LIVE,
-        format!("{}: \"{}\" names the retired term \"{}\"", rel, heading, text),
+        format!(
+            "{}: \"{}\" names the retired term \"{}\"",
+            rel, heading, text
+        ),
         Next::agent(Act::Rewrites("the entry".into())),
     )
 }
@@ -800,9 +1042,19 @@ pub fn bad_option_letter(rel: &str, dependent: &str, target: &str, letter: char)
 /// order; `answered` counts the ones the owner answered, which hold their
 /// place and are never moved.
 pub fn tier_cap_exceeded(rel: &str, open: &[String], answered: usize, cap: usize) -> Said {
-    let names = open.iter().map(|h| format!("\"{}\"", h)).collect::<Vec<_>>().join(", ");
+    let names = open
+        .iter()
+        .map(|h| format!("\"{}\"", h))
+        .collect::<Vec<_>>()
+        .join(", ");
     let found = if answered == 0 {
-        format!("{}: {} questions in one tier, the most is {}: {}", rel, open.len(), cap, names)
+        format!(
+            "{}: {} questions in one tier, the most is {}: {}",
+            rel,
+            open.len(),
+            cap,
+            names
+        )
     } else {
         format!(
             "{}: {} questions in one tier, {} answered, the most is {}: {}",
@@ -838,7 +1090,11 @@ fn derive_what(rel: &str, e: &DeriveError) -> (&'static rule::Rule, String, Next
             format!(
                 "{}: depends lines lead back to their own question: {}",
                 rel,
-                names.iter().map(|n| format!("\"{}\"", n)).collect::<Vec<_>>().join(", ")
+                names
+                    .iter()
+                    .map(|n| format!("\"{}\"", n))
+                    .collect::<Vec<_>>()
+                    .join(", ")
             ),
             Next::agent(Act::Rewrites("the depends lines of these questions".into())),
         ),
@@ -850,8 +1106,6 @@ fn derive_what(rel: &str, e: &DeriveError) -> (&'static rule::Rule, String, Next
     }
 }
 
-
-
 pub fn derive_error(rel: &str, e: &DeriveError) -> Said {
     let (r, found, next) = derive_what(rel, e);
     said(r, found, next)
@@ -860,7 +1114,10 @@ pub fn derive_error(rel: &str, e: &DeriveError) -> Said {
 pub fn answered_id_missing(id: &str, heading: &str) -> Said {
     said(
         &crate::rule::ANSWERED_QUESTION_STAYS_IN_FILES,
-        format!("id {} (\"{}\") is answered and current but missing from every topic file", id, heading),
+        format!(
+            "id {} (\"{}\") is answered and current but missing from every topic file",
+            id, heading
+        ),
         Next::agent(Act::Restores("the section".into())),
     )
 }
@@ -895,14 +1152,24 @@ pub fn id_not_found_some_unread(id: &str, unread: &[String]) -> String {
 /// `st`, an answer, a refusal, a supersede, a withdrawal or a drop.
 pub fn already_closed(heading: &str, st: crate::status::QuestionStatus) -> String {
     refuse(
-        format!("\"{}\" is already {}; show prints every question that waits for an answer", heading, st.name()),
+        format!(
+            "\"{}\" is already {}; show prints every question that waits for an answer",
+            heading,
+            st.name()
+        ),
         Next::owner_runs(Cmd::fixed("adr show")),
     )
 }
 
 /// `letters` are the letters of the question's options; `id` and `version`
 /// are the ones the owner gave, both good when this is printed.
-pub fn letter_not_an_option(letter: char, heading: &str, letters: &[char], id: &str, version: &str) -> String {
+pub fn letter_not_an_option(
+    letter: char,
+    heading: &str,
+    letters: &[char],
+    id: &str,
+    version: &str,
+) -> String {
     let has: Vec<String> = letters.iter().map(|c| c.to_string()).collect();
     refuse(
         format!(
@@ -911,31 +1178,48 @@ pub fn letter_not_an_option(letter: char, heading: &str, letters: &[char], id: &
             heading,
             has.join(", ")
         ),
-        crate::moves::clause(MoveKind::Answer { id: id.to_string(), version: version.to_string(), heading: heading.to_string() }),
+        crate::moves::clause(MoveKind::Answer {
+            id: id.to_string(),
+            version: version.to_string(),
+            heading: heading.to_string(),
+        }),
     )
 }
 
 /// `report`: what the rules find in the question's file and its moves
 /// (`moves::of_unasked_question_in`).
 pub fn not_in_asked_state(heading: &str, report: &crate::moves::Report) -> String {
-    format!("\"{}\" is edited since it was asked; {}", heading, report.moves_tail(Next::agent(Act::Restores("the question".into()))).render())
+    format!(
+        "\"{}\" is edited since it was asked; {}",
+        heading,
+        report
+            .moves_tail(Next::agent(Act::Restores("the question".into())))
+            .render()
+    )
 }
-
-
-
 
 /// A question with a body that no `ask` has put to the owner.
 /// `report`: what the rules find in the question's file and its moves
 /// (`moves::of_unasked_question_in`).
 pub fn not_asked_yet(heading: &str, rel: &str, report: &crate::moves::Report) -> String {
-    format!("\"{}\" is {}; {}", heading, crate::status::QuestionStatus::NotAsked.name(), report.moves_tail(Next::agent_runs(command(&["adr", "ask", rel]))).render())
+    format!(
+        "\"{}\" is {}; {}",
+        heading,
+        crate::status::QuestionStatus::NotAsked.name(),
+        report
+            .moves_tail(Next::agent_runs(command(&["adr", "ask", rel])))
+            .render()
+    )
 }
 
 /// An answer that would remove a question with no identifier.
 pub fn drop_without_id(heading: &str, rel: &str) -> Said {
     said(
         &crate::rule::DROP_NAMES_AN_IDENTIFIER,
-        format!("answering would remove \"{}\", which has no identifier", heading),
+        format!(
+            "answering would remove \"{}\", which has no identifier",
+            heading
+        ),
         Next::owner_runs(command(&["adr", "approve", rel])),
     )
 }
@@ -950,7 +1234,11 @@ pub fn drop_of_closed(heading: &str, refused: bool, rel: &str) -> Said {
             heading,
             if refused { "refused" } else { "answered" }
         ),
-        Next::agent(Act::Writes(format!("a question that supersedes \"{}\"", heading))).and_owner_runs(command(&["adr", "approve", rel])),
+        Next::agent(Act::Writes(format!(
+            "a question that supersedes \"{}\"",
+            heading
+        )))
+        .and_owner_runs(command(&["adr", "approve", rel])),
     )
 }
 
@@ -968,7 +1256,17 @@ pub fn drop_not_approved(heading: &str, rel: &str) -> Said {
 
 /// A question with no body yet: nothing to ask or answer.
 pub fn not_written(heading: &str, report: &crate::moves::Report) -> String {
-    format!("\"{}\" is [{}]; {}", heading, crate::status::QuestionStatus::NoBody.name(), report.moves_tail(Next::agent(Act::Writes(format!("the body of \"{}\"", heading)))).render())
+    format!(
+        "\"{}\" is [{}]; {}",
+        heading,
+        crate::status::QuestionStatus::NoBody.name(),
+        report
+            .moves_tail(Next::agent(Act::Writes(format!(
+                "the body of \"{}\"",
+                heading
+            ))))
+            .render()
+    )
 }
 
 /// `adr answer <id> <letter>` with no `@<version>` (per "Does an answer
@@ -981,7 +1279,11 @@ pub fn answer_missing_version(id: &str, asked: Option<(&str, &str)>) -> String {
     match asked {
         Some((heading, version)) => refuse(
             format!("{}: no version given", named(id, Some(heading))),
-            crate::moves::clause(MoveKind::Answer { id: id.to_string(), version: version.to_string(), heading: heading.to_string() }),
+            crate::moves::clause(MoveKind::Answer {
+                id: id.to_string(),
+                version: version.to_string(),
+                heading: heading.to_string(),
+            }),
         ),
         None => refuse(
             format!("{}: no version given", id),
@@ -1031,15 +1333,29 @@ fn ask_again(rel: &str) -> Next {
 }
 
 pub fn no_terms_line(rel: &str, id: &str, heading: &str) -> Said {
-    said(&crate::rule::ASKED_QUESTION_HAS_TERMS_LINE, format!("{}: no terms line", named(id, Some(heading))), ask_again(rel))
+    said(
+        &crate::rule::ASKED_QUESTION_HAS_TERMS_LINE,
+        format!("{}: no terms line", named(id, Some(heading))),
+        ask_again(rel),
+    )
 }
 
 pub fn malformed_terms_line(rel: &str, id: &str, heading: &str) -> Said {
-    said(&crate::rule::ASKED_TERMS_LINE_PARSES, format!("{}: malformed terms line", named(id, Some(heading))), ask_again(rel))
+    said(
+        &crate::rule::ASKED_TERMS_LINE_PARSES,
+        format!("{}: malformed terms line", named(id, Some(heading))),
+        ask_again(rel),
+    )
 }
 
 /// `word` is the word of the question the gone term was named by.
-pub fn terms_line_names_gone_term(rel: &str, id: &str, heading: &str, uuid: &str, word: &str) -> Said {
+pub fn terms_line_names_gone_term(
+    rel: &str,
+    id: &str,
+    heading: &str,
+    uuid: &str,
+    word: &str,
+) -> Said {
     said(
         &crate::rule::ANSWERED_TERMS_LINE_TERM_EXISTS,
         format!(
@@ -1080,19 +1396,33 @@ pub fn named(id: &str, name: Option<&str>) -> String {
 /// the refusal never names the owner's approve while approve would refuse
 /// (per "Does a command compute a move of its own?", aac5c313 A).
 pub fn plan_not_approved(rel: &str, status: FileStatus, report: &crate::moves::Report) -> Said {
-    said(&crate::rule::PLAN_APPROVED_BEFORE_ASK, format!("{}: plan is {}", rel, status.name()), report.moves_tail(Next::owner_runs(command(&["adr", "approve", rel]))))
+    said(
+        &crate::rule::PLAN_APPROVED_BEFORE_ASK,
+        format!("{}: plan is {}", rel, status.name()),
+        report.moves_tail(Next::owner_runs(command(&["adr", "approve", rel]))),
+    )
 }
 
 /// `plan_not_approved` for the prose above the first question.
 pub fn context_not_approved(rel: &str, status: FileStatus, report: &crate::moves::Report) -> Said {
-    said(&crate::rule::PROSE_APPROVED_BEFORE_ASK, format!("{}: prose is {}", rel, status.name()), report.moves_tail(Next::owner_runs(command(&["adr", "approve", rel]))))
+    said(
+        &crate::rule::PROSE_APPROVED_BEFORE_ASK,
+        format!("{}: prose is {}", rel, status.name()),
+        report.moves_tail(Next::owner_runs(command(&["adr", "approve", rel]))),
+    )
 }
 
 pub fn missing_answer_set(rel: &str, dependent: &str, target: &str) -> Said {
     said(
         &rule::DEPENDS_ENTRY_HAS_ANSWER_SET,
-        format!("{}: \"{}\" depends on \"{}\" without an answer set", rel, dependent, target),
-        Next::agent(Act::Writes("an answer set (=A, =A|B or =*) on that depends entry".into())).and_owner_runs(command(&["adr", "approve", rel])),
+        format!(
+            "{}: \"{}\" depends on \"{}\" without an answer set",
+            rel, dependent, target
+        ),
+        Next::agent(Act::Writes(
+            "an answer set (=A, =A|B or =*) on that depends entry".into(),
+        ))
+        .and_owner_runs(command(&["adr", "approve", rel])),
     )
 }
 
@@ -1101,7 +1431,10 @@ pub fn missing_answer_set(rel: &str, dependent: &str, target: &str) -> Said {
 pub fn depends_names_twice(rel: &str, dependent: &str, entry: &str) -> Said {
     said(
         &rule::DEPENDS_ENTRY_ONCE,
-        format!("{}: \"{}\": the depends entry \"{}\" names what an earlier entry of the line names", rel, dependent, entry),
+        format!(
+            "{}: \"{}\": the depends entry \"{}\" names what an earlier entry of the line names",
+            rel, dependent, entry
+        ),
         Next::agent(Act::Removes("the entry".into())),
     )
 }
@@ -1110,7 +1443,10 @@ pub fn depends_names_twice(rel: &str, dependent: &str, entry: &str) -> Said {
 pub fn supersedes_names_twice(rel: &str, heading: &str, entry: &str) -> Said {
     said(
         &rule::SUPERSEDES_ENTRY_ONCE,
-        format!("{}: \"{}\": the supersedes entry \"{}\" names what an earlier entry of the line names", rel, heading, entry),
+        format!(
+            "{}: \"{}\": the supersedes entry \"{}\" names what an earlier entry of the line names",
+            rel, heading, entry
+        ),
         Next::agent(Act::Removes("the entry".into())),
     )
 }
@@ -1118,23 +1454,36 @@ pub fn supersedes_names_twice(rel: &str, heading: &str, entry: &str) -> Said {
 pub fn set_on_term(rel: &str, dependent: &str) -> Said {
     said(
         &rule::ANSWER_SET_NOT_ON_TERM,
-        format!("{}: \"{}\" depends on a term under an answer set", rel, dependent),
-        Next::agent(Act::Removes("the answer set from that entry".into())).and_owner_runs(command(&["adr", "approve", rel])),
+        format!(
+            "{}: \"{}\" depends on a term under an answer set",
+            rel, dependent
+        ),
+        Next::agent(Act::Removes("the answer set from that entry".into()))
+            .and_owner_runs(command(&["adr", "approve", rel])),
     )
 }
 
 pub fn set_on_answered_question(rel: &str, dependent: &str, target: &str) -> Said {
     said(
         &rule::ANSWER_SET_ON_OPEN_QUESTION_ONLY,
-        format!("{}: \"{}\" depends on \"{}\", which is answered, under an answer set", rel, dependent, target),
-        Next::agent(Act::Removes("the answer set from that entry".into())).and_owner_runs(command(&["adr", "approve", rel])),
+        format!(
+            "{}: \"{}\" depends on \"{}\", which is answered, under an answer set",
+            rel, dependent, target
+        ),
+        Next::agent(Act::Removes("the answer set from that entry".into()))
+            .and_owner_runs(command(&["adr", "approve", rel])),
     )
 }
 
 pub fn question_without_body(rel: &str, heading: &str) -> Said {
     said(
         &rule::QUESTION_HAS_BODY,
-        format!("{}: \"{}\" is [{}]", rel, heading, crate::status::QuestionStatus::NoBody.name()),
+        format!(
+            "{}: \"{}\" is [{}]",
+            rel,
+            heading,
+            crate::status::QuestionStatus::NoBody.name()
+        ),
         Next::agent(Act::Writes(format!("the body of \"{}\"", heading))),
     )
 }
@@ -1181,8 +1530,13 @@ pub fn blame_entry_without_range(rel: &str, heading: &str, entry: &str) -> Said 
 fn blame_entry_incomplete(rel: &str, heading: &str, entry: &str, lacks: &str) -> Said {
     said(
         &rule::BLAME_LINE_NAMES_ROW_RANGES,
-        format!("{}: \"{}\": the blame entry \"{}\" names no {}", rel, heading, entry, lacks),
-        Next::agent(Act::Writes("the name of a blame file and the ranges of its rows".into())),
+        format!(
+            "{}: \"{}\": the blame entry \"{}\" names no {}",
+            rel, heading, entry, lacks
+        ),
+        Next::agent(Act::Writes(
+            "the name of a blame file and the ranges of its rows".into(),
+        )),
     )
 }
 
@@ -1190,24 +1544,46 @@ fn blame_entry_incomplete(rel: &str, heading: &str, entry: &str, lacks: &str) ->
 pub fn blame_names_no_file(rel: &str, heading: &str, name: &str) -> Said {
     said(
         &rule::BLAME_LINE_NAMES_APPROVED_FILE,
-        format!("{}: \"{}\": the blame entry \"{}\" names no blame file", rel, heading, name),
-        Next::agent(Act::Writes("the path of a blame file under adrdom/blame without .md".into())),
+        format!(
+            "{}: \"{}\": the blame entry \"{}\" names no blame file",
+            rel, heading, name
+        ),
+        Next::agent(Act::Writes(
+            "the path of a blame file under adrdom/blame without .md".into(),
+        )),
     )
 }
 
 /// A `blame:` entry names the blame file `blame_rel`, which awaits its
 /// approval (`status` is new or changed): the line waits for it.
-pub fn blame_file_awaits_approval(rel: &str, heading: &str, blame_rel: &str, status: FileStatus) -> Said {
+pub fn blame_file_awaits_approval(
+    rel: &str,
+    heading: &str,
+    blame_rel: &str,
+    status: FileStatus,
+) -> Said {
     said(
         &rule::BLAME_LINE_NAMES_APPROVED_FILE,
-        format!("{}: \"{}\": the blame line names {}, which is {}", rel, heading, blame_rel, status.name()),
+        format!(
+            "{}: \"{}\": the blame line names {}, which is {}",
+            rel,
+            heading,
+            blame_rel,
+            status.name()
+        ),
         crate::moves::approval_wait(),
     )
 }
 
 /// A `blame:` entry names a range that is the range of no row of the blame
 /// file `blame_rel`.
-pub fn blame_range_of_no_row(rel: &str, heading: &str, blame_rel: &str, from: usize, to: usize) -> Said {
+pub fn blame_range_of_no_row(
+    rel: &str,
+    heading: &str,
+    blame_rel: &str,
+    from: usize,
+    to: usize,
+) -> Said {
     said(
         &rule::BLAME_LINE_NAMES_ROW_RANGES,
         format!(
@@ -1222,8 +1598,13 @@ pub fn blame_range_of_no_row(rel: &str, heading: &str, blame_rel: &str, from: us
 pub fn plan_neighbours_missing(rel: &str, heading: &str) -> Said {
     said(
         &rule::PLAN_STEP_HAS_ITS_RECORD,
-        format!("{}: \"{}\" has no neighbours on record for its heading", rel, heading),
-        crate::moves::clause(MoveKind::Plan { rel: rel.to_string() }),
+        format!(
+            "{}: \"{}\" has no neighbours on record for its heading",
+            rel, heading
+        ),
+        crate::moves::clause(MoveKind::Plan {
+            rel: rel.to_string(),
+        }),
     )
 }
 
@@ -1231,8 +1612,13 @@ pub fn plan_neighbours_missing(rel: &str, heading: &str) -> Said {
 pub fn plan_rows_missing(rel: &str, heading: &str) -> Said {
     said(
         &rule::PLAN_STEP_HAS_ITS_RECORD,
-        format!("{}: \"{}\" has no reader rows for its heading with its body", rel, heading),
-        crate::moves::clause(MoveKind::Plan { rel: rel.to_string() }),
+        format!(
+            "{}: \"{}\" has no reader rows for its heading with its body",
+            rel, heading
+        ),
+        crate::moves::clause(MoveKind::Plan {
+            rel: rel.to_string(),
+        }),
     )
 }
 
@@ -1241,8 +1627,14 @@ pub fn plan_rows_missing(rel: &str, heading: &str) -> Said {
 pub fn plan_line_missing(rel: &str, heading: &str, kind: &str, name: &str) -> Said {
     said(
         &rule::NEIGHBOUR_IS_ON_A_LINE,
-        format!("{}: the {} \"{}\" is a neighbour of \"{}\" and is on no line", rel, kind, name, heading),
-        Next::agent(Act::Writes(format!("the missing line under \"{}\"", heading))),
+        format!(
+            "{}: the {} \"{}\" is a neighbour of \"{}\" and is on no line",
+            rel, kind, name, heading
+        ),
+        Next::agent(Act::Writes(format!(
+            "the missing line under \"{}\"",
+            heading
+        ))),
     )
 }
 
@@ -1257,7 +1649,14 @@ pub fn plan_question_read(heading: &str, what: &str) -> String {
 /// text it was brought for and the reader's word (a neighbour of a heading
 /// has none), the line the agent put it on, and the reader's sentence of
 /// reason (the same).
-pub fn neighbour(kind: &str, name: &str, step: &str, word: Option<&str>, line: Option<&str>, reason: &str) -> String {
+pub fn neighbour(
+    kind: &str,
+    name: &str,
+    step: &str,
+    word: Option<&str>,
+    line: Option<&str>,
+    reason: &str,
+) -> String {
     let on = match line {
         Some(l) => format!("on the {} line", l),
         None => "no line".to_string(),
@@ -1282,7 +1681,11 @@ pub fn read_pair(word: &str, first: &str, second: &str, reason: &str, next: Next
         "same" => &crate::rule::READ_PAIR_SAME,
         _ => &crate::rule::READ_PAIR_INCONSISTENT,
     };
-    said(rule, format!("{}: \"{}\" and \"{}\": {}", word, first, second, reason), next)
+    said(
+        rule,
+        format!("{}: \"{}\" and \"{}\": {}", word, first, second, reason),
+        next,
+    )
 }
 
 pub fn ask_supersedes_not_current(rel: &str, heading: &str, old: &str, name: Option<&str>) -> Said {
@@ -1293,7 +1696,10 @@ pub fn ask_supersedes_not_current(rel: &str, heading: &str, old: &str, name: Opt
     };
     said(
         &rule::SUPERSEDES_TARGET_IS_CURRENT,
-        format!("{}: \"{}\": supersedes {}, which is not a current decision", rel, heading, target),
+        format!(
+            "{}: \"{}\": supersedes {}, which is not a current decision",
+            rel, heading, target
+        ),
         Next::agent(Act::Rewrites("the supersedes entry".into())),
     )
 }
@@ -1328,7 +1734,10 @@ pub fn supersedes_leaves_out(
         })
         .collect::<Vec<_>>()
         .join(", ");
-    let add = Act::Rewrites(format!("the supersedes line of \"{}\" to add {}", heading, names));
+    let add = Act::Rewrites(format!(
+        "the supersedes line of \"{}\" to add {}",
+        heading, names
+    ));
     said(
         &rule::SUPERSEDES_NAMES_DEPENDENTS,
         format!(
@@ -1347,18 +1756,32 @@ pub fn supersedes_leaves_out(
 pub fn stands_on_what_it_supersedes(rel: &str, heading: &str, target: &str) -> Said {
     said(
         &rule::QUESTION_NOT_ON_WHAT_IT_SUPERSEDES,
-        format!("{}: \"{}\" stands on \"{}\", which it supersedes", rel, heading, target),
+        format!(
+            "{}: \"{}\" stands on \"{}\", which it supersedes",
+            rel, heading, target
+        ),
         Next::agent(Act::Removes("the entry from its depends line".into())),
     )
 }
 
 /// A question of the plan stands on a decision that another question of the
 /// same plan supersedes.
-pub fn stands_on_what_the_plan_supersedes(rel: &str, heading: &str, target: &str, replacer: &str) -> Said {
+pub fn stands_on_what_the_plan_supersedes(
+    rel: &str,
+    heading: &str,
+    target: &str,
+    replacer: &str,
+) -> Said {
     said(
         &rule::NO_QUESTION_ON_WHAT_PLAN_SUPERSEDES,
-        format!("{}: \"{}\" stands on \"{}\", which \"{}\" supersedes", rel, heading, target, replacer),
-        Next::agent(Act::Rewrites(format!("the depends entry to name \"{}\"", replacer))),
+        format!(
+            "{}: \"{}\" stands on \"{}\", which \"{}\" supersedes",
+            rel, heading, target, replacer
+        ),
+        Next::agent(Act::Rewrites(format!(
+            "the depends entry to name \"{}\"",
+            replacer
+        ))),
     )
 }
 
@@ -1403,7 +1826,6 @@ pub fn pairs_no_term_at_write(rel: &str, heading: &str) -> Said {
 // refusal uses. `show` prints them under the file, `ask` when it has
 // nothing to ask.
 
-
 // --- show: the lines of its listing ----------------------------------------
 // Labels and layout, no refusal among them: a note carries no `Next`.
 
@@ -1432,7 +1854,6 @@ pub fn show_question_of(heading: &str, rel: &str) -> String {
     format!("{} ({})", heading, rel)
 }
 
-
 /// Under a question not yet asked: no neighbour of its heading and no word of
 /// the reader on its body is on record.
 /// The move that reads them is the file's own (`moves::of_planning`), not
@@ -1445,7 +1866,10 @@ pub fn show_no_records() -> String {
 /// `decision` rows a question names and how many none names (per "Does check
 /// report a decision row that no question names?", ee27fd4c A).
 pub fn show_decision_rows(with: usize, without: usize) -> String {
-    format!("decision rows: {} with a question, {} with none", with, without)
+    format!(
+        "decision rows: {} with a question, {} with none",
+        with, without
+    )
 }
 
 /// Above the lines of a changed part whose approved text no commit holds:
@@ -1495,20 +1919,29 @@ pub fn invalid_letter(letter: &str, id_arg: &str) -> String {
 pub fn no_such_term(name: &str) -> String {
     refuse(
         format!("no term named \"{}\" in adrdom/terms.md", name),
-        Next::agent(Act::Rewrites("the name to a term that exists in adrdom/terms.md".into())),
+        Next::agent(Act::Rewrites(
+            "the name to a term that exists in adrdom/terms.md".into(),
+        )),
     )
 }
 
 /// `ban --term` with no terms file to look the name up in.
 pub fn no_terms_file_for_term(name: &str) -> String {
     refuse(
-        format!("cannot look up \"{}\": adrdom/terms.md is missing or cannot be read", name),
+        format!(
+            "cannot look up \"{}\": adrdom/terms.md is missing or cannot be read",
+            name
+        ),
         Next::agent(Act::Writes("adrdom/terms.md".into())),
     )
 }
 
 pub fn already_in_use() -> Said {
-    said(&crate::rule::BAN_NOT_ON_USED_WORD, "refusing: already in use", Next::agent(Act::Removes("the word from the repository".into())))
+    said(
+        &crate::rule::BAN_NOT_ON_USED_WORD,
+        "refusing: already in use",
+        Next::agent(Act::Removes("the word from the repository".into())),
+    )
 }
 
 /// One place a word `ban` was given already stands: its file and line,
@@ -1541,7 +1974,10 @@ pub fn after_fix_agent_runs(command: Cmd) -> Next {
 pub fn topic_file_unread(cmd: &str, rel: &str, e: &std::io::Error) -> Next {
     if e.kind() == std::io::ErrorKind::NotFound {
         // The file meant is not known, so the command is not named.
-        Next::agent(Act::Rewrites(format!("the topic file given to adr {} to one under adrdom/decisions that exists", cmd)))
+        Next::agent(Act::Rewrites(format!(
+            "the topic file given to adr {} to one under adrdom/decisions that exists",
+            cmd
+        )))
     } else {
         after_fix_agent_runs(command(&["adr", cmd, rel]))
     }
@@ -1565,11 +2001,17 @@ pub fn settings_not_json_object(path: &str, next: Next) -> String {
 }
 
 pub fn settings_permissions_not_object(path: &str, next: Next) -> String {
-    refuse(format!("{}: permissions is not an object", path), next.on(path))
+    refuse(
+        format!("{}: permissions is not an object", path),
+        next.on(path),
+    )
 }
 
 pub fn settings_deny_not_array(path: &str, next: Next) -> String {
-    refuse(format!("{}: permissions.deny is not an array", path), next.on(path))
+    refuse(
+        format!("{}: permissions.deny is not an array", path),
+        next.on(path),
+    )
 }
 
 // --- check/*.rs --------------------------------------------------------
@@ -1580,12 +2022,21 @@ pub fn check_parse_error(rel: &str, heading: &str, e: &str) -> Said {
         said(
             &rule::ID_ASSIGNED_BY_TOOL,
             found,
-            Next::agent(Act::Removes("the id line".into())).and_owner_runs(command(&["adr", "approve", rel])),
+            Next::agent(Act::Removes("the id line".into()))
+                .and_owner_runs(command(&["adr", "approve", rel])),
         )
     } else if e.starts_with("answer names missing option") {
-        said(&rule::ANSWER_NAMES_AN_OPTION, found, Next::agent(Act::Restores("the answer line".into())))
+        said(
+            &rule::ANSWER_NAMES_AN_OPTION,
+            found,
+            Next::agent(Act::Restores("the answer line".into())),
+        )
     } else {
-        said(&rule::OPTION_IS_ONE_SENTENCE, found, Next::agent(Act::Rewrites("the option".into())))
+        said(
+            &rule::OPTION_IS_ONE_SENTENCE,
+            found,
+            Next::agent(Act::Rewrites("the option".into())),
+        )
     }
 }
 
@@ -1593,7 +2044,8 @@ pub fn duplicate_id(id: &str, prev: &str, rel: &str, heading: &str) -> Said {
     said(
         &crate::rule::ID_NAMES_ONE_QUESTION,
         format!("duplicate id {} in {} and {}:{}", id, prev, rel, heading),
-        Next::agent(Act::Rewrites("the copied section".into())).then(Act::Removes("the id line copied with it".into()))
+        Next::agent(Act::Rewrites("the copied section".into()))
+            .then(Act::Removes("the id line copied with it".into()))
             .and_owner_runs(command(&["adr", "approve", rel])),
     )
 }
@@ -1604,7 +2056,10 @@ pub fn duplicate_id(id: &str, prev: &str, rel: &str, heading: &str) -> Said {
 pub fn removed_from_plan(id: &str, heading: &str, event: &str, rel: &str) -> Said {
     said(
         &crate::rule::ASKED_QUESTION_LEAVES_BY_APPROVAL,
-        format!("{} (\"{}\", {}) was removed from the plan", id, heading, event),
+        format!(
+            "{} (\"{}\", {}) was removed from the plan",
+            id, heading, event
+        ),
         Next::owner_runs(command(&["adr", "approve", rel])),
     )
 }
@@ -1614,7 +2069,10 @@ pub fn removed_from_plan(id: &str, heading: &str, event: &str, rel: &str) -> Sai
 pub fn removed_with_file(id: &str, heading: &str, event: &str, next: Next) -> Said {
     said(
         &crate::rule::FILE_LEAVES_WITH_NO_LIVE_QUESTION,
-        format!("{} (\"{}\", {}) was removed with its file", id, heading, event),
+        format!(
+            "{} (\"{}\", {}) was removed with its file",
+            id, heading, event
+        ),
         next,
     )
 }
@@ -1624,7 +2082,10 @@ pub fn removed_with_file(id: &str, heading: &str, event: &str, next: Next) -> Sa
 pub fn ledger_id_not_found(id: &str, heading: Option<&str>) -> Said {
     said(
         &crate::rule::LEDGER_IDENTIFIER_IN_A_FILE,
-        format!("ledger id {} not found in any topic file", named(id, heading)),
+        format!(
+            "ledger id {} not found in any topic file",
+            named(id, heading)
+        ),
         Next::agent(Act::Restores("the question's section".into())),
     )
 }
@@ -1632,7 +2093,11 @@ pub fn ledger_id_not_found(id: &str, heading: Option<&str>) -> Said {
 pub fn withdrawn_id_present(id: &str, heading: &str, rel: &str) -> Said {
     said(
         &crate::rule::WITHDRAWN_ID_STAYS_OUT,
-        format!("withdrawn id {} still present in {}", named(id, Some(heading)), rel),
+        format!(
+            "withdrawn id {} still present in {}",
+            named(id, Some(heading)),
+            rel
+        ),
         Next::agent(Act::Removes(format!("the section from {}", rel))),
     )
 }
@@ -1719,7 +2184,10 @@ pub fn edited_after_asking(rel: &str, heading: &str, report: &crate::moves::Repo
 pub fn answer_set_changed(rel: &str, dep_heading: &str, heading: &str) -> Said {
     said(
         &crate::rule::ANSWER_SET_FROZEN_AT_ASK,
-        format!("{}: {} answer set on {} changed after ask", rel, dep_heading, heading),
+        format!(
+            "{}: {} answer set on {} changed after ask",
+            rel, dep_heading, heading
+        ),
         Next::agent(Act::Restores("the answer set".into())),
     )
 }
@@ -1735,9 +2203,13 @@ pub fn answer_set_changed(rel: &str, dep_heading: &str, heading: &str) -> Said {
 pub fn answer_conflict(rel: &str, heading: &str, id: &str, a: &str, b: &str) -> Said {
     said(
         &crate::rule::ONE_STANDING_ANSWER,
-        format!("{}: {}: two standing answers, {} and {}", rel, heading, a, b),
-        Next::agent_runs(command(&["adr", "ask", rel]))
-            .and_owner_runs(command(&["adr", "answer", &format!("{}@", id)]).then("<version> <letter>")),
+        format!(
+            "{}: {}: two standing answers, {} and {}",
+            rel, heading, a, b
+        ),
+        Next::agent_runs(command(&["adr", "ask", rel])).and_owner_runs(
+            command(&["adr", "answer", &format!("{}@", id)]).then("<version> <letter>"),
+        ),
     )
 }
 
@@ -1804,7 +2276,11 @@ pub fn section_no_terms_line(rel: &str, heading: &str, answered: bool) -> Said {
     } else {
         ask_again(rel)
     };
-    said(&crate::rule::ASKED_QUESTION_HAS_TERMS_LINE, format!("{}: {}: no terms line", rel, heading), next)
+    said(
+        &crate::rule::ASKED_QUESTION_HAS_TERMS_LINE,
+        format!("{}: {}: no terms line", rel, heading),
+        next,
+    )
 }
 
 /// approve of the terms file found an asked question whose `terms:` line
@@ -1826,7 +2302,11 @@ pub fn section_terms_line_malformed(rel: &str, heading: &str, answered: bool) ->
     } else {
         ask_again(rel)
     };
-    said(&crate::rule::SECTION_TERMS_LINE_PARSES, format!("{}: {}: malformed terms line", rel, heading), next)
+    said(
+        &crate::rule::SECTION_TERMS_LINE_PARSES,
+        format!("{}: {}: malformed terms line", rel, heading),
+        next,
+    )
 }
 
 /// A section's `terms:` line names a uuid that isn't in `adrdom/terms.md`
@@ -1876,7 +2356,10 @@ pub fn term_definition_term_not_found(name: &str, word: &str) -> Said {
 pub fn term_definition_term_retired(name: &str, retired_name: &str) -> Said {
     said(
         &crate::rule::DEFINITION_USES_LIVE_TERMS,
-        format!("adrdom/terms.md: {}: uses the retired term {}", name, retired_name),
+        format!(
+            "adrdom/terms.md: {}: uses the retired term {}",
+            name, retired_name
+        ),
         Next::agent(Act::Rewrites("the definition".into())),
     )
 }
@@ -1955,7 +2438,10 @@ pub fn settings_unparseable(path: &str) -> Said {
     said(
         &crate::rule::AGENT_SETTINGS_FILE_PARSES,
         format!("{} cannot be parsed", path),
-        Next::agent_then_runs(Act::Rewrites("the file".into()), Cmd::fixed("adr install --claude")),
+        Next::agent_then_runs(
+            Act::Rewrites("the file".into()),
+            Cmd::fixed("adr install --claude"),
+        ),
     )
 }
 
@@ -2077,7 +2563,10 @@ pub fn ledger_merge_parents_unreadable() -> String {
 pub fn ledger_answered_without_asked(id: &str, heading: Option<&str>) -> Said {
     said(
         &crate::rule::ANSWER_ROW_HAS_ASKED_ROW,
-        format!("answered row for {} matches no asked row", named(id, heading)),
+        format!(
+            "answered row for {} matches no asked row",
+            named(id, heading)
+        ),
         Next::owner(Act::Restores("the ledger".into())),
     )
 }
@@ -2104,7 +2593,10 @@ pub fn ledger_dropped_without_cause(id: &str, cause: &str) -> Said {
 pub fn ledger_dropped_not_approved(id: &str) -> Said {
     said(
         &crate::rule::LEDGER_DROPPED_HASH_IS_APPROVED,
-        format!("dropped row for {} matches no approved row of that question", id),
+        format!(
+            "dropped row for {} matches no approved row of that question",
+            id
+        ),
         Next::owner(Act::Restores("the ledger".into())),
     )
 }
@@ -2131,7 +2623,10 @@ pub fn ledger_dropped_still_in_file(id: &str, rel: &str) -> Said {
 pub fn ledger_superseded_still_in_file(heading: &str, rel: &str) -> Said {
     said(
         &crate::rule::SUPERSEDED_QUESTION_LEAVES_FILES,
-        format!("\"{}\" is superseded but its section is still in {}", heading, rel),
+        format!(
+            "\"{}\" is superseded but its section is still in {}",
+            heading, rel
+        ),
         Next::agent(Act::Removes("the question from the file".into())),
     )
 }
@@ -2140,7 +2635,10 @@ pub fn ledger_superseded_still_in_file(heading: &str, rel: &str) -> Said {
 pub fn ledger_dropped_text_differs(id: &str) -> Said {
     said(
         &crate::rule::LEDGER_DROPPED_HASH_IS_REMOVED_TEXT,
-        format!("dropped row for {} holds a hash that is not the hash of the text HEAD holds", id),
+        format!(
+            "dropped row for {} holds a hash that is not the hash of the text HEAD holds",
+            id
+        ),
         Next::owner(Act::Restores("the ledger".into())),
     )
 }
@@ -2149,7 +2647,10 @@ pub fn ledger_dropped_text_differs(id: &str) -> Said {
 pub fn ledger_dropped_set_holds_letter(id: &str, letter: &str) -> Said {
     said(
         &crate::rule::LEDGER_DROPPED_LETTER_NOT_IN_SET,
-        format!("dropped row for {} names answer {}, which the set at HEAD holds", id, letter),
+        format!(
+            "dropped row for {} names answer {}, which the set at HEAD holds",
+            id, letter
+        ),
         Next::owner(Act::Restores("the ledger".into())),
     )
 }
@@ -2158,7 +2659,10 @@ pub fn ledger_dropped_set_holds_letter(id: &str, letter: &str) -> Said {
 pub fn ledger_dropped_not_standing_on(id: &str, on: &str) -> Said {
     said(
         &crate::rule::DROPPED_ROW_NAMES_GROUND,
-        format!("dropped row for {} says it stood on {}, which the question at HEAD does not", id, on),
+        format!(
+            "dropped row for {} says it stood on {}, which the question at HEAD does not",
+            id, on
+        ),
         Next::owner(Act::Restores("the ledger".into())),
     )
 }
@@ -2173,7 +2677,10 @@ pub fn ledger_dropped_not_standing_on(id: &str, on: &str) -> Said {
 pub fn ledger_push_drops_rows(local_ref: &str, remote_ref: &str) -> Said {
     said(
         &crate::rule::PUSH_KEEPS_LEDGER_ROWS,
-        format!("push of {} would drop ledger rows the remote's {} holds", local_ref, remote_ref),
+        format!(
+            "push of {} would drop ledger rows the remote's {} holds",
+            local_ref, remote_ref
+        ),
         Next::owner(Act::Restores("the missing rows of the ledger".into())),
     )
 }
@@ -2236,7 +2743,11 @@ pub fn stale_test(id: &str, heading: Option<&str>, locations: &[String], mv: Nex
     };
     said(
         &crate::rule::TEST_TIE_NAMES_CURRENT_DECISION,
-        format!("{} tied to a test and not a current decision{}", named(id, heading), at),
+        format!(
+            "{} tied to a test and not a current decision{}",
+            named(id, heading),
+            at
+        ),
         mv,
     )
 }
@@ -2248,7 +2759,10 @@ pub const BRIEF_ASSET: &str = "assets/brief.md";
 pub fn brief_line_unmarked(line: usize, mv: Next) -> Said {
     said(
         &crate::rule::BRIEF_SENTENCE_HAS_SOURCE,
-        format!("{} is a sentence with no from-comment", location(BRIEF_ASSET, line)),
+        format!(
+            "{} is a sentence with no from-comment",
+            location(BRIEF_ASSET, line)
+        ),
         mv,
     )
 }
@@ -2257,28 +2771,56 @@ pub fn brief_line_unmarked(line: usize, mv: Next) -> Said {
 pub fn brief_comment_malformed(line: usize, what: &str, mv: Next) -> Said {
     said(
         &crate::rule::BRIEF_SENTENCE_HAS_SOURCE,
-        format!("{} holds a from-comment that {}", location(BRIEF_ASSET, line), what),
+        format!(
+            "{} holds a from-comment that {}",
+            location(BRIEF_ASSET, line),
+            what
+        ),
         mv,
     )
 }
 
 /// A from-comment entry that is not an identifier, or names nothing.
 pub fn brief_comment_unknown(line: usize, token: &str, is_id: bool, mv: Next) -> Said {
-    let what = if is_id { "which names no decision or term" } else { "which is no identifier" };
+    let what = if is_id {
+        "which names no decision or term"
+    } else {
+        "which is no identifier"
+    };
     said(
         &crate::rule::BRIEF_SOURCE_NAMES_CURRENT,
-        format!("{} holds \"{}\" in its from-comment, {}", location(BRIEF_ASSET, line), token, what),
+        format!(
+            "{} holds \"{}\" in its from-comment, {}",
+            location(BRIEF_ASSET, line),
+            token,
+            what
+        ),
         mv,
     )
 }
 
 /// A from-comment entry naming a decision that is not current, or a
 /// retired term.
-pub fn brief_comment_stale(line: usize, id: &str, name: Option<&str>, retired_term: bool, mv: Next) -> Said {
-    let what = if retired_term { "a retired term" } else { "not a current decision" };
+pub fn brief_comment_stale(
+    line: usize,
+    id: &str,
+    name: Option<&str>,
+    retired_term: bool,
+    mv: Next,
+) -> Said {
+    let what = if retired_term {
+        "a retired term"
+    } else {
+        "not a current decision"
+    };
     said(
         &crate::rule::BRIEF_SOURCE_NAMES_CURRENT,
-        format!("{} names {} in its from-comment, {}", location(BRIEF_ASSET, line), named(id, name), what),
+        format!(
+            "{} names {} in its from-comment, {}",
+            location(BRIEF_ASSET, line),
+            named(id, name),
+            what
+        ),
         mv,
     )
 }
@@ -2311,8 +2853,15 @@ pub fn duplicate_heading_across_files(heading: &str, rel1: &str, rel2: &str) -> 
 pub fn bad_topic_file_name(rel: &str, new_path: &str) -> Said {
     said(
         &crate::rule::FILE_NAME_IS_LOWERCASE_HYPHENATED,
-        format!("{}: file name is not lowercase words joined by single hyphens", rel),
-        Next::agent(Act::Rewrites(format!("the name of {} to {}", rel, new_path))).and_owner_runs(command(&["adr", "approve", new_path])),
+        format!(
+            "{}: file name is not lowercase words joined by single hyphens",
+            rel
+        ),
+        Next::agent(Act::Rewrites(format!(
+            "the name of {} to {}",
+            rel, new_path
+        )))
+        .and_owner_runs(command(&["adr", "approve", new_path])),
     )
 }
 
@@ -2324,8 +2873,12 @@ pub fn bad_topic_file_name(rel: &str, new_path: &str) -> Said {
 pub fn topic_file_name_mismatch(rel: &str, topic: &str) -> Said {
     said(
         &crate::rule::FILE_NAME_MATCHES_TOPIC,
-        format!("{}: file name does not match its topic \"{}\" in lowercase words joined by hyphens", rel, topic),
-        Next::agent(Act::Rewrites("the topic line".into())).and_owner_runs(command(&["adr", "approve", rel])),
+        format!(
+            "{}: file name does not match its topic \"{}\" in lowercase words joined by hyphens",
+            rel, topic
+        ),
+        Next::agent(Act::Rewrites("the topic line".into()))
+            .and_owner_runs(command(&["adr", "approve", rel])),
     )
 }
 
@@ -2339,8 +2892,12 @@ pub fn topic_file_name_mismatch(rel: &str, topic: &str) -> Said {
 pub fn topic_unnameable(rel: &str, topic: &str) -> Said {
     said(
         &crate::rule::TOPIC_HAS_A_FILE_NAME,
-        format!("{}: topic \"{}\" has no file name: a name holds lowercase words only", rel, topic),
-        Next::agent(Act::Rewrites("the topic line".into())).and_owner_runs(command(&["adr", "approve", rel])),
+        format!(
+            "{}: topic \"{}\" has no file name: a name holds lowercase words only",
+            rel, topic
+        ),
+        Next::agent(Act::Rewrites("the topic line".into()))
+            .and_owner_runs(command(&["adr", "approve", rel])),
     )
 }
 
@@ -2352,7 +2909,11 @@ pub fn topic_unnameable(rel: &str, topic: &str) -> Said {
 /// A fault of the structure of a blame file: a header line missing, the
 /// blank line after the header, a line that is no row.
 pub fn blame_shape_error(rel: &str, e: &str) -> Said {
-    said(&crate::rule::BLAME_FILE_SHAPE, format!("{}: {}", rel, e), Next::agent(Act::Rewrites("the blame file".into())))
+    said(
+        &crate::rule::BLAME_FILE_SHAPE,
+        format!("{}: {}", rel, e),
+        Next::agent(Act::Rewrites("the blame file".into())),
+    )
 }
 
 /// A row whose value is neither `decision` nor `detail`.
@@ -2371,12 +2932,20 @@ pub fn blame_id_error(rel: &str, e: &str, approved: Option<&str>) -> Said {
     // approval gets its approved id line back instead.
     let next = match approved {
         Some(id) => Next::agent(Act::Writes(format!("back the id line \"id: {}\"", id))),
-        None => match e.strip_prefix("line ").and_then(|r| r.split(':').next()).filter(|n| n.parse::<usize>().is_ok()) {
-        Some(n) => Next::agent(Act::Removes(format!("the id line, line {}", n))),
-        None => Next::agent(Act::Removes("the id line".into())),
+        None => match e
+            .strip_prefix("line ")
+            .and_then(|r| r.split(':').next())
+            .filter(|n| n.parse::<usize>().is_ok())
+        {
+            Some(n) => Next::agent(Act::Removes(format!("the id line, line {}", n))),
+            None => Next::agent(Act::Removes("the id line".into())),
         },
     };
-    said(&crate::rule::BLAME_ID_ASSIGNED_BY_TOOL, format!("{}: {}", rel, e), next)
+    said(
+        &crate::rule::BLAME_ID_ASSIGNED_BY_TOOL,
+        format!("{}: {}", rel, e),
+        next,
+    )
 }
 
 /// `rel` was approved and has no id line now: the identifier its approval
@@ -2394,7 +2963,10 @@ pub fn blame_id_line_gone(rel: &str, id: &str) -> Said {
 pub fn blame_id_not_written(rel: &str) -> Said {
     said(
         &crate::rule::BLAME_ID_ASSIGNED_BY_TOOL,
-        format!("{}: its id line holds an identifier the tool did not write", rel),
+        format!(
+            "{}: its id line holds an identifier the tool did not write",
+            rel
+        ),
         Next::agent(Act::Removes("the id line".into())),
     )
 }
@@ -2404,7 +2976,10 @@ pub fn blame_id_not_written(rel: &str) -> Said {
 pub fn blame_id_edited(rel: &str, written: &str) -> Said {
     said(
         &crate::rule::BLAME_ID_ASSIGNED_BY_TOOL,
-        format!("{}: its id line differs from the identifier of its approval", rel),
+        format!(
+            "{}: its id line differs from the identifier of its approval",
+            rel
+        ),
         Next::agent(Act::Writes(format!("back the id line \"id: {}\"", written))),
     )
 }
@@ -2430,15 +3005,28 @@ fn range_text(start: usize, end: usize) -> String {
 pub fn blame_coverage_gap(rel: &str, start: usize, end: usize) -> Said {
     said(
         &crate::rule::BLAME_COVERS_ORIGIN,
-        format!("{}: line(s) {} of the origin are covered by no row", rel, range_text(start, end)),
-        Next::agent(Act::Writes(format!("a row for {} {}", if start == end { "line" } else { "lines" }, range_text(start, end)))),
+        format!(
+            "{}: line(s) {} of the origin are covered by no row",
+            rel,
+            range_text(start, end)
+        ),
+        Next::agent(Act::Writes(format!(
+            "a row for {} {}",
+            if start == end { "line" } else { "lines" },
+            range_text(start, end)
+        ))),
     )
 }
 
 pub fn blame_range_beyond(rel: &str, start: usize, end: usize, n: usize) -> Said {
     said(
         &crate::rule::BLAME_ROW_RANGE_WITHIN_ORIGIN,
-        format!("{}: row {} is beyond the origin's {} line(s)", rel, range_text(start, end), n),
+        format!(
+            "{}: row {} is beyond the origin's {} line(s)",
+            rel,
+            range_text(start, end),
+            n
+        ),
         Next::agent(Act::Rewrites("the row".into())),
     )
 }
@@ -2467,7 +3055,11 @@ pub fn blame_blob_mismatch(rel: &str, origin: &str) -> Said {
     said(
         &crate::rule::BLAME_BLOB_MATCHES_ORIGIN,
         format!("{}: blob no longer matches {}", rel, origin),
-        Next::agent(Act::Rewrites(format!("the rows of {} to the current origin", rel))).and_owner_runs(command(&["adr", "approve", rel])),
+        Next::agent(Act::Rewrites(format!(
+            "the rows of {} to the current origin",
+            rel
+        )))
+        .and_owner_runs(command(&["adr", "approve", rel])),
     )
 }
 
@@ -2478,7 +3070,12 @@ pub fn blame_blob_mismatch(rel: &str, origin: &str) -> Said {
 pub fn blame_origin_missing(rel: &str, origin: &str, status: FileStatus) -> Said {
     said(
         &crate::rule::BLAME_ORIGIN_STAYS_UNTIL_APPROVED,
-        format!("{}: origin {} is missing while the blame file is {}", rel, origin, status.name()),
+        format!(
+            "{}: origin {} is missing while the blame file is {}",
+            rel,
+            origin,
+            status.name()
+        ),
         Next::agent(Act::Restores(origin.to_string())),
     )
 }
@@ -2499,7 +3096,10 @@ pub fn blame_file_unreadable(rel: &str) -> String {
 /// when git could not be asked at all).
 pub fn blame_hash_failed(rel: &str, origin: &str) -> String {
     refuse(
-        format!("{}: git could not hash the current content of {}", rel, origin),
+        format!(
+            "{}: git could not hash the current content of {}",
+            rel, origin
+        ),
         Next::agent_then_runs(Act::Rewrites(origin.to_string()), Cmd::fixed("adr check")),
     )
 }
@@ -2510,7 +3110,10 @@ pub fn blame_hash_failed(rel: &str, origin: &str) -> String {
 /// never routed through the missing-origin branch).
 pub fn blame_origin_unreadable(rel: &str, origin: &str) -> String {
     refuse(
-        format!("{}: origin {} exists but cannot be read as text (e.g. its encoding)", rel, origin),
+        format!(
+            "{}: origin {} exists but cannot be read as text (e.g. its encoding)",
+            rel, origin
+        ),
         Next::agent(Act::Rewrites(origin.to_string())),
     )
 }
@@ -2527,7 +3130,11 @@ pub fn bind_failed(port: u16, e: impl Display) -> String {
 pub fn missing_answer_selection(id: &str, version: &str) -> String {
     refuse(
         "missing answer selection".to_string(),
-        crate::moves::clause(MoveKind::Answer { id: id.to_string(), version: version.to_string(), heading: String::new() }),
+        crate::moves::clause(MoveKind::Answer {
+            id: id.to_string(),
+            version: version.to_string(),
+            heading: String::new(),
+        }),
     )
 }
 
@@ -2540,7 +3147,10 @@ pub fn missing_answer_selection(id: &str, version: &str) -> String {
 pub fn untested(rel: &str, heading: &str, mv: Next) -> Said {
     said(
         &crate::rule::DECISION_HAS_TEST_TIE,
-        format!("{}: {} is answered and no tracked file holds its tie", rel, heading),
+        format!(
+            "{}: {} is answered and no tracked file holds its tie",
+            rel, heading
+        ),
         mv,
     )
 }
@@ -2554,7 +3164,10 @@ pub fn topic_file_unreadable(path: &str, e: impl Display) -> String {
 /// file, or adrdom/terms.md.
 pub fn file_unreadable(path: &str, e: impl Display) -> String {
     refuse(
-        format!("{}: cannot be read as text (e.g. its encoding): {}", path, e),
+        format!(
+            "{}: cannot be read as text (e.g. its encoding): {}",
+            path, e
+        ),
         Next::agent(Act::Rewrites(path.to_string())),
     )
 }
@@ -2573,7 +3186,11 @@ fn approve_one_of() -> Next {
 }
 
 fn quoted_list(names: &[String]) -> String {
-    names.iter().map(|n| format!("\"{}\"", n)).collect::<Vec<_>>().join(", ")
+    names
+        .iter()
+        .map(|n| format!("\"{}\"", n))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// One entry of `adrdom/terms.md` waits for the owner's approve (per "Does
@@ -2595,7 +3212,10 @@ pub fn terms_entry_waits(rel: Option<&str>, name: &str, status: crate::status::T
 pub fn approve_terms_names_no_entry(waiting: &[String]) -> Said {
     said(
         &crate::rule::APPROVE_NAMES_ONE_TERM_ENTRY,
-        format!("adrdom/terms.md: {} wait, and approve names none of them", quoted_list(waiting)),
+        format!(
+            "adrdom/terms.md: {} wait, and approve names none of them",
+            quoted_list(waiting)
+        ),
         approve_one_of(),
     )
 }
@@ -2605,12 +3225,19 @@ pub fn approve_terms_names_no_entry(waiting: &[String]) -> Said {
 pub fn approve_terms_entry_not_waiting(name: &str, waiting: &[String]) -> Said {
     let (found, next) = if waiting.is_empty() {
         (
-            format!("adrdom/terms.md: \"{}\" does not wait, and no entry does", name),
+            format!(
+                "adrdom/terms.md: \"{}\" does not wait, and no entry does",
+                name
+            ),
             Next::owner_runs(Cmd::fixed("adr approve adrdom/terms.md")),
         )
     } else {
         (
-            format!("adrdom/terms.md: \"{}\" does not wait; {} wait", name, quoted_list(waiting)),
+            format!(
+                "adrdom/terms.md: \"{}\" does not wait; {} wait",
+                name,
+                quoted_list(waiting)
+            ),
             approve_one_of(),
         )
     };
@@ -2621,7 +3248,10 @@ pub fn approve_terms_entry_not_waiting(name: &str, waiting: &[String]) -> Said {
 pub fn approve_entry_on_other_file(rel: &str) -> Said {
     said(
         &crate::rule::APPROVE_NAMES_ONE_TERM_ENTRY,
-        format!("{}: approve takes an entry name for adrdom/terms.md only", rel),
+        format!(
+            "{}: approve takes an entry name for adrdom/terms.md only",
+            rel
+        ),
         Next::owner_runs(command(&["adr", "approve", rel])),
     )
 }
@@ -2643,14 +3273,6 @@ pub fn message_file_unreadable(path: &str, e: impl Display) -> String {
         Next::agent(Act::Rewrites(format!("the commit message file {}", path))),
     )
 }
-
-
-
-
-
-
-
-
 
 // --- the embedding model and the install of adrdom/.gitignore -----------------
 
@@ -2689,13 +3311,25 @@ fn install_planning() -> Next {
 /// The embedding model is not in the user cache directory.
 #[cfg(feature = "model")]
 pub fn model_not_installed(path: &str) -> String {
-    refuse(format!("model: the embedding model is not installed; looked in {}", path), install_planning())
+    refuse(
+        format!(
+            "model: the embedding model is not installed; looked in {}",
+            path
+        ),
+        install_planning(),
+    )
 }
 
 /// The onnxruntime library is not in the user cache directory.
 #[cfg(feature = "model")]
 pub fn onnxruntime_not_installed(path: &str) -> String {
-    refuse(format!("model: the onnxruntime library is not installed; looked for {}", path), install_planning())
+    refuse(
+        format!(
+            "model: the onnxruntime library is not installed; looked for {}",
+            path
+        ),
+        install_planning(),
+    )
 }
 
 /// No user cache directory can be found on this machine.
@@ -2713,7 +3347,10 @@ pub fn cache_dir_missing() -> String {
 pub fn model_load_failed(dir: &str, e: impl Display) -> String {
     refuse(
         format!("model: cannot load the embedding model from {}: {}", dir, e),
-        Next::agent_then_runs(Act::Removes(dir.to_string()), Cmd::fixed("adr install --planning")),
+        Next::agent_then_runs(
+            Act::Removes(dir.to_string()),
+            Cmd::fixed("adr install --planning"),
+        ),
     )
 }
 
@@ -2721,14 +3358,23 @@ pub fn model_load_failed(dir: &str, e: impl Display) -> String {
 /// load; the install step checks it and fetches it again.
 #[cfg(feature = "model")]
 pub fn onnxruntime_load_failed(path: &str, e: impl Display) -> String {
-    refuse(format!("model: cannot load the onnxruntime library {}: {}", path, e), install_planning())
+    refuse(
+        format!("model: cannot load the onnxruntime library {}: {}", path, e),
+        install_planning(),
+    )
 }
 
 /// The install step found the onnxruntime library in the user cache
 /// directory unloadable and removed it.
 #[cfg(feature = "model")]
 pub fn onnxruntime_removed(path: &str, e: impl Display) -> String {
-    refuse(format!("model: removed the onnxruntime library {}, which does not load: {}", path, e), install_planning())
+    refuse(
+        format!(
+            "model: removed the onnxruntime library {}, which does not load: {}",
+            path, e
+        ),
+        install_planning(),
+    )
 }
 
 /// The onnxruntime library the install step just fetched, matching its pinned
@@ -2736,7 +3382,10 @@ pub fn onnxruntime_removed(path: &str, e: impl Display) -> String {
 #[cfg(feature = "model")]
 pub fn onnxruntime_unusable(path: &str, e: impl Display) -> String {
     refuse(
-        format!("model: the fetched onnxruntime library {} does not load: {}", path, e),
+        format!(
+            "model: the fetched onnxruntime library {} does not load: {}",
+            path, e
+        ),
         Next::not_yet("an onnxruntime build this machine can load"),
     )
 }
@@ -2753,7 +3402,10 @@ pub fn onnxruntime_no_build(platform: &str) -> String {
 /// Fetching the onnxruntime library or the model failed.
 #[cfg(feature = "model")]
 pub fn model_fetch_failed(what: &str, e: impl Display) -> String {
-    refuse(format!("model: cannot fetch {}: {}", what, e), Next::agent(Act::RunsAgain))
+    refuse(
+        format!("model: cannot fetch {}: {}", what, e),
+        Next::agent(Act::RunsAgain),
+    )
 }
 
 pub fn embed_failed(e: impl Display) -> String {
@@ -2777,7 +3429,9 @@ pub fn reader_missing(program: &str) -> String {
 pub fn reader_no_agent() -> String {
     refuse(
         "reader: no agent is installed for this repository".to_string(),
-        Next::agent(Act::Installs("an agent's files with adr install --claude or adr install --codex".into())),
+        Next::agent(Act::Installs(
+            "an agent's files with adr install --claude or adr install --codex".into(),
+        )),
     )
 }
 
@@ -2787,17 +3441,29 @@ pub fn reader_no_agent() -> String {
 /// several lines never runs into the move.
 pub fn reader_failed(neighbour: &str, e: impl Display) -> String {
     refuse(
-        format!("reader: no word for the neighbour {}: {}", neighbour, crate::reader::flatten(&e.to_string())),
+        format!(
+            "reader: no word for the neighbour {}: {}",
+            neighbour,
+            crate::reader::flatten(&e.to_string())
+        ),
         Next::agent(Act::RunsAgain),
     )
 }
 
 pub fn reader_write_failed(e: impl Display) -> String {
-    write_failed(crate::repo::READER_PATH, e, fix_then_same_command("the reader file"))
+    write_failed(
+        crate::repo::READER_PATH,
+        e,
+        fix_then_same_command("the reader file"),
+    )
 }
 
 pub fn neighbours_write_failed(e: impl Display) -> String {
-    write_failed(crate::repo::NEIGHBOURS_PATH, e, fix_then_same_command("the neighbours file"))
+    write_failed(
+        crate::repo::NEIGHBOURS_PATH,
+        e,
+        fix_then_same_command("the neighbours file"),
+    )
 }
 
 pub fn malformed_reader_row(lineno: usize, raw: &str) -> Said {
@@ -2829,7 +3495,10 @@ pub fn reader_merge_row_edited() -> Said {
 pub fn reader_push_row_edited(local_ref: &str, remote_ref: &str) -> Said {
     said(
         &crate::rule::PUSH_LEAVES_READER_ROWS_UNEDITED,
-        format!("push of {} would change a reader row the remote's {} holds", local_ref, remote_ref),
+        format!(
+            "push of {} would change a reader row the remote's {} holds",
+            local_ref, remote_ref
+        ),
         Next::owner(Act::Restores("the row".into())),
     )
 }
@@ -2865,13 +3534,24 @@ mod tests {
         ];
         for act in acts {
             let text = act.render();
-            assert_eq!(ACTS.iter().filter(|a| text.starts_with(**a)).count(), 1, "{}", text);
+            assert_eq!(
+                ACTS.iter().filter(|a| text.starts_with(**a)).count(),
+                1,
+                "{}",
+                text
+            );
         }
         let mv = Next::agent(Act::Rewrites("the line".into()))
             .then(Act::Runs(Cmd::fixed("adr ask x.md")))
             .and_owner_runs(Cmd::fixed("adr approve x.md"));
-        assert_eq!(mv.render(), "agent rewrites the line, then runs: adr ask x.md, owner runs: adr approve x.md");
-        assert_eq!(Next::not_yet("after it is approved").render(), "not yet: after it is approved");
+        assert_eq!(
+            mv.render(),
+            "agent rewrites the line, then runs: adr ask x.md, owner runs: adr approve x.md"
+        );
+        assert_eq!(
+            Next::not_yet("after it is approved").render(),
+            "not yet: after it is approved"
+        );
     }
 
     /// Every refusal/failure function in this module, called once with
@@ -2894,7 +3574,9 @@ mod tests {
         let approve_x = crate::moves::Report {
             stops: Vec::new(),
             findings: Vec::new(),
-            moves: vec![crate::moves::Move::new(crate::moves::MoveKind::Approve { path: "x.md".to_string() })],
+            moves: vec![crate::moves::Move::new(crate::moves::MoveKind::Approve {
+                path: "x.md".to_string(),
+            })],
         };
         let outputs: Vec<String> = vec![
             write_failed("x", e, Next::agent(Act::RunsAgain)),
@@ -2925,15 +3607,28 @@ mod tests {
             too_long("x.md", 3, "heading", crate::tells::LengthKind::Option, 21).text(),
             term_removed_but_carried("uuid-1", Some("word"), "term \"x\"", None).text(),
             term_retired_but_carried("x", "term \"y\"", RetiredUser::Definition).text(),
-            term_retired_but_carried("x", "id-1: \"heading\"", RetiredUser::Decision("id-1", "heading")).text(),
+            term_retired_but_carried(
+                "x",
+                "id-1: \"heading\"",
+                RetiredUser::Decision("id-1", "heading"),
+            )
+            .text(),
             term_retired_but_carried("x", "x.md: \"heading\"", RetiredUser::Asked("x.md")).text(),
-            term_retired_but_carried("x", "x.md: \"heading\"", RetiredUser::PlanHeading("x.md")).text(),
+            term_retired_but_carried("x", "x.md: \"heading\"", RetiredUser::PlanHeading("x.md"))
+                .text(),
             word_moved_off_term("word", "term", "id-1: \"heading\"", Some("id-1")).text(),
             definition_too_long("x", 3).text(),
             terms_banned_word(3, "").text(),
             shape_error("x.md", "missing h1").text(),
             section_shape_error("x.md", "heading", "stray line 4").text(),
-            tell("x.md", 3, "context", "claude", crate::tells::TellKind::Provenance).text(),
+            tell(
+                "x.md",
+                3,
+                "context",
+                "claude",
+                crate::tells::TellKind::Provenance,
+            )
+            .text(),
             no_depends_line("x.md", "heading").text(),
             no_depends_line_bare("heading").text(),
             section_no_terms_line("x.md", "heading", false).text(),
@@ -2947,7 +3642,8 @@ mod tests {
             term_definition_term_not_found("term", "word").text(),
             term_definition_term_retired("term", "retired-term").text(),
             term_definition_terms_line_malformed("term").text(),
-            frozen_depends_edited("x.md", "heading", crate::status::QuestionStatus::Answered).text(),
+            frozen_depends_edited("x.md", "heading", crate::status::QuestionStatus::Answered)
+                .text(),
             dep_not_current_decision("x.md", "heading", "id-1", Some("name")).text(),
             dep_retired_term_id("x.md", "heading", "id-1", Some("name")).text(),
             dep_no_term("x.md", "heading", "widget").text(),
@@ -2964,15 +3660,26 @@ mod tests {
                             heading: "target".to_string(),
                         }),
                     },
-                    crate::moves::Waits::RefusedTarget { heading: "refused".to_string() },
-                    crate::moves::Waits::RefusedTier { heading: "other".to_string() },
+                    crate::moves::Waits::RefusedTarget {
+                        heading: "refused".to_string(),
+                    },
+                    crate::moves::Waits::RefusedTier {
+                        heading: "other".to_string(),
+                    },
                 ],
-            ).0.text(),
+            )
+            .0
+            .text(),
             crate::moves::answer_waits(
                 "heading",
                 "x.md",
-                vec![crate::moves::Waits::Asking { heading: "target".to_string(), report: approve_x.clone() }],
-            ).0.text(),
+                vec![crate::moves::Waits::Asking {
+                    heading: "target".to_string(),
+                    report: approve_x.clone(),
+                }],
+            )
+            .0
+            .text(),
             tier_cap_exceeded("x.md", &["heading".to_string()], 0, 4).text(),
             tier_cap_exceeded("x.md", &["heading".to_string()], 3, 4).text(),
             derive_error("x.md", &DeriveError::SelfDep("heading".to_string())).text(),
@@ -3081,7 +3788,13 @@ mod tests {
             reader_missing("codex"),
             reader_no_agent(),
             unrelated_names_nothing("x.md", "Does X?", "Y").text(),
-            unrelated_ambiguous("x.md", "Does X?", "Y", &["a.md".to_string(), "b.md".to_string()]).text(),
+            unrelated_ambiguous(
+                "x.md",
+                "Does X?",
+                "Y",
+                &["a.md".to_string(), "b.md".to_string()],
+            )
+            .text(),
             blame_entry_without_range("x.md", "Does X?", "notes").text(),
             blame_names_no_file("x.md", "Does X?", "notes").text(),
             blame_range_of_no_row("x.md", "Does X?", "adrdom/blame/notes.md", 3, 4).text(),
@@ -3105,21 +3818,58 @@ mod tests {
             ledger_since_drops_rows("abc123").text(),
             ledger_since_unreadable("abc123"),
             ledger_same_time_competition("2024-01-01T00:00:00Z", "id id-1").text(),
-            stale_test("id-1", None, &["x.rs:3".to_string()], Next::agent(Act::Removes("the tie comment from the test".into()))).text(),
+            stale_test(
+                "id-1",
+                None,
+                &["x.rs:3".to_string()],
+                Next::agent(Act::Removes("the tie comment from the test".into())),
+            )
+            .text(),
             brief_line_unmarked(3, Next::agent(Act::Writes("the from-comment".into()))).text(),
-            brief_comment_malformed(3, "is empty", Next::agent(Act::Rewrites("the from-comment".into()))).text(),
-            brief_comment_unknown(3, "x", false, Next::agent(Act::Rewrites("the from-comment".into()))).text(),
-            brief_comment_stale(3, "id-1", None, false, Next::agent(Act::Removes("the from-comment".into()))).text(),
+            brief_comment_malformed(
+                3,
+                "is empty",
+                Next::agent(Act::Rewrites("the from-comment".into())),
+            )
+            .text(),
+            brief_comment_unknown(
+                3,
+                "x",
+                false,
+                Next::agent(Act::Rewrites("the from-comment".into())),
+            )
+            .text(),
+            brief_comment_stale(
+                3,
+                "id-1",
+                None,
+                false,
+                Next::agent(Act::Removes("the from-comment".into())),
+            )
+            .text(),
             duplicate_heading_in_file("heading", "x.md").text(),
             duplicate_heading_across_files("heading", "x.md", "y.md").text(),
-            bad_topic_file_name("adrdom/decisions/Bad_Name.md", "adrdom/decisions/bad-name.md").text(),
+            bad_topic_file_name(
+                "adrdom/decisions/Bad_Name.md",
+                "adrdom/decisions/bad-name.md",
+            )
+            .text(),
             topic_file_name_mismatch("adrdom/decisions/x.md", "Y").text(),
             topic_unnameable("adrdom/decisions/rule.md", "Rule 2").text(),
             bind_failed(7357, e),
             missing_answer_selection("id-1", "abcd1234"),
             blame_shape_error("adrdom/blame/x.md", "line 1: missing \"origin: <path>\"").text(),
-            blame_row_value_error("adrdom/blame/x.md", "line 4: row value \"term: pass\" is neither decision nor detail").text(),
-            blame_id_error("adrdom/blame/x.md", "line 3: id line holds \"x\", which is no identifier the tool assigns", None).text(),
+            blame_row_value_error(
+                "adrdom/blame/x.md",
+                "line 4: row value \"term: pass\" is neither decision nor detail",
+            )
+            .text(),
+            blame_id_error(
+                "adrdom/blame/x.md",
+                "line 3: id line holds \"x\", which is no identifier the tool assigns",
+                None,
+            )
+            .text(),
             blame_id_line_gone("adrdom/blame/x.md", "11111111-1111-4111-8111-111111111111").text(),
             blame_id_not_written("adrdom/blame/x.md").text(),
             blame_id_edited("adrdom/blame/x.md", "11111111-1111-4111-8111-111111111111").text(),
@@ -3149,20 +3899,50 @@ mod tests {
             approve_not_a_file_approve_takes("README.md"),
             dep_names_decision_of_other_file("x.md", "H?", "id-1", None).text(),
             dep_names_heading_of_other_file("x.md", "H?", "E?").text(),
-            depends_line_over_limit("x.md", "H?", &["A?".to_string(), "B?".to_string(), "C?".to_string()], 2).text(),
+            depends_line_over_limit(
+                "x.md",
+                "H?",
+                &["A?".to_string(), "B?".to_string(), "C?".to_string()],
+                2,
+            )
+            .text(),
             id_not_found_some_unread("id-1", &["y.md".to_string()]),
             drop_without_id("H?", "x.md").text(),
             drop_of_closed("H?", true, "x.md").text(),
             drop_of_closed("H?", false, "x.md").text(),
             drop_not_approved("H?", "x.md").text(),
             set_on_term("x.md", "H?").text(),
-            supersedes_leaves_out("x.md", "H?", &[("y.md".to_string(), "G?".to_string(), "id-2".to_string())], SupersedesMoment::Approve).text(),
-            supersedes_leaves_out("x.md", "H?", &[("x.md".to_string(), "G?".to_string(), "id-2".to_string())], SupersedesMoment::Asked).text(),
+            supersedes_leaves_out(
+                "x.md",
+                "H?",
+                &[("y.md".to_string(), "G?".to_string(), "id-2".to_string())],
+                SupersedesMoment::Approve,
+            )
+            .text(),
+            supersedes_leaves_out(
+                "x.md",
+                "H?",
+                &[("x.md".to_string(), "G?".to_string(), "id-2".to_string())],
+                SupersedesMoment::Asked,
+            )
+            .text(),
             stands_on_what_it_supersedes("x.md", "H?", "G?").text(),
             stands_on_what_the_plan_supersedes("x.md", "H?", "G?", "F?").text(),
-            ask_supersedes_ambiguous("x.md", "H?", "G?", &["y.md".to_string(), "z.md".to_string()]).text(),
+            ask_supersedes_ambiguous(
+                "x.md",
+                "H?",
+                "G?",
+                &["y.md".to_string(), "z.md".to_string()],
+            )
+            .text(),
             no_terms_file_for_term("widget"),
-            removed_with_file("id-1", "H?", "asked", Next::owner_runs(command(&["adr", "approve", "x.md"]))).text(),
+            removed_with_file(
+                "id-1",
+                "H?",
+                "asked",
+                Next::owner_runs(command(&["adr", "approve", "x.md"])),
+            )
+            .text(),
             refused_text_changed("x.md", "H?").text(),
             asked_terms_line_unreadable("x.md", "H?").text(),
             install_file_not_staged(".githooks/pre-commit").text(),
@@ -3202,8 +3982,15 @@ mod tests {
                 "not a command: {}",
                 o
             );
-            for prose in [" again", " if ", " to ", " and ", " with ", " first", ";", ","] {
-                assert!(!command.contains(prose), "{:?} after the command: {}", prose, o);
+            for prose in [
+                " again", " if ", " to ", " and ", " with ", " first", ";", ",",
+            ] {
+                assert!(
+                    !command.contains(prose),
+                    "{:?} after the command: {}",
+                    prose,
+                    o
+                );
             }
         }
     }
@@ -3213,7 +4000,10 @@ mod tests {
     // The words of the count `show --questions` prints.
     #[test]
     fn the_count_of_decision_rows_reads_word_for_word() {
-        assert_eq!(show_decision_rows(1, 2), "decision rows: 1 with a question, 2 with none");
+        assert_eq!(
+            show_decision_rows(1, 2),
+            "decision rows: 1 with a question, 2 with none"
+        );
     }
 
     // adr: 69708a07-469c-406b-9e25-63da1605b432
@@ -3270,7 +4060,11 @@ mod tests {
     fn section_term_not_found_answered_never_suggests_restoring_as_retired() {
         let out = section_term_not_found("x.md", "heading", "word", true).text();
         assert!(!out.contains("retired"), "{}", out);
-        assert!(out.contains("agent restores the term in adrdom/terms.md"), "{}", out);
+        assert!(
+            out.contains("agent restores the term in adrdom/terms.md"),
+            "{}",
+            out
+        );
     }
 
     // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
@@ -3285,14 +4079,45 @@ mod tests {
         let e = "boom";
         for (line, command) in [
             (owner_refusal("unban", &[]), "owner runs: adr unban"),
-            (not_a_repo("unban", &[], Actor::Owner), "owner changes into a git repository, then runs: adr unban"),
-            (stdin_read_failed(after_fix_owner_runs(Cmd::fixed("adr unban"))), "owner runs: adr unban"),
-            (stdin_read_failed(after_fix_agent_runs(Cmd::fixed("adr ban"))), "then runs: adr ban"),
-            (update_failed("banned list", e, after_fix_agent_runs(Cmd::fixed("adr ban"))), "then runs: adr ban"),
-            (update_failed("ledger", e, after_fix_agent_runs(Cmd::fixed("adr ban"))), "then runs: adr ban"),
-            (update_failed("banned list", e, after_fix_agent_runs(Cmd::fixed("adr ban --rebuild"))), "then runs: adr ban --rebuild"),
+            (
+                not_a_repo("unban", &[], Actor::Owner),
+                "owner changes into a git repository, then runs: adr unban",
+            ),
+            (
+                stdin_read_failed(after_fix_owner_runs(Cmd::fixed("adr unban"))),
+                "owner runs: adr unban",
+            ),
+            (
+                stdin_read_failed(after_fix_agent_runs(Cmd::fixed("adr ban"))),
+                "then runs: adr ban",
+            ),
+            (
+                update_failed(
+                    "banned list",
+                    e,
+                    after_fix_agent_runs(Cmd::fixed("adr ban")),
+                ),
+                "then runs: adr ban",
+            ),
+            (
+                update_failed("ledger", e, after_fix_agent_runs(Cmd::fixed("adr ban"))),
+                "then runs: adr ban",
+            ),
+            (
+                update_failed(
+                    "banned list",
+                    e,
+                    after_fix_agent_runs(Cmd::fixed("adr ban --rebuild")),
+                ),
+                "then runs: adr ban --rebuild",
+            ),
         ] {
-            assert!(line.ends_with(command), "{} should end with {}", line, command);
+            assert!(
+                line.ends_with(command),
+                "{} should end with {}",
+                line,
+                command
+            );
         }
     }
 
@@ -3311,30 +4136,66 @@ mod tests {
     // current decision names the question by identifier and heading.
     #[test]
     fn moves_name_one_act_each() {
-        let asked = term_retired_but_carried("x", "x.md: \"H?\"", RetiredUser::Asked("x.md")).text();
-        assert!(asked.ends_with("agent rewrites the question, then runs: adr ask x.md"), "{}", asked);
+        let asked =
+            term_retired_but_carried("x", "x.md: \"H?\"", RetiredUser::Asked("x.md")).text();
+        assert!(
+            asked.ends_with("agent rewrites the question, then runs: adr ask x.md"),
+            "{}",
+            asked
+        );
         assert!(!asked.contains("strikes it"), "{}", asked);
-        let heading = term_retired_but_carried("x", "x.md: \"H?\"", RetiredUser::PlanHeading("x.md")).text();
-        assert!(heading.ends_with("agent rewrites the heading, owner runs: adr approve x.md"), "{}", heading);
+        let heading =
+            term_retired_but_carried("x", "x.md: \"H?\"", RetiredUser::PlanHeading("x.md")).text();
+        assert!(
+            heading.ends_with("agent rewrites the heading, owner runs: adr approve x.md"),
+            "{}",
+            heading
+        );
         assert!(!heading.contains("strikes it"), "{}", heading);
-        let decision = term_retired_but_carried("x", "id-1", RetiredUser::Decision("id-1", "H?")).text();
-        assert!(decision.contains("then writes a question that supersedes id-1 (\"H?\")"), "{}", decision);
+        let decision =
+            term_retired_but_carried("x", "id-1", RetiredUser::Decision("id-1", "H?")).text();
+        assert!(
+            decision.contains("then writes a question that supersedes id-1 (\"H?\")"),
+            "{}",
+            decision
+        );
         let removed = term_removed_but_carried("u", Some("w"), "id-1", Some(("id-1", "H?"))).text();
-        assert!(removed.contains("then writes a question that supersedes id-1 (\"H?\")"), "{}", removed);
+        assert!(
+            removed.contains("then writes a question that supersedes id-1 (\"H?\")"),
+            "{}",
+            removed
+        );
         let moved = word_moved_off_term("w", "t", "id-1", Some("id-1")).text();
-        assert!(moved.ends_with("agent rewrites the entry of \"t\" so \"w\" names it"), "{}", moved);
+        assert!(
+            moved.ends_with("agent rewrites the entry of \"t\" so \"w\" names it"),
+            "{}",
+            moved
+        );
         assert!(!moved.contains("or writes a question"), "{}", moved);
-        assert!(section_no_terms_line("x.md", "H?", true).text().contains("agent restores the terms line from git"));
+        assert!(section_no_terms_line("x.md", "H?", true)
+            .text()
+            .contains("agent restores the terms line from git"));
         let no_term = dep_no_term("x.md", "H?", "w").text();
-        assert!(no_term.ends_with("agent writes the term in adrdom/terms.md"), "{}", no_term);
+        assert!(
+            no_term.ends_with("agent writes the term in adrdom/terms.md"),
+            "{}",
+            no_term
+        );
         assert!(!no_term.contains("or names another"), "{}", no_term);
         let not_current = dep_not_current_decision("x.md", "H?", "id-1", None).text();
-        assert!(not_current.ends_with("agent rewrites the entry to name a term or a question of this file"), "{}", not_current);
+        assert!(
+            not_current
+                .ends_with("agent rewrites the entry to name a term or a question of this file"),
+            "{}",
+            not_current
+        );
     }
 
     #[test]
     fn dropped_malformed_row_prints_its_detail_and_a_removal_names_its_move() {
-        assert!(ledger_dropped_malformed("id-1", "x y z").text().contains("\"x y z\""));
+        assert!(ledger_dropped_malformed("id-1", "x y z")
+            .text()
+            .contains("\"x y z\""));
         let hold = crate::moves::RemovalHold {
             id: "id-1".into(),
             heading: "H?".into(),
@@ -3351,18 +4212,45 @@ mod tests {
     fn a_duplicate_term_identifier_is_judged_by_its_own_rule() {
         let said = terms_shape_error("line 9: duplicate id \"u\" (also used at line 3)");
         assert_eq!(said.rule.name, "term_identifier_is_unique");
-        assert_eq!(terms_shape_error("line 4: duplicate field \"id\"").rule.name, "term_entry_fields");
+        assert_eq!(
+            terms_shape_error("line 4: duplicate field \"id\"")
+                .rule
+                .name,
+            "term_entry_fields"
+        );
     }
 
     #[test]
     fn a_tell_and_a_length_hit_pick_their_rule_from_their_kind() {
         use crate::tells::{LengthKind, TellKind};
-        assert_eq!(tell("x.md", 1, "H?", "said", TellKind::Provenance).rule.name, rule::TELL_NAMES_SPEAKER.name);
-        assert_eq!(tell("x.md", 1, "H?", "and", TellKind::Join).rule.name, rule::TELL_JOINS_TWO_QUESTIONS.name);
-        assert_eq!(too_long("x.md", 1, "H?", LengthKind::OneWordOption, 3).rule.name, rule::DOES_OPTION_IS_ONE_WORD.name);
-        assert_eq!(too_long("x.md", 1, "H?", LengthKind::Option, 30).rule.name, rule::OPTION_WORD_LIMIT.name);
-        assert_eq!(too_long("x.md", 1, "H?", LengthKind::Why, 30).rule.name, rule::WHY_WORD_LIMIT.name);
-        assert_eq!(too_long("x.md", 1, "H?", LengthKind::Costs, 30).rule.name, rule::COSTS_WORD_LIMIT.name);
+        assert_eq!(
+            tell("x.md", 1, "H?", "said", TellKind::Provenance)
+                .rule
+                .name,
+            rule::TELL_NAMES_SPEAKER.name
+        );
+        assert_eq!(
+            tell("x.md", 1, "H?", "and", TellKind::Join).rule.name,
+            rule::TELL_JOINS_TWO_QUESTIONS.name
+        );
+        assert_eq!(
+            too_long("x.md", 1, "H?", LengthKind::OneWordOption, 3)
+                .rule
+                .name,
+            rule::DOES_OPTION_IS_ONE_WORD.name
+        );
+        assert_eq!(
+            too_long("x.md", 1, "H?", LengthKind::Option, 30).rule.name,
+            rule::OPTION_WORD_LIMIT.name
+        );
+        assert_eq!(
+            too_long("x.md", 1, "H?", LengthKind::Why, 30).rule.name,
+            rule::WHY_WORD_LIMIT.name
+        );
+        assert_eq!(
+            too_long("x.md", 1, "H?", LengthKind::Costs, 30).rule.name,
+            rule::COSTS_WORD_LIMIT.name
+        );
     }
 }
 
@@ -3393,17 +4281,27 @@ pub fn removal_holds_open(rel: &str, hold: &crate::moves::RemovalHold) -> Said {
     )
 }
 
-
-
 /// A commit in a planner's session that stages paths outside adrdom: the
 /// first `named` paths, then "and N more".
 pub fn planner_commit_outside(paths: &[String], named: usize) -> Said {
-    let shown = paths.iter().take(named).cloned().collect::<Vec<_>>().join(", ");
+    let shown = paths
+        .iter()
+        .take(named)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ");
     let rest = paths.len().saturating_sub(named);
-    let more = if rest > 0 { format!(" and {} more", rest) } else { String::new() };
+    let more = if rest > 0 {
+        format!(" and {} more", rest)
+    } else {
+        String::new()
+    };
     said(
         &crate::rule::PLANNER_COMMIT_STAYS_IN_ADRDOM,
-        format!("this planner's commit stages {}{} outside adrdom", shown, more),
+        format!(
+            "this planner's commit stages {}{} outside adrdom",
+            shown, more
+        ),
         Next::builder(Act::Runs(command(&["git", "commit", "--", ":!adrdom"]))),
     )
 }
@@ -3412,7 +4310,10 @@ pub fn planner_commit_outside(paths: &[String], named: usize) -> Said {
 pub fn planner_roles_unreadable(path: &str, err: &std::io::Error) -> Said {
     said(
         &crate::rule::PLANNER_COMMIT_STAYS_IN_ADRDOM,
-        format!("{} cannot be read, so the role of this session is unknown: {}", path, err),
+        format!(
+            "{} cannot be read, so the role of this session is unknown: {}",
+            path, err
+        ),
         Next::owner(Act::Rewrites(path.to_string())),
     )
 }
@@ -3422,6 +4323,9 @@ pub fn planner_staged_unreadable() -> Said {
     said(
         &crate::rule::PLANNER_COMMIT_STAYS_IN_ADRDOM,
         "the staged paths of this planner's commit could not be read from git",
-        Next::agent_then_runs(Act::Rewrites("the git repository".into()), Cmd::fixed("git commit")),
+        Next::agent_then_runs(
+            Act::Rewrites("the git repository".into()),
+            Cmd::fixed("git commit"),
+        ),
     )
 }

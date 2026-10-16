@@ -25,7 +25,9 @@ fn git_ok(dir: &Path, args: &[&str]) -> Output {
 }
 
 fn current_branch(dir: &Path) -> String {
-    stdout(&git_ok(dir, &["rev-parse", "--abbrev-ref", "HEAD"])).trim().to_string()
+    stdout(&git_ok(dir, &["rev-parse", "--abbrev-ref", "HEAD"]))
+        .trim()
+        .to_string()
 }
 
 fn checkout_new_branch(dir: &Path, name: &str) {
@@ -39,7 +41,12 @@ fn checkout(dir: &Path, name: &str) {
 fn commit_all(dir: &Path, msg: &str) {
     run_git(dir, &["add", "-A"]);
     let out = run_git(dir, &["commit", "-q", "-m", msg]);
-    assert!(out.status.success(), "commit '{}' failed: {}", msg, stderr(&out));
+    assert!(
+        out.status.success(),
+        "commit '{}' failed: {}",
+        msg,
+        stderr(&out)
+    );
 }
 
 /// A repo with `adr install`ed and the hook wiring immediately switched off
@@ -57,7 +64,11 @@ fn new_repo() -> PathBuf {
 
 fn finish_merge_commit(dir: &Path) {
     let out = run_git(dir, &["commit", "--no-edit"]);
-    assert!(out.status.success(), "merge commit failed: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "merge commit failed: {}",
+        stderr(&out)
+    );
 }
 
 /// Distinctive text from `msg::ledger_merge_drops_rows`, searched for in
@@ -156,20 +167,43 @@ fn a_merge_keeping_both_branches_rows_passes_staged_and_committed() {
 fn a_merge_dropping_a_branchs_row_is_refused_by_the_message_hook() {
     let dir = new_repo();
     setup_two_branches_each_appending_a_row(&dir);
-    let ours_row = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap().trim().to_string();
+    let ours_row = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv"))
+        .unwrap()
+        .trim()
+        .to_string();
 
     run_git(&dir, &["merge", "--no-ff", "--no-commit", "b"]);
     force_ledger_lines(&dir, &[&ours_row]);
     let msg = dir.join(".git/MERGE_MSG");
-    let hook = adr(&dir, &["check", "--message", msg.to_str().unwrap()], &[], "");
-    assert!(!hook.status.success(), "the message hook refuses the merge: {}", stdout(&hook));
-    assert!(stdout(&hook).contains(MERGE_DROPS_ROWS_TEXT), "{}", stdout(&hook));
+    let hook = adr(
+        &dir,
+        &["check", "--message", msg.to_str().unwrap()],
+        &[],
+        "",
+    );
+    assert!(
+        !hook.status.success(),
+        "the message hook refuses the merge: {}",
+        stdout(&hook)
+    );
+    assert!(
+        stdout(&hook).contains(MERGE_DROPS_ROWS_TEXT),
+        "{}",
+        stdout(&hook)
+    );
     run_git(&dir, &["merge", "--abort"]);
 
     // Through git itself, with the hooks install wrote.
     git_ok(&dir, &["config", "core.hooksPath", ".githooks"]);
-    let merged = run_git(&dir, &["merge", "-s", "ours", "--no-ff", "-m", "merge b", "b"]);
-    assert!(!merged.status.success(), "git merge -s ours lands: {}", stdout(&merged));
+    let merged = run_git(
+        &dir,
+        &["merge", "-s", "ours", "--no-ff", "-m", "merge b", "b"],
+    );
+    assert!(
+        !merged.status.success(),
+        "git merge -s ours lands: {}",
+        stdout(&merged)
+    );
     let text = format!("{}{}", stdout(&merged), stderr(&merged));
     assert!(text.contains(MERGE_DROPS_ROWS_TEXT), "{}", text);
 }
@@ -204,7 +238,11 @@ fn b_merge_dropping_the_other_branchs_row_fails_staged() {
     );
     let text = stdout(&staged);
     assert!(text.contains(MERGE_DROPS_ROWS_TEXT), "{}", text);
-    assert!(text.contains("owner restores the missing rows of the ledger from git"), "{}", text);
+    assert!(
+        text.contains("owner restores the missing rows of the ledger from git"),
+        "{}",
+        text
+    );
 }
 
 // adr: 1c27f2d6-ab62-4c5a-91b2-1488722f3c48
@@ -229,7 +267,9 @@ fn c_committed_merge_that_dropped_a_branchs_row_fails_plain_check() {
     finish_merge_commit(&dir);
 
     // Confirm this really is a merge commit before trusting the refusal.
-    assert!(run_git(&dir, &["rev-parse", "-q", "--verify", "HEAD^2"]).status.success());
+    assert!(run_git(&dir, &["rev-parse", "-q", "--verify", "HEAD^2"])
+        .status
+        .success());
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(
@@ -238,7 +278,11 @@ fn c_committed_merge_that_dropped_a_branchs_row_fails_plain_check() {
     );
     let text = stdout(&out);
     assert!(text.contains(MERGE_DROPS_ROWS_TEXT), "{}", text);
-    assert!(text.contains("owner restores the missing rows of the ledger from git"), "{}", text);
+    assert!(
+        text.contains("owner restores the missing rows of the ledger from git"),
+        "{}",
+        text
+    );
 }
 
 /// A fresh, otherwise-empty directory to clone into: its own path, never a
@@ -299,12 +343,18 @@ fn d_a_shallow_clone_of_a_merge_commit_fails_until_deepened() {
         &std::env::temp_dir(),
         &["clone", "--depth", "1", &url, clone_dir.to_str().unwrap()],
     );
-    assert!(clone_out.status.success(), "shallow clone failed: {}", stderr(&clone_out));
+    assert!(
+        clone_out.status.success(),
+        "shallow clone failed: {}",
+        stderr(&clone_out)
+    );
 
     // The premise this case depends on: a shallow clone really does hide
     // the merge commit's second parent from `rev-parse`.
     assert!(
-        !run_git(&clone_dir, &["rev-parse", "-q", "--verify", "HEAD^2"]).status.success(),
+        !run_git(&clone_dir, &["rev-parse", "-q", "--verify", "HEAD^2"])
+            .status
+            .success(),
         "HEAD^2 unexpectedly resolved in the shallow clone"
     );
 
@@ -316,10 +366,18 @@ fn d_a_shallow_clone_of_a_merge_commit_fails_until_deepened() {
     let text = stdout(&shallow);
     assert!(text.contains("check: "), "{}", text);
     assert!(text.contains(PARENTS_UNREADABLE_TEXT), "{}", text);
-    assert!(text.contains("the clone is too shallow; agent runs: git fetch --deepen=1"), "{}", text);
+    assert!(
+        text.contains("the clone is too shallow; agent runs: git fetch --deepen=1"),
+        "{}",
+        text
+    );
 
     let deepen = run_git(&clone_dir, &["fetch", "--deepen=1"]);
-    assert!(deepen.status.success(), "git fetch --deepen=1 failed: {}", stderr(&deepen));
+    assert!(
+        deepen.status.success(),
+        "git fetch --deepen=1 failed: {}",
+        stderr(&deepen)
+    );
 
     let after_deepen = adr(&clone_dir, &["check"], &[], "");
     assert!(
@@ -399,7 +457,11 @@ fn a_the_flow_the_old_prefix_rule_refused_now_passes() {
 
     checkout_new_branch(&dir, "feat");
     let feat_ban = adr(&dir, &["ban"], &[], "featnonsenseword\n");
-    assert!(feat_ban.status.success(), "feat: ban failed: {}", stderr(&feat_ban));
+    assert!(
+        feat_ban.status.success(),
+        "feat: ban failed: {}",
+        stderr(&feat_ban)
+    );
     commit_all(&dir, "feat: ban featnonsenseword");
     let feat_row = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv"))
         .unwrap()
@@ -410,7 +472,11 @@ fn a_the_flow_the_old_prefix_rule_refused_now_passes() {
 
     checkout(&dir, &main_branch);
     let main_ban = adr(&dir, &["ban"], &[], "mainnonsenseword\n");
-    assert!(main_ban.status.success(), "main: ban failed: {}", stderr(&main_ban));
+    assert!(
+        main_ban.status.success(),
+        "main: ban failed: {}",
+        stderr(&main_ban)
+    );
     commit_all(&dir, "main: ban mainnonsenseword");
     let main_row = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv"))
         .unwrap()
@@ -533,12 +599,20 @@ fn c_a_missing_or_changed_head_row_still_fails() {
     std::fs::write(&ledger_path, "").unwrap();
     let removed = adr(&dir, &["check"], &[], "");
     assert!(!removed.status.success());
-    assert!(stdout(&removed).contains("owner restores the missing or changed row from git"), "{}", stdout(&removed));
+    assert!(
+        stdout(&removed).contains("owner restores the missing or changed row from git"),
+        "{}",
+        stdout(&removed)
+    );
 
     // Restore, then change one byte in the middle of the row.
     let changed = committed.replace("some-detail", "some-detait");
     std::fs::write(&ledger_path, &changed).unwrap();
     let byte_changed = adr(&dir, &["check"], &[], "");
     assert!(!byte_changed.status.success());
-    assert!(stdout(&byte_changed).contains("owner restores the missing or changed row from git"), "{}", stdout(&byte_changed));
+    assert!(
+        stdout(&byte_changed).contains("owner restores the missing or changed row from git"),
+        "{}",
+        stdout(&byte_changed)
+    );
 }

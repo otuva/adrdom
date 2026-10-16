@@ -29,7 +29,11 @@ fn approve_refuses_a_heading_with_no_depends_line() {
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "approve should have refused: {}",
+        stdout(&out)
+    );
     let err = stderr(&out);
     assert!(
         err.contains("\"1.1 No depends?\" has no depends line; agent writes the depends line of"),
@@ -39,7 +43,9 @@ fn approve_refuses_a_heading_with_no_depends_line() {
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(
-        !ledger.lines().any(|l| l.contains("\tapproved\t") || l.contains("\tcontext\t")),
+        !ledger
+            .lines()
+            .any(|l| l.contains("\tapproved\t") || l.contains("\tcontext\t")),
         "no row should have been written on refusal: {}",
         ledger
     );
@@ -61,7 +67,11 @@ fn approve_accepts_a_term_and_a_question_of_the_file_and_refuses_a_missing_line(
     let missing = "# Missing\n\n### 1.1 No depends?\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
     let missing_record = write_record(&dir, "adrdom/decisions/missing.md", missing);
     let out = adr_owner(&dir, &["approve", missing_record.to_str().unwrap()], "");
-    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "approve should have refused: {}",
+        stdout(&out)
+    );
     assert!(
         stderr(&out).contains("\"1.1 No depends?\" has no depends line"),
         "{}",
@@ -84,8 +94,22 @@ fn approve_accepts_a_term_and_a_question_of_the_file_and_refuses_a_missing_line(
 /// of another topic file; returns its identifier.
 fn earlier_decision(dir: &std::path::Path) -> String {
     let decided_id = "66666666-6666-6666-6666-666666666666";
-    append_ledger_row_at(dir, "asked", decided_id, "h1", "Some earlier heading?", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(dir, "answered", decided_id, "h1", "A", "2024-01-01T00:00:01Z");
+    append_ledger_row_at(
+        dir,
+        "asked",
+        decided_id,
+        "h1",
+        "Some earlier heading?",
+        "2024-01-01T00:00:00Z",
+    );
+    append_ledger_row_at(
+        dir,
+        "answered",
+        decided_id,
+        "h1",
+        "A",
+        "2024-01-01T00:00:01Z",
+    );
     let earlier = format!(
         "# Earlier\n\n### Some earlier heading?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         decided_id
@@ -101,7 +125,8 @@ fn one_question(heading: &str, depends: &str) -> String {
     )
 }
 
-const OTHER_FILE_REFUSAL: &str = "a decision of another topic file; agent rewrites the depends line of";
+const OTHER_FILE_REFUSAL: &str =
+    "a decision of another topic file; agent rewrites the depends line of";
 
 // adr: 9afe335c-2a7a-4625-b115-f74d3f091cac
 //
@@ -116,22 +141,46 @@ fn approve_refuses_an_entry_naming_a_current_decision_of_another_file() {
     let decided_id = earlier_decision(&dir);
 
     for entry in [decided_id.clone(), "Some earlier heading?".to_string()] {
-        let record = write_record(&dir, "adrdom/decisions/example.md", &one_question("Third?", &entry));
+        let record = write_record(
+            &dir,
+            "adrdom/decisions/example.md",
+            &one_question("Third?", &entry),
+        );
         let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-        assert!(!out.status.success(), "approve should have refused {}: {}", entry, stdout(&out));
+        assert!(
+            !out.status.success(),
+            "approve should have refused {}: {}",
+            entry,
+            stdout(&out)
+        );
         let err = stderr(&out);
         assert!(err.contains("\"Third?\" depends on "), "{}", err);
         assert!(err.contains(OTHER_FILE_REFUSAL), "{}", err);
         assert!(err.contains(&format!("agent rewrites the depends line of \"Third?\" to name terms and questions of this file")), "{}", err);
-        assert!(err.contains("Some earlier heading?") || err.contains(&decided_id), "{}", err);
-        assert_eq!(err.matches("depends on ").count(), 1, "one finding for the entry: {}", err);
+        assert!(
+            err.contains("Some earlier heading?") || err.contains(&decided_id),
+            "{}",
+            err
+        );
+        assert_eq!(
+            err.matches("depends on ").count(),
+            1,
+            "one finding for the entry: {}",
+            err
+        );
 
         let check = stdout(&adr(&dir, &["check"], &[], ""));
-        assert!(check.contains(OTHER_FILE_REFUSAL), "check must report the same finding: {}", check);
+        assert!(
+            check.contains(OTHER_FILE_REFUSAL),
+            "check must report the same finding: {}",
+            check
+        );
 
         let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
         assert!(
-            !ledger.lines().any(|l| l.contains("\tapproved\t") && l.contains("example.md")),
+            !ledger
+                .lines()
+                .any(|l| l.contains("\tapproved\t") && l.contains("example.md")),
             "no approved row on refusal: {}",
             ledger
         );
@@ -147,15 +196,34 @@ fn ask_refuses_an_entry_naming_a_current_decision_of_another_file() {
     let dir = init_repo();
     setup(&dir);
     let decided_id = earlier_decision(&dir);
-    let record = write_record(&dir, "adrdom/decisions/example.md", &one_question("Third?", "decision"));
-    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "").status.success());
+    let record = write_record(
+        &dir,
+        "adrdom/decisions/example.md",
+        &one_question("Third?", "decision"),
+    );
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
     let approved = std::fs::read_to_string(&record).unwrap();
 
     for entry in [decided_id.clone(), "Some earlier heading?".to_string()] {
-        let line = approved.lines().find(|l| l.starts_with("depends: ")).unwrap().to_string();
-        std::fs::write(&record, approved.replacen(&line, &format!("depends: {}", entry), 1)).unwrap();
+        let line = approved
+            .lines()
+            .find(|l| l.starts_with("depends: "))
+            .unwrap()
+            .to_string();
+        std::fs::write(
+            &record,
+            approved.replacen(&line, &format!("depends: {}", entry), 1),
+        )
+        .unwrap();
         let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-        assert!(!out.status.success(), "ask should have refused {}: {}", entry, stdout(&out));
+        assert!(
+            !out.status.success(),
+            "ask should have refused {}: {}",
+            entry,
+            stdout(&out)
+        );
         let err = stderr(&out);
         assert!(err.contains(OTHER_FILE_REFUSAL), "{}", err);
     }
@@ -178,12 +246,28 @@ fn check_does_not_report_an_answered_question_standing_on_a_decision_of_another_
     assert!(!check.contains(OTHER_FILE_REFUSAL), "{}", check);
     assert!(!check.contains("depends on"), "{}", check);
 
-    let show = stdout(&adr(&dir, &["show", "--dependents", "adrdom/decisions/earlier.md"], &[], ""));
-    assert!(show.contains("Does X stand on the earlier one?"), "{}", show);
+    let show = stdout(&adr(
+        &dir,
+        &["show", "--dependents", "adrdom/decisions/earlier.md"],
+        &[],
+        "",
+    ));
+    assert!(
+        show.contains("Does X stand on the earlier one?"),
+        "{}",
+        show
+    );
 }
 
 fn approve_via_ledger_fixture(dir: &std::path::Path, x_id: &str, decided_id: &str) {
-    append_ledger_row_at(dir, "asked", x_id, "h2", "Does X stand on the earlier one?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(
+        dir,
+        "asked",
+        x_id,
+        "h2",
+        "Does X stand on the earlier one?",
+        "2024-01-01T00:00:00Z",
+    );
     append_ledger_row_at(dir, "answered", x_id, "h2", "A", "2024-01-01T00:00:01Z");
     let x = format!(
         "# Topic X\n\n### Does X stand on the earlier one?\ndepends: {}\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
@@ -201,11 +285,19 @@ fn show_dependents_does_not_list_a_draft_naming_a_decision_of_another_file_by_he
     let dir = init_repo();
     setup(&dir);
     earlier_decision(&dir);
-    write_record(&dir, "adrdom/decisions/example.md", &one_question("Third?", "Some earlier heading?"));
+    write_record(
+        &dir,
+        "adrdom/decisions/example.md",
+        &one_question("Third?", "Some earlier heading?"),
+    );
     let shown = stdout(&adr(&dir, &["show", "--all", "--dependents"], &[], ""));
     assert!(shown.contains("Some earlier heading?"), "{}", shown);
     assert!(!shown.contains("dependents: Third?"), "{}", shown);
-    assert!(!shown.contains("Third? (adrdom/decisions/example.md)"), "{}", shown);
+    assert!(
+        !shown.contains("Third? (adrdom/decisions/example.md)"),
+        "{}",
+        shown
+    );
 }
 
 // adr: 010901e0-c02d-49eb-98bc-d584756d7f51
@@ -222,24 +314,50 @@ fn approve_refuses_a_depends_line_naming_three_questions_and_counts_no_term() {
             h, d
         )
     };
-    let roots = format!("{}{}{}", q("Root a?", "decision"), q("Root b?", "decision"), q("Root c?", "decision"));
+    let roots = format!(
+        "{}{}{}",
+        q("Root a?", "decision"),
+        q("Root b?", "decision"),
+        q("Root c?", "decision")
+    );
 
-    let two = format!("# Example\n\n{}{}", roots, q("Over two?", "Root a?=A, Root b?=A, decision"));
+    let two = format!(
+        "# Example\n\n{}{}",
+        roots,
+        q("Over two?", "Root a?=A, Root b?=A, decision")
+    );
     let record = write_record(&dir, "adrdom/decisions/example.md", &two);
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(out.status.success(), "two questions and a term pass: {}{}", stdout(&out), stderr(&out));
+    assert!(
+        out.status.success(),
+        "two questions and a term pass: {}{}",
+        stdout(&out),
+        stderr(&out)
+    );
 
-    let three = format!("# Example\n\n{}{}", roots, q("Over three?", "Root a?=A, Root b?=A, Root c?=A, decision"));
+    let three = format!(
+        "# Example\n\n{}{}",
+        roots,
+        q("Over three?", "Root a?=A, Root b?=A, Root c?=A, decision")
+    );
     let record = write_record(&dir, "adrdom/decisions/three.md", &three);
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(!out.status.success(), "three questions are refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "three questions are refused: {}",
+        stdout(&out)
+    );
     let err = stderr(&out);
     let refusal = "\"Over three?\" depends on 3 questions, the most is 2: \"Root a?\", \"Root b?\", \"Root c?\"; agent rewrites the depends line of \"Over three?\"";
     assert!(err.contains(refusal), "{}", err);
     assert!(!err.contains("Over two?"), "{}", err);
 
     let check = stdout(&adr(&dir, &["check"], &[], ""));
-    assert!(check.contains(refusal), "check reports the same finding: {}", check);
+    assert!(
+        check.contains(refusal),
+        "check reports the same finding: {}",
+        check
+    );
 }
 
 // adr: 010901e0-c02d-49eb-98bc-d584756d7f51
@@ -263,14 +381,24 @@ fn ask_refuses_a_depends_line_naming_three_questions() {
         q("Over?", "Root a?=A, Root b?=A")
     );
     let record = write_record(&dir, "adrdom/decisions/example.md", &body);
-    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "").status.success());
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
     let approved = std::fs::read_to_string(&record).unwrap();
-    let line = approved.lines().find(|l| l.starts_with("depends: ") && l.contains(",")).unwrap().to_string();
+    let line = approved
+        .lines()
+        .find(|l| l.starts_with("depends: ") && l.contains(","))
+        .unwrap()
+        .to_string();
     let edited = approved.replacen(&line, &format!("{}, Root c?=A", line), 1);
     std::fs::write(&record, edited).unwrap();
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
-    assert!(stderr(&out).contains("\"Over?\" depends on 3 questions, the most is 2"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("\"Over?\" depends on 3 questions, the most is 2"),
+        "{}",
+        stderr(&out)
+    );
 }
 
 // --- term entry resolution ------------------------------------------------
@@ -284,7 +412,11 @@ fn approve_refuses_a_term_entry_that_resolves_to_nothing() {
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "approve should have refused: {}",
+        stdout(&out)
+    );
     let err = stderr(&out);
     assert!(
         err.contains("\"1.1 Q?\" depends on \"nosuchterm\" which is no term; agent writes the term in adrdom/terms.md"),
@@ -312,7 +444,11 @@ fn approve_refuses_a_term_entry_that_resolves_to_a_retired_term() {
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "approve should have refused: {}",
+        stdout(&out)
+    );
     let err = stderr(&out);
     assert!(
         err.contains("\"1.1 Q?\" names the retired term \"gadget\"; agent rewrites the entry"),
@@ -336,7 +472,11 @@ fn approve_refuses_a_decision_entry_that_is_not_current() {
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "approve should have refused: {}",
+        stdout(&out)
+    );
     let err = stderr(&out);
     assert!(
         err.contains(&format!(
@@ -359,7 +499,11 @@ fn approve_refuses_a_dangling_heading_dependency() {
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "approve should have refused: {}",
+        stdout(&out)
+    );
     let err = stderr(&out);
     assert!(
         err.contains("\"1.1 Q?\" depends on \"Missing?\" which is no heading in this file; agent rewrites the entry"),
@@ -381,12 +525,24 @@ fn approve_refuses_a_cycle_between_two_headings() {
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "approve should have refused: {}",
+        stdout(&out)
+    );
     let err = stderr(&out);
-    assert!(err.contains("depends lines lead back to their own question"), "{}", err);
+    assert!(
+        err.contains("depends lines lead back to their own question"),
+        "{}",
+        err
+    );
     assert!(err.contains("\"A?\""), "{}", err);
     assert!(err.contains("\"B?\""), "{}", err);
-    assert!(err.contains("agent rewrites the depends lines of these questions"), "{}", err);
+    assert!(
+        err.contains("agent rewrites the depends lines of these questions"),
+        "{}",
+        err
+    );
 }
 
 #[test]
@@ -397,7 +553,11 @@ fn approve_refuses_a_heading_that_depends_on_itself() {
     let record = write_record(&dir, "adrdom/decisions/example.md", content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "approve should have refused: {}",
+        stdout(&out)
+    );
     let err = stderr(&out);
     assert!(
         err.contains("\"A?\" depends on itself; agent removes the entry"),
@@ -420,7 +580,11 @@ fn approve_refuses_five_root_questions_in_one_tier() {
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "approve should have refused: {}",
+        stdout(&out)
+    );
     let err = stderr(&out);
     assert!(
         err.contains("5 questions in one tier, the most is 4"),
@@ -430,7 +594,9 @@ fn approve_refuses_five_root_questions_in_one_tier() {
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(
-        !ledger.lines().any(|l| l.contains("\tapproved\t") || l.contains("\tcontext\t")),
+        !ledger
+            .lines()
+            .any(|l| l.contains("\tapproved\t") || l.contains("\tcontext\t")),
         "no row should have been written on refusal: {}",
         ledger
     );
@@ -475,7 +641,13 @@ fn approve_accepts_two_new_headings_when_two_in_the_tier_are_dead() {
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
     // The refused and answered rows carry the sections' real hashes, as
     // `answer` writes them.
-    append_ledger_row(&dir, "refused", old_a, &mirror_section_hash(&dead_a), "1.1 Dead A?");
+    append_ledger_row(
+        &dir,
+        "refused",
+        old_a,
+        &mirror_section_hash(&dead_a),
+        "1.1 Dead A?",
+    );
     append_ledger_row(&dir, "answered", old_b, &mirror_section_hash(&dead_b), "A");
     append_ledger_row(&dir, "superseded", old_b, "-", "some-other-id");
 
@@ -537,7 +709,9 @@ fn the_tool_derives_tiers_across_a_chain() {
 // in file order.
 fn tiers_of(path: &std::path::Path) -> Vec<usize> {
     let rf = adr::record::load(path).unwrap();
-    (0..rf.sections.len()).map(|i| rf.tier_of(i).unwrap()).collect()
+    (0..rf.sections.len())
+        .map(|i| rf.tier_of(i).unwrap())
+        .collect()
 }
 
 // --- refused id withdrawn when absent from every file (8.2 A) -------------
@@ -554,11 +728,19 @@ fn approve_withdraws_a_refused_id_missing_from_every_file() {
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out.status.success(), "approve failed: {}", stderr(&out));
-    assert!(stdout(&out).lines().any(|l| l == "withdrawn: \"Some vanished question?\""), "{}", stdout(&out));
+    assert!(
+        stdout(&out)
+            .lines()
+            .any(|l| l == "withdrawn: \"Some vanished question?\""),
+        "{}",
+        stdout(&out)
+    );
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(
-        ledger.lines().any(|l| l.contains("\twithdrawn\t") && l.contains(fake_id)),
+        ledger
+            .lines()
+            .any(|l| l.contains("\twithdrawn\t") && l.contains(fake_id)),
         "ledger missing withdrawn row for refused id: {}",
         ledger
     );
@@ -577,10 +759,19 @@ fn approve_question_hash_moves_when_only_an_answer_set_changes() {
 
     let out1 = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out1.status.success(), "approve failed: {}", stderr(&out1));
-    assert!(stdout(&out1).lines().any(|l| l == "approved: plan of adrdom/decisions/example.md"), "{}", stdout(&out1));
+    assert!(
+        stdout(&out1)
+            .lines()
+            .any(|l| l == "approved: plan of adrdom/decisions/example.md"),
+        "{}",
+        stdout(&out1)
+    );
 
     let ledger1 = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    let approved_count1 = ledger1.lines().filter(|l| l.contains("\tapproved\t")).count();
+    let approved_count1 = ledger1
+        .lines()
+        .filter(|l| l.contains("\tapproved\t"))
+        .count();
 
     // Only the answer set changes (A -> B); the depends target is the same.
     // Edited on the file as `approve` actually left it (with 1.2's depends
@@ -601,13 +792,26 @@ fn approve_question_hash_moves_when_only_an_answer_set_changes() {
     // covers: the file awaits approval again, and approve writes a new file
     // row and a new row for 1.2 only.
     let asked = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(stderr(&asked).contains("plan is changed"), "{}", stderr(&asked));
+    assert!(
+        stderr(&asked).contains("plan is changed"),
+        "{}",
+        stderr(&asked)
+    );
     let out2 = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(out2.status.success(), "approve failed: {}", stderr(&out2));
-    assert!(stdout(&out2).lines().any(|l| l == "approved: plan of adrdom/decisions/example.md"), "{}", stdout(&out2));
+    assert!(
+        stdout(&out2)
+            .lines()
+            .any(|l| l == "approved: plan of adrdom/decisions/example.md"),
+        "{}",
+        stdout(&out2)
+    );
 
     let ledger2 = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    let approved_count2 = ledger2.lines().filter(|l| l.contains("\tapproved\t")).count();
+    let approved_count2 = ledger2
+        .lines()
+        .filter(|l| l.contains("\tapproved\t"))
+        .count();
     assert_eq!(
         approved_count1 + 2,
         approved_count2,
@@ -649,7 +853,10 @@ fn approve_turns_a_depends_name_into_an_id_and_show_turns_it_back_into_words() {
     // B's depends line now holds A's uuid, not the words it was written
     // with.
     assert!(
-        approved.contains(&format!("### 1.2 Does the paint match?\ndepends: {}=A\n", a_id)),
+        approved.contains(&format!(
+            "### 1.2 Does the paint match?\ndepends: {}=A\n",
+            a_id
+        )),
         "expected B's depends line rewritten to A's id: {}",
         approved
     );
@@ -670,11 +877,11 @@ fn approve_turns_a_depends_name_into_an_id_and_show_turns_it_back_into_words() {
 
     // Rename A's heading text only -- its `id:` line and B's depends line
     // (already an id) are untouched.
-    let renamed = approved.replace(
-        "### 1.1 Is the widget red?",
-        "### 1.1 Is the gadget red?",
+    let renamed = approved.replace("### 1.1 Is the widget red?", "### 1.1 Is the gadget red?");
+    assert_ne!(
+        renamed, approved,
+        "the fixture should still have that heading"
     );
-    assert_ne!(renamed, approved, "the fixture should still have that heading");
     std::fs::write(&record, &renamed).unwrap();
 
     let out2 = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
@@ -683,15 +890,29 @@ fn approve_turns_a_depends_name_into_an_id_and_show_turns_it_back_into_words() {
         "a heading rename must break no reference: {}",
         stderr(&out2)
     );
-    assert!(stdout(&out2).lines().any(|l| l == "approved: plan of adrdom/decisions/example.md"), "{}", stdout(&out2));
+    assert!(
+        stdout(&out2)
+            .lines()
+            .any(|l| l == "approved: plan of adrdom/decisions/example.md"),
+        "{}",
+        stdout(&out2)
+    );
 
     // B's dependency still resolves -- and now prints the *new* wording,
     // proving the depends line was never the text.
     let show2 = adr(&dir, &["show", "--all"], &[], "");
     assert!(show2.status.success(), "{}", stderr(&show2));
     let shown2 = stdout(&show2);
-    assert!(shown2.contains("[not asked] 1.1 Is the gadget red?"), "{}", shown2);
-    assert!(shown2.contains("depends: 1.1 Is the gadget red?=A"), "{}", shown2);
+    assert!(
+        shown2.contains("[not asked] 1.1 Is the gadget red?"),
+        "{}",
+        shown2
+    );
+    assert!(
+        shown2.contains("depends: 1.1 Is the gadget red?=A"),
+        "{}",
+        shown2
+    );
     assert!(!shown2.contains("Is the widget red?"), "{}", shown2);
 }
 
@@ -714,15 +935,26 @@ fn ask_and_check_refuse_a_depends_line_reverted_by_hand_after_approve() {
     assert!(out.status.success(), "approving failed: {}", stderr(&out));
 
     let approved = std::fs::read_to_string(&record).unwrap();
-    let a_id = approved.lines().find_map(|l| l.strip_prefix("id: ")).unwrap().to_string();
-    assert!(approved.contains(&format!("depends: {}=A\n", a_id)), "{}", approved);
+    let a_id = approved
+        .lines()
+        .find_map(|l| l.strip_prefix("id: "))
+        .unwrap()
+        .to_string();
+    assert!(
+        approved.contains(&format!("depends: {}=A\n", a_id)),
+        "{}",
+        approved
+    );
 
     let reverted = approved.replacen(
         &format!("depends: {}=A\n", a_id),
         "depends: 1.1 Is A do a thing?=A\n",
         1,
     );
-    assert_ne!(reverted, approved, "the fixture should still hold the rewritten line");
+    assert_ne!(
+        reverted, approved,
+        "the fixture should still hold the rewritten line"
+    );
     std::fs::write(&record, &reverted).unwrap();
 
     let ask_out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
@@ -743,7 +975,11 @@ fn ask_and_check_refuse_a_depends_line_reverted_by_hand_after_approve() {
     let checked = stdout(&check_out);
     assert!(check_out.status.success(), "{}", checked);
     assert!(!checked.contains("awaiting approval"), "{}", checked);
-    assert!(!checked.contains("body under unapproved heading"), "{}", checked);
+    assert!(
+        !checked.contains("body under unapproved heading"),
+        "{}",
+        checked
+    );
 }
 
 //
@@ -755,7 +991,14 @@ fn approve_refuses_a_depends_set_on_an_answered_question_of_the_file() {
     setup(&dir);
 
     let a_id = "11111111-2222-3333-4444-555555555555";
-    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Is A do a thing?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(
+        &dir,
+        "asked",
+        a_id,
+        "h1",
+        "1.1 Is A do a thing?",
+        "2024-01-01T00:00:00Z",
+    );
     append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
     let content = format!(
         "# Topic A\n\n### 1.1 Is A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n\n### 1.1 Is B stand on A?\ndepends: {}=A\n\nProblem: p2 of the decision.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
@@ -764,7 +1007,11 @@ fn approve_refuses_a_depends_set_on_an_answered_question_of_the_file() {
     let record = write_record(&dir, "adrdom/decisions/topic-a.md", &content);
 
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "approve should have refused: {}",
+        stdout(&out)
+    );
     let err = stderr(&out);
     assert!(
         err.contains(
@@ -776,7 +1023,9 @@ fn approve_refuses_a_depends_set_on_an_answered_question_of_the_file() {
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert!(
-        !ledger.lines().any(|l| l.contains("\tapproved\t") && l.contains("topic-a.md")),
+        !ledger
+            .lines()
+            .any(|l| l.contains("\tapproved\t") && l.contains("topic-a.md")),
         "no approved row should have been written on refusal: {}",
         ledger
     );
@@ -800,7 +1049,14 @@ fn approve_refuses_a_frozen_sections_depends_line_hand_edited_to_a_cross_file_he
     // Y: an already-answered, current decision living in a topic file of
     // its own, for X to (wrongly) start naming after X is already answered.
     let y_id = "77777777-7777-7777-7777-777777777777";
-    append_ledger_row_at(&dir, "asked", y_id, "h1", "1.1 Does Y do a thing?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(
+        &dir,
+        "asked",
+        y_id,
+        "h1",
+        "1.1 Does Y do a thing?",
+        "2024-01-01T00:00:00Z",
+    );
     append_ledger_row_at(&dir, "answered", y_id, "h1", "A", "2024-01-01T00:00:01Z");
     let y_content = format!(
         "# Topic Y\n\n### 1.1 Does Y do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
@@ -812,7 +1068,14 @@ fn approve_refuses_a_frozen_sections_depends_line_hand_edited_to_a_cross_file_he
     // after the fact, to a cross-file heading reference -- exactly the
     // edit `record_refusals`'s frozen check exists to catch.
     let x_id = "66666666-6666-6666-6666-666666666666";
-    append_ledger_row_at(&dir, "asked", x_id, "h1", "1.1 Does X stand on something?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(
+        &dir,
+        "asked",
+        x_id,
+        "h1",
+        "1.1 Does X stand on something?",
+        "2024-01-01T00:00:00Z",
+    );
     append_ledger_row_at(&dir, "answered", x_id, "h1", "A", "2024-01-01T00:00:01Z");
     let x_content = format!(
         "# Topic X\n\n### 1.1 Does X stand on something?\ndepends: 1.1 Does Y do a thing?\n\nid: {}\n\nProblem: p of the decision.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
@@ -821,7 +1084,11 @@ fn approve_refuses_a_frozen_sections_depends_line_hand_edited_to_a_cross_file_he
     let record_x = write_record(&dir, "adrdom/decisions/topic-x.md", &x_content);
 
     let out = adr_owner(&dir, &["approve", record_x.to_str().unwrap()], "");
-    assert!(!out.status.success(), "approve should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "approve should have refused: {}",
+        stdout(&out)
+    );
     assert!(
         stderr(&out).contains("\"1.1 Does X stand on something?\" is [answered] and its depends line was edited; agent restores the line from git"),
         "{}",

@@ -104,7 +104,11 @@ fn answer_letter_after_refused_refuses() {
     assert!(adr_answer(&dir, &id, "refuse").status.success());
 
     let out = adr_answer(&dir, &id, "A");
-    assert!(!out.status.success(), "answer should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "answer should have refused: {}",
+        stdout(&out)
+    );
     assert_eq!(
         stderr(&out).trim_end(),
         "answer: \"1.1 What color is the widget?\" is already refused; show prints every question that waits for an answer; owner runs: adr show"
@@ -131,7 +135,11 @@ fn answer_refuse_twice_gives_the_already_refused_message() {
     assert!(adr_answer(&dir, &id, "refuse").status.success());
 
     let out = adr_answer(&dir, &id, "refuse");
-    assert!(!out.status.success(), "second refuse should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "second refuse should have refused: {}",
+        stdout(&out)
+    );
     assert_eq!(
         stderr(&out).trim_end(),
         "answer: \"1.1 What color is the widget?\" is already refused; show prints every question that waits for an answer; owner runs: adr show"
@@ -193,7 +201,12 @@ fn answer_refuse_prints_only_the_refused_line_and_writes_no_superseded_row() {
     // One line, the refused row: nothing is superseded, so nothing else is
     // written or printed.
     let printed = stdout(&out);
-    assert_eq!(printed.trim_end(), "refused: \"1.2 What color is the second widget?\"", "{}", printed);
+    assert_eq!(
+        printed.trim_end(),
+        "refused: \"1.2 What color is the second widget?\"",
+        "{}",
+        printed
+    );
 
     // Q1 must still be current: no `superseded` row for it.
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();

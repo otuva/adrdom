@@ -122,14 +122,19 @@ fn check_a_refused_id_is_never_untested_but_a_tie_to_it_is_reported() {
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
     assert!(
-        !text.lines().any(|l| l.contains("no tracked file holds its tie")
-            && (l.contains(REFUSABLE_ID) || l.contains("Q?"))),
+        !text
+            .lines()
+            .any(|l| l.contains("no tracked file holds its tie")
+                && (l.contains(REFUSABLE_ID) || l.contains("Q?"))),
         "a refused id must never be reported untested: {}",
         text
     );
     assert!(
-        line_with(&text, &REFUSABLE_ID, " tied to a test and not a current decision")
-            && text.contains("agent removes the tie comment from the test"),
+        line_with(
+            &text,
+            &REFUSABLE_ID,
+            " tied to a test and not a current decision"
+        ) && text.contains("agent removes the tie comment from the test"),
         "a tie to a refused id must be reported: {}",
         text
     );
@@ -148,7 +153,10 @@ fn check_fails_a_refused_id_missing_from_every_file_until_withdrawn() {
     assert!(!out.status.success());
     let text = stdout(&out);
     assert!(
-        text.contains(&format!("ledger id {} (\"1.1 Q?\") not found in any topic file", REFUSABLE_ID)),
+        text.contains(&format!(
+            "ledger id {} (\"1.1 Q?\") not found in any topic file",
+            REFUSABLE_ID
+        )),
         "{}",
         text
     );
@@ -211,8 +219,22 @@ fn check_stays_silent_on_a_superseded_id_once_the_file_is_reapproved() {
     write_record(&dir, rel, &content);
     approve_via_ledger(&dir, rel, &content);
     let hash = mirror_section_hash(&refusable_section(None));
-    append_ledger_row_at(&dir, "asked", REFUSABLE_ID, &hash, "1.1 Q?", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "superseded", REFUSABLE_ID, "-", "new-id", "2024-01-01T00:00:01Z");
+    append_ledger_row_at(
+        &dir,
+        "asked",
+        REFUSABLE_ID,
+        &hash,
+        "1.1 Q?",
+        "2024-01-01T00:00:00Z",
+    );
+    append_ledger_row_at(
+        &dir,
+        "superseded",
+        REFUSABLE_ID,
+        "-",
+        "new-id",
+        "2024-01-01T00:00:01Z",
+    );
 
     // The heading is gone and the file has since been re-approved without
     // it: the ordinary, finished state after a supersede, not a plan
@@ -241,8 +263,22 @@ fn check_stays_silent_on_a_superseded_id_despite_an_unrelated_stale_file() {
     write_record(&dir, rel_a, &content_a);
     approve_via_ledger(&dir, rel_a, &content_a);
     let hash = mirror_section_hash(&refusable_section(None));
-    append_ledger_row_at(&dir, "asked", REFUSABLE_ID, &hash, "1.1 Q?", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "superseded", REFUSABLE_ID, "-", "new-id", "2024-01-01T00:00:01Z");
+    append_ledger_row_at(
+        &dir,
+        "asked",
+        REFUSABLE_ID,
+        &hash,
+        "1.1 Q?",
+        "2024-01-01T00:00:00Z",
+    );
+    append_ledger_row_at(
+        &dir,
+        "superseded",
+        REFUSABLE_ID,
+        "-",
+        "new-id",
+        "2024-01-01T00:00:01Z",
+    );
 
     // A's heading is gone and A is re-approved without it: the ordinary,
     // finished state after a supersede.

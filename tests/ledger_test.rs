@@ -308,21 +308,34 @@ fn ledger_rows_from_ask_approve_answer_are_six_fields_with_correct_meaning() {
             "every row must be exactly six tab-separated fields: {}",
             line
         );
-        let (time, event, ident, hash, detail, ver) =
-            (fields[0], fields[1], fields[2], fields[3], fields[4], fields[5]);
+        let (time, event, ident, hash, detail, ver) = (
+            fields[0], fields[1], fields[2], fields[3], fields[4], fields[5],
+        );
         assert!(
             time.contains('T') && time.ends_with('Z'),
             "time field should be RFC3339: {}",
             time
         );
-        assert_eq!(ver, version, "every row this run wrote should carry the tool version: {}", line);
+        assert_eq!(
+            ver, version,
+            "every row this run wrote should carry the tool version: {}",
+            line
+        );
 
         match event {
             "terms" => {
                 saw.insert("terms");
                 assert_eq!(ident, "-", "a file-level event's identifier column is '-'");
-                assert_eq!(hash.len(), 64, "hash should be a sha256 hex digest: {}", hash);
-                assert_eq!(detail, "adrdom/terms.md", "detail should name the file the event covers");
+                assert_eq!(
+                    hash.len(),
+                    64,
+                    "hash should be a sha256 hex digest: {}",
+                    hash
+                );
+                assert_eq!(
+                    detail, "adrdom/terms.md",
+                    "detail should name the file the event covers"
+                );
             }
             "approved" => {
                 saw.insert("approved");
@@ -342,7 +355,10 @@ fn ledger_rows_from_ask_approve_answer_are_six_fields_with_correct_meaning() {
                 saw.insert("asked");
                 assert_eq!(ident, id, "asked row's identifier is the question's id");
                 assert_eq!(hash.len(), 64);
-                assert_eq!(detail, "5.1 Is this pass?", "detail is the heading text asked covers");
+                assert_eq!(
+                    detail, "5.1 Is this pass?",
+                    "detail is the heading text asked covers"
+                );
                 asked_hash = Some(hash.to_string());
             }
             "answered" => {
@@ -360,7 +376,11 @@ fn ledger_rows_from_ask_approve_answer_are_six_fields_with_correct_meaning() {
         }
     }
     for expected in ["terms", "approved", "context", "asked", "answered"] {
-        assert!(saw.contains(expected), "expected a {} row from this run", expected);
+        assert!(
+            saw.contains(expected),
+            "expected a {} row from this run",
+            expected
+        );
     }
 }
 
@@ -414,7 +434,11 @@ fn question_identifier_survives_reword_and_a_move_to_another_file() {
     approve_record(&dir, "adrdom/decisions/example.md");
 
     let after_reword_ids = extract_ids(&std::fs::read_to_string(&record_path).unwrap());
-    assert_eq!(after_reword_ids, vec![id.clone()], "reword must not mint a new id or drop the old one");
+    assert_eq!(
+        after_reword_ids,
+        vec![id.clone()],
+        "reword must not mint a new id or drop the old one"
+    );
 
     assert!(adr(&dir, &["ask", record_path.to_str().unwrap()], &[], "")
         .status
@@ -433,9 +457,18 @@ fn question_identifier_survives_reword_and_a_move_to_another_file() {
         second_fields[4].to_string(),
     );
 
-    assert_eq!(second_id, id, "the re-asked row must carry the exact same identifier as before the reword");
-    assert_ne!(second_hash, first_hash, "the reworded text must hash differently -- an edit is still caught");
-    assert_ne!(second_detail, first_detail, "the detail should reflect the new heading wording");
+    assert_eq!(
+        second_id, id,
+        "the re-asked row must carry the exact same identifier as before the reword"
+    );
+    assert_ne!(
+        second_hash, first_hash,
+        "the reworded text must hash differently -- an edit is still caught"
+    );
+    assert_ne!(
+        second_detail, first_detail,
+        "the detail should reflect the new heading wording"
+    );
 
     // Move the same section, id intact, into a brand-new topic file: the
     // identifier does not depend on which file it lives in.
@@ -502,7 +535,11 @@ fn version_flag_and_ledger_rows_use_the_repository_version_file() {
     let terms = "# Terms\n\n## pass\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A clear yes.\naliases: passes\n";
     let terms_path = write_record(&dir, "adrdom/terms.md", terms);
     let approve_terms_out = adr_owner(&dir, &["approve", terms_path.to_str().unwrap()], "");
-    assert!(approve_terms_out.status.success(), "{}", stderr(&approve_terms_out));
+    assert!(
+        approve_terms_out.status.success(),
+        "{}",
+        stderr(&approve_terms_out)
+    );
 
     let ledger_content = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     let terms_row = ledger_content

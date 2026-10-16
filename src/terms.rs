@@ -565,7 +565,10 @@ pub fn cycles(tf: &TermsFile) -> Vec<Vec<String>> {
         }
         let start = *scc.iter().min().expect("scc is non-empty");
         let cycle_idx = find_cycle_in_scc(&scc, &adj, start);
-        let names = cycle_idx.iter().map(|&i| tf.terms[i].name.clone()).collect();
+        let names = cycle_idx
+            .iter()
+            .map(|&i| tf.terms[i].name.clone())
+            .collect();
         out.push((start, names));
     }
     out.sort_by_key(|(start, _)| *start);
@@ -619,7 +622,16 @@ fn tarjan_visit(
 
     for &v in &adj[u] {
         if indices[v].is_none() {
-            tarjan_visit(v, adj, index_counter, indices, lowlink, on_stack, stack, sccs);
+            tarjan_visit(
+                v,
+                adj,
+                index_counter,
+                indices,
+                lowlink,
+                on_stack,
+                stack,
+                sccs,
+            );
             lowlink[u] = lowlink[u].min(lowlink[v]);
         } else if on_stack[v] {
             lowlink[u] = lowlink[u].min(indices[v].expect("visited node has an index"));
@@ -686,7 +698,10 @@ fn find_cycle_dfs(
             continue;
         }
         if on_stack_set.contains(&v) {
-            let pos = on_stack.iter().position(|&x| x == v).expect("v is on the stack");
+            let pos = on_stack
+                .iter()
+                .position(|&x| x == v)
+                .expect("v is on the stack");
             *found = Some(on_stack[pos..].to_vec());
             break;
         } else if !visited.contains(&v) {
@@ -806,7 +821,11 @@ pub fn validate_pairs(line: &str, tf: &TermsFile) -> Result<Vec<Problem>, Malfor
     let pairs = parse_terms_line(line).ok_or(Malformed)?;
     let mut problems = Vec::new();
     for (word, uuid) in pairs {
-        match tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str())) {
+        match tf
+            .terms
+            .iter()
+            .find(|t| t.id.as_deref() == Some(uuid.as_str()))
+        {
             None => problems.push(Problem {
                 uuid,
                 word,
@@ -961,9 +980,9 @@ aliases: \n"
     fn duplicate_word_across_two_entries_is_an_error() {
         let s = well_formed().replacen("aliases: choice\n", "aliases: question\n", 1);
         let tf = parse(&lines_of(&s));
-        assert!(tf.errors.iter().any(
-            |e| e.contains("word \"question\"") && e.contains("decision") && e.contains("question")
-        ));
+        assert!(tf.errors.iter().any(|e| e.contains("word \"question\"")
+            && e.contains("decision")
+            && e.contains("question")));
     }
 
     #[test]
@@ -1078,7 +1097,11 @@ aliases: \n"
         // "decisions" is not an alias of "decision" here: a plain word,
         // caught at review rather than paired.
         let pairs = resolve("the decisions were many", &terms);
-        assert!(pairs.iter().all(|(_, id)| id != "id-decision"), "{:?}", pairs);
+        assert!(
+            pairs.iter().all(|(_, id)| id != "id-decision"),
+            "{:?}",
+            pairs
+        );
 
         // Not a plural of anything registered either: no arbitrary stemming.
         let pairs2 = resolve("a decisional matter", &terms);
@@ -1186,7 +1209,10 @@ aliases: \n"
         let terms = sample_terms();
         let lookup = phrase_lookup(&terms);
         assert!(!lookup.values().any(|id| id == "id-verdict"));
-        assert_eq!(lookup.get("decision").map(String::as_str), Some("id-decision"));
+        assert_eq!(
+            lookup.get("decision").map(String::as_str),
+            Some("id-decision")
+        );
     }
 
     #[test]
@@ -1240,10 +1266,7 @@ aliases: \n"
         let terms = sample_terms();
         let lookup = phrase_lookup(&terms);
         assert_eq!(lookup.get("terms"), Some(&"id-terms".to_string()));
-        assert_eq!(
-            lookup.get("terms file"),
-            Some(&"id-terms-file".to_string())
-        );
+        assert_eq!(lookup.get("terms file"), Some(&"id-terms-file".to_string()));
     }
 
     #[test]
@@ -1323,7 +1346,8 @@ aliases: \n"
     #[test]
     fn validate_pairs_reports_a_gone_uuid() {
         let tf = parse(&lines_of(&well_formed()));
-        let problems = validate_pairs("terms: decision=99999999-9999-9999-9999-999999999999", &tf).unwrap();
+        let problems =
+            validate_pairs("terms: decision=99999999-9999-9999-9999-999999999999", &tf).unwrap();
         assert_eq!(problems.len(), 1);
         assert!(matches!(problems[0].kind, ProblemKind::Gone));
         assert_eq!(problems[0].uuid, "99999999-9999-9999-9999-999999999999");
@@ -1383,12 +1407,7 @@ aliases: \n"
         assert_eq!(file_hash(&tf1), file_hash(&tf2));
     }
 
-    fn term_with_definition(
-        name: &str,
-        id: &str,
-        definition: &str,
-        start_line: usize,
-    ) -> Term {
+    fn term_with_definition(name: &str, id: &str, definition: &str, start_line: usize) -> Term {
         Term {
             name: name.to_string(),
             id: Some(id.to_string()),
@@ -1480,7 +1499,10 @@ aliases: \n",
         );
         let tf = parse(&lines);
         assert!(tf.terms.iter().all(|t| t.id.is_none()));
-        assert!(cycles(&tf).is_empty(), "id-less file should show no cycle directly");
+        assert!(
+            cycles(&tf).is_empty(),
+            "id-less file should show no cycle directly"
+        );
 
         let minted = minted_copy(&tf);
         assert!(minted.terms.iter().all(|t| t.id.is_some()));
@@ -1536,7 +1558,12 @@ aliases: \n",
         let found = cycles(&tf);
         let elapsed = start.elapsed();
 
-        assert_eq!(found.len(), 1, "expected exactly one cycle, got {:?}", found);
+        assert_eq!(
+            found.len(),
+            1,
+            "expected exactly one cycle, got {:?}",
+            found
+        );
         assert!(elapsed.as_secs() < 1, "cycles took too long: {:?}", elapsed);
     }
 }

@@ -12,8 +12,16 @@ const RAW: &str = include_str!("../VERSION");
 const fn trim_trailing_newline(s: &str) -> &str {
     let bytes = s.as_bytes();
     let len = bytes.len();
-    let end = if len > 0 && bytes[len - 1] == b'\n' { len - 1 } else { len };
-    let end = if end > 0 && bytes[end - 1] == b'\r' { end - 1 } else { end };
+    let end = if len > 0 && bytes[len - 1] == b'\n' {
+        len - 1
+    } else {
+        len
+    };
+    let end = if end > 0 && bytes[end - 1] == b'\r' {
+        end - 1
+    } else {
+        end
+    };
     let (head, _) = bytes.split_at(end);
     match core::str::from_utf8(head) {
         Ok(s2) => s2,

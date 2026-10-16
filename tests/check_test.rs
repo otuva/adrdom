@@ -88,7 +88,11 @@ fn check_ids_failure_missing_id() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!stdout(&out).contains("ids:"), "{}", stdout(&out));
-    assert!(!stdout(&out).contains("awaiting approval"), "{}", stdout(&out));
+    assert!(
+        !stdout(&out).contains("awaiting approval"),
+        "{}",
+        stdout(&out)
+    );
 }
 
 #[test]
@@ -105,7 +109,9 @@ fn check_ledger_malformed_row() {
     assert!(!out.status.success());
     assert!(!stdout(&out).contains("ledger:"), "{}", stdout(&out));
     assert!(
-        stdout(&out).contains("line 1: malformed row: this-is-not-a-valid-row; owner removes the row at line 1"),
+        stdout(&out).contains(
+            "line 1: malformed row: this-is-not-a-valid-row; owner removes the row at line 1"
+        ),
         "{}",
         stdout(&out)
     );
@@ -129,7 +135,9 @@ fn check_answers_failure_hand_written_answer_line() {
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("3.1 Is this pass?: answer line without ledger row; agent removes the answer line"),
+        stdout(&out).contains(
+            "3.1 Is this pass?: answer line without ledger row; agent removes the answer line"
+        ),
         "{}",
         stdout(&out)
     );
@@ -344,7 +352,9 @@ fn check_reports_a_banned_word_inside_terms_md_exactly_once() {
     // "banned word" twice -- once in "what happened", once in the next
     // move -- so counting that phrase would over-count a single hit).
     assert_eq!(
-        text.lines().filter(|l| l.contains("adrdom/terms.md:5:")).count(),
+        text.lines()
+            .filter(|l| l.contains("adrdom/terms.md:5:"))
+            .count(),
         1,
         "the hit must be reported exactly once, no terms:-prefixed duplicate: {}",
         text
@@ -365,7 +375,10 @@ fn check_reports_a_banned_word_inside_terms_md_exactly_once() {
         text2
     );
     assert_eq!(
-        text2.lines().filter(|l| l.contains("adrdom/terms.md:5:")).count(),
+        text2
+            .lines()
+            .filter(|l| l.contains("adrdom/terms.md:5:"))
+            .count(),
         1,
         "the staged hit must also be reported exactly once: {}",
         text2
@@ -386,8 +399,16 @@ fn check_tests_note_when_untested() {
     let out = adr(&dir, &["check"], &[], "");
     let out_text = stdout(&out);
     assert!(out.status.success(), "{}", out_text);
-    let untested_line = |t: &str| t.lines().any(|l| l.contains("no tracked file holds its tie") && l.contains(&format!("adr: {}", id)));
-    assert!(untested_line(&out_text), "check must name the untested decision by id: {}", out_text);
+    let untested_line = |t: &str| {
+        t.lines().any(|l| {
+            l.contains("no tracked file holds its tie") && l.contains(&format!("adr: {}", id))
+        })
+    };
+    assert!(
+        untested_line(&out_text),
+        "check must name the untested decision by id: {}",
+        out_text
+    );
 
     write_test_comment(&dir, &id);
 
@@ -440,7 +461,11 @@ fn check_fails_an_answered_question_whose_text_changed_since_answering() {
 
     // Untouched, check still passes.
     let out = adr(&dir, &["check"], &[], "");
-    assert!(out.status.success(), "check should pass before any edit: {}", stdout(&out));
+    assert!(
+        out.status.success(),
+        "check should pass before any edit: {}",
+        stdout(&out)
+    );
 
     // Edit the answered section's Problem line after the fact -- the
     // `**Answer:** A` line and the id are left alone.
@@ -450,14 +475,21 @@ fn check_fails_an_answered_question_whose_text_changed_since_answering() {
         "Problem: whether it truly passes.",
         1,
     );
-    assert_ne!(content, edited, "fixture edit should have changed something");
+    assert_ne!(
+        content, edited,
+        "fixture edit should have changed something"
+    );
     std::fs::write(&record, &edited).unwrap();
 
     let out2 = adr(&dir, &["check"], &[], "");
     assert!(!out2.status.success());
     let text = stdout(&out2);
     assert!(!text.contains("answers:"), "{}", text);
-    assert!(text.contains("text changed since being answered"), "{}", text);
+    assert!(
+        text.contains("text changed since being answered"),
+        "{}",
+        text
+    );
     assert!(
         text.contains("text changed since being answered; agent restores adrdom/decisions/example.md from git"),
         "{}",
@@ -468,7 +500,11 @@ fn check_fails_an_answered_question_whose_text_changed_since_answering() {
         "a genuine answer line must never be reported as hand-written: {}",
         text
     );
-    assert!(!text.contains("re-asks"), "an answered question can never be re-asked: {}", text);
+    assert!(
+        !text.contains("re-asks"),
+        "an answered question can never be re-asked: {}",
+        text
+    );
     assert!(text.contains("3.1 Is this pass?"), "{}", text);
 }
 
@@ -490,21 +526,36 @@ fn check_fails_on_a_renamed_answered_option_never_as_answer_without_row() {
     write_test_comment(&dir, &id);
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(out.status.success(), "check should pass before any edit: {}", stdout(&out));
+    assert!(
+        out.status.success(),
+        "check should pass before any edit: {}",
+        stdout(&out)
+    );
 
     // Rename option A to C -- the `**Answer:** A` line still says A, but
     // there is no longer an option A in the section.
     let content = std::fs::read_to_string(&record).unwrap();
     let edited = content.replacen("- A) Yes it passes.", "- C) Yes it passes.", 1);
-    assert_ne!(content, edited, "fixture edit should have changed something");
+    assert_ne!(
+        content, edited,
+        "fixture edit should have changed something"
+    );
     std::fs::write(&record, &edited).unwrap();
 
     let out2 = adr(&dir, &["check"], &[], "");
     assert!(!out2.status.success());
     let text = stdout(&out2);
     assert!(!text.contains("answers:"), "{}", text);
-    assert!(text.contains("answer names missing option A; agent restores the answer line from git"), "{}", text);
-    assert!(text.contains("text changed since being answered"), "{}", text);
+    assert!(
+        text.contains("answer names missing option A; agent restores the answer line from git"),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains("text changed since being answered"),
+        "{}",
+        text
+    );
     assert!(
         !text.contains("answer line without ledger row"),
         "a genuine answer line must never be reported as hand-written just because its option letter moved: {}",
@@ -552,7 +603,11 @@ fn check_tests_ignores_a_tie_under_adrdom_and_an_untracked_tie() {
     run_git(&dir, &["add", "outside.txt"]);
     let out3 = adr(&dir, &["check"], &[], "");
     assert!(out3.status.success(), "{}", stdout(&out3));
-    assert!(!stdout(&out3).contains("no tracked file holds its tie"), "{}", stdout(&out3));
+    assert!(
+        !stdout(&out3).contains("no tracked file holds its tie"),
+        "{}",
+        stdout(&out3)
+    );
 }
 
 // adr: 6ef9eca6-fd8b-4211-aae7-00b37a2a9245
@@ -562,7 +617,9 @@ fn check_tests_ignores_a_tie_under_adrdom_and_an_untracked_tie() {
 #[test]
 fn check_install_fails_when_settings_deny_entry_removed_and_passes_after_install() {
     let dir = init_repo();
-    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "")
+        .status
+        .success());
 
     std::fs::remove_file(dir.join(".claude/settings.json")).unwrap();
 
@@ -576,7 +633,9 @@ fn check_install_fails_when_settings_deny_entry_removed_and_passes_after_install
     );
     assert!(out_text.contains("adr install --claude"), "{}", out_text);
 
-    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "")
+        .status
+        .success());
 
     let out2 = adr(&dir, &["check"], &[], "");
     let out2_text = stdout(&out2);
@@ -683,7 +742,10 @@ fn check_install_fails_when_agents_md_brief_differs() {
         "This repository is governed by adr, edited.",
         1,
     );
-    assert_ne!(content, edited, "fixture edit should have changed something");
+    assert_ne!(
+        content, edited,
+        "fixture edit should have changed something"
+    );
     std::fs::write(dir.join("AGENTS.md"), edited).unwrap();
 
     let out = adr(&dir, &["check"], &[], "");
@@ -703,13 +765,16 @@ fn check_install_fails_when_agents_md_brief_differs() {
 #[test]
 fn check_install_fails_when_claude_md_does_not_import_agents_md() {
     let dir = init_repo();
-    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "")
+        .status
+        .success());
     std::fs::write(dir.join("CLAUDE.md"), "# Notes\n\nNo import here.\n").unwrap();
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains("CLAUDE.md does not import AGENTS.md; agent runs: adr install --claude"),
+        stdout(&out)
+            .contains("CLAUDE.md does not import AGENTS.md; agent runs: adr install --claude"),
         "{}",
         stdout(&out)
     );
@@ -768,9 +833,7 @@ fn check_install_fails_when_pre_commit_hook_is_not_executable_and_install_repair
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains(
-            ".githooks/pre-commit is not executable; agent runs: adr install"
-        ),
+        stdout(&out).contains(".githooks/pre-commit is not executable; agent runs: adr install"),
         "{}",
         stdout(&out)
     );
@@ -808,9 +871,7 @@ fn check_install_fails_when_commit_msg_hook_missing_and_passes_after_reinstall()
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
     assert!(
-        stdout(&out).contains(
-            ".githooks/commit-msg is missing; agent runs: adr install"
-        ),
+        stdout(&out).contains(".githooks/commit-msg is missing; agent runs: adr install"),
         "{}",
         stdout(&out)
     );
@@ -869,7 +930,9 @@ fn installed_brief_says_agents_write_the_questions_and_the_owner_approves() {
 
     let agents = std::fs::read_to_string(dir.join("adrdom/state/brief.md")).unwrap();
     assert!(
-        agents.contains("Agents write the questions. Only the owner approves a plan and answers a question"),
+        agents.contains(
+            "Agents write the questions. Only the owner approves a plan and answers a question"
+        ),
         "{}",
         agents
     );
@@ -888,7 +951,9 @@ fn installed_brief_tells_the_agent_not_to_build_without_a_covering_decision() {
 
     let agents = std::fs::read_to_string(dir.join("adrdom/state/brief.md")).unwrap();
     assert!(
-        agents.contains("Behaviour no current decision covers is a question for the owner before it is built"),
+        agents.contains(
+            "Behaviour no current decision covers is a question for the owner before it is built"
+        ),
         "{}",
         agents
     );
@@ -921,7 +986,9 @@ fn check_install_passes_right_after_install_with_a_claude_md_present() {
 #[test]
 fn check_install_passes_right_after_install_claude_created_claude_md() {
     let dir = init_repo();
-    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "")
+        .status
+        .success());
     assert!(dir.join("CLAUDE.md").is_file());
 
     let out = adr(&dir, &["check"], &[], "");
@@ -1022,7 +1089,11 @@ fn check_tests_ignores_adr_prefix_that_is_not_a_uuid() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "check should pass: {}", stdout(&out));
-    assert!(!stdout(&out).contains("no tracked file holds its tie"), "{}", stdout(&out));
+    assert!(
+        !stdout(&out).contains("no tracked file holds its tie"),
+        "{}",
+        stdout(&out)
+    );
 }
 
 #[test]
@@ -1082,7 +1153,11 @@ Standard: s2.\n\n\
         + 1;
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success(), "check should have failed: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "check should have failed: {}",
+        stdout(&out)
+    );
     let text = stdout(&out);
     assert!(!text.contains("parse:"), "{}", text);
     assert!(
@@ -1166,7 +1241,11 @@ fn check_notes_a_heading_with_no_body_in_a_draft() {
         stdout(&out)
     );
     let text = stdout(&out);
-    assert!(text.contains("\"1.1 Not written yet?\"") && text.contains("no body"), "{}", text);
+    assert!(
+        text.contains("\"1.1 Not written yet?\"") && text.contains("no body"),
+        "{}",
+        text
+    );
     assert!(!text.contains("awaiting approval"), "{}", text);
 }
 
@@ -1220,8 +1299,16 @@ fn check_fails_a_question_heading_duplicated_across_two_files() {
     // Both files approved: a failure (a note while one awaits approval).
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    approve_via_ledger(&dir, "adrdom/decisions/a.md", "# File A\n\n### 9.9 Same heading?\n");
-    approve_via_ledger(&dir, "adrdom/decisions/b.md", "# File B\n\n### 9.9 Same heading?\n");
+    approve_via_ledger(
+        &dir,
+        "adrdom/decisions/a.md",
+        "# File A\n\n### 9.9 Same heading?\n",
+    );
+    approve_via_ledger(
+        &dir,
+        "adrdom/decisions/b.md",
+        "# File B\n\n### 9.9 Same heading?\n",
+    );
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
@@ -1236,7 +1323,8 @@ fn check_fails_a_question_heading_duplicated_across_two_files() {
 }
 
 #[test]
-fn check_notes_a_question_heading_duplicated_within_one_file_in_a_draft_and_fails_it_when_approved() {
+fn check_notes_a_question_heading_duplicated_within_one_file_in_a_draft_and_fails_it_when_approved()
+{
     // Regression: the cross-file dedup above only compares paths, so two
     // identical `### ` headings inside the SAME file collapsed to one path
     // and never surfaced -- and `derive_tiers`' heading index binds a
@@ -1515,15 +1603,30 @@ fn check_fails_a_withdrawn_id_still_present_in_a_record() {
     let text = stdout(&out);
     assert!(!text.contains("ids:"), "{}", text);
     assert!(
-        text.contains(&format!("withdrawn id {} (\"1.1 Some question?\") still present in", wd_id)),
+        text.contains(&format!(
+            "withdrawn id {} (\"1.1 Some question?\") still present in",
+            wd_id
+        )),
         "{}",
         text
     );
     // The move removes the section: the identifier never comes back, so no
     // approve clears it. show names the same finding.
-    let line = text.lines().find(|l| l.contains("still present in")).unwrap();
-    assert!(line.ends_with("; agent removes the section from adrdom/decisions/example.md"), "{}", line);
-    let shown = stdout(&adr(&dir, &["show", "adrdom/decisions/example.md"], &[], ""));
+    let line = text
+        .lines()
+        .find(|l| l.contains("still present in"))
+        .unwrap();
+    assert!(
+        line.ends_with("; agent removes the section from adrdom/decisions/example.md"),
+        "{}",
+        line
+    );
+    let shown = stdout(&adr(
+        &dir,
+        &["show", "adrdom/decisions/example.md"],
+        &[],
+        "",
+    ));
     assert!(shown.contains(line), "{}", shown);
 }
 
@@ -1572,7 +1675,11 @@ fn check_fails_on_a_terms_file_shape_error() {
         "{}",
         text
     );
-    assert!(!text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
+    assert!(
+        !text.contains("owner runs: adr approve adrdom/terms.md"),
+        "{}",
+        text
+    );
 }
 
 #[test]
@@ -1667,7 +1774,8 @@ fn check_and_ask_fail_when_terms_is_edited_after_its_latest_approval() {
     let check_out = adr(&dir, &["check"], &[], "");
     assert!(!check_out.status.success());
     assert!(
-        stdout(&check_out).contains("adrdom/terms.md is changed; owner runs: adr approve adrdom/terms.md"),
+        stdout(&check_out)
+            .contains("adrdom/terms.md is changed; owner runs: adr approve adrdom/terms.md"),
         "{}",
         stdout(&check_out)
     );
@@ -1758,7 +1866,10 @@ fn check_fails_an_asked_section_whose_terms_line_names_a_missing_uuid() {
         text
     );
     assert!(
-        text.contains(&format!("term {} (\"decision\") removed but used by adrdom/decisions/example.md", missing_uuid)),
+        text.contains(&format!(
+            "term {} (\"decision\") removed but used by adrdom/decisions/example.md",
+            missing_uuid
+        )),
         "{}",
         text
     );
@@ -1797,7 +1908,9 @@ fn check_fails_an_asked_section_bound_to_a_retired_term() {
         text
     );
     assert!(
-        text.contains("uses the retired term decision; agent runs: adr ask adrdom/decisions/example.md"),
+        text.contains(
+            "uses the retired term decision; agent runs: adr ask adrdom/decisions/example.md"
+        ),
         "an asked-only question bound to a retired term is still re-asked: {}",
         text
     );
@@ -1859,8 +1972,22 @@ fn check_fails_an_answered_section_with_no_terms_line_by_restoring_or_supersedin
         question_id
     );
     write_record(&dir, "adrdom/decisions/example.md", &record_content);
-    append_ledger_row_at(&dir, "asked", question_id, "deadbeef", "1.1 Some question?", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "answered", question_id, "deadbeef", "A", "2024-01-01T00:00:01Z");
+    append_ledger_row_at(
+        &dir,
+        "asked",
+        question_id,
+        "deadbeef",
+        "1.1 Some question?",
+        "2024-01-01T00:00:00Z",
+    );
+    append_ledger_row_at(
+        &dir,
+        "answered",
+        question_id,
+        "deadbeef",
+        "A",
+        "2024-01-01T00:00:01Z",
+    );
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success());
@@ -1928,9 +2055,10 @@ fn check_passes_when_a_new_term_would_now_match_words_already_answered_in_text()
     // hand-crafted fixture -- irrelevant to what this test is about.)
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
-    let terms_failure_on_section = text
-        .lines()
-        .any(|l| l.contains("an asked question keeps the terms it was asked with") && l.contains("Some question?"));
+    let terms_failure_on_section = text.lines().any(|l| {
+        l.contains("an asked question keeps the terms it was asked with")
+            && l.contains("Some question?")
+    });
     assert!(!terms_failure_on_section, "{}", text);
 }
 
@@ -1951,7 +2079,11 @@ fn check_prints_no_line_for_a_term_paired_by_nothing() {
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
-    assert!(!stdout(&out).contains("paired by nothing"), "{}", stdout(&out));
+    assert!(
+        !stdout(&out).contains("paired by nothing"),
+        "{}",
+        stdout(&out)
+    );
 }
 
 const GOOD_TERMS: &str = "# Terms\n\n## decision\nid: 11111111-1111-1111-1111-111111111111\ndefinition: A choice.\naliases: \n";
@@ -1973,7 +2105,10 @@ fn check_staged_reads_terms_from_the_index() {
         let approve_out = adr_owner(&dir, &["approve", terms_path.to_str().unwrap()], "");
         assert!(approve_out.status.success(), "{}", stderr(&approve_out));
         run_git(&dir, &["add", "-A"]);
-        run_git(&dir, &["commit", "--no-verify", "-q", "-m", "approve terms"]);
+        run_git(
+            &dir,
+            &["commit", "--no-verify", "-q", "-m", "approve terms"],
+        );
 
         std::fs::write(&terms_path, BAD_TERMS).unwrap();
         run_git(&dir, &["add", "adrdom/terms.md"]);
@@ -1984,7 +2119,9 @@ fn check_staged_reads_terms_from_the_index() {
         let out = adr(&dir, &["check", "--staged"], &[], "");
         assert!(!out.status.success(), "{}", stdout(&out));
         assert!(
-            stdout(&out).contains("adrdom/terms.md: line 1: missing h1 \"# Terms\"; agent rewrites the line"),
+            stdout(&out).contains(
+                "adrdom/terms.md: line 1: missing h1 \"# Terms\"; agent rewrites the line"
+            ),
             "{}",
             stdout(&out)
         );
@@ -2001,7 +2138,10 @@ fn check_staged_reads_terms_from_the_index() {
         let approve_out = adr_owner(&dir, &["approve", terms_path.to_str().unwrap()], "");
         assert!(approve_out.status.success(), "{}", stderr(&approve_out));
         run_git(&dir, &["add", "-A"]);
-        run_git(&dir, &["commit", "--no-verify", "-q", "-m", "approve terms"]);
+        run_git(
+            &dir,
+            &["commit", "--no-verify", "-q", "-m", "approve terms"],
+        );
 
         // Dirty, unstaged edit: not part of any staged diff.
         std::fs::write(&terms_path, BAD_TERMS).unwrap();
@@ -2030,7 +2170,16 @@ fn check_staged_refuses_a_reworded_answered_option_restored_on_disk() {
     let (record, id) = answer_one_question(&dir);
     write_test_comment(&dir, &id);
     run_git(&dir, &["add", "-A"]);
-    run_git(&dir, &["commit", "--no-verify", "-q", "-m", "seed answered question"]);
+    run_git(
+        &dir,
+        &[
+            "commit",
+            "--no-verify",
+            "-q",
+            "-m",
+            "seed answered question",
+        ],
+    );
 
     let original = std::fs::read_to_string(&record).unwrap();
     let reworded = original.replace("Yes it passes.", "Yes, this now passes for sure.");
@@ -2065,7 +2214,16 @@ fn check_staged_ignores_an_unstaged_working_tree_fix() {
     let reworded = original.replace("Yes it passes.", "Yes, this now passes for sure.");
     std::fs::write(&record, &reworded).unwrap();
     run_git(&dir, &["add", "-A"]);
-    run_git(&dir, &["commit", "--no-verify", "-q", "-m", "reword (bad, committed for the fixture)"]);
+    run_git(
+        &dir,
+        &[
+            "commit",
+            "--no-verify",
+            "-q",
+            "-m",
+            "reword (bad, committed for the fixture)",
+        ],
+    );
 
     // The fix, applied only to the working tree: never staged, so the
     // index (and HEAD) still hold the reworded text.
@@ -2116,11 +2274,23 @@ fn check_staged_treats_a_staged_deleted_topic_file_as_gone() {
     let (record, id) = answer_one_question(&dir);
     write_test_comment(&dir, &id);
     run_git(&dir, &["add", "-A"]);
-    run_git(&dir, &["commit", "--no-verify", "-q", "-m", "seed answered question"]);
+    run_git(
+        &dir,
+        &[
+            "commit",
+            "--no-verify",
+            "-q",
+            "-m",
+            "seed answered question",
+        ],
+    );
 
     // Staged deletion, left on disk: `git rm --cached` removes the path
     // from the index only.
-    run_git(&dir, &["rm", "--cached", "-q", "adrdom/decisions/example.md"]);
+    run_git(
+        &dir,
+        &["rm", "--cached", "-q", "adrdom/decisions/example.md"],
+    );
     assert!(
         record.exists(),
         "the working tree copy must still be on disk -- only the index drops it"
@@ -2162,7 +2332,11 @@ fn check_staged_reads_a_newly_staged_test_files_tie_from_the_index() {
 
     let out = adr(&dir, &["check", "--staged"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
-    assert!(!stdout(&out).contains("no tracked file holds its tie"), "{}", stdout(&out));
+    assert!(
+        !stdout(&out).contains("no tracked file holds its tie"),
+        "{}",
+        stdout(&out)
+    );
 
     // Outside a commit, the working tree is read instead: the tie is gone
     // there, so plain `adr check` notes it untested.
@@ -2237,7 +2411,11 @@ aliases: \n";
         "{}",
         text
     );
-    assert!(!text.contains("owner runs: adr approve adrdom/terms.md"), "{}", text);
+    assert!(
+        !text.contains("owner runs: adr approve adrdom/terms.md"),
+        "{}",
+        text
+    );
 }
 
 // "What does check do with a test that names a decision that is not current?"
@@ -2295,9 +2473,17 @@ fn check_reports_a_test_tied_to_a_decision_that_was_later_superseded() {
     assert!(adr_answer(&dir, &new_id, "A").status.success());
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(out.status.success(), "check should not fail: {}", stdout(&out));
     assert!(
-        line_with(&stdout(&out), &old_id, " tied to a test and not a current decision"),
+        out.status.success(),
+        "check should not fail: {}",
+        stdout(&out)
+    );
+    assert!(
+        line_with(
+            &stdout(&out),
+            &old_id,
+            " tied to a test and not a current decision"
+        ),
         "{}",
         stdout(&out)
     );
@@ -2324,9 +2510,17 @@ fn check_reports_a_test_tied_to_a_refused_decision() {
     write_test_comment(&dir, &id);
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(out.status.success(), "check should not fail: {}", stdout(&out));
     assert!(
-        line_with(&stdout(&out), &id, " tied to a test and not a current decision"),
+        out.status.success(),
+        "check should not fail: {}",
+        stdout(&out)
+    );
+    assert!(
+        line_with(
+            &stdout(&out),
+            &id,
+            " tied to a test and not a current decision"
+        ),
         "{}",
         stdout(&out)
     );
@@ -2343,7 +2537,11 @@ fn check_fails_a_topic_file_it_cannot_read() {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_empty_terms(&dir);
     std::fs::create_dir_all(dir.join("adrdom/decisions")).unwrap();
-    std::fs::write(dir.join("adrdom/decisions/broken.md"), [0x23u8, 0x20, 0xff, 0xfe, 0x0a]).unwrap();
+    std::fs::write(
+        dir.join("adrdom/decisions/broken.md"),
+        [0x23u8, 0x20, 0xff, 0xfe, 0x0a],
+    )
+    .unwrap();
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(!out.status.success(), "{}", stdout(&out));
@@ -2369,8 +2567,16 @@ fn check_prints_what_failed_and_nothing_on_a_pass() {
 
     let pre_commit = std::fs::read_to_string(dir.join(".githooks/pre-commit")).unwrap();
     let commit_msg = std::fs::read_to_string(dir.join(".githooks/commit-msg")).unwrap();
-    assert!(pre_commit.contains("adr check --staged\n"), "{}", pre_commit);
-    assert!(commit_msg.contains("adr check --message \"$1\"\n"), "{}", commit_msg);
+    assert!(
+        pre_commit.contains("adr check --staged\n"),
+        "{}",
+        pre_commit
+    );
+    assert!(
+        commit_msg.contains("adr check --message \"$1\"\n"),
+        "{}",
+        commit_msg
+    );
 
     for args in [&["check", "--staged"][..], &["check"][..]] {
         let pass = adr(&dir, args, &[], "");
@@ -2378,12 +2584,20 @@ fn check_prints_what_failed_and_nothing_on_a_pass() {
         assert_eq!(stdout(&pass), "", "{:?}", args);
     }
 
-    std::fs::write(dir.join("adrdom/decisions/broken.md"), [0x23u8, 0x20, 0xff, 0xfe, 0x0a]).unwrap();
+    std::fs::write(
+        dir.join("adrdom/decisions/broken.md"),
+        [0x23u8, 0x20, 0xff, 0xfe, 0x0a],
+    )
+    .unwrap();
     let failed = adr(&dir, &["check"], &[], "");
     assert!(!failed.status.success());
     let lines: Vec<String> = stdout(&failed).lines().map(|l| l.to_string()).collect();
     assert_eq!(lines.len(), 1, "{:?}", lines);
-    assert!(lines[0].starts_with("check: adrdom/decisions/broken.md: cannot be read"), "{:?}", lines);
+    assert!(
+        lines[0].starts_with("check: adrdom/decisions/broken.md: cannot be read"),
+        "{:?}",
+        lines
+    );
 }
 
 const TWO_QUESTIONS: &str = r#"# Example
@@ -2453,26 +2667,56 @@ fn check_an_untested_decision_is_a_note_whether_or_not_its_tier_is_open() {
         "{}",
         text
     );
-    assert_eq!(text.lines().filter(|l| l.contains("no tracked file holds its tie")).count(), 1, "{}", text);
+    assert_eq!(
+        text.lines()
+            .filter(|l| l.contains("no tracked file holds its tie"))
+            .count(),
+        1,
+        "{}",
+        text
+    );
     run_git(&dir, &["add", "-A"]);
     let staged = adr(&dir, &["check", "--staged"], &[], "");
     assert!(staged.status.success(), "{}", stdout(&staged));
-    assert_eq!(stdout(&staged), text, "the hook's check prints the same lines");
+    assert_eq!(
+        stdout(&staged),
+        text,
+        "the hook's check prints the same lines"
+    );
 
     assert!(adr_answer(&dir, &second, "A").status.success());
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
     assert!(out.status.success(), "{}", text);
-    assert!(text.contains(&format!("puts \"adr: {}\" in a test", first)), "{}", text);
-    assert!(text.contains(&format!("puts \"adr: {}\" in a test", second)), "{}", text);
-    assert_eq!(text.lines().filter(|l| l.contains("no tracked file holds its tie")).count(), 2, "{}", text);
+    assert!(
+        text.contains(&format!("puts \"adr: {}\" in a test", first)),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains(&format!("puts \"adr: {}\" in a test", second)),
+        "{}",
+        text
+    );
+    assert_eq!(
+        text.lines()
+            .filter(|l| l.contains("no tracked file holds its tie"))
+            .count(),
+        2,
+        "{}",
+        text
+    );
     assert!(!text.contains("waiting:"), "{}", text);
 
     write_test_comment(&dir, &first);
     write_test_comment(&dir, &second);
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
-    assert!(!stdout(&out).contains("no tracked file holds its tie"), "{}", stdout(&out));
+    assert!(
+        !stdout(&out).contains("no tracked file holds its tie"),
+        "{}",
+        stdout(&out)
+    );
 }
 
 // adr: 3460d220-e523-448b-aeff-baa8051b7d06
@@ -2554,11 +2798,19 @@ fn check_counts_an_adr_tie_that_follows_an_adr_code_comment_on_one_line() {
     let (_record, id) = answer_one_question(&dir);
     let other = "99999999-9999-4999-8999-999999999999";
 
-    std::fs::write(dir.join("both.txt"), format!("// adr-code: {} adr: {}\n", other, id)).unwrap();
+    std::fs::write(
+        dir.join("both.txt"),
+        format!("// adr-code: {} adr: {}\n", other, id),
+    )
+    .unwrap();
     run_git(&dir, &["add", "both.txt"]);
 
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}", stdout(&out));
-    assert!(!stdout(&out).contains(&format!("puts \"adr: {}\" in a test", id)), "{}", stdout(&out));
+    assert!(
+        !stdout(&out).contains(&format!("puts \"adr: {}\" in a test", id)),
+        "{}",
+        stdout(&out)
+    );
     assert!(!stdout(&out).contains(other), "{}", stdout(&out));
 }

@@ -75,7 +75,9 @@ fn moves_of(shown: &str) -> Vec<String> {
     shown
         .lines()
         .map(str::trim)
-        .filter(|l| l.starts_with("agent ") || l.starts_with("owner runs:") || l.starts_with("not yet"))
+        .filter(|l| {
+            l.starts_with("agent ") || l.starts_with("owner runs:") || l.starts_with("not yet")
+        })
         .map(str::to_string)
         .collect()
 }
@@ -126,25 +128,55 @@ fn ask_names_every_fault_in_one_run() {
     // and the approval rows are written by hand: ask is the second stop.
     let loaded = std::fs::read_to_string(&record)
         .unwrap()
-        .replace("is red and unpainted.", "is already red and currently unpainted.")
+        .replace(
+            "is red and unpainted.",
+            "is already red and currently unpainted.",
+        )
         .replace("no lid.", "no lid today.");
     std::fs::write(&record, &loaded).unwrap();
     let rf = adr::record::load(&record).unwrap();
     let rel = "adrdom/decisions/example.md";
     let later = "2099-01-01T00:00:00Z";
-    append_ledger_row_at(&dir, "approved", "-", &adr::record::plan_hash(&rf), rel, later);
-    append_ledger_row_at(&dir, "context", "-", &adr::record::context_hash(&rf), rel, later);
+    append_ledger_row_at(
+        &dir,
+        "approved",
+        "-",
+        &adr::record::plan_hash(&rf),
+        rel,
+        later,
+    );
+    append_ledger_row_at(
+        &dir,
+        "context",
+        "-",
+        &adr::record::context_hash(&rf),
+        rel,
+        later,
+    );
     let with_bodies = loaded;
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "ask should have refused: {}",
+        stdout(&out)
+    );
     let err = stderr(&out);
     let lines: Vec<&str> = err.lines().collect();
     assert_eq!(lines.len(), 3, "{}", err);
-    assert!(lines.iter().all(|l| l.starts_with("adrdom/decisions/example.md:")), "{}", err);
+    assert!(
+        lines
+            .iter()
+            .all(|l| l.starts_with("adrdom/decisions/example.md:")),
+        "{}",
+        err
+    );
     for word in ["already", "currently", "today"] {
         assert_eq!(
-            lines.iter().filter(|l| l.contains(&format!("\"{}\"", word))).count(),
+            lines
+                .iter()
+                .filter(|l| l.contains(&format!("\"{}\"", word)))
+                .count(),
             1,
             "one line for {:?}: {}",
             word,
@@ -153,8 +185,15 @@ fn ask_names_every_fault_in_one_run() {
     }
 
     let after = std::fs::read_to_string(&record).unwrap();
-    assert_eq!(after, with_bodies, "ask must not modify the file when it refuses");
-    assert_eq!(asked_row_count(&dir), 0, "nothing is asked while a refusal stands");
+    assert_eq!(
+        after, with_bodies,
+        "ask must not modify the file when it refuses"
+    );
+    assert_eq!(
+        asked_row_count(&dir),
+        0,
+        "nothing is asked while a refusal stands"
+    );
 }
 
 // --- one run asks every tier ------------------------------------------------
@@ -190,7 +229,9 @@ fn ask_asks_a_later_tier_candidate_while_the_lower_tier_is_open() {
     assert!(out.status.success(), "{}", stderr(&out));
     assert!(stderr(&out).is_empty(), "{}", stderr(&out));
     assert!(
-        stdout(&out).lines().any(|l| l == "asked: \"1.2 Does the widget's paint match its color?\""),
+        stdout(&out)
+            .lines()
+            .any(|l| l == "asked: \"1.2 Does the widget's paint match its color?\""),
         "{}",
         stdout(&out)
     );
@@ -239,9 +280,19 @@ fn one_ask_run_asks_every_question_of_a_multi_tier_file() {
     assert!(out.status.success(), "{}", stderr(&out));
     let printed = stdout(&out);
     for heading in ["Is alpha ready?", "Is beta ready?", "Is gamma ready?"] {
-        assert!(printed.lines().any(|l| l == format!("asked: \"{}\"", heading)), "{}", printed);
+        assert!(
+            printed
+                .lines()
+                .any(|l| l == format!("asked: \"{}\"", heading)),
+            "{}",
+            printed
+        );
     }
-    assert_eq!(asked_row_count(&dir), 3, "every question is asked in one run");
+    assert_eq!(
+        asked_row_count(&dir),
+        3,
+        "every question is asked in one run"
+    );
     let text = std::fs::read_to_string(&record).unwrap();
     for id in extract_ids(&text) {
         current_version(&dir, &id);
@@ -260,9 +311,7 @@ fn ask_asks_a_candidate_standing_on_a_refused_question_and_the_plan_change_works
         .success());
     let content = std::fs::read_to_string(&record).unwrap();
     let q1_id = extract_ids(&content)[0].clone();
-    assert!(adr_answer(&dir, &q1_id, "refuse")
-        .status
-        .success());
+    assert!(adr_answer(&dir, &q1_id, "refuse").status.success());
 
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(&q2_depends_on_q1("=A"));
@@ -273,7 +322,13 @@ fn ask_asks_a_candidate_standing_on_a_refused_question_and_the_plan_change_works
     // tier), and `answer` refuses it until the plan changes.
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
-    assert!(stdout(&out).lines().any(|l| l == "asked: \"1.2 Does the widget's paint match its color?\""), "{}", stdout(&out));
+    assert!(
+        stdout(&out)
+            .lines()
+            .any(|l| l == "asked: \"1.2 Does the widget's paint match its color?\""),
+        "{}",
+        stdout(&out)
+    );
     assert_eq!(asked_row_count(&dir), 2);
 
     // What the owner would read next: the refused question, the plan
@@ -294,7 +349,13 @@ fn ask_asks_a_candidate_standing_on_a_refused_question_and_the_plan_change_works
     unhook_q2_from_the_refused_question(&dir, &record);
     let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out2.status.success(), "{}", stderr(&out2));
-    assert!(stdout(&out2).lines().any(|l| l == "asked: \"1.2 Does the widget's paint match its color?\""), "{}", stdout(&out2));
+    assert!(
+        stdout(&out2)
+            .lines()
+            .any(|l| l == "asked: \"1.2 Does the widget's paint match its color?\""),
+        "{}",
+        stdout(&out2)
+    );
     let q2_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[1].clone();
     assert!(adr_answer(&dir, &q2_id, "A").status.success());
 }
@@ -360,9 +421,7 @@ Standard: plain words.
         .find_map(|l| l.strip_prefix("id: "))
         .unwrap()
         .to_string();
-    assert!(adr_answer(&dir, &qx_id, "refuse")
-        .status
-        .success());
+    assert!(adr_answer(&dir, &qx_id, "refuse").status.success());
 
     let mut content2 = std::fs::read_to_string(&record).unwrap();
     content2.push_str(&q2_depends_on_q1("=A"));
@@ -453,7 +512,10 @@ fn approve_refuses_a_tier_over_the_cap() {
         stderr(&approve_out)
     );
     let after = std::fs::read_to_string(&record).unwrap();
-    assert_eq!(after, content, "approve may not modify the file when it refuses");
+    assert_eq!(
+        after, content,
+        "approve may not modify the file when it refuses"
+    );
 }
 
 // --- stands on refused: a specific dependency, not the generic blocker ----
@@ -514,9 +576,7 @@ Standard: plain words.
         .find_map(|l| l.strip_prefix("id: "))
         .unwrap()
         .to_string();
-    assert!(adr_answer(&dir, &q1_id, "refuse")
-        .status
-        .success());
+    assert!(adr_answer(&dir, &q1_id, "refuse").status.success());
 
     let mut content2 = std::fs::read_to_string(&record).unwrap();
     content2.push_str(&q2_depends_on_q1("=A"));
@@ -546,7 +606,13 @@ Standard: plain words.
     unhook_q2_from_the_refused_question(&dir, &record);
     let out2 = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(out2.status.success(), "{}", stderr(&out2));
-    assert!(stdout(&out2).lines().any(|l| l == "asked: \"1.2 Does the widget's paint match its color?\""), "{}", stdout(&out2));
+    assert!(
+        stdout(&out2)
+            .lines()
+            .any(|l| l == "asked: \"1.2 Does the widget's paint match its color?\""),
+        "{}",
+        stdout(&out2)
+    );
     assert_eq!(asked_row_count(&dir), 4);
 }
 
@@ -593,8 +659,15 @@ fn answer_takes_a_question_in_the_order_it_stands_on() {
             )
         );
     }
-    assert_eq!(std::fs::read_to_string(&record).unwrap(), before, "a refused answer writes nothing");
-    assert_eq!(std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap(), ledger_before);
+    assert_eq!(
+        std::fs::read_to_string(&record).unwrap(),
+        before,
+        "a refused answer writes nothing"
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap(),
+        ledger_before
+    );
 
     assert!(adr_answer(&dir, &q1_id, "A").status.success());
     assert!(adr_answer(&dir, &q2_id, "A").status.success());
@@ -613,7 +686,9 @@ fn answer_refuses_a_question_standing_on_a_refused_question() {
     let content = format!("{}{}", Q1, q2_depends_on_q1("=A"));
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
     let (q1_id, q2_id) = (ids[0].clone(), ids[1].clone());
     assert!(adr_answer(&dir, &q1_id, "refuse").status.success());
@@ -650,7 +725,11 @@ fn approve_refuses_a_set_on_an_answered_target() {
     std::fs::write(&record, &content).unwrap();
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("answered, under an answer set"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("answered, under an answer set"),
+        "{}",
+        stderr(&out)
+    );
 }
 
 // --- answer sets mandatory ------------------------------------------------
@@ -664,7 +743,11 @@ fn approve_refuses_a_tier_n_dependent_with_no_answer_set() {
     let record = write_record(&dir, "adrdom/decisions/example.md", &content);
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("without an answer set"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("without an answer set"),
+        "{}",
+        stderr(&out)
+    );
 }
 
 #[test]
@@ -674,14 +757,20 @@ fn approve_refuses_a_set_missing_on_an_asked_but_unanswered_target() {
     approve_minimal_terms(&dir, "widget");
     let record = write_record(&dir, "adrdom/decisions/example.md", Q1);
     approve_record(&dir, "adrdom/decisions/example.md");
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
 
     let mut content = std::fs::read_to_string(&record).unwrap();
     content.push_str(&q2_depends_on_q1(""));
     std::fs::write(&record, &content).unwrap();
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("without an answer set"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("without an answer set"),
+        "{}",
+        stderr(&out)
+    );
 }
 
 // A set naming an option the target lacks never reaches `ask`: approve refuses
@@ -728,7 +817,12 @@ fn ask_prints_a_line_per_row_and_writes_an_assumes_row_per_dependent() {
 
     let after = std::fs::read_to_string(&record).unwrap();
     let ids = extract_ids(&after);
-    assert_eq!(ids.len(), 2, "both headings should have an id from approve: {}", after);
+    assert_eq!(
+        ids.len(),
+        2,
+        "both headings should have an id from approve: {}",
+        after
+    );
     let q1_id = after
         .lines()
         .skip_while(|l| !l.starts_with("### 1.1 What color"))
@@ -751,7 +845,10 @@ fn ask_prints_a_line_per_row_and_writes_an_assumes_row_per_dependent() {
         .expect(&format!("no assumes row: {}", ledger));
     let fields: Vec<&str> = row.split('\t').collect();
     assert_eq!(fields[1], "assumes");
-    assert_eq!(fields[2], q1_id, "assumes row id should be the asked question's id");
+    assert_eq!(
+        fields[2], q1_id,
+        "assumes row id should be the asked question's id"
+    );
     assert_eq!(fields[3], expected_hash, "row: {}", row);
     assert_eq!(fields[4], q2_id);
 }
@@ -788,11 +885,18 @@ fn ask_refuses_when_a_refused_section_was_edited_since_refusal() {
         "Problem: the widget's color is undecided.",
         "Problem: the widget's color is still undecided, reworded.",
     );
-    assert_ne!(refused_content, edited, "the fixture should have that Problem line");
+    assert_ne!(
+        refused_content, edited,
+        "the fixture should have that Problem line"
+    );
     std::fs::write(&record, &edited).unwrap();
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(!out.status.success(), "ask should have refused: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "ask should have refused: {}",
+        stdout(&out)
+    );
     // The finding check and show print for the same state, under its own
     // rule, with its move.
     assert_eq!(
@@ -801,7 +905,12 @@ fn ask_refuses_when_a_refused_section_was_edited_since_refusal() {
     );
     let checked = stdout(&adr(&dir, &["check"], &[], ""));
     assert!(checked.contains("adrdom/decisions/example.md: 1.1 What color is the widget?: text changed since being refused;"), "{}", checked);
-    let shown = stdout(&adr(&dir, &["show", "adrdom/decisions/example.md"], &[], ""));
+    let shown = stdout(&adr(
+        &dir,
+        &["show", "adrdom/decisions/example.md"],
+        &[],
+        "",
+    ));
     assert!(shown.contains("adrdom/decisions/example.md: 1.1 What color is the widget?: text changed since being refused;"), "{}", shown);
 
     // Nothing changed: the file is exactly as edited, no new ledger rows.
@@ -809,7 +918,10 @@ fn ask_refuses_when_a_refused_section_was_edited_since_refusal() {
     assert_eq!(after, edited);
     let ledger_before = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
     assert_eq!(
-        ledger_before.lines().filter(|l| l.contains("\trefused\t")).count(),
+        ledger_before
+            .lines()
+            .filter(|l| l.contains("\trefused\t"))
+            .count(),
         1,
         "{}",
         ledger_before
@@ -842,16 +954,34 @@ fn ask_asks_every_tier_show_named_and_the_owners_answers_come_in_order() {
 
     let shown = stdout(&adr(&dir, &["show", rel], &[], ""));
     assert!(
-        shown.lines().any(|l| l.contains("agent runs: adr ask") && l.contains("Is alpha ready?") && l.contains("Is delta ready?")),
+        shown.lines().any(|l| l.contains("agent runs: adr ask")
+            && l.contains("Is alpha ready?")
+            && l.contains("Is delta ready?")),
         "{}",
         shown
     );
     assert!(!shown.contains("not yet"), "{}", shown);
 
     let out = adr(&dir, &["ask", record.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask must take the move show named: {}", stderr(&out));
-    assert!(stdout(&out).lines().any(|l| l == "asked: \"Is alpha ready?\""), "{}", stdout(&out));
-    assert!(stdout(&out).lines().any(|l| l == "asked: \"Is delta ready?\""), "{}", stdout(&out));
+    assert!(
+        out.status.success(),
+        "ask must take the move show named: {}",
+        stderr(&out)
+    );
+    assert!(
+        stdout(&out)
+            .lines()
+            .any(|l| l == "asked: \"Is alpha ready?\""),
+        "{}",
+        stdout(&out)
+    );
+    assert!(
+        stdout(&out)
+            .lines()
+            .any(|l| l == "asked: \"Is delta ready?\""),
+        "{}",
+        stdout(&out)
+    );
     assert_eq!(asked_row_count(&dir), 2, "alpha and delta are asked");
     assert!(stderr(&out).is_empty(), "{}", stderr(&out));
 
@@ -870,22 +1000,36 @@ fn ask_asks_every_tier_show_named_and_the_owners_answers_come_in_order() {
     let shown = stdout(&adr(&dir, &["show", rel], &[], ""));
     assert!(shown.contains("owner runs: adr answer"), "{}", shown);
     assert!(shown.contains(&alpha_id), "{}", shown);
-    assert!(!shown.contains(&format!("adr answer {}@", delta_id)), "{}", shown);
     assert!(
-        shown.lines().any(|l| l.contains("not yet") && l.contains("Is delta ready?")),
+        !shown.contains(&format!("adr answer {}@", delta_id)),
+        "{}",
+        shown
+    );
+    assert!(
+        shown
+            .lines()
+            .any(|l| l.contains("not yet") && l.contains("Is delta ready?")),
         "{}",
         shown
     );
 
     // A run with nothing to ask prints nothing; show names the same moves.
     let shown_again = nothing_to_ask_and_show(&dir, &record);
-    assert!(shown_again.contains("owner runs: adr answer"), "{}", shown_again);
+    assert!(
+        shown_again.contains("owner runs: adr answer"),
+        "{}",
+        shown_again
+    );
     assert_eq!(asked_row_count(&dir), 2);
 
     // The owner's move; then show names the answer to delta.
     assert!(adr_answer(&dir, &alpha_id, "A").status.success());
     let shown = stdout(&adr(&dir, &["show", rel], &[], ""));
-    assert!(shown.contains(&format!("owner runs: adr answer {}@", delta_id)), "{}", shown);
+    assert!(
+        shown.contains(&format!("owner runs: adr answer {}@", delta_id)),
+        "{}",
+        shown
+    );
     assert!(!shown.contains("not yet: \"Is delta"), "{}", shown);
 }
 
@@ -903,28 +1047,48 @@ fn answer_names_the_move_show_names_for_an_edited_target() {
     let rel = "adrdom/decisions/example.md";
     let record = write_record(&dir, rel, &format!("{}{}", Q1, q2_depends_on_q1("=A")));
     approve_record(&dir, rel);
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let q2_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[1].clone();
 
     let text = std::fs::read_to_string(&record).unwrap();
-    std::fs::write(&record, text.replacen("is undecided.", "is undecided, reworded.", 1)).unwrap();
+    std::fs::write(
+        &record,
+        text.replacen("is undecided.", "is undecided, reworded.", 1),
+    )
+    .unwrap();
 
     let refused = adr_answer(&dir, &q2_id, "A");
     assert!(!refused.status.success());
     assert!(
-        stderr(&refused).trim_end().ends_with(&format!("owner runs: adr approve {}", rel)),
+        stderr(&refused)
+            .trim_end()
+            .ends_with(&format!("owner runs: adr approve {}", rel)),
         "{}",
         stderr(&refused)
     );
     let shown = stdout(&adr(&dir, &["show", rel], &[], ""));
-    assert!(shown.contains(&format!("owner runs: adr approve {}", rel)), "{}", shown);
+    assert!(
+        shown.contains(&format!("owner runs: adr approve {}", rel)),
+        "{}",
+        shown
+    );
 
     approve_record(&dir, rel);
     let refused = adr_answer(&dir, &q2_id, "A");
     assert!(!refused.status.success());
-    assert!(stderr(&refused).contains(&format!("agent runs: adr ask {}", rel)), "{}", stderr(&refused));
+    assert!(
+        stderr(&refused).contains(&format!("agent runs: adr ask {}", rel)),
+        "{}",
+        stderr(&refused)
+    );
     let shown = stdout(&adr(&dir, &["show", rel], &[], ""));
-    assert!(shown.contains(&format!("agent runs: adr ask {}", rel)), "{}", shown);
+    assert!(
+        shown.contains(&format!("agent runs: adr ask {}", rel)),
+        "{}",
+        shown
+    );
 }
 
 // adr: da80931c-68cf-4c51-acce-060307bbd973
@@ -944,7 +1108,9 @@ fn answer_names_one_ask_clause_for_every_edited_heading() {
     let rel = "adrdom/decisions/example.md";
     let record = write_record(&dir, rel, &content);
     approve_record(&dir, rel);
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let q3_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[2].clone();
     let version = current_version(&dir, &q3_id);
 
@@ -953,13 +1119,23 @@ fn answer_names_one_ask_clause_for_every_edited_heading() {
     std::fs::write(&record, text).unwrap();
     approve_record(&dir, rel);
 
-    let refused = adr_owner(&dir, &["answer", &format!("{}@{}", q3_id, version), "A"], "");
+    let refused = adr_owner(
+        &dir,
+        &["answer", &format!("{}@{}", q3_id, version), "A"],
+        "",
+    );
     assert!(!refused.status.success());
     let err = stderr(&refused);
     assert_eq!(err.matches("agent runs: adr ask").count(), 1, "{}", err);
     // The refusal names both headings; its ask clause carries no `#`
     // comment, so no clause after it is read as part of one.
-    assert!(err.contains("\"Is alpha ready?\" has no decision yet, \"Is beta ready?\" has no decision yet"), "{}", err);
+    assert!(
+        err.contains(
+            "\"Is alpha ready?\" has no decision yet, \"Is beta ready?\" has no decision yet"
+        ),
+        "{}",
+        err
+    );
     assert!(!err.contains('#'), "{}", err);
 }
 
@@ -976,14 +1152,20 @@ fn answer_names_the_plan_refusal_next_names_when_approve_would_refuse() {
     let rel = "adrdom/decisions/example.md";
     let record = write_record(&dir, rel, &format!("{}{}", Q1, q2_depends_on_q1("=A")));
     approve_record(&dir, rel);
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let q2_id = extract_ids(&std::fs::read_to_string(&record).unwrap())[1].clone();
 
     // Q1 is edited and a heading with no depends line is added: approve
     // would refuse the plan.
     let text = std::fs::read_to_string(&record).unwrap();
     let text = text.replacen("is undecided.", "is undecided, reworded.", 1);
-    std::fs::write(&record, format!("{}\n### 1.9 Is the widget plain?\n", text.trim_end())).unwrap();
+    std::fs::write(
+        &record,
+        format!("{}\n### 1.9 Is the widget plain?\n", text.trim_end()),
+    )
+    .unwrap();
 
     let refused = adr_answer(&dir, &q2_id, "A");
     assert!(!refused.status.success());

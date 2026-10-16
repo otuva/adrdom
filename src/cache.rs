@@ -22,13 +22,20 @@ pub const ORT_FILE: &str = "libonnxruntime.so.1.28.0";
 const MODEL_REPO_DIR: &str = "models--Qdrant--bge-base-en-v1.5-onnx-Q";
 
 /// The files fastembed reads for the quantized bge-base model.
-const MODEL_FILES: [&str; 5] =
-    ["model_optimized.onnx", "tokenizer.json", "config.json", "special_tokens_map.json", "tokenizer_config.json"];
+const MODEL_FILES: [&str; 5] = [
+    "model_optimized.onnx",
+    "tokenizer.json",
+    "config.json",
+    "special_tokens_map.json",
+    "tokenizer_config.json",
+];
 
 /// `<user cache directory>/adrdom`: `$XDG_CACHE_HOME` or `~/.cache` on Linux,
 /// `~/Library/Caches` on macOS, the local app data on Windows.
 pub fn root() -> Result<PathBuf, String> {
-    dirs::cache_dir().map(|d| d.join("adrdom")).ok_or_else(msg::cache_dir_missing)
+    dirs::cache_dir()
+        .map(|d| d.join("adrdom"))
+        .ok_or_else(msg::cache_dir_missing)
 }
 
 /// The directory fastembed is given as its cache directory.
@@ -62,7 +69,10 @@ pub fn init_ort(lib: &std::path::Path) -> Result<(), String> {
     static DONE: std::sync::OnceLock<Result<(), String>> = std::sync::OnceLock::new();
     DONE.get_or_init(|| {
         // Microsoft's Windows library sends ETW telemetry unless told not to.
-        ort::init_from(lib).map_err(|e| e.to_string())?.with_telemetry(false).commit();
+        ort::init_from(lib)
+            .map_err(|e| e.to_string())?
+            .with_telemetry(false)
+            .commit();
         Ok(())
     })
     .clone()

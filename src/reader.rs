@@ -220,7 +220,13 @@ pub fn parse_row(line: &str) -> Option<Row> {
         None => !p[2].is_empty() && !p[2].contains(char::is_whitespace),
     };
     let word_ok = is_stored_word(p[3]);
-    if !is_time(p[0]) || !is_hash(p[1]) || !neighbour_ok || !word_ok || !is_hash(p[5]) || p[6].is_empty() {
+    if !is_time(p[0])
+        || !is_hash(p[1])
+        || !neighbour_ok
+        || !word_ok
+        || !is_hash(p[5])
+        || p[6].is_empty()
+    {
         return None;
     }
     Some(Row {
@@ -271,7 +277,11 @@ pub fn rows(root: &Path) -> std::sync::Arc<Vec<Row>> {
     static CACHE: OnceLock<Mutex<Option<(Key, Arc<Vec<Row>>)>>> = OnceLock::new();
     let path = root.join(repo::READER_PATH);
     let meta = std::fs::metadata(&path).ok();
-    let key: Key = (path.clone(), meta.as_ref().map_or(0, |m| m.len()), meta.and_then(|m| m.modified().ok()));
+    let key: Key = (
+        path.clone(),
+        meta.as_ref().map_or(0, |m| m.len()),
+        meta.and_then(|m| m.modified().ok()),
+    );
     let cache = CACHE.get_or_init(|| Mutex::new(None));
     let mut held = cache.lock().unwrap_or_else(|e| e.into_inner());
     if let Some((k, rows)) = held.as_ref() {
@@ -297,7 +307,9 @@ pub fn rows(root: &Path) -> std::sync::Arc<Vec<Row>> {
 pub fn rows_via(root: &Path, source: &repo::Source) -> std::sync::Arc<Vec<Row>> {
     match source {
         repo::Source::WorkingTree => rows(root),
-        repo::Source::Index => std::sync::Arc::new(parse(&source.read(root, repo::READER_PATH).unwrap_or_default()).rows),
+        repo::Source::Index => std::sync::Arc::new(
+            parse(&source.read(root, repo::READER_PATH).unwrap_or_default()).rows,
+        ),
     }
 }
 
@@ -325,7 +337,10 @@ impl Live {
     /// the id (or name) of a term, retired or not, or `text:` and the hash
     /// of a question's heading and body.
     pub fn of(root: &Path) -> Live {
-        Live { root: root.to_path_buf(), sets: std::sync::OnceLock::new() }
+        Live {
+            root: root.to_path_buf(),
+            sets: std::sync::OnceLock::new(),
+        }
     }
 
     fn load(root: &Path) -> LiveSets {
@@ -356,7 +371,11 @@ impl Live {
             crate::state::TermsLoad::Missing => {}
             crate::state::TermsLoad::LoadError(_) => complete = false,
         }
-        LiveSets { texts, neighbours, complete }
+        LiveSets {
+            texts,
+            neighbours,
+            complete,
+        }
     }
 
     /// Reads the records now, so that a caller about to take a lock does not
@@ -416,11 +435,20 @@ pub fn append_live(root: &Path, rows: &[Row], live: &Live) -> Result<(), String>
     }
     // A file that does not end in a newline would glue its last line to the
     // first new row.
-    let lead = if !old.is_empty() && !old.ends_with('\n') { "\n" } else { "" };
-    let kept: Vec<&str> = old.lines().filter(|l| parse_row(l).map_or(true, |r| live.holds(&r))).collect();
+    let lead = if !old.is_empty() && !old.ends_with('\n') {
+        "\n"
+    } else {
+        ""
+    };
+    let kept: Vec<&str> = old
+        .lines()
+        .filter(|l| parse_row(l).map_or(true, |r| live.holds(&r)))
+        .collect();
     if kept.len() == old.lines().count() {
         let text = format!("{}{}", lead, text);
-        return handle.write_all(text.as_bytes()).map_err(msg::reader_write_failed);
+        return handle
+            .write_all(text.as_bytes())
+            .map_err(msg::reader_write_failed);
     }
     let mut all = String::new();
     for l in kept {
@@ -446,21 +474,32 @@ const LOCK_TRIES: usize = 50;
 /// the lock counts only when the path still names the locked file.
 pub(crate) fn lock_file(path: &Path) -> std::io::Result<std::fs::File> {
     for _ in 0..LOCK_TRIES {
-        let h = std::fs::OpenOptions::new().create(true).read(true).append(true).open(path)?;
+        let h = std::fs::OpenOptions::new()
+            .create(true)
+            .read(true)
+            .append(true)
+            .open(path)?;
         h.lock()?;
         if same_file(&h, path) {
             return Ok(h);
         }
     }
-    Err(std::io::Error::new(std::io::ErrorKind::Other, "the file kept changing under the lock"))
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        "the file kept changing under the lock",
+    ))
 }
 
 /// Removes every `<name>.*.tmp` beside the file `path`, `<name>` its file
 /// name.
 pub(crate) fn remove_stale_tmp(path: &Path) {
-    let (Some(dir), Some(own)) = (path.parent(), path.file_name()) else { return };
+    let (Some(dir), Some(own)) = (path.parent(), path.file_name()) else {
+        return;
+    };
     let prefix = format!("{}.", own.to_string_lossy());
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
     for e in entries.flatten() {
         let name = e.file_name();
         let name = name.to_string_lossy();
@@ -506,10 +545,19 @@ pub fn parse_reply(kind: Kind, letters: &[char], reply: &str) -> Result<(String,
             if kind == Kind::Body {
                 set.push_str(", closes and the letter of an option");
             }
-            return Err(format!("the last line is not one of {}: {:?}", set, lines[last].trim()));
+            return Err(format!(
+                "the last line is not one of {}: {:?}",
+                set,
+                lines[last].trim()
+            ));
         }
     };
-    let reason = lines[..last].iter().map(|l| l.trim()).filter(|l| !l.is_empty()).collect::<Vec<_>>().join(" ");
+    let reason = lines[..last]
+        .iter()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
     Ok((reason, word))
 }
 
@@ -520,10 +568,16 @@ fn closes_letter(kind: Kind, letters: &[char], word: &str) -> Option<char> {
         return None;
     }
     // `closes: b` and `closes (b)` name the letter as `closes b` does.
-    let mut parts = word.split(|c: char| !c.is_alphanumeric()).filter(|t| !t.is_empty());
-    let (Some(CLOSES), Some(l), None) = (parts.next(), parts.next(), parts.next()) else { return None };
+    let mut parts = word
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|t| !t.is_empty());
+    let (Some(CLOSES), Some(l), None) = (parts.next(), parts.next(), parts.next()) else {
+        return None;
+    };
     let mut cs = l.chars();
-    let (Some(c), None) = (cs.next(), cs.next()) else { return None };
+    let (Some(c), None) = (cs.next(), cs.next()) else {
+        return None;
+    };
     let c = c.to_ascii_uppercase();
     letters.contains(&c).then_some(c)
 }
@@ -564,7 +618,10 @@ impl Program {
 /// else `codex` when its rules file is there, else none.
 pub fn program(root: &Path) -> Option<Program> {
     let imports = std::fs::read_to_string(root.join("CLAUDE.md"))
-        .map(|c| c.lines().any(|l| l == crate::commands::install::CLAUDE_MD_IMPORT))
+        .map(|c| {
+            c.lines()
+                .any(|l| l == crate::commands::install::CLAUDE_MD_IMPORT)
+        })
         .unwrap_or(false);
     if imports {
         Some(Program::Claude)
@@ -586,12 +643,18 @@ pub fn model_of(root: &Path) -> &'static str {
 }
 
 /// The file suffixes a program name may carry on this platform.
-const SUFFIXES: &[&str] = if cfg!(windows) { &[".exe", ".cmd"] } else { &[""] };
+const SUFFIXES: &[&str] = if cfg!(windows) {
+    &[".exe", ".cmd"]
+} else {
+    &[""]
+};
 
 /// Whether `f` is a file the system can run: on unix, one with an
 /// executable bit; elsewhere any file.
 fn is_runnable(f: &Path) -> bool {
-    let Ok(meta) = std::fs::metadata(f) else { return false };
+    let Ok(meta) = std::fs::metadata(f) else {
+        return false;
+    };
     if !meta.is_file() {
         return false;
     }
@@ -611,7 +674,11 @@ fn is_runnable(f: &Path) -> bool {
 /// with no executable bit is skipped and the search goes on.
 pub fn find_program(name: &str, path: &std::ffi::OsStr, suffixes: &[&str]) -> Option<PathBuf> {
     std::env::split_paths(path)
-        .flat_map(|d| suffixes.iter().map(move |s| d.join(format!("{}{}", name, s))))
+        .flat_map(|d| {
+            suffixes
+                .iter()
+                .map(move |s| d.join(format!("{}{}", name, s)))
+        })
         .find(|f| is_runnable(f))
 }
 
@@ -689,7 +756,12 @@ fn run(mut cmd: Command, name: &str, input: String, cwd: &Path) -> Result<String
     let stdout = t_out.join().unwrap_or_default();
     let stderr = t_err.join().unwrap_or_default();
     if !status.success() {
-        return Err(format!("{} exited with {}: {}", name, status, stderr.trim()));
+        return Err(format!(
+            "{} exited with {}: {}",
+            name,
+            status,
+            stderr.trim()
+        ));
     }
     Ok(stdout)
 }
@@ -705,7 +777,8 @@ impl Reader for Claude {
         // plant settings or a CLAUDE.md in it.
         let cwd = PrivateDir::create()?;
         let prompt_file = cwd.0.join("system-prompt.txt");
-        std::fs::write(&prompt_file, pair.kind.prompt()).map_err(|e| format!("cannot write the reader's prompt: {}", e))?;
+        std::fs::write(&prompt_file, pair.kind.prompt())
+            .map_err(|e| format!("cannot write the reader's prompt: {}", e))?;
         let mut cmd = Command::new(&self.exe);
         cmd.args([
             "-p",
@@ -726,7 +799,8 @@ impl Reader for Claude {
         ])
         .arg(&prompt_file);
         let stdout = run(cmd, "claude", user, &cwd.0)?;
-        let v: serde_json::Value = serde_json::from_str(&stdout).map_err(|e| format!("reply is not JSON: {}", e))?;
+        let v: serde_json::Value =
+            serde_json::from_str(&stdout).map_err(|e| format!("reply is not JSON: {}", e))?;
         v.get("result")
             .and_then(|r| r.as_str())
             .map(String::from)
@@ -801,7 +875,8 @@ fn marked_word(text: &str, neighbour: &str) -> Option<String> {
 #[cfg(feature = "fake-model")]
 impl Reader for Fake {
     fn ask(&self, pair: &Pair) -> Result<String, String> {
-        let word = marked_word(&pair.new_text, &pair.neighbour).unwrap_or_else(|| "unrelated".to_string());
+        let word =
+            marked_word(&pair.new_text, &pair.neighbour).unwrap_or_else(|| "unrelated".to_string());
         Ok(format!("The fake reader's reason.\n{}", word))
     }
 
@@ -831,7 +906,8 @@ pub fn load(root: &Path) -> Result<Box<dyn Reader>, String> {
 /// `load` with the directories of `path` searched, and no fake reader.
 pub fn load_in(root: &Path, path: &std::ffi::OsStr) -> Result<Box<dyn Reader>, String> {
     let p = program(root).ok_or_else(msg::reader_no_agent)?;
-    let exe = find_program(p.name(), path, SUFFIXES).ok_or_else(|| msg::reader_missing(p.name()))?;
+    let exe =
+        find_program(p.name(), path, SUFFIXES).ok_or_else(|| msg::reader_missing(p.name()))?;
     Ok(match p {
         Program::Claude => Box::new(Claude { exe }),
         Program::Codex => Box::new(Codex { exe }),
@@ -857,7 +933,12 @@ pub fn read_with(root: &Path, reader: &dyn Reader, pairs: &[Pair]) -> Result<Vec
     read_with_live(root, reader, pairs, &Live::of(root))
 }
 
-pub fn read_with_live(root: &Path, reader: &dyn Reader, pairs: &[Pair], live: &Live) -> Result<Vec<Row>, String> {
+pub fn read_with_live(
+    root: &Path,
+    reader: &dyn Reader,
+    pairs: &[Pair],
+    live: &Live,
+) -> Result<Vec<Row>, String> {
     let model = reader.model();
     let mut have: HashMap<(String, String, String, String), Row> = HashMap::new();
     for r in read_file(root).rows {
@@ -865,7 +946,14 @@ pub fn read_with_live(root: &Path, reader: &dyn Reader, pairs: &[Pair], live: &L
             have.insert(r.key(), r);
         }
     }
-    let key = |p: &Pair| (sha256_hex(&p.new_text), p.neighbour.clone(), p.kind.prompt_hash(), model.to_string());
+    let key = |p: &Pair| {
+        (
+            sha256_hex(&p.new_text),
+            p.neighbour.clone(),
+            p.kind.prompt_hash(),
+            model.to_string(),
+        )
+    };
     let mut todo: Vec<usize> = Vec::new();
     let mut seen: HashSet<(String, String, String, String)> = HashSet::new();
     for (i, p) in pairs.iter().enumerate() {
@@ -883,13 +971,21 @@ pub fn read_with_live(root: &Path, reader: &dyn Reader, pairs: &[Pair], live: &L
                 .map(|&i| {
                     s.spawn(move || {
                         let p = &pairs[i];
-                        (i, reader.ask(p).and_then(|reply| parse_reply(p.kind, &p.letters, &reply)))
+                        (
+                            i,
+                            reader
+                                .ask(p)
+                                .and_then(|reply| parse_reply(p.kind, &p.letters, &reply)),
+                        )
                     })
                 })
                 .collect();
             hs.into_iter()
                 .zip(chunk)
-                .map(|(h, &i)| h.join().unwrap_or((i, Err("the reader stopped".to_string()))))
+                .map(|(h, &i)| {
+                    h.join()
+                        .unwrap_or((i, Err("the reader stopped".to_string())))
+                })
                 .collect()
         });
         for (i, r) in got {
@@ -909,7 +1005,11 @@ pub fn read_with_live(root: &Path, reader: &dyn Reader, pairs: &[Pair], live: &L
                     });
                 }
                 Err(e) => {
-                    let e = if e.starts_with("reader: ") { e } else { msg::reader_failed(&p.neighbour, e) };
+                    let e = if e.starts_with("reader: ") {
+                        e
+                    } else {
+                        msg::reader_failed(&p.neighbour, e)
+                    };
                     return Err(e);
                 }
             }
@@ -934,7 +1034,13 @@ impl PrivateDir {
     }
 
     fn create_in(base: &Path) -> Result<PrivateDir, String> {
-        let base = std::fs::canonicalize(base).map_err(|e| format!("cannot make a directory for the reader: {}: {}", base.display(), e))?;
+        let base = std::fs::canonicalize(base).map_err(|e| {
+            format!(
+                "cannot make a directory for the reader: {}: {}",
+                base.display(),
+                e
+            )
+        })?;
         let path = base.join(format!("adr-reader-{}", uuid::Uuid::new_v4()));
         #[allow(unused_mut)]
         let mut dir = std::fs::DirBuilder::new();
@@ -943,7 +1049,8 @@ impl PrivateDir {
             use std::os::unix::fs::DirBuilderExt;
             dir.mode(0o700);
         }
-        dir.create(&path).map_err(|e| format!("cannot make a directory for the reader: {}", e))?;
+        dir.create(&path)
+            .map_err(|e| format!("cannot make a directory for the reader: {}", e))?;
         Ok(PrivateDir(path))
     }
 }
@@ -961,8 +1068,17 @@ mod tests {
     // adr: ed372cc6-c161-4b90-85bd-c73a6e788c5e
     #[test]
     fn a_set_pair_is_given_the_lower_identifier_first() {
-        let mut p = Pair { kind: Kind::Set, new_text: "NEW".into(), neighbour: "n".into(), neighbour_text: "NEIGHBOUR".into(), letters: Vec::new() };
-        assert_eq!(user_message(&p), "First decision:\nNEW\n\nSecond decision:\nNEIGHBOUR");
+        let mut p = Pair {
+            kind: Kind::Set,
+            new_text: "NEW".into(),
+            neighbour: "n".into(),
+            neighbour_text: "NEIGHBOUR".into(),
+            letters: Vec::new(),
+        };
+        assert_eq!(
+            user_message(&p),
+            "First decision:\nNEW\n\nSecond decision:\nNEIGHBOUR"
+        );
         p.kind = Kind::Body;
         assert!(user_message(&p).starts_with("Existing record:\nNEIGHBOUR"));
     }
@@ -975,7 +1091,10 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            assert_eq!(std::fs::metadata(&a.0).unwrap().permissions().mode() & 0o777, 0o700);
+            assert_eq!(
+                std::fs::metadata(&a.0).unwrap().permissions().mode() & 0o777,
+                0o700
+            );
         }
         let path = a.0.clone();
         drop(a);
@@ -988,10 +1107,21 @@ mod tests {
         std::fs::create_dir(base.0.join("x")).unwrap();
         let d = PrivateDir::create_in(&base.0.join("x").join("..")).unwrap();
         assert!(d.0.is_absolute());
-        assert!(!d.0.components().any(|c| c == std::path::Component::ParentDir), "{:?}", d.0);
+        assert!(
+            !d.0.components()
+                .any(|c| c == std::path::Component::ParentDir),
+            "{:?}",
+            d.0
+        );
         assert_eq!(d.0.parent().unwrap(), base.0.canonicalize().unwrap());
-        let e = PrivateDir::create_in(&base.0.join("missing")).err().expect("refuses");
-        assert!(e.starts_with("cannot make a directory for the reader"), "{}", e);
+        let e = PrivateDir::create_in(&base.0.join("missing"))
+            .err()
+            .expect("refuses");
+        assert!(
+            e.starts_with("cannot make a directory for the reader"),
+            "{}",
+            e
+        );
     }
 
     fn row() -> Row {
@@ -1010,12 +1140,25 @@ mod tests {
     #[test]
     fn plan_and_set_replies_are_a_reason_then_one_word_of_their_set() {
         let (reason, word) = parse_reply(Kind::Plan, &[], "It asks the same.\n\nSame.\n").unwrap();
-        assert_eq!((reason.as_str(), word.as_str()), ("It asks the same.", "same"));
+        assert_eq!(
+            (reason.as_str(), word.as_str()),
+            ("It asks the same.", "same")
+        );
         for w in PLAN_WORDS {
-            assert_eq!(parse_reply(Kind::Plan, &[], &format!("r\n{}.", w)).unwrap().1, w);
+            assert_eq!(
+                parse_reply(Kind::Plan, &[], &format!("r\n{}.", w))
+                    .unwrap()
+                    .1,
+                w
+            );
         }
         for w in SET_WORDS {
-            assert_eq!(parse_reply(Kind::Set, &[], &format!("r\n{}", w.to_uppercase())).unwrap().1, w);
+            assert_eq!(
+                parse_reply(Kind::Set, &[], &format!("r\n{}", w.to_uppercase()))
+                    .unwrap()
+                    .1,
+                w
+            );
         }
         assert!(parse_reply(Kind::Plan, &[], "r\nconsistent").is_err());
         assert!(parse_reply(Kind::Plan, &[], "r\ndepends").is_err());
@@ -1031,7 +1174,8 @@ mod tests {
     #[test]
     fn body_reply_is_a_reason_then_one_word_of_the_body_set_or_closes_with_a_letter() {
         for w in BODY_WORDS {
-            let (reason, got) = parse_reply(Kind::Body, &['A', 'B'], &format!("One sentence.\n{}", w)).unwrap();
+            let (reason, got) =
+                parse_reply(Kind::Body, &['A', 'B'], &format!("One sentence.\n{}", w)).unwrap();
             assert_eq!((reason.as_str(), got.as_str()), ("One sentence.", w));
         }
         assert_eq!(BODY_WORDS.len(), 4);
@@ -1039,12 +1183,33 @@ mod tests {
         assert!(parse_reply(Kind::Body, &['A', 'B'], "r\ndepends").is_err());
         assert!(parse_reply(Kind::Body, &['A', 'B'], "r\nconsistently").is_err());
         assert!(parse_reply(Kind::Body, &[], "inconsistent").is_ok());
-        for reply in ["r\ncloses B", "r\nCloses b.", "r\n  closes   B  ", "r\nCloses: B", "r\ncloses (B)", "r\n**closes B**"] {
-            assert_eq!(parse_reply(Kind::Body, &['A', 'B'], reply).unwrap().1, "closes B");
+        for reply in [
+            "r\ncloses B",
+            "r\nCloses b.",
+            "r\n  closes   B  ",
+            "r\nCloses: B",
+            "r\ncloses (B)",
+            "r\n**closes B**",
+        ] {
+            assert_eq!(
+                parse_reply(Kind::Body, &['A', 'B'], reply).unwrap().1,
+                "closes B"
+            );
         }
         // No letter, a letter the question lacks, two letters, or another kind.
-        for reply in ["r\ncloses", "r\ncloses C", "r\ncloses AB", "r\ncloses 1", "r\ncloses B or A", "r\ncloses option B"] {
-            assert!(parse_reply(Kind::Body, &['A', 'B'], reply).is_err(), "{}", reply);
+        for reply in [
+            "r\ncloses",
+            "r\ncloses C",
+            "r\ncloses AB",
+            "r\ncloses 1",
+            "r\ncloses B or A",
+            "r\ncloses option B",
+        ] {
+            assert!(
+                parse_reply(Kind::Body, &['A', 'B'], reply).is_err(),
+                "{}",
+                reply
+            );
         }
         assert!(parse_reply(Kind::Body, &[], "r\ncloses A").is_err());
         assert!(parse_reply(Kind::Plan, &['A'], "r\ncloses A").is_err());
@@ -1052,17 +1217,36 @@ mod tests {
 
     #[test]
     fn a_stored_word_is_a_word_of_a_set_depends_or_closes_with_a_capital_letter() {
-        for w in ["same", "consistent", "inconsistent", "unrelated", "depends", "closes A", "closes Z"] {
+        for w in [
+            "same",
+            "consistent",
+            "inconsistent",
+            "unrelated",
+            "depends",
+            "closes A",
+            "closes Z",
+        ] {
             assert!(is_stored_word(w), "{}", w);
         }
-        for w in ["closes", "closes a", "closes AB", "closes  A", "close A", "maybe", ""] {
+        for w in [
+            "closes",
+            "closes a",
+            "closes AB",
+            "closes  A",
+            "close A",
+            "maybe",
+            "",
+        ] {
             assert!(!is_stored_word(w), "{}", w);
         }
     }
 
     #[test]
     fn the_three_prompts_differ_and_name_their_words() {
-        let hashes: HashSet<String> = [Kind::Body, Kind::Plan, Kind::Set].iter().map(|k| k.prompt_hash()).collect();
+        let hashes: HashSet<String> = [Kind::Body, Kind::Plan, Kind::Set]
+            .iter()
+            .map(|k| k.prompt_hash())
+            .collect();
         assert_eq!(hashes.len(), 3);
         assert!(Kind::Body.prompt().contains("inconsistent"));
         assert!(Kind::Body.prompt().contains("closes"));
@@ -1112,7 +1296,9 @@ mod tests {
         assert!(parse_row(&format!("{}\textra", good)).is_none());
         assert!(parse_row(&good.replace("depends", "maybe")).is_none());
         assert!(parse_row(&good.replace("2026-10-05T10:00:00Z", "yesterday")).is_none());
-        assert!(parse_row(&good.replace("d10dab89-1d42-4764-9d72-22d6fd6a9260", "text:abc")).is_none());
+        assert!(
+            parse_row(&good.replace("d10dab89-1d42-4764-9d72-22d6fd6a9260", "text:abc")).is_none()
+        );
         assert!(parse_row(&good.replace("d10dab89-1d42-4764-9d72-22d6fd6a9260", "")).is_none());
         assert!(parse_row(&good.replace("depends", "closes B")).is_some());
         assert!(parse_row(&good.replace("depends", "closes")).is_none());
@@ -1131,7 +1317,11 @@ mod tests {
             neighbour_text: String::new(),
             letters: vec!['A', 'B'],
         };
-        let word = |p: &Pair| parse_reply(p.kind, &p.letters, &Fake.ask(p).unwrap()).unwrap().1;
+        let word = |p: &Pair| {
+            parse_reply(p.kind, &p.letters, &Fake.ask(p).unwrap())
+                .unwrap()
+                .1
+        };
         assert_eq!(word(&p("Does X? [word:same]", "id-1")), "same");
         assert_eq!(word(&p("Does X?", "id-1")), "unrelated");
         let t = "Does X? [word:same] [word:closes B@id-2]";

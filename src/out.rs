@@ -19,7 +19,11 @@ use std::io::Write;
 /// version of an asked one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Status {
-    Question { status: QuestionStatus, letter: Option<char>, version: Option<String> },
+    Question {
+        status: QuestionStatus,
+        letter: Option<char>,
+        version: Option<String>,
+    },
     File(FileStatus),
     Term(TermStatus),
 }
@@ -29,7 +33,11 @@ impl Status {
     /// an answered question and the version of an asked one.
     pub fn name(&self) -> String {
         match self {
-            Status::Question { status, letter, version } => match version {
+            Status::Question {
+                status,
+                letter,
+                version,
+            } => match version {
                 Some(v) => format!("{} @{}", status.name_with(*letter), v),
                 None => status.name_with(*letter),
             },
@@ -43,34 +51,74 @@ impl Status {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
     /// The plan of a topic file approved (its file row).
-    PlanApproved { path: String },
+    PlanApproved {
+        path: String,
+    },
     /// One question's text approved (its own row).
-    QuestionApproved { heading: String },
+    QuestionApproved {
+        heading: String,
+    },
     /// The prose of a topic file approved.
-    ProseApproved { path: String },
+    ProseApproved {
+        path: String,
+    },
     TermsApproved,
-    TermApproved { name: String },
-    TermRemoved { name: String },
-    BlameApproved { path: String },
-    Asked { heading: String },
+    TermApproved {
+        name: String,
+    },
+    TermRemoved {
+        name: String,
+    },
+    BlameApproved {
+        path: String,
+    },
+    Asked {
+        heading: String,
+    },
     /// A question asked while one standing on it carries an answer set.
-    Assumes { dependent: String, target: String },
+    Assumes {
+        dependent: String,
+        target: String,
+    },
     /// `sentence` is the picked option's sentence when the caller knows it
     /// (`answer` does; a row alone does not carry it).
-    Answered { heading: String, letter: String, sentence: String },
-    Refused { heading: String },
-    Superseded { heading: String },
-    Withdrawn { heading: String },
-    Dropped { heading: String },
-    Banned { term: Option<String> },
+    Answered {
+        heading: String,
+        letter: String,
+        sentence: String,
+    },
+    Refused {
+        heading: String,
+    },
+    Superseded {
+        heading: String,
+    },
+    Withdrawn {
+        heading: String,
+    },
+    Dropped {
+        heading: String,
+    },
+    Banned {
+        term: Option<String>,
+    },
     Unbanned,
-    FileWritten { path: String },
-    FileRemoved { path: String },
+    FileWritten {
+        path: String,
+    },
+    FileRemoved {
+        path: String,
+    },
     /// A key of git's configuration set to `value` (install's
     /// `core.hooksPath`).
-    ConfigSet { key: String, value: String },
+    ConfigSet {
+        key: String,
+        value: String,
+    },
     /// A key of git's configuration unset.
-    ConfigUnset { key: String },
+    ConfigUnset {
+        key: String,
+    },
 }
 
 impl Event {
@@ -80,23 +128,52 @@ impl Event {
     pub fn from_row(row: &Row, names: &HashMap<String, String>) -> Option<Event> {
         let name = |id: &str| names.get(id).cloned().unwrap_or_else(|| id.to_string());
         Some(match row.event.as_str() {
-            "approved" if row.id == "-" => Event::PlanApproved { path: row.detail.clone() },
-            "approved" => Event::QuestionApproved { heading: name(&row.id) },
-            "context" => Event::ProseApproved { path: row.detail.clone() },
+            "approved" if row.id == "-" => Event::PlanApproved {
+                path: row.detail.clone(),
+            },
+            "approved" => Event::QuestionApproved {
+                heading: name(&row.id),
+            },
+            "context" => Event::ProseApproved {
+                path: row.detail.clone(),
+            },
             "terms" => Event::TermsApproved,
-            "term" if row.hash == crate::state::TERM_REMOVED => Event::TermRemoved { name: row.detail.clone() },
-            "term" => Event::TermApproved { name: row.detail.clone() },
-            "blame" => Event::BlameApproved { path: row.detail.clone() },
-            "asked" => Event::Asked { heading: row.detail.clone() },
-            "assumes" => Event::Assumes { dependent: name(&row.detail), target: name(&row.id) },
-            "answered" => {
-                Event::Answered { heading: name(&row.id), letter: row.detail.clone(), sentence: String::new() }
-            }
-            "refused" => Event::Refused { heading: row.detail.clone() },
-            "superseded" => Event::Superseded { heading: name(&row.id) },
-            "withdrawn" => Event::Withdrawn { heading: row.detail.clone() },
-            "dropped" => Event::Dropped { heading: name(&row.id) },
-            "banned" => Event::Banned { term: (!row.detail.is_empty()).then(|| name(&row.detail)) },
+            "term" if row.hash == crate::state::TERM_REMOVED => Event::TermRemoved {
+                name: row.detail.clone(),
+            },
+            "term" => Event::TermApproved {
+                name: row.detail.clone(),
+            },
+            "blame" => Event::BlameApproved {
+                path: row.detail.clone(),
+            },
+            "asked" => Event::Asked {
+                heading: row.detail.clone(),
+            },
+            "assumes" => Event::Assumes {
+                dependent: name(&row.detail),
+                target: name(&row.id),
+            },
+            "answered" => Event::Answered {
+                heading: name(&row.id),
+                letter: row.detail.clone(),
+                sentence: String::new(),
+            },
+            "refused" => Event::Refused {
+                heading: row.detail.clone(),
+            },
+            "superseded" => Event::Superseded {
+                heading: name(&row.id),
+            },
+            "withdrawn" => Event::Withdrawn {
+                heading: row.detail.clone(),
+            },
+            "dropped" => Event::Dropped {
+                heading: name(&row.id),
+            },
+            "banned" => Event::Banned {
+                term: (!row.detail.is_empty()).then(|| name(&row.detail)),
+            },
             "unbanned" => Event::Unbanned,
             _ => return None,
         })
@@ -113,12 +190,23 @@ impl Event {
             Event::BlameApproved { path } => format!("approved: {}", path),
             Event::Asked { heading } => format!("asked: \"{}\"", heading),
             Event::Assumes { dependent, target } => {
-                format!("assumes: \"{}\" stands on \"{}\" under its answer set", dependent, target)
+                format!(
+                    "assumes: \"{}\" stands on \"{}\" under its answer set",
+                    dependent, target
+                )
             }
-            Event::Answered { heading, letter, sentence } if sentence.is_empty() => {
+            Event::Answered {
+                heading,
+                letter,
+                sentence,
+            } if sentence.is_empty() => {
                 format!("answered: \"{}\" {}", heading, letter)
             }
-            Event::Answered { heading, letter, sentence } => {
+            Event::Answered {
+                heading,
+                letter,
+                sentence,
+            } => {
                 format!("answered: \"{}\" {}: {}", heading, letter, sentence)
             }
             Event::Refused { heading } => format!("refused: \"{}\"", heading),
@@ -141,26 +229,41 @@ impl Event {
 pub enum Line {
     /// Text the command read from the records, at a depth under what holds
     /// it (a decision's heading at 1, its picked option at 2).
-    Record { depth: usize, text: String },
+    Record {
+        depth: usize,
+        text: String,
+    },
     /// A topic's heading line in a listing of every topic:
     /// `# <topic> (<path>)`. It reads as a `Record` at depth 0 does.
-    Topic { text: String },
+    Topic {
+        text: String,
+    },
     /// A thing in the records and its status; `mark` is the side of a
     /// change beyond its latest approval the thing is on as a whole: a thing
     /// new since that approval (`Added`) or struck from it (`Removed`), the
     /// marks of a diff (per "Does show print what a file holds past its latest
     /// approval?", 91f9652a A).
-    Status { subject: String, status: Status, mark: Option<Side> },
+    Status {
+        subject: String,
+        status: Status,
+        mark: Option<Side>,
+    },
     /// The reader's word on a neighbour of a question, one line under the
     /// question (per "What does show print of a reader's word on a
     /// question?", 6e72f34e A). A view: no move stands on it. The reader's
     /// words are not statuses (a closed list), so the line is no `Status`.
-    Word { word: String, name: String },
+    Word {
+        word: String,
+        name: String,
+    },
     /// A rule one thing in the records breaks: found and the move.
     Finding(Finding),
     /// What stopped a command on its own input, files, environment or gate:
     /// `<command>: <what>; <move>`.
-    Stop { command: Command, text: String },
+    Stop {
+        command: Command,
+        text: String,
+    },
     Move(Move),
     Event(Event),
 }
@@ -179,7 +282,13 @@ pub fn report(r: &crate::moves::Report) -> Vec<Line> {
         .map(Line::Move)
         .chain(r.stops.iter().cloned())
         .chain(r.findings.iter().cloned().map(Line::Finding))
-        .chain(r.moves.iter().filter(|m| !is_build(m)).cloned().map(Line::Move))
+        .chain(
+            r.moves
+                .iter()
+                .filter(|m| !is_build(m))
+                .cloned()
+                .map(Line::Move),
+        )
         .collect()
 }
 
@@ -189,7 +298,11 @@ pub fn text(line: &Line) -> String {
     visible(&match line {
         Line::Record { depth, text } => format!("{}{}", INDENT.repeat(*depth), text),
         Line::Topic { text } => text.clone(),
-        Line::Status { subject, status, mark } => format!("{}[{}] {}", mark_of(*mark), status.name(), subject),
+        Line::Status {
+            subject,
+            status,
+            mark,
+        } => format!("{}[{}] {}", mark_of(*mark), status.name(), subject),
         Line::Word { word, name } => format!("{}[{}] {}", INDENT, word, name),
         Line::Finding(f) => f.text(),
         Line::Stop { command, text } => format!("{}: {}", command, text),
@@ -207,7 +320,15 @@ pub fn visible(s: &str) -> String {
     if !s.chars().any(is_hidden) {
         return s.to_string();
     }
-    s.chars().map(|c| if is_hidden(c) { format!("\\u{{{:x}}}", c as u32) } else { c.to_string() }).collect()
+    s.chars()
+        .map(|c| {
+            if is_hidden(c) {
+                format!("\\u{{{:x}}}", c as u32)
+            } else {
+                c.to_string()
+            }
+        })
+        .collect()
 }
 
 /// A character the terminal or the page would act on rather than show: a
@@ -227,7 +348,11 @@ pub fn html(line: &Line) -> String {
             format!("<p class=\"record depth-{}\">{}</p>", depth, esc(text))
         }
         Line::Topic { text } => format!("<p class=\"record depth-0\">{}</p>", esc(text)),
-        Line::Status { subject, status, mark } => format!(
+        Line::Status {
+            subject,
+            status,
+            mark,
+        } => format!(
             "<p class=\"status\">{}<span class=\"status-name s-{}\">[{}]</span> {}</p>",
             esc(mark_of(*mark)),
             status_class(status),
@@ -235,14 +360,30 @@ pub fn html(line: &Line) -> String {
             esc(subject)
         ),
         Line::Word { word, name } => {
-            let class: String = word_class(word).chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect();
-            format!("<p class=\"word word-{}\"><span class=\"word-name\">[{}]</span> {}</p>", class, esc(word), esc(name))
+            let class: String = word_class(word)
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric() || *c == '-')
+                .collect();
+            format!(
+                "<p class=\"word word-{}\"><span class=\"word-name\">[{}]</span> {}</p>",
+                class,
+                esc(word),
+                esc(name)
+            )
         }
         Line::Finding(f) => format!("<p class=\"finding\">{}</p>", esc(&f.text())),
         Line::Stop { command, text } => {
-            format!("<p class=\"finding stop\"><span class=\"rule\">{}:</span> {}</p>", esc(command.as_str()), esc(text))
+            format!(
+                "<p class=\"finding stop\"><span class=\"rule\">{}:</span> {}</p>",
+                esc(command.as_str()),
+                esc(text)
+            )
         }
-        Line::Move(m) => format!("<p class=\"move {}\">{}</p>", mover_class(m), esc(&m.text())),
+        Line::Move(m) => format!(
+            "<p class=\"move {}\">{}</p>",
+            mover_class(m),
+            esc(&m.text())
+        ),
         Line::Event(e) => format!("<p class=\"event\">{}</p>", esc(&e.text())),
     }
 }
@@ -266,7 +407,12 @@ pub(crate) fn word_is_marked(word: &str) -> bool {
 /// The first word of a status name, as the page's class: `answered`, `asked`.
 fn status_class(status: &Status) -> String {
     let name = status.name();
-    name.split(' ').next().unwrap_or("").chars().filter(|c| c.is_ascii_alphanumeric()).collect()
+    name.split(' ')
+        .next()
+        .unwrap_or("")
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect()
 }
 
 /// The mark a status line leads with: `+ ` or `- `, the marks of the change
@@ -313,7 +459,10 @@ pub fn esc(s: &str) -> String {
 pub fn refusal(cmd: Command, text: &str) -> Line {
     let prefix = format!("{}: ", cmd);
     let text = text.strip_prefix(&prefix).unwrap_or(text);
-    Line::Stop { command: cmd, text: text.to_string() }
+    Line::Stop {
+        command: cmd,
+        text: text.to_string(),
+    }
 }
 
 /// What stopped the command `cmd`, one line per line of `stop`, the
@@ -321,7 +470,10 @@ pub fn refusal(cmd: Command, text: &str) -> Line {
 /// error and the page shows in its banner, the same lines (per "Does the ui
 /// show what the terminal prints?", 7857d633 A).
 pub fn stop(cmd: Command, stop: &str) -> Vec<Line> {
-    stop.lines().filter(|l| !l.trim().is_empty()).map(|l| refusal(cmd, l)).collect()
+    stop.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| refusal(cmd, l))
+        .collect()
 }
 
 /// The exit code of a command whose reader went away, as a shell reports a
@@ -337,7 +489,10 @@ pub fn present(lines: &[Line]) -> Vec<&Line> {
     let mut i = 0;
     while i < lines.len() {
         if matches!(lines[i], Line::Finding(_)) {
-            let mut run: Vec<&Line> = lines[i..].iter().take_while(|l| matches!(l, Line::Finding(_))).collect();
+            let mut run: Vec<&Line> = lines[i..]
+                .iter()
+                .take_while(|l| matches!(l, Line::Finding(_)))
+                .collect();
             i += run.len();
             run.sort_by(|a, b| match (a, b) {
                 (Line::Finding(x), Line::Finding(y)) => crate::rules::finding_order(x, y),
@@ -367,18 +522,25 @@ pub struct Style {
 }
 
 impl Style {
-    pub const PLAIN: Style = Style { colour: false, shape: false };
+    pub const PLAIN: Style = Style {
+        colour: false,
+        shape: false,
+    };
 }
 
 /// Whether `NO_COLOR` (set and not empty) or `TERM=dumb` forbids colour.
 fn colour_forbidden() -> bool {
-    std::env::var_os("NO_COLOR").is_some_and(|v| !v.is_empty()) || std::env::var("TERM").is_ok_and(|t| t == "dumb")
+    std::env::var_os("NO_COLOR").is_some_and(|v| !v.is_empty())
+        || std::env::var("TERM").is_ok_and(|t| t == "dumb")
 }
 
 /// The style of a stream: shaped when it is a terminal, coloured when it is
 /// a terminal and colour is not forbidden.
 fn style_for(is_terminal: bool) -> Style {
-    Style { colour: is_terminal && !colour_forbidden(), shape: is_terminal }
+    Style {
+        colour: is_terminal && !colour_forbidden(),
+        shape: is_terminal,
+    }
 }
 
 /// The style of standard output, decided once per process.
@@ -409,7 +571,9 @@ pub enum Group {
 impl Group {
     fn of(line: &Line) -> Group {
         match line {
-            Line::Record { .. } | Line::Topic { .. } | Line::Status { .. } | Line::Word { .. } => Group::Questions,
+            Line::Record { .. } | Line::Topic { .. } | Line::Status { .. } | Line::Word { .. } => {
+                Group::Questions
+            }
             Line::Finding(_) | Line::Stop { .. } => Group::Findings,
             Line::Move(_) => Group::Moves,
             Line::Event(_) => Group::Events,
@@ -469,7 +633,9 @@ fn status_colour(status: &Status) -> Option<&'static str> {
             QuestionStatus::Answered => Some(GREEN),
             QuestionStatus::Refused => Some(RED),
             QuestionStatus::Asked | QuestionStatus::ChangedSinceAsked => Some(YELLOW),
-            QuestionStatus::Superseded | QuestionStatus::Withdrawn | QuestionStatus::Dropped => Some(DIM),
+            QuestionStatus::Superseded | QuestionStatus::Withdrawn | QuestionStatus::Dropped => {
+                Some(DIM)
+            }
             QuestionStatus::NoBody | QuestionStatus::NotAsked => None,
         },
         Status::File(s) => match s {
@@ -493,7 +659,9 @@ fn painted(line: &Line) -> String {
         Line::Topic { .. } => sgr(BOLD, &t),
         Line::Record { .. } => t,
         Line::Status { status, mark, .. } => {
-            let Some(code) = status_colour(status) else { return t };
+            let Some(code) = status_colour(status) else {
+                return t;
+            };
             let start = mark_of(*mark).len();
             match t[start..].find(']') {
                 Some(i) => {
@@ -551,7 +719,11 @@ fn render_after(lines: &[Line], style: Style, last: &mut Option<Group>) -> Vec<S
         for l in run {
             // A topic heading is set off by a blank line, also when it opens
             // a call that continues the stream's group.
-            let apart = if out.is_empty() { continued } else { !out.last().is_some_and(|s| s.is_empty()) };
+            let apart = if out.is_empty() {
+                continued
+            } else {
+                !out.last().is_some_and(|s| s.is_empty())
+            };
             if matches!(l, Line::Topic { .. }) && apart {
                 out.push(String::new());
             }
@@ -566,14 +738,21 @@ fn render_after(lines: &[Line], style: Style, last: &mut Option<Group>) -> Vec<S
 static LAST_STDOUT: std::sync::Mutex<Option<Group>> = std::sync::Mutex::new(None);
 static LAST_STDERR: std::sync::Mutex<Option<Group>> = std::sync::Mutex::new(None);
 
-fn render_stream(lines: &[Line], style: Style, last: &std::sync::Mutex<Option<Group>>) -> Vec<String> {
+fn render_stream(
+    lines: &[Line],
+    style: Style,
+    last: &std::sync::Mutex<Option<Group>>,
+) -> Vec<String> {
     let mut g = last.lock().unwrap_or_else(|e| e.into_inner());
     render_after(lines, style, &mut g)
 }
 
 /// `render_lines` joined by newlines, each line ended by one.
 pub fn render(lines: &[Line], style: Style) -> String {
-    render_lines(lines, style).into_iter().map(|l| l + "\n").collect()
+    render_lines(lines, style)
+        .into_iter()
+        .map(|l| l + "\n")
+        .collect()
 }
 
 /// Prints `lines` to standard output, one terminal line each, dressed as a
@@ -605,10 +784,16 @@ fn unwritable(e: std::io::Error) -> ! {
     // The command as it was run, by whoever runs it: the move runs as
     // printed once standard output can be written.
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let owner = args.first().is_some_and(|a| crate::commands::OWNER_COMMANDS.contains(&a.as_str()));
+    let owner = args
+        .first()
+        .is_some_and(|a| crate::commands::OWNER_COMMANDS.contains(&a.as_str()));
     let mut words = vec!["adr"];
     words.extend(args.iter().map(String::as_str));
-    let actor = if owner { crate::msg::Actor::Owner } else { crate::msg::Actor::Agent };
+    let actor = if owner {
+        crate::msg::Actor::Owner
+    } else {
+        crate::msg::Actor::Agent
+    };
     let _ = writeln!(
         std::io::stderr().lock(),
         "{}",
@@ -662,43 +847,81 @@ mod tests {
         let names: HashMap<String, String> = [("id-1".to_string(), "Does it?".to_string())].into();
         for event in crate::ledger::EVENTS {
             let r = row(event, "id-1", "h", "d");
-            assert!(Event::from_row(&r, &names).is_some(), "no event for a {} row", event);
+            assert!(
+                Event::from_row(&r, &names).is_some(),
+                "no event for a {} row",
+                event
+            );
         }
         let answered = Event::from_row(&row("answered", "id-1", "h", "A"), &names).unwrap();
         assert_eq!(answered.text(), "answered: \"Does it?\" A");
-        let plan = Event::from_row(&row("approved", "-", "h", "adrdom/decisions/x.md"), &names).unwrap();
+        let plan =
+            Event::from_row(&row("approved", "-", "h", "adrdom/decisions/x.md"), &names).unwrap();
         assert_eq!(plan.text(), "approved: plan of adrdom/decisions/x.md");
     }
 
     #[test]
     fn a_closes_word_prints_with_its_letter_in_red_and_one_page_class() {
-        let l = Line::Word { word: "closes B".to_string(), name: "Does it?".to_string() };
+        let l = Line::Word {
+            word: "closes B".to_string(),
+            name: "Does it?".to_string(),
+        };
         assert_eq!(text(&l), "  [closes B] Does it?");
         assert_eq!(painted(&l), format!("\x1b[1;31m{}\x1b[0m", text(&l)));
-        assert!(html(&l).starts_with("<p class=\"word word-closes\">"), "{}", html(&l));
-        assert!(word_is_marked("closes B") && word_is_marked("same") && !word_is_marked("unrelated"));
+        assert!(
+            html(&l).starts_with("<p class=\"word word-closes\">"),
+            "{}",
+            html(&l)
+        );
+        assert!(
+            word_is_marked("closes B") && word_is_marked("same") && !word_is_marked("unrelated")
+        );
     }
 
     #[test]
     fn a_line_reads_the_same_words_on_the_terminal_and_the_page() {
         let lines = vec![
-            Line::Record { depth: 1, text: "Does it?".to_string() },
+            Line::Record {
+                depth: 1,
+                text: "Does it?".to_string(),
+            },
             Line::Status {
                 subject: "Does it?".to_string(),
-                status: Status::Question { status: QuestionStatus::Asked, letter: None, version: Some("ab12".into()) },
+                status: Status::Question {
+                    status: QuestionStatus::Asked,
+                    letter: None,
+                    version: Some("ab12".into()),
+                },
                 mark: Some(Side::Added),
             },
-            Line::Word { word: "inconsistent".to_string(), name: "Does <it>?".to_string() },
-            Line::Finding(Finding::new(&crate::rule::TOPIC_FILE_SHAPE, "x.md: a <fault>".to_string(), crate::msg::Next::agent(crate::msg::Act::Rewrites("the file".into())))),
-            Line::Stop { command: Command::Show, text: "x.md is not a file; agent names one".to_string() },
-            Line::Move(Move::new(MoveKind::Approve { path: "x.md".to_string() })),
-            Line::Event(Event::Asked { heading: "Does it?".to_string() }),
+            Line::Word {
+                word: "inconsistent".to_string(),
+                name: "Does <it>?".to_string(),
+            },
+            Line::Finding(Finding::new(
+                &crate::rule::TOPIC_FILE_SHAPE,
+                "x.md: a <fault>".to_string(),
+                crate::msg::Next::agent(crate::msg::Act::Rewrites("the file".into())),
+            )),
+            Line::Stop {
+                command: Command::Show,
+                text: "x.md is not a file; agent names one".to_string(),
+            },
+            Line::Move(Move::new(MoveKind::Approve {
+                path: "x.md".to_string(),
+            })),
+            Line::Event(Event::Asked {
+                heading: "Does it?".to_string(),
+            }),
         ];
         for l in &lines {
             let t = text(l);
             let words = esc(t.trim_start());
             let page = html(l);
-            for w in words.split(' ').filter(|w| !w.starts_with('[') && !w.ends_with(']') && !w.ends_with(':')) {
+            for w in words
+                .split(' ')
+                .filter(|w| !w.starts_with('[') && !w.ends_with(']') && !w.ends_with(':'))
+            {
                 assert!(page.contains(w), "{:?} lacks {:?}", page, w);
             }
         }
@@ -722,7 +945,11 @@ mod tests {
                 _ => {}
             }
         }
-        out.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&")
+        out.replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace("&#39;", "'")
+            .replace("&amp;", "&")
     }
 
     // adr: a9e9e370-7768-4a79-b67b-7fe0926b5670
@@ -731,27 +958,56 @@ mod tests {
     // terminal or the page as themselves: both show them written out.
     #[test]
     fn a_hidden_character_is_written_visibly_on_the_terminal_and_the_page() {
-        let line = Line::Record { depth: 1, text: "A) ok\r\u{1b}[2K- A) other \u{202e}x\u{200b}y\tz".to_string() };
+        let line = Line::Record {
+            depth: 1,
+            text: "A) ok\r\u{1b}[2K- A) other \u{202e}x\u{200b}y\tz".to_string(),
+        };
         let t = text(&line);
-        assert_eq!(t, "  A) ok\\u{d}\\u{1b}[2K- A) other \\u{202e}x\\u{200b}y\tz");
+        assert_eq!(
+            t,
+            "  A) ok\\u{d}\\u{1b}[2K- A) other \\u{202e}x\\u{200b}y\tz"
+        );
         let h = html(&line);
-        assert!(!h.contains('\r') && !h.contains('\u{1b}') && !h.contains('\u{202e}'), "{:?}", h);
+        assert!(
+            !h.contains('\r') && !h.contains('\u{1b}') && !h.contains('\u{202e}'),
+            "{:?}",
+            h
+        );
         assert!(h.contains("\\u{1b}"), "{}", h);
     }
 
     fn sample() -> Vec<Line> {
         vec![
-            Line::Topic { text: "# Example (x.md)".to_string() },
+            Line::Topic {
+                text: "# Example (x.md)".to_string(),
+            },
             Line::Status {
                 subject: "Does it?".to_string(),
-                status: Status::Question { status: QuestionStatus::Answered, letter: Some('A'), version: None },
+                status: Status::Question {
+                    status: QuestionStatus::Answered,
+                    letter: Some('A'),
+                    version: None,
+                },
                 mark: None,
             },
-            Line::Word { word: "inconsistent".to_string(), name: "Does it not?".to_string() },
-            Line::Finding(Finding::new(&crate::rule::TOPIC_FILE_SHAPE, "x.md: a fault".to_string(), crate::msg::Next::agent(crate::msg::Act::Rewrites("the file".into())))),
-            Line::Move(Move::new(MoveKind::Approve { path: "x.md".to_string() })),
-            Line::Topic { text: "# Other (y.md)".to_string() },
-            Line::Event(Event::Asked { heading: "Does it?".to_string() }),
+            Line::Word {
+                word: "inconsistent".to_string(),
+                name: "Does it not?".to_string(),
+            },
+            Line::Finding(Finding::new(
+                &crate::rule::TOPIC_FILE_SHAPE,
+                "x.md: a fault".to_string(),
+                crate::msg::Next::agent(crate::msg::Act::Rewrites("the file".into())),
+            )),
+            Line::Move(Move::new(MoveKind::Approve {
+                path: "x.md".to_string(),
+            })),
+            Line::Topic {
+                text: "# Other (y.md)".to_string(),
+            },
+            Line::Event(Event::Asked {
+                heading: "Does it?".to_string(),
+            }),
         ]
     }
 
@@ -762,22 +1018,55 @@ mod tests {
     // colour off the lines are exactly the plain text.
     #[test]
     fn colour_paints_each_kind_and_never_lets_a_record_escape() {
-        let on = Style { colour: true, shape: false };
+        let on = Style {
+            colour: true,
+            shape: false,
+        };
         let lines = render_lines(&sample(), on);
         assert_eq!(lines[0], "\u{1b}[1m# Example (x.md)\u{1b}[0m");
-        assert!(lines[1].starts_with("\u{1b}[32m[answered A]\u{1b}[0m Does it?"), "{:?}", lines[1]);
-        assert!(lines[2].starts_with("\u{1b}[1;31m") && lines[2].contains("[inconsistent]"), "{:?}", lines[2]);
+        assert!(
+            lines[1].starts_with("\u{1b}[32m[answered A]\u{1b}[0m Does it?"),
+            "{:?}",
+            lines[1]
+        );
+        assert!(
+            lines[2].starts_with("\u{1b}[1;31m") && lines[2].contains("[inconsistent]"),
+            "{:?}",
+            lines[2]
+        );
         assert!(lines[3].starts_with("\u{1b}[33m"), "{:?}", lines[3]);
-        assert!(lines[4].starts_with("\u{1b}[1m") && lines[4].contains("owner runs:"), "{:?}", lines[4]);
+        assert!(
+            lines[4].starts_with("\u{1b}[1m") && lines[4].contains("owner runs:"),
+            "{:?}",
+            lines[4]
+        );
         assert!(lines[6].starts_with("\u{1b}[32masked"), "{:?}", lines[6]);
-        let stop = render_lines(&[Line::Stop { command: Command::Show, text: "no".to_string() }], on);
+        let stop = render_lines(
+            &[Line::Stop {
+                command: Command::Show,
+                text: "no".to_string(),
+            }],
+            on,
+        );
         assert_eq!(stop[0], "\u{1b}[31mshow: no\u{1b}[0m");
-        let agent = Line::Move(Move::new(MoveKind::Ask { rel: "x.md".to_string(), headings: vec![] }));
+        let agent = Line::Move(Move::new(MoveKind::Ask {
+            rel: "x.md".to_string(),
+            headings: vec![],
+        }));
         assert!(!render_lines(&[agent], on)[0].contains('\u{1b}'));
-        let hostile = Line::Record { depth: 1, text: "a\u{1b}[2Kb".to_string() };
-        assert_eq!(render_lines(&[hostile.clone()], on), vec!["  a\\u{1b}[2Kb".to_string()]);
+        let hostile = Line::Record {
+            depth: 1,
+            text: "a\u{1b}[2Kb".to_string(),
+        };
+        assert_eq!(
+            render_lines(&[hostile.clone()], on),
+            vec!["  a\\u{1b}[2Kb".to_string()]
+        );
         let off: Vec<String> = render_lines(&sample(), Style::PLAIN);
-        assert_eq!(off, present(&sample()).into_iter().map(text).collect::<Vec<_>>());
+        assert_eq!(
+            off,
+            present(&sample()).into_iter().map(text).collect::<Vec<_>>()
+        );
         assert!(off.iter().all(|l| !l.contains('\u{1b}')));
     }
 
@@ -787,9 +1076,24 @@ mod tests {
     // opens with the findings header.
     #[test]
     fn a_shaped_refusal_opens_with_the_findings_header() {
-        let stop = [Line::Stop { command: Command::Show, text: "no".to_string() }];
-        assert_eq!(render_lines(&stop, Style { colour: false, shape: true }), vec!["Findings".to_string(), "show: no".to_string()]);
-        assert_eq!(render_lines(&stop, Style::PLAIN), vec!["show: no".to_string()]);
+        let stop = [Line::Stop {
+            command: Command::Show,
+            text: "no".to_string(),
+        }];
+        assert_eq!(
+            render_lines(
+                &stop,
+                Style {
+                    colour: false,
+                    shape: true
+                }
+            ),
+            vec!["Findings".to_string(), "show: no".to_string()]
+        );
+        assert_eq!(
+            render_lines(&stop, Style::PLAIN),
+            vec!["show: no".to_string()]
+        );
     }
 
     // adr: a5503032-f7f1-45a2-874a-5580d1211d37
@@ -799,7 +1103,13 @@ mod tests {
     // lines, one per item.
     #[test]
     fn shape_separates_the_groups_with_a_blank_line_and_a_header() {
-        let shaped = render_lines(&sample(), Style { colour: false, shape: true });
+        let shaped = render_lines(
+            &sample(),
+            Style {
+                colour: false,
+                shape: true,
+            },
+        );
         let plain = render_lines(&sample(), Style::PLAIN);
         assert_eq!(plain.len(), 7);
         assert!(plain.iter().all(|l| !l.is_empty()));
@@ -807,11 +1117,22 @@ mod tests {
         assert_eq!(shaped[at("Findings") - 1], "");
         assert_eq!(shaped[at("Moves") - 1], "");
         assert_eq!(shaped[0], "# Example (x.md)");
-        let other = shaped.iter().position(|l| l.starts_with("# Other")).unwrap();
+        let other = shaped
+            .iter()
+            .position(|l| l.starts_with("# Other"))
+            .unwrap();
         assert_eq!(shaped[other - 1], "");
         let events = shaped.iter().position(|l| l.starts_with("asked:")).unwrap();
         assert_eq!(shaped[events - 1], "");
-        assert_eq!(shaped.iter().filter(|l| !l.is_empty()).filter(|l| *l != "Findings" && *l != "Moves").cloned().collect::<Vec<_>>(), plain);
+        assert_eq!(
+            shaped
+                .iter()
+                .filter(|l| !l.is_empty())
+                .filter(|l| *l != "Findings" && *l != "Moves")
+                .cloned()
+                .collect::<Vec<_>>(),
+            plain
+        );
     }
 
     // adr: a5503032-f7f1-45a2-874a-5580d1211d37
@@ -820,27 +1141,49 @@ mod tests {
     // ended in, and starts another group with a blank line and its header.
     #[test]
     fn a_later_call_continues_or_starts_a_group_on_one_stream() {
-        let shaped = Style { colour: false, shape: true };
-        let stop = |t: &str| [Line::Stop { command: Command::Show, text: t.to_string() }];
+        let shaped = Style {
+            colour: false,
+            shape: true,
+        };
+        let stop = |t: &str| {
+            [Line::Stop {
+                command: Command::Show,
+                text: t.to_string(),
+            }]
+        };
         let mut last = None;
-        assert_eq!(render_after(&stop("a"), shaped, &mut last), vec!["Findings", "show: a"]);
+        assert_eq!(
+            render_after(&stop("a"), shaped, &mut last),
+            vec!["Findings", "show: a"]
+        );
         assert_eq!(render_after(&stop("b"), shaped, &mut last), vec!["show: b"]);
         let ev = [Line::Event(Event::TermsApproved)];
         let got = render_after(&ev, shaped, &mut last);
         assert_eq!(got[0], "");
         assert_eq!(got.len(), 2);
-        assert_eq!(render_after(&stop("c"), shaped, &mut last), vec!["", "Findings", "show: c"]);
+        assert_eq!(
+            render_after(&stop("c"), shaped, &mut last),
+            vec!["", "Findings", "show: c"]
+        );
         // A topic heading that opens a continuing call is set off by a blank
         // line; one that opens a stream is not.
-        let rec = [Line::Record { depth: 1, text: "x".to_string() }];
-        let top = [Line::Topic { text: "# T (t.md)".to_string() }];
+        let rec = [Line::Record {
+            depth: 1,
+            text: "x".to_string(),
+        }];
+        let top = [Line::Topic {
+            text: "# T (t.md)".to_string(),
+        }];
         let mut q = None;
         assert_eq!(render_after(&top, shaped, &mut q), vec!["# T (t.md)"]);
         assert_eq!(render_after(&rec, shaped, &mut q), vec!["  x"]);
         assert_eq!(render_after(&top, shaped, &mut q), vec!["", "# T (t.md)"]);
         // Piped output ignores the state.
         let mut none = None;
-        assert_eq!(render_after(&stop("a"), Style::PLAIN, &mut none), vec!["show: a"]);
+        assert_eq!(
+            render_after(&stop("a"), Style::PLAIN, &mut none),
+            vec!["show: a"]
+        );
         assert_eq!(none, None);
     }
 }

@@ -219,7 +219,10 @@ pub const ID_NAMES_ONE_QUESTION: Rule = Rule {
 /// Decision: Does a command refuse what check lets pass?
 pub const ASKED_QUESTION_LEAVES_BY_APPROVAL: Rule = Rule {
     name: "asked_question_leaves_by_approval",
-    decisions: &["21ae8ae0-6884-4d3c-8464-024a8a5aae2d", "80b89c24-7d65-43f4-bb03-55e9d85c327d"],
+    decisions: &[
+        "21ae8ae0-6884-4d3c-8464-024a8a5aae2d",
+        "80b89c24-7d65-43f4-bb03-55e9d85c327d",
+    ],
 };
 
 /// Decision: What may leave a topic file by a plan change?
@@ -227,7 +230,11 @@ pub const ASKED_QUESTION_LEAVES_BY_APPROVAL: Rule = Rule {
 /// Decision: Does approve withdraw an asked question struck from the plan?
 pub const FILE_LEAVES_WITH_NO_LIVE_QUESTION: Rule = Rule {
     name: "file_leaves_with_no_live_question",
-    decisions: &["79da6500-2246-4a80-baf1-0eaf7cad49ee", "80b89c24-7d65-43f4-bb03-55e9d85c327d", "21ae8ae0-6884-4d3c-8464-024a8a5aae2d"],
+    decisions: &[
+        "79da6500-2246-4a80-baf1-0eaf7cad49ee",
+        "80b89c24-7d65-43f4-bb03-55e9d85c327d",
+        "21ae8ae0-6884-4d3c-8464-024a8a5aae2d",
+    ],
 };
 
 /// Decision: Does approve withdraw an asked question struck from the plan?
@@ -426,14 +433,20 @@ pub const BLAME_ORIGIN_STAYS_UNTIL_APPROVED: Rule = Rule {
 /// Decision: Does a question keep its identifier when its heading is reworded?
 pub const BLAME_ID_ASSIGNED_BY_TOOL: Rule = Rule {
     name: "blame_id_assigned_by_tool",
-    decisions: &["d2851ea1-fcb6-476a-b321-c813a594d5e5", "7a1e7b81-0967-4ed2-8a8a-c7153056836f"],
+    decisions: &[
+        "d2851ea1-fcb6-476a-b321-c813a594d5e5",
+        "7a1e7b81-0967-4ed2-8a8a-c7153056836f",
+    ],
 };
 
 /// Decision: What does a blame file hold of its origin?
 /// Decision: Does a question keep its identifier when its heading is reworded?
 pub const BLAME_ID_NAMES_ONE_FILE: Rule = Rule {
     name: "blame_id_names_one_file",
-    decisions: &["d2851ea1-fcb6-476a-b321-c813a594d5e5", "7a1e7b81-0967-4ed2-8a8a-c7153056836f"],
+    decisions: &[
+        "d2851ea1-fcb6-476a-b321-c813a594d5e5",
+        "7a1e7b81-0967-4ed2-8a8a-c7153056836f",
+    ],
 };
 
 /// Decision: Does ask pair the whole question to terms?
@@ -689,14 +702,20 @@ pub const ANSWER_LINE_HAS_ROW: Rule = Rule {
 /// Decision: Does the owner answer a question with a refusal?
 pub const REFUSAL_LINE_HAS_ROW: Rule = Rule {
     name: "refusal_line_has_row",
-    decisions: &["dfd32ef6-c2ac-40ef-b8b3-9c58732516b1", "b782664f-7465-4e1e-99e0-13f6dd2de774"],
+    decisions: &[
+        "dfd32ef6-c2ac-40ef-b8b3-9c58732516b1",
+        "b782664f-7465-4e1e-99e0-13f6dd2de774",
+    ],
 };
 
 /// Decision: Does check fail an answered question whose text changed?
 /// Decision: Does the owner answer a question with a refusal?
 pub const REFUSED_TEXT_FROZEN: Rule = Rule {
     name: "refused_text_frozen",
-    decisions: &["cd83e277-ebf0-4458-a77a-c526ab4cfeca", "b782664f-7465-4e1e-99e0-13f6dd2de774"],
+    decisions: &[
+        "cd83e277-ebf0-4458-a77a-c526ab4cfeca",
+        "b782664f-7465-4e1e-99e0-13f6dd2de774",
+    ],
 };
 
 /// Decision: Does a blame file cover its whole origin?
@@ -709,7 +728,10 @@ pub const BLAME_ROW_RANGE_WITHIN_ORIGIN: Rule = Rule {
 /// Decision: Does a planning step run without the record of the step before?
 pub const PLAN_STEP_HAS_ITS_RECORD: Rule = Rule {
     name: "plan_step_has_its_record",
-    decisions: &["46fc51ff-66b9-4841-a953-ae0d4c2fc424", "d3be71e4-ce7b-43b0-86a8-e86868521f99"],
+    decisions: &[
+        "46fc51ff-66b9-4841-a953-ae0d4c2fc424",
+        "d3be71e4-ce7b-43b0-86a8-e86868521f99",
+    ],
 };
 
 /// Decision: What does answer write for a removed question?
@@ -752,35 +774,50 @@ pub const QUESTION_NOT_ON_ITSELF: Rule = Rule {
 /// Decision: Does install write outside adrdom?
 pub const HOOK_MATCHES_INSTALL: Rule = Rule {
     name: "hook_matches_install",
-    decisions: &["6ef9eca6-fd8b-4211-aae7-00b37a2a9245", "4f925b13-ad16-48b8-acd1-3e30d6e308b6"],
+    decisions: &[
+        "6ef9eca6-fd8b-4211-aae7-00b37a2a9245",
+        "4f925b13-ad16-48b8-acd1-3e30d6e308b6",
+    ],
 };
 
 /// Decision: Does check hold the files install writes?
 /// Decision: Does install write outside adrdom?
 pub const HOOK_IS_EXECUTABLE: Rule = Rule {
     name: "hook_is_executable",
-    decisions: &["6ef9eca6-fd8b-4211-aae7-00b37a2a9245", "4f925b13-ad16-48b8-acd1-3e30d6e308b6"],
+    decisions: &[
+        "6ef9eca6-fd8b-4211-aae7-00b37a2a9245",
+        "4f925b13-ad16-48b8-acd1-3e30d6e308b6",
+    ],
 };
 
 /// Decision: Does check read the words of an answered question again?
 /// Decision: Does ask pair the whole question to terms?
 pub const SECTION_TERMS_LINE_PARSES: Rule = Rule {
     name: "section_terms_line_parses",
-    decisions: &["6108b8b2-911e-443b-abe0-4c6f8b407384", "f571a454-3e6c-46c1-b754-0822a5d1d667"],
+    decisions: &[
+        "6108b8b2-911e-443b-abe0-4c6f8b407384",
+        "f571a454-3e6c-46c1-b754-0822a5d1d667",
+    ],
 };
 
 /// Decision: What does a definition say?
 /// Decision: Does check read the words of an answered question again?
 pub const DEFINITION_TERMS_LINE_PARSES: Rule = Rule {
     name: "definition_terms_line_parses",
-    decisions: &["fcc1c1ec-d8e8-428e-9731-9817cdeb8e76", "6108b8b2-911e-443b-abe0-4c6f8b407384"],
+    decisions: &[
+        "fcc1c1ec-d8e8-428e-9731-9817cdeb8e76",
+        "6108b8b2-911e-443b-abe0-4c6f8b407384",
+    ],
 };
 
 /// Decision: Does check read the words of an answered question again?
 /// Decision: Does ask pair the whole question to terms?
 pub const RETIRE_READS_ASKED_TERMS_LINES: Rule = Rule {
     name: "retire_reads_asked_terms_lines",
-    decisions: &["6108b8b2-911e-443b-abe0-4c6f8b407384", "f571a454-3e6c-46c1-b754-0822a5d1d667"],
+    decisions: &[
+        "6108b8b2-911e-443b-abe0-4c6f8b407384",
+        "f571a454-3e6c-46c1-b754-0822a5d1d667",
+    ],
 };
 
 /// Decision: What holds the list of loaded phrases?
@@ -817,7 +854,10 @@ pub const TELL_JOINS_TWO_QUESTIONS: Rule = Rule {
 /// Decision: What is the shape of a topic file?
 pub const ANSWER_LINE_IS_LAST: Rule = Rule {
     name: "answer_line_is_last",
-    decisions: &["178a232e-b51c-4122-a1a9-9e9ed6970748", "9913568f-6b85-4d26-946b-c6e108f9aa51"],
+    decisions: &[
+        "178a232e-b51c-4122-a1a9-9e9ed6970748",
+        "9913568f-6b85-4d26-946b-c6e108f9aa51",
+    ],
 };
 
 /// Decision: Does the owner answer a question with a refusal?
@@ -854,14 +894,20 @@ pub const SUPERSEDES_ENTRY_ONCE: Rule = Rule {
 /// Decision: Does one decision supersede several?
 pub const QUESTION_NOT_ON_WHAT_IT_SUPERSEDES: Rule = Rule {
     name: "question_not_on_what_it_supersedes",
-    decisions: &["9afe335c-2a7a-4625-b115-f74d3f091cac", "f4f667ad-8714-4e65-897b-c7002e423c28"],
+    decisions: &[
+        "9afe335c-2a7a-4625-b115-f74d3f091cac",
+        "f4f667ad-8714-4e65-897b-c7002e423c28",
+    ],
 };
 
 /// Decision: What does a depends entry name?
 /// Decision: Does one decision supersede several?
 pub const NO_QUESTION_ON_WHAT_PLAN_SUPERSEDES: Rule = Rule {
     name: "no_question_on_what_plan_supersedes",
-    decisions: &["9afe335c-2a7a-4625-b115-f74d3f091cac", "f4f667ad-8714-4e65-897b-c7002e423c28"],
+    decisions: &[
+        "9afe335c-2a7a-4625-b115-f74d3f091cac",
+        "f4f667ad-8714-4e65-897b-c7002e423c28",
+    ],
 };
 
 /// Decision: What does a reference in a topic file carry?
@@ -922,7 +968,10 @@ pub const DROPPED_ROW_NAMES_GROUND: Rule = Rule {
 /// Decision: Does approve withdraw an asked question struck from the plan?
 pub const LEDGER_IDENTIFIER_IN_A_FILE: Rule = Rule {
     name: "ledger_identifier_in_a_file",
-    decisions: &["80b89c24-7d65-43f4-bb03-55e9d85c327d", "21ae8ae0-6884-4d3c-8464-024a8a5aae2d"],
+    decisions: &[
+        "80b89c24-7d65-43f4-bb03-55e9d85c327d",
+        "21ae8ae0-6884-4d3c-8464-024a8a5aae2d",
+    ],
 };
 
 /// Decision: Does check fail a planner's commit that reaches outside adrdom?

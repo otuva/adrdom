@@ -18,7 +18,6 @@
 //! chunks as large as it reads at once, so a failure keeps what earlier
 //! chunks read and loses at most one wave. The
 //! model and the reader are loaded only here and in `adr plan`.
-use crate::rules::Command;
 use crate::embed;
 use crate::index::{self, Rec};
 use crate::ledger;
@@ -27,6 +26,7 @@ use crate::out::{self, Line};
 use crate::reader::{self, Kind, Pair};
 use crate::record;
 use crate::repo;
+use crate::rules::Command;
 use crate::rules::{Class, Finding};
 use crate::state;
 use std::collections::BTreeSet;
@@ -39,7 +39,10 @@ pub fn run() -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            out::eprint(&[out::refusal(Command::Read, &msg::not_a_repo("read", &[], Actor::Agent))]);
+            out::eprint(&[out::refusal(
+                Command::Read,
+                &msg::not_a_repo("read", &[], Actor::Agent),
+            )]);
             return 1;
         }
     };
@@ -75,16 +78,27 @@ fn read_all(root: &std::path::Path) -> Result<Vec<Line>, String> {
     let emb = embed::load(root)?;
     // The whole pool is refreshed, so the cache file holds what `adr plan` keeps.
     let (all_vecs, _) = index::refresh(root, emb.as_ref(), &recs, &[])?;
-    let vecs: Vec<Vec<f32>> = recs.iter().zip(all_vecs).filter(|(r, _)| r.kind == "decision").map(|(_, v)| v).collect();
+    let vecs: Vec<Vec<f32>> = recs
+        .iter()
+        .zip(all_vecs)
+        .filter(|(r, _)| r.kind == "decision")
+        .map(|(_, v)| v)
+        .collect();
     // Each unordered pair once, as (lower id, higher id) positions.
     let mut set: BTreeSet<(usize, usize)> = BTreeSet::new();
     for i in 0..decisions.len() {
         for (j, _) in index::rank(&vecs[i], &vecs, |k| k != i, index::NEIGHBOURS) {
-            set.insert(if decisions[i].id < decisions[j].id { (i, j) } else { (j, i) });
+            set.insert(if decisions[i].id < decisions[j].id {
+                (i, j)
+            } else {
+                (j, i)
+            });
         }
     }
     let mut ordered: Vec<(usize, usize)> = set.into_iter().collect();
-    ordered.sort_by(|a, b| (&decisions[a.0].id, &decisions[a.1].id).cmp(&(&decisions[b.0].id, &decisions[b.1].id)));
+    ordered.sort_by(|a, b| {
+        (&decisions[a.0].id, &decisions[a.1].id).cmp(&(&decisions[b.0].id, &decisions[b.1].id))
+    });
     let pairs: Vec<Pair> = ordered
         .iter()
         .map(|&(a, b)| Pair {
@@ -113,7 +127,9 @@ fn read_all(root: &std::path::Path) -> Result<Vec<Line>, String> {
             "inconsistent" => 1,
             _ => continue,
         };
-        let next = msg::Next::agent(msg::Act::Writes("a question that supersedes one of the pair".to_string()));
+        let next = msg::Next::agent(msg::Act::Writes(
+            "a question that supersedes one of the pair".to_string(),
+        ));
         let said = msg::read_pair(
             &row.word,
             heading_of(&decisions[a].text),
@@ -121,7 +137,12 @@ fn read_all(root: &std::path::Path) -> Result<Vec<Line>, String> {
             &reader::flatten(&row.reason),
             next,
         );
-        marked.push((group, &decisions[a].id, &decisions[b].id, Finding::said(Class::Reader, said)));
+        marked.push((
+            group,
+            &decisions[a].id,
+            &decisions[b].id,
+            Finding::said(Class::Reader, said),
+        ));
     }
     marked.sort_by(|x, y| (x.0, x.1, x.2).cmp(&(y.0, y.1, y.2)));
     let mut out: Vec<Line> = marked.iter().map(|m| Line::Finding(m.3.clone())).collect();

@@ -131,7 +131,14 @@ pub struct Finding {
 impl Finding {
     /// A finding about the records of no class; `about` names its subject.
     pub fn new(rule: &'static Rule, found: String, next: msg::Next) -> Finding {
-        Finding { subject: Subject::Records, rule, class: Class::Other, found, next, sections: Vec::new() }
+        Finding {
+            subject: Subject::Records,
+            rule,
+            class: Class::Other,
+            found,
+            next,
+            sections: Vec::new(),
+        }
     }
     /// A finding of `class` from what a message function said.
     pub fn said(class: Class, said: msg::Said) -> Finding {
@@ -171,7 +178,10 @@ pub fn finding_order(a: &Finding, b: &Finding) -> std::cmp::Ordering {
             Subject::TopicFile(p) | Subject::BlameFile(p) | Subject::Directory(p) => p.clone(),
         };
         let question = f.sections.iter().min().map_or(0, |i| i + 1);
-        let rule = crate::rule::ALL.iter().position(|r| r.name == f.rule.name).unwrap_or(usize::MAX);
+        let rule = crate::rule::ALL
+            .iter()
+            .position(|r| r.name == f.rule.name)
+            .unwrap_or(usize::MAX);
         (file, question, rule, f.text())
     }
     key(a).cmp(&key(b))
@@ -181,32 +191,45 @@ pub fn finding_order(a: &Finding, b: &Finding) -> std::cmp::Ordering {
 /// the records left as it is.
 fn about_topic_file(fs: Vec<Finding>, rel: &str) -> Vec<Finding> {
     fs.into_iter()
-        .map(|f| if f.subject == Subject::Records { f.about(Subject::TopicFile(rel.to_string())) } else { f })
+        .map(|f| {
+            if f.subject == Subject::Records {
+                f.about(Subject::TopicFile(rel.to_string()))
+            } else {
+                f
+            }
+        })
         .collect()
 }
 
 /// Strings of one rule, each a finding about the topic file `rel`.
 fn found(class: Class, rel: &str, messages: Vec<msg::Said>) -> Vec<Finding> {
-    messages.into_iter().map(|m| Finding::said(class, m).about(Subject::TopicFile(rel.to_string()))).collect()
+    messages
+        .into_iter()
+        .map(|m| Finding::said(class, m).about(Subject::TopicFile(rel.to_string())))
+        .collect()
 }
 
 /// Every identifier the topic files `all` hold: the one set of the
 /// questions in the files every reader of "held by no file" reads.
 pub fn held_ids(all: &[RecordFile]) -> HashSet<&str> {
-    all.iter().flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.as_deref())).collect()
+    all.iter()
+        .flat_map(|rf| rf.sections.iter().filter_map(|s| s.id.as_deref()))
+        .collect()
 }
 
 /// A path of the shape of a topic file: `adrdom/decisions/<name>.md`.
 pub(crate) fn is_topic_file_path(rel: &str) -> bool {
     // Any `.md` under the directory, nested too: the files the loader,
     // show, check, ask and approve take (`repo::list_decision_files_via`).
-    rel.strip_prefix(&format!("{}/", repo::DECISIONS_DIR)).is_some_and(|name| name.ends_with(".md"))
+    rel.strip_prefix(&format!("{}/", repo::DECISIONS_DIR))
+        .is_some_and(|name| name.ends_with(".md"))
 }
 
 /// A path of the shape of a blame file: `adrdom/blame/<name>.md`, nested
 /// paths too (`blame::Index` lists the same files).
 pub(crate) fn is_blame_file_path(rel: &str) -> bool {
-    rel.strip_prefix(&format!("{}/", repo::BLAME_DIR)).is_some_and(|name| name.ends_with(".md"))
+    rel.strip_prefix(&format!("{}/", repo::BLAME_DIR))
+        .is_some_and(|name| name.ends_with(".md"))
 }
 
 /// Whether `rel` (a path from the repository root) names a file approve
@@ -235,7 +258,10 @@ pub fn removal_awaiting(led: &Ledger, exists: &dyn Fn(&str) -> bool) -> Vec<Stri
         .collect();
     let empty = empty_plan_hash();
     rels.into_iter()
-        .filter(|rel| led.latest_for_path("approved", rel).is_some_and(|r| r.hash != empty))
+        .filter(|rel| {
+            led.latest_for_path("approved", rel)
+                .is_some_and(|r| r.hash != empty)
+        })
         .filter(|rel| !exists(rel))
         .map(|rel| rel.to_string())
         .collect()
@@ -258,9 +284,16 @@ pub struct RemovalHolds {
 /// back to the newest committed version that has the file. That fallback can
 /// name a heading already struck by an uncommitted approval; the move stays
 /// executable: restore the file, strike the heading again, approve.
-pub(crate) fn latest_approved_version(root: &Path, rel: &str, led: &Ledger) -> Option<std::sync::Arc<RecordFile>> {
+pub(crate) fn latest_approved_version(
+    root: &Path,
+    rel: &str,
+    led: &Ledger,
+) -> Option<std::sync::Arc<RecordFile>> {
     // An approved removal is the empty plan: no version to read.
-    if led.latest_for_path("approved", rel).is_some_and(|r| r.hash == empty_plan_hash()) {
+    if led
+        .latest_for_path("approved", rel)
+        .is_some_and(|r| r.hash == empty_plan_hash())
+    {
         return None;
     }
     let mut newest: Option<std::sync::Arc<RecordFile>> = None;
@@ -279,7 +312,12 @@ pub(crate) fn latest_approved_version(root: &Path, rel: &str, led: &Ledger) -> O
 /// of its latest approved committed plan (see `latest_approved_version`) and the ids whose latest approved row
 /// names it and that have a ledger state, minus the ids in `present_ids`. Shared by `approve`, `check`
 /// and `show`, so the three agree on whether a removal passes.
-pub fn removal_holds(root: &Path, rel: &str, led: &Ledger, present_ids: &HashSet<String>) -> RemovalHolds {
+pub fn removal_holds(
+    root: &Path,
+    rel: &str,
+    led: &Ledger,
+    present_ids: &HashSet<String>,
+) -> RemovalHolds {
     let mut held: Vec<(String, String)> = Vec::new();
     let mut seen: BTreeSet<String> = BTreeSet::new();
     if let Some(old) = latest_approved_version(root, rel, led) {
@@ -291,7 +329,11 @@ pub fn removal_holds(root: &Path, rel: &str, led: &Ledger, present_ids: &HashSet
             }
         }
     }
-    for r in led.rows.iter().filter(|r| r.event == "approved" && r.id != "-" && r.detail == rel) {
+    for r in led
+        .rows
+        .iter()
+        .filter(|r| r.event == "approved" && r.id != "-" && r.detail == rel)
+    {
         // approve writes a per-question row only when the question's hash
         // changed, so a heading approved, never asked, then struck keeps a
         // row the ledger cannot tell from a live one. Only an id with a
@@ -299,9 +341,14 @@ pub fn removal_holds(root: &Path, rel: &str, led: &Ledger, present_ids: &HashSet
         // from the file's latest approved committed plan alone.
         if led.latest_state(&r.id).is_some()
             && seen.insert(r.id.clone())
-            && led.latest_for_id("approved", &r.id).is_some_and(|l| l.detail == rel)
+            && led
+                .latest_for_id("approved", &r.id)
+                .is_some_and(|l| l.detail == rel)
         {
-            let heading = led.latest_asked(&r.id).map(|a| a.detail.clone()).unwrap_or_else(|| r.id.clone());
+            let heading = led
+                .latest_asked(&r.id)
+                .map(|a| a.detail.clone())
+                .unwrap_or_else(|| r.id.clone());
             held.push((r.id.clone(), heading));
         }
     }
@@ -317,7 +364,11 @@ pub fn removal_holds(root: &Path, rel: &str, led: &Ledger, present_ids: &HashSet
             Some(st @ (status::QuestionStatus::Asked | status::QuestionStatus::Answered)) => st,
             Some(_) => continue,
         };
-        holds.push(moves::RemovalHold { id: id.clone(), heading: heading.clone(), status });
+        holds.push(moves::RemovalHold {
+            id: id.clone(),
+            heading: heading.clone(),
+            status,
+        });
     }
     RemovalHolds { held, holds }
 }
@@ -396,8 +447,9 @@ pub fn terms_refusals(
     // Fresh definition pairs for every term (never re-derived from a stale
     // terms line in the file). Computed once and reused for the dependents
     // check below and, by the caller, for the write step.
-    let pairs_per_entry: Vec<Vec<(String, String)>> =
-        (0..tf.terms.len()).map(|i| terms::definition_pairs(tf, i)).collect();
+    let pairs_per_entry: Vec<Vec<(String, String)>> = (0..tf.terms.len())
+        .map(|i| terms::definition_pairs(tf, i))
+        .collect();
 
     // Every current decision's terms line, every current decision's
     // `depends:` line (once approved, an id -- possibly a term's), and
@@ -416,10 +468,18 @@ pub fn terms_refusals(
     for dep in &dependents {
         let label = dep.source.label();
         for (word, uuid) in &dep.pairs {
-            let Some(target) = tf.terms.iter().find(|t| t.id.as_deref() == Some(uuid.as_str()))
+            let Some(target) = tf
+                .terms
+                .iter()
+                .find(|t| t.id.as_deref() == Some(uuid.as_str()))
             else {
                 let word = dep.from_word.then_some(word.as_str());
-                refusals.push(terms_finding(msg::term_removed_but_carried(uuid, word, &label, dep.source.decision_ref())));
+                refusals.push(terms_finding(msg::term_removed_but_carried(
+                    uuid,
+                    word,
+                    &label,
+                    dep.source.decision_ref(),
+                )));
                 continue;
             };
             if target.retired {
@@ -430,12 +490,20 @@ pub fn terms_refusals(
                 // holds a retire of a term?"): the agent rewords the
                 // definition and the owner re-approves.
                 let user = match &dep.source {
-                    state::DependentSource::Decision { id, heading, .. } => msg::RetiredUser::Decision(id, heading),
+                    state::DependentSource::Decision { id, heading, .. } => {
+                        msg::RetiredUser::Decision(id, heading)
+                    }
                     state::DependentSource::Asked { rel, .. } => msg::RetiredUser::Asked(rel),
-                    state::DependentSource::PlanHeading { rel, .. } => msg::RetiredUser::PlanHeading(rel),
+                    state::DependentSource::PlanHeading { rel, .. } => {
+                        msg::RetiredUser::PlanHeading(rel)
+                    }
                     state::DependentSource::Term { .. } => msg::RetiredUser::Definition,
                 };
-                refusals.push(terms_finding(msg::term_retired_but_carried(&target.name, &label, user)));
+                refusals.push(terms_finding(msg::term_retired_but_carried(
+                    &target.name,
+                    &label,
+                    user,
+                )));
                 continue;
             }
             // A `depends:`-line dependent's pair is an id read straight off
@@ -464,7 +532,12 @@ pub fn terms_refusals(
                     // definition still carries the drifted word) is
                     // reworded by the agent and the owner re-approves, same
                     // as the retired case above.
-                    refusals.push(terms_finding(msg::word_moved_off_term(word, &target.name, &label, dep.source.decision_id())));
+                    refusals.push(terms_finding(msg::word_moved_off_term(
+                        word,
+                        &target.name,
+                        &label,
+                        dep.source.decision_id(),
+                    )));
                 }
             }
         }
@@ -496,18 +569,30 @@ pub fn terms_refusals(
 /// written holds it on: what `approve` refuses the terms file on, and what
 /// `check` reads to know whether `approve` would take it (`check_banned`
 /// names the hit itself, as it does in every tracked file).
-pub fn terms_banned_hits(root: &Path, tf: &terms::TermsFile, source: &repo::Source) -> Vec<Finding> {
+pub fn terms_banned_hits(
+    root: &Path,
+    tf: &terms::TermsFile,
+    source: &repo::Source,
+) -> Vec<Finding> {
     let banned_entries = crate::banned::read_entries_via(root, source);
     if banned_entries.is_empty() {
         return Vec::new();
     }
-    let hash_map: std::collections::HashMap<String, Option<String>> = banned_entries.into_iter().collect();
+    let hash_map: std::collections::HashMap<String, Option<String>> =
+        banned_entries.into_iter().collect();
     // The file as written, not the minted copy: an entry minted an id gains
     // a line, and a hit names the line the file holds.
-    let text = source.read(root, crate::repo::TERMS_PATH).unwrap_or_else(|| tf.lines.join("\n"));
+    let text = source
+        .read(root, crate::repo::TERMS_PATH)
+        .unwrap_or_else(|| tf.lines.join("\n"));
     crate::banned::hits(&text, &hash_map, &tf.terms)
         .into_iter()
-        .map(|hit| terms_finding(msg::terms_banned_word(hit.line, &msg::term_suffix(hit.term.as_deref()))))
+        .map(|hit| {
+            terms_finding(msg::terms_banned_word(
+                hit.line,
+                &msg::term_suffix(hit.term.as_deref()),
+            ))
+        })
         .collect()
 }
 
@@ -527,7 +612,10 @@ fn length_found(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<(usize, msg::Sa
 
 /// `found` as findings of `class`, each about its question.
 fn in_sections(class: Class, found: Vec<(usize, msg::Said)>) -> Vec<Finding> {
-    found.into_iter().map(|(i, m)| Finding::said(class, m).in_section(i)).collect()
+    found
+        .into_iter()
+        .map(|(i, m)| Finding::said(class, m).in_section(i))
+        .collect()
 }
 
 fn body_tell_found(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<(usize, msg::Said)> {
@@ -544,7 +632,12 @@ fn body_tell_found(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<(usize, msg:
     out
 }
 
-fn no_term_found(rel: &str, rf: &RecordFile, terms_list: &[terms::Term], led: &Ledger) -> Vec<(usize, msg::Said)> {
+fn no_term_found(
+    rel: &str,
+    rf: &RecordFile,
+    terms_list: &[terms::Term],
+    led: &Ledger,
+) -> Vec<(usize, msg::Said)> {
     let mut out = Vec::new();
     for (i, sec) in rf.sections.iter().enumerate() {
         if !status::open_to_ask(led, rf, sec) {
@@ -580,14 +673,25 @@ fn letter_found(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<(usize, msg::Sa
                 continue;
             };
             let target = match d {
-                record::Dep::Id { id, .. } => rf.sections.iter().find(|s| s.id.as_deref() == Some(id.as_str())),
+                record::Dep::Id { id, .. } => rf
+                    .sections
+                    .iter()
+                    .find(|s| s.id.as_deref() == Some(id.as_str())),
                 record::Dep::Text { text, .. } => {
                     let t = text.trim();
-                    if t.ends_with('?') { rf.sections.iter().find(|s| s.heading_text.trim() == t) } else { None }
+                    if t.ends_with('?') {
+                        rf.sections.iter().find(|s| s.heading_text.trim() == t)
+                    } else {
+                        None
+                    }
                 }
             };
             if let Some(ts) = target.filter(|ts| open || state::tier_unresolved(ts)) {
-                out.extend(depends::bad_letters(rel, &sec.heading_text, ts, letters).into_iter().map(|m| (i, m)));
+                out.extend(
+                    depends::bad_letters(rel, &sec.heading_text, ts, letters)
+                        .into_iter()
+                        .map(|m| (i, m)),
+                );
             }
         }
     }
@@ -611,7 +715,13 @@ pub fn closed_findings(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<Finding>
         // The file's own `**Answer:**` line shows one side only: two
         // standing rulings for different options are read off the ledger.
         if let Some((a, b)) = state::conflicting_rulings(led, id) {
-            push(msg::answer_conflict(rel, &sec.heading_text, id, &a.label(), &b.label()));
+            push(msg::answer_conflict(
+                rel,
+                &sec.heading_text,
+                id,
+                &a.label(),
+                &b.label(),
+            ));
         }
         let open_again = state::is_open_again(led, id);
         if sec.answer_line.is_some() && open_again {
@@ -623,13 +733,25 @@ pub fn closed_findings(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<Finding>
                 state::ClosedMatch::Current => {}
                 // A genuine row exists: the ruling is real and the
                 // question's text moved since.
-                state::ClosedMatch::Edited if sec.is_refused() => push(msg::refused_text_changed(rel, &sec.heading_text)),
-                state::ClosedMatch::Edited => push(msg::answered_text_changed(rel, &sec.heading_text)),
-                state::ClosedMatch::NotClosed if sec.is_refused() => push(msg::refusal_without_row(rel, &sec.heading_text)),
-                state::ClosedMatch::NotClosed => push(msg::answer_without_row(rel, &sec.heading_text)),
+                state::ClosedMatch::Edited if sec.is_refused() => {
+                    push(msg::refused_text_changed(rel, &sec.heading_text))
+                }
+                state::ClosedMatch::Edited => {
+                    push(msg::answered_text_changed(rel, &sec.heading_text))
+                }
+                state::ClosedMatch::NotClosed if sec.is_refused() => {
+                    push(msg::refusal_without_row(rel, &sec.heading_text))
+                }
+                state::ClosedMatch::NotClosed => {
+                    push(msg::answer_without_row(rel, &sec.heading_text))
+                }
             }
         } else if !open_again {
-            if led.rows.iter().any(|r| r.event == "answered" && &r.id == id) {
+            if led
+                .rows
+                .iter()
+                .any(|r| r.event == "answered" && &r.id == id)
+            {
                 push(msg::answered_row_without_line(rel, &sec.heading_text));
             } else if led.rows.iter().any(|r| r.event == "refused" && &r.id == id) {
                 push(msg::refused_row_without_line(rel, &sec.heading_text));
@@ -663,13 +785,15 @@ pub fn depends_shape_refusals(
         // refuses: the second is a finding here, before approval.
         let mut seen: Vec<String> = Vec::new();
         for d in &sec.depends {
-            let Ok(Some(target)) =
-                depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, led)
+            let Ok(Some(target)) = depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, led)
             else {
                 continue;
             };
             let key = match &target {
-                DepTarget::Heading(idx) => rf.sections[*idx].id.clone().unwrap_or_else(|| format!("heading {}", idx)),
+                DepTarget::Heading(idx) => rf.sections[*idx]
+                    .id
+                    .clone()
+                    .unwrap_or_else(|| format!("heading {}", idx)),
                 DepTarget::Term(id) | DepTarget::Decision(id) | DepTarget::Struck(id) => id.clone(),
             };
             if seen.contains(&key) {
@@ -697,24 +821,37 @@ pub fn depends_shape_refusals(
             // strikes the section of a superseded question from its topic
             // file?"): a set stays only when frozen at ask.
             if let (DepTarget::Struck(tid), Some(set)) = (&target, d.set()) {
-                if !sec.id.as_deref().is_some_and(|sid| set_frozen_ids(led, sid, tid, set)) {
-                    let name = led.latest_for_id("asked", tid).map(|r| r.detail.clone()).unwrap_or_else(|| tid.clone());
+                if !sec
+                    .id
+                    .as_deref()
+                    .is_some_and(|sid| set_frozen_ids(led, sid, tid, set))
+                {
+                    let name = led
+                        .latest_for_id("asked", tid)
+                        .map(|r| r.detail.clone())
+                        .unwrap_or_else(|| tid.clone());
                     out.push(msg::set_on_answered_question(rel, &sec.heading_text, &name));
                 }
                 continue;
             }
             let Some(ts) = target_section else { continue };
             match d.set() {
-                None if ts.answer_letter().is_none() => {
-                    out.push(msg::missing_answer_set(rel, &sec.heading_text, &ts.heading_text))
-                }
+                None if ts.answer_letter().is_none() => out.push(msg::missing_answer_set(
+                    rel,
+                    &sec.heading_text,
+                    &ts.heading_text,
+                )),
                 // A set approved before its target was answered stays (per
                 // "Does a depends entry on a question in its file carry an
                 // answer set?"): a set with no `assumes` row of the target
                 // for this entry, written when the target was asked, is
                 // refused.
                 Some(_) if ts.answer_letter().is_some() && !set_frozen_at_ask(led, sec, d, ts) => {
-                    out.push(msg::set_on_answered_question(rel, &sec.heading_text, &ts.heading_text))
+                    out.push(msg::set_on_answered_question(
+                        rel,
+                        &sec.heading_text,
+                        &ts.heading_text,
+                    ))
                 }
                 _ => {}
             }
@@ -761,18 +898,37 @@ pub fn depends_shape_refusals(
 /// line, an answer naming a missing option). The one list every reader of
 /// the `parse` rule prints, in this order.
 pub fn parse_findings(rel: &str, rf: &RecordFile) -> Vec<Finding> {
-    let mut out: Vec<Finding> = rf.shape_errors.iter().map(|e| Finding::said(Class::Parse, msg::shape_error(rel, e))).collect();
+    let mut out: Vec<Finding> = rf
+        .shape_errors
+        .iter()
+        .map(|e| Finding::said(Class::Parse, msg::shape_error(rel, e)))
+        .collect();
     for i in record::non_question_heading_lines(&rf.lines) {
-        out.push(Finding::said(Class::Parse, msg::heading_not_a_question(rel, i + 1)));
+        out.push(Finding::said(
+            Class::Parse,
+            msg::heading_not_a_question(rel, i + 1),
+        ));
     }
     for (si, sec) in rf.sections.iter().enumerate() {
         for e in &sec.shape_errors {
-            out.push(Finding::said(Class::Parse, msg::section_shape_error(rel, &sec.heading_text, e)).in_section(si));
+            out.push(
+                Finding::said(
+                    Class::Parse,
+                    msg::section_shape_error(rel, &sec.heading_text, e),
+                )
+                .in_section(si),
+            );
         }
     }
     for (si, sec) in rf.sections.iter().enumerate() {
         for e in &sec.parse_errors {
-            out.push(Finding::said(Class::Parse, msg::check_parse_error(rel, &sec.heading_text, e)).in_section(si));
+            out.push(
+                Finding::said(
+                    Class::Parse,
+                    msg::check_parse_error(rel, &sec.heading_text, e),
+                )
+                .in_section(si),
+            );
         }
     }
     out
@@ -806,7 +962,13 @@ pub fn record_refusals(
             continue;
         }
         for (line, phrase, what) in tells::heading_tells(sec.start, &sec.heading_text) {
-            out.push(Finding::said(Class::Tells, msg::tell(rel, line, &sec.heading_text, &phrase, what)).in_section(si));
+            out.push(
+                Finding::said(
+                    Class::Tells,
+                    msg::tell(rel, line, &sec.heading_text, &phrase, what),
+                )
+                .in_section(si),
+            );
         }
     }
     // Per "Does ask refuse an option over a word limit?" and "Does an option
@@ -816,7 +978,10 @@ pub fn record_refusals(
     // The other two body rules `ask` enforces, found the same way: a loaded
     // phrase in a body, and a question that pairs no term.
     out.extend(in_sections(Class::Tells, body_tell_found(rel, rf, led)));
-    out.extend(in_sections(Class::Tells, no_term_found(rel, rf, terms_list, led)));
+    out.extend(in_sections(
+        Class::Tells,
+        no_term_found(rel, rf, terms_list, led),
+    ));
     // The three shapes of a depends entry approve stops, found the same way.
     for said in depends_shape_refusals(rel, rf, terms_list, phrase_lookup, led) {
         out.push(Finding::said(Class::Plan, said));
@@ -824,7 +989,10 @@ pub fn record_refusals(
     {
         let (cs, ce) = rf.context_range;
         for (line, phrase, what) in tells::prose_tells_in(&rf.lines, cs, ce) {
-            out.push(Finding::said(Class::Tells, msg::tell(rel, line, "context", &phrase, what)));
+            out.push(Finding::said(
+                Class::Tells,
+                msg::tell(rel, line, "context", &phrase, what),
+            ));
         }
     }
 
@@ -833,7 +1001,10 @@ pub fn record_refusals(
     // stands on, before anything about it is resolved or written.
     for (si, sec) in rf.sections.iter().enumerate() {
         if sec.depends.is_empty() {
-            out.push(Finding::said(Class::Plan, msg::no_depends_line(rel, &sec.heading_text)).in_section(si));
+            out.push(
+                Finding::said(Class::Plan, msg::no_depends_line(rel, &sec.heading_text))
+                    .in_section(si),
+            );
         }
     }
 
@@ -852,7 +1023,13 @@ pub fn record_refusals(
         for d in &sec.depends {
             if frozen && matches!(d, record::Dep::Text { .. }) {
                 let st = status::question_status(led, sec);
-                out.push(Finding::said(Class::PlanFrozen, msg::frozen_depends_edited(rel, &sec.heading_text, st)).in_section(si));
+                out.push(
+                    Finding::said(
+                        Class::PlanFrozen,
+                        msg::frozen_depends_edited(rel, &sec.heading_text, st),
+                    )
+                    .in_section(si),
+                );
                 continue;
             }
             if let record::Dep::Text { text, .. } = d {
@@ -869,9 +1046,7 @@ pub fn record_refusals(
             if state::is_dead(led, sec) {
                 continue;
             }
-            if let Err(e) =
-                depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, led)
-            {
+            if let Err(e) = depends::resolve_dep(d, sec, rf, terms_list, phrase_lookup, led) {
                 // What the identifier names, for the refusal only: a term
                 // (a retired one too), else the heading of a question in
                 // any state.
@@ -886,7 +1061,11 @@ pub fn record_refusals(
                     _ => None,
                 };
                 out.push(
-                    Finding::said(Class::Plan, depends::dep_refusal_text(rel, &sec.heading_text, &e, name)).in_section(si),
+                    Finding::said(
+                        Class::Plan,
+                        depends::dep_refusal_text(rel, &sec.heading_text, &e, name),
+                    )
+                    .in_section(si),
                 );
             }
         }
@@ -899,7 +1078,15 @@ pub fn record_refusals(
     out.extend(cap_finding(rel, rf, replaced, led));
     out.extend(depends_line_cap_findings(rel, rf, led));
 
-    out.extend(supersedes_refusals(rel, rf, cross_file_headings, names, all, led, None));
+    out.extend(supersedes_refusals(
+        rel,
+        rf,
+        cross_file_headings,
+        names,
+        all,
+        led,
+        None,
+    ));
 
     // Per "Does every neighbour get a line under its heading?": an
     // `unrelated:` entry names a current decision, a term, another question
@@ -924,7 +1111,12 @@ pub fn record_refusals(
 /// `detail` row alike. A fault of the first two stops the judgement of its
 /// entry, and the ranges of a file not yet approved wait for it. A repeated
 /// entry or range earns its finding once, and is no fault of its own.
-pub fn blame_line_refusals(rel: &str, rf: &RecordFile, blame: &crate::blame::Index, led: &Ledger) -> Vec<Finding> {
+pub fn blame_line_refusals(
+    rel: &str,
+    rf: &RecordFile,
+    blame: &crate::blame::Index,
+    led: &Ledger,
+) -> Vec<Finding> {
     let mut out = Vec::new();
     for (i, sec) in rf.sections.iter().enumerate() {
         if sec.blame.is_empty() || !status::open_to_ask_text(led, rf, sec) {
@@ -940,13 +1132,22 @@ pub fn blame_line_refusals(rel: &str, rf: &RecordFile, blame: &crate::blame::Ind
                 match blame.named(&entry.file) {
                     None => vec![msg::blame_names_no_file(rel, heading, &entry.file)],
                     Some(file) if file.status != status::FileStatus::Approved => {
-                        vec![msg::blame_file_awaits_approval(rel, heading, file.rel(), file.status)]
+                        vec![msg::blame_file_awaits_approval(
+                            rel,
+                            heading,
+                            file.rel(),
+                            file.status,
+                        )]
                     }
                     Some(file) => entry
                         .ranges
                         .iter()
-                        .filter(|&&(from, to)| !file.rows().iter().any(|r| r.start == from && r.end == to))
-                        .map(|&(from, to)| msg::blame_range_of_no_row(rel, heading, file.rel(), from, to))
+                        .filter(|&&(from, to)| {
+                            !file.rows().iter().any(|r| r.start == from && r.end == to)
+                        })
+                        .map(|&(from, to)| {
+                            msg::blame_range_of_no_row(rel, heading, file.rel(), from, to)
+                        })
                         .collect(),
                 }
             };
@@ -956,7 +1157,11 @@ pub fn blame_line_refusals(rel: &str, rf: &RecordFile, blame: &crate::blame::Ind
                 }
             }
         }
-        out.extend(found.into_iter().map(|said| Finding::said(Class::Plan, said).in_section(i)));
+        out.extend(
+            found
+                .into_iter()
+                .map(|said| Finding::said(Class::Plan, said).in_section(i)),
+        );
     }
     out
 }
@@ -1002,11 +1207,17 @@ pub fn supersedes_refusals(
                 // One decision named twice (by heading and by identifier, or
                 // twice alike): found before approval, never written twice.
                 Ok(id) if ids.contains(&id) => {
-                    out.push(refuse(i, msg::supersedes_names_twice(rel, &sec.heading_text, old)));
+                    out.push(refuse(
+                        i,
+                        msg::supersedes_names_twice(rel, &sec.heading_text, old),
+                    ));
                 }
                 Ok(id) => ids.push(id),
                 Err(depends::SupersedesError::Ambiguous(files)) => {
-                    out.push(refuse(i, msg::ask_supersedes_ambiguous(rel, &sec.heading_text, old, &files)));
+                    out.push(refuse(
+                        i,
+                        msg::ask_supersedes_ambiguous(rel, &sec.heading_text, old, &files),
+                    ));
                 }
                 Err(depends::SupersedesError::NotCurrent) => {
                     let split_sibling = asked
@@ -1020,12 +1231,15 @@ pub fn supersedes_refusals(
                     if split_sibling {
                         ids.push(old.trim().to_string());
                     } else {
-                        out.push(refuse(i, msg::ask_supersedes_not_current(
-                            rel,
-                            &sec.heading_text,
-                            old,
-                            names.get(old).map(String::as_str),
-                        )));
+                        out.push(refuse(
+                            i,
+                            msg::ask_supersedes_not_current(
+                                rel,
+                                &sec.heading_text,
+                                old,
+                                names.get(old).map(String::as_str),
+                            ),
+                        ));
                     }
                 }
             }
@@ -1047,24 +1261,40 @@ pub fn supersedes_refusals(
         let sec = &rf.sections[*i];
         let missing = depends::left_out_of_supersedes(all, led, ids);
         if !missing.is_empty() {
-            let moment = if *asked { msg::SupersedesMoment::Asked } else { msg::SupersedesMoment::Approve };
-            out.push(refuse(*i, msg::supersedes_leaves_out(rel, &sec.heading_text, &missing, moment)));
+            let moment = if *asked {
+                msg::SupersedesMoment::Asked
+            } else {
+                msg::SupersedesMoment::Approve
+            };
+            out.push(refuse(
+                *i,
+                msg::supersedes_leaves_out(rel, &sec.heading_text, &missing, moment),
+            ));
         }
         for target in ids {
             let target_name = names.get(target).map(String::as_str).unwrap_or("");
             if sec.depends.iter().any(|d| stands_on(d, target)) {
-                out.push(refuse(*i, msg::stands_on_what_it_supersedes(rel, &sec.heading_text, target_name)));
+                out.push(refuse(
+                    *i,
+                    msg::stands_on_what_it_supersedes(rel, &sec.heading_text, target_name),
+                ));
             }
             for (j, other) in rf.sections.iter().enumerate() {
-                let open = other.id.as_deref().map_or(true, |id| !state::is_current(led, id))
+                let open = other
+                    .id
+                    .as_deref()
+                    .map_or(true, |id| !state::is_current(led, id))
                     && !state::is_dead(led, other);
                 if j != *i && open && other.depends.iter().any(|d| stands_on(d, target)) {
-                    out.push(refuse(j, msg::stands_on_what_the_plan_supersedes(
-                        rel,
-                        &other.heading_text,
-                        target_name,
-                        &sec.heading_text,
-                    )));
+                    out.push(refuse(
+                        j,
+                        msg::stands_on_what_the_plan_supersedes(
+                            rel,
+                            &other.heading_text,
+                            target_name,
+                            &sec.heading_text,
+                        ),
+                    ));
                 }
             }
         }
@@ -1093,11 +1323,16 @@ pub fn own_name_and_heading_refusals(
 pub fn own_name_refusals(rel: &str, topic: Option<&str>) -> Vec<Finding> {
     let mut out = Vec::new();
     let name = rel.rsplit('/').next().unwrap_or(rel);
-    let here = |said: msg::Said| Finding::said(Class::Plan, said).about(Subject::Directory(rel.to_string()));
+    let here = |said: msg::Said| {
+        Finding::said(Class::Plan, said).about(Subject::Directory(rel.to_string()))
+    };
     if !repo::valid_topic_file_name(name) {
         // The approve the move names is of the file under the name its topic
         // gives, when the topic gives one.
-        let dir = rel.rsplit_once('/').map(|(d, _)| format!("{}/", d)).unwrap_or_default();
+        let dir = rel
+            .rsplit_once('/')
+            .map(|(d, _)| format!("{}/", d))
+            .unwrap_or_default();
         let named = topic
             .map(|t| format!("{}{}.md", dir, repo::expected_topic_file_stem(t)))
             .filter(|p| repo::valid_topic_file_name(p.rsplit('/').next().unwrap_or(p)))
@@ -1121,10 +1356,17 @@ pub fn duplicate_heading_refusals(rel: &str, sections: &[record::Section]) -> Ve
     for sec in sections {
         *counts.entry(sec.heading_text.as_str()).or_insert(0) += 1;
     }
-    let mut dups: Vec<&str> = counts.into_iter().filter(|(_, c)| *c > 1).map(|(h, _)| h).collect();
+    let mut dups: Vec<&str> = counts
+        .into_iter()
+        .filter(|(_, c)| *c > 1)
+        .map(|(h, _)| h)
+        .collect();
     dups.sort();
     for h in dups {
-        out.push(Finding::said(Class::Plan, msg::duplicate_heading_in_file(h, rel)).about(Subject::Directory(rel.to_string())));
+        out.push(
+            Finding::said(Class::Plan, msg::duplicate_heading_in_file(h, rel))
+                .about(Subject::Directory(rel.to_string())),
+        );
     }
     out
 }
@@ -1141,7 +1383,11 @@ pub fn has_force(rf: &RecordFile, s: &record::Section, led: &Ledger) -> bool {
 /// hash). A fault of a duplicate heading belongs to them, for `check` in a
 /// file and across files and for `approve` alike; an unchanged question is
 /// not the copy.
-pub fn copying_sections<'a>(rf: &'a RecordFile, heading: &str, led: &Ledger) -> Vec<&'a record::Section> {
+pub fn copying_sections<'a>(
+    rf: &'a RecordFile,
+    heading: &str,
+    led: &Ledger,
+) -> Vec<&'a record::Section> {
     rf.sections
         .iter()
         .filter(|s| s.heading_text == heading && !has_force(rf, s, led))
@@ -1162,8 +1408,17 @@ pub fn copying_sections<'a>(rf: &'a RecordFile, heading: &str, led: &Ledger) -> 
 /// section of every other file counts, answered and superseded ones too,
 /// the same set `check` compares. Only a copying question (`copying_sections`)
 /// is refused for it; an unchanged one is not.
-pub fn cross_file_heading_refusals(rel: &str, rf: &RecordFile, all: &[RecordFile], led: &Ledger) -> Vec<Finding> {
-    let mut heads: Vec<&str> = rf.sections.iter().map(|s| s.heading_text.as_str()).collect();
+pub fn cross_file_heading_refusals(
+    rel: &str,
+    rf: &RecordFile,
+    all: &[RecordFile],
+    led: &Ledger,
+) -> Vec<Finding> {
+    let mut heads: Vec<&str> = rf
+        .sections
+        .iter()
+        .map(|s| s.heading_text.as_str())
+        .collect();
     heads.sort();
     heads.dedup();
     let mut out = Vec::new();
@@ -1180,8 +1435,11 @@ pub fn cross_file_heading_refusals(rel: &str, rf: &RecordFile, all: &[RecordFile
         paths.sort();
         paths.dedup();
         out.push(
-            Finding::said(Class::Plan, msg::duplicate_heading_across_files(h, paths[0], paths[1]))
-                .about(Subject::Directory(rel.to_string())),
+            Finding::said(
+                Class::Plan,
+                msg::duplicate_heading_across_files(h, paths[0], paths[1]),
+            )
+            .about(Subject::Directory(rel.to_string())),
         );
     }
     out
@@ -1203,7 +1461,11 @@ pub fn missing_answered_refusals(records: &[RecordFile], led: &Ledger) -> Vec<Fi
 /// `missing_answered_refusals` leaving out the ids in `skip`: `check` skips
 /// the ids of a removed file awaiting removal, which its `ids` category
 /// names with the file's removal move instead. `approve` skips none.
-pub fn missing_answered_refusals_except(records: &[RecordFile], led: &Ledger, skip: &HashSet<String>) -> Vec<Finding> {
+pub fn missing_answered_refusals_except(
+    records: &[RecordFile],
+    led: &Ledger,
+    skip: &HashSet<String>,
+) -> Vec<Finding> {
     let mut present_ids: HashSet<String> = HashSet::new();
     for rf in records {
         for sec in &rf.sections {
@@ -1226,7 +1488,10 @@ pub fn missing_answered_refusals_except(records: &[RecordFile], led: &Ledger, sk
                     .latest_asked(id)
                     .map(|a| a.detail.clone())
                     .unwrap_or_else(|| id.clone());
-                out.push(Finding::said(Class::Ids, msg::answered_id_missing(id, &heading)));
+                out.push(Finding::said(
+                    Class::Ids,
+                    msg::answered_id_missing(id, &heading),
+                ));
             }
         }
     }
@@ -1237,14 +1502,23 @@ pub fn missing_answered_refusals_except(records: &[RecordFile], led: &Ledger, sk
 /// an `assumes` row of the target for this dependent carries the hash of
 /// exactly this entry. A set written after the target was answered has no
 /// such row, so it is a shape error.
-pub(crate) fn set_frozen_at_ask(led: &Ledger, sec: &record::Section, d: &record::Dep, target: &record::Section) -> bool {
-    let (Some(id), Some(tid), Some(set)) = (&sec.id, &target.id, d.set()) else { return false };
+pub(crate) fn set_frozen_at_ask(
+    led: &Ledger,
+    sec: &record::Section,
+    d: &record::Dep,
+    target: &record::Section,
+) -> bool {
+    let (Some(id), Some(tid), Some(set)) = (&sec.id, &target.id, d.set()) else {
+        return false;
+    };
     set_frozen_ids(led, id, tid, set)
 }
 
 fn set_frozen_ids(led: &Ledger, id: &str, tid: &str, set: &record::AnswerSet) -> bool {
     let hash = record::assumes_hash(id, set);
-    led.assumes_for(tid).iter().any(|r| r.detail == id && r.hash == hash)
+    led.assumes_for(tid)
+        .iter()
+        .any(|r| r.detail == id && r.hash == hash)
 }
 
 /// The rule on the tiers of `rf` (per "What are the tiers derived from?"):
@@ -1267,7 +1541,12 @@ pub fn derive_finding(
             .find(|s| s.heading_text.trim() == section.trim())
             .filter(|s| status::open_to_ask_text(led, rf, s))
             .filter(|_| names_decision_of_other_file(rel, entry, cross_file_headings))
-            .map(|_| Finding::said(Class::Plan, msg::dep_names_heading_of_other_file(rel, section, entry.trim()))),
+            .map(|_| {
+                Finding::said(
+                    Class::Plan,
+                    msg::dep_names_heading_of_other_file(rel, section, entry.trim()),
+                )
+            }),
         _ => None,
     };
     // The sections the error is about (`check` reads them to tell a
@@ -1291,8 +1570,14 @@ pub fn derive_finding(
 
 /// Whether `entry` is the heading of a current decision of a topic file other
 /// than `rel` (`depends::cross_file_heading_index`).
-fn names_decision_of_other_file(rel: &str, entry: &str, cross_file_headings: &HashMap<String, Vec<(String, String)>>) -> bool {
-    cross_file_headings.get(entry.trim()).is_some_and(|at| at.iter().any(|(file, _)| file != rel))
+fn names_decision_of_other_file(
+    rel: &str,
+    entry: &str,
+    cross_file_headings: &HashMap<String, Vec<(String, String)>>,
+) -> bool {
+    cross_file_headings
+        .get(entry.trim())
+        .is_some_and(|at| at.iter().any(|(file, _)| file != rel))
 }
 
 /// The cap on a depends line (per "What bounds the questions a depends line
@@ -1309,9 +1594,15 @@ pub fn depends_line_cap_findings(rel: &str, rf: &RecordFile, led: &Ledger) -> Ve
         let mut targets: Vec<(String, String)> = Vec::new();
         for d in &sec.depends {
             let named = match (rf.dep_target(d), d) {
-                (Some(idx), _) => Some((format!("#{}", idx), rf.sections[idx].heading_text.trim().to_string())),
+                (Some(idx), _) => Some((
+                    format!("#{}", idx),
+                    rf.sections[idx].heading_text.trim().to_string(),
+                )),
                 (None, record::Dep::Id { id, .. }) if state::is_struck_from(led, id, rel) => {
-                    let name = led.latest_for_id("asked", id).map(|r| r.detail.clone()).unwrap_or_else(|| id.clone());
+                    let name = led
+                        .latest_for_id("asked", id)
+                        .map(|r| r.detail.clone())
+                        .unwrap_or_else(|| id.clone());
                     Some((id.clone(), name))
                 }
                 _ => None,
@@ -1327,7 +1618,12 @@ pub fn depends_line_cap_findings(rel: &str, rf: &RecordFile, led: &Ledger) -> Ve
             out.push(
                 Finding::said(
                     Class::Plan,
-                    msg::depends_line_over_limit(rel, &sec.heading_text, &names, record::DEPENDS_LINE_CAP),
+                    msg::depends_line_over_limit(
+                        rel,
+                        &sec.heading_text,
+                        &names,
+                        record::DEPENDS_LINE_CAP,
+                    ),
                 )
                 .in_section(si),
             );
@@ -1340,10 +1636,18 @@ pub fn depends_line_cap_findings(rel: &str, rf: &RecordFile, led: &Ledger) -> Ve
 /// hold more than `TIER_CAP` live questions. Only judged when tiers were
 /// derived; a refused, superseded or withdrawn question does not count, nor
 /// a decision an open question supersedes (`replaced`).
-pub fn cap_finding(rel: &str, rf: &RecordFile, replaced: &HashSet<String>, led: &Ledger) -> Option<Finding> {
+pub fn cap_finding(
+    rel: &str,
+    rf: &RecordFile,
+    replaced: &HashSet<String>,
+    led: &Ledger,
+) -> Option<Finding> {
     let tiers = rf.tiers.as_ref()?;
     let (open, answered) = state::over_cap_headings(led, rf, tiers, replaced)?;
-    Some(Finding::said(Class::Plan, msg::tier_cap_exceeded(rel, &open, answered, record::TIER_CAP)))
+    Some(Finding::said(
+        Class::Plan,
+        msg::tier_cap_exceeded(rel, &open, answered, record::TIER_CAP),
+    ))
 }
 
 // --- the judgements every command reads --------------------------------------
@@ -1414,16 +1718,30 @@ pub fn judge_topic_file(j: &TopicFileJudge) -> Vec<Finding> {
         rel,
     );
     if j.directory {
-        out.extend(own_name_and_heading_refusals(rel, rf.topic.as_deref(), &rf.sections));
+        out.extend(own_name_and_heading_refusals(
+            rel,
+            rf.topic.as_deref(),
+            &rf.sections,
+        ));
         out.extend(cross_file_heading_refusals(rel, rf, j.all, led));
     }
     // Per "Does a depends entry carry the answers it holds under?": a letter
     // the target has no option for is found before `ask`.
-    out.extend(about_topic_file(in_sections(Class::Plan, letter_found(rel, rf, led)), rel));
+    out.extend(about_topic_file(
+        in_sections(Class::Plan, letter_found(rel, rf, led)),
+        rel,
+    ));
     if j.planning {
-        out.extend(found(Class::Plan, rel, planning_steps(j.root, rel, rf, j.all, j.terms_list, led, j.shared)));
+        out.extend(found(
+            Class::Plan,
+            rel,
+            planning_steps(j.root, rel, rf, j.all, j.terms_list, led, j.shared),
+        ));
     }
-    out.extend(about_topic_file(banned_in_questions(j.root, rel, rf, j.terms_list, led), rel));
+    out.extend(about_topic_file(
+        banned_in_questions(j.root, rel, rf, j.terms_list, led),
+        rel,
+    ));
     out
 }
 
@@ -1442,7 +1760,9 @@ pub fn banned_in_questions(
     led: &Ledger,
 ) -> Vec<Finding> {
     let entries: HashMap<String, Option<String>> =
-        crate::banned::read_entries(&root.join(crate::banned::BAN_LIST)).into_iter().collect();
+        crate::banned::read_entries(&root.join(crate::banned::BAN_LIST))
+            .into_iter()
+            .collect();
     if entries.is_empty() {
         return Vec::new();
     }
@@ -1453,7 +1773,11 @@ pub fn banned_in_questions(
         .filter_map(|(i, sec)| {
             let text = state::section_text_excluding_terms_line(&rf.lines, sec);
             let hit = crate::banned::first_hit(&text, &entries, terms_list)?;
-            let said = msg::banned_word_in_candidate(rel, &sec.heading_text, &msg::term_suffix(hit.term.as_deref()));
+            let said = msg::banned_word_in_candidate(
+                rel,
+                &sec.heading_text,
+                &msg::term_suffix(hit.term.as_deref()),
+            );
             Some(Finding::said(Class::Banned, said).in_section(i))
         })
         .collect()
@@ -1469,14 +1793,24 @@ pub fn banned_in_questions(
 /// withdrawn row (per "Does approve withdraw an asked question struck from
 /// the plan?"). Not part of `judge_topic_file`: approve clears it rather
 /// than refusing on it; show, plan and check print it the same way.
-pub fn struck_asked(rel: &str, stale: bool, sole_stale: bool, all: &[RecordFile], led: &Ledger) -> Vec<Finding> {
+pub fn struck_asked(
+    rel: &str,
+    stale: bool,
+    sole_stale: bool,
+    all: &[RecordFile],
+    led: &Ledger,
+) -> Vec<Finding> {
     if !stale {
         return Vec::new();
     }
     struck_asked_ids(rel, sole_stale, all, led)
         .into_iter()
         .map(|(id, heading, event)| {
-            Finding::said(Class::Ids, msg::removed_from_plan(&id, &heading, event, rel)).about(Subject::TopicFile(rel.to_string()))
+            Finding::said(
+                Class::Ids,
+                msg::removed_from_plan(&id, &heading, event, rel),
+            )
+            .about(Subject::TopicFile(rel.to_string()))
         })
         .collect()
 }
@@ -1486,11 +1820,20 @@ pub fn struck_asked(rel: &str, stale: bool, sole_stale: bool, all: &[RecordFile]
 /// per-question `approved` row names `rel`, and, when `rel` is the only file
 /// awaiting a re-approval (`sole_stale`), the ids asked under a ledger that
 /// approved whole files only and so names no file for them.
-pub fn struck_asked_ids<'l>(rel: &str, sole_stale: bool, all: &[RecordFile], led: &'l Ledger) -> Vec<(String, String, &'l str)> {
+pub fn struck_asked_ids<'l>(
+    rel: &str,
+    sole_stale: bool,
+    all: &[RecordFile],
+    led: &'l Ledger,
+) -> Vec<(String, String, &'l str)> {
     let held: HashSet<&str> = held_ids(all);
     let mut seen: HashSet<&str> = HashSet::new();
     let mut out = Vec::new();
-    for row in led.rows.iter().filter(|r| r.event == "asked" && r.id != "-") {
+    for row in led
+        .rows
+        .iter()
+        .filter(|r| r.event == "asked" && r.id != "-")
+    {
         let id = row.id.as_str();
         if !seen.insert(id) || held.contains(id) {
             continue;
@@ -1500,10 +1843,17 @@ pub fn struck_asked_ids<'l>(rel: &str, sole_stale: bool, all: &[RecordFile], led
             None if sole_stale => {}
             _ => continue,
         }
-        let Some(event) = led.latest_state(id).map(|r| r.event.as_str()).filter(|e| *e == "asked" || *e == "refused") else {
+        let Some(event) = led
+            .latest_state(id)
+            .map(|r| r.event.as_str())
+            .filter(|e| *e == "asked" || *e == "refused")
+        else {
             continue;
         };
-        let heading = led.latest_asked(id).map(|r| r.detail.clone()).unwrap_or_else(|| id.to_string());
+        let heading = led
+            .latest_asked(id)
+            .map(|r| r.detail.clone())
+            .unwrap_or_else(|| id.to_string());
         out.push((id.to_string(), heading, event));
     }
     out
@@ -1513,7 +1863,10 @@ pub fn struck_asked_ids<'l>(rel: &str, sole_stale: bool, all: &[RecordFile], led
 /// from that approval now, read off the files as written.
 pub fn stale_files<'a>(all: &'a [RecordFile], led: &Ledger) -> Vec<&'a str> {
     all.iter()
-        .filter(|rf| led.latest_for_path("approved", &rf.rel).is_some() && !state::plan_approved(led, rf, &rf.rel))
+        .filter(|rf| {
+            led.latest_for_path("approved", &rf.rel).is_some()
+                && !state::plan_approved(led, rf, &rf.rel)
+        })
         .map(|rf| rf.rel.as_str())
         .collect()
 }
@@ -1549,7 +1902,6 @@ fn planning_steps(
     }
 }
 
-
 /// What the judgement of every topic file of a run reads of the whole
 /// repository, read once per run rather than once per file: the planning
 /// records (`plan::Shared`, with the term phrases and the heading indexes),
@@ -1565,12 +1917,23 @@ pub struct RepoIndex {
 }
 
 impl RepoIndex {
-    pub fn new(root: &Path, all: &[RecordFile], terms_list: &[terms::Term], led: &Ledger) -> RepoIndex {
+    pub fn new(
+        root: &Path,
+        all: &[RecordFile],
+        terms_list: &[terms::Term],
+        led: &Ledger,
+    ) -> RepoIndex {
         RepoIndex::new_via(root, all, terms_list, led, &repo::Source::WorkingTree)
     }
 
     /// `new` with the reader's rows as `source` holds them.
-    pub fn new_via(root: &Path, all: &[RecordFile], terms_list: &[terms::Term], led: &Ledger, source: &repo::Source) -> RepoIndex {
+    pub fn new_via(
+        root: &Path,
+        all: &[RecordFile],
+        terms_list: &[terms::Term],
+        led: &Ledger,
+        source: &repo::Source,
+    ) -> RepoIndex {
         let (blame, _) = crate::blame::Index::read(root, source, led);
         RepoIndex::new_with_blame(root, all, terms_list, led, source, blame)
     }
@@ -1586,10 +1949,24 @@ impl RepoIndex {
         blame: crate::blame::Index,
     ) -> RepoIndex {
         let planning = crate::plan::Shared::new_via(root, all, terms_list, led, source);
-        let base = depends::replaced_base(all, &depends::approved_plan_rels(all, led), &planning.cross, led);
-        let stale = stale_files(all, led).into_iter().map(str::to_string).collect();
+        let base = depends::replaced_base(
+            all,
+            &depends::approved_plan_rels(all, led),
+            &planning.cross,
+            led,
+        );
+        let stale = stale_files(all, led)
+            .into_iter()
+            .map(str::to_string)
+            .collect();
         let records = judge_records(all, led);
-        RepoIndex { planning, blame, base, stale, records }
+        RepoIndex {
+            planning,
+            blame,
+            base,
+            stale,
+            records,
+        }
     }
 
     /// The rules on the topic files as a whole (`judge_records`).
@@ -1640,7 +2017,11 @@ pub fn no_body_refusals(rel: &str, rf: &RecordFile, led: &Ledger) -> Vec<msg::Sa
     rf.sections
         .iter()
         .filter(|sec| sec.is_skeleton)
-        .filter(|sec| !sec.id.as_ref().is_some_and(|id| led.latest_asked(id).is_some()))
+        .filter(|sec| {
+            !sec.id
+                .as_ref()
+                .is_some_and(|id| led.latest_asked(id).is_some())
+        })
         .map(|sec| msg::question_without_body(rel, &sec.heading_text))
         .collect()
 }
@@ -1657,7 +2038,8 @@ pub fn judge_records(records: &[RecordFile], led: &Ledger) -> Vec<Finding> {
 /// approval defines pairs to it, and the finding is the terms file's own
 /// approval (`terms_gate`), never a missing term the file already holds.
 pub fn judged_terms(tf: Option<&terms::TermsFile>) -> Vec<terms::Term> {
-    tf.map(|tf| terms::minted_copy(tf).terms).unwrap_or_default()
+    tf.map(|tf| terms::minted_copy(tf).terms)
+        .unwrap_or_default()
 }
 
 /// What keeps `approve`, `ask` and `answer` from taking the topic file
@@ -1668,7 +2050,8 @@ pub fn judged_terms(tf: Option<&terms::TermsFile>) -> Vec<terms::Term> {
 /// and no move those commands would refuse.
 pub fn terms_gate(root: &Path, led: &Ledger, rel: &str) -> TermsGate {
     let mut gate = TermsGate::default();
-    gate.waits = crate::terms::load(&root.join(crate::repo::TERMS_PATH)).is_ok_and(|tf| !state::terms_approved(led, &tf));
+    gate.waits = crate::terms::load(&root.join(crate::repo::TERMS_PATH))
+        .is_ok_and(|tf| !state::terms_approved(led, &tf));
     if let Err(lines) = crate::actions::require_terms(root, led, rel, Command::Show) {
         for l in lines {
             match l {
@@ -1707,16 +2090,25 @@ impl TermsGate {
 /// questions, a withdrawn identifier back in a file (a withdrawn identifier
 /// never returns, per "Does approve withdraw an asked question struck from
 /// the plan?"), and a current decision no topic file holds.
-pub fn judge_records_except(records: &[RecordFile], led: &Ledger, skip: &HashSet<String>) -> Vec<Finding> {
+pub fn judge_records_except(
+    records: &[RecordFile],
+    led: &Ledger,
+    skip: &HashSet<String>,
+) -> Vec<Finding> {
     let mut out = Vec::new();
     let mut seen: HashMap<&str, String> = HashMap::new();
     for rf in records {
         for sec in rf.sections.iter().filter(|s| !s.is_skeleton) {
-            let Some(id) = sec.id.as_deref() else { continue };
+            let Some(id) = sec.id.as_deref() else {
+                continue;
+            };
             match seen.get(id) {
                 Some(prev) => out.push(
-                    Finding::said(Class::Ids, msg::duplicate_id(id, prev, &rf.rel, &sec.heading_text))
-                        .about(Subject::TopicFile(rf.rel.clone())),
+                    Finding::said(
+                        Class::Ids,
+                        msg::duplicate_id(id, prev, &rf.rel, &sec.heading_text),
+                    )
+                    .about(Subject::TopicFile(rf.rel.clone())),
                 ),
                 None => {
                     seen.insert(id, format!("{}:{}", rf.rel, sec.heading_text));
@@ -1727,10 +2119,16 @@ pub fn judge_records_except(records: &[RecordFile], led: &Ledger, skip: &HashSet
     for rf in records {
         for sec in &rf.sections {
             let Some(id) = &sec.id else { continue };
-            if led.latest_state(id).is_some_and(|row| row.event == "withdrawn") {
+            if led
+                .latest_state(id)
+                .is_some_and(|row| row.event == "withdrawn")
+            {
                 out.push(
-                    Finding::said(Class::Ids, msg::withdrawn_id_present(id, &sec.heading_text, &rf.rel))
-                        .about(Subject::TopicFile(rf.rel.clone())),
+                    Finding::said(
+                        Class::Ids,
+                        msg::withdrawn_id_present(id, &sec.heading_text, &rf.rel),
+                    )
+                    .about(Subject::TopicFile(rf.rel.clone())),
                 );
             }
         }
@@ -1741,11 +2139,19 @@ pub fn judge_records_except(records: &[RecordFile], led: &Ledger, skip: &HashSet
 
 /// The rules on a removed topic file: each question it held that keeps its
 /// removal from being approved (`removal_holds`).
-pub fn judge_removed_topic_file(root: &Path, rel: &str, led: &Ledger, present_ids: &HashSet<String>) -> Vec<Finding> {
+pub fn judge_removed_topic_file(
+    root: &Path,
+    rel: &str,
+    led: &Ledger,
+    present_ids: &HashSet<String>,
+) -> Vec<Finding> {
     removal_holds(root, rel, led, present_ids)
         .holds
         .iter()
-        .map(|h| Finding::said(Class::Plan, msg::removal_holds_open(rel, h)).about(Subject::TopicFile(rel.to_string())))
+        .map(|h| {
+            Finding::said(Class::Plan, msg::removal_holds_open(rel, h))
+                .about(Subject::TopicFile(rel.to_string()))
+        })
         .collect()
 }
 
@@ -1754,10 +2160,27 @@ pub fn judge_removed_topic_file(root: &Path, rel: &str, led: &Ledger, present_id
 /// judgement `show` prints and the gate of `ask`, `answer` and the approve
 /// of a topic file names, so no command offers the owner's approve of the
 /// terms file while approve would refuse it.
-pub fn terms_file_findings(root: &Path, records: &[RecordFile], tf: &terms::TermsFile, led: &Ledger) -> Vec<Finding> {
-    let approved_plans: HashSet<String> =
-        records.iter().filter(|rf| state::plan_approved(led, rf, &rf.rel)).map(|rf| rf.rel.clone()).collect();
-    judge_terms_file(root, records, tf, led, &repo::Source::WorkingTree, true, &approved_plans).0
+pub fn terms_file_findings(
+    root: &Path,
+    records: &[RecordFile],
+    tf: &terms::TermsFile,
+    led: &Ledger,
+) -> Vec<Finding> {
+    let approved_plans: HashSet<String> = records
+        .iter()
+        .filter(|rf| state::plan_approved(led, rf, &rf.rel))
+        .map(|rf| rf.rel.clone())
+        .collect();
+    judge_terms_file(
+        root,
+        records,
+        tf,
+        led,
+        &repo::Source::WorkingTree,
+        true,
+        &approved_plans,
+    )
+    .0
 }
 
 /// The rules on the terms file (`terms_refusals`), each a finding about it;
@@ -1784,11 +2207,21 @@ pub fn judge_blame_coverage(bf: &crate::blame::BlameFile, n: usize) -> Vec<Findi
     let about = || Subject::BlameFile(bf.rel.clone());
     let mut out: Vec<Finding> = beyond
         .iter()
-        .map(|b| Finding::said(Class::Blame, msg::blame_range_beyond(&bf.rel, b.start, b.end, n)).about(about()))
+        .map(|b| {
+            Finding::said(
+                Class::Blame,
+                msg::blame_range_beyond(&bf.rel, b.start, b.end, n),
+            )
+            .about(about())
+        })
         .collect();
-    out.extend(
-        gaps.iter().map(|g| Finding::said(Class::Blame, msg::blame_coverage_gap(&bf.rel, g.start, g.end)).about(about())),
-    );
+    out.extend(gaps.iter().map(|g| {
+        Finding::said(
+            Class::Blame,
+            msg::blame_coverage_gap(&bf.rel, g.start, g.end),
+        )
+        .about(about())
+    }));
     out
 }
 
@@ -1796,7 +2229,10 @@ pub fn judge_blame_coverage(bf: &crate::blame::BlameFile, n: usize) -> Vec<Findi
 /// (`blame::file_state`): the findings of the state, then, when the origin
 /// could be read, coverage. What `approve` refuses on, `check` prints and
 /// `show` names the moves of a blame file from.
-pub fn judge_blame_file(st: &crate::blame::FileState, bf: &crate::blame::BlameFile) -> Vec<Finding> {
+pub fn judge_blame_file(
+    st: &crate::blame::FileState,
+    bf: &crate::blame::BlameFile,
+) -> Vec<Finding> {
     let mut out = st.findings.clone();
     if let Some(c) = &st.origin_content {
         out.extend(judge_blame_coverage(bf, c.lines().count()));

@@ -17,9 +17,17 @@ fn approved_then_edited(edit: impl Fn(&str) -> String) -> (std::path::PathBuf, s
     let record = write_record(&dir, "adrdom/decisions/example.md", CLEAN);
     approve_record(&dir, "adrdom/decisions/example.md");
     let approved = std::fs::read_to_string(&record).unwrap();
-    let dep = approved.lines().find(|l| l.starts_with("depends: ")).unwrap().to_string();
+    let dep = approved
+        .lines()
+        .find(|l| l.starts_with("depends: "))
+        .unwrap()
+        .to_string();
     let edited = approved.replacen(&format!("{}\n", dep), &format!("{}\n", edit(&dep)), 1);
-    assert_ne!(edited, approved, "the line to edit must exist: {}", approved);
+    assert_ne!(
+        edited, approved,
+        "the line to edit must exist: {}",
+        approved
+    );
     std::fs::write(&record, edited).unwrap();
     (dir, record)
 }
@@ -27,16 +35,35 @@ fn approved_then_edited(edit: impl Fn(&str) -> String) -> (std::path::PathBuf, s
 fn refused_everywhere(dir: &std::path::Path, record: &std::path::Path, needle: &str) {
     let ask = adr(dir, &["ask", record.to_str().unwrap()], &[], "");
     assert!(!ask.status.success(), "ask should refuse: {}", stdout(&ask));
-    assert!(stderr(&ask).contains(needle), "ask output missing {:?}: {}", needle, stderr(&ask));
+    assert!(
+        stderr(&ask).contains(needle),
+        "ask output missing {:?}: {}",
+        needle,
+        stderr(&ask)
+    );
 
     let apr = adr_owner(dir, &["approve", record.to_str().unwrap()], "");
-    assert!(!apr.status.success(), "approve should refuse: {}", stdout(&apr));
-    assert!(stderr(&apr).contains(needle), "approve output missing {:?}: {}", needle, stderr(&apr));
+    assert!(
+        !apr.status.success(),
+        "approve should refuse: {}",
+        stdout(&apr)
+    );
+    assert!(
+        stderr(&apr).contains(needle),
+        "approve output missing {:?}: {}",
+        needle,
+        stderr(&apr)
+    );
 
     // The edited file awaits approval, so check prints the finding as a note.
     let chk = adr(dir, &["check"], &[], "");
     let text = format!("{}{}", stdout(&chk), stderr(&chk));
-    assert!(text.contains(needle), "check output missing {:?}: {}", needle, text);
+    assert!(
+        text.contains(needle),
+        "check output missing {:?}: {}",
+        needle,
+        text
+    );
 }
 
 #[test]
@@ -49,7 +76,8 @@ fn a_depends_list_continued_on_a_second_line_is_refused() {
 #[test]
 fn a_depends_list_continued_on_a_bare_following_line_is_refused() {
     // adr: b0554224-15e4-4e91-a2bb-9ae5667803f4
-    let (dir, record) = approved_then_edited(|d| format!("{d},\n  {}", d.trim_start_matches("depends: ")));
+    let (dir, record) =
+        approved_then_edited(|d| format!("{d},\n  {}", d.trim_start_matches("depends: ")));
     refused_everywhere(&dir, &record, "stray line");
 }
 

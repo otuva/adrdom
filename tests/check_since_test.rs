@@ -12,11 +12,18 @@ use std::path::Path;
 fn commit_all(dir: &Path, msg: &str) {
     run_git(dir, &["add", "-A"]);
     let out = run_git(dir, &["commit", "-q", "-m", msg]);
-    assert!(out.status.success(), "commit '{}' failed: {}", msg, stderr(&out));
+    assert!(
+        out.status.success(),
+        "commit '{}' failed: {}",
+        msg,
+        stderr(&out)
+    );
 }
 
 fn head_sha(dir: &Path) -> String {
-    stdout(&run_git(dir, &["rev-parse", "HEAD"])).trim().to_string()
+    stdout(&run_git(dir, &["rev-parse", "HEAD"]))
+        .trim()
+        .to_string()
 }
 
 /// `adr install`ed, with the hook wiring immediately switched off
@@ -69,10 +76,17 @@ fn b_fails_when_a_row_of_commit_is_gone() {
     commit_all(&dir, "drop the ledger row");
 
     let out = adr(&dir, &["check", "--since", &since], &[], "");
-    assert!(!out.status.success(), "check --since must fail when a row of <commit> is gone");
+    assert!(
+        !out.status.success(),
+        "check --since must fail when a row of <commit> is gone"
+    );
     let text = stdout(&out);
     assert!(text.contains(SINCE_DROPS_ROWS_TEXT), "{}", text);
-    assert!(text.contains("owner restores the missing rows of the ledger from git"), "{}", text);
+    assert!(
+        text.contains("owner restores the missing rows of the ledger from git"),
+        "{}",
+        text
+    );
 }
 
 // adr: a26876ba-5789-4d05-965e-853d00d9edd2
@@ -102,15 +116,25 @@ fn c_fails_when_a_row_of_commit_changed() {
     fields[3] = hash_chars.into_iter().collect();
     lines[idx] = fields.join("\t");
     let changed = lines.join("\n") + "\n";
-    assert_ne!(content, changed, "the byte flip must actually change the file");
+    assert_ne!(
+        content, changed,
+        "the byte flip must actually change the file"
+    );
     std::fs::write(&ledger_path, &changed).unwrap();
     commit_all(&dir, "change one byte of the ledger row");
 
     let out = adr(&dir, &["check", "--since", &since], &[], "");
-    assert!(!out.status.success(), "check --since must fail when a row of <commit> changed");
+    assert!(
+        !out.status.success(),
+        "check --since must fail when a row of <commit> changed"
+    );
     let text = stdout(&out);
     assert!(text.contains(SINCE_DROPS_ROWS_TEXT), "{}", text);
-    assert!(text.contains("owner restores the missing rows of the ledger from git"), "{}", text);
+    assert!(
+        text.contains("owner restores the missing rows of the ledger from git"),
+        "{}",
+        text
+    );
 }
 
 // adr: a26876ba-5789-4d05-965e-853d00d9edd2
@@ -138,7 +162,10 @@ fn e_an_unknown_commit_fails_with_its_own_message() {
 
     let bogus = "2222222222222222222222222222222222222d";
     let out = adr(&dir, &["check", "--since", bogus], &[], "");
-    assert!(!out.status.success(), "check --since must fail for a commit this repo doesn't have");
+    assert!(
+        !out.status.success(),
+        "check --since must fail for a commit this repo doesn't have"
+    );
     let text = stdout(&out);
     assert!(text.contains("check: "), "{}", text);
     assert!(text.contains(SINCE_UNREADABLE_TEXT), "{}", text);

@@ -37,7 +37,12 @@ const H_VERDICT: &str = "What is the verdict?";
 const H_CHOICE: &str = "What is the choice of verdict?";
 
 fn sec(heading: &str, deps: &str, body: bool) -> String {
-    format!("\n### {}\ndepends: {}\n{}", heading, deps, if body { BODY } else { "" })
+    format!(
+        "\n### {}\ndepends: {}\n{}",
+        heading,
+        deps,
+        if body { BODY } else { "" }
+    )
 }
 
 fn terms_rows(dir: &Path) -> usize {
@@ -67,8 +72,12 @@ fn setup(record_body: &str) -> (PathBuf, PathBuf, PathBuf) {
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let record = write_record(&dir, "adrdom/decisions/example.md", record_body);
     let terms = write_record(&dir, "adrdom/terms.md", TERMS_TWO_ENTRIES);
-    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "").status.success());
-    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "").status.success());
+    assert!(adr_owner(&dir, &["approve", terms.to_str().unwrap()], "")
+        .status
+        .success());
+    assert!(adr_owner(&dir, &["approve", record.to_str().unwrap()], "")
+        .status
+        .success());
     (dir, record, terms)
 }
 
@@ -79,23 +88,39 @@ fn retire(dir: &Path, terms: &Path) -> std::process::Output {
 
 fn assert_retire_refused(dir: &Path, terms: &Path, rows_before: usize, heading: &str) {
     let out = retire(dir, terms);
-    assert!(!out.status.success(), "retire should have refused: {}{}", stdout(&out), stderr(&out));
-    let err = stderr(&out);
-    assert!(err.contains(heading), "stderr should name {:?}: {}", heading, err);
     assert!(
-        err.contains("term \"decision\" retired but used by") && err.contains("; agent rewrites the "),
+        !out.status.success(),
+        "retire should have refused: {}{}",
+        stdout(&out),
+        stderr(&out)
+    );
+    let err = stderr(&out);
+    assert!(
+        err.contains(heading),
+        "stderr should name {:?}: {}",
+        heading,
+        err
+    );
+    assert!(
+        err.contains("term \"decision\" retired but used by")
+            && err.contains("; agent rewrites the "),
         "stderr should name the retired term in use: {}",
         err
     );
-    assert_eq!(terms_rows(dir), rows_before, "a refused retire writes no terms row");
+    assert_eq!(
+        terms_rows(dir),
+        rows_before,
+        "a refused retire writes no terms row"
+    );
 }
 
 #[test]
 fn retire_refused_while_an_asked_question_names_the_term() {
     // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
-    let (dir, record, terms) =
-        setup(&format!("# Example\n{}", sec(H_DECISION, "decision", true)));
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let (dir, record, terms) = setup(&format!("# Example\n{}", sec(H_DECISION, "decision", true)));
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let rows = terms_rows(&dir);
     assert_retire_refused(&dir, &terms, rows, H_DECISION);
 }
@@ -103,8 +128,7 @@ fn retire_refused_while_an_asked_question_names_the_term() {
 #[test]
 fn retire_refused_while_an_approved_unasked_plan_heading_names_the_term() {
     // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
-    let (dir, _record, terms) =
-        setup(&format!("# Example\n{}", sec(H_DECISION, "verdict", true)));
+    let (dir, _record, terms) = setup(&format!("# Example\n{}", sec(H_DECISION, "verdict", true)));
     let rows = terms_rows(&dir);
     assert_retire_refused(&dir, &terms, rows, H_DECISION);
 }
@@ -117,7 +141,9 @@ fn retire_succeeds_once_the_asked_question_is_struck_from_the_plan() {
         sec(H_DECISION, "decision", true),
         sec(H_VERDICT, "verdict", true)
     ));
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let rows = terms_rows(&dir);
     // Refused first, while the asked question stands in the plan.
     assert_retire_refused(&dir, &terms, rows, H_DECISION);
@@ -134,10 +160,18 @@ fn retire_succeeds_once_the_asked_question_is_struck_from_the_plan() {
     let end = c.find(&format!("### {}", H_VERDICT)).unwrap();
     std::fs::write(&record, format!("{}{}", &c[..start], &c[end..])).unwrap();
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(out.status.success(), "striking approve failed: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "striking approve failed: {}",
+        stderr(&out)
+    );
 
     let out = retire(&dir, &terms);
-    assert!(out.status.success(), "retire should pass once struck: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "retire should pass once struck: {}",
+        stderr(&out)
+    );
     assert_eq!(terms_rows(&dir), rows + 1);
 }
 
@@ -149,21 +183,28 @@ fn retire_succeeds_when_only_a_refused_question_names_the_term() {
         sec(H_DECISION, "decision", true),
         sec(H_VERDICT, "verdict", true)
     ));
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let out = adr_answer(&dir, &id_of(&record, H_DECISION), "refuse");
     assert!(out.status.success(), "refuse failed: {}", stderr(&out));
     let rows = terms_rows(&dir);
     let out = retire(&dir, &terms);
-    assert!(out.status.success(), "a refused question is not live: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "a refused question is not live: {}",
+        stderr(&out)
+    );
     assert_eq!(terms_rows(&dir), rows + 1);
 }
 
 #[test]
 fn retire_refused_when_an_asked_questions_terms_line_cannot_be_read() {
     // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
-    let (dir, record, terms) =
-        setup(&format!("# Example\n{}", sec(H_DECISION, "decision", true)));
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let (dir, record, terms) = setup(&format!("# Example\n{}", sec(H_DECISION, "decision", true)));
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let text = std::fs::read_to_string(&record).unwrap();
     let line = text
         .lines()
@@ -175,11 +216,28 @@ fn retire_refused_when_an_asked_questions_terms_line_cannot_be_read() {
     std::fs::write(&record, broken).unwrap();
     let rows = terms_rows(&dir);
     let out = retire(&dir, &terms);
-    assert!(!out.status.success(), "retire should have refused: {}{}", stdout(&out), stderr(&out));
+    assert!(
+        !out.status.success(),
+        "retire should have refused: {}{}",
+        stdout(&out),
+        stderr(&out)
+    );
     let err = stderr(&out);
-    assert!(err.contains(H_DECISION), "stderr should name the question: {}", err);
-    assert!(err.contains("agent restores adrdom/decisions/example.md from git"), "{}", err);
-    assert_eq!(terms_rows(&dir), rows, "a refused retire writes no terms row");
+    assert!(
+        err.contains(H_DECISION),
+        "stderr should name the question: {}",
+        err
+    );
+    assert!(
+        err.contains("agent restores adrdom/decisions/example.md from git"),
+        "{}",
+        err
+    );
+    assert_eq!(
+        terms_rows(&dir),
+        rows,
+        "a refused retire writes no terms row"
+    );
 }
 
 const TERMS_DECISION_RETIRED_PLUS_NEW: &str = "# Terms\n\n\
@@ -201,8 +259,7 @@ aliases: \n";
 #[test]
 fn a_heading_written_after_a_retire_was_approved_does_not_block_terms_approve_or_check() {
     // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
-    let (dir, record, terms) =
-        setup(&format!("# Example\n{}", sec(H_VERDICT, "verdict", true)));
+    let (dir, record, terms) = setup(&format!("# Example\n{}", sec(H_VERDICT, "verdict", true)));
     // Nothing names "decision": the retire passes and writes its term row.
     let out = retire(&dir, &terms);
     assert!(out.status.success(), "retire should pass: {}", stderr(&out));
@@ -210,46 +267,82 @@ fn a_heading_written_after_a_retire_was_approved_does_not_block_terms_approve_or
     let c = std::fs::read_to_string(&record).unwrap();
     // The new text pairs the live term "verdict": a heading with the retired
     // word alone pairs no term.
-    let new_sec = sec(H_DECISION, "verdict", true).replace("Problem: p.", "Problem: p of the verdict.");
+    let new_sec =
+        sec(H_DECISION, "verdict", true).replace("Problem: p.", "Problem: p of the verdict.");
     std::fs::write(&record, format!("{}{}", c, new_sec)).unwrap();
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(out.status.success(), "plan approve failed: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "plan approve failed: {}",
+        stderr(&out)
+    );
     // An unrelated terms edit (a new term) still approves.
     std::fs::write(&terms, TERMS_DECISION_RETIRED_PLUS_NEW).unwrap();
     let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
-    assert!(out.status.success(), "terms approve refused: {}{}", stdout(&out), stderr(&out));
+    assert!(
+        out.status.success(),
+        "terms approve refused: {}{}",
+        stdout(&out),
+        stderr(&out)
+    );
     let out = adr(&dir, &["check"], &[], "");
     let all = format!("{}{}", stdout(&out), stderr(&out));
-    assert!(!all.contains("retired but used by"), "check names the heading: {}", all);
-    assert!(!all.contains(H_DECISION), "check names the heading: {}", all);
+    assert!(
+        !all.contains("retired but used by"),
+        "check names the heading: {}",
+        all
+    );
+    assert!(
+        !all.contains(H_DECISION),
+        "check names the heading: {}",
+        all
+    );
 }
 
 #[test]
 fn unreadable_terms_line_blocks_only_an_approve_that_retires_or_removes() {
     // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
-    let (dir, record, terms) =
-        setup(&format!("# Example\n{}", sec(H_DECISION, "decision", true)));
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let (dir, record, terms) = setup(&format!("# Example\n{}", sec(H_DECISION, "decision", true)));
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let text = std::fs::read_to_string(&record).unwrap();
-    let line = text.lines().find(|l| l.starts_with("terms: ")).unwrap().to_string();
+    let line = text
+        .lines()
+        .find(|l| l.starts_with("terms: "))
+        .unwrap()
+        .to_string();
     std::fs::write(&record, text.replacen(&line, "terms: decision", 1)).unwrap();
     // Only adds a term: passes.
-    let with_new = format!("{}\n## ruling\ndefinition: A formal finding.\naliases: \n", TERMS_TWO_ENTRIES);
+    let with_new = format!(
+        "{}\n## ruling\ndefinition: A formal finding.\naliases: \n",
+        TERMS_TWO_ENTRIES
+    );
     std::fs::write(&terms, with_new).unwrap();
     let out = adr_owner(&dir, &["approve", terms.to_str().unwrap()], "");
-    assert!(out.status.success(), "adding a term should pass: {}{}", stdout(&out), stderr(&out));
+    assert!(
+        out.status.success(),
+        "adding a term should pass: {}{}",
+        stdout(&out),
+        stderr(&out)
+    );
     // Retires: refused, naming the unreadable line.
     let out = retire(&dir, &terms);
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("terms line cannot be read"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("terms line cannot be read"),
+        "{}",
+        stderr(&out)
+    );
 }
 
 #[test]
 fn retire_refused_while_only_an_asked_questions_depends_line_names_the_term() {
     // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
-    let (dir, record, terms) =
-        setup(&format!("# Example\n{}", sec(H_CHOICE, "decision", true)));
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    let (dir, record, terms) = setup(&format!("# Example\n{}", sec(H_CHOICE, "decision", true)));
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let rows = terms_rows(&dir);
     assert_retire_refused(&dir, &terms, rows, H_CHOICE);
 }
@@ -257,8 +350,7 @@ fn retire_refused_while_only_an_asked_questions_depends_line_names_the_term() {
 #[test]
 fn retire_refused_while_only_an_approved_unasked_headings_depends_line_names_the_term() {
     // adr: fcf9d2c6-009e-4d6a-a3e4-14274bd1ee94
-    let (dir, _record, terms) =
-        setup(&format!("# Example\n{}", sec(H_CHOICE, "decision", true)));
+    let (dir, _record, terms) = setup(&format!("# Example\n{}", sec(H_CHOICE, "decision", true)));
     let rows = terms_rows(&dir);
     assert_retire_refused(&dir, &terms, rows, H_CHOICE);
 }
@@ -283,8 +375,16 @@ fn retire_succeeds_once_the_question_naming_the_term_only_by_depends_is_struck()
     let rest = c[end..].replace(&format!(", {}", choice_id), "");
     std::fs::write(&record, format!("{}{}", &c[..start], rest)).unwrap();
     let out = adr_owner(&dir, &["approve", record.to_str().unwrap()], "");
-    assert!(out.status.success(), "striking approve failed: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "striking approve failed: {}",
+        stderr(&out)
+    );
     let out = retire(&dir, &terms);
-    assert!(out.status.success(), "retire should pass once struck: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "retire should pass once struck: {}",
+        stderr(&out)
+    );
     assert_eq!(terms_rows(&dir), rows + 1);
 }

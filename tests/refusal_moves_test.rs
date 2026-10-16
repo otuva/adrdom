@@ -42,17 +42,26 @@ fn an_entry_on_a_question_of_another_file_is_refused_in_both_states() {
     let a = write_record(
         &dir,
         A,
-        &format!("# A\n\n{}", question("Is the widget alpha hold?", "widget", "")),
+        &format!(
+            "# A\n\n{}",
+            question("Is the widget alpha hold?", "widget", "")
+        ),
     );
     approve_record(&dir, A);
-    assert!(adr(&dir, &["ask", a.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", a.to_str().unwrap()], &[], "")
+        .status
+        .success());
 
     let b = write_record(
         &dir,
         B,
         &format!(
             "# B\n\n{}",
-            question("Is the widget beta hold?", "widget, Is the widget alpha hold?", "")
+            question(
+                "Is the widget beta hold?",
+                "widget, Is the widget alpha hold?",
+                ""
+            )
         ),
     );
     let refusal = format!(
@@ -92,10 +101,15 @@ fn a_tie_in_a_file_named_outside_ascii_counts() {
     let path = write_record(
         &dir,
         A,
-        &format!("# A\n\n{}", question("Is the widget alpha hold?", "widget", "")),
+        &format!(
+            "# A\n\n{}",
+            question("Is the widget alpha hold?", "widget", "")
+        ),
     );
     approve_record(&dir, A);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let alpha = extract_ids(&std::fs::read_to_string(&path).unwrap())[0].clone();
     assert!(adr_answer(&dir, &alpha, "A").status.success());
 
@@ -105,7 +119,12 @@ fn a_tie_in_a_file_named_outside_ascii_counts() {
     for args in [&["check"][..], &["check", "--staged"][..]] {
         let out = adr(&dir, args, &[], "");
         assert!(out.status.success(), "{:?}: {}", args, stdout(&out));
-        assert!(!stdout(&out).contains("no tracked file holds its tie"), "{:?}: {}", args, stdout(&out));
+        assert!(
+            !stdout(&out).contains("no tracked file holds its tie"),
+            "{:?}: {}",
+            args,
+            stdout(&out)
+        );
     }
 }
 
@@ -117,7 +136,11 @@ fn a_tie_in_a_file_named_outside_ascii_counts() {
 fn the_ban_scan_reads_a_file_named_outside_ascii() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    std::fs::write(dir.join("nötes.txt"), "this line mentions gadgetword right here\n").unwrap();
+    std::fs::write(
+        dir.join("nötes.txt"),
+        "this line mentions gadgetword right here\n",
+    )
+    .unwrap();
     run_git(&dir, &["add", "-A"]);
 
     let out = adr(&dir, &["ban"], &[], "gadgetword\n");
@@ -138,7 +161,10 @@ fn the_cap_refusal_names_the_questions_and_the_move() {
     let plan = |fifth_depends: &str| {
         let mut content = String::from("# Cap\n\n");
         for n in ["one", "two", "three", "four"] {
-            content.push_str(&format!("{}\n", question(&format!("Is the widget {} hold?", n), "widget", "")));
+            content.push_str(&format!(
+                "{}\n",
+                question(&format!("Is the widget {} hold?", n), "widget", "")
+            ));
         }
         content.push_str(&question(FIFTH, fifth_depends, ""));
         content
@@ -182,7 +208,9 @@ fn the_cap_refusal_names_only_the_questions_not_answered() {
     }
     let path = write_record(&dir, rel, &content);
     approve_record(&dir, rel);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     for id in extract_ids(&std::fs::read_to_string(&path).unwrap()) {
         assert!(adr_answer(&dir, &id, "A").status.success());
     }
@@ -210,7 +238,12 @@ fn answered(dir: &std::path::Path, rel: &str, content: &str, index: usize) -> St
     assert!(out.status.success(), "ask {} failed: {}", rel, stderr(&out));
     let id = extract_ids(&std::fs::read_to_string(&path).unwrap())[index].clone();
     let out = adr_answer(dir, &id, "A");
-    assert!(out.status.success(), "answer {} failed: {}", rel, stderr(&out));
+    assert!(
+        out.status.success(),
+        "answer {} failed: {}",
+        rel,
+        stderr(&out)
+    );
     id
 }
 
@@ -225,7 +258,12 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     const ALPHA: &str = "Is the widget alpha hold?";
     const BETA: &str = "Is the widget beta hold?";
     const GAMMA: &str = "Is the widget gamma hold?";
-    let alpha = answered(&dir, A, &format!("# A\n\n{}", question(ALPHA, "widget", "")), 0);
+    let alpha = answered(
+        &dir,
+        A,
+        &format!("# A\n\n{}", question(ALPHA, "widget", "")),
+        0,
+    );
 
     // Answered, no test tied to it.
     let out = adr(&dir, &["check"], &[], "");
@@ -241,7 +279,10 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     // Beta stands on alpha; then gamma takes alpha's place.
     write_test_comment(&dir, &alpha);
     let mut with_beta = std::fs::read_to_string(dir.join(A)).unwrap();
-    with_beta.push_str(&format!("\n{}", question(BETA, &format!("widget, {}", ALPHA), "")));
+    with_beta.push_str(&format!(
+        "\n{}",
+        question(BETA, &format!("widget, {}", ALPHA), "")
+    ));
     let beta = answered(&dir, A, &with_beta, 1);
     write_test_comment(&dir, &beta);
 
@@ -263,7 +304,11 @@ fn a_refusal_names_the_question_beside_its_identifier() {
     let mut a = std::fs::read_to_string(dir.join(A)).unwrap();
     a.push_str(&format!(
         "\n{}",
-        question(GAMMA, "widget", &format!("supersedes: {}, {}\n", alpha, BETA))
+        question(
+            GAMMA,
+            "widget",
+            &format!("supersedes: {}, {}\n", alpha, BETA)
+        )
     ));
     let gamma = answered(&dir, A, &a, 2);
     write_test_comment(&dir, &gamma);
@@ -311,7 +356,10 @@ fn show_ends_without_a_word_when_its_reader_goes_away() {
     let dir = setup();
     let mut plan = String::from("# A\n");
     for n in ["one", "two", "three", "four"] {
-        plan.push_str(&format!("\n### Is the widget {} hold?\ndepends: widget\n", n));
+        plan.push_str(&format!(
+            "\n### Is the widget {} hold?\ndepends: widget\n",
+            n
+        ));
     }
     write_record(&dir, A, &plan);
 
@@ -334,16 +382,34 @@ fn show_ends_without_a_word_when_its_reader_goes_away() {
 /// The clauses of a refusal's move, split at `, ` and `; `: no clause may
 /// come twice, and none may be the command that just failed by itself.
 fn assert_one_clearing_move(line: &str, failed: &str) {
-    let (_, mv) = line.split_once("; ").unwrap_or_else(|| panic!("a refusal with no move: {}", line));
+    let (_, mv) = line
+        .split_once("; ")
+        .unwrap_or_else(|| panic!("a refusal with no move: {}", line));
     // Clauses are joined by "; " and, as `Next` renders them, by ", " before
     // the next actor's clause.
-    let joined = mv.replace(", agent ", "\u{0}agent ").replace(", owner ", "\u{0}owner ").replace(", not yet", "\u{0}not yet");
-    let clauses: Vec<&str> = joined.split(['\n', '\u{0}']).flat_map(|l| l.split("; ")).collect();
+    let joined = mv
+        .replace(", agent ", "\u{0}agent ")
+        .replace(", owner ", "\u{0}owner ")
+        .replace(", not yet", "\u{0}not yet");
+    let clauses: Vec<&str> = joined
+        .split(['\n', '\u{0}'])
+        .flat_map(|l| l.split("; "))
+        .collect();
     for (i, c) in clauses.iter().enumerate() {
         assert!(!clauses[..i].contains(c), "a clause named twice: {}", line);
     }
-    assert_ne!(mv.trim(), format!("owner runs: {}", failed), "the move is the failed command: {}", line);
-    assert_ne!(mv.trim(), format!("agent runs: {}", failed), "the move is the failed command: {}", line);
+    assert_ne!(
+        mv.trim(),
+        format!("owner runs: {}", failed),
+        "the move is the failed command: {}",
+        line
+    );
+    assert_ne!(
+        mv.trim(),
+        format!("agent runs: {}", failed),
+        "the move is the failed command: {}",
+        line
+    );
 }
 
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
@@ -354,7 +420,9 @@ fn assert_one_clearing_move(line: &str, failed: &str) {
 #[test]
 fn a_settings_file_that_does_not_parse_names_its_fix_once() {
     let dir = init_repo();
-    assert!(adr(&dir, &["install", "--claude"], &[], "").status.success());
+    assert!(adr(&dir, &["install", "--claude"], &[], "")
+        .status
+        .success());
     std::fs::write(dir.join(".claude/settings.json"), "{ not json").unwrap();
 
     let out = adr(&dir, &["install", "--claude"], &[], "");
@@ -366,14 +434,30 @@ fn a_settings_file_that_does_not_parse_names_its_fix_once() {
     assert_one_clearing_move(err.trim_end(), "adr install --claude");
 
     let check = stdout(&adr(&dir, &["check"], &[], ""));
-    let line = check.lines().find(|l| l.contains("settings.json")).unwrap_or_else(|| panic!("{}", check));
-    assert!(line.ends_with("agent rewrites the file, then runs: adr install --claude"), "check names another move: {}", line);
+    let line = check
+        .lines()
+        .find(|l| l.contains("settings.json"))
+        .unwrap_or_else(|| panic!("{}", check));
+    assert!(
+        line.ends_with("agent rewrites the file, then runs: adr install --claude"),
+        "check names another move: {}",
+        line
+    );
 
     let out = adr_owner(&dir, &["uninstall"], "");
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("agent rewrites .claude/settings.json, owner runs: adr uninstall"), "{}", err);
-    assert_eq!(err.matches("owner runs: adr uninstall").count(), 1, "{}", err);
+    assert!(
+        err.contains("agent rewrites .claude/settings.json, owner runs: adr uninstall"),
+        "{}",
+        err
+    );
+    assert_eq!(
+        err.matches("owner runs: adr uninstall").count(),
+        1,
+        "{}",
+        err
+    );
     assert_one_clearing_move(err.trim_end(), "adr uninstall");
 }
 
@@ -414,18 +498,48 @@ fn outside_a_repository_every_command_names_the_step_that_clears_it() {
         (vec!["ban", "--term", "answer set"], false),
         (vec!["ban", "--rebuild"], false),
     ] {
-        let out = if owner { adr_owner(outside, &args, "") } else { adr(outside, &args, &[], "") };
+        let out = if owner {
+            adr_owner(outside, &args, "")
+        } else {
+            adr(outside, &args, &[], "")
+        };
         assert!(!out.status.success(), "{:?}", args);
         let err = stderr(&out);
         let line = err.trim_end();
-        assert!(line.contains("not inside a git repository; "), "{:?}: {}", args, err);
+        assert!(
+            line.contains("not inside a git repository; "),
+            "{:?}: {}",
+            args,
+            err
+        );
         // The move is the command line as given, so it runs as printed: an
         // argument of several words is quoted.
-        let quoted: Vec<String> =
-            args.iter().map(|a| if a.contains(' ') { format!("'{}'", a) } else { a.to_string() }).collect();
+        let quoted: Vec<String> = args
+            .iter()
+            .map(|a| {
+                if a.contains(' ') {
+                    format!("'{}'", a)
+                } else {
+                    a.to_string()
+                }
+            })
+            .collect();
         let command = format!("adr {}", quoted.join(" "));
-        assert!(line.ends_with(&format!("changes into a git repository, then runs: {}", command)), "{:?}: {}", args, err);
-        assert!(line.starts_with(&format!("{}: not inside", args[0])), "{:?}: {}", args, err);
+        assert!(
+            line.ends_with(&format!(
+                "changes into a git repository, then runs: {}",
+                command
+            )),
+            "{:?}: {}",
+            args,
+            err
+        );
+        assert!(
+            line.starts_with(&format!("{}: not inside", args[0])),
+            "{:?}: {}",
+            args,
+            err
+        );
         assert_one_clearing_move(line, &command);
     }
 }
@@ -448,8 +562,19 @@ fn an_owner_refusal_names_the_command_as_it_can_be_run() {
         let line = err.trim_end();
         // The owner running it is what clears an agent's refusal here, so the
         // move is the command itself, named once.
-        assert!(line.ends_with(&format!("; owner runs: {}", command)), "{:?}: {}", args, err);
-        assert_eq!(line.matches("owner runs:").count(), 1, "{:?}: {}", args, err);
+        assert!(
+            line.ends_with(&format!("; owner runs: {}", command)),
+            "{:?}: {}",
+            args,
+            err
+        );
+        assert_eq!(
+            line.matches("owner runs:").count(),
+            1,
+            "{:?}: {}",
+            args,
+            err
+        );
     }
 }
 
@@ -488,12 +613,26 @@ fn ask_and_plan_on_a_missing_topic_file_name_the_command_that_clears_it() {
 fn a_refusal_of_several_lines_names_the_command_on_every_line() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
-    std::fs::write(dir.join("adrdom/terms.md"), "# Terms\n\n## widget\naliases: widgets\n\n## gadget\naliases: gadgets\n").unwrap();
-    let rec = write_record(&dir, "adrdom/decisions/x.md", "# X\n\n### Does the widget run?\n");
+    std::fs::write(
+        dir.join("adrdom/terms.md"),
+        "# Terms\n\n## widget\naliases: widgets\n\n## gadget\naliases: gadgets\n",
+    )
+    .unwrap();
+    let rec = write_record(
+        &dir,
+        "adrdom/decisions/x.md",
+        "# X\n\n### Does the widget run?\n",
+    );
     let out = adr(&dir, &["ask", rec.to_str().unwrap()], &[], "");
     assert!(!out.status.success());
     let err = stderr(&out);
     let lines: Vec<&str> = err.lines().collect();
     assert!(lines.len() >= 2, "{}", err);
-    assert!(lines.iter().all(|l| l.starts_with("adrdom/terms.md:") && l.contains("; agent ")), "{}", err);
+    assert!(
+        lines
+            .iter()
+            .all(|l| l.starts_with("adrdom/terms.md:") && l.contains("; agent ")),
+        "{}",
+        err
+    );
 }

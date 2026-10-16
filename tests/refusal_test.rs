@@ -26,7 +26,9 @@
 use std::path::{Path, PathBuf};
 
 fn collect_rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
-    for entry in std::fs::read_dir(dir).unwrap_or_else(|e| panic!("read_dir {}: {}", dir.display(), e)) {
+    for entry in
+        std::fs::read_dir(dir).unwrap_or_else(|e| panic!("read_dir {}: {}", dir.display(), e))
+    {
         let entry = entry.unwrap();
         let path = entry.path();
         if path.is_dir() {
@@ -90,7 +92,11 @@ fn every_eprintln_in_commands_and_actions_is_msg_built_or_a_verified_passthrough
     let mut files = Vec::new();
     collect_rs_files(&root.join("src/commands"), &mut files);
     files.push(root.join("src/actions.rs"));
-    assert!(files.len() > 5, "expected to find the command files: {:?}", files);
+    assert!(
+        files.len() > 5,
+        "expected to find the command files: {:?}",
+        files
+    );
 
     let mut violations = Vec::new();
     for file in &files {
@@ -109,10 +115,8 @@ fn every_eprintln_in_commands_and_actions_is_msg_built_or_a_verified_passthrough
                 .trim();
             let arg = inner.rsplit(',').next().unwrap_or("").trim();
             let has_comma = inner.contains(',');
-            let is_bare_ident = arg
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_')
-                && !arg.is_empty();
+            let is_bare_ident =
+                arg.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') && !arg.is_empty();
             if has_comma && is_bare_ident && VERIFIED_PASSTHROUGHS.contains(&arg) {
                 continue;
             }

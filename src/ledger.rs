@@ -175,7 +175,14 @@ pub fn append(path: &Path, rows: &[Row]) -> std::io::Result<()> {
 
 /// The events that put a question in a state (`Ledger::latest_state`): the
 /// one list every reader of a question's state reads.
-pub const STATE_EVENTS: [&str; 6] = ["asked", "answered", "refused", "superseded", "withdrawn", "dropped"];
+pub const STATE_EVENTS: [&str; 6] = [
+    "asked",
+    "answered",
+    "refused",
+    "superseded",
+    "withdrawn",
+    "dropped",
+];
 
 impl Ledger {
     /// The latest row that puts an id in a state: `asked`, `answered`,
@@ -184,13 +191,19 @@ impl Ledger {
     /// "Does answer remove a question whose answer set lacks the answer?"):
     /// the question left its file, asked or not, and never returns.
     pub fn latest_state(&self, id: &str) -> Option<&Row> {
-        self.rows.iter().rfind(|r| r.id == id && STATE_EVENTS.contains(&r.event.as_str()))
+        self.rows
+            .iter()
+            .rfind(|r| r.id == id && STATE_EVENTS.contains(&r.event.as_str()))
     }
 
     /// Every identifier a state row names, each once, sorted: the
     /// questions the ledger holds a state for.
     pub fn state_ids(&self) -> std::collections::BTreeSet<String> {
-        self.rows.iter().filter(|r| STATE_EVENTS.contains(&r.event.as_str())).map(|r| r.id.clone()).collect()
+        self.rows
+            .iter()
+            .filter(|r| STATE_EVENTS.contains(&r.event.as_str()))
+            .map(|r| r.id.clone())
+            .collect()
     }
 
     pub fn latest_asked(&self, id: &str) -> Option<&Row> {
@@ -210,7 +223,9 @@ impl Ledger {
     /// this position agrees with the time order -- but the position is what
     /// the comparison actually reads.
     pub fn latest_asked_pos(&self, id: &str) -> Option<usize> {
-        self.rows.iter().rposition(|r| r.id == id && r.event == "asked")
+        self.rows
+            .iter()
+            .rposition(|r| r.id == id && r.event == "asked")
     }
 
     /// The position in `rows` -- ordered by time, never by file place, same
@@ -219,7 +234,9 @@ impl Ledger {
     /// `latest_asked_pos` to tell whether a supersedes target was
     /// superseded before or after a question asking it was itself asked.
     pub fn latest_superseded_pos(&self, id: &str) -> Option<usize> {
-        self.rows.iter().rposition(|r| r.id == id && r.event == "superseded")
+        self.rows
+            .iter()
+            .rposition(|r| r.id == id && r.event == "superseded")
     }
 
     /// The latest row of `event` whose `detail` column equals `path` and
@@ -235,7 +252,9 @@ impl Ledger {
     /// its identifier: a blame file's approval carries the file's own
     /// identifier (d2851ea1 A), `-` in the rows of older ledgers.
     pub fn latest_blame(&self, path: &str) -> Option<&Row> {
-        self.rows.iter().rfind(|r| r.event == "blame" && r.detail == path)
+        self.rows
+            .iter()
+            .rfind(|r| r.event == "blame" && r.detail == path)
     }
 
     /// The latest row of `event` for the identifier `id`.
@@ -258,7 +277,10 @@ impl Ledger {
                 latest.insert(r.detail.clone(), r);
             }
         }
-        order.into_iter().filter_map(|d| latest.get(&d).copied()).collect()
+        order
+            .into_iter()
+            .filter_map(|d| latest.get(&d).copied())
+            .collect()
     }
 }
 
@@ -285,7 +307,11 @@ mod tests {
     #[test]
     fn read_accepts_5_field_rows_with_empty_version() {
         let path = temp_path();
-        fs::write(&path, "2024-01-01T00:00:00Z\tasked\tid-1\thash-1\theading\n").unwrap();
+        fs::write(
+            &path,
+            "2024-01-01T00:00:00Z\tasked\tid-1\thash-1\theading\n",
+        )
+        .unwrap();
         let led = read(&path);
         assert!(led.malformed.is_empty(), "{:?}", led.malformed);
         assert_eq!(led.rows.len(), 1);
@@ -451,7 +477,10 @@ mod tests {
         assert_eq!(led.rows.len(), 1);
         assert_eq!(led.rows[0].detail, "good row");
         assert_eq!(led.malformed.len(), 1);
-        assert_eq!(led.malformed[0].0, 1, "the bad row is the file's real line 1");
+        assert_eq!(
+            led.malformed[0].0, 1,
+            "the bad row is the file's real line 1"
+        );
         assert!(led.malformed[0].1.starts_with("not-a-time"));
     }
 
@@ -469,6 +498,10 @@ mod tests {
         let forward_details: Vec<&str> = forward.rows.iter().map(|r| r.detail.as_str()).collect();
         let backward_details: Vec<&str> = backward.rows.iter().map(|r| r.detail.as_str()).collect();
         assert_eq!(forward_details, vec!["aaa", "bbb"]);
-        assert_eq!(backward_details, vec!["aaa", "bbb"], "file order must not change the tie-break");
+        assert_eq!(
+            backward_details,
+            vec!["aaa", "bbb"],
+            "file order must not change the tie-break"
+        );
     }
 }

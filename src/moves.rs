@@ -50,7 +50,11 @@ pub enum MoveKind {
     /// The agent asks these questions of `rel`.
     Ask { rel: String, headings: Vec<String> },
     /// The owner answers this asked question.
-    Answer { id: String, version: String, heading: String },
+    Answer {
+        id: String,
+        version: String,
+        heading: String,
+    },
     /// An asked question `answer` does not take until `on` are settled.
     AnswerWaits { heading: String, on: Vec<String> },
     /// A refused question holds the questions after it: the plan changes.
@@ -96,7 +100,10 @@ pub struct Move {
 
 impl Move {
     pub fn new(kind: MoveKind) -> Move {
-        Move { kind, session: crate::session::Role::Plain }
+        Move {
+            kind,
+            session: crate::session::Role::Plain,
+        }
     }
 
     /// The move as computed in a session of `session`.
@@ -117,16 +124,21 @@ impl Move {
     /// Who takes the move, fixed by its kind (and, for a build, the role of
     /// the session).
     pub fn actor(&self) -> Mover {
-        if matches!(self.kind, MoveKind::Build { .. }
+        if matches!(
+            self.kind,
+            MoveKind::Build { .. }
                 | MoveKind::Retie { .. }
                 | MoveKind::BriefTieWrite
                 | MoveKind::BriefTieFix
                 | MoveKind::BriefTieRetie { .. }
-            ) && self.session == crate::session::Role::Planner {
+        ) && self.session == crate::session::Role::Planner
+        {
             return Mover::Builder;
         }
         match &self.kind {
-            MoveKind::Approve { .. } | MoveKind::ApproveEntry { .. } | MoveKind::Answer { .. } => Mover::Owner,
+            MoveKind::Approve { .. } | MoveKind::ApproveEntry { .. } | MoveKind::Answer { .. } => {
+                Mover::Owner
+            }
             MoveKind::CommitWaits
             | MoveKind::AnswerWaits { .. }
             | MoveKind::BuildWaits { .. }
@@ -151,54 +163,72 @@ impl Move {
     /// a move nobody takes yet.
     pub fn next(&self) -> Option<Next> {
         Some(match &self.kind {
-            MoveKind::PlanUnresolved => {
-                Next::all(vec![Next::agent_runs(Cmd::fixed("adr check")), Next::agent(Act::Rewrites("the headings and lines of the plan".to_string()))])
-            }
+            MoveKind::PlanUnresolved => Next::all(vec![
+                Next::agent_runs(Cmd::fixed("adr check")),
+                Next::agent(Act::Rewrites(
+                    "the headings and lines of the plan".to_string(),
+                )),
+            ]),
             MoveKind::Plan { rel } => Next::agent_runs(command(&["adr", "plan", rel])),
-            MoveKind::WriteLines { headings } => Next::agent(Act::Writes(format!("lines for {}", quoted(headings)))),
-            MoveKind::WriteBodies { headings } => Next::agent(Act::Writes(format!("the body of {}", quoted(headings)))),
-            MoveKind::Approve { path } => Next::owner_runs(command(&["adr", "approve", path])),
-            MoveKind::ApproveEntry { name } => Next::owner_runs(crate::msg::approve_entry_cmd(name)),
-            MoveKind::Ask { rel, .. } => Next::agent_runs(command(&["adr", "ask", rel])),
-            MoveKind::Answer { id, version, .. } => {
-                Next::owner_runs(command(&["adr", "answer", &format!("{}@{}", id, version)]).then("<letter>"))
+            MoveKind::WriteLines { headings } => {
+                Next::agent(Act::Writes(format!("lines for {}", quoted(headings))))
             }
+            MoveKind::WriteBodies { headings } => {
+                Next::agent(Act::Writes(format!("the body of {}", quoted(headings))))
+            }
+            MoveKind::Approve { path } => Next::owner_runs(command(&["adr", "approve", path])),
+            MoveKind::ApproveEntry { name } => {
+                Next::owner_runs(crate::msg::approve_entry_cmd(name))
+            }
+            MoveKind::Ask { rel, .. } => Next::agent_runs(command(&["adr", "ask", rel])),
+            MoveKind::Answer { id, version, .. } => Next::owner_runs(
+                command(&["adr", "answer", &format!("{}@{}", id, version)]).then("<letter>"),
+            ),
             MoveKind::Refused { heading } => Next::agent(Act::Writes(format!(
                 "the plan change that drops or replaces \"{}\"",
                 heading
             ))),
             MoveKind::Build { heading, id } => {
-                let action = Act::Builds(format!("\"{}\" and puts \"adr: {}\" in a test that shows it", heading, id));
+                let action = Act::Builds(format!(
+                    "\"{}\" and puts \"adr: {}\" in a test that shows it",
+                    heading, id
+                ));
                 self.build_mover(action)
             }
             MoveKind::Retie { to } => {
                 let action = if to.is_empty() {
                     Act::Removes("the tie comment from the test".to_string())
                 } else {
-                    let list: Vec<String> =
-                        to.iter().map(|(h, id)| format!("\"{}\" (\"adr: {}\")", h, id)).collect();
+                    let list: Vec<String> = to
+                        .iter()
+                        .map(|(h, id)| format!("\"{}\" (\"adr: {}\")", h, id))
+                        .collect();
                     Act::Rewrites(format!("the tie comment to {}", list.join(" and ")))
                 };
                 self.build_mover(action)
             }
-            MoveKind::BriefTieWrite => {
-                self.build_mover(Act::Writes("the from-comment naming the decision or term the sentence states".to_string()))
-            }
-            MoveKind::BriefTieFix => {
-                self.build_mover(Act::Rewrites("the from-comment to name a decision or term of the records".to_string()))
-            }
+            MoveKind::BriefTieWrite => self.build_mover(Act::Writes(
+                "the from-comment naming the decision or term the sentence states".to_string(),
+            )),
+            MoveKind::BriefTieFix => self.build_mover(Act::Rewrites(
+                "the from-comment to name a decision or term of the records".to_string(),
+            )),
             MoveKind::BriefTieRetie { to } => {
                 let action = if to.is_empty() {
                     Act::Removes("the from-comment from the brief".to_string())
                 } else {
-                    let list: Vec<String> = to.iter().map(|(h, id)| format!("\"{}\" ({})", h, id)).collect();
+                    let list: Vec<String> = to
+                        .iter()
+                        .map(|(h, id)| format!("\"{}\" ({})", h, id))
+                        .collect();
                     Act::Rewrites(format!("the from-comment to {}", list.join(" and ")))
                 };
                 self.build_mover(action)
             }
-            MoveKind::SupersedeMarkedPairs => {
-                Next::agent(Act::Writes("a question that supersedes one decision of each same or inconsistent pair".to_string()))
-            }
+            MoveKind::SupersedeMarkedPairs => Next::agent(Act::Writes(
+                "a question that supersedes one decision of each same or inconsistent pair"
+                    .to_string(),
+            )),
             MoveKind::CommitWaits
             | MoveKind::AnswerWaits { .. }
             | MoveKind::BuildWaits { .. }
@@ -212,8 +242,12 @@ impl Move {
     /// is about, so it is printed only where the move stands alone.
     pub fn text(&self) -> String {
         match &self.kind {
-            MoveKind::Answer { heading, .. } => format!("{}  # \"{}\"", self.clause_text(), heading),
-            MoveKind::Ask { headings, .. } => format!("{}  # {}", self.clause_text(), quoted(headings)),
+            MoveKind::Answer { heading, .. } => {
+                format!("{}  # \"{}\"", self.clause_text(), heading)
+            }
+            MoveKind::Ask { headings, .. } => {
+                format!("{}  # {}", self.clause_text(), quoted(headings))
+            }
             _ => self.clause_text(),
         }
     }
@@ -246,7 +280,6 @@ impl Move {
             _ => self.next().expect("a move with a mover"),
         }
     }
-
 }
 
 /// What the rules find in one thing of the records and the moves that
@@ -269,7 +302,10 @@ impl Report {
     /// each on its own line. With no move, `fallback` names the act.
     pub fn moves_tail(&self, fallback: Next) -> Next {
         if self.moves.is_empty() {
-            debug_assert!(!self.findings.is_empty(), "a refusal names at least one move");
+            debug_assert!(
+                !self.findings.is_empty(),
+                "a refusal names at least one move"
+            );
             return fallback;
         }
         Next::all(self.moves.iter().map(Move::clause).collect())
@@ -326,7 +362,11 @@ impl std::fmt::Display for Cmd {
 
 /// The command line of `words`, each quoted as `shell_word` quotes it.
 pub fn command(words: &[&str]) -> Cmd {
-    Cmd(words.iter().map(|w| shell_word(w)).collect::<Vec<_>>().join(" "))
+    Cmd(words
+        .iter()
+        .map(|w| shell_word(w))
+        .collect::<Vec<_>>()
+        .join(" "))
 }
 
 /// `word` as a POSIX shell reads it back: unchanged when it holds only
@@ -336,7 +376,10 @@ pub fn command(words: &[&str]) -> Cmd {
 /// part of the one word.
 pub fn shell_word(word: &str) -> String {
     let plain = !word.is_empty()
-        && word.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '/' | '@' | ':' | '=' | ',' | '+' | '-'));
+        && word.chars().all(|c| {
+            c.is_ascii_alphanumeric()
+                || matches!(c, '_' | '.' | '/' | '@' | ':' | '=' | ',' | '+' | '-')
+        });
     if plain {
         return word.to_string();
     }
@@ -354,7 +397,9 @@ pub fn shell_word(word: &str) -> String {
                 '\n' => s.push_str("\\n"),
                 '\t' => s.push_str("\\t"),
                 '\r' => s.push_str("\\r"),
-                c if (c as u32) < 0x80 && c.is_control() => s.push_str(&format!("\\x{:02x}", c as u32)),
+                c if (c as u32) < 0x80 && c.is_control() => {
+                    s.push_str(&format!("\\x{:02x}", c as u32))
+                }
                 c if crate::out::is_hidden(c) => s.push_str(&format!("\\U{:08x}", c as u32)),
                 c => s.push(c),
             }
@@ -366,7 +411,11 @@ pub fn shell_word(word: &str) -> String {
 }
 
 fn quoted(headings: &[String]) -> String {
-    headings.iter().map(|h| format!("\"{}\"", h)).collect::<Vec<_>>().join(", ")
+    headings
+        .iter()
+        .map(|h| format!("\"{}\"", h))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// The words of a hold in a refusal: what the question is that keeps the
@@ -402,7 +451,9 @@ pub fn removal_next(rel: &str, holds: &[RemovalHold]) -> Next {
         .collect();
     steps
         .into_iter()
-        .fold(Next::agent(Act::Restores(rel.to_string())), |n, a| n.then(a))
+        .fold(Next::agent(Act::Restores(rel.to_string())), |n, a| {
+            n.then(a)
+        })
         .and_owner_runs(command(&["adr", "approve", rel]))
 }
 
@@ -410,8 +461,18 @@ pub fn removal_next(rel: &str, holds: &[RemovalHold]) -> Next {
 /// from being approved (`rules::judge_removed_topic_file`, each carrying
 /// the move `removal_next` names), or, with none, the owner's approval.
 pub fn of_removed_topic_file(rel: &str, findings: Vec<Finding>) -> Report {
-    let moves = if findings.is_empty() { vec![Move::new(MoveKind::Approve { path: rel.to_string() })] } else { Vec::new() };
-    Report { stops: Vec::new(), findings, moves }
+    let moves = if findings.is_empty() {
+        vec![Move::new(MoveKind::Approve {
+            path: rel.to_string(),
+        })]
+    } else {
+        Vec::new()
+    };
+    Report {
+        stops: Vec::new(),
+        findings,
+        moves,
+    }
 }
 
 /// Every move of the topic file `rf`, in the order they are taken: what is
@@ -474,10 +535,15 @@ pub fn of_topic_file(
                         .chain(&w.refused_tier)
                         .map(|&j| rf.sections[j].heading_text.clone())
                         .collect();
-                    waiting.push(Move::new(MoveKind::AnswerWaits { heading: heading.to_string(), on }));
+                    waiting.push(Move::new(MoveKind::AnswerWaits {
+                        heading: heading.to_string(),
+                        on,
+                    }));
                 }
             }
-            QuestionStatus::Refused => held.push(Move::new(MoveKind::Refused { heading: heading.to_string() })),
+            QuestionStatus::Refused => held.push(Move::new(MoveKind::Refused {
+                heading: heading.to_string(),
+            })),
             QuestionStatus::Answered => {
                 let Some(id) = &sec.id else { continue };
                 if tests.get(id).is_some_and(|locations| !locations.is_empty()) {
@@ -512,7 +578,10 @@ pub fn of_topic_file(
             out.extend(of_planning(rf, planning));
         }
         if !to_ask.is_empty() {
-            out.push(Move::new(MoveKind::Ask { rel: rf.rel.clone(), headings: to_ask }));
+            out.push(Move::new(MoveKind::Ask {
+                rel: rf.rel.clone(),
+                headings: to_ask,
+            }));
         }
     } else if !refused {
         // Nothing is asked under a plan that waits for its approval; what
@@ -542,24 +611,40 @@ pub struct Judging<'a> {
 /// as loaded from disk, with the findings and planning records read the
 /// way `of_topic_file_in` reads them: the move `answer` names for a
 /// question it cannot take yet is the one `show` names for its file.
-pub fn of_unasked_question_in(j: &Judging, rf: &RecordFile, heading: &str, unwritten: bool) -> Report {
-    let plan_ok = state::plan_approved(j.led, rf, &rf.rel) && state::context_approved(j.led, rf, &rf.rel);
+pub fn of_unasked_question_in(
+    j: &Judging,
+    rf: &RecordFile,
+    heading: &str,
+    unwritten: bool,
+) -> Report {
+    let plan_ok =
+        state::plan_approved(j.led, rf, &rf.rel) && state::context_approved(j.led, rf, &rf.rel);
     let planning = crate::plan::load_with(rf, j.terms_list, j.led, &j.index.planning);
-    let mut findings = crate::rules::judge_topic_file_in(j.root, rf, j.all, j.terms_list, j.led, j.index);
+    let mut findings =
+        crate::rules::judge_topic_file_in(j.root, rf, j.all, j.terms_list, j.led, j.index);
     findings.extend(j.index.records().iter().cloned());
     let mut moves = of_unasked_question(rf, plan_ok, &findings, &planning, heading, unwritten);
     // The terms file's gate, as `of_topic_file_with` reads it.
     let gate = crate::rules::terms_gate(j.root, j.led, &rf.rel);
     let mut stops = Vec::new();
     if !gate.is_empty() {
-        moves.retain(|m| !matches!(m.kind, MoveKind::Approve { .. } | MoveKind::Ask { .. } | MoveKind::Answer { .. }));
+        moves.retain(|m| {
+            !matches!(
+                m.kind,
+                MoveKind::Approve { .. } | MoveKind::Ask { .. } | MoveKind::Answer { .. }
+            )
+        });
         findings.splice(0..0, gate.findings);
         stops = gate.stops;
     }
     if gate.waits {
         moves.push(Move::new(MoveKind::CommitWaits));
     }
-    Report { stops, findings, moves }
+    Report {
+        stops,
+        findings,
+        moves,
+    }
 }
 
 /// Every move of the topic file `rf` as loaded from disk: the approval of
@@ -578,7 +663,15 @@ pub fn of_topic_file_in(
     led: &Ledger,
     tests: &HashMap<String, Vec<String>>,
 ) -> Report {
-    of_topic_file_with(root, rf, all, terms_list, led, tests, &crate::rules::RepoIndex::new(root, all, terms_list, led))
+    of_topic_file_with(
+        root,
+        rf,
+        all,
+        terms_list,
+        led,
+        tests,
+        &crate::rules::RepoIndex::new(root, all, terms_list, led),
+    )
 }
 
 /// `of_topic_file_in` with what the run shares read once (`index`): what a
@@ -609,7 +702,8 @@ pub fn of_topic_file_judged(
     index: &crate::rules::RepoIndex,
 ) -> (Report, Vec<Finding>) {
     let shared = &index.planning;
-    let plan_ok = state::plan_approved(led, rf, &rf.rel) && state::context_approved(led, rf, &rf.rel);
+    let plan_ok =
+        state::plan_approved(led, rf, &rf.rel) && state::context_approved(led, rf, &rf.rel);
     let planning = crate::plan::load_with(rf, terms_list, led, shared);
     let findings = crate::rules::judge_topic_file_in(root, rf, all, terms_list, led, index);
     let judged = findings.clone();
@@ -619,13 +713,26 @@ pub fn of_topic_file_judged(
     // planning moves wait on them.
     let mut findings = findings;
     findings.extend(index.records().iter().cloned());
-    let mut moves = of_topic_file(&rf, led, plan_ok, &findings, tests, &planning, crate::session::role(root));
+    let mut moves = of_topic_file(
+        &rf,
+        led,
+        plan_ok,
+        &findings,
+        tests,
+        &planning,
+        crate::session::role(root),
+    );
     // While adrdom/terms.md is not approved, approve, ask and answer stop on
     // it: its gate is the file's finding, and their moves wait on it.
     let gate = crate::rules::terms_gate(root, led, &rf.rel);
     let mut stops = Vec::new();
     if !gate.is_empty() {
-        moves.retain(|m| !matches!(m.kind, MoveKind::Approve { .. } | MoveKind::Ask { .. } | MoveKind::Answer { .. }));
+        moves.retain(|m| {
+            !matches!(
+                m.kind,
+                MoveKind::Approve { .. } | MoveKind::Ask { .. } | MoveKind::Answer { .. }
+            )
+        });
         findings.splice(0..0, gate.findings);
         stops = gate.stops;
     }
@@ -640,7 +747,14 @@ pub fn of_topic_file_judged(
     let sole = index.stale().len() == 1;
     let stale = index.stale().contains(&rf.rel);
     findings.extend(crate::rules::struck_asked(&rf.rel, stale, sole, all, led));
-    (Report { stops, findings, moves }, judged)
+    (
+        Report {
+            stops,
+            findings,
+            moves,
+        },
+        judged,
+    )
 }
 
 /// The move of the answered decision `id`, section `i` of `rf`, that no
@@ -655,11 +769,19 @@ pub fn of_untested(rf: &RecordFile, i: usize, id: &str, role: crate::session::Ro
     // a refused one: the refused one has its own line, and the answer is
     // what the build waits for longest.
     match state::unresolved_sibling(rf, i) {
-        Some(s) if s.is_refused() => {
-            Move::new(MoveKind::BuildWaitsRefused { heading, beside: s.heading_text.clone() })
-        }
-        Some(s) => Move::new(MoveKind::BuildWaits { heading, beside: s.heading_text.clone() }),
-        None => Move::new(MoveKind::Build { heading, id: id.to_string() }).in_session(role),
+        Some(s) if s.is_refused() => Move::new(MoveKind::BuildWaitsRefused {
+            heading,
+            beside: s.heading_text.clone(),
+        }),
+        Some(s) => Move::new(MoveKind::BuildWaits {
+            heading,
+            beside: s.heading_text.clone(),
+        }),
+        None => Move::new(MoveKind::Build {
+            heading,
+            id: id.to_string(),
+        })
+        .in_session(role),
     }
 }
 
@@ -682,7 +804,10 @@ pub fn of_unasked_question(
         if unwritten {
             out.extend(of_planning(rf, planning));
         } else {
-            out.push(Move::new(MoveKind::Ask { rel: rf.rel.clone(), headings: vec![heading.to_string()] }));
+            out.push(Move::new(MoveKind::Ask {
+                rel: rf.rel.clone(),
+                headings: vec![heading.to_string()],
+            }));
         }
     } else if findings.is_empty() {
         out.extend(of_planning(rf, planning));
@@ -694,9 +819,15 @@ pub fn of_unasked_question(
 /// asked: the owner's approve once every record is there.
 pub fn of_planning(rf: &RecordFile, p: &crate::plan::Planning) -> Vec<Move> {
     use crate::plan::{NextMove, Step};
-    let approve = || vec![Move::new(MoveKind::Approve { path: rf.rel.clone() })];
+    let approve = || {
+        vec![Move::new(MoveKind::Approve {
+            path: rf.rel.clone(),
+        })]
+    };
     match p.next() {
-        NextMove::Plan => vec![Move::new(MoveKind::Plan { rel: rf.rel.clone() })],
+        NextMove::Plan => vec![Move::new(MoveKind::Plan {
+            rel: rf.rel.clone(),
+        })],
         NextMove::WriteLines => {
             let mut missing = p.lines_missing(Step::Heading);
             if missing.is_empty() {
@@ -726,14 +857,30 @@ pub fn of_blame_file(
     index: &crate::blame::Index,
     cmd: crate::rules::Command,
 ) -> Report {
-    let st = crate::blame::file_state(root, &crate::repo::Source::WorkingTree, &e.file, e.status, index);
+    let st = crate::blame::file_state(
+        root,
+        &crate::repo::Source::WorkingTree,
+        &e.file,
+        e.status,
+        index,
+    );
     let findings = crate::rules::judge_blame_file(&st, &e.file);
-    let stops: Vec<crate::out::Line> = st.stops.iter().flat_map(|m| crate::out::stop(cmd, m)).collect();
+    let stops: Vec<crate::out::Line> = st
+        .stops
+        .iter()
+        .flat_map(|m| crate::out::stop(cmd, m))
+        .collect();
     let mut moves = Vec::new();
     if findings.is_empty() && stops.is_empty() && e.status.awaits_approval() {
-        moves.push(Move::new(MoveKind::Approve { path: e.rel().to_string() }));
+        moves.push(Move::new(MoveKind::Approve {
+            path: e.rel().to_string(),
+        }));
     }
-    Report { stops, findings, moves }
+    Report {
+        stops,
+        findings,
+        moves,
+    }
 }
 
 /// The report of the terms file: the findings of the rules on it, and, for
@@ -742,18 +889,32 @@ pub fn of_blame_file(
 /// approve take for a terms file holding several entries that wait?",
 /// da0dc8b1 A), or of the file when no entry waits; while it differs, a
 /// commit waits.
-pub fn of_terms_file(findings: Vec<Finding>, status: status::TermsFileStatus, waiting: &[String]) -> Report {
+pub fn of_terms_file(
+    findings: Vec<Finding>,
+    status: status::TermsFileStatus,
+    waiting: &[String],
+) -> Report {
     let mut moves = Vec::new();
     if findings.is_empty() && status.awaits_approval() {
         if waiting.is_empty() {
-            moves.push(Move::new(MoveKind::Approve { path: crate::repo::TERMS_PATH.to_string() }));
+            moves.push(Move::new(MoveKind::Approve {
+                path: crate::repo::TERMS_PATH.to_string(),
+            }));
         }
-        moves.extend(waiting.iter().map(|name| Move::new(MoveKind::ApproveEntry { name: name.clone() })));
+        moves.extend(
+            waiting
+                .iter()
+                .map(|name| Move::new(MoveKind::ApproveEntry { name: name.clone() })),
+        );
     }
     if status.awaits_approval() {
         moves.push(Move::new(MoveKind::CommitWaits));
     }
-    Report { stops: Vec::new(), findings, moves }
+    Report {
+        stops: Vec::new(),
+        findings,
+        moves,
+    }
 }
 
 /// The move after a reading that marked a pair same or inconsistent.
@@ -767,15 +928,31 @@ pub fn of_marked_pairs() -> Move {
 /// `of_unasked_question` names for it), a question with no body, or a
 /// refused question the plan has to drop or replace.
 pub enum Waits {
-    Unanswered { heading: String, answer: Move },
-    Asking { heading: String, report: Report },
+    Unanswered {
+        heading: String,
+        answer: Move,
+    },
+    Asking {
+        heading: String,
+        report: Report,
+    },
     /// No decision yet and no question to answer first: the chain it waits
     /// on ends on `refused`, a refused question.
-    Stuck { heading: String, refused: String },
+    Stuck {
+        heading: String,
+        refused: String,
+    },
     /// No decision yet and no body written.
-    Unwritten { heading: String, report: Report },
-    RefusedTarget { heading: String },
-    RefusedTier { heading: String },
+    Unwritten {
+        heading: String,
+        report: Report,
+    },
+    RefusedTarget {
+        heading: String,
+    },
+    RefusedTier {
+        heading: String,
+    },
 }
 
 /// `answer` (a letter or a refusal) of a question that waits: it stands on a
@@ -784,7 +961,11 @@ pub enum Waits {
 /// "Does a refused question hold the tiers above it?"). Every question it waits on is named, each
 /// with the move that clears it: the agent's moves first, one `adr ask` naming every heading, and
 /// the one owner move last.
-pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> (crate::msg::Said, Vec<Finding>) {
+pub fn answer_waits(
+    heading: &str,
+    rel: &str,
+    waits: Vec<Waits>,
+) -> (crate::msg::Said, Vec<Finding>) {
     let mut parts = Vec::new();
     let mut answer: Option<Move> = None;
     let mut refused: Vec<String> = Vec::new();
@@ -793,7 +974,10 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> (crate::msg:
     let mut owner: Option<Move> = None;
     let mut unwritten: Vec<String> = Vec::new();
     let mut asking: Vec<String> = Vec::new();
-    let add = |report: Report, found: &mut Vec<Finding>, agent: &mut Vec<Move>, owner: &mut Option<Move>| {
+    let add = |report: Report,
+               found: &mut Vec<Finding>,
+               agent: &mut Vec<Move>,
+               owner: &mut Option<Move>| {
         for f in &report.findings {
             if !found.iter().any(|g| g.text() == f.text()) {
                 found.push(f.clone());
@@ -829,12 +1013,22 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> (crate::msg:
     };
     for w in waits {
         match w {
-            Waits::Stuck { heading: h, refused: r } => {
-                parts.push(format!("\"{}\" has no decision yet and waits on the refused \"{}\"", h, r));
+            Waits::Stuck {
+                heading: h,
+                refused: r,
+            } => {
+                parts.push(format!(
+                    "\"{}\" has no decision yet and waits on the refused \"{}\"",
+                    h, r
+                ));
                 refuse_on(r, &mut refused);
             }
             Waits::Unwritten { heading: h, report } => {
-                parts.push(format!("\"{}\" has no decision yet and is [{}]", h, QuestionStatus::NoBody.name()));
+                parts.push(format!(
+                    "\"{}\" has no decision yet and is [{}]",
+                    h,
+                    QuestionStatus::NoBody.name()
+                ));
                 unwritten.push(h.clone());
                 add(report, &mut found, &mut agent, &mut owner);
             }
@@ -843,12 +1037,18 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> (crate::msg:
                 asking.push(h.clone());
                 add(report, &mut found, &mut agent, &mut owner);
             }
-            Waits::Unanswered { heading: h, answer: m } => {
+            Waits::Unanswered {
+                heading: h,
+                answer: m,
+            } => {
                 parts.push(format!("\"{}\" has no decision yet", h));
                 answer = answer.or(Some(m));
             }
             Waits::RefusedTarget { heading: h } => {
-                parts.push(format!("\"{}\" is refused and the question stands on it", h));
+                parts.push(format!(
+                    "\"{}\" is refused and the question stands on it",
+                    h
+                ));
                 refuse_on(h, &mut refused);
             }
             Waits::RefusedTier { heading: h } => {
@@ -862,10 +1062,13 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> (crate::msg:
     let mut clauses: Vec<Next> = Vec::new();
     clauses.extend(agent.iter().map(Move::clause));
     if !refused.is_empty() {
-        clauses.push(
-            Next::agent(Act::Writes(format!("the plan change that drops or replaces {}", quoted(&refused)))),
-        );
-        owner = Some(Move::new(MoveKind::Approve { path: rel.to_string() }));
+        clauses.push(Next::agent(Act::Writes(format!(
+            "the plan change that drops or replaces {}",
+            quoted(&refused)
+        ))));
+        owner = Some(Move::new(MoveKind::Approve {
+            path: rel.to_string(),
+        }));
     }
     if owner.is_none() {
         owner = answer;
@@ -874,7 +1077,10 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> (crate::msg:
     if clauses.is_empty() {
         // No move of the questions it waits on: the act on each of them.
         if !unwritten.is_empty() {
-            clauses.push(Next::agent(Act::Writes(format!("the body of {}", quoted(&unwritten)))));
+            clauses.push(Next::agent(Act::Writes(format!(
+                "the body of {}",
+                quoted(&unwritten)
+            ))));
         }
         if !asking.is_empty() {
             clauses.push(Next::agent(Act::Rewrites(quoted(&asking))));
@@ -887,7 +1093,14 @@ pub fn answer_waits(heading: &str, rel: &str, waits: Vec<Waits>) -> (crate::msg:
     } else {
         &crate::rule::ANSWER_NEEDS_NO_REFUSED_BELOW
     };
-    (crate::msg::said(rule, format!("\"{}\" waits: {}", heading, parts.join(", ")), Next::all(clauses)), found)
+    (
+        crate::msg::said(
+            rule,
+            format!("\"{}\" waits: {}", heading, parts.join(", ")),
+            Next::all(clauses),
+        ),
+        found,
+    )
 }
 
 #[cfg(test)]
@@ -898,10 +1111,23 @@ mod tests {
     #[test]
     fn a_report_with_no_move_names_the_fallback_act() {
         let mut empty = Report::default();
-        empty.findings.push(Finding::new(&crate::rule::ASKED_TEXT_FROZEN, "f".into(), Next::agent(Act::Writes("m".to_string()))));
-        assert_eq!(empty.moves_tail(Next::agent(Act::Restores("x.md".to_string()))).render(), "agent restores x.md from git");
-        assert!(!crate::msg::edited_after_asking("x.md", "h", &empty).text().contains("each finding of the file names"));
-        assert!(crate::msg::edited_after_asking("x.md", "h", &empty).text().ends_with("agent restores x.md from git"));
+        empty.findings.push(Finding::new(
+            &crate::rule::ASKED_TEXT_FROZEN,
+            "f".into(),
+            Next::agent(Act::Writes("m".to_string())),
+        ));
+        assert_eq!(
+            empty
+                .moves_tail(Next::agent(Act::Restores("x.md".to_string())))
+                .render(),
+            "agent restores x.md from git"
+        );
+        assert!(!crate::msg::edited_after_asking("x.md", "h", &empty)
+            .text()
+            .contains("each finding of the file names"));
+        assert!(crate::msg::edited_after_asking("x.md", "h", &empty)
+            .text()
+            .ends_with("agent restores x.md from git"));
     }
 
     // adr: 1af76f91-5644-42ef-97ea-8f70f934c26c
@@ -940,26 +1166,67 @@ mod tests {
             let index = Index::of(vec![bf], &led);
             of_blame_file(&root, &index.entries()[0], &index, Command::Show)
         };
-        let clean = report(file("adrdom/blame/a.md", "docs/x.md", "1-2\tdecision\n"), false);
+        let clean = report(
+            file("adrdom/blame/a.md", "docs/x.md", "1-2\tdecision\n"),
+            false,
+        );
         assert!(clean.findings.is_empty() && clean.stops.is_empty());
-        assert_eq!(clean.moves, vec![Move::new(MoveKind::Approve { path: "adrdom/blame/a.md".into() })]);
-        let bad_row = report(file("adrdom/blame/a.md", "docs/x.md", "1-2\tmaybe\n"), false);
+        assert_eq!(
+            clean.moves,
+            vec![Move::new(MoveKind::Approve {
+                path: "adrdom/blame/a.md".into()
+            })]
+        );
+        let bad_row = report(
+            file("adrdom/blame/a.md", "docs/x.md", "1-2\tmaybe\n"),
+            false,
+        );
         assert_eq!(bad_row.findings.len(), 1);
         assert!(bad_row.moves.is_empty());
-        let approved = report(file("adrdom/blame/a.md", "docs/x.md", "1-2\tdecision\n"), true);
+        let approved = report(
+            file("adrdom/blame/a.md", "docs/x.md", "1-2\tdecision\n"),
+            true,
+        );
         assert!(approved.findings.is_empty() && approved.moves.is_empty());
-        let gone = report(file("adrdom/blame/a.md", "docs/gone.md", "1-2\tdecision\n"), true);
+        let gone = report(
+            file("adrdom/blame/a.md", "docs/gone.md", "1-2\tdecision\n"),
+            true,
+        );
         assert!(gone.findings.is_empty() && gone.stops.is_empty() && gone.moves.is_empty());
         let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
     fn the_kind_fixes_who_moves() {
-        assert_eq!(Move::new(MoveKind::Approve { path: "x.md".into() }).actor(), Mover::Owner);
-        assert_eq!(Move::new(MoveKind::Plan { rel: "x.md".into() }).actor(), Mover::Agent);
-        assert_eq!(Move::new(MoveKind::BuildWaits { heading: "h".into(), beside: "b".into() }).actor(), Mover::NotYet);
-        assert_eq!(of_removed_topic_file("x.md", Vec::new()).moves[0].actor(), Mover::Owner);
-        let build = || Move::new(MoveKind::Build { heading: "h".into(), id: "i".into() });
+        assert_eq!(
+            Move::new(MoveKind::Approve {
+                path: "x.md".into()
+            })
+            .actor(),
+            Mover::Owner
+        );
+        assert_eq!(
+            Move::new(MoveKind::Plan { rel: "x.md".into() }).actor(),
+            Mover::Agent
+        );
+        assert_eq!(
+            Move::new(MoveKind::BuildWaits {
+                heading: "h".into(),
+                beside: "b".into()
+            })
+            .actor(),
+            Mover::NotYet
+        );
+        assert_eq!(
+            of_removed_topic_file("x.md", Vec::new()).moves[0].actor(),
+            Mover::Owner
+        );
+        let build = || {
+            Move::new(MoveKind::Build {
+                heading: "h".into(),
+                id: "i".into(),
+            })
+        };
         assert_eq!(build().actor(), Mover::Agent);
         assert!(build().text().starts_with("agent builds"));
         let b = build().in_session(crate::session::Role::Planner);
@@ -974,7 +1241,10 @@ mod tests {
     // stays one line.
     #[test]
     fn a_command_quotes_every_word_a_shell_would_read_otherwise() {
-        assert_eq!(command(&["adr", "approve", "adrdom/decisions/x-y.md"]).to_string(), "adr approve adrdom/decisions/x-y.md");
+        assert_eq!(
+            command(&["adr", "approve", "adrdom/decisions/x-y.md"]).to_string(),
+            "adr approve adrdom/decisions/x-y.md"
+        );
         assert_eq!(
             command(&["adr", "approve", "adrdom/blame/a$(touch PWNED).md"]).to_string(),
             "adr approve 'adrdom/blame/a$(touch PWNED).md'"
@@ -983,8 +1253,15 @@ mod tests {
         assert_eq!(shell_word(""), "''");
         assert_eq!(shell_word("a\nowner runs: x"), "$'a\\nowner runs: x'");
         assert_eq!(shell_word("`id`"), "'`id`'");
-        let m = Move::new(MoveKind::Answer { id: "x$(touch P)".into(), version: "abcd".into(), heading: "H?".into() });
-        assert_eq!(m.clause_text(), "owner runs: adr answer 'x$(touch P)@abcd' <letter>");
+        let m = Move::new(MoveKind::Answer {
+            id: "x$(touch P)".into(),
+            version: "abcd".into(),
+            heading: "H?".into(),
+        });
+        assert_eq!(
+            m.clause_text(),
+            "owner runs: adr answer 'x$(touch P)@abcd' <letter>"
+        );
     }
 
     // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
@@ -994,24 +1271,58 @@ mod tests {
     // move as printed, gets the word back as the file holds it.
     #[test]
     fn a_word_with_a_hidden_character_runs_as_printed() {
-        for word in ["adrdom/decisions/z\u{200b}z.md", "a\u{202e}b.md", "x\u{85}y", "p\u{1b}[2Kq", "it's\u{feff}"] {
-            let line = crate::out::text(&crate::out::Line::Move(Move::new(MoveKind::Approve { path: word.into() })));
+        for word in [
+            "adrdom/decisions/z\u{200b}z.md",
+            "a\u{202e}b.md",
+            "x\u{85}y",
+            "p\u{1b}[2Kq",
+            "it's\u{feff}",
+        ] {
+            let line = crate::out::text(&crate::out::Line::Move(Move::new(MoveKind::Approve {
+                path: word.into(),
+            })));
             assert!(!line.contains("\\u{"), "{:?} printed as {}", word, line);
             let printed = line.strip_prefix("owner runs: adr approve ").unwrap();
-            let out = std::process::Command::new("bash").arg("-c").arg(format!("printf %s {}", printed)).output().unwrap();
+            let out = std::process::Command::new("bash")
+                .arg("-c")
+                .arg(format!("printf %s {}", printed))
+                .output()
+                .unwrap();
             assert_eq!(String::from_utf8(out.stdout).unwrap(), word, "{}", line);
         }
     }
 
     #[test]
     fn each_move_reads_as_one_line() {
-        let m = Move::new(MoveKind::Answer { id: "id-1".into(), version: "abcd".into(), heading: "Does it?".into() });
-        assert_eq!(m.text(), "owner runs: adr answer id-1@abcd <letter>  # \"Does it?\"");
-        let m = Move::new(MoveKind::Ask { rel: "x.md".into(), headings: vec!["A?".into(), "B?".into()] });
+        let m = Move::new(MoveKind::Answer {
+            id: "id-1".into(),
+            version: "abcd".into(),
+            heading: "Does it?".into(),
+        });
+        assert_eq!(
+            m.text(),
+            "owner runs: adr answer id-1@abcd <letter>  # \"Does it?\""
+        );
+        let m = Move::new(MoveKind::Ask {
+            rel: "x.md".into(),
+            headings: vec!["A?".into(), "B?".into()],
+        });
         assert_eq!(m.text(), "agent runs: adr ask x.md  # \"A?\", \"B?\"");
-        let m = Move::new(MoveKind::BuildWaits { heading: "A?".into(), beside: "B?".into() });
-        assert_eq!(m.text(), "not yet: \"A?\" is answered and is built once \"B?\" is answered");
-        assert_eq!(Move::new(MoveKind::Approve { path: "x.md".into() }).text(), "owner runs: adr approve x.md");
+        let m = Move::new(MoveKind::BuildWaits {
+            heading: "A?".into(),
+            beside: "B?".into(),
+        });
+        assert_eq!(
+            m.text(),
+            "not yet: \"A?\" is answered and is built once \"B?\" is answered"
+        );
+        assert_eq!(
+            Move::new(MoveKind::Approve {
+                path: "x.md".into()
+            })
+            .text(),
+            "owner runs: adr approve x.md"
+        );
     }
 
     // adr: aac5c313-dedd-466b-a0c3-ead5e99ce913
@@ -1021,45 +1332,88 @@ mod tests {
             stops: Vec::new(),
             findings: Vec::new(),
             moves: vec![
-                Move::new(MoveKind::Ask { rel: "x.md".into(), headings: vec!["A?".into(), "B?".into()] }),
-                Move::new(MoveKind::Approve { path: "x.md".into() }),
+                Move::new(MoveKind::Ask {
+                    rel: "x.md".into(),
+                    headings: vec!["A?".into(), "B?".into()],
+                }),
+                Move::new(MoveKind::Approve {
+                    path: "x.md".into(),
+                }),
             ],
         };
         let tail = report.moves_tail(Next::agent(Act::Restores("x.md".to_string())));
-        assert_eq!(tail.render(), "agent runs: adr ask x.md, owner runs: adr approve x.md");
+        assert_eq!(
+            tail.render(),
+            "agent runs: adr ask x.md, owner runs: adr approve x.md"
+        );
         assert!(!tail.render().contains('#'), "{}", tail);
     }
 
     #[test]
     fn answer_waits_merges_the_ask_moves_and_puts_the_owner_last() {
-        let ask = |h: &str| Move::new(MoveKind::Ask { rel: "x.md".into(), headings: vec![h.into()] });
+        let ask = |h: &str| {
+            Move::new(MoveKind::Ask {
+                rel: "x.md".into(),
+                headings: vec![h.into()],
+            })
+        };
         let (said, _) = answer_waits(
             "heading",
             "x.md",
             vec![
-                Waits::Asking { heading: "a".into(), report: Report { stops: Vec::new(), findings: Vec::new(), moves: vec![ask("a")] } },
+                Waits::Asking {
+                    heading: "a".into(),
+                    report: Report {
+                        stops: Vec::new(),
+                        findings: Vec::new(),
+                        moves: vec![ask("a")],
+                    },
+                },
                 Waits::Asking {
                     heading: "b".into(),
                     report: Report {
-            stops: Vec::new(),
+                        stops: Vec::new(),
                         findings: Vec::new(),
-                        moves: vec![ask("b"), Move::new(MoveKind::Approve { path: "x.md".into() })],
+                        moves: vec![
+                            ask("b"),
+                            Move::new(MoveKind::Approve {
+                                path: "x.md".into(),
+                            }),
+                        ],
                     },
                 },
             ],
         );
-        assert_eq!(said.found, "\"heading\" waits: \"a\" has no decision yet, \"b\" has no decision yet");
-        assert_eq!(said.next.render(), "agent runs: adr ask x.md, owner runs: adr approve x.md");
+        assert_eq!(
+            said.found,
+            "\"heading\" waits: \"a\" has no decision yet, \"b\" has no decision yet"
+        );
+        assert_eq!(
+            said.next.render(),
+            "agent runs: adr ask x.md, owner runs: adr approve x.md"
+        );
     }
 
     #[test]
     fn a_hold_is_superseded_when_current_and_struck_otherwise() {
         let holds = vec![
-            RemovalHold { id: "id-1".into(), heading: "A?".into(), status: QuestionStatus::Answered },
-            RemovalHold { id: "id-2".into(), heading: "B?".into(), status: QuestionStatus::Asked },
+            RemovalHold {
+                id: "id-1".into(),
+                heading: "A?".into(),
+                status: QuestionStatus::Answered,
+            },
+            RemovalHold {
+                id: "id-2".into(),
+                heading: "B?".into(),
+                status: QuestionStatus::Asked,
+            },
         ];
         let text = removal_next("x.md", &holds).render();
-        assert!(text.contains("supersedes") && text.contains("strikes"), "{}", text);
+        assert!(
+            text.contains("supersedes") && text.contains("strikes"),
+            "{}",
+            text
+        );
         assert!(text.ends_with("owner runs: adr approve x.md"), "{}", text);
     }
 }

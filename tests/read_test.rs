@@ -36,13 +36,20 @@ fn repo_with(markers: &[&str]) -> (PathBuf, Vec<Dec>) {
     let mut out: Vec<Dec> = Vec::new();
     let mut files = Vec::new();
     for (f, chunk) in markers.chunks(3).enumerate() {
-        let rel = format!("adrdom/decisions/topic-{}.md", "abcdefghij".chars().nth(f).unwrap());
+        let rel = format!(
+            "adrdom/decisions/topic-{}.md",
+            "abcdefghij".chars().nth(f).unwrap()
+        );
         let mut text = format!("# Topic {}\n", "abcdefghij".chars().nth(f).unwrap());
         let mut headings = Vec::new();
         for (i, m) in chunk.iter().enumerate() {
             let n = f * 3 + i;
             let plain = format!("Does the widget n{} glow?", n);
-            text.push_str(&format!("\n### {}\ndepends: widget\n{}", plain, body(&format!("n{}", n))));
+            text.push_str(&format!(
+                "\n### {}\ndepends: widget\n{}",
+                plain,
+                body(&format!("n{}", n))
+            ));
             headings.push((plain, m.to_string()));
         }
         let path = write_record(&dir, &rel, &text);
@@ -54,7 +61,11 @@ fn repo_with(markers: &[&str]) -> (PathBuf, Vec<Dec>) {
         for (id, (h, m)) in ids.iter().zip(headings) {
             let r = adr_answer(&dir, id, "A");
             assert!(r.status.success(), "{}{}", stdout(&r), stderr(&r));
-            out.push(Dec { heading: h, id: id.clone(), marker: m });
+            out.push(Dec {
+                heading: h,
+                id: id.clone(),
+                marker: m,
+            });
         }
         files.push((path, ()));
     }
@@ -65,9 +76,14 @@ fn repo_with(markers: &[&str]) -> (PathBuf, Vec<Dec>) {
     for (path, _) in &files {
         let mut text = std::fs::read_to_string(path).unwrap();
         for d in out.iter_mut().filter(|d| !d.marker.is_empty()) {
-            let marked = d.heading.replace(" glow?", &format!(" [word:{}] glow?", d.marker));
+            let marked = d
+                .heading
+                .replace(" glow?", &format!(" [word:{}] glow?", d.marker));
             if text.contains(&format!("### {}\n", d.heading)) {
-                text = text.replace(&format!("### {}\n", d.heading), &format!("### {}\n", marked));
+                text = text.replace(
+                    &format!("### {}\n", d.heading),
+                    &format!("### {}\n", marked),
+                );
                 d.heading = marked;
             }
         }
@@ -82,7 +98,12 @@ fn read_with(dir: &Path, envs: &[(&str, &str)]) -> Output {
 
 fn read_ok(dir: &Path) -> String {
     let out = read_with(dir, &[]);
-    assert!(out.status.success(), "stdout={} stderr={}", stdout(&out), stderr(&out));
+    assert!(
+        out.status.success(),
+        "stdout={} stderr={}",
+        stdout(&out),
+        stderr(&out)
+    );
     stdout(&out)
 }
 
@@ -93,7 +114,10 @@ fn rows(dir: &Path) -> Vec<reader::Row> {
 /// The rows `adr read` wrote: those on the set prompt.
 fn set_rows(dir: &Path) -> Vec<reader::Row> {
     let hash = reader::Kind::Set.prompt_hash();
-    rows(dir).into_iter().filter(|r| r.prompt_hash == hash).collect()
+    rows(dir)
+        .into_iter()
+        .filter(|r| r.prompt_hash == hash)
+        .collect()
 }
 
 fn text_of(d: &Dec) -> String {
@@ -122,12 +146,17 @@ fn line_of(word: &str, first: &Dec, second: &Dec) -> String {
 }
 
 /// The move a same or inconsistent pair calls for, as `adr read` prints it.
-const SUPERSEDE_MOVE: &str = "agent writes a question that supersedes one decision of each same or inconsistent pair";
+const SUPERSEDE_MOVE: &str =
+    "agent writes a question that supersedes one decision of each same or inconsistent pair";
 
 /// The word the fake reader gives a pair: the marker of its first decision.
 fn word_of(a: &Dec, b: &Dec) -> String {
     let (first, _) = ordered(a, b);
-    if first.marker.is_empty() { "unrelated".into() } else { first.marker.clone() }
+    if first.marker.is_empty() {
+        "unrelated".into()
+    } else {
+        first.marker.clone()
+    }
 }
 
 // adr: 48c47c42-6720-44ca-b47d-12a61ba8ee9f
@@ -149,7 +178,9 @@ fn every_pair_of_current_decisions_is_read_once() {
             let (f, s) = ordered(&decs[i], &decs[j]);
             let hash = record::sha256_hex(&text_of(f));
             assert_eq!(
-                set.iter().filter(|r| r.text_hash == hash && r.neighbour == s.id).count(),
+                set.iter()
+                    .filter(|r| r.text_hash == hash && r.neighbour == s.id)
+                    .count(),
                 1,
                 "pair {} {}",
                 f.heading,
@@ -178,7 +209,9 @@ fn a_pair_is_one_row_the_lower_identifier_first() {
     assert_eq!(r.word, "unrelated");
     assert_eq!(r.reason, REASON);
     assert_eq!(r.model, reader::MODEL);
-    let prompt = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/reader-set.md")).unwrap();
+    let prompt =
+        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/reader-set.md"))
+            .unwrap();
     assert_eq!(r.prompt_hash, record::sha256_hex(&prompt));
 }
 
@@ -209,7 +242,13 @@ fn every_word_is_kept_and_a_word_outside_the_set_fails_the_run() {
         assert_eq!(rows(&dir), before, "{}: no row of the failed chunk", word);
         let hash_a = record::sha256_hex(&text_of(&decs[0]));
         let hash_b = record::sha256_hex(&text_of(&decs[1]));
-        assert!(!set_rows(&dir).iter().any(|r| r.text_hash == hash_a || r.text_hash == hash_b), "{}", word);
+        assert!(
+            !set_rows(&dir)
+                .iter()
+                .any(|r| r.text_hash == hash_a || r.text_hash == hash_b),
+            "{}",
+            word
+        );
     }
 }
 
@@ -221,21 +260,37 @@ fn a_commit_never_runs_the_reader() {
         write_test_comment(&dir, &d.id);
     }
     let _ = std::fs::remove_dir_all(dir.join("adrdom/cache"));
-    let rows_before = std::fs::read_to_string(dir.join("adrdom/state/reader.tsv")).unwrap_or_default();
+    let rows_before =
+        std::fs::read_to_string(dir.join("adrdom/state/reader.tsv")).unwrap_or_default();
     run_git(&dir, &["add", "-A"]);
     let bin_dir = adr_bin().parent().unwrap().to_path_buf();
-    let path = format!("{}:{}", bin_dir.display(), std::env::var("PATH").unwrap_or_default());
+    let path = format!(
+        "{}:{}",
+        bin_dir.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
     let out = scrubbed(std::process::Command::new("git"))
         .current_dir(&dir)
-        .args(["commit", "-q", "-m", "chore: commit with no model and no reader"])
+        .args([
+            "commit",
+            "-q",
+            "-m",
+            "chore: commit with no model and no reader",
+        ])
         .env("PATH", path)
         .env("ADR_NO_MODEL", "1")
         .env("ADR_NO_READER", "1")
         .output()
         .unwrap();
     assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
-    assert_eq!(std::fs::read_to_string(dir.join("adrdom/state/reader.tsv")).unwrap_or_default(), rows_before);
-    assert!(!dir.join("adrdom/cache").exists(), "the commit created a cache");
+    assert_eq!(
+        std::fs::read_to_string(dir.join("adrdom/state/reader.tsv")).unwrap_or_default(),
+        rows_before
+    );
+    assert!(
+        !dir.join("adrdom/cache").exists(),
+        "the commit created a cache"
+    );
 }
 
 // adr: 27bd0855-a6c8-4cda-a82b-bf95022a14b0
@@ -243,7 +298,12 @@ fn a_commit_never_runs_the_reader() {
 fn marked_pairs_print_their_lines_in_the_order_of_the_words() {
     // Two decisions to each word: that pair is marked by both.
     let (dir, decs) = repo_with(&[
-        "same", "same", "inconsistent", "inconsistent", "consistent", "consistent",
+        "same",
+        "same",
+        "inconsistent",
+        "inconsistent",
+        "consistent",
+        "consistent",
     ]);
     let out = read_ok(&dir);
     let lines: Vec<&str> = out.lines().collect();
@@ -274,14 +334,26 @@ fn marked_pairs_print_their_lines_in_the_order_of_the_words() {
     }
     // The consistent pair prints nothing.
     let (f, s) = ordered(&decs[4], &decs[5]);
-    assert!(!out.contains(&format!("\"{}\" and \"{}\"", f.heading, s.heading)), "{}", out);
+    assert!(
+        !out.contains(&format!("\"{}\" and \"{}\"", f.heading, s.heading)),
+        "{}",
+        out
+    );
 
     // Groups in the order same, inconsistent; each line exactly.
     let mut want: Vec<String> = Vec::new();
     for w in ["same", "inconsistent"] {
-        let mut g: Vec<String> = expected.iter().filter(|(x, _)| x == w).map(|(_, l)| l.clone()).collect();
+        let mut g: Vec<String> = expected
+            .iter()
+            .filter(|(x, _)| x == w)
+            .map(|(_, l)| l.clone())
+            .collect();
         g.sort();
-        let mut got: Vec<String> = lines.iter().filter(|l| l.starts_with(&format!("{}: ", w))).map(|l| l.to_string()).collect();
+        let mut got: Vec<String> = lines
+            .iter()
+            .filter(|l| l.starts_with(&format!("{}: ", w)))
+            .map(|l| l.to_string())
+            .collect();
         got.sort();
         assert_eq!(got, g, "{}", out);
         want.extend(g);
@@ -289,11 +361,24 @@ fn marked_pairs_print_their_lines_in_the_order_of_the_words() {
     let printed: Vec<&str> = lines
         .iter()
         .copied()
-        .filter(|l| ["same: ", "inconsistent: "].iter().any(|p| l.starts_with(p)))
+        .filter(|l| {
+            ["same: ", "inconsistent: "]
+                .iter()
+                .any(|p| l.starts_with(p))
+        })
         .collect();
     assert_eq!(printed.len(), want.len());
-    let rank = |l: &str| ["same", "inconsistent"].iter().position(|w| l.starts_with(&format!("{}: ", w))).unwrap();
-    assert!(printed.windows(2).all(|w| rank(w[0]) <= rank(w[1])), "{}", out);
+    let rank = |l: &str| {
+        ["same", "inconsistent"]
+            .iter()
+            .position(|w| l.starts_with(&format!("{}: ", w)))
+            .unwrap()
+    };
+    assert!(
+        printed.windows(2).all(|w| rank(w[0]) <= rank(w[1])),
+        "{}",
+        out
+    );
 
     // The pairs, then the move they call for, and nothing else: no count
     // (1af76f91 A).
@@ -318,9 +403,15 @@ fn reading_stops_without_the_model() {
     let (dir, _) = repo_with(&["", ""]);
     let before = rows(&dir);
     let (want, next) = if cfg!(feature = "model") {
-        ("the embedding model is not installed", "agent runs: adr install --planning")
+        (
+            "the embedding model is not installed",
+            "agent runs: adr install --planning",
+        )
     } else {
-        ("the embedding model is missing", "agent builds adr with the model feature")
+        (
+            "the embedding model is missing",
+            "agent builds adr with the model feature",
+        )
     };
     let out = read_with(&dir, &[("ADR_NO_MODEL", "1")]);
     assert!(!out.status.success(), "{}", stdout(&out));
@@ -335,7 +426,11 @@ fn reading_stops_without_the_reader() {
     let before = rows(&dir);
     let out = read_with(&dir, &[("ADR_NO_READER", "1")]);
     assert!(!out.status.success(), "{}", stdout(&out));
-    assert!(stderr(&out).contains("no agent is installed for this repository"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("no agent is installed for this repository"),
+        "{}",
+        stderr(&out)
+    );
     assert_eq!(rows(&dir), before);
 }
 
@@ -344,10 +439,22 @@ fn a_planning_run_on_an_unrelated_file_repeats_no_set_row() {
     let (dir, decs) = repo_with(&["", ""]);
     read_ok(&dir);
     let rel = "adrdom/decisions/other.md";
-    write_record(&dir, rel, &format!("# Other\n\n### Does the widget other glow?\ndepends: widget\n{}", body("other")));
+    write_record(
+        &dir,
+        rel,
+        &format!(
+            "# Other\n\n### Does the widget other glow?\ndepends: widget\n{}",
+            body("other")
+        ),
+    );
     let path = dir.join(rel);
     let first = adr(&dir, &["plan", path.to_str().unwrap()], &[], "");
-    assert!(first.status.success(), "{}{}", stdout(&first), stderr(&first));
+    assert!(
+        first.status.success(),
+        "{}{}",
+        stdout(&first),
+        stderr(&first)
+    );
     let n = set_rows(&dir).len();
     assert_eq!(n, 1, "{}", decs.len());
     // Planning again reads nothing new, and never touches the set rows.
@@ -365,7 +472,12 @@ fn a_superseded_decision_drops_out_of_the_reading() {
     let first = read_ok(&dir);
     assert!(first.contains(&decs[0].heading), "{}", first);
     assert_eq!(set_rows(&dir).len(), 3);
-    assert_eq!(first.lines().filter(|l| l.starts_with("same: ")).count(), 3, "{}", first);
+    assert_eq!(
+        first.lines().filter(|l| l.starts_with("same: ")).count(),
+        3,
+        "{}",
+        first
+    );
 
     // A new answered question supersedes the first decision.
     let rel = "adrdom/decisions/topic-d.md";
@@ -373,7 +485,12 @@ fn a_superseded_decision_drops_out_of_the_reading() {
     let path = write_record(
         &dir,
         rel,
-        &format!("# Topic d\n\n### {}\ndepends: widget\nsupersedes: {}\n{}", h, decs[0].id, body("n9")),
+        &format!(
+            "# Topic d\n\n### {}\ndepends: widget\nsupersedes: {}\n{}",
+            h,
+            decs[0].id,
+            body("n9")
+        ),
     );
     approve_record(&dir, rel);
     let a = adr(&dir, &["ask", path.to_str().unwrap()], &[], "");
@@ -384,7 +501,11 @@ fn a_superseded_decision_drops_out_of_the_reading() {
 
     let before = set_rows(&dir).len();
     let out = read_ok(&dir);
-    assert!(!out.contains(&decs[0].heading), "the superseded decision is printed: {}", out);
+    assert!(
+        !out.contains(&decs[0].heading),
+        "the superseded decision is printed: {}",
+        out
+    );
     // The new decision is paired with the two decisions that remain; the
     // pair of those two was read before and is not read again. The
     // superseded decision's section is struck from its file (per "What
@@ -394,8 +515,12 @@ fn a_superseded_decision_drops_out_of_the_reading() {
     // text left the records?"): two rows go, two come.
     assert_eq!(set_rows(&dir).len(), before);
     let gone = record::sha256_hex(&text_of(&decs[0]));
-    assert!(set_rows(&dir).iter().all(|r| r.text_hash != gone && r.neighbour != decs[0].id));
-    assert!(set_rows(&dir).iter().any(|r| r.neighbour == id || r.text_hash == record::sha256_hex(&format!("{}\nYes.", h))));
+    assert!(set_rows(&dir)
+        .iter()
+        .all(|r| r.text_hash != gone && r.neighbour != decs[0].id));
+    assert!(set_rows(&dir)
+        .iter()
+        .any(|r| r.neighbour == id || r.text_hash == record::sha256_hex(&format!("{}\nYes.", h))));
 }
 
 // adr: 48c47c42-6720-44ca-b47d-12a61ba8ee9f
@@ -404,10 +529,18 @@ fn a_decision_is_read_against_ten_neighbours_not_every_other() {
     let (dir, decs) = repo_with(&[""; 15]);
     read_ok(&dir);
     let rs = set_rows(&dir);
-    assert!(rs.len() < pairs(&decs), "{} rows for {} pairs", rs.len(), pairs(&decs));
+    assert!(
+        rs.len() < pairs(&decs),
+        "{} rows for {} pairs",
+        rs.len(),
+        pairs(&decs)
+    );
     for d in &decs {
         let h = record::sha256_hex(&text_of(d));
-        let n = rs.iter().filter(|r| r.text_hash == h || r.neighbour == d.id).count();
+        let n = rs
+            .iter()
+            .filter(|r| r.text_hash == h || r.neighbour == d.id)
+            .count();
         assert!(n >= 10, "{} is in {} rows", d.id, n);
     }
 }
@@ -422,7 +555,11 @@ fn a_stopped_reading_prints_the_stop_and_its_move_and_no_count() {
     let err = stderr(&out);
     assert_eq!(err.matches("agent ").count(), 1, "one move: {}", err);
     assert!(err.lines().all(|l| l.starts_with("read: ")), "{}", err);
-    assert!(!err.contains(" unread"), "no count of unread pairs: {}", err);
+    assert!(
+        !err.contains(" unread"),
+        "no count of unread pairs: {}",
+        err
+    );
     // The rows of the chunks read before the stop are kept, and the next run
     // reads only what is left. Six decisions each read against five others:
     // every pair is a neighbour pair.

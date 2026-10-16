@@ -34,21 +34,38 @@ fn banned_lines(dir: &Path) -> Vec<String> {
 fn assert_sorted(lines: &[String]) {
     let mut sorted = lines.to_vec();
     sorted.sort();
-    assert_eq!(lines, sorted.as_slice(), "banned.sha256 is not sorted by hash: {:?}", lines);
+    assert_eq!(
+        lines,
+        sorted.as_slice(),
+        "banned.sha256 is not sorted by hash: {:?}",
+        lines
+    );
 }
 
 fn checkout_new_branch(dir: &Path, name: &str) {
     let out = run_git(dir, &["checkout", "-b", name]);
-    assert!(out.status.success(), "checkout -b {} failed: {}", name, stderr(&out));
+    assert!(
+        out.status.success(),
+        "checkout -b {} failed: {}",
+        name,
+        stderr(&out)
+    );
 }
 
 fn checkout(dir: &Path, name: &str) {
     let out = run_git(dir, &["checkout", name]);
-    assert!(out.status.success(), "checkout {} failed: {}", name, stderr(&out));
+    assert!(
+        out.status.success(),
+        "checkout {} failed: {}",
+        name,
+        stderr(&out)
+    );
 }
 
 fn current_branch(dir: &Path) -> String {
-    stdout(&run_git(dir, &["rev-parse", "--abbrev-ref", "HEAD"])).trim().to_string()
+    stdout(&run_git(dir, &["rev-parse", "--abbrev-ref", "HEAD"]))
+        .trim()
+        .to_string()
 }
 
 fn commit_all(dir: &Path, msg: &str) -> Output {
@@ -127,7 +144,11 @@ fn resolve_ours_then_theirs(content: &str) -> String {
 /// happening), then completes the merge commit.
 fn finish_merge_with_rebuild(dir: &Path) {
     let rebuild_out = adr(dir, &["ban", "--rebuild"], &[], "");
-    assert!(rebuild_out.status.success(), "ban --rebuild failed: {}", stderr(&rebuild_out));
+    assert!(
+        rebuild_out.status.success(),
+        "ban --rebuild failed: {}",
+        stderr(&rebuild_out)
+    );
     run_git(dir, &["add", "adrdom/state/banned.sha256"]);
 
     let ledger_content = std::fs::read_to_string(ledger_path(dir)).unwrap_or_default();
@@ -138,7 +159,11 @@ fn finish_merge_with_rebuild(dir: &Path) {
     }
 
     let commit_out = run_git(dir, &["commit", "--no-edit"]);
-    assert!(commit_out.status.success(), "merge commit failed: {}", stderr(&commit_out));
+    assert!(
+        commit_out.status.success(),
+        "merge commit failed: {}",
+        stderr(&commit_out)
+    );
 }
 
 // (a): a garbage file, conflict markers included, is fully replaced.
@@ -151,7 +176,11 @@ fn a_rebuild_recovers_from_a_garbage_file_with_conflict_markers() {
     let ban_out = adr(&dir, &["ban"], &[], "rebuildwordalpha\nrebuildwordbeta\n");
     assert!(ban_out.status.success(), "ban failed: {}", stderr(&ban_out));
     let unban_out = adr_owner(&dir, &["unban"], "rebuildwordbeta\n");
-    assert!(unban_out.status.success(), "unban failed: {}", stderr(&unban_out));
+    assert!(
+        unban_out.status.success(),
+        "unban failed: {}",
+        stderr(&unban_out)
+    );
 
     let expected_hash = record::sha256_hex("rebuildwordalpha");
     let ledger_before = std::fs::read_to_string(ledger_path(&dir)).unwrap();
@@ -170,17 +199,28 @@ fn a_rebuild_recovers_from_a_garbage_file_with_conflict_markers() {
     );
 
     let rebuild_out = adr(&dir, &["ban", "--rebuild"], &[], "");
-    assert!(rebuild_out.status.success(), "ban --rebuild failed: {}", stderr(&rebuild_out));
+    assert!(
+        rebuild_out.status.success(),
+        "ban --rebuild failed: {}",
+        stderr(&rebuild_out)
+    );
 
     let lines = banned_lines(&dir);
     assert_eq!(lines, vec![expected_hash], "{:?}", lines);
 
     let check_after = adr(&dir, &["check"], &[], "");
     let text = stdout(&check_after);
-    assert!(!text.contains("banned:"), "unexpected banned failure after rebuild: {}", text);
+    assert!(
+        !text.contains("banned:"),
+        "unexpected banned failure after rebuild: {}",
+        text
+    );
 
     let ledger_after = std::fs::read_to_string(ledger_path(&dir)).unwrap();
-    assert_eq!(ledger_before, ledger_after, "rebuild must write no ledger row");
+    assert_eq!(
+        ledger_before, ledger_after,
+        "rebuild must write no ledger row"
+    );
 }
 
 // (b): a term uuid carried by a ban survives a rebuild.
@@ -201,7 +241,11 @@ fn b_rebuild_keeps_a_bans_term_identifier() {
     assert!(ban_out.status.success(), "ban failed: {}", stderr(&ban_out));
 
     let rebuild_out = adr(&dir, &["ban", "--rebuild"], &[], "");
-    assert!(rebuild_out.status.success(), "ban --rebuild failed: {}", stderr(&rebuild_out));
+    assert!(
+        rebuild_out.status.success(),
+        "ban --rebuild failed: {}",
+        stderr(&rebuild_out)
+    );
 
     let lines = banned_lines(&dir);
     assert_eq!(lines.len(), 1, "{:?}", lines);
@@ -222,7 +266,11 @@ fn c_a_real_merge_conflict_on_banned_sha256_is_cleared_by_rebuild() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     let install_commit = commit_all(&dir, "install");
-    assert!(install_commit.status.success(), "install commit failed: {}", stderr(&install_commit));
+    assert!(
+        install_commit.status.success(),
+        "install commit failed: {}",
+        stderr(&install_commit)
+    );
     let base_branch = current_branch(&dir);
 
     let word1_hash = record::sha256_hex("mergerebuildworda");
@@ -232,14 +280,22 @@ fn c_a_real_merge_conflict_on_banned_sha256_is_cleared_by_rebuild() {
     let a_ban = adr(&dir, &["ban"], &[], "mergerebuildworda\n");
     assert!(a_ban.status.success(), "a: ban failed: {}", stderr(&a_ban));
     let a_commit = commit_all(&dir, "a: ban word1");
-    assert!(a_commit.status.success(), "a commit failed: {}", stderr(&a_commit));
+    assert!(
+        a_commit.status.success(),
+        "a commit failed: {}",
+        stderr(&a_commit)
+    );
 
     checkout(&dir, &base_branch);
     checkout_new_branch(&dir, "b");
     let b_ban = adr(&dir, &["ban"], &[], "mergerebuildwordb\n");
     assert!(b_ban.status.success(), "b: ban failed: {}", stderr(&b_ban));
     let b_commit = commit_all(&dir, "b: ban word2");
-    assert!(b_commit.status.success(), "b commit failed: {}", stderr(&b_commit));
+    assert!(
+        b_commit.status.success(),
+        "b commit failed: {}",
+        stderr(&b_commit)
+    );
 
     checkout(&dir, "a");
     run_git(&dir, &["merge", "--no-ff", "--no-commit", "b"]);
@@ -253,12 +309,24 @@ fn c_a_real_merge_conflict_on_banned_sha256_is_cleared_by_rebuild() {
     finish_merge_with_rebuild(&dir);
 
     let check_out = adr(&dir, &["check"], &[], "");
-    assert!(check_out.status.success(), "check failed after merge: {}", stdout(&check_out));
+    assert!(
+        check_out.status.success(),
+        "check failed after merge: {}",
+        stdout(&check_out)
+    );
 
     let lines = banned_lines(&dir);
     assert_eq!(lines.len(), 2, "{:?}", lines);
-    assert!(lines.iter().any(|l| l.starts_with(&word1_hash)), "{:?}", lines);
-    assert!(lines.iter().any(|l| l.starts_with(&word2_hash)), "{:?}", lines);
+    assert!(
+        lines.iter().any(|l| l.starts_with(&word1_hash)),
+        "{:?}",
+        lines
+    );
+    assert!(
+        lines.iter().any(|l| l.starts_with(&word2_hash)),
+        "{:?}",
+        lines
+    );
     assert_sorted(&lines);
 }
 
@@ -273,16 +341,32 @@ fn unban_then_ban_setup(word2: &str) -> (PathBuf, String, String) {
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
     let base_ban = adr(&dir, &["ban"], &[], "mergeunbanword1\n");
-    assert!(base_ban.status.success(), "base: ban failed: {}", stderr(&base_ban));
+    assert!(
+        base_ban.status.success(),
+        "base: ban failed: {}",
+        stderr(&base_ban)
+    );
     let base_commit = commit_all(&dir, "base: ban word1");
-    assert!(base_commit.status.success(), "base commit failed: {}", stderr(&base_commit));
+    assert!(
+        base_commit.status.success(),
+        "base commit failed: {}",
+        stderr(&base_commit)
+    );
     let base_branch = current_branch(&dir);
 
     checkout_new_branch(&dir, "a");
     let a_unban = adr_owner(&dir, &["unban"], "mergeunbanword1\n");
-    assert!(a_unban.status.success(), "a: unban failed: {}", stderr(&a_unban));
+    assert!(
+        a_unban.status.success(),
+        "a: unban failed: {}",
+        stderr(&a_unban)
+    );
     let a_commit = commit_all(&dir, "a: unban word1");
-    assert!(a_commit.status.success(), "a commit failed: {}", stderr(&a_commit));
+    assert!(
+        a_commit.status.success(),
+        "a commit failed: {}",
+        stderr(&a_commit)
+    );
 
     // More than two seconds between the two branches' commands, so the
     // ledger rows they each write carry real, distinct wall-clock times.
@@ -293,7 +377,11 @@ fn unban_then_ban_setup(word2: &str) -> (PathBuf, String, String) {
     let b_ban = adr(&dir, &["ban"], &[], &format!("{}\n", word2));
     assert!(b_ban.status.success(), "b: ban failed: {}", stderr(&b_ban));
     let b_commit = commit_all(&dir, "b: ban word2");
-    assert!(b_commit.status.success(), "b commit failed: {}", stderr(&b_commit));
+    assert!(
+        b_commit.status.success(),
+        "b commit failed: {}",
+        stderr(&b_commit)
+    );
 
     let word2_hash = record::sha256_hex(word2);
     (dir, base_branch, word2_hash)
@@ -302,7 +390,12 @@ fn unban_then_ban_setup(word2: &str) -> (PathBuf, String, String) {
 /// One direction of case (d): checks out `head_branch`, merges
 /// `other_branch` in, finishes with `adr ban --rebuild`, and asserts the
 /// rebuilt file holds only `word2_hash` and `check` passes.
-fn assert_merge_leaves_only_word2(dir: &Path, head_branch: &str, other_branch: &str, word2_hash: &str) {
+fn assert_merge_leaves_only_word2(
+    dir: &Path,
+    head_branch: &str,
+    other_branch: &str,
+    word2_hash: &str,
+) {
     checkout(dir, head_branch);
     run_git(dir, &["merge", "--no-ff", "--no-commit", other_branch]);
     finish_merge_with_rebuild(dir);
@@ -365,15 +458,25 @@ fn w3_a_hash_the_ledger_calls_unbanned_but_put_back_in_the_file_is_banned_again(
     let ban_out = adr(&dir, &["ban"], &[], &format!("{}\n", word));
     assert!(ban_out.status.success(), "ban failed: {}", stderr(&ban_out));
     let unban_out = adr_owner(&dir, &["unban"], &format!("{}\n", word));
-    assert!(unban_out.status.success(), "unban failed: {}", stderr(&unban_out));
-    assert!(banned_lines(&dir).is_empty(), "expected the file empty right after unban");
+    assert!(
+        unban_out.status.success(),
+        "unban failed: {}",
+        stderr(&unban_out)
+    );
+    assert!(
+        banned_lines(&dir).is_empty(),
+        "expected the file empty right after unban"
+    );
 
     // Put the hash back into the file by hand -- the shape a merge that
     // resurrects a stale line, or a hand edit, leaves behind. The ledger
     // still says `unbanned`, so `check` must refuse this.
     std::fs::write(banned_path(&dir), format!("{}\n", hash)).unwrap();
     let stale_check = adr(&dir, &["check"], &[], "");
-    assert!(!stale_check.status.success(), "expected check to refuse the stale file");
+    assert!(
+        !stale_check.status.success(),
+        "expected check to refuse the stale file"
+    );
     assert!(
         stdout(&stale_check).contains("in the ban list, ledger says unbanned"),
         "{}",
@@ -381,13 +484,23 @@ fn w3_a_hash_the_ledger_calls_unbanned_but_put_back_in_the_file_is_banned_again(
     );
 
     let ledger_before = std::fs::read_to_string(ledger_path(&dir)).unwrap();
-    let banned_rows_before = ledger_before.lines().filter(|l| l.contains("\tbanned\t")).count();
+    let banned_rows_before = ledger_before
+        .lines()
+        .filter(|l| l.contains("\tbanned\t"))
+        .count();
 
     let reban_out = adr(&dir, &["ban"], &[], &format!("{}\n", word));
-    assert!(reban_out.status.success(), "re-ban failed: {}", stderr(&reban_out));
+    assert!(
+        reban_out.status.success(),
+        "re-ban failed: {}",
+        stderr(&reban_out)
+    );
 
     let ledger_after = std::fs::read_to_string(ledger_path(&dir)).unwrap();
-    let banned_rows_after = ledger_after.lines().filter(|l| l.contains("\tbanned\t")).count();
+    let banned_rows_after = ledger_after
+        .lines()
+        .filter(|l| l.contains("\tbanned\t"))
+        .count();
     assert_eq!(
         banned_rows_after,
         banned_rows_before + 1,
@@ -429,7 +542,10 @@ fn w5_ledger_says_banned_but_file_is_missing_it_gets_no_new_row_but_the_file_is_
     // banned. `check` must refuse this the other way round from (w3).
     std::fs::write(banned_path(&dir), "").unwrap();
     let stale_check = adr(&dir, &["check"], &[], "");
-    assert!(!stale_check.status.success(), "expected check to refuse the missing entry");
+    assert!(
+        !stale_check.status.success(),
+        "expected check to refuse the missing entry"
+    );
     assert!(
         stdout(&stale_check).contains("in ledger, missing from the ban list"),
         "{}",
@@ -439,7 +555,11 @@ fn w5_ledger_says_banned_but_file_is_missing_it_gets_no_new_row_but_the_file_is_
     let ledger_before = std::fs::read_to_string(ledger_path(&dir)).unwrap();
 
     let reban_out = adr(&dir, &["ban"], &[], &format!("{}\n", word));
-    assert!(reban_out.status.success(), "re-ban failed: {}", stderr(&reban_out));
+    assert!(
+        reban_out.status.success(),
+        "re-ban failed: {}",
+        stderr(&reban_out)
+    );
     assert_eq!(
         stdout(&reban_out).trim_end(),
         "written: adrdom/state/banned.sha256",
@@ -447,7 +567,10 @@ fn w5_ledger_says_banned_but_file_is_missing_it_gets_no_new_row_but_the_file_is_
     );
 
     let ledger_after = std::fs::read_to_string(ledger_path(&dir)).unwrap();
-    assert_eq!(ledger_before, ledger_after, "no new entries must write no ledger row");
+    assert_eq!(
+        ledger_before, ledger_after,
+        "no new entries must write no ledger row"
+    );
 
     // The file this run wrote is still fixed, equal to the ledger, even
     // though nothing new was banned.
@@ -477,7 +600,11 @@ fn e_rebuild_writes_the_file_when_it_is_missing() {
     assert!(!banned_path(&dir).exists());
 
     let rebuild_out = adr(&dir, &["ban", "--rebuild"], &[], "");
-    assert!(rebuild_out.status.success(), "ban --rebuild failed: {}", stderr(&rebuild_out));
+    assert!(
+        rebuild_out.status.success(),
+        "ban --rebuild failed: {}",
+        stderr(&rebuild_out)
+    );
 
     let lines = banned_lines(&dir);
     assert_eq!(lines, vec![expected_hash], "{:?}", lines);

@@ -80,9 +80,16 @@ fn a_banned_and_unbanned_for_one_hash_at_one_time_fails_then_a_later_ban_row_pas
     append_ledger_row_at(&dir, "unbanned", "-", &hash, "", tie_time);
 
     let tied = adr(&dir, &["check"], &[], "");
-    assert!(!tied.status.success(), "a hand-tied banned/unbanned pair must fail check");
+    assert!(
+        !tied.status.success(),
+        "a hand-tied banned/unbanned pair must fail check"
+    );
     let text = stdout(&tied);
-    assert!(text.contains("owner runs the same adr command again"), "{}", text);
+    assert!(
+        text.contains("owner runs the same adr command again"),
+        "{}",
+        text
+    );
     assert!(text.contains(COMPETES_TEXT), "{}", text);
     assert!(text.contains(&hash[..12]), "{}", text);
 
@@ -119,12 +126,23 @@ fn g_a_hand_tied_pair_with_the_hash_already_in_the_file_is_cleared_by_a_real_ban
     let tie_time = "2024-01-01T00:00:00Z";
     append_ledger_row_at(&dir, "banned", "-", &hash, "", tie_time);
     append_ledger_row_at(&dir, "unbanned", "-", &hash, "", tie_time);
-    std::fs::write(dir.join("adrdom/state/banned.sha256"), format!("{}\n", hash)).unwrap();
+    std::fs::write(
+        dir.join("adrdom/state/banned.sha256"),
+        format!("{}\n", hash),
+    )
+    .unwrap();
 
     let tied = adr(&dir, &["check"], &[], "");
-    assert!(!tied.status.success(), "a hand-tied banned/unbanned pair must fail check");
+    assert!(
+        !tied.status.success(),
+        "a hand-tied banned/unbanned pair must fail check"
+    );
     let text = stdout(&tied);
-    assert!(text.contains("owner runs the same adr command again"), "{}", text);
+    assert!(
+        text.contains("owner runs the same adr command again"),
+        "{}",
+        text
+    );
     assert!(text.contains(COMPETES_TEXT), "{}", text);
     assert!(text.contains(&hash[..12]), "{}", text);
 
@@ -164,9 +182,16 @@ fn b_two_state_rows_for_one_id_at_one_time_fails() {
     append_ledger_row_at(&dir, "answered", id, "hash-1", "A", tie_time);
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success(), "two state rows sharing an id at one time must fail check");
+    assert!(
+        !out.status.success(),
+        "two state rows sharing an id at one time must fail check"
+    );
     let text = stdout(&out);
-    assert!(text.contains("owner runs the same adr command again"), "{}", text);
+    assert!(
+        text.contains("owner runs the same adr command again"),
+        "{}",
+        text
+    );
     assert!(text.contains(COMPETES_TEXT), "{}", text);
     assert!(text.contains(&format!("id {}", id)), "{}", text);
 }
@@ -236,12 +261,23 @@ fn f_two_approved_rows_for_one_file_at_one_time_names_the_event() {
     append_ledger_row_at(&dir, "approved", "-", "hash-2", rel, tie_time);
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(!out.status.success(), "two approved rows for one file at one time must fail check");
+    assert!(
+        !out.status.success(),
+        "two approved rows for one file at one time must fail check"
+    );
     let text = stdout(&out);
-    assert!(text.contains("owner runs the same adr command again"), "{}", text);
+    assert!(
+        text.contains("owner runs the same adr command again"),
+        "{}",
+        text
+    );
     assert!(text.contains(COMPETES_TEXT), "{}", text);
     assert!(text.contains(rel), "{}", text);
-    assert!(text.contains("approved"), "the event name must be in the message: {}", text);
+    assert!(
+        text.contains("approved"),
+        "the event name must be in the message: {}",
+        text
+    );
 }
 
 // adr: ce19c883-c61d-477b-a6d4-fee5134c6e9a

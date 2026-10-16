@@ -106,8 +106,15 @@ pub const ANSWER_PREFIX: &str = "**Answer:**";
 /// checks all seven; a caller that wants only some of them (e.g.
 /// id/supersedes, or id/depends/supersedes without the terms line) calls
 /// `starts_with_any` with its own subset of these constants instead.
-pub const TOOL_LINE_PREFIXES: &[&str] =
-    &[ID_PREFIX, TERMS_PREFIX, DEPENDS_PREFIX, SUPERSEDES_PREFIX, UNRELATED_PREFIX, BLAME_PREFIX, ANSWER_PREFIX];
+pub const TOOL_LINE_PREFIXES: &[&str] = &[
+    ID_PREFIX,
+    TERMS_PREFIX,
+    DEPENDS_PREFIX,
+    SUPERSEDES_PREFIX,
+    UNRELATED_PREFIX,
+    BLAME_PREFIX,
+    ANSWER_PREFIX,
+];
 
 /// True when `line`, trimmed of leading whitespace, starts with any of
 /// `prefixes` (each an exact prefix, e.g. `tells::ID_PREFIX`).
@@ -173,7 +180,11 @@ fn line_tells(i: usize, text: &str) -> Vec<(usize, String, TellKind)> {
 /// what it does). Used for a section's body (`ask`, and through
 /// `rules::body_tell_refusals` `check`, `approve` and `plan`) and for the
 /// context prose (`approve`, `check`).
-pub fn prose_tells_in(lines: &[String], start: usize, end: usize) -> Vec<(usize, String, TellKind)> {
+pub fn prose_tells_in(
+    lines: &[String],
+    start: usize,
+    end: usize,
+) -> Vec<(usize, String, TellKind)> {
     let mut out = Vec::new();
     let end = end.min(lines.len());
     let start = start.min(end);
@@ -209,13 +220,25 @@ fn opens_with_does(heading_text: &str) -> bool {
 /// count, the line's kind). Only `ask` reads this, and only on a question
 /// not yet answered, so answered text is never judged (per "Does the word
 /// limit read answered text?").
-pub fn length_tells(lines: &[String], start: usize, end: usize, heading_text: &str) -> Vec<(usize, usize, LengthKind)> {
+pub fn length_tells(
+    lines: &[String],
+    start: usize,
+    end: usize,
+    heading_text: &str,
+) -> Vec<(usize, usize, LengthKind)> {
     let mut out = Vec::new();
     let closed = opens_with_does(heading_text);
     let end = end.min(lines.len());
     for (i, line) in lines.iter().enumerate().take(end).skip(start) {
         let (kind, text) = if let Some((_, rest)) = crate::record::parse_option_line(line) {
-            (if closed { LengthKind::OneWordOption } else { LengthKind::Option }, rest)
+            (
+                if closed {
+                    LengthKind::OneWordOption
+                } else {
+                    LengthKind::Option
+                },
+                rest,
+            )
         } else if let Some((d, v)) = crate::record::detail_line(line) {
             (
                 match d {
@@ -228,7 +251,11 @@ pub fn length_tells(lines: &[String], start: usize, end: usize, heading_text: &s
             continue;
         };
         let n = count_words(&text);
-        let over = if kind == LengthKind::OneWordOption { n != 1 } else { n > WORD_LIMIT };
+        let over = if kind == LengthKind::OneWordOption {
+            n != 1
+        } else {
+            n > WORD_LIMIT
+        };
         if over {
             out.push((i, n, kind));
         }
@@ -249,7 +276,10 @@ pub fn heading_tells(line: usize, heading_text: &str) -> Vec<(usize, String, Tel
             out.push((line, (*form).to_string(), TellKind::LoadedOpening));
         }
     }
-    if let Some(w) = hw.iter().find(|w| w.as_str() == "and" || w.as_str() == "or") {
+    if let Some(w) = hw
+        .iter()
+        .find(|w| w.as_str() == "and" || w.as_str() == "or")
+    {
         out.push((line, w.clone(), TellKind::Join));
     }
     out.extend(line_tells(line, heading_text));
@@ -276,7 +306,11 @@ mod tests {
     #[test]
     fn provenance_list_names_every_agent() {
         for name in ["claude", "codex", "gemini", "copilot"] {
-            assert!(PROVENANCE.contains(&name), "{} missing from PROVENANCE", name);
+            assert!(
+                PROVENANCE.contains(&name),
+                "{} missing from PROVENANCE",
+                name
+            );
         }
     }
 
@@ -313,18 +347,25 @@ mod tests {
     #[test]
     fn heading_tells_loaded_opening() {
         let hits = heading_tells(0, "which store does the tool use");
-        assert!(hits.iter().any(|(_, phrase, what)| phrase == "which" && *what == TellKind::LoadedOpening));
+        assert!(hits
+            .iter()
+            .any(|(_, phrase, what)| phrase == "which" && *what == TellKind::LoadedOpening));
     }
 
     #[test]
     fn heading_tells_join() {
         let hits = heading_tells(0, "does it store terms and definitions");
-        assert!(hits.iter().any(|(_, phrase, what)| phrase == "and" && *what == TellKind::Join));
+        assert!(hits
+            .iter()
+            .any(|(_, phrase, what)| phrase == "and" && *what == TellKind::Join));
     }
 
     #[test]
     fn length_tells_counts_words() {
-        let lines: Vec<String> = ["- A) Yes.", "  Why: short.", "- B) one two"].iter().map(|s| s.to_string()).collect();
+        let lines: Vec<String> = ["- A) Yes.", "  Why: short.", "- B) one two"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
         assert!(length_tells(&lines, 0, 3, "Does it?").len() == 1);
         assert!(length_tells(&lines, 0, 3, "1.1 Does it?").len() == 1);
         assert!(length_tells(&lines, 0, 3, "What is it?").is_empty());
@@ -334,5 +375,4 @@ mod tests {
     fn heading_tells_clean_heading_has_none() {
         assert!(heading_tells(0, "does the tool store terms").is_empty());
     }
-
 }

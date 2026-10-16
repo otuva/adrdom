@@ -4,11 +4,14 @@ use crate::blame;
 use crate::depends::{self, DepTarget};
 use crate::ledger::{self, Ledger};
 use crate::msg::{self, Next};
+use crate::out::Line;
 use crate::record::{self, RecordFile};
 use crate::repo;
+use crate::rules::{
+    self, empty_plan_hash, is_topic_file_path, removal_holds, terms_refusals, Class, Command,
+    Finding, RemovalHolds,
+};
 use crate::state::{self, TermsLoad};
-use crate::out::Line;
-use crate::rules::{self, empty_plan_hash, is_topic_file_path, removal_holds, terms_refusals, Class, Command, Finding, RemovalHolds};
 use crate::terms;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -30,7 +33,10 @@ impl Outcome {
     /// The events of `rows`, each named in words by `names` (`event_names_in`).
     pub fn of_rows(rows: &[ledger::Row], names: &HashMap<String, String>) -> Outcome {
         Outcome {
-            events: rows.iter().filter_map(|r| crate::out::Event::from_row(r, names)).collect(),
+            events: rows
+                .iter()
+                .filter_map(|r| crate::out::Event::from_row(r, names))
+                .collect(),
             input_findings: Vec::new(),
         }
     }
@@ -59,9 +65,17 @@ fn findings_of(findings: Vec<Finding>) -> Stops {
 /// identifier: what turns the identifiers of the rows an act wrote into
 /// words, from what the act already holds; and for a question no topic file holds (a superseded
 /// section struck) the heading its `asked` row carries.
-pub fn event_names_in(all: &[RecordFile], terms: &[terms::Term], led: &Ledger) -> HashMap<String, String> {
+pub fn event_names_in(
+    all: &[RecordFile],
+    terms: &[terms::Term],
+    led: &Ledger,
+) -> HashMap<String, String> {
     let mut names = crate::view::heading_names(all, led);
-    names.extend(terms.iter().filter_map(|t| Some((t.id.clone()?, t.name.clone()))));
+    names.extend(
+        terms
+            .iter()
+            .filter_map(|t| Some((t.id.clone()?, t.name.clone()))),
+    );
     names
 }
 
@@ -76,7 +90,10 @@ fn load_terms_or_refuse(root: &Path, cmd: Command) -> Result<terms::TermsFile, S
         TermsLoad::Missing => Err(finding(Class::Terms, msg::terms_missing())),
         TermsLoad::LoadError(e) => Err(stop(
             cmd,
-            msg::terms_load_error(&e, msg::fix_then_same_command("adrdom/terms.md so it can be read")),
+            msg::terms_load_error(
+                &e,
+                msg::fix_then_same_command("adrdom/terms.md so it can be read"),
+            ),
         )),
         TermsLoad::Ok(tf) => Ok(tf),
     }
@@ -89,23 +106,45 @@ fn load_terms_or_refuse(root: &Path, cmd: Command) -> Result<terms::TermsFile, S
 /// success, the loaded, approved terms file is returned. The one gate for
 /// `ask`, `answer`, `refuse`, and approve-of-a-topic-file (per "Does the
 /// tool stop while the terms file waits for approval?", aa475aa3 A).
-pub fn require_terms(root: &Path, led: &Ledger, rel: &str, cmd: Command) -> Result<terms::TermsFile, Stops> {
+pub fn require_terms(
+    root: &Path,
+    led: &Ledger,
+    rel: &str,
+    cmd: Command,
+) -> Result<terms::TermsFile, Stops> {
     let tf = load_terms_or_refuse(root, cmd)?;
     if !tf.errors.is_empty() {
-        return Err(tf.errors.iter().flat_map(|e| finding(Class::Terms, msg::terms_shape_error(e))).collect());
+        return Err(tf
+            .errors
+            .iter()
+            .flat_map(|e| finding(Class::Terms, msg::terms_shape_error(e)))
+            .collect());
     }
     if !state::terms_approved(led, &tf) {
         // What approve of the terms file would refuse comes first: the
         // owner's approve is named only when approve would take the file.
-        let findings = rules::terms_file_findings(root, &record::load_all(root), &terms::minted_copy(&tf), led);
+        let findings = rules::terms_file_findings(
+            root,
+            &record::load_all(root),
+            &terms::minted_copy(&tf),
+            led,
+        );
         if !findings.is_empty() {
             return Err(findings_of(findings));
         }
         let waiting = state::waiting_terms(led, &tf);
         if waiting.is_empty() {
-            return Err(finding(Class::Terms, msg::terms_not_approved(rel, crate::status::terms_file_status(led, &tf))));
+            return Err(finding(
+                Class::Terms,
+                msg::terms_not_approved(rel, crate::status::terms_file_status(led, &tf)),
+            ));
         }
-        return Err(waiting.iter().flat_map(|(name, st)| finding(Class::Terms, msg::terms_entry_waits(Some(rel), name, *st))).collect());
+        return Err(waiting
+            .iter()
+            .flat_map(|(name, st)| {
+                finding(Class::Terms, msg::terms_entry_waits(Some(rel), name, *st))
+            })
+            .collect());
     }
     Ok(tf)
 }
@@ -148,7 +187,12 @@ struct Located {
 /// section's options right after the already-answered checks and before
 /// the version check, as before answer and refuse shared this path.
 /// `do_refuse` passes `None`.
-fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> Result<Located, Stops> {
+fn locate_asked(
+    root: &Path,
+    id: &str,
+    version: &str,
+    letter: Option<char>,
+) -> Result<Located, Stops> {
     let ledger_path = root.join(crate::repo::LEDGER_PATH);
     let led = ledger::read(&ledger_path);
 
@@ -177,7 +221,10 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
         // b5ca161f-c88c-4f02-a9d9-1d406cf3a252): the ledger still says it is
         // closed, by the heading its `asked` row carries.
         if unread.is_empty() && state::is_superseded(&led, id) {
-            let heading = led.latest_asked(id).map(|r| r.detail.clone()).unwrap_or_default();
+            let heading = led
+                .latest_asked(id)
+                .map(|r| r.detail.clone())
+                .unwrap_or_default();
             return Err(stop(
                 Command::Answer,
                 msg::already_closed(&heading, crate::status::QuestionStatus::Superseded),
@@ -186,7 +233,10 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
         if unread.is_empty() {
             return Err(stop(Command::Answer, msg::id_not_found(id)));
         }
-        return Err(stop(Command::Answer, msg::id_not_found_some_unread(id, &unread)));
+        return Err(stop(
+            Command::Answer,
+            msg::id_not_found_some_unread(id, &unread),
+        ));
     };
     // `record::load` (unlike `load_all`/`load_all_via`) leaves `rf.rel` as
     // the raw path it was given, so it is recomputed here the way every
@@ -211,16 +261,27 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
             | QuestionStatus::Refused
             | QuestionStatus::Superseded
             | QuestionStatus::Withdrawn
-            | QuestionStatus::Dropped) => return Err(stop(Command::Answer, msg::already_closed(&sec.heading_text, st))),
+            | QuestionStatus::Dropped) => {
+                return Err(stop(
+                    Command::Answer,
+                    msg::already_closed(&sec.heading_text, st),
+                ))
+            }
             _ => {}
         }
         // A closing line the ledger does not hold is hand-written: the
         // finding `check` and `show` print for it, the same move.
         if sec.is_refused() {
-            return Err(finding(Class::Answers, msg::refusal_without_row(&rel, &sec.heading_text)));
+            return Err(finding(
+                Class::Answers,
+                msg::refusal_without_row(&rel, &sec.heading_text),
+            ));
         }
         if sec.answer_line.is_some() {
-            return Err(finding(Class::Answers, msg::answer_without_row(&rel, &sec.heading_text)));
+            return Err(finding(
+                Class::Answers,
+                msg::answer_without_row(&rel, &sec.heading_text),
+            ));
         }
         cur_hash = record::section_hash(&rf.lines, sec);
         // Per "Does an answer carry the version of the question the owner
@@ -248,7 +309,13 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
             let moves = || {
                 let all = record::load_all(root);
                 let index = crate::rules::RepoIndex::new(root, &all, &tf.terms, &led);
-                let j = crate::moves::Judging { root, all: &all, terms_list: &tf.terms, led: &led, index: &index };
+                let j = crate::moves::Judging {
+                    root,
+                    all: &all,
+                    terms_list: &tf.terms,
+                    led: &led,
+                    index: &index,
+                };
                 crate::moves::of_unasked_question_in(&j, &rf, &sec.heading_text, sec.is_skeleton)
             };
             let report = moves();
@@ -266,14 +333,20 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
             return Err(lines);
         }
         if version_lower != cur_hash[..record::VERSION_LEN] {
-            return Err(stop(Command::Answer, msg::stale_version(&sec.heading_text, &rel)));
+            return Err(stop(
+                Command::Answer,
+                msg::stale_version(&sec.heading_text, &rel),
+            ));
         }
         // Checked once the identifier and the version are good, so the
         // move it names runs as printed with a letter of the options.
         if let Some(letter) = letter {
             if !sec.options.iter().any(|o| o.letter == letter) {
                 let letters: Vec<char> = sec.options.iter().map(|o| o.letter).collect();
-                return Err(stop(Command::Answer, msg::letter_not_an_option(letter, &sec.heading_text, &letters, id, version)));
+                return Err(stop(
+                    Command::Answer,
+                    msg::letter_not_an_option(letter, &sec.heading_text, &letters, id, version),
+                ));
             }
         }
     }
@@ -282,7 +355,14 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
         return Err(r);
     }
 
-    Ok(Located { led, rf, idx, rel, tf, cur_hash })
+    Ok(Located {
+        led,
+        rf,
+        idx,
+        rel,
+        tf,
+        cur_hash,
+    })
 }
 
 /// The refusal when `answer` does not take question `idx` now (per "Does answer take a question
@@ -292,7 +372,14 @@ fn locate_asked(root: &Path, id: &str, version: &str, letter: Option<char>) -> R
 /// question in its chain that `answer` takes, once that question is asked and stands as asked, else
 /// the agent's `adr ask` (or the writing of a body first); a chain that ends on a refused question
 /// names the plan change and the approval.
-fn answer_gate(root: &Path, rf: &RecordFile, led: &Ledger, tf: &terms::TermsFile, idx: usize, rel: &str) -> Option<Stops> {
+fn answer_gate(
+    root: &Path,
+    rf: &RecordFile,
+    led: &Ledger,
+    tf: &terms::TermsFile,
+    idx: usize,
+    rel: &str,
+) -> Option<Stops> {
     let w = state::answer_waits(rf, idx);
     if w.is_empty() {
         return None;
@@ -308,17 +395,29 @@ fn answer_gate(root: &Path, rf: &RecordFile, led: &Ledger, tf: &terms::TermsFile
     let moves_for = |leaf: usize, unwritten: bool| {
         let all = all.get_or_init(|| record::load_all(root));
         let index = index.get_or_init(|| crate::rules::RepoIndex::new(root, all, &tf.terms, led));
-        let j = crate::moves::Judging { root, all, terms_list: &tf.terms, led, index };
+        let j = crate::moves::Judging {
+            root,
+            all,
+            terms_list: &tf.terms,
+            led,
+            index,
+        };
         crate::moves::of_unasked_question_in(&j, rf, &rf.sections[leaf].heading_text, unwritten)
     };
     for &t in &w.unanswered {
         let heading = rf.sections[t].heading_text.clone();
         waits.push(match answer_leaf(rf, t) {
-            Err(refused) => Waits::Stuck { heading, refused: rf.sections[refused].heading_text.clone() },
+            Err(refused) => Waits::Stuck {
+                heading,
+                refused: rf.sections[refused].heading_text.clone(),
+            },
             Ok(leaf) => {
                 let sec = &rf.sections[leaf];
                 match &sec.id {
-                    _ if sec.is_skeleton => Waits::Unwritten { heading, report: moves_for(leaf, true) },
+                    _ if sec.is_skeleton => Waits::Unwritten {
+                        heading,
+                        report: moves_for(leaf, true),
+                    },
                     Some(id) if crate::view::asked_text_stands(led, rf, sec) => {
                         let answer = Move::new(MoveKind::Answer {
                             id: id.clone(),
@@ -327,18 +426,26 @@ fn answer_gate(root: &Path, rf: &RecordFile, led: &Ledger, tf: &terms::TermsFile
                         });
                         Waits::Unanswered { heading, answer }
                     }
-                    _ => Waits::Asking { heading, report: moves_for(leaf, false) },
+                    _ => Waits::Asking {
+                        heading,
+                        report: moves_for(leaf, false),
+                    },
                 }
             }
         });
     }
     for &t in &w.refused_target {
-        waits.push(Waits::RefusedTarget { heading: rf.sections[t].heading_text.clone() });
+        waits.push(Waits::RefusedTarget {
+            heading: rf.sections[t].heading_text.clone(),
+        });
     }
     for &t in &w.refused_tier {
-        waits.push(Waits::RefusedTier { heading: rf.sections[t].heading_text.clone() });
+        waits.push(Waits::RefusedTier {
+            heading: rf.sections[t].heading_text.clone(),
+        });
     }
-    let (waits_line, found) = crate::moves::answer_waits(&rf.sections[idx].heading_text, rel, waits);
+    let (waits_line, found) =
+        crate::moves::answer_waits(&rf.sections[idx].heading_text, rel, waits);
     let mut lines = finding(Class::Answers, waits_line);
     lines.extend(findings_of(found));
     Some(lines)
@@ -396,7 +503,12 @@ fn finish_answer(
     let before = record::join_lines(&rf.lines);
     let path = rf.path.clone();
     let again = || {
-        msg::after_fix_owner_runs(crate::moves::command(&["adr", "answer", &format!("{}@{}", id, version), given]))
+        msg::after_fix_owner_runs(crate::moves::command(&[
+            "adr",
+            "answer",
+            &format!("{}@{}", id, version),
+            given,
+        ]))
     };
 
     let hash_end = {
@@ -419,7 +531,8 @@ fn finish_answer(
         rf = without_sections(rf, &leaving);
     }
 
-    record::save(&rf).map_err(|e| stop(Command::Answer, msg::write_failed("topic file", e, again())))?;
+    record::save(&rf)
+        .map_err(|e| stop(Command::Answer, msg::write_failed("topic file", e, again())))?;
 
     // The other topic files that hold a struck section, each as it was
     // before, so a ledger that cannot take the rows puts them all back.
@@ -429,7 +542,11 @@ fn finish_answer(
             if other.path == path || other.rel == rf.rel {
                 continue;
             }
-            if !other.sections.iter().any(|s| s.id.as_ref().is_some_and(|i| strike_ids.contains(i))) {
+            if !other
+                .sections
+                .iter()
+                .any(|s| s.id.as_ref().is_some_and(|i| strike_ids.contains(i)))
+            {
                 continue;
             }
             let was = record::join_lines(&other.lines);
@@ -441,7 +558,10 @@ fn finish_answer(
             if let Err(e) = record::save(&cut) {
                 restore_files(&others);
                 let _ = std::fs::write(&path, &before);
-                return Err(stop(Command::Answer, msg::write_failed("topic file", e, again())));
+                return Err(stop(
+                    Command::Answer,
+                    msg::write_failed("topic file", e, again()),
+                ));
             }
         }
     }
@@ -455,13 +575,28 @@ fn finish_answer(
                 Command::Answer,
                 msg::update_failed(
                     "ledger",
-                    format!("{}; {} holds the answer line and could not be put back: {}", e, rf.rel, back),
-                    Next::agent(msg::Act::Rewrites("the ledger".to_string())).then(msg::Act::Removes(format!("the answer line from {}", rf.rel)))
-                        .and_owner_runs(crate::moves::command(&["adr", "answer", &format!("{}@{}", id, version), given])),
+                    format!(
+                        "{}; {} holds the answer line and could not be put back: {}",
+                        e, rf.rel, back
+                    ),
+                    Next::agent(msg::Act::Rewrites("the ledger".to_string()))
+                        .then(msg::Act::Removes(format!(
+                            "the answer line from {}",
+                            rf.rel
+                        )))
+                        .and_owner_runs(crate::moves::command(&[
+                            "adr",
+                            "answer",
+                            &format!("{}@{}", id, version),
+                            given,
+                        ])),
                 ),
             ));
         }
-        return Err(stop(Command::Answer, msg::update_failed("ledger", e, again())));
+        return Err(stop(
+            Command::Answer,
+            msg::update_failed("ledger", e, again()),
+        ));
     }
 
     Ok(others.into_iter().map(|(_, _, rel)| rel).collect())
@@ -511,7 +646,14 @@ struct Drop {
 /// row is not removed, and neither is one that holds an answer line or has
 /// an `answered` or `refused` row (per "Does a decision change after it is
 /// answered?"): the answer refuses.
-fn collect_drops(rf: &RecordFile, rel: &str, led: &Ledger, idx: usize, id: &str, letter: char) -> Result<Vec<Drop>, Stops> {
+fn collect_drops(
+    rf: &RecordFile,
+    rel: &str,
+    led: &Ledger,
+    idx: usize,
+    id: &str,
+    letter: char,
+) -> Result<Vec<Drop>, Stops> {
     let mut found: Vec<usize> = Vec::new();
     let mut details: Vec<String> = Vec::new();
     for (j, sec) in rf.sections.iter().enumerate() {
@@ -535,7 +677,11 @@ fn collect_drops(rf: &RecordFile, rel: &str, led: &Ledger, idx: usize, id: &str,
             if j == idx || found.contains(&j) {
                 continue;
             }
-            if sec.depends.iter().any(|d| rf.dep_target(d) == Some(removed)) {
+            if sec
+                .depends
+                .iter()
+                .any(|d| rf.dep_target(d) == Some(removed))
+            {
                 found.push(j);
                 details.push(removed_id.clone().unwrap_or_default());
             }
@@ -546,12 +692,21 @@ fn collect_drops(rf: &RecordFile, rel: &str, led: &Ledger, idx: usize, id: &str,
     for (j, detail) in found.into_iter().zip(details) {
         let sec = &rf.sections[j];
         let Some(qid) = sec.id.clone() else {
-            return Err(finding(Class::Answers, msg::drop_without_id(&sec.heading_text, rel)));
+            return Err(finding(
+                Class::Answers,
+                msg::drop_without_id(&sec.heading_text, rel),
+            ));
         };
         let closed = sec.answer_value.is_some()
-            || led.rows.iter().any(|r| r.id == qid && matches!(r.event.as_str(), "answered" | "refused"));
+            || led
+                .rows
+                .iter()
+                .any(|r| r.id == qid && matches!(r.event.as_str(), "answered" | "refused"));
         if closed {
-            return Err(finding(Class::Answers, msg::drop_of_closed(&sec.heading_text, sec.is_refused(), rel)));
+            return Err(finding(
+                Class::Answers,
+                msg::drop_of_closed(&sec.heading_text, sec.is_refused(), rel),
+            ));
         }
         let hash = record::question_hash(rf, sec);
         let approved = led
@@ -559,31 +714,57 @@ fn collect_drops(rf: &RecordFile, rel: &str, led: &Ledger, idx: usize, id: &str,
             .iter()
             .any(|r| r.event == "approved" && r.id == qid && r.hash == hash && r.detail == rel);
         if !approved {
-            return Err(finding(Class::Answers, msg::drop_not_approved(&sec.heading_text, rel)));
+            return Err(finding(
+                Class::Answers,
+                msg::drop_not_approved(&sec.heading_text, rel),
+            ));
         }
-        out.push(Drop { id: qid, hash, detail });
+        out.push(Drop {
+            id: qid,
+            hash,
+            detail,
+        });
     }
     Ok(out)
 }
 
 pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<Outcome, Stops> {
-    let Located { led, rf, idx, tf, cur_hash, rel } = locate_asked(root, id, version, Some(letter))?;
+    let Located {
+        led,
+        rf,
+        idx,
+        tf,
+        cur_hash,
+        rel,
+    } = locate_asked(root, id, version, Some(letter))?;
 
     let supersedes_val;
     {
         let sec = &rf.sections[idx];
         let Some(terms_line_idx) = sec.terms_line else {
-            return Err(finding(Class::Terms, msg::no_terms_line(&rel, id, &sec.heading_text)));
+            return Err(finding(
+                Class::Terms,
+                msg::no_terms_line(&rel, id, &sec.heading_text),
+            ));
         };
-        let problems = terms::validate_pairs(rf.lines[terms_line_idx].trim_end(), &tf)
-            .map_err(|_| finding(Class::Terms, msg::malformed_terms_line(&rel, id, &sec.heading_text)))?;
+        let problems =
+            terms::validate_pairs(rf.lines[terms_line_idx].trim_end(), &tf).map_err(|_| {
+                finding(
+                    Class::Terms,
+                    msg::malformed_terms_line(&rel, id, &sec.heading_text),
+                )
+            })?;
         if let Some(p) = problems.first() {
             return Err(finding(
                 Class::Terms,
                 match &p.kind {
-                    terms::ProblemKind::Gone => {
-                        msg::terms_line_names_gone_term(&rel, id, &sec.heading_text, &p.uuid, &p.word)
-                    }
+                    terms::ProblemKind::Gone => msg::terms_line_names_gone_term(
+                        &rel,
+                        id,
+                        &sec.heading_text,
+                        &p.uuid,
+                        &p.word,
+                    ),
                     terms::ProblemKind::Retired(name) => {
                         msg::terms_line_names_retired_term(&rel, id, &sec.heading_text, name)
                     }
@@ -599,7 +780,15 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
     {
         let cross_file_headings = depends::cross_file_heading_index(&all, &led);
         let names = crate::view::heading_names(&all, &led);
-        let refusals = rules::supersedes_refusals(&rf.rel, &rf, &cross_file_headings, &names, &all, &led, Some(idx));
+        let refusals = rules::supersedes_refusals(
+            &rf.rel,
+            &rf,
+            &cross_file_headings,
+            &names,
+            &all,
+            &led,
+            Some(idx),
+        );
         if !refusals.is_empty() {
             return Err(findings_of(refusals));
         }
@@ -670,7 +859,10 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
     let names = event_names_in(&all, &tf.terms, &led);
     let mut outcome = Outcome::of_rows(&rows, &names);
     for e in &mut outcome.events {
-        if let crate::out::Event::Answered { heading, sentence, .. } = e {
+        if let crate::out::Event::Answered {
+            heading, sentence, ..
+        } = e
+        {
             *heading = heading_for_print.clone();
             *sentence = sentence_for_print.clone();
         }
@@ -683,7 +875,18 @@ pub fn do_answer(root: &Path, id: &str, version: &str, letter: char) -> Result<O
     strike_ids.extend(superseded_ids.iter().cloned());
     strike_ids.sort();
     strike_ids.dedup();
-    let written = finish_answer(root, id, version, &letter_str, rf, idx, &letter_str, rows, &drop_ids, &strike_ids)?;
+    let written = finish_answer(
+        root,
+        id,
+        version,
+        &letter_str,
+        rf,
+        idx,
+        &letter_str,
+        rows,
+        &drop_ids,
+        &strike_ids,
+    )?;
     for path in written {
         outcome.events.push(crate::out::Event::FileWritten { path });
     }
@@ -706,7 +909,13 @@ pub fn do_refuse(root: &Path, id: &str, version: &str) -> Result<Outcome, Stops>
     // version, and ledger-state checks as the letter path (`locate_asked`).
     // The section's own terms-line/pairing checks are not shared (5), so
     // the returned terms file has no further use here.
-    let Located { led, rf, idx, cur_hash, .. } = locate_asked(root, id, version, None)?;
+    let Located {
+        led,
+        rf,
+        idx,
+        cur_hash,
+        ..
+    } = locate_asked(root, id, version, None)?;
 
     let heading_for_print = rf.sections[idx].heading_text.clone();
 
@@ -721,7 +930,18 @@ pub fn do_refuse(root: &Path, id: &str, version: &str) -> Result<Outcome, Stops>
 
     let mut outcome = Outcome::of_rows(std::slice::from_ref(&row), &HashMap::new());
     let strike_ids = state::superseded_ids(&led);
-    let written = finish_answer(root, id, version, "refuse", rf, idx, "refused", vec![row], &[], &strike_ids)?;
+    let written = finish_answer(
+        root,
+        id,
+        version,
+        "refuse",
+        rf,
+        idx,
+        "refused",
+        vec![row],
+        &[],
+        &strike_ids,
+    )?;
     for path in written {
         outcome.events.push(crate::out::Event::FileWritten { path });
     }
@@ -748,7 +968,10 @@ pub fn do_approve(root: &Path, file: &Path, entry: Option<&str>) -> Result<Outco
         return do_approve_terms(root, file, &led, &ledger_path, entry);
     }
     if entry.is_some() {
-        return Err(finding(Class::Terms, msg::approve_entry_on_other_file(&rel)));
+        return Err(finding(
+            Class::Terms,
+            msg::approve_entry_on_other_file(&rel),
+        ));
     }
     if rules::is_blame_file_path(&rel) {
         do_approve_blame(root, file, &rel, &led, &ledger_path)
@@ -759,7 +982,6 @@ pub fn do_approve(root: &Path, file: &Path, entry: Option<&str>) -> Result<Outco
     }
 }
 
-
 /// `file` as a path from the repository root, read the way the shell that
 /// ran the command reads it (relative to the current directory unless
 /// absolute, `.` and `..` resolved), or the refusal when it is outside the
@@ -767,12 +989,18 @@ pub fn do_approve(root: &Path, file: &Path, entry: Option<&str>) -> Result<Outco
 /// adrdom/decisions, adrdom/terms.md, or a blame file under adrdom/blame.
 fn approved_rel(root: &Path, file: &Path) -> Result<String, Stops> {
     let Some(rel) = state::given_rel(root, file) else {
-        return Err(stop(Command::Approve, msg::approve_not_a_file_approve_takes(&file.display().to_string())));
+        return Err(stop(
+            Command::Approve,
+            msg::approve_not_a_file_approve_takes(&file.display().to_string()),
+        ));
     };
     if rules::approve_takes(&rel) {
         Ok(rel)
     } else {
-        Err(stop(Command::Approve, msg::approve_not_a_file_approve_takes(&rel)))
+        Err(stop(
+            Command::Approve,
+            msg::approve_not_a_file_approve_takes(&rel),
+        ))
     }
 }
 
@@ -783,15 +1011,28 @@ fn approved_rel(root: &Path, file: &Path) -> Result<String, Stops> {
 /// approved plan for: a draft never approved leaves with no owner act.
 /// Writes the approved and context rows over an empty plan and empty prose,
 /// and a withdrawn row for each refused id left in no file.
-fn do_approve_removal(root: &Path, rel: &str, led: &Ledger, ledger_path: &Path) -> Result<Outcome, Stops> {
+fn do_approve_removal(
+    root: &Path,
+    rel: &str,
+    led: &Ledger,
+    ledger_path: &Path,
+) -> Result<Outcome, Stops> {
     if led.latest_for_path("approved", rel).is_none() {
         return Err(stop(Command::Approve, msg::removal_not_a_topic_file(rel)));
     }
     let all_records: Vec<RecordFile> = record::load_all(root);
-    let present_ids: HashSet<String> = rules::held_ids(&all_records).into_iter().map(str::to_string).collect();
+    let present_ids: HashSet<String> = rules::held_ids(&all_records)
+        .into_iter()
+        .map(str::to_string)
+        .collect();
     let RemovalHolds { held, .. } = removal_holds(root, rel, led, &present_ids);
 
-    let refusals = findings_of(rules::judge_removed_topic_file(root, rel, led, &present_ids));
+    let refusals = findings_of(rules::judge_removed_topic_file(
+        root,
+        rel,
+        led,
+        &present_ids,
+    ));
     if !refusals.is_empty() {
         return Err(refusals);
     }
@@ -826,11 +1067,14 @@ fn do_approve_removal(root: &Path, rel: &str, led: &Ledger, ledger_path: &Path) 
     }
     rows.extend(withdrawn_rows);
     ledger::append(ledger_path, &rows).map_err(|e| {
-        stop(Command::Approve, msg::update_failed(
-            "ledger",
-            e,
-            msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
-        ))
+        stop(
+            Command::Approve,
+            msg::update_failed(
+                "ledger",
+                e,
+                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+            ),
+        )
     })?;
     Ok(Outcome::of_rows(&rows, &HashMap::new()))
 }
@@ -841,9 +1085,19 @@ fn do_approve_removal(root: &Path, rel: &str, led: &Ledger, ledger_path: &Path) 
 fn insert_id_line(content: &str, id_line: &str) -> Option<String> {
     let first = content.find('\n')?;
     let second = first + 1 + content[first + 1..].find('\n')?;
-    let eol = if content[..second].ends_with('\r') { "\r\n" } else { "\n" };
+    let eol = if content[..second].ends_with('\r') {
+        "\r\n"
+    } else {
+        "\n"
+    };
     let at = second + 1;
-    Some(format!("{}{}{}{}", &content[..at], id_line, eol, &content[at..]))
+    Some(format!(
+        "{}{}{}{}",
+        &content[..at],
+        id_line,
+        eol,
+        &content[at..]
+    ))
 }
 
 /// `adrdom/blame/<name>.md` (per "Does the owner approve a blame file?",
@@ -863,13 +1117,20 @@ fn do_approve_blame(
     ledger_path: &Path,
 ) -> Result<Outcome, Stops> {
     let content = std::fs::read_to_string(file).map_err(|e| {
-        stop(Command::Approve, msg::read_failed(
-            rel,
-            e,
-            msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
-        ))
+        stop(
+            Command::Approve,
+            msg::read_failed(
+                rel,
+                e,
+                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+            ),
+        )
     })?;
-    let bf = blame::parse(file.to_path_buf(), rel.to_string(), record::split_lines(&content));
+    let bf = blame::parse(
+        file.to_path_buf(),
+        rel.to_string(),
+        record::split_lines(&content),
+    );
 
     // One judgement of the file against its origin, the one `check` and
     // `show` read (`blame::file_state`, `rules::judge_blame_file`): approve
@@ -886,7 +1147,11 @@ fn do_approve_blame(
     // An origin that is there and cannot be read or hashed holds the file
     // from approval, as it holds `check`.
     if !st.stops.is_empty() {
-        return Err(st.stops.iter().flat_map(|m| stop(Command::Approve, m)).collect());
+        return Err(st
+            .stops
+            .iter()
+            .flat_map(|m| stop(Command::Approve, m))
+            .collect());
     }
     // The origin is gone and the file is approved (`file_state` names it
     // while the file awaits approval): the file stands at its approval, and
@@ -908,11 +1173,14 @@ fn do_approve_blame(
         // Only the id line is added to the bytes on disk, with the line
         // ending of the line above it (d2851ea1 A).
         written = Some(insert_id_line(&content, &id_line).ok_or_else(|| {
-            stop(Command::Approve, msg::write_failed(
-                &file.display().to_string(),
-                "no second line to insert the id line after",
-                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
-            ))
+            stop(
+                Command::Approve,
+                msg::write_failed(
+                    &file.display().to_string(),
+                    "no second line to insert the id line after",
+                    msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+                ),
+            )
         })?);
     }
 
@@ -933,27 +1201,32 @@ fn do_approve_blame(
             version: crate::version::VERSION.to_string(),
         };
         ledger::append(ledger_path, std::slice::from_ref(&row)).map_err(|e| {
-            stop(Command::Approve, msg::update_failed(
-                "ledger",
-                e,
-                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
-            ))
+            stop(
+                Command::Approve,
+                msg::update_failed(
+                    "ledger",
+                    e,
+                    msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+                ),
+            )
         })?;
         rows.push(row);
     }
     if let Some(written) = written {
         std::fs::write(&bf.path, written).map_err(|e| {
-            stop(Command::Approve, msg::write_failed(
-                &file.display().to_string(),
-                e,
-                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
-            ))
+            stop(
+                Command::Approve,
+                msg::write_failed(
+                    &file.display().to_string(),
+                    e,
+                    msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+                ),
+            )
         })?;
     }
 
     Ok(Outcome::of_rows(&rows, &HashMap::new()))
 }
-
 
 /// `adrdom/terms.md` (per "Does the owner approve the terms file as a
 /// whole?"): the six steps below, in order, nothing written to disk before
@@ -969,14 +1242,21 @@ fn do_approve_terms(
     entry: Option<&str>,
 ) -> Result<Outcome, Stops> {
     // The command that runs this approve again, named after a failure.
-    let again = || entry.map(msg::approve_entry_cmd).unwrap_or_else(|| crate::moves::Cmd::fixed("adr approve adrdom/terms.md"));
+    let again = || {
+        entry
+            .map(msg::approve_entry_cmd)
+            .unwrap_or_else(|| crate::moves::Cmd::fixed("adr approve adrdom/terms.md"))
+    };
     // Step 1: parse.
     let mut tf = terms::load(file).map_err(|e| {
-        stop(Command::Approve, msg::read_failed(
-            &file.display().to_string(),
-            e,
-            msg::after_fix_owner_runs(again()),
-        ))
+        stop(
+            Command::Approve,
+            msg::read_failed(
+                &file.display().to_string(),
+                e,
+                msg::after_fix_owner_runs(again()),
+            ),
+        )
     })?;
 
     // Every topic file, parsed once here and reused by `terms_refusals`
@@ -995,14 +1275,24 @@ fn do_approve_terms(
 
     // Steps 1 (shape, post-mint), 3 (cycles), 4 (dependents), 5 (banned):
     // every refusal, all at once.
-    let (refusals, pairs_per_entry) =
-        terms_refusals(root, &records, &tf, led, &repo::Source::WorkingTree, true, &approved_plans);
+    let (refusals, pairs_per_entry) = terms_refusals(
+        root,
+        &records,
+        &tf,
+        led,
+        &repo::Source::WorkingTree,
+        true,
+        &approved_plans,
+    );
     let mut refusals = refusals;
     // Only an approve that retires or removes a term needs to read the
     // asked questions' terms lines; one that only adds or rewords does not.
     if state::approve_retires_or_removes(led, &tf) {
         for (rel, heading) in state::unreadable_asked_terms_lines(&records, led) {
-            refusals.push(Finding::said(Class::Terms, msg::asked_terms_line_unreadable(&rel, &heading)));
+            refusals.push(Finding::said(
+                Class::Terms,
+                msg::asked_terms_line_unreadable(&rel, &heading),
+            ));
         }
     }
     if !refusals.is_empty() {
@@ -1013,13 +1303,22 @@ fn do_approve_terms(
     // that wait?" (da0dc8b1 A): the name of one entry that waits, new,
     // changed or removed, in any order; with no name, only a file none of
     // whose entries waits (it differs in order or blank lines alone).
-    let waiting: Vec<String> = state::waiting_terms(led, &tf).into_iter().map(|(name, _)| name).collect();
+    let waiting: Vec<String> = state::waiting_terms(led, &tf)
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect();
     match entry {
         None if !waiting.is_empty() => {
-            return Err(finding(Class::Terms, msg::approve_terms_names_no_entry(&waiting)));
+            return Err(finding(
+                Class::Terms,
+                msg::approve_terms_names_no_entry(&waiting),
+            ));
         }
         Some(name) if !waiting.iter().any(|w| w == name) => {
-            return Err(finding(Class::Terms, msg::approve_terms_entry_not_waiting(name, &waiting)));
+            return Err(finding(
+                Class::Terms,
+                msg::approve_terms_entry_not_waiting(name, &waiting),
+            ));
         }
         _ => {}
     }
@@ -1033,11 +1332,19 @@ fn do_approve_terms(
         .terms
         .iter()
         .filter(|t| named(&t.name))
-        .filter_map(|t| t.id.clone().map(|id| (id, t.name.clone(), terms::term_hash(t))))
-        .filter(|(id, _, hash)| led.latest_for_id("term", id).is_none_or(|r| r.hash != *hash))
+        .filter_map(|t| {
+            t.id.clone()
+                .map(|id| (id, t.name.clone(), terms::term_hash(t)))
+        })
+        .filter(|(id, _, hash)| {
+            led.latest_for_id("term", id)
+                .is_none_or(|r| r.hash != *hash)
+        })
         .collect();
-    let removed_rows_due: Vec<(String, String)> =
-        state::removed_terms(led, &tf).into_iter().filter(|(_, name)| named(name)).collect();
+    let removed_rows_due: Vec<(String, String)> = state::removed_terms(led, &tf)
+        .into_iter()
+        .filter(|(_, name)| named(name))
+        .collect();
 
     // Step 6: write the file. `terms:` lines use the fresh pairs computed
     // above, one term at a time, in the same order as `tf.terms`.
@@ -1050,11 +1357,14 @@ fn do_approve_terms(
     let terms_before = std::fs::read_to_string(&tf.path).ok();
     let terms_changed = terms_before.as_deref() != Some(tf.lines.join("\n").as_str());
     terms::save(&tf).map_err(|e| {
-        stop(Command::Approve, msg::write_failed(
-            &file.display().to_string(),
-            e,
-            msg::after_fix_owner_runs(again()),
-        ))
+        stop(
+            Command::Approve,
+            msg::write_failed(
+                &file.display().to_string(),
+                e,
+                msg::after_fix_owner_runs(again()),
+            ),
+        )
     })?;
 
     // Per "Does approve write the terms brief?" (fcab4bf9 A): written on
@@ -1066,7 +1376,8 @@ fn do_approve_terms(
     // (the problem fcab4bf9 settles); the brief of the last approval stays.
     let brief_path = root.join(crate::repo::TERMS_BRIEF_PATH);
     let brief_before = std::fs::read_to_string(&brief_path).ok();
-    let brief_changed = file_settles && brief_before.as_deref() != Some(terms::brief_text(&tf).as_str());
+    let brief_changed =
+        file_settles && brief_before.as_deref() != Some(terms::brief_text(&tf).as_str());
     let write_brief = || -> std::io::Result<()> {
         if let Some(dir) = brief_path.parent() {
             std::fs::create_dir_all(dir)?;
@@ -1075,11 +1386,14 @@ fn do_approve_terms(
     };
     if file_settles {
         write_brief().map_err(|e| {
-            stop(Command::Approve, msg::write_failed(
-                crate::repo::TERMS_BRIEF_PATH,
-                e,
-                msg::after_fix_owner_runs(again()),
-            ))
+            stop(
+                Command::Approve,
+                msg::write_failed(
+                    crate::repo::TERMS_BRIEF_PATH,
+                    e,
+                    msg::after_fix_owner_runs(again()),
+                ),
+            )
         })?;
     }
 
@@ -1096,11 +1410,10 @@ fn do_approve_terms(
         })
         .collect();
     let append_failed = |e: std::io::Error| {
-        stop(Command::Approve, msg::update_failed(
-            "ledger",
-            e,
-            msg::after_fix_owner_runs(again()),
-        ))
+        stop(
+            Command::Approve,
+            msg::update_failed("ledger", e, msg::after_fix_owner_runs(again())),
+        )
     };
 
     // The file already matching the ledger's latest `terms` row writes
@@ -1157,14 +1470,17 @@ fn do_approve_terms(
     // print?", 069a6b4a A, one line per event it wrote).
     let mut outcome = Outcome::of_rows(&written, &HashMap::new());
     if terms_changed && written.is_empty() {
-        outcome.events.push(crate::out::Event::FileWritten { path: crate::repo::TERMS_PATH.to_string() });
+        outcome.events.push(crate::out::Event::FileWritten {
+            path: crate::repo::TERMS_PATH.to_string(),
+        });
     }
     if brief_changed {
-        outcome.events.push(crate::out::Event::FileWritten { path: crate::repo::TERMS_BRIEF_PATH.to_string() });
+        outcome.events.push(crate::out::Event::FileWritten {
+            path: crate::repo::TERMS_BRIEF_PATH.to_string(),
+        });
     }
     Ok(outcome)
 }
-
 
 /// Inserts a freshly minted id directly after each skeleton section's
 /// `depends:` line (or its `supersedes:`, `unrelated:` or `blame:` line,
@@ -1180,13 +1496,17 @@ fn insert_missing_ids(rf: &RecordFile, mut work_lines: Vec<String>) -> Result<Ve
             let sec = &rf.sections[i];
             let depends_idx = (sec.start + 1..sec.end)
                 .find(|&j| work_lines[j].starts_with("depends: "))
-                .ok_or_else(|| finding(Class::Plan, msg::no_depends_line_bare(&sec.heading_text)))?;
+                .ok_or_else(|| {
+                    finding(Class::Plan, msg::no_depends_line_bare(&sec.heading_text))
+                })?;
             // The plan lines come first, then the id: after the
             // `supersedes:`, `unrelated:` and `blame:` lines when the heading
             // has them (directly under `depends:`), else after `depends:`.
             let mut after = depends_idx;
             while work_lines.get(after + 1).is_some_and(|l| {
-                l.starts_with("supersedes: ") || l.starts_with("unrelated: ") || l.starts_with("blame: ")
+                l.starts_with("supersedes: ")
+                    || l.starts_with("unrelated: ")
+                    || l.starts_with("blame: ")
             }) {
                 after += 1;
             }
@@ -1214,11 +1534,14 @@ fn do_approve_record(
     ledger_path: &Path,
 ) -> Result<Outcome, Stops> {
     let mut rf = record::load(file).map_err(|e| {
-        stop(Command::Approve, msg::read_failed(
-            rel,
-            e,
-            msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
-        ))
+        stop(
+            Command::Approve,
+            msg::read_failed(
+                rel,
+                e,
+                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+            ),
+        )
     })?;
     // The file as the repository names it, whatever path it was loaded by:
     // every rule that compares a ledger row's path with `rf.rel` reads the
@@ -1296,7 +1619,12 @@ fn do_approve_record(
         shared: None,
         directory: true,
     };
-    let refusals = findings_of(rules::judge_topic_file(&judge).into_iter().chain(rules::judge_records(&all_records, led)).collect());
+    let refusals = findings_of(
+        rules::judge_topic_file(&judge)
+            .into_iter()
+            .chain(rules::judge_records(&all_records, led))
+            .collect(),
+    );
 
     // Per "Does approve turn the supersedes line into identifiers?" (B):
     // each entry of a `supersedes:` line is the heading of a current
@@ -1317,14 +1645,18 @@ fn do_approve_record(
         }
         // A target that names no decision (or several) is `record_refusals`'
         // refusal above; only the ones that resolve are turned.
-        let ids: Vec<String> = depends::supersedes_entries(&sec.supersedes, &cross_file_headings, led)
-            .iter()
-            .filter_map(|old| depends::resolve_supersedes(old, &cross_file_headings, led).ok())
-            .collect();
+        let ids: Vec<String> =
+            depends::supersedes_entries(&sec.supersedes, &cross_file_headings, led)
+                .iter()
+                .filter_map(|old| depends::resolve_supersedes(old, &cross_file_headings, led).ok())
+                .collect();
         supersedes_ids.insert(i, ids);
     }
 
-    let present_ids: HashSet<String> = rules::held_ids(&all_records).into_iter().map(str::to_string).collect();
+    let present_ids: HashSet<String> = rules::held_ids(&all_records)
+        .into_iter()
+        .map(str::to_string)
+        .collect();
     let state_ids = led.state_ids();
 
     // One time for every row this run writes (per "Does a command write a
@@ -1342,11 +1674,12 @@ fn do_approve_record(
     // An id of a removed file awaiting its removal's approval is settled by
     // that approval (per "What may leave a topic file by a plan change?"),
     // never by the approval of an unrelated file.
-    let removed_held: HashSet<String> = rules::removal_awaiting(led, &|rel| root.join(rel).exists())
-        .iter()
-        .flat_map(|rel| removal_holds(root, rel, led, &present_ids).held)
-        .map(|(id, _)| id)
-        .collect();
+    let removed_held: HashSet<String> =
+        rules::removal_awaiting(led, &|rel| root.join(rel).exists())
+            .iter()
+            .flat_map(|rel| removal_holds(root, rel, led, &present_ids).held)
+            .map(|(id, _)| id)
+            .collect();
     for id in &state_ids {
         if present_ids.contains(id) || removed_held.contains(id) {
             continue;
@@ -1384,7 +1717,8 @@ fn do_approve_record(
 
     let sections_snapshot = work_rf.sections.clone();
     for sec in &sections_snapshot {
-        let Some(line_idx) = (sec.start + 1..sec.end).find(|&j| work_rf.lines[j].starts_with("depends: "))
+        let Some(line_idx) =
+            (sec.start + 1..sec.end).find(|&j| work_rf.lines[j].starts_with("depends: "))
         else {
             continue;
         };
@@ -1398,8 +1732,12 @@ fn do_approve_record(
     // The `supersedes:` line, kept where the writer put it (under `id:`
     // and `terms:` once asked), holds ids from here on.
     for (i, sec) in sections_snapshot.iter().enumerate() {
-        let Some(ids) = supersedes_ids.get(&i) else { continue };
-        if let Some(j) = (sec.start + 1..sec.end).find(|&j| work_rf.lines[j].starts_with("supersedes: ")) {
+        let Some(ids) = supersedes_ids.get(&i) else {
+            continue;
+        };
+        if let Some(j) =
+            (sec.start + 1..sec.end).find(|&j| work_rf.lines[j].starts_with("supersedes: "))
+        {
             work_rf.lines[j] = format!("supersedes: {}", ids.join(", "));
         }
     }
@@ -1410,12 +1748,27 @@ fn do_approve_record(
         if sec.unrelated.is_empty() || !crate::status::question_status(led, sec).is_unasked() {
             continue;
         }
-        let Some(j) = (sec.start + 1..sec.end).find(|&j| work_rf.lines[j].starts_with("unrelated: ")) else {
+        let Some(j) =
+            (sec.start + 1..sec.end).find(|&j| work_rf.lines[j].starts_with("unrelated: "))
+        else {
             continue;
         };
         let mut ids: Vec<String> = Vec::new();
-        for e in crate::plan::section_unrelated_entries(i, &work_rf, terms_list, &cross_file_headings, led) {
-            let id = match crate::plan::resolve_ref(&e, &work_rf, i, terms_list, &cross_file_headings, led) {
+        for e in crate::plan::section_unrelated_entries(
+            i,
+            &work_rf,
+            terms_list,
+            &cross_file_headings,
+            led,
+        ) {
+            let id = match crate::plan::resolve_ref(
+                &e,
+                &work_rf,
+                i,
+                terms_list,
+                &cross_file_headings,
+                led,
+            ) {
                 Ok(crate::plan::Target::Decision(id))
                 | Ok(crate::plan::Target::Term(id))
                 | Ok(crate::plan::Target::Dropped(id)) => id,
@@ -1437,14 +1790,18 @@ fn do_approve_record(
         if sec.blame.is_empty() || !crate::status::open_to_ask_text(led, &rf, &rf.sections[i]) {
             continue;
         }
-        let Some(j) = (sec.start + 1..sec.end).find(|&j| work_rf.lines[j].starts_with("blame: ")) else {
+        let Some(j) = (sec.start + 1..sec.end).find(|&j| work_rf.lines[j].starts_with("blame: "))
+        else {
             continue;
         };
         let entries: Vec<String> = sec
             .blame
             .iter()
             .map(|e| {
-                let file = blame_index.named(&e.file).and_then(|b| b.id()).unwrap_or(&e.file);
+                let file = blame_index
+                    .named(&e.file)
+                    .and_then(|b| b.id())
+                    .unwrap_or(&e.file);
                 std::iter::once(file.to_string())
                     .chain(e.ranges.iter().map(|(from, to)| format!("{}-{}", from, to)))
                     .collect::<Vec<_>>()
@@ -1465,11 +1822,14 @@ fn do_approve_record(
     let bytes_change = std::fs::read_to_string(&work_rf.path).ok().as_deref()
         != Some(record::join_lines(&work_rf.lines).as_str());
     record::save(&work_rf).map_err(|e| {
-        stop(Command::Approve, msg::write_failed(
-            &file.display().to_string(),
-            e,
-            msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
-        ))
+        stop(
+            Command::Approve,
+            msg::write_failed(
+                &file.display().to_string(),
+                e,
+                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+            ),
+        )
     })?;
 
     let mut rows: Vec<ledger::Row> = Vec::new();
@@ -1507,11 +1867,20 @@ fn do_approve_record(
             continue;
         }
         for d in &sec.depends {
-            let record::Dep::Id { id: tid, set: Some(set) } = d else { continue };
+            let record::Dep::Id {
+                id: tid,
+                set: Some(set),
+            } = d
+            else {
+                continue;
+            };
             let waiting = work_rf.sections.iter().any(|t| t.id.as_ref() == Some(tid))
                 && led.latest_state(tid).is_some_and(|r| r.event == "asked");
             let hash = record::assumes_hash(dep_id, set);
-            let written = led.assumes_for(tid).iter().any(|r| &r.detail == dep_id && r.hash == hash);
+            let written = led
+                .assumes_for(tid)
+                .iter()
+                .any(|r| &r.detail == dep_id && r.hash == hash);
             if waiting && !written {
                 rows.push(ledger::Row {
                     time: write_time.clone(),
@@ -1539,10 +1908,8 @@ fn do_approve_record(
         });
     }
 
-    let context_changed = led
-        .latest_for_path("context", rel)
-        .map(|r| r.hash.as_str())
-        != Some(context_hash.as_str());
+    let context_changed =
+        led.latest_for_path("context", rel).map(|r| r.hash.as_str()) != Some(context_hash.as_str());
     if context_changed {
         rows.push(ledger::Row {
             time: write_time.clone(),
@@ -1555,32 +1922,45 @@ fn do_approve_record(
     }
 
     ledger::append(ledger_path, &rows).map_err(|e| {
-        stop(Command::Approve, msg::update_failed(
-            "ledger",
-            e,
-            msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
-        ))
+        stop(
+            Command::Approve,
+            msg::update_failed(
+                "ledger",
+                e,
+                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+            ),
+        )
     })?;
 
     // `withdrawn_rows` was computed, and any refusal already returned,
     // above -- before either write this function has made so far.
     if !withdrawn_rows.is_empty() {
         ledger::append(ledger_path, &withdrawn_rows).map_err(|e| {
-            stop(Command::Approve, msg::update_failed(
-                "ledger",
-                e,
-                msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
-            ))
+            stop(
+                Command::Approve,
+                msg::update_failed(
+                    "ledger",
+                    e,
+                    msg::after_fix_owner_runs(crate::moves::command(&["adr", "approve", &*rel])),
+                ),
+            )
         })?;
     }
     rows.extend(withdrawn_rows);
 
-    let mut outcome = Outcome::of_rows(&rows, &crate::view::heading_texts(std::slice::from_ref(&work_rf)));
+    let mut outcome = Outcome::of_rows(
+        &rows,
+        &crate::view::heading_texts(std::slice::from_ref(&work_rf)),
+    );
     // A file written that no row of this run covers is named by one line of
     // its own (per "What does a command that writes print?", 069a6b4a A).
-    let covered = rows.iter().any(|r| (r.event == "approved" || r.event == "context") && r.detail == rel);
+    let covered = rows
+        .iter()
+        .any(|r| (r.event == "approved" || r.event == "context") && r.detail == rel);
     if bytes_change && !covered {
-        outcome.events.push(crate::out::Event::FileWritten { path: rel.to_string() });
+        outcome.events.push(crate::out::Event::FileWritten {
+            path: rel.to_string(),
+        });
     }
     Ok(outcome)
 }
@@ -1611,7 +1991,9 @@ fn rewrite_dep_entry(
                 .flatten()
                 .and_then(|target| match target {
                     DepTarget::Heading(idx) => work_rf.sections[idx].id.clone(),
-                    DepTarget::Term(id) | DepTarget::Decision(id) | DepTarget::Struck(id) => Some(id),
+                    DepTarget::Term(id) | DepTarget::Decision(id) | DepTarget::Struck(id) => {
+                        Some(id)
+                    }
                 });
             match resolved {
                 Some(id) => format!("{}{}", id, record::set_suffix(set)),
@@ -1636,7 +2018,10 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, Stops> {
     let mut to_remove: Vec<String> = Vec::new();
     let mut not_banned = 0;
     for line in input.lines() {
-        let hashes: Vec<String> = crate::banned::tokenize(line).iter().map(|t| record::sha256_hex(t)).collect();
+        let hashes: Vec<String> = crate::banned::tokenize(line)
+            .iter()
+            .map(|t| record::sha256_hex(t))
+            .collect();
         if hashes.is_empty() {
             continue;
         }
@@ -1653,10 +2038,17 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, Stops> {
     to_remove.sort();
     // The words given that were not banned: a finding on the input, as a
     // count of the words given, never dropped without a word.
-    let input_findings: Vec<Line> = if not_banned == 0 { Vec::new() } else { stop(Command::Unban, msg::unban_not_banned(not_banned)) };
+    let input_findings: Vec<Line> = if not_banned == 0 {
+        Vec::new()
+    } else {
+        stop(Command::Unban, msg::unban_not_banned(not_banned))
+    };
 
     if to_remove.is_empty() {
-        return Ok(Outcome { events: Vec::new(), input_findings });
+        return Ok(Outcome {
+            events: Vec::new(),
+            input_findings,
+        });
     }
 
     // One time for every row this run writes (per "Does a command write a
@@ -1676,11 +2068,29 @@ pub fn do_unban(root: &Path, input: &str) -> Result<Outcome, Stops> {
             version: crate::version::VERSION.to_string(),
         })
         .collect();
-    ledger::append(&ledger_path, &rows)
-        .map_err(|e| stop(Command::Unban, msg::update_failed("ledger", e, msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr unban")))))?;
-    let remaining: Vec<(String, Option<String>)> = banned_now.into_iter().filter(|(h, _)| !to_remove.contains(h)).collect();
+    ledger::append(&ledger_path, &rows).map_err(|e| {
+        stop(
+            Command::Unban,
+            msg::update_failed(
+                "ledger",
+                e,
+                msg::after_fix_owner_runs(crate::moves::Cmd::fixed("adr unban")),
+            ),
+        )
+    })?;
+    let remaining: Vec<(String, Option<String>)> = banned_now
+        .into_iter()
+        .filter(|(h, _)| !to_remove.contains(h))
+        .collect();
     crate::banned::write_sorted(&banned_path, remaining).map_err(|e| {
-        stop(Command::Unban, msg::update_failed("banned list", e, msg::after_fix_agent_runs(crate::moves::Cmd::fixed("adr ban --rebuild"))))
+        stop(
+            Command::Unban,
+            msg::update_failed(
+                "banned list",
+                e,
+                msg::after_fix_agent_runs(crate::moves::Cmd::fixed("adr ban --rebuild")),
+            ),
+        )
     })?;
 
     let mut outcome = Outcome::of_rows(&rows, &HashMap::new());

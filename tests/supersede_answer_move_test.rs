@@ -60,14 +60,24 @@ fn approve(dir: &Path, name: &str) -> std::process::Output {
 
 fn approve_ok(dir: &Path, name: &str) {
     let out = approve(dir, name);
-    assert!(out.status.success(), "approve {} failed: {}", name, stderr(&out));
+    assert!(
+        out.status.success(),
+        "approve {} failed: {}",
+        name,
+        stderr(&out)
+    );
 }
 
 /// asks the file, answers `heading` A.
 fn ask_answer(dir: &Path, name: &str, heading: &str) {
     let p = dir.join(rel(name));
     let out = adr(dir, &["ask", p.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask {} failed: {}", name, stderr(&out));
+    assert!(
+        out.status.success(),
+        "ask {} failed: {}",
+        name,
+        stderr(&out)
+    );
     let id = id_of(&p, heading);
     let out = adr_answer(dir, &id, "A");
     assert!(out.status.success(), "answer failed: {}", stderr(&out));
@@ -82,14 +92,23 @@ fn setup() -> PathBuf {
 
 /// a.md with Q1 answered.
 fn with_q1(dir: &Path) -> PathBuf {
-    let p = write_record(dir, &rel("a"), &format!("# A\n{}", sec(Q1, "widget", None, true)));
+    let p = write_record(
+        dir,
+        &rel("a"),
+        &format!("# A\n{}", sec(Q1, "widget", None, true)),
+    );
     approve_ok(dir, "a");
     ask_answer(dir, "a", Q1);
     p
 }
 
 fn assert_refused_naming(out: &std::process::Output, names: &[&str]) {
-    assert!(!out.status.success(), "should have refused: {}{}", stdout(out), stderr(out));
+    assert!(
+        !out.status.success(),
+        "should have refused: {}{}",
+        stdout(out),
+        stderr(out)
+    );
     let err = stderr(out);
     for n in names {
         assert!(err.contains(n), "stderr should name {:?}: {}", n, err);
@@ -108,7 +127,11 @@ fn old_dependent(dir: &Path, name: &str, heading: &str, target: &str, id: &str) 
     let hash = mirror_section_hash(&section);
     append_ledger_row_at(dir, "asked", id, &hash, heading, "2024-01-01T00:00:00Z");
     append_ledger_row_at(dir, "answered", id, &hash, "A", "2024-01-01T00:00:01Z");
-    write_record(dir, &rel(name), &format!("# Old\n\n{}\n**Answer:** A\n", section.trim_end()));
+    write_record(
+        dir,
+        &rel(name),
+        &format!("# Old\n\n{}\n**Answer:** A\n", section.trim_end()),
+    );
 }
 
 /// The case where approve passed (Q4 names Q1 only, Q1 had no dependents)
@@ -122,7 +145,13 @@ fn q1_gains_a_dependent_after_approve(dir: &Path, ask_q4_first: bool) -> PathBuf
         let out = adr(dir, &["ask", a.to_str().unwrap()], &[], "");
         assert!(out.status.success(), "ask a failed: {}", stderr(&out));
     }
-    old_dependent(dir, "c", Q7, &id_of(&a, Q1), "77777777-7777-7777-7777-777777777777");
+    old_dependent(
+        dir,
+        "c",
+        Q7,
+        &id_of(&a, Q1),
+        "77777777-7777-7777-7777-777777777777",
+    );
     a
 }
 
@@ -134,7 +163,16 @@ fn the_move_printed_by_a_refused_answer_leads_to_a_successful_answer() {
     let id1 = id_of(&a, Q1);
     let id4 = id_of(&a, Q4);
     let out = adr_owner(&dir, &["answer", &id_at_version(&dir, &id4), "A"], "");
-    assert_refused_naming(&out, &[Q7, "c.md", "agent rewrites the supersedes line of", "to add adrdom/decisions/c.md", "then runs: adr ask adrdom/decisions/a.md"]);
+    assert_refused_naming(
+        &out,
+        &[
+            Q7,
+            "c.md",
+            "agent rewrites the supersedes line of",
+            "to add adrdom/decisions/c.md",
+            "then runs: adr ask adrdom/decisions/a.md",
+        ],
+    );
 
     let c = std::fs::read_to_string(&a).unwrap();
     let edited = c.replace(
@@ -146,7 +184,12 @@ fn the_move_printed_by_a_refused_answer_leads_to_a_successful_answer() {
     let out = approve(&dir, "a");
     assert!(out.status.success(), "approve failed: {}", stderr(&out));
     let out = adr(&dir, &["ask", a.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask failed: {}{}", stdout(&out), stderr(&out));
+    assert!(
+        out.status.success(),
+        "ask failed: {}{}",
+        stdout(&out),
+        stderr(&out)
+    );
     let out = adr_owner(&dir, &["answer", &id_at_version(&dir, &id4), "A"], "");
     assert!(out.status.success(), "answer failed: {}", stderr(&out));
 }

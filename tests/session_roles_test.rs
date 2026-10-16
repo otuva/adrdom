@@ -12,7 +12,9 @@ fn roles(dir: &Path) -> Option<String> {
 }
 
 fn topic(dir: &Path) -> String {
-    write_record(dir, "adrdom/decisions/gadgets.md", TOPIC).display().to_string()
+    write_record(dir, "adrdom/decisions/gadgets.md", TOPIC)
+        .display()
+        .to_string()
 }
 
 /// No command prints a line of the role file: the write is no ledger event.
@@ -85,7 +87,12 @@ fn a_missing_file_or_a_directory_marks_nothing() {
             let out = adr_as(&dir, &[cmd, &path], &[], Some("s1"), "");
             assert!(!out.status.success(), "{} {}", cmd, rel);
             assert!(roles(&dir).is_none(), "{} {} marked the session", cmd, rel);
-            assert!(!dir.join(ROLES).exists(), "{} {} created the roles file", cmd, rel);
+            assert!(
+                !dir.join(ROLES).exists(),
+                "{} {} created the roles file",
+                cmd,
+                rel
+            );
         }
     }
 }
@@ -102,7 +109,10 @@ fn the_roles_file_is_untracked_and_the_ledger_untouched() {
     let status = run_git(&dir, &["status", "--porcelain", "--untracked-files=all"]);
     let status = stdout(&status);
     assert!(!status.contains("roles.tsv"), "{}", status);
-    assert_eq!(std::fs::read(dir.join("adrdom/state/ledger.tsv")).unwrap(), ledger);
+    assert_eq!(
+        std::fs::read(dir.join("adrdom/state/ledger.tsv")).unwrap(),
+        ledger
+    );
 }
 
 #[test]
@@ -110,21 +120,28 @@ fn every_planner_keeps_its_line_and_others_stay_plain() {
     // adr: 1ee664a1-cac0-4917-9e46-8199a387d235
     let dir = widget_repo();
     let t = topic(&dir);
-    assert!(adr_as(&dir, &["plan", &t], &[], Some("s1"), "").status.success());
+    assert!(adr_as(&dir, &["plan", &t], &[], Some("s1"), "")
+        .status
+        .success());
     let s2 = adr_as(&dir, &["plan", &t], &[], Some("s2"), "");
     assert_no_planner_line(&s2);
     assert_eq!(roles(&dir).as_deref(), Some("s1\tplanner\ns2\tplanner\n"));
     // s3 was never marked: its first plan is the one that marks it.
     // Until then s3 is plain: its commit outside adrdom passes the hooks
     // while the marked s1's is refused.
-    assert!(commit_outside(&dir, "plain.rs", Some("s3")).status.success());
+    assert!(commit_outside(&dir, "plain.rs", Some("s3"))
+        .status
+        .success());
     let refused = commit_outside(&dir, "planner.rs", Some("s1"));
     assert!(!refused.status.success());
     assert!(format!("{}{}", stdout(&refused), stderr(&refused)).contains("outside adrdom"));
     run_git(&dir, &["reset", "-q"]);
     let s3 = adr_as(&dir, &["plan", &t], &[], Some("s3"), "");
     assert_no_planner_line(&s3);
-    assert_eq!(roles(&dir).as_deref(), Some("s1\tplanner\ns2\tplanner\ns3\tplanner\n"));
+    assert_eq!(
+        roles(&dir).as_deref(),
+        Some("s1\tplanner\ns2\tplanner\ns3\tplanner\n")
+    );
 }
 
 #[test]
@@ -160,5 +177,10 @@ fn no_identifier_writes_nothing_and_stops_nothing() {
     let commit = commit_outside(&dir, "plain.rs", None);
     assert!(commit.status.success(), "{}", stderr(&commit));
     let check = adr_as(&dir, &["check"], &[], None, "");
-    assert!(check.status.success(), "{}{}", stdout(&check), stderr(&check));
+    assert!(
+        check.status.success(),
+        "{}{}",
+        stdout(&check),
+        stderr(&check)
+    );
 }

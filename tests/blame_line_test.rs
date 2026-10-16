@@ -56,19 +56,41 @@ fn assert_refused_and_noted(dir: &Path, rec: &Path, lines: &[String]) {
     let ledger_before = ledger_text(dir);
 
     let out = approve_unplanned(dir, rec);
-    assert!(!out.status.success(), "approve should refuse: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "approve should refuse: {}",
+        stdout(&out)
+    );
     let refused = refusal_lines(&out, "approve: ");
     for line in lines {
-        assert!(refused.contains(line), "approve lacks {:?}:\n{}", line, stderr(&out));
+        assert!(
+            refused.contains(line),
+            "approve lacks {:?}:\n{}",
+            line,
+            stderr(&out)
+        );
     }
-    assert_eq!(std::fs::read_to_string(rec).unwrap(), topic_before, "nothing written on refusal");
+    assert_eq!(
+        std::fs::read_to_string(rec).unwrap(),
+        topic_before,
+        "nothing written on refusal"
+    );
     assert_eq!(ledger_text(dir), ledger_before, "no ledger row on refusal");
 
     // The topic file is a draft: check prints the same lines and passes.
     let checked = adr(dir, &["check"], &[], "");
-    assert!(checked.status.success(), "a draft's finding is a note: {}", stdout(&checked));
+    assert!(
+        checked.status.success(),
+        "a draft's finding is a note: {}",
+        stdout(&checked)
+    );
     for line in lines {
-        assert!(stdout(&checked).lines().any(|l| l == line), "check lacks {:?}:\n{}", line, stdout(&checked));
+        assert!(
+            stdout(&checked).lines().any(|l| l == line),
+            "check lacks {:?}:\n{}",
+            line,
+            stdout(&checked)
+        );
     }
 }
 
@@ -96,18 +118,34 @@ fn approve_turns_the_name_on_a_blame_line_into_the_identifier() {
         .position(|l| *l == format!("blame: {} 1-2", id))
         .unwrap_or_else(|| panic!("no blame line holds the identifier {}:\n{}", id, saved));
     assert!(!saved.contains("blame: x"), "the name is gone:\n{}", saved);
-    assert!(lines[at + 1].starts_with("id: "), "the id line comes directly under the blame line:\n{}", saved);
+    assert!(
+        lines[at + 1].starts_with("id: "),
+        "the id line comes directly under the blame line:\n{}",
+        saved
+    );
 
     let shown = stdout(&adr(&dir, &["show", REL], &[], ""));
     assert!(shown.lines().any(|l| l == "  blame: x 1-2"), "{}", shown);
-    assert!(!shown.contains(&id), "show prints the name, not the identifier:\n{}", shown);
+    assert!(
+        !shown.contains(&id),
+        "show prints the name, not the identifier:\n{}",
+        shown
+    );
 
     // The line in its identifier form names an approved blame file and the
     // range of a row: check has nothing to say of it.
     let checked = adr(&dir, &["check"], &[], "");
     assert!(checked.status.success(), "{}", stdout(&checked));
-    assert!(!stdout(&checked).contains("blame line"), "{}", stdout(&checked));
-    assert!(!stdout(&checked).contains("blame entry"), "{}", stdout(&checked));
+    assert!(
+        !stdout(&checked).contains("blame line"),
+        "{}",
+        stdout(&checked)
+    );
+    assert!(
+        !stdout(&checked).contains("blame entry"),
+        "{}",
+        stdout(&checked)
+    );
 }
 
 // adr: 69708a07-469c-406b-9e25-63da1605b432
@@ -123,7 +161,11 @@ fn a_blame_line_may_name_a_detail_row() {
     approve_record(&dir, REL);
 
     let saved = std::fs::read_to_string(&rec).unwrap();
-    assert!(saved.lines().any(|l| l == format!("blame: {} 3-3", id)), "{}", saved);
+    assert!(
+        saved.lines().any(|l| l == format!("blame: {} 3-3", id)),
+        "{}",
+        saved
+    );
 }
 
 // adr: 69708a07-469c-406b-9e25-63da1605b432
@@ -135,7 +177,13 @@ fn a_blame_line_may_name_a_detail_row() {
 #[test]
 fn a_blame_line_names_rows_of_two_blame_files() {
     let (dir, x) = gate_repo();
-    let other = approved_blame_file(&dir, "sub/other", "docs/other.md", "a\nb\n", "1-1\tdecision\n2-2\tdetail\n");
+    let other = approved_blame_file(
+        &dir,
+        "sub/other",
+        "docs/other.md",
+        "a\nb\n",
+        "1-1\tdecision\n2-2\tdetail\n",
+    );
     let (id_x, id_other) = (id_line_of(&x), id_line_of(&other));
     assert_ne!(id_x, id_other);
     let rec = write_record(&dir, REL, &topic("blame: x 1-2 3-3, sub/other 1-1\n"));
@@ -143,10 +191,21 @@ fn a_blame_line_names_rows_of_two_blame_files() {
 
     let saved = std::fs::read_to_string(&rec).unwrap();
     let want = format!("blame: {} 1-2 3-3, {} 1-1", id_x, id_other);
-    assert!(saved.lines().any(|l| l == want), "no line {:?}:\n{}", want, saved);
+    assert!(
+        saved.lines().any(|l| l == want),
+        "no line {:?}:\n{}",
+        want,
+        saved
+    );
 
     let shown = stdout(&adr(&dir, &["show", REL], &[], ""));
-    assert!(shown.lines().any(|l| l == "  blame: x 1-2 3-3, sub/other 1-1"), "{}", shown);
+    assert!(
+        shown
+            .lines()
+            .any(|l| l == "  blame: x 1-2 3-3, sub/other 1-1"),
+        "{}",
+        shown
+    );
 }
 
 // adr: 69708a07-469c-406b-9e25-63da1605b432
@@ -162,7 +221,11 @@ fn a_blame_line_in_identifier_form_approves_as_written() {
     approve_record(&dir, REL);
 
     let saved = std::fs::read_to_string(&rec).unwrap();
-    assert!(saved.lines().any(|l| l == format!("blame: {} 1-2", id)), "{}", saved);
+    assert!(
+        saved.lines().any(|l| l == format!("blame: {} 1-2", id)),
+        "{}",
+        saved
+    );
 }
 
 // adr: 69708a07-469c-406b-9e25-63da1605b432
@@ -211,7 +274,13 @@ fn approve_refuses_a_blame_line_naming_no_blame_file() {
 fn approve_refuses_a_blame_line_naming_a_blame_file_awaiting_approval() {
     // Never approved: new.
     let (dir, _x) = gate_repo();
-    blame_file(&dir, "y", "docs/y.md", "one\ntwo\n", "1-1\tdecision\n2-2\tdetail\n");
+    blame_file(
+        &dir,
+        "y",
+        "docs/y.md",
+        "one\ntwo\n",
+        "1-1\tdecision\n2-2\tdetail\n",
+    );
     let rec = write_record(&dir, REL, &topic("blame: y 1-1\n"));
     let line = found(
         "the blame line names adrdom/blame/y.md, which is new; not yet: after it is approved",
@@ -295,7 +364,11 @@ fn a_blame_file_named_like_a_range_is_named_by_the_first_token() {
     let rec = write_record(&dir, REL, &topic("blame: 10-14 1-2\n"));
     approve_record(&dir, REL);
     let saved = std::fs::read_to_string(&rec).unwrap();
-    assert!(saved.lines().any(|l| l == format!("blame: {} 1-2", id)), "{}", saved);
+    assert!(
+        saved.lines().any(|l| l == format!("blame: {} 1-2", id)),
+        "{}",
+        saved
+    );
 }
 
 // --- nothing forces the link ------------------------------------------------
@@ -316,7 +389,11 @@ fn a_question_with_no_blame_line_approves() {
     assert!(!saved.contains("blame:"), "{}", saved);
 
     let out = adr(&dir, &["ask", rec.to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask should not stop for a missing blame line: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "ask should not stop for a missing blame line: {}",
+        stderr(&out)
+    );
     let checked = adr(&dir, &["check"], &[], "");
     assert!(checked.status.success(), "{}", stdout(&checked));
     assert!(!stdout(&checked).contains("blame"), "{}", stdout(&checked));
@@ -331,10 +408,18 @@ fn a_question_with_no_blame_line_approves() {
 #[test]
 fn a_heading_with_a_depends_and_a_blame_line_has_no_body() {
     let (dir, _x) = gate_repo();
-    write_record(&dir, REL, &format!("# Gate\n\n### {}\ndepends: widget\nblame: x 1-2\n", HEADING));
+    write_record(
+        &dir,
+        REL,
+        &format!("# Gate\n\n### {}\ndepends: widget\nblame: x 1-2\n", HEADING),
+    );
 
     let shown = stdout(&adr(&dir, &["show", REL], &[], ""));
-    assert!(shown.contains(&format!("[no body] {}\n", HEADING)), "{}", shown);
+    assert!(
+        shown.contains(&format!("[no body] {}\n", HEADING)),
+        "{}",
+        shown
+    );
     assert!(shown.lines().any(|l| l == "  + blame: x 1-2"), "{}", shown);
     assert!(!shown.contains("stray line"), "{}", shown);
 }
@@ -351,20 +436,42 @@ fn a_blame_line_is_part_of_the_approved_question() {
     let rec = write_record(&dir, REL, &topic(""));
     approve_record(&dir, REL);
     run_git(&dir, &["add", "-A"]);
-    assert!(run_git(&dir, &["commit", "-q", "-m", "approve the gate"]).status.success());
+    assert!(run_git(&dir, &["commit", "-q", "-m", "approve the gate"])
+        .status
+        .success());
 
     let text = std::fs::read_to_string(&rec).unwrap();
-    let depends = text.lines().find(|l| l.starts_with("depends: ")).unwrap().to_string();
-    std::fs::write(&rec, text.replacen(&format!("{}\n", depends), &format!("{}\nblame: x 1-2\n", depends), 1)).unwrap();
+    let depends = text
+        .lines()
+        .find(|l| l.starts_with("depends: "))
+        .unwrap()
+        .to_string();
+    std::fs::write(
+        &rec,
+        text.replacen(
+            &format!("{}\n", depends),
+            &format!("{}\nblame: x 1-2\n", depends),
+            1,
+        ),
+    )
+    .unwrap();
 
     let shown = stdout(&adr(&dir, &["show", REL], &[], ""));
-    assert!(shown.starts_with("[changed] Gate (adrdom/decisions/gate.md)\n"), "{}", shown);
+    assert!(
+        shown.starts_with("[changed] Gate (adrdom/decisions/gate.md)\n"),
+        "{}",
+        shown
+    );
     assert!(shown.lines().any(|l| l == "  + blame: x 1-2"), "{}", shown);
     // A marked line opens with its mark; an unmarked line of the question
     // (the option lines among them) is indented past it.
     let marked: Vec<&str> = shown
         .lines()
-        .filter(|l| ["+ ", "- ", "  + ", "  - "].iter().any(|p| l.starts_with(p)))
+        .filter(|l| {
+            ["+ ", "- ", "  + ", "  - "]
+                .iter()
+                .any(|p| l.starts_with(p))
+        })
         .collect();
     assert_eq!(marked, vec!["  + blame: x 1-2"], "{}", shown);
 }
@@ -386,12 +493,20 @@ fn an_asked_question_is_not_judged_again_when_its_blame_file_changes() {
     let asked = adr(&dir, &["ask", rec.to_str().unwrap()], &[], "");
     assert!(asked.status.success(), "{}", stderr(&asked));
 
-    edit_file(&x, "1-2\tdecision\n3-3\tdetail\n", "1-1\tdecision\n2-3\tdetail\n");
+    edit_file(
+        &x,
+        "1-2\tdecision\n3-3\tdetail\n",
+        "1-1\tdecision\n2-3\tdetail\n",
+    );
 
     let checked = adr(&dir, &["check"], &[], "");
     assert!(checked.status.success(), "{}", stdout(&checked));
     assert!(!stdout(&checked).contains(REL), "{}", stdout(&checked));
-    assert!(!stdout(&checked).contains("blame line"), "{}", stdout(&checked));
+    assert!(
+        !stdout(&checked).contains("blame line"),
+        "{}",
+        stdout(&checked)
+    );
 }
 
 // adr: 69708a07-469c-406b-9e25-63da1605b432
@@ -412,11 +527,29 @@ fn ask_refuses_what_check_fails_on_a_blame_line() {
     );
 
     let checked = adr(&dir, &["check"], &[], "");
-    assert!(!checked.status.success(), "check should fail: {}", stdout(&checked));
-    assert!(stdout(&checked).lines().any(|l| l == line), "check lacks {:?}:\n{}", line, stdout(&checked));
+    assert!(
+        !checked.status.success(),
+        "check should fail: {}",
+        stdout(&checked)
+    );
+    assert!(
+        stdout(&checked).lines().any(|l| l == line),
+        "check lacks {:?}:\n{}",
+        line,
+        stdout(&checked)
+    );
 
     let asked = adr(&dir, &["ask", rec.to_str().unwrap()], &[], "");
-    assert!(!asked.status.success(), "ask should refuse: {}", stdout(&asked));
-    assert!(refusal_lines(&asked, "ask: ").contains(&line), "ask lacks {:?}:\n{}", line, stderr(&asked));
+    assert!(
+        !asked.status.success(),
+        "ask should refuse: {}",
+        stdout(&asked)
+    );
+    assert!(
+        refusal_lines(&asked, "ask: ").contains(&line),
+        "ask lacks {:?}:\n{}",
+        line,
+        stderr(&asked)
+    );
     assert_eq!(asked_row_count(&dir), 0, "no question asked");
 }

@@ -103,7 +103,10 @@ pub fn resolve_dep(
             {
                 return Ok(Some(DepTarget::Heading(idx)));
             }
-            if let Some(term) = terms_list.iter().find(|t| t.id.as_deref() == Some(id.as_str())) {
+            if let Some(term) = terms_list
+                .iter()
+                .find(|t| t.id.as_deref() == Some(id.as_str()))
+            {
                 if !term.retired || state::is_dead(led, sec) {
                     return Ok(Some(DepTarget::Term(id.clone())));
                 }
@@ -174,7 +177,10 @@ pub fn dep_refusal_text(rel: &str, heading: &str, err: &DepError, name: Option<&
 /// that names nothing. A `depends:` entry is resolved against the file and
 /// the terms alone. Takes already-loaded records rather than a repo root,
 /// so a caller that has every topic file in memory does not read them again.
-pub fn cross_file_heading_index(records: &[RecordFile], led: &Ledger) -> HashMap<String, Vec<(String, String)>> {
+pub fn cross_file_heading_index(
+    records: &[RecordFile],
+    led: &Ledger,
+) -> HashMap<String, Vec<(String, String)>> {
     let mut out: HashMap<String, Vec<(String, String)>> = HashMap::new();
     for rf in records {
         for sec in &rf.sections {
@@ -289,7 +295,11 @@ pub fn bad_letters(
 /// decision's id, or -- as a same-file heading written as text -- its
 /// heading. Questions not answered, refused, superseded or withdrawn, and
 /// headings with no body, are not part of it.
-pub fn standing_on(records: &[RecordFile], led: &Ledger, target: &str) -> Vec<(String, String, String)> {
+pub fn standing_on(
+    records: &[RecordFile],
+    led: &Ledger,
+    target: &str,
+) -> Vec<(String, String, String)> {
     let mut found: Vec<(String, String, String)> = Vec::new();
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     seen.insert(target.to_string());
@@ -306,12 +316,21 @@ pub fn standing_on(records: &[RecordFile], led: &Ledger, target: &str) -> Vec<(S
                 if seen.contains(id) || !state::is_current(led, id) {
                     continue;
                 }
-                let at = cur_heading.as_ref().map(|(rel, h)| (rel.as_str(), h.as_str()));
-                let stands = sec.depends.iter().any(|d| entry_names_target(d, &rf.rel, &cur, at));
+                let at = cur_heading
+                    .as_ref()
+                    .map(|(rel, h)| (rel.as_str(), h.as_str()));
+                let stands = sec
+                    .depends
+                    .iter()
+                    .any(|d| entry_names_target(d, &rf.rel, &cur, at));
                 if stands {
                     seen.insert(id.clone());
                     queue.push(id.clone());
-                    found.push((rf.rel.clone(), sec.heading_text.trim().to_string(), id.clone()));
+                    found.push((
+                        rf.rel.clone(),
+                        sec.heading_text.trim().to_string(),
+                        id.clone(),
+                    ));
                 }
             }
         }
@@ -410,7 +429,11 @@ fn collect_replaced(
         if sec.supersedes.is_empty() || state::is_dead(led, sec) {
             continue;
         }
-        if sec.id.as_deref().is_some_and(|id| state::is_current(led, id)) {
+        if sec
+            .id
+            .as_deref()
+            .is_some_and(|id| state::is_current(led, id))
+        {
             continue;
         }
         for entry in supersedes_entries(&sec.supersedes, cross_file_headings, led) {

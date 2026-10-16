@@ -31,7 +31,9 @@ fn git_ok(dir: &Path, args: &[&str]) -> Output {
 }
 
 fn current_branch(dir: &Path) -> String {
-    stdout(&git_ok(dir, &["rev-parse", "--abbrev-ref", "HEAD"])).trim().to_string()
+    stdout(&git_ok(dir, &["rev-parse", "--abbrev-ref", "HEAD"]))
+        .trim()
+        .to_string()
 }
 
 fn conflicted_files(dir: &Path) -> Vec<String> {
@@ -156,18 +158,34 @@ fn two_branches_each_banning_a_word_merge_the_ledger_with_no_conflict() {
 
     git_ok(&dir, &["checkout", "-b", "branch-a"]);
     let a_ban = adr(&dir, &["ban"], &[], "mergerulewordalpha\n");
-    assert!(a_ban.status.success(), "branch a ban failed: {}", stderr(&a_ban));
+    assert!(
+        a_ban.status.success(),
+        "branch a ban failed: {}",
+        stderr(&a_ban)
+    );
     run_git(&dir, &["add", "-A"]);
     let a_commit = run_git(&dir, &["commit", "-q", "-m", "a: ban a word"]);
-    assert!(a_commit.status.success(), "branch a commit failed: {}", stderr(&a_commit));
+    assert!(
+        a_commit.status.success(),
+        "branch a commit failed: {}",
+        stderr(&a_commit)
+    );
 
     git_ok(&dir, &["checkout", &base_branch]);
     git_ok(&dir, &["checkout", "-b", "branch-b"]);
     let b_ban = adr(&dir, &["ban"], &[], "mergerulewordbeta\n");
-    assert!(b_ban.status.success(), "branch b ban failed: {}", stderr(&b_ban));
+    assert!(
+        b_ban.status.success(),
+        "branch b ban failed: {}",
+        stderr(&b_ban)
+    );
     run_git(&dir, &["add", "-A"]);
     let b_commit = run_git(&dir, &["commit", "-q", "-m", "b: ban a different word"]);
-    assert!(b_commit.status.success(), "branch b commit failed: {}", stderr(&b_commit));
+    assert!(
+        b_commit.status.success(),
+        "branch b commit failed: {}",
+        stderr(&b_commit)
+    );
 
     git_ok(&dir, &["checkout", "branch-a"]);
     let merge_out = run_git(&dir, &["merge", "--no-ff", "--no-edit", "branch-b"]);
@@ -199,7 +217,10 @@ fn two_branches_each_banning_a_word_merge_the_ledger_with_no_conflict() {
     }
 
     let ledger = std::fs::read_to_string(dir.join("adrdom/state/ledger.tsv")).unwrap();
-    let banned_rows: Vec<&str> = ledger.lines().filter(|l| l.contains("\tbanned\t")).collect();
+    let banned_rows: Vec<&str> = ledger
+        .lines()
+        .filter(|l| l.contains("\tbanned\t"))
+        .collect();
     assert_eq!(
         banned_rows.len(),
         2,
@@ -208,7 +229,12 @@ fn two_branches_each_banning_a_word_merge_the_ledger_with_no_conflict() {
     );
 
     let words = banned_lines(&dir);
-    assert_eq!(words.len(), 2, "merged banned.sha256 must hold both words: {:?}", words);
+    assert_eq!(
+        words.len(),
+        2,
+        "merged banned.sha256 must hold both words: {:?}",
+        words
+    );
 }
 
 // adr: db56a285-946f-48b1-b073-bb1e90192185
@@ -219,7 +245,11 @@ fn a_second_install_leaves_the_gitattributes_file_unchanged() {
 
     let first = std::fs::read(dir.join(GITATTRIBUTES_PATH)).unwrap();
     let out2 = adr(&dir, &["install"], &[], "");
-    assert!(out2.status.success(), "second install failed: {}", stderr(&out2));
+    assert!(
+        out2.status.success(),
+        "second install failed: {}",
+        stderr(&out2)
+    );
     let second = std::fs::read(dir.join(GITATTRIBUTES_PATH)).unwrap();
 
     assert_eq!(

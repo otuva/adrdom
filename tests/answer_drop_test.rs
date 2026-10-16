@@ -132,21 +132,31 @@ fn answer_removes_the_question_and_its_dependents_and_the_file_stays_approved() 
 #[test]
 fn an_asked_question_is_removed_and_check_and_approve_leave_it_gone() {
     let g = gate();
-    let asked_ids: Vec<String> = ledger_rows(&g.dir, "asked").into_iter().map(|r| r[2].clone()).collect();
+    let asked_ids: Vec<String> = ledger_rows(&g.dir, "asked")
+        .into_iter()
+        .map(|r| r[2].clone())
+        .collect();
     for id in [&g.two, &g.three] {
         assert!(asked_ids.contains(id), "{} was asked: {:?}", id, asked_ids);
     }
     assert!(adr_answer(&g.dir, &g.one, "B").status.success());
 
     let text = std::fs::read_to_string(&g.path).unwrap();
-    assert!(!text.contains(&format!("### {}\n", TWO)) && !text.contains(&format!("### {}\n", THREE)), "{}", text);
+    assert!(
+        !text.contains(&format!("### {}\n", TWO)) && !text.contains(&format!("### {}\n", THREE)),
+        "{}",
+        text
+    );
     let dropped = ledger_rows(&g.dir, "dropped");
     assert_eq!(dropped.len(), 2, "{:?}", dropped);
     let (ok, report) = check_text(&g.dir);
     assert!(ok, "{}", report);
 
     approve_record(&g.dir, REL);
-    assert!(ledger_rows(&g.dir, "withdrawn").is_empty(), "a dropped id is not withdrawn");
+    assert!(
+        ledger_rows(&g.dir, "withdrawn").is_empty(),
+        "a dropped id is not withdrawn"
+    );
     commit(&g.dir, "feat: answer the gate");
     let (ok, report) = check_text(&g.dir);
     assert!(ok, "{}", report);
@@ -185,7 +195,13 @@ fn answer_writes_a_dropped_row_for_each_removed_question() {
 
     let dropped = ledger_rows(&g.dir, "dropped");
     assert_eq!(dropped.len(), 2, "{:?}", dropped);
-    let row = |id: &str| dropped.iter().find(|r| r[2] == id).unwrap_or_else(|| panic!("{:?}", dropped)).clone();
+    let row = |id: &str| {
+        dropped
+            .iter()
+            .find(|r| r[2] == id)
+            .unwrap_or_else(|| panic!("{:?}", dropped))
+            .clone()
+    };
     // The question that stood on the answered one: the hash from approval,
     // the answered identifier and the letter.
     assert_eq!(row(&g.two)[3], two_hash);
@@ -215,14 +231,23 @@ fn check_verifies_each_dropped_row() {
             std::fs::write(&g.path, f).unwrap();
         }
         let (ok, report) = check_text(&g.dir);
-        assert!(!ok && report.contains(needle), "wanted {:?}: {}", needle, report);
+        assert!(
+            !ok && report.contains(needle),
+            "wanted {:?}: {}",
+            needle,
+            report
+        );
         std::fs::write(ledger_path(&g.dir), &good_ledger).unwrap();
         std::fs::write(&g.path, &good_file).unwrap();
     };
 
     // A letter no answer row carries.
     let wrong_letter = two_row.replace(&format!("{} B", g.one), &format!("{} A", g.one));
-    fail_with(good_ledger.replace(&two_row, &wrong_letter), None, "has no cause");
+    fail_with(
+        good_ledger.replace(&two_row, &wrong_letter),
+        None,
+        "has no cause",
+    );
     // HEAD's set holds the letter the row names.
     fail_with(
         good_ledger.replace(&two_row, &wrong_letter),
@@ -232,15 +257,32 @@ fn check_verifies_each_dropped_row() {
     // A dependent naming a question with no dropped row.
     let other = "00000000-0000-4000-8000-000000000000";
     let no_cause = three_row.replace(&g.two, other);
-    fail_with(good_ledger.replace(&three_row, &no_cause), None, "has no cause");
+    fail_with(
+        good_ledger.replace(&three_row, &no_cause),
+        None,
+        "has no cause",
+    );
     // A hash no approval row holds.
-    let bad_hash = two_row.replace(&two_row.split('\t').nth(3).unwrap().to_string(), &"0".repeat(64));
-    fail_with(good_ledger.replace(&two_row, &bad_hash), None, "matches no approved row");
+    let bad_hash = two_row.replace(
+        &two_row.split('\t').nth(3).unwrap().to_string(),
+        &"0".repeat(64),
+    );
+    fail_with(
+        good_ledger.replace(&two_row, &bad_hash),
+        None,
+        "matches no approved row",
+    );
     // A detail of no known shape.
     let bad_detail = two_row.replace(&format!("{} B", g.one), "nonsense");
-    fail_with(good_ledger.replace(&two_row, &bad_detail), None, "has the detail");
+    fail_with(
+        good_ledger.replace(&two_row, &bad_detail),
+        None,
+        "has the detail",
+    );
     // An id still in a topic file.
-    let head_file = String::from_utf8_lossy(&run_git(&g.dir, &["show", &format!("HEAD:{}", REL)]).stdout).to_string();
+    let head_file =
+        String::from_utf8_lossy(&run_git(&g.dir, &["show", &format!("HEAD:{}", REL)]).stdout)
+            .to_string();
     fail_with(good_ledger.clone(), Some(&head_file), "is still in");
 }
 
@@ -279,7 +321,9 @@ fn a_drop_before_the_latest_approval_is_not_put_back() {
     );
     let path = write_record(&dir, REL, &plan);
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let one = id_of(&path, ONE);
     let two = id_of(&path, TWO);
     assert!(adr_answer(&dir, &one, "B").status.success());
@@ -288,7 +332,15 @@ fn a_drop_before_the_latest_approval_is_not_put_back() {
     // Re-approve with a new question that stands on Two=A, then drop it.
     let q4 = "Is the widget gate sealed shut?";
     let text = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, format!("{}\n{}", text.trim_end(), q(q4, &format!("widget, {}=A", TWO)))).unwrap();
+    std::fs::write(
+        &path,
+        format!(
+            "{}\n{}",
+            text.trim_end(),
+            q(q4, &format!("widget, {}=A", TWO))
+        ),
+    )
+    .unwrap();
     approve_record(&dir, REL);
     assert!(adr_answer(&dir, &two, "B").status.success());
     assert!(!std::fs::read_to_string(&path).unwrap().contains(q4));
@@ -307,7 +359,11 @@ fn pair() -> (PathBuf, PathBuf, String, String) {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_minimal_terms(&dir, "widget");
-    let plan = format!("# Gate\n\n{}{}", q(ONE, "widget"), q(TWO, &format!("widget, {}=A", ONE)));
+    let plan = format!(
+        "# Gate\n\n{}{}",
+        q(ONE, "widget"),
+        q(TWO, &format!("widget, {}=A", ONE))
+    );
     let path = write_record(&dir, REL, &plan);
     approve_record(&dir, REL);
     let out = adr(&dir, &["ask", path.to_str().unwrap()], &[], "");
@@ -318,7 +374,11 @@ fn pair() -> (PathBuf, PathBuf, String, String) {
 }
 
 fn row_hash(dir: &Path, event: &str, id: &str) -> String {
-    ledger_rows(dir, event).into_iter().find(|r| r[2] == id).unwrap()[3].clone()
+    ledger_rows(dir, event)
+        .into_iter()
+        .find(|r| r[2] == id)
+        .unwrap()[3]
+        .clone()
 }
 
 // adr: dad5273c-afe2-4ab1-a451-e2a5d4d9a26d
@@ -342,9 +402,16 @@ fn an_answer_never_removes_an_answered_question() {
     assert!(!out.status.success(), "{}{}", stdout(&out), stderr(&out));
     let err = stderr(&out);
     assert!(err.contains(TWO) && err.contains("answered"), "{}", err);
-    assert!(err.contains("agent writes a question that supersedes"), "{}", err);
+    assert!(
+        err.contains("agent writes a question that supersedes"),
+        "{}",
+        err
+    );
     assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
-    assert_eq!(std::fs::read_to_string(ledger_path(&dir)).unwrap(), ledger_before);
+    assert_eq!(
+        std::fs::read_to_string(ledger_path(&dir)).unwrap(),
+        ledger_before
+    );
 }
 
 // adr: dad5273c-afe2-4ab1-a451-e2a5d4d9a26d
@@ -361,7 +428,11 @@ fn check_fails_a_dropped_row_after_an_answered_row_of_the_same_question() {
     append_ledger_row_at(&dir, "answered", &two, &h2, "A", "2020-01-01T00:00:00Z");
     let (ok, report) = check_text(&dir);
     assert!(!ok, "{}", report);
-    assert!(report.contains(&format!("dropped row for {} follows its answered row", two)), "{}", report);
+    assert!(
+        report.contains(&format!("dropped row for {} follows its answered row", two)),
+        "{}",
+        report
+    );
 }
 
 // adr: ce19c883-c61d-477b-a6d4-fee5134c6e9a
@@ -372,7 +443,10 @@ fn check_fails_a_dropped_row_after_an_answered_row_of_the_same_question() {
 fn check_fails_a_dropped_row_and_another_state_row_at_one_time() {
     let (dir, _path, one, two) = pair();
     assert!(adr_answer(&dir, &one, "B").status.success());
-    let dropped = ledger_rows(&dir, "dropped").into_iter().find(|r| r[2] == two).unwrap();
+    let dropped = ledger_rows(&dir, "dropped")
+        .into_iter()
+        .find(|r| r[2] == two)
+        .unwrap();
     append_ledger_row_at(&dir, "withdrawn", &two, &dropped[3], "", &dropped[0]);
     let (ok, report) = check_text(&dir);
     assert!(!ok, "{}", report);
@@ -391,7 +465,9 @@ fn chain(refuse_first: bool) -> (PathBuf, String, String, String) {
     );
     let path = write_record(&dir, REL, &plan);
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let ids = (id_of(&path, ONE), id_of(&path, TWO), id_of(&path, THREE));
     if refuse_first {
         assert!(adr_answer(&dir, &ids.0, "refuse").status.success());
@@ -409,9 +485,16 @@ fn a_waiting_chain_names_the_first_question_answer_takes() {
     let out = adr_answer(&dir, &three, "A");
     assert!(!out.status.success());
     let err = stderr(&out);
-    let want = format!("owner runs: adr answer {} <letter>", id_at_version(&dir, &one));
+    let want = format!(
+        "owner runs: adr answer {} <letter>",
+        id_at_version(&dir, &one)
+    );
     assert!(err.contains(&want), "{}", err);
-    assert!(!err.contains(&format!("adr answer {}", id_at_version(&dir, &two))), "{}", err);
+    assert!(
+        !err.contains(&format!("adr answer {}", id_at_version(&dir, &two))),
+        "{}",
+        err
+    );
 }
 
 // adr: da80931c-68cf-4c51-acce-060307bbd973
@@ -423,10 +506,22 @@ fn a_waiting_chain_ending_on_a_refused_question_names_the_plan_change() {
     let out = adr_answer(&dir, &three, "A");
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains(&format!("\"{}\"", ONE)) && err.contains("refused"), "{}", err);
-    assert!(err.contains("writes the plan change") && err.contains("adr approve"), "{}", err);
+    assert!(
+        err.contains(&format!("\"{}\"", ONE)) && err.contains("refused"),
+        "{}",
+        err
+    );
+    assert!(
+        err.contains("writes the plan change") && err.contains("adr approve"),
+        "{}",
+        err
+    );
     assert!(!err.contains("adr answer"), "{}", err);
     // The refused question is named once in the plan change move, though
     // Three both waits on it through Two and sits in a tier above it.
-    assert!(err.contains(&format!("drops or replaces \"{}\", owner runs", ONE)), "{}", err);
+    assert!(
+        err.contains(&format!("drops or replaces \"{}\", owner runs", ONE)),
+        "{}",
+        err
+    );
 }

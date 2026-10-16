@@ -122,7 +122,10 @@ pub fn parse(path: PathBuf, rel: String, lines: Vec<String>) -> BlameFile {
     let origin = match lines.first().and_then(|l| l.strip_prefix("origin: ")) {
         Some(v) if !v.trim().is_empty() => Some(v.trim().to_string()),
         _ => {
-            fault(ShapeKind::File, "line 1: missing \"origin: <path>\"".to_string());
+            fault(
+                ShapeKind::File,
+                "line 1: missing \"origin: <path>\"".to_string(),
+            );
             None
         }
     };
@@ -130,7 +133,10 @@ pub fn parse(path: PathBuf, rel: String, lines: Vec<String>) -> BlameFile {
     let blob = match lines.get(1).and_then(|l| l.strip_prefix("blob: ")) {
         Some(v) if is_hex_oid(v.trim()) => Some(v.trim().to_string()),
         _ => {
-            fault(ShapeKind::File, "line 2: missing \"blob: <40 or 64 hex>\"".to_string());
+            fault(
+                ShapeKind::File,
+                "line 2: missing \"blob: <40 or 64 hex>\"".to_string(),
+            );
             None
         }
     };
@@ -146,13 +152,19 @@ pub fn parse(path: PathBuf, rel: String, lines: Vec<String>) -> BlameFile {
         } else {
             fault(
                 ShapeKind::Id,
-                format!("line 3: id line holds \"{}\", which is no identifier the tool assigns", v),
+                format!(
+                    "line 3: id line holds \"{}\", which is no identifier the tool assigns",
+                    v
+                ),
             );
         }
         blank = 3;
     }
     if !lines.get(blank).is_some_and(|l| l.trim().is_empty()) {
-        fault(ShapeKind::File, format!("line {}: expected a blank line after the header", blank + 1));
+        fault(
+            ShapeKind::File,
+            format!("line {}: expected a blank line after the header", blank + 1),
+        );
     }
 
     let mut rows = Vec::new();
@@ -161,7 +173,10 @@ pub fn parse(path: PathBuf, rel: String, lines: Vec<String>) -> BlameFile {
             continue;
         }
         if l.starts_with(ID_PREFIX) {
-            fault(ShapeKind::Id, format!("line {}: id line below the header", i + 1));
+            fault(
+                ShapeKind::Id,
+                format!("line {}: id line below the header", i + 1),
+            );
             continue;
         }
         match parse_row(l) {
@@ -169,19 +184,35 @@ pub fn parse(path: PathBuf, rel: String, lines: Vec<String>) -> BlameFile {
                 if value != DECISION && value != DETAIL {
                     fault(
                         ShapeKind::RowValue,
-                        format!("line {}: row value \"{}\" is neither decision nor detail", i + 1, value),
+                        format!(
+                            "line {}: row value \"{}\" is neither decision nor detail",
+                            i + 1,
+                            value
+                        ),
                     );
                 }
                 rows.push(Row { start, end, value });
             }
             None => fault(
                 ShapeKind::File,
-                format!("line {}: not a row (\"<start>-<end>\", a tab, then decision or detail)", i + 1),
+                format!(
+                    "line {}: not a row (\"<start>-<end>\", a tab, then decision or detail)",
+                    i + 1
+                ),
             ),
         }
     }
 
-    BlameFile { path, rel, lines, origin, blob, id, rows, shape_errors: errors }
+    BlameFile {
+        path,
+        rel,
+        lines,
+        origin,
+        blob,
+        id,
+        rows,
+        shape_errors: errors,
+    }
 }
 
 /// The hash `state::blame_approved`/`do_approve_blame` compare against the
@@ -227,7 +258,10 @@ pub fn coverage_errors(rows: &[Row], n: usize) -> (Vec<BeyondError>, Vec<GapErro
     let mut covered = vec![false; n + 1]; // 1-based; index 0 unused.
     for r in rows {
         if r.start > n || r.end > n {
-            beyond.push(BeyondError { start: r.start, end: r.end });
+            beyond.push(BeyondError {
+                start: r.start,
+                end: r.end,
+            });
         }
         // Only the part inside the origin marks coverage.
         for i in r.start..=r.end.min(n) {
@@ -368,21 +402,34 @@ impl Index {
                 file,
             })
             .collect();
-        let blame_rows =
-            led.rows.iter().filter(|r| r.event == "blame").map(|r| (r.detail.clone(), r.id.clone())).collect();
-        Index { entries, blame_rows }
+        let blame_rows = led
+            .rows
+            .iter()
+            .filter(|r| r.event == "blame")
+            .map(|r| (r.detail.clone(), r.id.clone()))
+            .collect();
+        Index {
+            entries,
+            blame_rows,
+        }
     }
 
     /// The identifier of the latest `blame` row for `rel`; `None` when the
     /// file has no approval, or when its latest row is one of an older ledger
     /// (identifier `-`): approved, with no identifier assigned yet.
     pub fn approved_id(&self, rel: &str) -> Option<&str> {
-        self.blame_rows.iter().rfind(|(path, _)| path == rel).map(|(_, id)| id.as_str()).filter(|id| *id != "-")
+        self.blame_rows
+            .iter()
+            .rfind(|(path, _)| path == rel)
+            .map(|(_, id)| id.as_str())
+            .filter(|id| *id != "-")
     }
 
     /// True when some `blame` row, for any path, holds `id`.
     pub fn row_holds(&self, id: &str) -> bool {
-        self.blame_rows.iter().any(|(_, held)| held.eq_ignore_ascii_case(id))
+        self.blame_rows
+            .iter()
+            .any(|(_, held)| held.eq_ignore_ascii_case(id))
     }
 
     /// The index of every blame file in `source`, and the path of each one
@@ -392,7 +439,9 @@ impl Index {
         let mut unreadable = Vec::new();
         for rel in rels(root, source) {
             match source.read(root, &rel) {
-                Some(content) => files.push(parse(root.join(&rel), rel, record::split_lines(&content))),
+                Some(content) => {
+                    files.push(parse(root.join(&rel), rel, record::split_lines(&content)))
+                }
                 None => unreadable.push(rel),
             }
         }
@@ -427,7 +476,12 @@ impl Index {
         let holds = |e: &&Entry| e.id().is_some_and(|held| held.eq_ignore_ascii_case(id));
         [FileStatus::Approved, FileStatus::Changed]
             .into_iter()
-            .find_map(|status| self.entries.iter().filter(holds).find(|e| e.status == status))
+            .find_map(|status| {
+                self.entries
+                    .iter()
+                    .filter(holds)
+                    .find(|e| e.status == status)
+            })
             .or_else(|| self.entries.iter().find(holds))
     }
 
@@ -441,15 +495,20 @@ impl Index {
 
 /// The name of the blame file at `rel`: `Entry::name`.
 fn name_of(rel: &str) -> String {
-    let under = rel.strip_prefix(repo::BLAME_DIR).map_or(rel, |r| r.trim_start_matches('/'));
+    let under = rel
+        .strip_prefix(repo::BLAME_DIR)
+        .map_or(rel, |r| r.trim_start_matches('/'));
     under.strip_suffix(".md").unwrap_or(under).to_string()
 }
 
 /// Every `*.md` file under `repo::BLAME_DIR` in `source`, nested ones too,
 /// sorted: the listing `check` judges and approve takes.
 fn rels(root: &Path, source: &repo::Source) -> Vec<String> {
-    let mut rels: Vec<String> =
-        source.list_under(root, repo::BLAME_DIR).into_iter().filter(|p| p.ends_with(".md")).collect();
+    let mut rels: Vec<String> = source
+        .list_under(root, repo::BLAME_DIR)
+        .into_iter()
+        .filter(|p| p.ends_with(".md"))
+        .collect();
     rels.sort();
     rels
 }
@@ -481,7 +540,11 @@ pub fn load_all_with_errors(root: &Path) -> (Vec<BlameFile>, Vec<(String, String
 /// resolves to `entry` (`Index::named`: its name, else its identifier) and
 /// holds exactly the row's range. The one test `show --questions` counts
 /// the rows by.
-pub fn decision_rows<'a>(entry: &'a Entry, index: &Index, topic_files: &[record::RecordFile]) -> Vec<(&'a Row, bool)> {
+pub fn decision_rows<'a>(
+    entry: &'a Entry,
+    index: &Index,
+    topic_files: &[record::RecordFile],
+) -> Vec<(&'a Row, bool)> {
     let named: Vec<(usize, usize)> = topic_files
         .iter()
         .flat_map(|rf| &rf.sections)
@@ -489,7 +552,12 @@ pub fn decision_rows<'a>(entry: &'a Entry, index: &Index, topic_files: &[record:
         .filter(|b| index.named(&b.file).is_some_and(|f| f.rel() == entry.rel()))
         .flat_map(|b| b.ranges.iter().copied())
         .collect();
-    entry.rows().iter().filter(|r| r.is_decision()).map(|r| (r, named.contains(&(r.start, r.end)))).collect()
+    entry
+        .rows()
+        .iter()
+        .filter(|r| r.is_decision())
+        .map(|r| (r, named.contains(&(r.start, r.end))))
+        .collect()
 }
 
 // --- what one blame file waits for ------------------------------------------
@@ -525,18 +593,29 @@ pub fn file_state(
     index: &Index,
 ) -> FileState {
     let rel = &bf.rel;
-    let mut st = FileState { findings: Vec::new(), stops: Vec::new(), origin_content: None };
-    let about = |said: msg::Said| Finding::said(Class::Blame, said).about(Subject::BlameFile(rel.clone()));
-    st.findings = bf.shape_errors.iter().map(|e| about(e.said(rel, index.approved_id(rel)))).collect();
+    let mut st = FileState {
+        findings: Vec::new(),
+        stops: Vec::new(),
+        origin_content: None,
+    };
+    let about =
+        |said: msg::Said| Finding::said(Class::Blame, said).about(Subject::BlameFile(rel.clone()));
+    st.findings = bf
+        .shape_errors
+        .iter()
+        .map(|e| about(e.said(rel, index.approved_id(rel))))
+        .collect();
     if let Some(keeper) = index.id_taken_from(bf) {
-        st.findings.push(about(msg::blame_id_shared(rel, keeper.rel())));
+        st.findings
+            .push(about(msg::blame_id_shared(rel, keeper.rel())));
     }
     // An approved file keeps the identifier its approval gave: approve writes
     // one only for a file never approved (d2851ea1 A). A faulty id line is
     // an id line, and its own finding says what is wrong with it.
     if let (FileStatus::Changed, None, Some(approved)) = (status, &bf.id, index.approved_id(rel)) {
         if !bf.shape_errors.iter().any(|e| e.kind == ShapeKind::Id) {
-            st.findings.push(about(msg::blame_id_line_gone(rel, approved)));
+            st.findings
+                .push(about(msg::blame_id_line_gone(rel, approved)));
         }
     }
     // The tool wrote the id line and the ledger holds what it wrote: an id
@@ -562,12 +641,14 @@ pub fn file_state(
     // written.
     let plain = plain_path(&origin);
     if !valid_origin_path(root, source, &origin) {
-        st.findings.push(about(msg::blame_bad_origin_path(rel, &origin)));
+        st.findings
+            .push(about(msg::blame_bad_origin_path(rel, &origin)));
         return st;
     }
     if !source.exists(root, &plain) {
         if status.awaits_approval() {
-            st.findings.push(about(msg::blame_origin_missing(rel, &origin, status)));
+            st.findings
+                .push(about(msg::blame_origin_missing(rel, &origin, status)));
         }
         return st;
     }
@@ -576,21 +657,26 @@ pub fn file_state(
     if bf.shape_errors.iter().any(|e| e.kind == ShapeKind::File) {
         return st;
     }
-    let blob = bf.blob.clone().expect("no structure fault means blob is set");
+    let blob = bf
+        .blob
+        .clone()
+        .expect("no structure fault means blob is set");
     match source.read(root, &plain) {
         None => st.stops.push(msg::blame_origin_unreadable(rel, &origin)),
         Some(origin_content) => {
             // The working tree file is hashed the way git stores it (its
             // filters applied); the index holds the stored blob already.
             let actual = match source {
-                repo::Source::WorkingTree => repo::git_hash_object_filtered(root, &origin_content, &plain),
+                repo::Source::WorkingTree => {
+                    repo::git_hash_object_filtered(root, &origin_content, &plain)
+                }
                 repo::Source::Index => repo::git_hash_object_stdin(root, &origin_content),
             };
             match actual {
                 // The `blob:` line may hold upper case hex; git prints lower.
-                Some(actual) if !actual.eq_ignore_ascii_case(&blob) => {
-                    st.findings.push(about(msg::blame_blob_mismatch(rel, &origin)))
-                }
+                Some(actual) if !actual.eq_ignore_ascii_case(&blob) => st
+                    .findings
+                    .push(about(msg::blame_blob_mismatch(rel, &origin))),
                 Some(_) => {}
                 None => st.stops.push(msg::blame_hash_failed(rel, &origin)),
             }
@@ -613,7 +699,10 @@ mod tests {
     }
 
     fn sample() -> String {
-        format!("origin: docs/x.md\nblob: {}\n\n1-3\tdecision\n4-4\tdetail\n", ZERO_BLOB)
+        format!(
+            "origin: docs/x.md\nblob: {}\n\n1-3\tdecision\n4-4\tdetail\n",
+            ZERO_BLOB
+        )
     }
 
     fn with_id(id: &str) -> String {
@@ -648,7 +737,11 @@ mod tests {
     // adr: d2851ea1-fcb6-476a-b321-c813a594d5e5
     #[test]
     fn well_formed_file_parses_with_no_shape_errors() {
-        let bf = parse(PathBuf::from("x.md"), "adrdom/blame/x.md".to_string(), lines_of(&sample()));
+        let bf = parse(
+            PathBuf::from("x.md"),
+            "adrdom/blame/x.md".to_string(),
+            lines_of(&sample()),
+        );
         assert!(bf.shape_errors.is_empty(), "{:?}", bf.shape_errors);
         assert_eq!(bf.origin.as_deref(), Some("docs/x.md"));
         assert_eq!(bf.blob.as_deref(), Some(ZERO_BLOB));
@@ -674,7 +767,10 @@ mod tests {
     fn missing_origin_is_a_shape_error() {
         let s = sample().replacen("origin: docs/x.md\n", "not an origin line\n", 1);
         let bf = parsed("x.md", &s);
-        assert!(bf.shape_errors.iter().any(|e| e.text.contains("origin") && e.kind == ShapeKind::File));
+        assert!(bf
+            .shape_errors
+            .iter()
+            .any(|e| e.text.contains("origin") && e.kind == ShapeKind::File));
     }
 
     // adr: d2851ea1-fcb6-476a-b321-c813a594d5e5
@@ -682,13 +778,20 @@ mod tests {
     fn a_short_blob_is_a_shape_error() {
         let s = sample().replacen(&format!("blob: {}\n", ZERO_BLOB), "blob: abc\n", 1);
         let bf = parsed("x.md", &s);
-        assert!(bf.shape_errors.iter().any(|e| e.text.contains("blob") && e.kind == ShapeKind::File));
+        assert!(bf
+            .shape_errors
+            .iter()
+            .any(|e| e.text.contains("blob") && e.kind == ShapeKind::File));
     }
 
     // A sha256-object-format repo's blob ids are 64 hex characters, not 40.
     #[test]
     fn a_64_hex_blob_is_accepted() {
-        let s = sample().replacen(&format!("blob: {}\n", ZERO_BLOB), &format!("blob: {}\n", "0".repeat(64)), 1);
+        let s = sample().replacen(
+            &format!("blob: {}\n", ZERO_BLOB),
+            &format!("blob: {}\n", "0".repeat(64)),
+            1,
+        );
         let bf = parsed("x.md", &s);
         assert!(bf.shape_errors.is_empty(), "{:?}", bf.shape_errors);
         assert_eq!(bf.blob.as_deref(), Some("0".repeat(64).as_str()));
@@ -700,7 +803,11 @@ mod tests {
         let s = sample().replacen("1-3\tdecision\n", "1-3 decision\n", 1);
         let bf = parsed("x.md", &s);
         assert_eq!(texts(&bf).len(), 1);
-        assert!(texts(&bf)[0].contains("line 4: not a row"), "{:?}", texts(&bf));
+        assert!(
+            texts(&bf)[0].contains("line 4: not a row"),
+            "{:?}",
+            texts(&bf)
+        );
         assert_eq!(bf.shape_errors[0].kind, ShapeKind::File);
     }
 
@@ -709,7 +816,11 @@ mod tests {
     fn a_missing_blank_line_after_the_header_is_a_shape_error() {
         let s = sample().replacen("\n\n1-3", "\n1-3", 1);
         let bf = parsed("x.md", &s);
-        assert!(texts(&bf).contains(&"line 3: expected a blank line after the header"), "{:?}", texts(&bf));
+        assert!(
+            texts(&bf).contains(&"line 3: expected a blank line after the header"),
+            "{:?}",
+            texts(&bf)
+        );
     }
 
     // adr: d2851ea1-fcb6-476a-b321-c813a594d5e5
@@ -717,7 +828,13 @@ mod tests {
     // reads it, and its fault carries the kind of its own rule.
     #[test]
     fn a_row_value_that_is_neither_decision_nor_detail_keeps_its_range() {
-        for old in ["term: pass", "dropped: dead", "prose: example", "free text", "Decision"] {
+        for old in [
+            "term: pass",
+            "dropped: dead",
+            "prose: example",
+            "free text",
+            "Decision",
+        ] {
             let s = sample().replacen("1-3\tdecision", &format!("1-3\t{}", old), 1);
             let bf = parsed("x.md", &s);
             assert_eq!(bf.rows.len(), 2, "{}", old);
@@ -727,7 +844,10 @@ mod tests {
             assert_eq!(bf.shape_errors[0].kind, ShapeKind::RowValue);
             assert_eq!(
                 bf.shape_errors[0].text,
-                format!("line 4: row value \"{}\" is neither decision nor detail", old)
+                format!(
+                    "line 4: row value \"{}\" is neither decision nor detail",
+                    old
+                )
             );
         }
     }
@@ -746,7 +866,10 @@ mod tests {
     fn an_id_line_with_no_blank_line_after_it_is_a_shape_error() {
         let s = with_id(ID_A).replacen("\n\n1-3", "\n1-3", 1);
         let bf = parsed("x.md", &s);
-        assert_eq!(texts(&bf), vec!["line 4: expected a blank line after the header"]);
+        assert_eq!(
+            texts(&bf),
+            vec!["line 4: expected a blank line after the header"]
+        );
         assert_eq!(bf.shape_errors[0].kind, ShapeKind::File);
     }
 
@@ -777,7 +900,11 @@ mod tests {
     // adr: 5c399a14-1e5c-48eb-b502-b57524c01c24
     #[test]
     fn coverage_errors_finds_a_gap_and_an_overlap_passes() {
-        let row = |start, end| Row { start, end, value: "detail".into() };
+        let row = |start, end| Row {
+            start,
+            end,
+            value: "detail".into(),
+        };
         let rows = vec![
             row(1, 2),
             row(2, 4),
@@ -792,11 +919,18 @@ mod tests {
     // adr: 5c399a14-1e5c-48eb-b502-b57524c01c24
     #[test]
     fn coverage_errors_finds_a_range_beyond_n() {
-        let rows = vec![Row { start: 1, end: 10, value: "decision".into() }];
+        let rows = vec![Row {
+            start: 1,
+            end: 10,
+            value: "decision".into(),
+        }];
         let (beyond, gaps) = coverage_errors(&rows, 5);
         assert_eq!(beyond.len(), 1);
         assert_eq!((beyond[0].start, beyond[0].end), (1, 10));
-        assert!(gaps.is_empty(), "the part inside the origin counts as covered");
+        assert!(
+            gaps.is_empty(),
+            "the part inside the origin counts as covered"
+        );
     }
 
     #[test]
@@ -810,12 +944,21 @@ mod tests {
     #[test]
     fn a_row_range_is_digits_a_dash_and_digits() {
         assert_eq!(parse_row("1-3\tdetail"), Some((1, 3, "detail".to_string())));
-        for bad in ["+1-+3", "+1-3", "1-+3", "-1-3", "1 - 3", "0-2", "1-x", "1-2-3"] {
+        for bad in [
+            "+1-+3", "+1-3", "1-+3", "-1-3", "1 - 3", "0-2", "1-x", "1-2-3",
+        ] {
             assert!(parse_row(&format!("{}\tdetail", bad)).is_none(), "{}", bad);
         }
-        let bf = parsed("x.md", &sample().replacen("1-3\tdecision", "+1-+3\tdecision", 1));
+        let bf = parsed(
+            "x.md",
+            &sample().replacen("1-3\tdecision", "+1-+3\tdecision", 1),
+        );
         assert_eq!(texts(&bf).len(), 1, "{:?}", texts(&bf));
-        assert!(texts(&bf)[0].contains("line 4: not a row"), "{:?}", texts(&bf));
+        assert!(
+            texts(&bf)[0].contains("line 4: not a row"),
+            "{:?}",
+            texts(&bf)
+        );
         assert_eq!(bf.rows.len(), 1);
     }
 
@@ -832,11 +975,23 @@ mod tests {
             let text = format!("origin: docs/x.md\nblob: {}\n\n1-2\tdetail\n", blob);
             let bf = parsed("adrdom/blame/x.md", &text);
             let index = Index::of(vec![bf.clone()], &ledger_approving(&[]));
-            file_state(&root, &repo::Source::WorkingTree, &bf, FileStatus::New, &index).findings.len()
+            file_state(
+                &root,
+                &repo::Source::WorkingTree,
+                &bf,
+                FileStatus::New,
+                &index,
+            )
+            .findings
+            .len()
         };
         assert_eq!(findings(&blob), 0);
         assert_eq!(findings(&blob.to_uppercase()), 0);
-        assert_eq!(findings(ZERO_BLOB), 1, "a blob of another content still mismatches");
+        assert_eq!(
+            findings(ZERO_BLOB),
+            1,
+            "a blob of another content still mismatches"
+        );
         assert_eq!(findings(&ZERO_BLOB.replacen('0', "A", 1)), 1);
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -852,24 +1007,50 @@ mod tests {
         let rows = "1-1\tdecision\n2-2\tdetail\n3-4\tdecision\n5-5\tdecision\n6-6\tdecision\n";
         let file = |rel: &str, id: Option<&str>| {
             let id_line = id.map(|i| format!("id: {}\n", i)).unwrap_or_default();
-            parsed(rel, &format!("origin: docs/x.md\nblob: {}\n{}\n{}", ZERO_BLOB, id_line, rows))
+            parsed(
+                rel,
+                &format!(
+                    "origin: docs/x.md\nblob: {}\n{}\n{}",
+                    ZERO_BLOB, id_line, rows
+                ),
+            )
         };
         let index = Index::of(
-            vec![file("adrdom/blame/x.md", Some(ID_A)), file("adrdom/blame/o.md", None)],
+            vec![
+                file("adrdom/blame/x.md", Some(ID_A)),
+                file("adrdom/blame/o.md", None),
+            ],
             &ledger_approving(&[]),
         );
-        let topic = |text: &str| record::build(PathBuf::from("t.md"), "adrdom/decisions/t.md".to_string(), lines_of(text));
+        let topic = |text: &str| {
+            record::build(
+                PathBuf::from("t.md"),
+                "adrdom/decisions/t.md".to_string(),
+                lines_of(text),
+            )
+        };
         let topic_files = vec![
             topic("# T\n\n### Q?\nblame: x 1-1 2-2 3-3, o 5-5\n"),
             topic(&format!("# U\n\n### R?\nblame: {} 5-5\n", ID_A)),
         ];
         let listed = |name: &str| -> Vec<(usize, usize, bool)> {
             let entry = index.by_name(name).unwrap();
-            decision_rows(entry, &index, &topic_files).into_iter().map(|(r, named)| (r.start, r.end, named)).collect()
+            decision_rows(entry, &index, &topic_files)
+                .into_iter()
+                .map(|(r, named)| (r.start, r.end, named))
+                .collect()
         };
-        assert_eq!(listed("x"), vec![(1, 1, true), (3, 4, false), (5, 5, true), (6, 6, false)]);
-        assert_eq!(listed("o"), vec![(1, 1, false), (3, 4, false), (5, 5, true), (6, 6, false)]);
-        assert!(decision_rows(index.by_name("x").unwrap(), &index, &[]).iter().all(|&(_, named)| !named));
+        assert_eq!(
+            listed("x"),
+            vec![(1, 1, true), (3, 4, false), (5, 5, true), (6, 6, false)]
+        );
+        assert_eq!(
+            listed("o"),
+            vec![(1, 1, false), (3, 4, false), (5, 5, true), (6, 6, false)]
+        );
+        assert!(decision_rows(index.by_name("x").unwrap(), &index, &[])
+            .iter()
+            .all(|&(_, named)| !named));
     }
 
     // adr: 69708a07-469c-406b-9e25-63da1605b432
@@ -882,8 +1063,18 @@ mod tests {
         let a = parsed("adrdom/blame/a.md", &sample());
         let index = Index::of(vec![nested, b, a], &ledger_approving(&[]));
         let rels: Vec<&str> = index.entries().iter().map(|e| e.rel()).collect();
-        assert_eq!(rels, vec!["adrdom/blame/a.md", "adrdom/blame/b.md", "adrdom/blame/pass/notes.md"]);
-        assert_eq!(index.by_name("pass/notes").map(|e| e.rel()), Some("adrdom/blame/pass/notes.md"));
+        assert_eq!(
+            rels,
+            vec![
+                "adrdom/blame/a.md",
+                "adrdom/blame/b.md",
+                "adrdom/blame/pass/notes.md"
+            ]
+        );
+        assert_eq!(
+            index.by_name("pass/notes").map(|e| e.rel()),
+            Some("adrdom/blame/pass/notes.md")
+        );
         assert!(index.by_name("adrdom/blame/a").is_none());
         assert_eq!(index.by_name("a").map(|e| e.rows().len()), Some(2));
         assert!(index.entries().iter().all(|e| e.status == FileStatus::New));
@@ -900,7 +1091,11 @@ mod tests {
         let x = parsed("adrdom/blame/x.md", &with_id(ID_A));
         let index = Index::of(vec![named_like_an_id, x], &ledger_approving(&[]));
         let rel = |written: &str| index.named(written).map(|e| e.rel().to_string());
-        assert_eq!(rel(ID_A).as_deref(), Some("adrdom/blame/x.md"), "the identifier, not the file called so");
+        assert_eq!(
+            rel(ID_A).as_deref(),
+            Some("adrdom/blame/x.md"),
+            "the identifier, not the file called so"
+        );
         assert_eq!(rel(ID_B), Some(format!("adrdom/blame/{}.md", ID_A)));
         assert_eq!(rel("x").as_deref(), Some("adrdom/blame/x.md"));
         assert_eq!(rel("22222222-2222-4222-8222-333333333333"), None);
@@ -916,25 +1111,60 @@ mod tests {
         let b = parsed("adrdom/blame/b.md", &with_id(ID_A));
         let c = parsed("adrdom/blame/c.md", &sample());
 
-        let drafts = Index::of(vec![c.clone(), b.clone(), a.clone()], &ledger_approving(&[]));
-        assert_eq!(drafts.keeper_of(ID_A).map(|e| e.rel()), Some("adrdom/blame/a.md"));
+        let drafts = Index::of(
+            vec![c.clone(), b.clone(), a.clone()],
+            &ledger_approving(&[]),
+        );
+        assert_eq!(
+            drafts.keeper_of(ID_A).map(|e| e.rel()),
+            Some("adrdom/blame/a.md")
+        );
         assert!(drafts.id_taken_from(&a).is_none());
-        assert_eq!(drafts.id_taken_from(&b).map(|e| e.rel()), Some("adrdom/blame/a.md"));
-        assert!(drafts.id_taken_from(&c).is_none(), "a file with no id line took none");
+        assert_eq!(
+            drafts.id_taken_from(&b).map(|e| e.rel()),
+            Some("adrdom/blame/a.md")
+        );
+        assert!(
+            drafts.id_taken_from(&c).is_none(),
+            "a file with no id line took none"
+        );
 
         let original_is_b = Index::of(vec![c, b.clone(), a.clone()], &ledger_approving(&[&b]));
-        assert_eq!(original_is_b.keeper_of(ID_A).map(|e| e.rel()), Some("adrdom/blame/b.md"));
-        assert!(original_is_b.id_taken_from(&b).is_none(), "an approved original never gets a finding");
-        assert_eq!(original_is_b.id_taken_from(&a).map(|e| e.rel()), Some("adrdom/blame/b.md"));
-        assert!(original_is_b.keeper_of("22222222-2222-4222-8222-222222222222").is_none());
+        assert_eq!(
+            original_is_b.keeper_of(ID_A).map(|e| e.rel()),
+            Some("adrdom/blame/b.md")
+        );
+        assert!(
+            original_is_b.id_taken_from(&b).is_none(),
+            "an approved original never gets a finding"
+        );
+        assert_eq!(
+            original_is_b.id_taken_from(&a).map(|e| e.rel()),
+            Some("adrdom/blame/b.md")
+        );
+        assert!(original_is_b
+            .keeper_of("22222222-2222-4222-8222-222222222222")
+            .is_none());
 
         // An approved original that was edited since is changed, and still
         // keeps the identifier over a copy never approved that sorts first.
-        let edited_b = parsed("adrdom/blame/b.md", &with_id(ID_A).replacen("4-4\tdetail", "4-4\tdecision", 1));
+        let edited_b = parsed(
+            "adrdom/blame/b.md",
+            &with_id(ID_A).replacen("4-4\tdetail", "4-4\tdecision", 1),
+        );
         let edited = Index::of(vec![edited_b.clone(), a.clone()], &ledger_approving(&[&b]));
-        assert_eq!(edited.by_name("b").map(|e| e.status), Some(FileStatus::Changed));
-        assert_eq!(edited.keeper_of(ID_A).map(|e| e.rel()), Some("adrdom/blame/b.md"));
+        assert_eq!(
+            edited.by_name("b").map(|e| e.status),
+            Some(FileStatus::Changed)
+        );
+        assert_eq!(
+            edited.keeper_of(ID_A).map(|e| e.rel()),
+            Some("adrdom/blame/b.md")
+        );
         assert!(edited.id_taken_from(&edited_b).is_none());
-        assert_eq!(edited.id_taken_from(&a).map(|e| e.rel()), Some("adrdom/blame/b.md"));
+        assert_eq!(
+            edited.id_taken_from(&a).map(|e| e.rel()),
+            Some("adrdom/blame/b.md")
+        );
     }
 }

@@ -59,13 +59,21 @@ pub struct Change {
 
 impl Change {
     fn new(status: FileStatus, lines: Vec<DiffLine>) -> Change {
-        Change { status, lines, baseline: true }
+        Change {
+            status,
+            lines,
+            baseline: true,
+        }
     }
 
     /// A changed part: its lines against `old`, the approved lines when a
     /// commit holds them.
     fn changed(old: Option<Vec<String>>, new: &[String]) -> Change {
-        Change { status: FileStatus::Changed, baseline: old.is_some(), lines: changed(old, new) }
+        Change {
+            status: FileStatus::Changed,
+            baseline: old.is_some(),
+            lines: changed(old, new),
+        }
     }
 }
 
@@ -76,10 +84,21 @@ pub fn diff(old: &[String], new: &[String]) -> Vec<DiffLine> {
     // stretch between is diffed, so one changed row of a long file costs
     // that row, not the whole file squared.
     let head = old.iter().zip(new).take_while(|(a, b)| a == b).count();
-    let tail = old[head..].iter().rev().zip(new[head..].iter().rev()).take_while(|(a, b)| a == b).count();
-    let both = |t: &String| DiffLine { side: Side::Both, text: t.clone() };
+    let tail = old[head..]
+        .iter()
+        .rev()
+        .zip(new[head..].iter().rev())
+        .take_while(|(a, b)| a == b)
+        .count();
+    let both = |t: &String| DiffLine {
+        side: Side::Both,
+        text: t.clone(),
+    };
     let mut out: Vec<DiffLine> = old[..head].iter().map(both).collect();
-    out.extend(diff_middle(&old[head..old.len() - tail], &new[head..new.len() - tail]));
+    out.extend(diff_middle(
+        &old[head..old.len() - tail],
+        &new[head..new.len() - tail],
+    ));
     out.extend(new[new.len() - tail..].iter().map(both));
     out
 }
@@ -89,21 +108,34 @@ fn diff_middle(old: &[String], new: &[String]) -> Vec<DiffLine> {
     let mut lcs = vec![vec![0usize; m + 1]; n + 1];
     for i in (0..n).rev() {
         for j in (0..m).rev() {
-            lcs[i][j] = if old[i] == new[j] { lcs[i + 1][j + 1] + 1 } else { lcs[i + 1][j].max(lcs[i][j + 1]) };
+            lcs[i][j] = if old[i] == new[j] {
+                lcs[i + 1][j + 1] + 1
+            } else {
+                lcs[i + 1][j].max(lcs[i][j + 1])
+            };
         }
     }
     let (mut i, mut j) = (0, 0);
     let mut out = Vec::new();
     while i < n || j < m {
         if i < n && j < m && old[i] == new[j] {
-            out.push(DiffLine { side: Side::Both, text: new[j].clone() });
+            out.push(DiffLine {
+                side: Side::Both,
+                text: new[j].clone(),
+            });
             i += 1;
             j += 1;
         } else if i < n && (j == m || lcs[i + 1][j] >= lcs[i][j + 1]) {
-            out.push(DiffLine { side: Side::Removed, text: old[i].clone() });
+            out.push(DiffLine {
+                side: Side::Removed,
+                text: old[i].clone(),
+            });
             i += 1;
         } else {
-            out.push(DiffLine { side: Side::Added, text: new[j].clone() });
+            out.push(DiffLine {
+                side: Side::Added,
+                text: new[j].clone(),
+            });
             j += 1;
         }
     }
@@ -112,12 +144,22 @@ fn diff_middle(old: &[String], new: &[String]) -> Vec<DiffLine> {
 
 /// Every line of `new` as added: a part never approved.
 fn added(new: &[String]) -> Vec<DiffLine> {
-    new.iter().map(|t| DiffLine { side: Side::Added, text: t.clone() }).collect()
+    new.iter()
+        .map(|t| DiffLine {
+            side: Side::Added,
+            text: t.clone(),
+        })
+        .collect()
 }
 
 /// Every line of `old` as removed: a part gone from the file.
 fn removed(old: &[String]) -> Vec<DiffLine> {
-    old.iter().map(|t| DiffLine { side: Side::Removed, text: t.clone() }).collect()
+    old.iter()
+        .map(|t| DiffLine {
+            side: Side::Removed,
+            text: t.clone(),
+        })
+        .collect()
 }
 
 /// The change of a part whose approved text is `old` (`None` when no
@@ -153,19 +195,28 @@ struct History {
 
 fn history() -> std::sync::MutexGuard<'static, History> {
     static HISTORY: OnceLock<Mutex<History>> = OnceLock::new();
-    HISTORY.get_or_init(Default::default).lock().unwrap_or_else(|e| e.into_inner())
+    HISTORY
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
 }
 
 /// The commits that touched `rel`, newest first. Reads `HEAD` first and
 /// drops what was kept of another repository or another `HEAD`.
 fn commits_of(root: &Path, rel: &str) -> Arc<Vec<String>> {
-    let head = repo::git(root, &["rev-parse", "HEAD"]).unwrap_or_default().trim().to_string();
+    let head = repo::git(root, &["rev-parse", "HEAD"])
+        .unwrap_or_default()
+        .trim()
+        .to_string();
     let key = (root.to_path_buf(), head.clone(), rel.to_string());
     let at = Some((root.to_path_buf(), head));
     {
         let mut h = history();
         if h.at != at {
-            *h = History { at, ..Default::default() };
+            *h = History {
+                at,
+                ..Default::default()
+            };
         }
         if let Some(found) = h.commits.get(&key) {
             return found.clone();
@@ -174,7 +225,17 @@ fn commits_of(root: &Path, rel: &str) -> Arc<Vec<String>> {
     // Every commit that touched the path, the side of a merge the merge did
     // not take included (`--full-history`), each line a hash and nothing
     // else (`--no-show-signature` over a user's `log.showSignature`).
-    let Some(log) = repo::git(root, &["log", "--no-show-signature", "--full-history", "--format=%H", "--", rel]) else {
+    let Some(log) = repo::git(
+        root,
+        &[
+            "log",
+            "--no-show-signature",
+            "--full-history",
+            "--format=%H",
+            "--",
+            rel,
+        ],
+    ) else {
         // Not kept: the next reader asks git again.
         return Arc::new(Vec::new());
     };
@@ -210,7 +271,8 @@ fn text_at(root: &Path, commit: &str, rel: &str) -> Option<Arc<String>> {
 /// Whether `commit`'s tree holds nothing at `rel`: git lists the tree and
 /// names no entry.
 fn commit_lacks(root: &Path, commit: &str, rel: &str) -> bool {
-    repo::git(root, &["ls-tree", "--name-only", commit, "--", rel]).is_some_and(|out| out.trim().is_empty())
+    repo::git(root, &["ls-tree", "--name-only", commit, "--", rel])
+        .is_some_and(|out| out.trim().is_empty())
 }
 
 /// The text of `rel` at `commit` parsed as a topic file. The parsed file
@@ -222,7 +284,11 @@ fn topic_at(root: &Path, commit: &str, rel: &str) -> Option<Arc<RecordFile>> {
         return Some(found.clone());
     }
     let text = text_at(root, commit, rel)?;
-    let rf = Arc::new(record::build(root.join(rel), rel.to_string(), record::split_lines(&text)));
+    let rf = Arc::new(record::build(
+        root.join(rel),
+        rel.to_string(),
+        record::split_lines(&text),
+    ));
     history().topics.insert(key, rf.clone());
     Some(rf)
 }
@@ -246,13 +312,21 @@ pub fn committed_topics(root: &Path, rel: &str) -> impl Iterator<Item = Arc<Reco
 }
 
 /// The newest committed text of `rel` that `matches` takes.
-pub fn approved_text(root: &Path, rel: &str, matches: &dyn Fn(&str) -> bool) -> Option<Arc<String>> {
+pub fn approved_text(
+    root: &Path,
+    rel: &str,
+    matches: &dyn Fn(&str) -> bool,
+) -> Option<Arc<String>> {
     committed_texts(root, rel).find(|text| matches(text))
 }
 
 /// The newest committed version of the topic file `rel` that `matches`
 /// takes.
-fn approved_topic(root: &Path, rel: &str, matches: &dyn Fn(&RecordFile) -> bool) -> Option<Arc<RecordFile>> {
+fn approved_topic(
+    root: &Path,
+    rel: &str,
+    matches: &dyn Fn(&RecordFile) -> bool,
+) -> Option<Arc<RecordFile>> {
     committed_topics(root, rel).find(|rf| matches(rf))
 }
 
@@ -264,7 +338,9 @@ pub fn question_lines(rf: &RecordFile, sec: &Section) -> Vec<String> {
     rf.lines[s..e]
         .iter()
         .map(|l| l.trim_end().to_string())
-        .filter(|l| !l.trim().is_empty() && !l.starts_with("terms: ") && !l.starts_with("**Answer:**"))
+        .filter(|l| {
+            !l.trim().is_empty() && !l.starts_with("terms: ") && !l.starts_with("**Answer:**")
+        })
         .collect()
 }
 
@@ -304,8 +380,14 @@ fn file_change(old: Option<Vec<String>>, new: &[String]) -> Change {
 /// `lines`, each trimmed at its end, less the blank lines at either end.
 fn inner_lines(lines: &[String]) -> Vec<String> {
     let lines: Vec<String> = lines.iter().map(|l| l.trim_end().to_string()).collect();
-    let from = lines.iter().position(|l| !l.is_empty()).unwrap_or(lines.len());
-    let to = lines.iter().rposition(|l| !l.is_empty()).map_or(from, |i| i + 1);
+    let from = lines
+        .iter()
+        .position(|l| !l.is_empty())
+        .unwrap_or(lines.len());
+    let to = lines
+        .iter()
+        .rposition(|l| !l.is_empty())
+        .map_or(from, |i| i + 1);
     lines[from..to].to_vec()
 }
 
@@ -320,7 +402,13 @@ fn approved_hash<'a>(led: &'a Ledger, rel: &str, id: &str) -> Option<&'a str> {
 /// The approved lines of the question `id` of `rel`: from `plan` when it
 /// holds that question at its approved hash, else from the newest committed
 /// version that does.
-fn approved_question(root: &Path, rel: &str, id: &str, hash: &str, plan: Option<&RecordFile>) -> Option<Vec<String>> {
+fn approved_question(
+    root: &Path,
+    rel: &str,
+    id: &str,
+    hash: &str,
+    plan: Option<&RecordFile>,
+) -> Option<Vec<String>> {
     let lines_in = |rf: &RecordFile| {
         rf.sections
             .iter()
@@ -366,13 +454,19 @@ pub fn topic_file(root: &Path, rf: &RecordFile, led: &Ledger) -> TopicChanges {
             None => Some(Change::new(FileStatus::New, added(&new))),
             Some(row) => {
                 let hash = row.hash.clone();
-                let old = approved_topic(root, rel, &|rf| record::context_hash(rf) == hash).map(|rf| prose_lines(&rf));
+                let old = approved_topic(root, rel, &|rf| record::context_hash(rf) == hash)
+                    .map(|rf| prose_lines(&rf));
                 Some(Change::changed(old, &new))
             }
         }
     };
     if plan_ok {
-        return TopicChanges { prose, questions: vec![None; rf.sections.len()], struck: Vec::new(), struck_unsure: false };
+        return TopicChanges {
+            prose,
+            questions: vec![None; rf.sections.len()],
+            struck: Vec::new(),
+            struck_unsure: false,
+        };
     }
     // The committed version of the latest approved plan, when one holds it
     // exactly: the source of the approved text of every question.
@@ -390,11 +484,18 @@ pub fn topic_file(root: &Path, rf: &RecordFile, led: &Ledger) -> TopicChanges {
             // beyond it, whatever an earlier approval said of its text (one
             // struck by a plan change and put back reads as added).
             let outside_plan = match (&plan, &from_ledger) {
-                (Some(p), _) => !p.sections.iter().any(|ps| ps.id.is_some() && ps.id == sec.id),
+                (Some(p), _) => !p
+                    .sections
+                    .iter()
+                    .any(|ps| ps.id.is_some() && ps.id == sec.id),
                 (None, Some(lp)) => sec.id.as_ref().is_some_and(|id| lp.outside.contains(id)),
                 (None, None) => false,
             };
-            match sec.id.as_deref().and_then(|id| approved_hash(led, rel, id).map(|h| (id, h))) {
+            match sec
+                .id
+                .as_deref()
+                .and_then(|id| approved_hash(led, rel, id).map(|h| (id, h)))
+            {
                 None => Some(Change::new(FileStatus::New, added(&new))),
                 Some(_) if outside_plan => Some(Change::new(FileStatus::New, added(&new))),
                 Some((_, h)) if h == hash => None,
@@ -410,8 +511,19 @@ pub fn topic_file(root: &Path, rf: &RecordFile, led: &Ledger) -> TopicChanges {
         Some(old) => (
             old.sections
                 .iter()
-                .filter(|s| s.id.as_deref().is_some_and(|id| !in_file(id) && !state::is_dropped(led, id) && !state::is_superseded(led, id)))
-                .map(|s| (s.heading_text.clone(), Change::new(FileStatus::Removed, removed(&question_lines(old, s)))))
+                .filter(|s| {
+                    s.id.as_deref().is_some_and(|id| {
+                        !in_file(id)
+                            && !state::is_dropped(led, id)
+                            && !state::is_superseded(led, id)
+                    })
+                })
+                .map(|s| {
+                    (
+                        s.heading_text.clone(),
+                        Change::new(FileStatus::Removed, removed(&question_lines(old, s))),
+                    )
+                })
                 .collect(),
             false,
         ),
@@ -420,10 +532,21 @@ pub fn topic_file(root: &Path, rf: &RecordFile, led: &Ledger) -> TopicChanges {
         // identifier stands for its heading, which only that text held.
         None => {
             let lp = from_ledger.unwrap_or_else(|| ledger_plan(rf, led));
-            (lp.struck.into_iter().map(|id| (id, Change::new(FileStatus::Removed, Vec::new()))).collect(), !lp.sure)
+            (
+                lp.struck
+                    .into_iter()
+                    .map(|id| (id, Change::new(FileStatus::Removed, Vec::new())))
+                    .collect(),
+                !lp.sure,
+            )
         }
     };
-    TopicChanges { prose, questions, struck, struck_unsure }
+    TopicChanges {
+        prose,
+        questions,
+        struck,
+        struck_unsure,
+    }
 }
 
 /// The most identifiers `ledger_plan` tries in every combination.
@@ -451,8 +574,16 @@ fn ledger_plan(rf: &RecordFile, led: &Ledger) -> LedgerPlan {
         })
         .collect();
     let mut gone: Vec<(String, String)> = Vec::new();
-    for r in led.rows.iter().filter(|r| r.event == "approved" && r.detail == rel && r.id != "-") {
-        if !in_file(&r.id) && !state::is_dropped(led, &r.id) && !state::is_superseded(led, &r.id) && !gone.iter().any(|(id, _)| *id == r.id) {
+    for r in led
+        .rows
+        .iter()
+        .filter(|r| r.event == "approved" && r.detail == rel && r.id != "-")
+    {
+        if !in_file(&r.id)
+            && !state::is_dropped(led, &r.id)
+            && !state::is_superseded(led, &r.id)
+            && !gone.iter().any(|(id, _)| *id == r.id)
+        {
             if let Some(h) = approved_hash(led, rel, &r.id) {
                 gone.push((r.id.clone(), h.to_string()));
             }
@@ -462,20 +593,42 @@ fn ledger_plan(rf: &RecordFile, led: &Ledger) -> LedgerPlan {
     let ids_of = |v: &[&(String, String)]| v.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>();
     // With nothing gone a set the search cannot find leaves nothing struck
     // unnamed: the plan may be one approved before (or no plan at all).
-    let unsure = || LedgerPlan { struck: ids_of(&gone.iter().collect::<Vec<_>>()), outside: Vec::new(), sure: gone.is_empty() };
+    let unsure = || LedgerPlan {
+        struck: ids_of(&gone.iter().collect::<Vec<_>>()),
+        outside: Vec::new(),
+        sure: gone.is_empty(),
+    };
     // The questions still in the file make the approved plan alone.
     if state::plan_approved_hashes(led, rel, &hashes_of(&kept.iter().collect::<Vec<_>>())) {
-        return LedgerPlan { struck: Vec::new(), outside: Vec::new(), sure: true };
+        return LedgerPlan {
+            struck: Vec::new(),
+            outside: Vec::new(),
+            sure: true,
+        };
     }
     // Every question still in the file in the plan, and a set of those gone.
     if !gone.is_empty() && gone.len() <= STRUCK_CANDIDATES {
         if let Some(mask) = completing_set(gone.len(), |mask| {
             let mut set: Vec<&(String, String)> = kept.iter().collect();
-            set.extend(gone.iter().enumerate().filter(|(i, _)| mask & (1 << i) != 0).map(|(_, g)| g));
+            set.extend(
+                gone.iter()
+                    .enumerate()
+                    .filter(|(i, _)| mask & (1 << i) != 0)
+                    .map(|(_, g)| g),
+            );
             state::plan_approved_hashes(led, rel, &hashes_of(&set))
         }) {
-            let struck = gone.iter().enumerate().filter(|(i, _)| mask & (1 << i) != 0).map(|(_, (id, _))| id.clone()).collect();
-            return LedgerPlan { struck, outside: Vec::new(), sure: true };
+            let struck = gone
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| mask & (1 << i) != 0)
+                .map(|(_, (id, _))| id.clone())
+                .collect();
+            return LedgerPlan {
+                struck,
+                outside: Vec::new(),
+                sure: true,
+            };
         }
     }
     // Any set of both: a question of the file the plan did not hold.
@@ -484,14 +637,29 @@ fn ledger_plan(rf: &RecordFile, led: &Ledger) -> LedgerPlan {
         return unsure();
     }
     match completing_set(both.len(), |mask| {
-        let set: Vec<&(String, String)> = both.iter().enumerate().filter(|(i, _)| mask & (1 << i) != 0).map(|(_, b)| *b).collect();
+        let set: Vec<&(String, String)> = both
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| mask & (1 << i) != 0)
+            .map(|(_, b)| *b)
+            .collect();
         state::plan_approved_hashes(led, rel, &hashes_of(&set))
     }) {
         Some(mask) => {
             let held = |i: usize| mask & (1 << i) != 0;
-            let outside = (0..kept.len()).filter(|&i| !held(i)).map(|i| kept[i].0.clone()).collect();
-            let struck = (0..gone.len()).filter(|&i| held(kept.len() + i)).map(|i| gone[i].0.clone()).collect();
-            LedgerPlan { struck, outside, sure: true }
+            let outside = (0..kept.len())
+                .filter(|&i| !held(i))
+                .map(|i| kept[i].0.clone())
+                .collect();
+            let struck = (0..gone.len())
+                .filter(|&i| held(kept.len() + i))
+                .map(|i| gone[i].0.clone())
+                .collect();
+            LedgerPlan {
+                struck,
+                outside,
+                sure: true,
+            }
         }
         None => unsure(),
     }
@@ -517,7 +685,9 @@ struct LedgerPlan {
 /// approved one.
 fn latest_plan(root: &Path, rel: &str, led: &Ledger) -> Option<Arc<RecordFile>> {
     led.latest_for_path("approved", rel)?;
-    approved_topic(root, rel, &|rf| state::plan_approved_hashes(led, rel, &record::question_hashes(rf)))
+    approved_topic(root, rel, &|rf| {
+        state::plan_approved_hashes(led, rel, &record::question_hashes(rf))
+    })
 }
 
 /// An entry's lines as the terms file holds them, less its `id:` and
@@ -543,7 +713,9 @@ pub fn entry_lines(tf: &TermsFile, t: &terms::Term) -> Vec<String> {
 fn approved_entry(root: &Path, id: &str, hash: &str) -> Option<Vec<String>> {
     let entry = |text: &str| {
         let tf = terms::parse(&record::split_lines(text));
-        let t = tf.terms.iter().find(|t| t.id.as_deref() == Some(id) && (hash.is_empty() || terms::term_hash(t) == hash))?;
+        let t = tf.terms.iter().find(|t| {
+            t.id.as_deref() == Some(id) && (hash.is_empty() || terms::term_hash(t) == hash)
+        })?;
         Some(entry_lines(&tf, t))
     };
     let text = approved_text(root, repo::TERMS_PATH, &|t| entry(t).is_some())?;
@@ -567,7 +739,10 @@ pub fn terms_file(root: &Path, tf: &TermsFile, led: &Ledger) -> TermsChanges {
                 TermStatus::New => Some(Change::new(FileStatus::New, added(&new))),
                 TermStatus::Changed => {
                     let id = t.id.as_deref().unwrap_or_default();
-                    let hash = led.latest_for_id("term", id).map(|r| r.hash.clone()).unwrap_or_default();
+                    let hash = led
+                        .latest_for_id("term", id)
+                        .map(|r| r.hash.clone())
+                        .unwrap_or_default();
                     Some(Change::changed(approved_entry(root, id, &hash), &new))
                 }
                 TermStatus::Approved | TermStatus::Retired | TermStatus::Removed => None,
@@ -577,20 +752,31 @@ pub fn terms_file(root: &Path, tf: &TermsFile, led: &Ledger) -> TermsChanges {
     let gone: Vec<(String, Change)> = state::removed_terms(led, tf)
         .into_iter()
         .map(|(id, name)| {
-            let hash = led.latest_for_id("term", &id).map(|r| r.hash.clone()).unwrap_or_default();
-            let old = approved_entry(root, &id, &hash).unwrap_or_else(|| vec![format!("## {}", name)]);
+            let hash = led
+                .latest_for_id("term", &id)
+                .map(|r| r.hash.clone())
+                .unwrap_or_default();
+            let old =
+                approved_entry(root, &id, &hash).unwrap_or_else(|| vec![format!("## {}", name)]);
             (name, Change::new(FileStatus::Removed, removed(&old)))
         })
         .collect();
-    let whole = (entries.iter().all(Option::is_none) && gone.is_empty() && !state::terms_approved(led, tf))
-        .then(|| {
-            let hash = led.latest_for_path("terms", repo::TERMS_PATH)?.hash.clone();
-            let old = approved_text(root, repo::TERMS_PATH, &|t| terms::file_hash(&terms::parse(&record::split_lines(t))) == hash)
+    let whole =
+        (entries.iter().all(Option::is_none) && gone.is_empty() && !state::terms_approved(led, tf))
+            .then(|| {
+                let hash = led.latest_for_path("terms", repo::TERMS_PATH)?.hash.clone();
+                let old = approved_text(root, repo::TERMS_PATH, &|t| {
+                    terms::file_hash(&terms::parse(&record::split_lines(t))) == hash
+                })
                 .map(|t| record::split_lines(&t));
-            Some(file_change(old, &tf.lines))
-        })
-        .flatten();
-    TermsChanges { entries, gone, whole }
+                Some(file_change(old, &tf.lines))
+            })
+            .flatten();
+    TermsChanges {
+        entries,
+        gone,
+        whole,
+    }
 }
 
 /// What the terms file holds beyond its latest approval (`terms_file`).
@@ -613,8 +799,10 @@ pub fn blame_file(root: &Path, rel: &str, lines: &[String], led: &Ledger) -> Opt
         return Some(Change::new(FileStatus::New, added(&inner_lines(lines))));
     };
     let hash = row.hash.clone();
-    let old = approved_text(root, rel, &|t| crate::blame::file_hash(&record::split_lines(t)) == hash)
-        .map(|t| record::split_lines(&t));
+    let old = approved_text(root, rel, &|t| {
+        crate::blame::file_hash(&record::split_lines(t)) == hash
+    })
+    .map(|t| record::split_lines(&t));
     Some(file_change(old, lines))
 }
 
@@ -652,7 +840,13 @@ mod tests {
     }
 
     fn git_in(dir: &Path, args: &[&str]) {
-        let ok = std::process::Command::new("git").current_dir(dir).args(args).output().unwrap().status.success();
+        let ok = std::process::Command::new("git")
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .unwrap()
+            .status
+            .success();
         assert!(ok, "git {:?}", args);
     }
 
@@ -676,10 +870,19 @@ mod tests {
         let key = (dir.clone(), commits[0].clone(), "f.md".to_string());
         assert_eq!(history().texts.get(&key), Some(&None));
         // The older one holds it.
-        assert_eq!(text_at(&dir, &commits[1], "f.md").as_deref().map(String::as_str), Some("one\n"));
+        assert_eq!(
+            text_at(&dir, &commits[1], "f.md")
+                .as_deref()
+                .map(String::as_str),
+            Some("one\n")
+        );
         // A commit git cannot read is not kept at all.
         assert!(text_at(&dir, "0000000000000000000000000000000000000000", "f.md").is_none());
-        let unknown = (dir.clone(), "0000000000000000000000000000000000000000".to_string(), "f.md".to_string());
+        let unknown = (
+            dir.clone(),
+            "0000000000000000000000000000000000000000".to_string(),
+            "f.md".to_string(),
+        );
         assert!(!history().texts.contains_key(&unknown));
         let _ = std::fs::remove_dir_all(&dir);
     }

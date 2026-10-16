@@ -1,10 +1,10 @@
-use crate::rules::Command;
 use crate::banned;
 use crate::commands::{deny_entries, OWNER_COMMANDS};
 use crate::moves::{command, Cmd};
 use crate::msg::{self, Actor};
 use crate::out::{self, Event};
 use crate::repo;
+use crate::rules::Command;
 use std::fs;
 use std::path::Path;
 
@@ -52,7 +52,9 @@ pub fn strip_ties(text: &str) -> String {
             fenced = !fenced;
         }
         match body.rfind(TIE_OPEN) {
-            Some(at) if !fenced && body.ends_with("-->") && body[at..].matches("-->").count() == 1 => {
+            Some(at)
+                if !fenced && body.ends_with("-->") && body[at..].matches("-->").count() == 1 =>
+            {
                 out.push_str(&body[..at]);
                 out.push_str(ends);
             }
@@ -101,7 +103,8 @@ pub(crate) const PRE_PUSH_HOOK: &str = "#!/bin/sh\nadr check --push\nexit $?\n";
 /// same as any other file `install` doesn't cover. `check`'s `install`
 /// check compares the file on disk against this text the same way it
 /// compares `.codex/rules/adrdom.rules` against `codex_rules_content()`.
-pub(crate) const GITATTRIBUTES_CONTENT: &str = "state/ledger.tsv merge=union\nstate/reader.tsv merge=union\n";
+pub(crate) const GITATTRIBUTES_CONTENT: &str =
+    "state/ledger.tsv merge=union\nstate/reader.tsv merge=union\n";
 
 /// `adrdom/.gitignore`'s whole content: the embedding index under
 /// `adrdom/cache` stays out of git ("Does git track a file the tool can get
@@ -132,7 +135,10 @@ pub fn run(claude: bool, codex: bool, planning: bool) -> i32 {
         Some(r) => r,
         None => {
             let words = install_words(claude, codex, planning);
-            out::eprint_stop(Command::Install, &msg::not_a_repo("install", &words[2..], Actor::Agent));
+            out::eprint_stop(
+                Command::Install,
+                &msg::not_a_repo("install", &words[2..], Actor::Agent),
+            );
             return 1;
         }
     };
@@ -154,32 +160,71 @@ pub fn run(claude: bool, codex: bool, planning: bool) -> i32 {
 
 /// Every piece install writes, in order, each file it writes pushed onto
 /// `events`; the first failure stops it, as its message.
-fn install_all(root: &Path, claude: bool, codex: bool, planning: bool, events: &mut Vec<Event>) -> Result<(), String> {
+fn install_all(
+    root: &Path,
+    claude: bool,
+    codex: bool,
+    planning: bool,
+    events: &mut Vec<Event>,
+) -> Result<(), String> {
     let cmd = &install_command(claude, codex, planning);
     for dir in [repo::DECISIONS_DIR, repo::STATE_DIR] {
         let path = root.join(dir);
-        fs::create_dir_all(&path).map_err(|e| msg::create_failed(&path.display().to_string(), e, msg::after_fix_agent_runs(cmd.clone())))?;
+        fs::create_dir_all(&path).map_err(|e| {
+            msg::create_failed(
+                &path.display().to_string(),
+                e,
+                msg::after_fix_agent_runs(cmd.clone()),
+            )
+        })?;
     }
 
     for rel in [repo::LEDGER_PATH, repo::READER_PATH, banned::BAN_LIST] {
         let path = root.join(rel);
-        events.extend(
-            create_if_missing(root, rel).map_err(|e| msg::write_failed(&path.display().to_string(), e, msg::after_fix_agent_runs(cmd.clone())))?,
-        );
+        events.extend(create_if_missing(root, rel).map_err(|e| {
+            msg::write_failed(
+                &path.display().to_string(),
+                e,
+                msg::after_fix_agent_runs(cmd.clone()),
+            )
+        })?);
     }
 
-    events.extend(install_gitattributes(root).map_err(|e| msg::write_failed(repo::GITATTRIBUTES_PATH, e, msg::after_fix_agent_runs(cmd.clone())))?);
-    events.extend(install_gitignore(root).map_err(|e| msg::write_failed(repo::GITIGNORE_PATH, e, msg::after_fix_agent_runs(cmd.clone())))?);
-    events.extend(install_brief(root).map_err(|e| msg::write_failed(repo::BRIEF_PATH, e, msg::after_fix_agent_runs(cmd.clone())))?);
+    events.extend(install_gitattributes(root).map_err(|e| {
+        msg::write_failed(
+            repo::GITATTRIBUTES_PATH,
+            e,
+            msg::after_fix_agent_runs(cmd.clone()),
+        )
+    })?);
+    events.extend(install_gitignore(root).map_err(|e| {
+        msg::write_failed(
+            repo::GITIGNORE_PATH,
+            e,
+            msg::after_fix_agent_runs(cmd.clone()),
+        )
+    })?);
+    events.extend(install_brief(root).map_err(|e| {
+        msg::write_failed(repo::BRIEF_PATH, e, msg::after_fix_agent_runs(cmd.clone()))
+    })?);
 
     let hooks = root.join(".githooks");
-    fs::create_dir_all(&hooks).map_err(|e| msg::create_failed(&hooks.display().to_string(), e, msg::after_fix_agent_runs(cmd.clone())))?;
+    fs::create_dir_all(&hooks).map_err(|e| {
+        msg::create_failed(
+            &hooks.display().to_string(),
+            e,
+            msg::after_fix_agent_runs(cmd.clone()),
+        )
+    })?;
     for (rel, content) in [
         (repo::PRE_COMMIT_HOOK_PATH, PRE_COMMIT_HOOK),
         (repo::COMMIT_MSG_HOOK_PATH, COMMIT_MSG_HOOK),
         (repo::PRE_PUSH_HOOK_PATH, PRE_PUSH_HOOK),
     ] {
-        events.extend(create_hook(root, rel, content).map_err(|e| msg::write_failed(rel, e, msg::after_fix_agent_runs(cmd.clone())))?);
+        events.extend(
+            create_hook(root, rel, content)
+                .map_err(|e| msg::write_failed(rel, e, msg::after_fix_agent_runs(cmd.clone())))?,
+        );
     }
 
     // Without this git runs none of the hooks written above. A change of
@@ -187,22 +232,40 @@ fn install_all(root: &Path, claude: bool, codex: bool, planning: bool, events: &
     let hooks_path = repo::git(root, &["config", "core.hooksPath"]).map(|v| v.trim().to_string());
     if hooks_path.as_deref() != Some(".githooks") {
         if repo::git(root, &["config", "core.hooksPath", ".githooks"]).is_none() {
-            return Err(msg::hooks_path_failed("set", msg::after_fix_agent_runs(cmd.clone())));
+            return Err(msg::hooks_path_failed(
+                "set",
+                msg::after_fix_agent_runs(cmd.clone()),
+            ));
         }
-        events.push(Event::ConfigSet { key: "core.hooksPath".to_string(), value: ".githooks".to_string() });
+        events.push(Event::ConfigSet {
+            key: "core.hooksPath".to_string(),
+            value: ".githooks".to_string(),
+        });
     }
 
-    events.extend(install_agents_md(root).map_err(|e| msg::update_failed("AGENTS.md", e, msg::after_fix_agent_runs(cmd.clone())))?);
-    events.extend(install_claude_md(root, claude).map_err(|e| msg::update_failed("CLAUDE.md", e, msg::after_fix_agent_runs(cmd.clone())))?);
+    events.extend(
+        install_agents_md(root).map_err(|e| {
+            msg::update_failed("AGENTS.md", e, msg::after_fix_agent_runs(cmd.clone()))
+        })?,
+    );
+    events.extend(
+        install_claude_md(root, claude).map_err(|e| {
+            msg::update_failed("CLAUDE.md", e, msg::after_fix_agent_runs(cmd.clone()))
+        })?,
+    );
 
     if claude {
         events.extend(merge_settings(root, cmd)?);
     }
 
     if codex {
-        events.extend(
-            install_codex_rules(root).map_err(|e| msg::write_failed(".codex/rules/adrdom.rules", e, msg::after_fix_agent_runs(cmd.clone())))?,
-        );
+        events.extend(install_codex_rules(root).map_err(|e| {
+            msg::write_failed(
+                ".codex/rules/adrdom.rules",
+                e,
+                msg::after_fix_agent_runs(cmd.clone()),
+            )
+        })?);
     }
 
     // The planning step runs last: the repository's own files are written
@@ -219,7 +282,9 @@ fn install_all(root: &Path, claude: bool, codex: bool, planning: bool, events: &
 
 /// The event of a file written at `rel`.
 fn written(rel: &str) -> Option<Event> {
-    Some(Event::FileWritten { path: rel.to_string() })
+    Some(Event::FileWritten {
+        path: rel.to_string(),
+    })
 }
 
 /// Creates the empty file at `rel` when it is missing.
@@ -470,8 +535,7 @@ fn merge_settings(root: &Path, cmd: &Cmd) -> Result<Option<Event>, String> {
         if content.trim().is_empty() {
             serde_json::json!({})
         } else {
-            serde_json::from_str(&content)
-                .map_err(|e| msg::parse_failed(REL, e, fix()))?
+            serde_json::from_str(&content).map_err(|e| msg::parse_failed(REL, e, fix()))?
         }
     } else {
         serde_json::json!({})

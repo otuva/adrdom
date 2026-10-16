@@ -56,9 +56,21 @@ fn with_both_agents_installed_the_tool_picks_claude() {
 fn a_repository_installed_for_no_agent_has_no_reader() {
     let dir = installed(&[]);
     assert_eq!(reader::program(&dir), None);
-    let e = reader::load_in(&dir, &OsString::from("/nonexistent")).err().expect("load refuses");
-    assert!(e.contains("reader: no agent is installed for this repository"), "{}", e);
-    assert!(e.contains("agent installs an agent's files with adr install --claude or adr install --codex"), "{}", e);
+    let e = reader::load_in(&dir, &OsString::from("/nonexistent"))
+        .err()
+        .expect("load refuses");
+    assert!(
+        e.contains("reader: no agent is installed for this repository"),
+        "{}",
+        e
+    );
+    assert!(
+        e.contains(
+            "agent installs an agent's files with adr install --claude or adr install --codex"
+        ),
+        "{}",
+        e
+    );
 }
 
 // adr: 5418b256-dfae-439a-96c1-57d82380cd1e
@@ -67,9 +79,19 @@ fn a_repository_installed_for_no_agent_has_no_reader() {
 fn the_missing_program_named_is_the_installed_agents() {
     for (flag, name) in [("--claude", "claude"), ("--codex", "codex")] {
         let dir = installed(&[flag]);
-        let e = reader::load_in(&dir, &OsString::from("/nonexistent")).err().expect("load refuses");
-        assert!(e.contains(&format!("reader: the {} program is missing", name)), "{}", e);
-        assert!(e.contains(&format!("agent installs the {} program", name)), "{}", e);
+        let e = reader::load_in(&dir, &OsString::from("/nonexistent"))
+            .err()
+            .expect("load refuses");
+        assert!(
+            e.contains(&format!("reader: the {} program is missing", name)),
+            "{}",
+            e
+        );
+        assert!(
+            e.contains(&format!("agent installs the {} program", name)),
+            "{}",
+            e
+        );
     }
 }
 
@@ -89,11 +111,20 @@ fn the_program_file_is_looked_up_with_each_suffix_in_order() {
         }
     };
     file("codex.cmd");
-    assert_eq!(reader::find_program("codex", &path, &[".exe", ".cmd"]), Some(dir.join("codex.cmd")));
+    assert_eq!(
+        reader::find_program("codex", &path, &[".exe", ".cmd"]),
+        Some(dir.join("codex.cmd"))
+    );
     file("codex.exe");
-    assert_eq!(reader::find_program("codex", &path, &[".exe", ".cmd"]), Some(dir.join("codex.exe")));
+    assert_eq!(
+        reader::find_program("codex", &path, &[".exe", ".cmd"]),
+        Some(dir.join("codex.exe"))
+    );
     assert_eq!(reader::find_program("codex", &path, &[""]), None);
-    assert_eq!(reader::find_program("claude", &path, &[".exe", ".cmd"]), None);
+    assert_eq!(
+        reader::find_program("claude", &path, &[".exe", ".cmd"]),
+        None
+    );
 }
 
 // adr: 5418b256-dfae-439a-96c1-57d82380cd1e
@@ -110,7 +141,10 @@ fn a_file_that_cannot_run_is_skipped() {
     assert_eq!(reader::find_program("claude", &path, &[""]), None);
     std::fs::write(b.join("claude"), "").unwrap();
     std::fs::set_permissions(b.join("claude"), std::fs::Permissions::from_mode(0o755)).unwrap();
-    assert_eq!(reader::find_program("claude", &path, &[""]), Some(b.join("claude")));
+    assert_eq!(
+        reader::find_program("claude", &path, &[""]),
+        Some(b.join("claude"))
+    );
 }
 
 #[cfg(unix)]
@@ -137,16 +171,26 @@ mod stubs {
         let dir = installed(&["--claude"]);
         let bin = init_repo();
         stub(&bin, "claude", &format!("#!/bin/sh\ncat > {0}/stdin.txt\nprintf '%s\\n' \"$@\" > {0}/args.txt\nprintf '%s\\n' '{{\"result\":\"They ask the same.\\nsame\"}}'\n", bin.display()));
-        let r = reader::load_in(&dir, bin.as_os_str()).ok().expect("claude found");
+        let r = reader::load_in(&dir, bin.as_os_str())
+            .ok()
+            .expect("claude found");
         assert_eq!(r.model(), reader::MODEL);
         let rows = reader::read_with(&dir, r.as_ref(), &[pair()]).unwrap();
         assert_eq!(rows[0].word, "same");
         assert_eq!(rows[0].model, reader::MODEL);
         let got = std::fs::read_to_string(bin.join("stdin.txt")).unwrap();
-        assert!(got.contains("Does the widget glow?") && got.contains("Does the widget shine?"), "{}", got);
+        assert!(
+            got.contains("Does the widget glow?") && got.contains("Does the widget shine?"),
+            "{}",
+            got
+        );
         // The system prompt goes by file, never as an argument.
         let args = std::fs::read_to_string(bin.join("args.txt")).unwrap();
-        assert!(args.lines().any(|l| l == "--system-prompt-file"), "{}", args);
+        assert!(
+            args.lines().any(|l| l == "--system-prompt-file"),
+            "{}",
+            args
+        );
         assert!(!args.lines().any(|l| l == "--system-prompt"), "{}", args);
     }
 
@@ -165,17 +209,33 @@ mod stubs {
                 bin.display()
             ),
         );
-        let r = reader::load_in(&dir, bin.as_os_str()).ok().expect("codex found");
+        let r = reader::load_in(&dir, bin.as_os_str())
+            .ok()
+            .expect("codex found");
         assert_eq!(r.model(), reader::CODEX_MODEL);
         let rows = reader::read_with(&dir, r.as_ref(), &[pair()]).unwrap();
         assert_eq!(rows[0].word, "same");
         assert_eq!(rows[0].model, reader::CODEX_MODEL);
         let got = std::fs::read_to_string(bin.join("stdin.txt")).unwrap();
-        assert!(got.contains("Does the widget glow?") && got.contains("Does the widget shine?"), "{}", got);
+        assert!(
+            got.contains("Does the widget glow?") && got.contains("Does the widget shine?"),
+            "{}",
+            got
+        );
         assert!(got.contains("====="), "the prompt is set apart: {}", got);
         let args = std::fs::read_to_string(bin.join("args.txt")).unwrap();
-        for flag in ["--ignore-user-config", "--ignore-rules", "shell_tool", reader::CODEX_MODEL] {
-            assert!(args.lines().any(|l| l == flag), "{} missing: {}", flag, args);
+        for flag in [
+            "--ignore-user-config",
+            "--ignore-rules",
+            "shell_tool",
+            reader::CODEX_MODEL,
+        ] {
+            assert!(
+                args.lines().any(|l| l == flag),
+                "{} missing: {}",
+                flag,
+                args
+            );
         }
     }
 }

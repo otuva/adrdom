@@ -84,8 +84,12 @@ fn sweep_partials(root: &Path) {
     let Ok(rd) = fs::read_dir(root) else { return };
     for e in rd.flatten() {
         let name = e.file_name().to_string_lossy().to_string();
-        let Some(stem) = name.strip_prefix('.').and_then(|n| n.strip_suffix(".tmp")) else { continue };
-        let Some((_, id)) = stem.rsplit_once('.') else { continue };
+        let Some(stem) = name.strip_prefix('.').and_then(|n| n.strip_suffix(".tmp")) else {
+            continue;
+        };
+        let Some((_, id)) = stem.rsplit_once('.') else {
+            continue;
+        };
         if uuid::Uuid::parse_str(id).is_err() {
             continue;
         }
@@ -122,9 +126,17 @@ pub fn run(events: &mut Vec<Event>) -> Result<(), String> {
         if !has_build() {
             return Err(msg::onnxruntime_no_build(&platform()));
         }
-        fs::create_dir_all(&root).map_err(|e| msg::create_failed(&root.display().to_string(), e, msg::Next::agent(msg::Act::RunsAgain)))?;
+        fs::create_dir_all(&root).map_err(|e| {
+            msg::create_failed(
+                &root.display().to_string(),
+                e,
+                msg::Next::agent(msg::Act::RunsAgain),
+            )
+        })?;
         fetch_library(&root, &lib).map_err(library_failed)?;
-        events.push(Event::FileWritten { path: lib_s.clone() });
+        events.push(Event::FileWritten {
+            path: lib_s.clone(),
+        });
         // The fetched file matched its pinned hash: a load failure is this machine's.
         cache::init_ort(&lib).map_err(|e| msg::onnxruntime_unusable(&lib_s, e))?;
     } else if let Err(e) = cache::init_ort(&lib) {
@@ -137,16 +149,23 @@ pub fn run(events: &mut Vec<Event>) -> Result<(), String> {
         .with_cache_dir(dir.clone())
         .with_show_download_progress(false);
     if fetched {
-        fastembed::TextEmbedding::try_new(opts).map_err(|e| msg::model_fetch_failed("the embedding model", e))?;
+        fastembed::TextEmbedding::try_new(opts)
+            .map_err(|e| msg::model_fetch_failed("the embedding model", e))?;
         if !cache::model_present()? {
             return Err(msg::model_fetch_failed(
                 "the embedding model",
-                format!("the fetched files are not where adr looks: {}", dir.display()),
+                format!(
+                    "the fetched files are not where adr looks: {}",
+                    dir.display()
+                ),
             ));
         }
-        events.push(Event::FileWritten { path: dir.display().to_string() });
+        events.push(Event::FileWritten {
+            path: dir.display().to_string(),
+        });
     } else {
-        fastembed::TextEmbedding::try_new(opts).map_err(|e| msg::model_load_failed(&dir.display().to_string(), e))?;
+        fastembed::TextEmbedding::try_new(opts)
+            .map_err(|e| msg::model_load_failed(&dir.display().to_string(), e))?;
     }
     Ok(())
 }
@@ -171,10 +190,16 @@ impl Drop for Temp {
 /// Downloads the release archive, checks its SHA-256, and writes the library
 /// file alone to `lib` (through a temporary name, then a rename).
 fn fetch_library(root: &Path, lib: &Path) -> Result<(), String> {
-    let arc = ARCHIVE.as_ref().ok_or("the 1.28.0 release has no archive for this platform")?;
+    let arc = ARCHIVE
+        .as_ref()
+        .ok_or("the 1.28.0 release has no archive for this platform")?;
     let archive = Temp::new(root, arc.name);
     let partial = Temp::new(root, cache::ORT_FILE);
-    download(&format!("{}{}", RELEASE_URL, arc.name), arc.sha256, &archive.0)?;
+    download(
+        &format!("{}{}", RELEASE_URL, arc.name),
+        arc.sha256,
+        &archive.0,
+    )?;
     extract(arc, &archive.0, &partial.0)?;
     // A rename that loses a race with another install leaves the same file.
     fs::rename(&partial.0, lib).map_err(|e| e.to_string())
@@ -195,7 +220,10 @@ fn download(url: &str, sha256: &str, to: &Path) -> Result<(), String> {
         .timeout_recv_response(Some(STALL_TIMEOUT))
         .build()
         .into();
-    let resp = agent.get(url).call().map_err(|e| format!("{}: {}", url, e))?;
+    let resp = agent
+        .get(url)
+        .call()
+        .map_err(|e| format!("{}: {}", url, e))?;
     // ureq's body timeout is a total, not a per-read one, so the reads run in
     // a thread and this one gives up when no chunk comes.
     let (tx, rx) = std::sync::mpsc::sync_channel::<Result<Vec<u8>, String>>(8);
@@ -227,7 +255,13 @@ fn download(url: &str, sha256: &str, to: &Path) -> Result<(), String> {
     loop {
         let chunk = match rx.recv_timeout(STALL_TIMEOUT) {
             Ok(c) => c?,
-            Err(_) => return Err(format!("{}: no data for {} seconds", url, STALL_TIMEOUT.as_secs())),
+            Err(_) => {
+                return Err(format!(
+                    "{}: no data for {} seconds",
+                    url,
+                    STALL_TIMEOUT.as_secs()
+                ))
+            }
         };
         if chunk.is_empty() {
             break;
@@ -237,7 +271,10 @@ fn download(url: &str, sha256: &str, to: &Path) -> Result<(), String> {
     }
     let got = format!("{:x}", hash.finalize());
     if got != sha256 {
-        return Err(format!("{} hashes to {}, not the pinned {}", url, got, sha256));
+        return Err(format!(
+            "{} hashes to {}, not the pinned {}",
+            url, got, sha256
+        ));
     }
     Ok(())
 }
@@ -252,7 +289,10 @@ fn extract(arc: &Archive, archive: &Path, to: &Path) -> Result<(), String> {
         let path = entry.path().map_err(|e| e.to_string())?.to_path_buf();
         let is_lib = entry.header().entry_type().is_file()
             && path.file_name().map_or(false, |n| n == arc.member)
-            && path.parent().and_then(|p| p.file_name()).map_or(false, |n| n == "lib");
+            && path
+                .parent()
+                .and_then(|p| p.file_name())
+                .map_or(false, |n| n == "lib");
         if is_lib {
             let mut out = fs::File::create(to).map_err(|e| e.to_string())?;
             std::io::copy(&mut entry, &mut out).map_err(|e| e.to_string())?;
@@ -265,10 +305,15 @@ fn extract(arc: &Archive, archive: &Path, to: &Path) -> Result<(), String> {
 /// Writes the one library file of `archive` to `to`.
 #[cfg(target_os = "windows")]
 fn extract(arc: &Archive, archive: &Path, to: &Path) -> Result<(), String> {
-    let mut zip = zip::ZipArchive::new(fs::File::open(archive).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipArchive::new(fs::File::open(archive).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?;
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
-        let hit = entry.is_file() && entry.name().map_err(|e| e.to_string())?.ends_with(&format!("/lib/{}", arc.member));
+        let hit = entry.is_file()
+            && entry
+                .name()
+                .map_err(|e| e.to_string())?
+                .ends_with(&format!("/lib/{}", arc.member));
         if hit {
             let mut out = fs::File::create(to).map_err(|e| e.to_string())?;
             std::io::copy(&mut entry, &mut out).map_err(|e| e.to_string())?;
@@ -290,7 +335,8 @@ mod tests {
 
     fn age(path: &Path, secs: u64) {
         let f = fs::OpenOptions::new().write(true).open(path).unwrap();
-        f.set_modified(std::time::SystemTime::now() - Duration::from_secs(secs)).unwrap();
+        f.set_modified(std::time::SystemTime::now() - Duration::from_secs(secs))
+            .unwrap();
     }
 
     #[test]
@@ -309,7 +355,10 @@ mod tests {
         }
         sweep_partials(&d);
         assert!(!old.exists());
-        assert!(young.exists(), "a young partial may belong to an install at work");
+        assert!(
+            young.exists(),
+            "a young partial may belong to an install at work"
+        );
         assert!(keep_name.exists(), "not the temp-name pattern");
         assert!(keep_lib.exists());
         fs::remove_dir_all(&d).unwrap();
@@ -319,7 +368,11 @@ mod tests {
     #[test]
     fn a_platform_without_a_build_is_not_yet_never_a_rerun() {
         let m = msg::onnxruntime_no_build("macos-x86_64");
-        assert!(m.contains("macos-x86_64") && m.contains("not yet:"), "{}", m);
+        assert!(
+            m.contains("macos-x86_64") && m.contains("not yet:"),
+            "{}",
+            m
+        );
         assert!(!m.contains("again"), "{}", m);
     }
 }

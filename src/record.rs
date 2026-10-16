@@ -34,8 +34,14 @@ pub enum AnswerSet {
 /// approved).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Dep {
-    Id { id: String, set: Option<AnswerSet> },
-    Text { text: String, set: Option<AnswerSet> },
+    Id {
+        id: String,
+        set: Option<AnswerSet>,
+    },
+    Text {
+        text: String,
+        set: Option<AnswerSet>,
+    },
 }
 
 impl Dep {
@@ -69,19 +75,32 @@ impl BlameEntry {
         let tokens: Vec<&str> = text.split_whitespace().collect();
         // The first token is always the name, even when it reads as a range
         // (a blame file may be called `10-14`).
-        let name_len = tokens.iter().rposition(|t| range_token(t).is_none()).map_or(0, |i| i + 1);
+        let name_len = tokens
+            .iter()
+            .rposition(|t| range_token(t).is_none())
+            .map_or(0, |i| i + 1);
         let name_len = name_len.max(tokens.len().min(1));
         BlameEntry {
             file: tokens[..name_len].join(" "),
-            ranges: tokens[name_len..].iter().filter_map(|t| range_token(t)).collect(),
+            ranges: tokens[name_len..]
+                .iter()
+                .filter_map(|t| range_token(t))
+                .collect(),
         }
     }
 
     /// The entry as a line writes it, single spaces between its parts:
     /// what a finding quotes.
     pub fn written(&self) -> String {
-        let ranges = self.ranges.iter().map(|(from, to)| format!("{}-{}", from, to));
-        std::iter::once(self.file.clone()).filter(|f| !f.is_empty()).chain(ranges).collect::<Vec<_>>().join(" ")
+        let ranges = self
+            .ranges
+            .iter()
+            .map(|(from, to)| format!("{}-{}", from, to));
+        std::iter::once(self.file.clone())
+            .filter(|f| !f.is_empty())
+            .chain(ranges)
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 }
 
@@ -226,13 +245,18 @@ impl RecordFile {
     /// this file (a dangling reference, reported elsewhere).
     pub fn dep_target(&self, d: &Dep) -> Option<usize> {
         match d {
-            Dep::Id { id, .. } => self.sections.iter().position(|s| s.id.as_deref() == Some(id.as_str())),
+            Dep::Id { id, .. } => self
+                .sections
+                .iter()
+                .position(|s| s.id.as_deref() == Some(id.as_str())),
             Dep::Text { text, .. } => {
                 let t = text.trim();
                 if !t.ends_with('?') {
                     return None;
                 }
-                self.sections.iter().position(|s| s.heading_text.trim() == t)
+                self.sections
+                    .iter()
+                    .position(|s| s.heading_text.trim() == t)
             }
         }
     }
@@ -294,7 +318,10 @@ pub fn load_all(root: &Path) -> Vec<RecordFile> {
 /// filesystem -- `repo::list_decision_files_via`/`Source::read`), and
 /// keeping every file that failed to read instead of dropping it, each
 /// paired with why.
-pub fn load_all_via(root: &Path, source: &crate::repo::Source) -> (Vec<RecordFile>, Vec<(PathBuf, String)>) {
+pub fn load_all_via(
+    root: &Path,
+    source: &crate::repo::Source,
+) -> (Vec<RecordFile>, Vec<(PathBuf, String)>) {
     let mut records = Vec::new();
     let mut errors = Vec::new();
     for f in crate::repo::list_decision_files_via(root, source) {
@@ -690,7 +717,8 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
                 match res {
                     Ok(d) => {
                         if depends.iter().any(|existing| dep_identity_eq(existing, &d)) {
-                            depends_errors.push(format!("depends: duplicate entry, line {}", j + 1));
+                            depends_errors
+                                .push(format!("depends: duplicate entry, line {}", j + 1));
                         } else {
                             depends.push(d);
                         }
@@ -711,8 +739,10 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
         }
         if let Some(v) = kv(line, "supersedes") {
             if supersedes_line_seen {
-                reference_line_errors
-                    .push(format!("supersedes: second supersedes line, line {}", j + 1));
+                reference_line_errors.push(format!(
+                    "supersedes: second supersedes line, line {}",
+                    j + 1
+                ));
                 continue;
             }
             supersedes_line_seen = true;
@@ -743,7 +773,12 @@ fn scan_body(lines: &[String], start: usize, end: usize, headings: &[String]) ->
                 continue;
             }
             blame_line_seen = true;
-            blame = v.split(',').map(str::trim).filter(|s| !s.is_empty()).map(BlameEntry::parse).collect();
+            blame = v
+                .split(',')
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(BlameEntry::parse)
+                .collect();
             continue;
         }
         if kv(line, "terms").is_some() {
@@ -910,7 +945,10 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
     // "identifier"): an `id:` line holding anything else was written by
     // hand, and nothing reads it as the question's identifier.
     if let Some(id) = scan.id.as_deref().filter(|id| !is_uuid(id.trim())) {
-        parse_errors.push(format!("id line holds {:?}, which is no identifier the tool assigns", id));
+        parse_errors.push(format!(
+            "id line holds {:?}, which is no identifier the tool assigns",
+            id
+        ));
     }
     if let Some(v) = &scan.answer_value {
         let v = v.trim();
@@ -949,7 +987,10 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
         // A skeleton heading (empty body) is exempt; a real body needs two
         // or three options.
         if scan.options.len() < 2 {
-            add(vec![format!("{} options, at least two", scan.options.len())]);
+            add(vec![format!(
+                "{} options, at least two",
+                scan.options.len()
+            )]);
         }
     }
     add(scan.option_shape_errors);
@@ -983,7 +1024,10 @@ fn parse_question(lines: &[String], start: usize, end: usize, headings: &[String
 
 /// Computes topic, context range, and file-level shape errors, given the
 /// lines and the already heading-parsed `sections`.
-fn analyze_shape(lines: &[String], sections: &[Section]) -> (Option<String>, (usize, usize), Vec<String>) {
+fn analyze_shape(
+    lines: &[String],
+    sections: &[Section],
+) -> (Option<String>, (usize, usize), Vec<String>) {
     let mut shape_errors = Vec::new();
 
     let h1_indices: Vec<usize> = lines
@@ -1058,9 +1102,7 @@ pub fn question_hash(rf: &RecordFile, sec: &Section) -> String {
         .iter()
         .map(|l| l.trim_end())
         .filter(|l| {
-            !l.trim().is_empty()
-                && !l.starts_with("terms: ")
-                && !l.starts_with("**Answer:**")
+            !l.trim().is_empty() && !l.starts_with("terms: ") && !l.starts_with("**Answer:**")
         })
         .collect::<Vec<_>>()
         .join("\n");
@@ -1181,7 +1223,11 @@ pub fn canonical_set(set: &AnswerSet) -> String {
         AnswerSet::Letters(letters) => {
             let mut sorted = letters.clone();
             sorted.sort_unstable();
-            sorted.into_iter().map(|c| c.to_string()).collect::<Vec<_>>().join("|")
+            sorted
+                .into_iter()
+                .map(|c| c.to_string())
+                .collect::<Vec<_>>()
+                .join("|")
         }
     }
 }
@@ -1191,7 +1237,9 @@ pub fn canonical_set(set: &AnswerSet) -> String {
 /// for `None`. Shared by every place that rewrites or prints a depends
 /// entry's answer set back into text.
 pub fn set_suffix(set: &Option<AnswerSet>) -> String {
-    set.as_ref().map(|s| format!("={}", canonical_set(s))).unwrap_or_default()
+    set.as_ref()
+        .map(|s| format!("={}", canonical_set(s)))
+        .unwrap_or_default()
 }
 
 /// sha256 of `<dependent key>=<canonical set>` (per "Does a depends entry
@@ -1343,7 +1391,11 @@ fn derive_visit(
     }
     path.pop();
     state[i] = 2;
-    let t = if deps[i].is_empty() { 1 } else { max_dep_tier + 1 };
+    let t = if deps[i].is_empty() {
+        1
+    } else {
+        max_dep_tier + 1
+    };
     tier[i] = Some(t);
     Ok(t)
 }
@@ -1361,7 +1413,9 @@ pub fn tier_sizes(tiers: &[usize]) -> Vec<(usize, usize)> {
 /// The first (lowest-numbered) tier holding more than `TIER_CAP` sections,
 /// if any (per "Does the tool cap the questions in a tier?").
 pub fn over_cap(tiers: &[usize]) -> Option<(usize, usize)> {
-    tier_sizes(tiers).into_iter().find(|&(_, count)| count > TIER_CAP)
+    tier_sizes(tiers)
+        .into_iter()
+        .find(|&(_, count)| count > TIER_CAP)
 }
 
 pub fn hex(bytes: &[u8]) -> String {
@@ -1395,7 +1449,10 @@ mod tests {
 
         let rf2 = rf_from("stray text\n# Topic\n");
         assert_eq!(rf2.topic.as_deref(), Some("Topic"));
-        assert!(rf2.shape_errors.iter().any(|e| e.contains("text before h1")));
+        assert!(rf2
+            .shape_errors
+            .iter()
+            .any(|e| e.contains("text before h1")));
 
         let rf3 = rf_from("# Topic\n\n# Second Topic\n");
         assert!(rf3.shape_errors.iter().any(|e| e.contains("duplicate h1")));
@@ -1428,8 +1485,15 @@ mod tests {
         let rf2 = rf_from(&edited);
         let h2 = context_hash(&rf2);
 
-        assert_eq!(h1, h2, "context hash must not move when only a body changes");
-        assert_ne!(h1, sha256_hex(""), "sanity: this record does have context prose");
+        assert_eq!(
+            h1, h2,
+            "context hash must not move when only a body changes"
+        );
+        assert_ne!(
+            h1,
+            sha256_hex(""),
+            "sanity: this record does have context prose"
+        );
     }
 
     #[test]
@@ -1438,7 +1502,11 @@ mod tests {
         let skeleton = &rf.sections[0];
         assert!(skeleton.is_skeleton);
         assert!(skeleton.id.is_none());
-        assert!(skeleton.shape_errors.is_empty(), "{:?}", skeleton.shape_errors);
+        assert!(
+            skeleton.shape_errors.is_empty(),
+            "{:?}",
+            skeleton.shape_errors
+        );
 
         let real = &rf.sections[1];
         assert!(!real.is_skeleton);
@@ -1516,7 +1584,11 @@ mod tests {
             .any(|e| e == "missing Standard line"));
 
         let rf2 = rf_from(SHAPED);
-        assert!(rf2.sections[0].shape_errors.is_empty(), "{:?}", rf2.sections[0].shape_errors);
+        assert!(
+            rf2.sections[0].shape_errors.is_empty(),
+            "{:?}",
+            rf2.sections[0].shape_errors
+        );
     }
 
     #[test]
@@ -1526,15 +1598,30 @@ mod tests {
 
         // Body edit: moves the hash (the body is part of the question).
         let body_edited = SHAPED.replace("Problem: p.", "Problem: a very different problem.");
-        assert_ne!(base_hash, plan_hash(&rf_from(&body_edited)), "a body edit must move the hash");
+        assert_ne!(
+            base_hash,
+            plan_hash(&rf_from(&body_edited)),
+            "a body edit must move the hash"
+        );
 
         // Heading added.
         let added = format!("{}\n### 1.2 A second question?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) y.\n  Why: w.\n  Costs: c.\n- B) z.\n  Why: w.\n  Costs: c.\n", SHAPED);
-        assert_ne!(base_hash, plan_hash(&rf_from(&added)), "adding a heading must move the hash");
+        assert_ne!(
+            base_hash,
+            plan_hash(&rf_from(&added)),
+            "adding a heading must move the hash"
+        );
 
         // Heading renamed.
-        let renamed = SHAPED.replace("### 1.1 First question?", "### 1.1 First question, renamed?");
-        assert_ne!(base_hash, plan_hash(&rf_from(&renamed)), "renaming a heading must move the hash");
+        let renamed = SHAPED.replace(
+            "### 1.1 First question?",
+            "### 1.1 First question, renamed?",
+        );
+        assert_ne!(
+            base_hash,
+            plan_hash(&rf_from(&renamed)),
+            "renaming a heading must move the hash"
+        );
 
         // Headings reordered: two questions, swapped.
         let two_questions = "# Topic\n\n### 1.1 Question A?\n\nProblem: pa.\n\nStandard: sa.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) x2.\n  Why: w.\n  Costs: c.\n\n### 1.2 Question B?\n\nProblem: pb.\n\nStandard: sb.\n\n- A) y.\n  Why: w.\n  Costs: c.\n- B) y2.\n  Why: w.\n  Costs: c.\n";
@@ -1640,7 +1727,11 @@ mod tests {
         );
 
         let ok = rf_from(SHAPED);
-        assert!(ok.sections[0].parse_errors.is_empty(), "{:?}", ok.sections[0].parse_errors);
+        assert!(
+            ok.sections[0].parse_errors.is_empty(),
+            "{:?}",
+            ok.sections[0].parse_errors
+        );
     }
 
     // adr: 178a232e-b51c-4122-a1a9-9e9ed6970748
@@ -1653,12 +1744,18 @@ mod tests {
             "# T\n\n### Q?\n\nProblem: p.\n\nProblem: p again.\n\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n",
         );
         assert!(
-            rf.sections[0].shape_errors.iter().any(|e| e == "duplicate Problem line"),
+            rf.sections[0]
+                .shape_errors
+                .iter()
+                .any(|e| e == "duplicate Problem line"),
             "{:?}",
             rf.sections[0].shape_errors
         );
         assert!(
-            !rf.sections[0].shape_errors.iter().any(|e| e == "missing Problem line"),
+            !rf.sections[0]
+                .shape_errors
+                .iter()
+                .any(|e| e == "missing Problem line"),
             "{:?}",
             rf.sections[0].shape_errors
         );
@@ -1667,7 +1764,10 @@ mod tests {
             "# T\n\n### Q?\n\nProblem: p.\n\nStandard: s.\n\nStandard: s again.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n",
         );
         assert!(
-            rf2.sections[0].shape_errors.iter().any(|e| e == "duplicate Standard line"),
+            rf2.sections[0]
+                .shape_errors
+                .iter()
+                .any(|e| e == "duplicate Standard line"),
             "{:?}",
             rf2.sections[0].shape_errors
         );
@@ -1683,7 +1783,10 @@ mod tests {
             "# T\n\n### Q?\n\n**Answer:** A\n\nProblem: p.\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n",
         );
         assert!(
-            rf.sections[0].shape_errors.iter().any(|e| e.starts_with("answer line not last")),
+            rf.sections[0]
+                .shape_errors
+                .iter()
+                .any(|e| e.starts_with("answer line not last")),
             "{:?}",
             rf.sections[0].shape_errors
         );
@@ -1693,7 +1796,10 @@ mod tests {
             "# T\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
         );
         assert!(
-            !ok.sections[0].shape_errors.iter().any(|e| e.starts_with("answer line not last")),
+            !ok.sections[0]
+                .shape_errors
+                .iter()
+                .any(|e| e.starts_with("answer line not last")),
             "{:?}",
             ok.sections[0].shape_errors
         );
@@ -1711,7 +1817,10 @@ mod tests {
             "# T\n\n### Q?\n\nProblem: p.\nStandard: s.\n\n- A) One.\n  Why: w.\n  Costs: c.\n- B) Two.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n\n**Answer:** B\n",
         );
         assert!(
-            rf.sections[0].shape_errors.iter().any(|e| e.starts_with("second answer line")),
+            rf.sections[0]
+                .shape_errors
+                .iter()
+                .any(|e| e.starts_with("second answer line")),
             "{:?}",
             rf.sections[0].shape_errors
         );
@@ -1777,7 +1886,11 @@ mod tests {
             .shape_errors
             .iter()
             .any(|e| e == "1 options, at least two"));
-        assert!(rf.sections[0].parse_errors.is_empty(), "{:?}", rf.sections[0].parse_errors);
+        assert!(
+            rf.sections[0].parse_errors.is_empty(),
+            "{:?}",
+            rf.sections[0].parse_errors
+        );
     }
 
     #[test]
@@ -1812,7 +1925,12 @@ mod tests {
              - B) y.\n  Why: w.\n  Costs: c.\n",
         );
         let sec = &rf.sections[1];
-        assert_eq!(sec.shape_errors, Vec::<String>::new(), "{:?}", sec.shape_errors);
+        assert_eq!(
+            sec.shape_errors,
+            Vec::<String>::new(),
+            "{:?}",
+            sec.shape_errors
+        );
         assert_eq!(sec.depends.len(), 3);
         assert_eq!(
             sec.depends[0],
@@ -1902,7 +2020,12 @@ mod tests {
              - B) y.\n  Why: w.\n  Costs: c.\n",
         );
         let sec = &rf.sections[2];
-        assert_eq!(sec.shape_errors, Vec::<String>::new(), "{:?}", sec.shape_errors);
+        assert_eq!(
+            sec.shape_errors,
+            Vec::<String>::new(),
+            "{:?}",
+            sec.shape_errors
+        );
         assert_eq!(
             sec.depends[0],
             Dep::Text {
@@ -1939,7 +2062,9 @@ mod tests {
         );
         let sec = &rf.sections[0];
         assert!(
-            sec.shape_errors.iter().any(|e| e == "depends: empty entry, line 4"),
+            sec.shape_errors
+                .iter()
+                .any(|e| e == "depends: empty entry, line 4"),
             "{:?}",
             sec.shape_errors
         );
@@ -2001,7 +2126,9 @@ mod tests {
             let rf = rf_from(&format!("# T\n\n### Q?\n{bare}\ndepends: widget\n"));
             let sec = &rf.sections[0];
             assert!(
-                sec.shape_errors.iter().any(|e| e.starts_with("depends: second depends line")),
+                sec.shape_errors
+                    .iter()
+                    .any(|e| e.starts_with("depends: second depends line")),
                 "{bare:?}: {:?}",
                 sec.shape_errors
             );
@@ -2017,15 +2144,29 @@ mod tests {
     fn unrelated_line_parses_is_in_the_question_hash_and_not_in_the_body_hash() {
         let text = "# Topic\n\n### Q?\ndepends: widget\nunrelated: a, b\nid: new-id\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n";
         let rf = rf_from(text);
-        assert_eq!(rf.sections[0].unrelated, vec!["a".to_string(), "b".to_string()]);
+        assert_eq!(
+            rf.sections[0].unrelated,
+            vec!["a".to_string(), "b".to_string()]
+        );
         assert!(rf.shape_errors.is_empty() && rf.sections[0].shape_errors.is_empty());
         let other = rf_from(&text.replace("unrelated: a, b", "unrelated: a, c"));
-        assert_ne!(question_hash(&rf, &rf.sections[0]), question_hash(&other, &other.sections[0]));
-        assert_eq!(body_hash(&rf, &rf.sections[0]), body_hash(&other, &other.sections[0]));
+        assert_ne!(
+            question_hash(&rf, &rf.sections[0]),
+            question_hash(&other, &other.sections[0])
+        );
+        assert_eq!(
+            body_hash(&rf, &rf.sections[0]),
+            body_hash(&other, &other.sections[0])
+        );
         assert_eq!(heading_hash(&rf.sections[0]), sha256_hex("Q?"));
-        assert!(body_text(&rf, &rf.sections[0]).starts_with("Q?\nProblem: p.\nStandard: s.\n- A) x."));
+        assert!(
+            body_text(&rf, &rf.sections[0]).starts_with("Q?\nProblem: p.\nStandard: s.\n- A) x.")
+        );
         let twice = rf_from(&text.replace("id: new-id", "unrelated: c\nid: new-id"));
-        assert!(twice.sections[0].shape_errors.iter().any(|e| e.contains("second unrelated line")));
+        assert!(twice.sections[0]
+            .shape_errors
+            .iter()
+            .any(|e| e.contains("second unrelated line")));
     }
 
     fn entry(text: &str) -> (String, Vec<(usize, usize)>) {
@@ -2038,11 +2179,23 @@ mod tests {
     // tokens is its ranges, what stands before them its name.
     #[test]
     fn a_blame_entry_is_a_name_and_its_row_ranges() {
-        assert_eq!(entry("old-file 10-14"), ("old-file".to_string(), vec![(10, 14)]));
-        assert_eq!(entry("old-file 10-14 31-35 3-3"), ("old-file".to_string(), vec![(10, 14), (31, 35), (3, 3)]));
-        assert_eq!(entry("sub/other   3-9"), ("sub/other".to_string(), vec![(3, 9)]));
+        assert_eq!(
+            entry("old-file 10-14"),
+            ("old-file".to_string(), vec![(10, 14)])
+        );
+        assert_eq!(
+            entry("old-file 10-14 31-35 3-3"),
+            ("old-file".to_string(), vec![(10, 14), (31, 35), (3, 3)])
+        );
+        assert_eq!(
+            entry("sub/other   3-9"),
+            ("sub/other".to_string(), vec![(3, 9)])
+        );
         let id = "69708a07-469c-406b-9e25-63da1605b432";
-        assert_eq!(entry(&format!("{} 1-2", id)), (id.to_string(), vec![(1, 2)]));
+        assert_eq!(
+            entry(&format!("{} 1-2", id)),
+            (id.to_string(), vec![(1, 2)])
+        );
     }
 
     // adr: 69708a07-469c-406b-9e25-63da1605b432
@@ -2057,7 +2210,10 @@ mod tests {
             let text = format!("old-file {}", bad);
             assert_eq!(entry(&text), (text.clone(), vec![]), "{}", bad);
         }
-        assert_eq!(entry("old-file 5-3 1-2"), ("old-file 5-3".to_string(), vec![(1, 2)]));
+        assert_eq!(
+            entry("old-file 5-3 1-2"),
+            ("old-file 5-3".to_string(), vec![(1, 2)])
+        );
     }
 
     // adr: 69708a07-469c-406b-9e25-63da1605b432
@@ -2066,7 +2222,10 @@ mod tests {
         for text in ["old-file 10-14 31-35", "old-file", "10-14"] {
             assert_eq!(BlameEntry::parse(text).written(), text);
         }
-        assert_eq!(BlameEntry::parse("old-file   10-14").written(), "old-file 10-14");
+        assert_eq!(
+            BlameEntry::parse("old-file   10-14").written(),
+            "old-file 10-14"
+        );
     }
 
     // adr: 69708a07-469c-406b-9e25-63da1605b432
@@ -2080,21 +2239,53 @@ mod tests {
         assert_eq!(
             sec.blame,
             vec![
-                BlameEntry { file: "old-file".to_string(), ranges: vec![(10, 14), (31, 35)] },
-                BlameEntry { file: "sub/other".to_string(), ranges: vec![(3, 9)] },
+                BlameEntry {
+                    file: "old-file".to_string(),
+                    ranges: vec![(10, 14), (31, 35)]
+                },
+                BlameEntry {
+                    file: "sub/other".to_string(),
+                    ranges: vec![(3, 9)]
+                },
             ]
         );
-        assert!(rf.shape_errors.is_empty() && sec.shape_errors.is_empty(), "{:?}", sec.shape_errors);
+        assert!(
+            rf.shape_errors.is_empty() && sec.shape_errors.is_empty(),
+            "{:?}",
+            sec.shape_errors
+        );
         let other = rf_from(&text.replace("sub/other 3-9", "sub/other 3-8"));
-        assert_ne!(question_hash(&rf, sec), question_hash(&other, &other.sections[0]));
+        assert_ne!(
+            question_hash(&rf, sec),
+            question_hash(&other, &other.sections[0])
+        );
         let without = rf_from(&text.replace("blame: old-file 10-14 31-35, sub/other 3-9\n", ""));
-        assert_ne!(question_hash(&rf, sec), question_hash(&without, &without.sections[0]));
-        assert_eq!(body_hash(&rf, sec), body_hash(&without, &without.sections[0]));
-        assert_eq!(body_text(&rf, sec), body_text(&without, &without.sections[0]));
+        assert_ne!(
+            question_hash(&rf, sec),
+            question_hash(&without, &without.sections[0])
+        );
+        assert_eq!(
+            body_hash(&rf, sec),
+            body_hash(&without, &without.sections[0])
+        );
+        assert_eq!(
+            body_text(&rf, sec),
+            body_text(&without, &without.sections[0])
+        );
         assert!(!body_text(&rf, sec).contains("blame"));
         let twice = rf_from(&text.replace("id: new-id", "blame: other 1-1\nid: new-id"));
-        assert_eq!(twice.sections[0].blame, sec.blame, "the first line is the one read");
-        assert!(twice.sections[0].shape_errors.iter().any(|e| e == "blame: second blame line, line 6"), "{:?}", twice.sections[0].shape_errors);
+        assert_eq!(
+            twice.sections[0].blame, sec.blame,
+            "the first line is the one read"
+        );
+        assert!(
+            twice.sections[0]
+                .shape_errors
+                .iter()
+                .any(|e| e == "blame: second blame line, line 6"),
+            "{:?}",
+            twice.sections[0].shape_errors
+        );
     }
 
     // adr: 69708a07-469c-406b-9e25-63da1605b432
@@ -2160,8 +2351,17 @@ mod tests {
              ### R?\ndepends: First, then second?\n\nProblem: p2.\n\nStandard: s2.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
         );
         let sec = &rf.sections[1];
-        assert_eq!(sec.shape_errors, Vec::<String>::new(), "{:?}", sec.shape_errors);
-        assert_eq!(sec.depends.len(), 1, "the comma must not split into two entries");
+        assert_eq!(
+            sec.shape_errors,
+            Vec::<String>::new(),
+            "{:?}",
+            sec.shape_errors
+        );
+        assert_eq!(
+            sec.depends.len(),
+            1,
+            "the comma must not split into two entries"
+        );
         assert_eq!(
             sec.depends[0],
             Dep::Text {
@@ -2274,7 +2474,12 @@ mod tests {
              ### C?\ndepends: A?\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n",
         );
         let deps = rf.dependents_of(0);
-        assert_eq!(deps.len(), 2, "{:?}", deps.iter().map(|(i, _)| i).collect::<Vec<_>>());
+        assert_eq!(
+            deps.len(),
+            2,
+            "{:?}",
+            deps.iter().map(|(i, _)| i).collect::<Vec<_>>()
+        );
         assert!(deps
             .iter()
             .any(|(i, set)| *i == 1 && *set == Some(&AnswerSet::Letters(vec!['A']))));
@@ -2304,8 +2509,15 @@ mod tests {
         let with_id = rf_from(base);
         let no_id = rf_from(&base.replace("id: 11111111-1111-1111-1111-111111111111\n\n", ""));
         assert_ne!(plan_hash(&with_id), plan_hash(&no_id));
-        let swapped = base.replace("11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222");
-        assert_ne!(plan_hash(&with_id), plan_hash(&rf_from(&swapped)), "swapping an id must move the hash");
+        let swapped = base.replace(
+            "11111111-1111-1111-1111-111111111111",
+            "22222222-2222-2222-2222-222222222222",
+        );
+        assert_ne!(
+            plan_hash(&with_id),
+            plan_hash(&rf_from(&swapped)),
+            "swapping an id must move the hash"
+        );
     }
 
     #[test]

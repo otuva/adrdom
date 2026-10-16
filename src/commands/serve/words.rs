@@ -159,7 +159,15 @@ fn no_entry_words(text: &str, pairs: &[(String, String)], terms_list: &[Term]) -
     let stripped = strip_uuid_tokens(text);
     let mut found: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for line in stripped.split('\n') {
-        if crate::tells::starts_with_any(line, &[crate::tells::ID_PREFIX, crate::tells::SUPERSEDES_PREFIX, crate::tells::UNRELATED_PREFIX, crate::tells::BLAME_PREFIX]) {
+        if crate::tells::starts_with_any(
+            line,
+            &[
+                crate::tells::ID_PREFIX,
+                crate::tells::SUPERSEDES_PREFIX,
+                crate::tells::UNRELATED_PREFIX,
+                crate::tells::BLAME_PREFIX,
+            ],
+        ) {
             continue;
         }
         for tok in crate::text::word_runs(line) {
@@ -213,8 +221,14 @@ mod word_tests {
         };
         let terms = vec![term("question", &["questions"])];
         // Unpaired, a term word is named though English uses it every day.
-        assert_eq!(super::no_entry_words("A question here", &[], &terms), vec!["question".to_string()]);
-        assert_eq!(super::no_entry_words("Many questions here", &[], &terms), vec!["questions".to_string()]);
+        assert_eq!(
+            super::no_entry_words("A question here", &[], &terms),
+            vec!["question".to_string()]
+        );
+        assert_eq!(
+            super::no_entry_words("Many questions here", &[], &terms),
+            vec!["questions".to_string()]
+        );
         // Paired, it is left out.
         let pairs = vec![("question".to_string(), "id-question".to_string())];
         assert!(super::no_entry_words("A question here", &pairs, &terms).is_empty());

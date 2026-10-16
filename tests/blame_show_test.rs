@@ -39,7 +39,10 @@ fn show_prints_a_blame_file_with_its_status_origin_and_rows() {
         "[approved] adrdom/blame/x.md\n  origin: docs/x.md\n  1-1\tdecision\n  2-2\tdetail\n"
     );
     // No status tag on a row line.
-    for row in text.lines().filter(|l| l.starts_with("  1-1") || l.starts_with("  2-2")) {
+    for row in text
+        .lines()
+        .filter(|l| l.starts_with("  1-1") || l.starts_with("  2-2"))
+    {
         assert!(!row.contains('['), "{}", row);
     }
 
@@ -64,8 +67,16 @@ fn show_marks_a_draft_blame_file_against_its_latest_approval() {
     );
     let text = stdout(&adr(&dir, &["show", "adrdom/blame/x.md"], &[], ""));
     assert!(text.starts_with("[new] adrdom/blame/x.md\n"), "{}", text);
-    assert!(text.contains("  + 1-1\tdecision\n  + 2-2\tdetail\n"), "{}", text);
-    assert!(text.ends_with("owner runs: adr approve adrdom/blame/x.md\n"), "{}", text);
+    assert!(
+        text.contains("  + 1-1\tdecision\n  + 2-2\tdetail\n"),
+        "{}",
+        text
+    );
+    assert!(
+        text.ends_with("owner runs: adr approve adrdom/blame/x.md\n"),
+        "{}",
+        text
+    );
 
     let out = adr_owner(&dir, &["approve", path.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
@@ -73,8 +84,16 @@ fn show_marks_a_draft_blame_file_against_its_latest_approval() {
     let content = std::fs::read_to_string(&path).unwrap();
     std::fs::write(&path, content.replace("2-2\tdetail", "2-2\tdecision")).unwrap();
     let text = stdout(&adr(&dir, &["show", "adrdom/blame/x.md"], &[], ""));
-    assert!(text.starts_with("[changed] adrdom/blame/x.md\n"), "{}", text);
-    assert!(text.contains("    1-1\tdecision\n  - 2-2\tdetail\n  + 2-2\tdecision\n"), "{}", text);
+    assert!(
+        text.starts_with("[changed] adrdom/blame/x.md\n"),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains("    1-1\tdecision\n  - 2-2\tdetail\n  + 2-2\tdecision\n"),
+        "{}",
+        text
+    );
 }
 
 // Two blame files: `show --all` prints each in the file form, and `show`
@@ -84,7 +103,13 @@ fn show_prints_each_blame_file_and_one_alone_when_it_is_named() {
     let dir = blame_setup();
 
     let blob_a = write_origin(&dir, "docs/a.md", "one\n");
-    let path_a = write_blame_file(&dir, "adrdom/blame/a.md", "docs/a.md", &blob_a, "1-1\tdecision\n");
+    let path_a = write_blame_file(
+        &dir,
+        "adrdom/blame/a.md",
+        "docs/a.md",
+        &blob_a,
+        "1-1\tdecision\n",
+    );
     let out = adr_owner(&dir, &["approve", path_a.to_str().unwrap()], "");
     assert!(out.status.success(), "{}", stderr(&out));
 
@@ -101,7 +126,12 @@ fn show_prints_each_blame_file_and_one_alone_when_it_is_named() {
     let one = stdout(&adr(&dir, &["show", "adrdom/blame/a.md"], &[], ""));
     assert!(!one.contains("adrdom/blame/b.md"), "{}", one);
     // A topic file named alone prints no blame file.
-    let topic = stdout(&adr(&dir, &["show", "adrdom/decisions/example.md"], &[], ""));
+    let topic = stdout(&adr(
+        &dir,
+        &["show", "adrdom/decisions/example.md"],
+        &[],
+        "",
+    ));
     assert!(!topic.contains("blame"), "{}", topic);
 }
 
@@ -133,7 +163,8 @@ fn a_blame_file_with_a_bad_header_and_one_with_a_bad_row_are_both_still_printed(
     assert!(text.contains("[new] adrdom/blame/a.md\n"), "{}", text);
     assert!(text.contains("[new] adrdom/blame/b.md\n"), "{}", text);
     assert!(
-        text.lines().any(|l| l.starts_with("adrdom/blame/a.md: line 1: missing \"origin: <path>\"")),
+        text.lines()
+            .any(|l| l.starts_with("adrdom/blame/a.md: line 1: missing \"origin: <path>\"")),
         "{}",
         text
     );
@@ -204,7 +235,11 @@ fn show_counts_decision_rows_with_and_without_a_question_under_its_flag() {
     let rows = "1-1\tdecision\n2-2\tdecision\n3-3\tdecision\n4-4\tdetail\n";
     approved_blame_file(&dir, "x", "docs/x.md", "one\ntwo\nthree\nfour\n", rows);
     let topic = "adrdom/decisions/gate.md";
-    write_record(&dir, topic, &gate_topic("Does the widget gate open?", "blame: x 1-1\n"));
+    write_record(
+        &dir,
+        topic,
+        &gate_topic("Does the widget gate open?", "blame: x 1-1\n"),
+    );
 
     let listing = "[approved] adrdom/blame/x.md\n  origin: docs/x.md\n  1-1\tdecision\n  2-2\tdecision\n  3-3\tdecision\n  4-4\tdetail\n";
     let count = "  decision rows: 1 with a question, 2 with none\n";
@@ -218,7 +253,11 @@ fn show_counts_decision_rows_with_and_without_a_question_under_its_flag() {
     let plain = adr(&dir, &["show", "adrdom/blame/x.md"], &[], "");
     assert!(plain.status.success(), "{}", stderr(&plain));
     assert_eq!(stdout(&plain), listing);
-    assert!(!stdout(&plain).contains("decision rows"), "{}", stdout(&plain));
+    assert!(
+        !stdout(&plain).contains("decision rows"),
+        "{}",
+        stdout(&plain)
+    );
 
     // `--all` takes the flag too, and without it prints no count.
     let all = stdout(&adr(&dir, &["show", "--all", "--questions"], &[], ""));
@@ -238,7 +277,12 @@ fn show_counts_decision_rows_with_and_without_a_question_under_its_flag() {
         let with = adr(&dir, &["show", "--questions", file], &[], "");
         assert!(with.status.success(), "{}: {}", file, stderr(&with));
         assert_eq!(stdout(&with), stdout(&without), "{}", file);
-        assert!(!stdout(&with).contains("decision rows"), "{}: {}", file, stdout(&with));
+        assert!(
+            !stdout(&with).contains("decision rows"),
+            "{}: {}",
+            file,
+            stdout(&with)
+        );
     }
 }
 
@@ -264,11 +308,18 @@ fn a_blame_id_never_replaces_the_name_of_a_question() {
     approve_record(&dir, rel);
     let ids = extract_ids(&std::fs::read_to_string(dir.join(rel)).unwrap());
     let blob = write_origin(&dir, "docs/x.md", "one\n");
-    let content = format!("origin: docs/x.md\nblob: {}\nid: {}\n\n1-1\tdetail\n", blob, ids[0]);
+    let content = format!(
+        "origin: docs/x.md\nblob: {}\nid: {}\n\n1-1\tdetail\n",
+        blob, ids[0]
+    );
     write_record(&dir, "adrdom/blame/x.md", &content);
 
     let shown = stdout(&adr(&dir, &["show", rel], &[], ""));
-    assert!(shown.contains("  depends: widget, Is alpha ready?=*\n"), "{}", shown);
+    assert!(
+        shown.contains("  depends: widget, Is alpha ready?=*\n"),
+        "{}",
+        shown
+    );
     assert!(!shown.contains("depends: widget, x"), "{}", shown);
 }
 
@@ -281,15 +332,42 @@ fn a_blame_id_never_replaces_the_name_of_a_question() {
 fn show_of_a_draft_blame_file_prints_its_rows_and_the_count_only_under_questions() {
     let dir = blame_setup();
     let blob = write_origin(&dir, "docs/x.md", "one\ntwo\n");
-    write_blame_file(&dir, "adrdom/blame/x.md", "docs/x.md", &blob, "1-1\tdecision\n2-2\tdetail\n");
+    write_blame_file(
+        &dir,
+        "adrdom/blame/x.md",
+        "docs/x.md",
+        &blob,
+        "1-1\tdecision\n2-2\tdetail\n",
+    );
 
     let plain = stdout(&adr(&dir, &["show", "adrdom/blame/x.md"], &[], ""));
     assert!(plain.starts_with("[new] adrdom/blame/x.md\n"), "{}", plain);
-    assert!(plain.contains("  + 1-1\tdecision\n  + 2-2\tdetail\n"), "{}", plain);
-    assert!(plain.ends_with("owner runs: adr approve adrdom/blame/x.md\n"), "{}", plain);
+    assert!(
+        plain.contains("  + 1-1\tdecision\n  + 2-2\tdetail\n"),
+        "{}",
+        plain
+    );
+    assert!(
+        plain.ends_with("owner runs: adr approve adrdom/blame/x.md\n"),
+        "{}",
+        plain
+    );
     assert!(!plain.contains("decision rows"), "{}", plain);
 
-    let flagged = stdout(&adr(&dir, &["show", "--questions", "adrdom/blame/x.md"], &[], ""));
-    assert!(flagged.contains("  + 1-1\tdecision\n  + 2-2\tdetail\n"), "{}", flagged);
-    assert!(flagged.contains("  decision rows: 0 with a question, 1 with none\n"), "{}", flagged);
+    let flagged = stdout(&adr(
+        &dir,
+        &["show", "--questions", "adrdom/blame/x.md"],
+        &[],
+        "",
+    ));
+    assert!(
+        flagged.contains("  + 1-1\tdecision\n  + 2-2\tdetail\n"),
+        "{}",
+        flagged
+    );
+    assert!(
+        flagged.contains("  decision rows: 0 with a question, 1 with none\n"),
+        "{}",
+        flagged
+    );
 }

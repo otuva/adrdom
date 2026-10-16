@@ -31,18 +31,24 @@ pub fn given_rel(root: &Path, file: &Path) -> Option<String> {
     let abs = if file.is_absolute() {
         file.to_path_buf()
     } else {
-        std::env::current_dir().map(|d| d.join(file)).unwrap_or_else(|_| root.join(file))
+        std::env::current_dir()
+            .map(|d| d.join(file))
+            .unwrap_or_else(|_| root.join(file))
     };
     let normal = lexical(&abs);
     let root_abs = lexical(&std::path::Path::new(std::path::MAIN_SEPARATOR_STR).join(root));
     // A root reached through a link (the current directory canonical, the
     // root as found, or the other way round) still holds its files.
-    let inside = normal.strip_prefix(&root_abs).ok().map(Path::to_path_buf).or_else(|| {
-        let canon_root = std::fs::canonicalize(root).ok()?;
-        let canon_parent = abs.parent().and_then(|p| std::fs::canonicalize(p).ok())?;
-        let canon = canon_parent.join(abs.file_name()?);
-        canon.strip_prefix(&canon_root).ok().map(Path::to_path_buf)
-    })?;
+    let inside = normal
+        .strip_prefix(&root_abs)
+        .ok()
+        .map(Path::to_path_buf)
+        .or_else(|| {
+            let canon_root = std::fs::canonicalize(root).ok()?;
+            let canon_parent = abs.parent().and_then(|p| std::fs::canonicalize(p).ok())?;
+            let canon = canon_parent.join(abs.file_name()?);
+            canon.strip_prefix(&canon_root).ok().map(Path::to_path_buf)
+        })?;
     Some(rel_path(Path::new(""), &inside))
 }
 
@@ -102,9 +108,9 @@ pub fn dropped_hashes(led: &Ledger, rel: &str) -> Vec<String> {
         .iter()
         .filter(|d| d.event == "dropped")
         .filter(|d| {
-            led.rows
-                .iter()
-                .any(|a| a.event == "approved" && a.id == d.id && a.hash == d.hash && a.detail == rel)
+            led.rows.iter().any(|a| {
+                a.event == "approved" && a.id == d.id && a.hash == d.hash && a.detail == rel
+            })
         })
         .map(|d| d.hash.clone())
         .collect()
@@ -117,7 +123,12 @@ pub fn dropped_hashes(led: &Ledger, rel: &str) -> Vec<String> {
 /// removed question takes its hash with it and nothing else moves). See
 /// `hash_matches_latest`.
 pub fn plan_approved_hashes(led: &Ledger, rel: &str, question_hashes: &[String]) -> bool {
-    if hash_matches_latest(led, "approved", rel, &record::derive_file_hash(question_hashes)) {
+    if hash_matches_latest(
+        led,
+        "approved",
+        rel,
+        &record::derive_file_hash(question_hashes),
+    ) {
         return true;
     }
     let mut base: Vec<String> = question_hashes.to_vec();
@@ -136,8 +147,13 @@ pub fn plan_approved_hashes(led: &Ledger, rel: &str, question_hashes: &[String])
     // superseded before it was absent from a file approved since the strike
     // and is put back only for a file approved while it still held it.
     // adr-code: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
-    let file_row = led.rows.iter().rposition(|r| r.event == "approved" && r.detail == rel && r.id == "-");
-    let Some(file_row) = file_row else { return false };
+    let file_row = led
+        .rows
+        .iter()
+        .rposition(|r| r.event == "approved" && r.detail == rel && r.id == "-");
+    let Some(file_row) = file_row else {
+        return false;
+    };
     let latest = &led.rows[file_row].hash;
     let (mut after, mut before): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
     // One pass: the latest state event of each id, the latest per-question
@@ -184,12 +200,16 @@ pub fn plan_approved_hashes(led: &Ledger, rel: &str, question_hashes: &[String])
 /// section no topic file keeps (per "What strikes the section of a
 /// superseded question from its topic file?").
 pub fn superseded_ids(led: &Ledger) -> Vec<String> {
-    led.state_ids().into_iter().filter(|id| is_superseded(led, id)).collect()
+    led.state_ids()
+        .into_iter()
+        .filter(|id| is_superseded(led, id))
+        .collect()
 }
 
 /// True when the latest state of `id` is `superseded`.
 pub fn is_superseded(led: &Ledger, id: &str) -> bool {
-    led.latest_state(id).is_some_and(|r| r.event == "superseded")
+    led.latest_state(id)
+        .is_some_and(|r| r.event == "superseded")
 }
 
 /// True when `id` is a superseded question whose latest per-question
@@ -197,7 +217,10 @@ pub fn is_superseded(led: &Ledger, id: &str) -> bool {
 /// struck from it (per "What strikes the section of a superseded question
 /// from its topic file?").
 pub fn is_struck_from(led: &Ledger, id: &str, rel: &str) -> bool {
-    is_superseded(led, id) && led.latest_for_id("approved", id).is_some_and(|r| r.detail == rel)
+    is_superseded(led, id)
+        && led
+            .latest_for_id("approved", id)
+            .is_some_and(|r| r.detail == rel)
 }
 
 /// True when `context_hash` (computed by the caller) matches the latest
@@ -275,13 +298,25 @@ pub fn load_terms_via(root: &Path, source: &crate::repo::Source) -> Option<Terms
 /// at (a term has nothing to supersede, so `decision_id` is `None` for
 /// one).
 pub enum DependentSource {
-    Decision { rel: String, heading: String, id: String },
-    Term { name: String },
+    Decision {
+        rel: String,
+        heading: String,
+        id: String,
+    },
+    Term {
+        name: String,
+    },
     /// An asked question (latest ledger state `asked`), by its terms line.
-    Asked { rel: String, heading: String },
+    Asked {
+        rel: String,
+        heading: String,
+    },
     /// A heading of an approved plan with an id and no ledger state yet,
     /// by its heading text.
-    PlanHeading { rel: String, heading: String },
+    PlanHeading {
+        rel: String,
+        heading: String,
+    },
 }
 
 impl DependentSource {
@@ -291,7 +326,8 @@ impl DependentSource {
         match self {
             DependentSource::Decision { rel, heading, .. } => format!("{}: \"{}\"", rel, heading),
             DependentSource::Term { name } => format!("term \"{}\"", name),
-            DependentSource::Asked { rel, heading } | DependentSource::PlanHeading { rel, heading } => {
+            DependentSource::Asked { rel, heading }
+            | DependentSource::PlanHeading { rel, heading } => {
                 format!("{}: \"{}\"", rel, heading)
             }
         }
@@ -329,7 +365,11 @@ pub fn retire_unrecorded(led: &Ledger, t: &terms::Term) -> bool {
 /// with the retired flag whose retirement is not recorded yet, or an id
 /// with a `term` row and no entry in `tf`.
 pub fn approve_retires_or_removes(led: &Ledger, tf: &TermsFile) -> bool {
-    if tf.terms.iter().any(|t| t.retired && retire_unrecorded(led, t)) {
+    if tf
+        .terms
+        .iter()
+        .any(|t| t.retired && retire_unrecorded(led, t))
+    {
         return true;
     }
     !removed_terms(led, tf).is_empty()
@@ -350,7 +390,12 @@ pub fn removed_terms(led: &Ledger, tf: &TermsFile) -> Vec<(String, String)> {
         }
         seen.push(&r.id);
         let latest = led.latest_for_id("term", &r.id).unwrap_or(r);
-        if latest.hash != TERM_REMOVED && !tf.terms.iter().any(|t| t.id.as_deref() == Some(r.id.as_str())) {
+        if latest.hash != TERM_REMOVED
+            && !tf
+                .terms
+                .iter()
+                .any(|t| t.id.as_deref() == Some(r.id.as_str()))
+        {
             out.push((r.id.clone(), latest.detail.clone()));
         }
     }
@@ -375,7 +420,11 @@ pub fn waiting_terms(led: &Ledger, tf: &TermsFile) -> Vec<(String, crate::status
         .map(|t| (t.name.clone(), crate::status::term_status(led, tf, t)))
         .filter(|(_, st)| matches!(st, TermStatus::New | TermStatus::Changed))
         .collect();
-    out.extend(removed_terms(led, tf).into_iter().map(|(_, name)| (name, TermStatus::Removed)));
+    out.extend(
+        removed_terms(led, tf)
+            .into_iter()
+            .map(|(_, name)| (name, TermStatus::Removed)),
+    );
     out
 }
 
@@ -490,11 +539,17 @@ fn depends_term_pairs(
 ) -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = Vec::new();
     for d in &sec.depends {
-        let record::Dep::Id { id: dep_id, .. } = d else { continue };
+        let record::Dep::Id { id: dep_id, .. } = d else {
+            continue;
+        };
         if already.iter().any(|(_, u)| u == dep_id) || out.iter().any(|(_, u)| u == dep_id) {
             continue;
         }
-        if !tf.terms.iter().any(|t| t.id.as_deref() == Some(dep_id.as_str())) {
+        if !tf
+            .terms
+            .iter()
+            .any(|t| t.id.as_deref() == Some(dep_id.as_str()))
+        {
             continue;
         }
         out.push((dep_id.clone(), dep_id.clone()));
@@ -576,11 +631,17 @@ pub fn dependent_entries(
             }
             if include_depends_ids {
                 for d in &sec.depends {
-                    let record::Dep::Id { id: dep_id, .. } = d else { continue };
+                    let record::Dep::Id { id: dep_id, .. } = d else {
+                        continue;
+                    };
                     if terms_line_pairs.iter().any(|(_, u)| u == dep_id) {
                         continue;
                     }
-                    if !tf.terms.iter().any(|t| t.id.as_deref() == Some(dep_id.as_str())) {
+                    if !tf
+                        .terms
+                        .iter()
+                        .any(|t| t.id.as_deref() == Some(dep_id.as_str()))
+                    {
                         continue;
                     }
                     out.push(DependentEntry {
@@ -610,7 +671,9 @@ pub fn dependent_entries(
                 continue;
             }
             out.push(DependentEntry {
-                source: DependentSource::Term { name: t.name.clone() },
+                source: DependentSource::Term {
+                    name: t.name.clone(),
+                },
                 pairs,
                 from_word: true,
             });
@@ -766,7 +829,9 @@ pub fn unresolved_sibling(rf: &RecordFile, i: usize) -> Option<&Section> {
         rf.sections
             .iter()
             .enumerate()
-            .find(|(j, s)| *j != i && tiers[*j] == tiers[i] && tier_unresolved(s) && s.is_refused() == refused)
+            .find(|(j, s)| {
+                *j != i && tiers[*j] == tiers[i] && tier_unresolved(s) && s.is_refused() == refused
+            })
             .map(|(_, s)| s)
     };
     find(false).or_else(|| find(true))
@@ -802,14 +867,21 @@ pub fn answer_waits(rf: &RecordFile, i: usize) -> AnswerWaits {
         if t == i || !tier_unresolved(&rf.sections[t]) {
             continue;
         }
-        let list = if rf.sections[t].is_refused() { &mut w.refused_target } else { &mut w.unanswered };
+        let list = if rf.sections[t].is_refused() {
+            &mut w.refused_target
+        } else {
+            &mut w.unanswered
+        };
         if !list.contains(&t) {
             list.push(t);
         }
     }
     if let Some(mine) = rf.tier_of(i) {
         for (j, s) in rf.sections.iter().enumerate() {
-            if s.is_refused() && rf.tier_of(j).is_some_and(|t| t < mine) && !w.refused_target.contains(&j) {
+            if s.is_refused()
+                && rf.tier_of(j).is_some_and(|t| t < mine)
+                && !w.refused_target.contains(&j)
+            {
                 w.refused_tier.push(j);
             }
         }
@@ -943,7 +1015,10 @@ fn ruling_of(row: &Row) -> Option<Ruling> {
 /// otherwise every `answered`/`refused` row of the question. `None` when
 /// `id` was never asked at all -- there is no `r` to reckon from.
 pub fn standing_rulings(led: &Ledger, id: &str) -> Option<Vec<Ruling>> {
-    let r_pos = led.rows.iter().rposition(|row| row.id == id && row.event == "asked")?;
+    let r_pos = led
+        .rows
+        .iter()
+        .rposition(|row| row.id == id && row.event == "asked")?;
 
     let mut distinct_rulings_before: Vec<Ruling> = Vec::new();
     for row in &led.rows[..r_pos] {
@@ -957,7 +1032,11 @@ pub fn standing_rulings(led: &Ledger, id: &str) -> Option<Vec<Ruling>> {
     }
     let asked_again = distinct_rulings_before.len() >= 2;
 
-    let range: &[Row] = if asked_again { &led.rows[r_pos + 1..] } else { &led.rows[..] };
+    let range: &[Row] = if asked_again {
+        &led.rows[r_pos + 1..]
+    } else {
+        &led.rows[..]
+    };
     let rulings: Vec<Ruling> = range
         .iter()
         .filter(|row| row.id == id)
@@ -984,8 +1063,12 @@ pub fn current_successors(led: &Ledger, id: &str) -> Vec<String> {
                 }
             }
             Some("superseded") => {
-                let mut next: Vec<String> =
-                    led.rows.iter().filter(|r| r.event == "superseded" && r.id == at).map(|r| r.detail.clone()).collect();
+                let mut next: Vec<String> = led
+                    .rows
+                    .iter()
+                    .filter(|r| r.event == "superseded" && r.id == at)
+                    .map(|r| r.detail.clone())
+                    .collect();
                 next.reverse();
                 stack.extend(next);
             }
@@ -1075,8 +1158,12 @@ mod tests {
     // computes for that content is.
     #[test]
     fn blame_approved_compares_the_latest_blame_row_hash() {
-        let content = "origin: docs/x.md\nblob: 0000000000000000000000000000000000000000\n\n1-1\tdetail\n";
-        let led = Ledger { rows: vec![], malformed: vec![] };
+        let content =
+            "origin: docs/x.md\nblob: 0000000000000000000000000000000000000000\n\n1-1\tdetail\n";
+        let led = Ledger {
+            rows: vec![],
+            malformed: vec![],
+        };
         assert!(!blame_approved(&led, "adrdom/blame/x.md", content));
 
         let hash = crate::blame::file_hash(&record::split_lines(content));
@@ -1093,7 +1180,11 @@ mod tests {
         };
         assert!(blame_approved(&led, "adrdom/blame/x.md", content));
         assert!(!blame_approved(&led, "adrdom/blame/other.md", content));
-        assert!(!blame_approved(&led, "adrdom/blame/x.md", "different content\n"));
+        assert!(!blame_approved(
+            &led,
+            "adrdom/blame/x.md",
+            "different content\n"
+        ));
     }
 
     // adr: 69708a07-469c-406b-9e25-63da1605b432
@@ -1104,10 +1195,25 @@ mod tests {
     #[test]
     fn the_text_read_for_terms_leaves_out_every_reference_line() {
         let content = "# T\n\n### Does the widget hold?\ndepends: widget\nunrelated: a, b\nblame: widgetnotes 1-2\nid: 11111111-1111-4111-8111-111111111111\nterms: widget=22222222-2222-4222-8222-222222222222\n\nProblem: p.\n\nStandard: s.\n\n- A) Yes.\n  Why: w.\n  Costs: c.\n- B) No.\n  Why: w.\n  Costs: c.\n";
-        let rf = record::build(PathBuf::from("t.md"), "t.md".to_string(), record::split_lines(content));
+        let rf = record::build(
+            PathBuf::from("t.md"),
+            "t.md".to_string(),
+            record::split_lines(content),
+        );
         let text = section_text_excluding_terms_line(&rf.lines, &rf.sections[0]);
-        assert!(text.starts_with("### Does the widget hold?\n\nProblem: p."), "{}", text);
-        for left_out in ["depends:", "unrelated:", "blame:", "widgetnotes", "id:", "terms:"] {
+        assert!(
+            text.starts_with("### Does the widget hold?\n\nProblem: p."),
+            "{}",
+            text
+        );
+        for left_out in [
+            "depends:",
+            "unrelated:",
+            "blame:",
+            "widgetnotes",
+            "id:",
+            "terms:",
+        ] {
             assert!(!text.contains(left_out), "{} in {}", left_out, text);
         }
     }
@@ -1137,7 +1243,10 @@ mod tests {
             // built here the same way, from the clean list this test
             // module writes them in (each `row_at` call already at a later
             // time than the last).
-            Ledger { rows, malformed: vec![] }
+            Ledger {
+                rows,
+                malformed: vec![],
+            }
         }
 
         fn t(n: u32) -> String {
@@ -1164,7 +1273,10 @@ mod tests {
                 row_at("asked", "q", "Q?", &t(5)),
                 row_at("answered", "q", "A", &t(6)),
             ]);
-            assert!(conflicting_rulings(&led, "q").is_none(), "A stands, no conflict");
+            assert!(
+                conflicting_rulings(&led, "q").is_none(),
+                "A stands, no conflict"
+            );
         }
 
         // c2: branch a asked t1, answered A t2; branch b asked t3, answered
@@ -1190,7 +1302,10 @@ mod tests {
                 row_at("asked", "q", "Q?", &t(5)),
                 row_at("answered", "q", "B", &t(6)),
             ]);
-            assert!(conflicting_rulings(&led, "q").is_none(), "B stands, no conflict");
+            assert!(
+                conflicting_rulings(&led, "q").is_none(),
+                "B stands, no conflict"
+            );
         }
 
         // c3: interleaved -- asked t1 (a), asked t2 (b), answered A t3,
@@ -1211,7 +1326,10 @@ mod tests {
         // c4: one branch only -- asked t1, answered A t2 -> no conflict.
         #[test]
         fn c4_single_answer_no_conflict() {
-            let led = led_of(vec![row_at("asked", "q", "Q?", &t(1)), row_at("answered", "q", "A", &t(2))]);
+            let led = led_of(vec![
+                row_at("asked", "q", "Q?", &t(1)),
+                row_at("answered", "q", "A", &t(2)),
+            ]);
             assert!(conflicting_rulings(&led, "q").is_none());
         }
 
@@ -1236,7 +1354,10 @@ mod tests {
                 row_at("answered", "q", "B", &t(3)),
                 row_at("asked", "q", "Q?", &t(5)),
             ]);
-            assert!(conflicting_rulings(&led, "q").is_none(), "open, not yet re-answered");
+            assert!(
+                conflicting_rulings(&led, "q").is_none(),
+                "open, not yet re-answered"
+            );
         }
 
         // c7: today's rules never let an *answered* id's text move and be
@@ -1303,7 +1424,10 @@ mod tests {
                 row_at("refused", "q", "Q?", &t(3)),
                 row_at("asked", "q", "Q?", &t(5)),
             ]);
-            assert!(conflicting_rulings(&led, "q").is_none(), "open, not yet settled again");
+            assert!(
+                conflicting_rulings(&led, "q").is_none(),
+                "open, not yet settled again"
+            );
         }
 
         // Same ledger, then answered A again after the re-ask -> A stands.
@@ -1317,7 +1441,10 @@ mod tests {
                 row_at("asked", "q", "Q?", &t(5)),
                 row_at("answered", "q", "A", &t(6)),
             ]);
-            assert!(conflicting_rulings(&led, "q").is_none(), "A stands, no conflict");
+            assert!(
+                conflicting_rulings(&led, "q").is_none(),
+                "A stands, no conflict"
+            );
         }
 
         // Same ledger, but the settling act after the re-ask is a fresh
@@ -1332,7 +1459,10 @@ mod tests {
                 row_at("asked", "q", "Q?", &t(5)),
                 row_at("refused", "q", "Q?", &t(6)),
             ]);
-            assert!(conflicting_rulings(&led, "q").is_none(), "refused stands, no conflict");
+            assert!(
+                conflicting_rulings(&led, "q").is_none(),
+                "refused stands, no conflict"
+            );
         }
     }
 }

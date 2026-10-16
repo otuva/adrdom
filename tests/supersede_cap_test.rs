@@ -51,11 +51,21 @@ fn approve(dir: &Path, name: &str) -> std::process::Output {
 
 fn approve_ok(dir: &Path, name: &str) {
     let out = approve(dir, name);
-    assert!(out.status.success(), "approve {} failed: {}", name, stderr(&out));
+    assert!(
+        out.status.success(),
+        "approve {} failed: {}",
+        name,
+        stderr(&out)
+    );
 }
 
 fn ask(dir: &Path, name: &str) -> std::process::Output {
-    adr(dir, &["ask", dir.join(rel(name)).to_str().unwrap()], &[], "")
+    adr(
+        dir,
+        &["ask", dir.join(rel(name)).to_str().unwrap()],
+        &[],
+        "",
+    )
 }
 
 fn cap_refusal(out: &std::process::Output) -> bool {
@@ -88,11 +98,24 @@ fn a_fifth_heading_superseding_one_of_four_passes_approve_check_and_ask() {
     let a = full_tier(&dir);
     append(&a, &sec(&h(5), Some(&h(1)), true));
     let out = approve(&dir, "a");
-    assert!(out.status.success(), "approve should pass the cap: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "approve should pass the cap: {}",
+        stderr(&out)
+    );
     let chk = adr(&dir, &["check"], &[], "");
-    assert!(!cap_refusal(&chk), "check printed a cap refusal: {}{}", stdout(&chk), stderr(&chk));
+    assert!(
+        !cap_refusal(&chk),
+        "check printed a cap refusal: {}{}",
+        stdout(&chk),
+        stderr(&chk)
+    );
     let out = ask(&dir, "a");
-    assert!(out.status.success(), "ask should pass the cap: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "ask should pass the cap: {}",
+        stderr(&out)
+    );
 }
 
 #[test]
@@ -101,7 +124,11 @@ fn a_fifth_heading_superseding_nothing_still_fails_the_cap() {
     let a = full_tier(&dir);
     append(&a, &sec(&h(5), None, true));
     let out = approve(&dir, "a");
-    assert!(!out.status.success(), "approve should refuse: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "approve should refuse: {}",
+        stdout(&out)
+    );
     assert!(cap_refusal(&out), "{}", stderr(&out));
 }
 
@@ -112,7 +139,11 @@ fn two_replacements_of_one_decision_in_a_full_tier_fail_the_cap() {
     append(&a, &sec(&h(5), Some(&h(1)), true));
     append(&a, &sec(&h(6), Some(&h(1)), true));
     let out = approve(&dir, "a");
-    assert!(!out.status.success(), "approve should refuse: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "approve should refuse: {}",
+        stdout(&out)
+    );
     assert!(cap_refusal(&out), "{}", stderr(&out));
 }
 
@@ -124,13 +155,21 @@ fn a_refused_replacement_returns_the_old_decision_to_the_count() {
     append(&a, &sec(&h(5), Some(&h(1)), true));
     approve_ok(&dir, "a");
     let out = ask(&dir, "a");
-    assert!(out.status.success(), "ask should pass the cap: {}", stderr(&out));
+    assert!(
+        out.status.success(),
+        "ask should pass the cap: {}",
+        stderr(&out)
+    );
     let out = adr_answer(&dir, &id_of(&a, &h(5)), "refuse");
     assert!(out.status.success(), "refuse failed: {}", stderr(&out));
 
     append(&a, &sec(&h(6), None, true));
     let out = approve(&dir, "a");
-    assert!(!out.status.success(), "approve should refuse: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "approve should refuse: {}",
+        stdout(&out)
+    );
     assert!(cap_refusal(&out), "{}", stderr(&out));
 }
 
@@ -138,7 +177,11 @@ fn a_refused_replacement_returns_the_old_decision_to_the_count() {
 fn an_open_replacement_in_another_file_frees_a_slot_in_the_full_tier() {
     let dir = init_repo();
     let a = full_tier(&dir);
-    write_record(&dir, &rel("b"), &format!("# B\n{}", sec(&h(9), Some(&h(1)), true)));
+    write_record(
+        &dir,
+        &rel("b"),
+        &format!("# B\n{}", sec(&h(9), Some(&h(1)), true)),
+    );
     approve_ok(&dir, "b");
     append(&a, &sec(&h(5), None, true));
     let out = approve(&dir, "a");
@@ -156,7 +199,11 @@ fn an_open_replacement_in_another_file_frees_a_slot_in_the_full_tier() {
 fn ask_stops_a_tier_that_a_refused_replacement_in_another_file_took_over_the_cap() {
     let dir = init_repo();
     let a = full_tier(&dir);
-    let b = write_record(&dir, &rel("b"), &format!("# B\n{}", sec(&h(9), Some(&h(1)), true)));
+    let b = write_record(
+        &dir,
+        &rel("b"),
+        &format!("# B\n{}", sec(&h(9), Some(&h(1)), true)),
+    );
     approve_ok(&dir, "b");
     append(&a, &sec(&h(5), None, true));
     approve_ok(&dir, "a");
@@ -166,6 +213,10 @@ fn ask_stops_a_tier_that_a_refused_replacement_in_another_file_took_over_the_cap
     assert!(out.status.success(), "refuse failed: {}", stderr(&out));
 
     let out = ask(&dir, "a");
-    assert!(!out.status.success(), "ask a should refuse: {}", stdout(&out));
+    assert!(
+        !out.status.success(),
+        "ask a should refuse: {}",
+        stdout(&out)
+    );
     assert!(cap_refusal(&out), "{}", stderr(&out));
 }

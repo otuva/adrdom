@@ -27,7 +27,9 @@ fn parse(content: &str) -> HashMap<String, Vec<String>> {
         let p: Vec<&str> = line.split('\t').collect();
         if let [hash, id] = p[..] {
             if !hash.is_empty() && !id.is_empty() {
-                out.entry(hash.to_string()).or_default().push(id.to_string());
+                out.entry(hash.to_string())
+                    .or_default()
+                    .push(id.to_string());
             }
         }
     }
@@ -57,7 +59,10 @@ pub fn record(root: &Path, entries: &[(String, Vec<String>)], live: &Live) -> Re
     let mut text = String::new();
     for line in old.lines() {
         let hash = line.split('\t').next().unwrap_or("");
-        if line.split('\t').count() == 2 && live.has_text(hash) && !entries.iter().any(|(h, _)| h == hash) {
+        if line.split('\t').count() == 2
+            && live.has_text(hash)
+            && !entries.iter().any(|(h, _)| h == hash)
+        {
             text.push_str(line);
             text.push('\n');
         }
@@ -101,13 +106,22 @@ mod tests {
         std::fs::write(root.join("adrdom/decisions/topic.md"), topic).unwrap();
         let (files, errors) = crate::record::load_all_via(&root, &repo::Source::WorkingTree);
         assert!(errors.is_empty(), "{:?}", errors);
-        let hashes: Vec<String> = files[0].sections.iter().map(crate::record::heading_hash).collect();
+        let hashes: Vec<String> = files[0]
+            .sections
+            .iter()
+            .map(crate::record::heading_hash)
+            .collect();
         assert_eq!(hashes.len(), 16);
         std::thread::scope(|s| {
             for h in &hashes {
                 let root = &root;
                 s.spawn(move || {
-                    record(root, &[(h.clone(), vec!["a".to_string(), "b".to_string()])], &Live::of(root)).unwrap();
+                    record(
+                        root,
+                        &[(h.clone(), vec!["a".to_string(), "b".to_string()])],
+                        &Live::of(root),
+                    )
+                    .unwrap();
                 });
             }
         });

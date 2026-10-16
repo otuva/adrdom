@@ -40,9 +40,15 @@ const WITH_COMMA: &str = "Is the widget hold, in the rain?";
 #[test]
 fn a_supersedes_line_takes_a_heading_that_holds_a_comma() {
     let dir = setup();
-    let a = write_record(&dir, A, &format!("# A\n\n{}", question(WITH_COMMA, "widget", "")));
+    let a = write_record(
+        &dir,
+        A,
+        &format!("# A\n\n{}", question(WITH_COMMA, "widget", "")),
+    );
     approve_record(&dir, A);
-    assert!(adr(&dir, &["ask", a.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", a.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let alpha = extract_ids(&std::fs::read_to_string(&a).unwrap())[0].clone();
     let out = adr_answer(&dir, &alpha, "A");
     assert!(out.status.success(), "{}", stderr(&out));
@@ -61,11 +67,19 @@ fn a_supersedes_line_takes_a_heading_that_holds_a_comma() {
     );
     approve_record(&dir, B);
     let approved = std::fs::read_to_string(&b).unwrap();
-    assert!(approved.contains(&format!("supersedes: {}\n", alpha)), "{}", approved);
+    assert!(
+        approved.contains(&format!("supersedes: {}\n", alpha)),
+        "{}",
+        approved
+    );
     let out = adr(&dir, &["ask", b.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
     let asked = std::fs::read_to_string(&b).unwrap();
-    assert!(asked.contains(&format!("supersedes: {}\n", alpha)), "{}", asked);
+    assert!(
+        asked.contains(&format!("supersedes: {}\n", alpha)),
+        "{}",
+        asked
+    );
 }
 
 // One hash on two lines of the ban list is one word: it is removed once,
@@ -114,9 +128,17 @@ fn uninstall_leaves_a_hook_it_did_not_write_and_prints_only_what_it_removed() {
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
     assert!(!text.contains(".githooks/pre-commit"), "{}", text);
-    assert!(text.lines().any(|l| l == "removed: .githooks/commit-msg"), "{}", text);
+    assert!(
+        text.lines().any(|l| l == "removed: .githooks/commit-msg"),
+        "{}",
+        text
+    );
     for line in text.lines() {
-        assert!(line.starts_with("removed: ") || line.starts_with("written: "), "{}", text);
+        assert!(
+            line.starts_with("removed: ") || line.starts_with("written: "),
+            "{}",
+            text
+        );
     }
     assert!(hook.exists());
     assert!(!dir.join(".githooks/commit-msg").exists());
@@ -135,10 +157,18 @@ fn uninstall_prints_what_it_removed_before_it_failed() {
     set_mode(&hooks, 0o755);
 
     assert!(!out.status.success(), "{}", stdout(&out));
-    assert!(stderr(&out).starts_with("uninstall: failed to remove "), "{}", stderr(&out));
+    assert!(
+        stderr(&out).starts_with("uninstall: failed to remove "),
+        "{}",
+        stderr(&out)
+    );
     let text = stdout(&out);
     assert!(text.contains("AGENTS.md"), "{}", text);
     for line in text.lines() {
-        assert!(line.starts_with("removed: ") || line.starts_with("written: "), "{}", text);
+        assert!(
+            line.starts_with("removed: ") || line.starts_with("written: "),
+            "{}",
+            text
+        );
     }
 }

@@ -17,13 +17,23 @@ fn check_fails_when_a_hash_is_back_in_the_file_after_being_unbanned() {
     let ban_out = adr(&dir, &["ban"], &[], "forbiddenword\n");
     assert!(ban_out.status.success(), "ban failed: {}", stderr(&ban_out));
     let banned_path = dir.join("adrdom/state/banned.sha256");
-    let hash_line = std::fs::read_to_string(&banned_path).unwrap().trim().to_string();
+    let hash_line = std::fs::read_to_string(&banned_path)
+        .unwrap()
+        .trim()
+        .to_string();
     assert!(!hash_line.is_empty(), "expected a banned hash line");
 
     let unban_out = adr_owner(&dir, &["unban"], "forbiddenword\n");
-    assert!(unban_out.status.success(), "unban failed: {}", stderr(&unban_out));
     assert!(
-        std::fs::read_to_string(&banned_path).unwrap().trim().is_empty(),
+        unban_out.status.success(),
+        "unban failed: {}",
+        stderr(&unban_out)
+    );
+    assert!(
+        std::fs::read_to_string(&banned_path)
+            .unwrap()
+            .trim()
+            .is_empty(),
         "expected the file empty right after unban"
     );
 
@@ -52,10 +62,18 @@ fn check_has_no_banned_failure_after_ban_or_after_ban_then_unban() {
 
     let out = adr(&dir, &["check"], &[], "");
     let text = stdout(&out);
-    assert!(!text.contains("banned:"), "unexpected banned failure right after ban: {}", text);
+    assert!(
+        !text.contains("banned:"),
+        "unexpected banned failure right after ban: {}",
+        text
+    );
 
     let unban_out = adr_owner(&dir, &["unban"], "quietword\n");
-    assert!(unban_out.status.success(), "unban failed: {}", stderr(&unban_out));
+    assert!(
+        unban_out.status.success(),
+        "unban failed: {}",
+        stderr(&unban_out)
+    );
 
     let out2 = adr(&dir, &["check"], &[], "");
     let text2 = stdout(&out2);

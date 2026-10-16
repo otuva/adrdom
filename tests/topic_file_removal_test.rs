@@ -32,7 +32,9 @@ fn setup(content: &str, ask: bool) -> (PathBuf, PathBuf) {
     let record = write_record(&dir, REL, content);
     approve_record(&dir, REL);
     if ask {
-        assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+        assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+            .status
+            .success());
     }
     (dir, record)
 }
@@ -41,9 +43,17 @@ fn setup(content: &str, ask: bool) -> (PathBuf, PathBuf) {
 /// move, never on its own.
 fn assert_owner_follows_agent(text: &str) {
     let owner = format!("owner runs: adr approve {}", REL);
-    let at = text.find(&owner).unwrap_or_else(|| panic!("no owner command: {}", text));
-    let agent = text.find("agent restores").unwrap_or_else(|| panic!("no agent move: {}", text));
-    assert!(agent < at, "owner's approve before the agent's move: {}", text);
+    let at = text
+        .find(&owner)
+        .unwrap_or_else(|| panic!("no owner command: {}", text));
+    let agent = text
+        .find("agent restores")
+        .unwrap_or_else(|| panic!("no agent move: {}", text));
+    assert!(
+        agent < at,
+        "owner's approve before the agent's move: {}",
+        text
+    );
 }
 
 fn approve_removal(dir: &Path) -> std::process::Output {
@@ -61,19 +71,43 @@ fn a_removed_file_holding_only_a_refused_question_is_approved_away() {
 
     let out = adr(&dir, &["check"], &[], "");
     let text = format!("{}{}", stdout(&out), stderr(&out));
-    assert!(text.contains(&format!("adr approve {}", REL)), "check must name the command: {}", text);
+    assert!(
+        text.contains(&format!("adr approve {}", REL)),
+        "check must name the command: {}",
+        text
+    );
 
     let before = ledger(&dir);
     let out = approve_removal(&dir);
     assert!(out.status.success(), "approve: {}", stderr(&out));
     let after = ledger(&dir);
     let new: Vec<&str> = after.lines().skip(before.lines().count()).collect();
-    assert!(new.iter().any(|l| l.contains("\twithdrawn\t") && l.contains(id.as_str())), "{:?}", new);
-    assert!(new.iter().any(|l| l.contains("\tapproved\t") && l.contains(REL)), "{:?}", new);
-    assert!(new.iter().any(|l| l.contains("\tcontext\t") && l.contains(REL)), "{:?}", new);
+    assert!(
+        new.iter()
+            .any(|l| l.contains("\twithdrawn\t") && l.contains(id.as_str())),
+        "{:?}",
+        new
+    );
+    assert!(
+        new.iter()
+            .any(|l| l.contains("\tapproved\t") && l.contains(REL)),
+        "{:?}",
+        new
+    );
+    assert!(
+        new.iter()
+            .any(|l| l.contains("\tcontext\t") && l.contains(REL)),
+        "{:?}",
+        new
+    );
 
     let out = adr(&dir, &["check"], &[], "");
-    assert!(out.status.success(), "check: {}{}", stdout(&out), stderr(&out));
+    assert!(
+        out.status.success(),
+        "check: {}{}",
+        stdout(&out),
+        stderr(&out)
+    );
     let text = format!("{}{}", stdout(&out), stderr(&out));
     assert!(!text.contains(id.as_str()), "{}", text);
     assert!(!text.contains("awaiting approval; owner runs"), "{}", text);
@@ -86,7 +120,11 @@ fn a_removed_file_holding_only_a_refused_question_is_approved_away() {
     write_record(&dir, REL, ONE);
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
-    assert!(!stdout(&out).contains("awaiting approval"), "a draft's status is no line of check's: {}", stdout(&out));
+    assert!(
+        !stdout(&out).contains("awaiting approval"),
+        "a draft's status is no line of check's: {}",
+        stdout(&out)
+    );
 }
 
 #[test]
@@ -101,7 +139,9 @@ fn a_removed_file_holding_only_superseded_sections_is_approved_away() {
     );
     let rb = write_record(&dir, "adrdom/decisions/b.md", &b);
     approve_record(&dir, "adrdom/decisions/b.md");
-    assert!(adr(&dir, &["ask", rb.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", rb.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let new_id = extract_ids(&std::fs::read_to_string(&rb).unwrap())[0].clone();
     assert!(adr_answer(&dir, &new_id, "A").status.success());
     write_test_comment(&dir, &new_id);
@@ -114,13 +154,21 @@ fn a_removed_file_holding_only_superseded_sections_is_approved_away() {
     assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
     assert!(!stdout(&out).contains(REL), "{}", stdout(&out));
     let shown = adr(&dir, &["show"], &[], "");
-    assert!(stdout(&shown).contains(&format!("[removed] {}", REL)), "{}", stdout(&shown));
+    assert!(
+        stdout(&shown).contains(&format!("[removed] {}", REL)),
+        "{}",
+        stdout(&shown)
+    );
 
     let out = approve_removal(&dir);
     assert!(out.status.success(), "approve: {}", stderr(&out));
     let out = adr(&dir, &["check"], &[], "");
     assert!(out.status.success(), "{}{}", stdout(&out), stderr(&out));
-    assert!(!stdout(&out).contains(&format!("adr approve {}", REL)), "{}", stdout(&out));
+    assert!(
+        !stdout(&out).contains(&format!("adr approve {}", REL)),
+        "{}",
+        stdout(&out)
+    );
 }
 
 #[test]
@@ -135,20 +183,36 @@ fn approve_refuses_the_removal_of_a_file_holding_a_current_decision() {
     // check and show name the agent's move, never the owner's refused approve.
     let out = adr(&dir, &["check"], &[], "");
     let text = format!("{}{}", stdout(&out), stderr(&out));
-    assert!(text.contains("agent restores") && text.contains(&format!("supersedes {}", id)), "{}", text);
+    assert!(
+        text.contains("agent restores") && text.contains(&format!("supersedes {}", id)),
+        "{}",
+        text
+    );
     assert_owner_follows_agent(&text);
     let out = adr(&dir, &["show"], &[], "");
     let text = stdout(&out);
-    assert!(text.contains("agent restores") && text.contains(&format!("supersedes {}", id)), "{}", text);
+    assert!(
+        text.contains("agent restores") && text.contains(&format!("supersedes {}", id)),
+        "{}",
+        text
+    );
     assert_owner_follows_agent(&text);
 
     let before = ledger(&dir);
     let out = approve_removal(&dir);
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains(&id) && err.contains("Only question?"), "{}", err);
+    assert!(
+        err.contains(&id) && err.contains("Only question?"),
+        "{}",
+        err
+    );
     assert!(err.contains("agent restores"), "{}", err);
-    assert!(err.contains(&format!("owner runs: adr approve {}", REL)), "{}", err);
+    assert!(
+        err.contains(&format!("owner runs: adr approve {}", REL)),
+        "{}",
+        err
+    );
     assert_eq!(ledger(&dir), before);
 }
 
@@ -164,7 +228,11 @@ fn approve_refuses_the_removal_of_a_file_holding_an_asked_question() {
     // the agent's move: the owner's approve would be refused.
     let out = adr(&dir, &["check"], &[], "");
     let text = format!("{}{}", stdout(&out), stderr(&out));
-    assert!(text.contains(&id) && text.contains(&format!("agent restores {}", REL)), "{}", text);
+    assert!(
+        text.contains(&id) && text.contains(&format!("agent restores {}", REL)),
+        "{}",
+        text
+    );
     assert_owner_follows_agent(&text);
     assert!(!text.contains("ledger id"), "{}", text);
     let out = adr(&dir, &["show"], &[], "");
@@ -174,7 +242,11 @@ fn approve_refuses_the_removal_of_a_file_holding_an_asked_question() {
     let out = approve_removal(&dir);
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains(&id) && err.contains("asked and not answered"), "{}", err);
+    assert!(
+        err.contains(&id) && err.contains("asked and not answered"),
+        "{}",
+        err
+    );
     assert_eq!(ledger(&dir), before);
 }
 
@@ -189,7 +261,11 @@ fn approve_refuses_the_removal_of_a_file_holding_an_approved_unasked_heading() {
     let out = approve_removal(&dir);
     assert!(!out.status.success());
     let err = stderr(&out);
-    assert!(err.contains("First question?") && err.contains("Second question?"), "{}", err);
+    assert!(
+        err.contains("First question?") && err.contains("Second question?"),
+        "{}",
+        err
+    );
     assert!(err.contains(&ids[0]) && err.contains(&ids[1]), "{}", err);
     assert_eq!(ledger(&dir), before);
 }
@@ -199,9 +275,20 @@ fn approve_refuses_a_path_never_approved_and_absent() {
     // adr: 79da6500-2246-4a80-baf1-0eaf7cad49ee
     let (dir, _record) = setup(ONE, false);
     let before = ledger(&dir);
-    let out = adr_owner(&dir, &["approve", dir.join("adrdom/decisions/nothing.md").to_str().unwrap()], "");
+    let out = adr_owner(
+        &dir,
+        &[
+            "approve",
+            dir.join("adrdom/decisions/nothing.md").to_str().unwrap(),
+        ],
+        "",
+    );
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("nothing to approve"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("nothing to approve"),
+        "{}",
+        stderr(&out)
+    );
     assert_eq!(ledger(&dir), before);
 }
 
@@ -215,10 +302,19 @@ fn show_and_plan_do_not_crash_on_a_removed_file() {
     std::fs::remove_file(&record).unwrap();
     let out = adr(&dir, &["show"], &[], "");
     assert!(out.status.success(), "{}", stderr(&out));
-    assert!(stdout(&out).contains(&format!("adr approve {}", REL)), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains(&format!("adr approve {}", REL)),
+        "{}",
+        stdout(&out)
+    );
     let out = adr(&dir, &["plan", dir.join(REL).to_str().unwrap()], &[], "");
     let text = format!("{}{}", stdout(&out), stderr(&out));
-    assert_ne!(out.status.code(), Some(101), "plan must not panic: {}", text);
+    assert_ne!(
+        out.status.code(),
+        Some(101),
+        "plan must not panic: {}",
+        text
+    );
     // A named refusal, an exit code of 1: the file is not there to plan.
     assert_eq!(out.status.code(), Some(1), "{}", text);
     assert!(text.contains(&format!("plan: cannot read {}:", REL)) && text.contains("agent rewrites the topic file given to adr plan to one under adrdom/decisions that exists"), "{}", text);
@@ -236,7 +332,9 @@ fn a_question_added_asked_and_uncommitted_holds_the_removal() {
     let both = format!("{}{}", std::fs::read_to_string(&record).unwrap(), SECOND);
     write_record(&dir, REL, &both);
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let ids = extract_ids(&std::fs::read_to_string(&record).unwrap());
     let second = ids.iter().find(|i| **i != first).unwrap().clone();
     std::fs::remove_file(&record).unwrap();
@@ -245,7 +343,11 @@ fn a_question_added_asked_and_uncommitted_holds_the_removal() {
     let out = approve_removal(&dir);
     assert!(!out.status.success(), "{}", stdout(&out));
     let err = stderr(&out);
-    assert!(err.contains(&second) && err.contains("Added question?"), "{}", err);
+    assert!(
+        err.contains(&second) && err.contains("Added question?"),
+        "{}",
+        err
+    );
     assert_eq!(ledger(&dir), before);
 
     // check and show agree: the agent's move, not the owner's.
@@ -264,10 +366,15 @@ fn approving_an_unrelated_file_leaves_the_ids_of_a_removed_file_alone() {
 
     // A live file with two asked questions, the second then struck from its
     // edited plan: an asked id in no file and tied to no removed file.
-    let live_text = TWO.replace("# Example", "# Live").replace("1.1 First", "4.1 Live first").replace("1.2 Second", "4.2 Live second");
+    let live_text = TWO
+        .replace("# Example", "# Live")
+        .replace("1.1 First", "4.1 Live first")
+        .replace("1.2 Second", "4.2 Live second");
     let live = write_record(&dir, "adrdom/decisions/live.md", &live_text);
     approve_record(&dir, "adrdom/decisions/live.md");
-    assert!(adr(&dir, &["ask", live.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", live.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let live_now = std::fs::read_to_string(&live).unwrap();
     let struck = extract_ids(&live_now)[1].clone();
     std::fs::write(&live, &live_now[..live_now.find("### 4.2").unwrap()]).unwrap();
@@ -279,12 +386,16 @@ fn approving_an_unrelated_file_leaves_the_ids_of_a_removed_file_alone() {
     write_record(&dir, "adrdom/decisions/other.md", other);
     approve_record(&dir, "adrdom/decisions/other.md");
     assert!(
-        !ledger(&dir).lines().any(|l| l.contains("\twithdrawn\t") && l.contains(id.as_str())),
+        !ledger(&dir)
+            .lines()
+            .any(|l| l.contains("\twithdrawn\t") && l.contains(id.as_str())),
         "the removed file's asked id must not be withdrawn by another file's approval"
     );
     // Positive control: the same approve withdraws the struck live id.
     assert!(
-        ledger(&dir).lines().any(|l| l.contains("\twithdrawn\t") && l.contains(struck.as_str())),
+        ledger(&dir)
+            .lines()
+            .any(|l| l.contains("\twithdrawn\t") && l.contains(struck.as_str())),
         "an asked id in no file and tied to no removed file is withdrawn: {}",
         ledger(&dir)
     );
@@ -292,7 +403,11 @@ fn approving_an_unrelated_file_leaves_the_ids_of_a_removed_file_alone() {
     // The removal is still refused for the open question.
     let out = approve_removal(&dir);
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("asked and not answered"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("asked and not answered"),
+        "{}",
+        stderr(&out)
+    );
 }
 
 #[test]
@@ -308,13 +423,25 @@ fn deleting_a_draft_never_approved_needs_no_owner_act() {
     let before = ledger(&dir);
     let out = approve_removal(&dir);
     assert!(!out.status.success(), "{}", stdout(&out));
-    assert!(stderr(&out).contains("never approved") && stderr(&out).contains("nothing to approve"), "{}", stderr(&out));
-    assert!(stderr(&out).contains("agent runs: git commit"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("never approved") && stderr(&out).contains("nothing to approve"),
+        "{}",
+        stderr(&out)
+    );
+    assert!(
+        stderr(&out).contains("agent runs: git commit"),
+        "{}",
+        stderr(&out)
+    );
     assert_eq!(ledger(&dir), before);
 
     let out = adr(&dir, &["check"], &[], "");
     let text = format!("{}{}", stdout(&out), stderr(&out));
-    assert!(!text.contains(REL), "check says nothing of a removed draft: {}", text);
+    assert!(
+        !text.contains(REL),
+        "check says nothing of a removed draft: {}",
+        text
+    );
     let out = adr(&dir, &["show"], &[], "");
     assert!(!stdout(&out).contains(REL), "{}", stdout(&out));
 }
@@ -343,7 +470,9 @@ fn a_heading_approved_never_asked_and_struck_does_not_hold_the_removal() {
 
     // After Q1 is refused, the removal passes.
     std::fs::write(&record, &cut).unwrap();
-    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", record.to_str().unwrap()], &[], "")
+        .status
+        .success());
     assert!(adr_answer(&dir, &ids[0], "refuse").status.success());
     commit(&dir);
     std::fs::remove_file(&record).unwrap();
@@ -364,7 +493,11 @@ fn a_committed_deletion_still_holds_an_approved_unasked_heading() {
     let out = approve_removal(&dir);
     assert!(!out.status.success(), "{}", stdout(&out));
     let err = stderr(&out);
-    assert!(err.contains("First question?") && err.contains("Second question?"), "{}", err);
+    assert!(
+        err.contains("First question?") && err.contains("Second question?"),
+        "{}",
+        err
+    );
     assert!(err.contains(&ids[0]) && err.contains(&ids[1]), "{}", err);
     assert_eq!(ledger(&dir), before);
 }
@@ -378,7 +511,11 @@ fn a_heading_struck_by_a_committed_plan_change_does_not_hold_a_committed_deletio
     let text = std::fs::read_to_string(&record).unwrap();
     let kept = text[..text.find("### 1.2").unwrap()].trim_end().to_string() + "\n";
     // The entry naming the struck heading goes with it.
-    let kept: String = kept.lines().filter(|l| !l.starts_with("unrelated:")).map(|l| format!("{}\n", l)).collect();
+    let kept: String = kept
+        .lines()
+        .filter(|l| !l.starts_with("unrelated:"))
+        .map(|l| format!("{}\n", l))
+        .collect();
     std::fs::write(&record, &kept).unwrap();
     approve_record(&dir, REL);
     commit(&dir);
@@ -391,8 +528,16 @@ fn a_heading_struck_by_a_committed_plan_change_does_not_hold_a_committed_deletio
     let out = approve_removal(&dir);
     assert!(!out.status.success(), "{}", stdout(&out));
     let err = stderr(&out);
-    assert!(err.contains(&ids[0]) && err.contains("First question?"), "{}", err);
-    assert!(!err.contains(&ids[1]) && !err.contains("Second question?"), "{}", err);
+    assert!(
+        err.contains(&ids[0]) && err.contains("First question?"),
+        "{}",
+        err
+    );
+    assert!(
+        !err.contains(&ids[1]) && !err.contains("Second question?"),
+        "{}",
+        err
+    );
     assert_eq!(ledger(&dir), before);
 }
 
@@ -413,10 +558,26 @@ fn check_names_each_id_of_a_committed_deletion_once_with_the_removal_move() {
         // A failure line is about the id it opens with; the move names the others.
         let lines: Vec<&str> = text
             .lines()
-            .filter(|l| !l.starts_with("plan:") && l.split_once(": ").is_some_and(|(_, rest)| rest.starts_with(id.as_str())))
+            .filter(|l| {
+                !l.starts_with("plan:")
+                    && l.split_once(": ")
+                        .is_some_and(|(_, rest)| rest.starts_with(id.as_str()))
+            })
             .collect();
-        assert_eq!(lines.len(), 1, "{} named {} times: {}", id, lines.len(), text);
-        assert!(lines[0].contains("agent restores") && lines[0].contains(&format!("owner runs: adr approve {}", REL)), "{}", lines[0]);
+        assert_eq!(
+            lines.len(),
+            1,
+            "{} named {} times: {}",
+            id,
+            lines.len(),
+            text
+        );
+        assert!(
+            lines[0].contains("agent restores")
+                && lines[0].contains(&format!("owner runs: adr approve {}", REL)),
+            "{}",
+            lines[0]
+        );
     }
 }
 
@@ -428,7 +589,11 @@ fn an_uncommitted_approval_of_a_strike_falls_back_to_the_newest_committed_plan()
     commit(&dir);
     let text = std::fs::read_to_string(&record).unwrap();
     let kept = text[..text.find("### 1.2").unwrap()].trim_end().to_string() + "\n";
-    let kept: String = kept.lines().filter(|l| !l.starts_with("unrelated:")).map(|l| format!("{}\n", l)).collect();
+    let kept: String = kept
+        .lines()
+        .filter(|l| !l.starts_with("unrelated:"))
+        .map(|l| format!("{}\n", l))
+        .collect();
     std::fs::write(&record, &kept).unwrap();
     approve_record(&dir, REL);
     // Not committed: no committed version matches the latest approval, so the
@@ -453,7 +618,11 @@ fn an_approved_removal_leaves_check_silent_about_the_path_and_a_second_approve_w
     let out = adr(&dir, &["check"], &[], "");
     let text = format!("{}{}", stdout(&out), stderr(&out));
     assert!(out.status.success(), "check: {}", text);
-    assert!(!text.contains(REL), "check names the removed path: {}", text);
+    assert!(
+        !text.contains(REL),
+        "check names the removed path: {}",
+        text
+    );
 
     let after = ledger(&dir);
     let out = approve_removal(&dir);

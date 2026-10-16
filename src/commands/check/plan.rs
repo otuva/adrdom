@@ -1,10 +1,10 @@
-use crate::rules::Class;
 use super::{is_note, Failure};
-use crate::rules::{self, Finding};
 use crate::ledger::Ledger;
 use crate::msg;
 use crate::record::RecordFile;
 use crate::repo::{self, Source};
+use crate::rules::Class;
+use crate::rules::{self, Finding};
 use crate::state;
 use std::collections::HashMap;
 use std::path::Path;
@@ -46,7 +46,9 @@ pub(super) fn check_plan(
     // still told so even when its content also fails to parse into one.
     for f in repo::list_decision_files_via(root, source) {
         let rel = state::rel_path(root, &f);
-        let topic = records_by_rel.get(rel.as_str()).and_then(|rf| rf.topic.as_deref());
+        let topic = records_by_rel
+            .get(rel.as_str())
+            .and_then(|rf| rf.topic.as_deref());
         // A file awaiting approval earns a note, an approved one a failure
         // (per "Does check fail a topic file awaiting approval?"); a file
         // that did not parse has no approval state read, so it fails.
@@ -82,12 +84,20 @@ pub(super) fn check_plan(
         }
         // The fault belongs to the copying question (`rules::copying_sections`):
         // a note when one sits in a draft, a failure otherwise.
-        let mut dup_headings: Vec<&str> = rf.sections.iter().map(|s| s.heading_text.as_str()).collect();
+        let mut dup_headings: Vec<&str> = rf
+            .sections
+            .iter()
+            .map(|s| s.heading_text.as_str())
+            .collect();
         dup_headings.sort();
         dup_headings.dedup();
         for h in dup_headings {
-            let bearing: Vec<_> =
-                rf.sections.iter().filter(|s| s.heading_text == h).cloned().collect();
+            let bearing: Vec<_> = rf
+                .sections
+                .iter()
+                .filter(|s| s.heading_text == h)
+                .cloned()
+                .collect();
             if bearing.len() < 2 {
                 continue;
             }
@@ -116,7 +126,12 @@ pub(super) fn check_plan(
                 })
             });
             let message = msg::duplicate_heading_across_files(heading, &paths[0], &paths[1]);
-            push_plan(&mut out, &mut notes, copied_in_draft, Failure::said(Class::Plan, message));
+            push_plan(
+                &mut out,
+                &mut notes,
+                copied_in_draft,
+                Failure::said(Class::Plan, message),
+            );
         }
     }
 

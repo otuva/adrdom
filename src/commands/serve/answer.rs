@@ -12,19 +12,38 @@ use crate::out::Line;
 use crate::record::{self, Dep, Section};
 use std::collections::HashMap;
 
-pub(super) fn render_next(r: &Records, last: &[Line], after: Option<&String>, show: Option<&String>, token: &str) -> String {
+pub(super) fn render_next(
+    r: &Records,
+    last: &[Line],
+    after: Option<&String>,
+    show: Option<&String>,
+    token: &str,
+) -> String {
     let mut body = banner(last);
     let files = data::files(r, false);
-    let all: Vec<&Q> = files.iter().flat_map(|f| f.qs.iter()).filter(|q| q.listed()).collect();
+    let all: Vec<&Q> = files
+        .iter()
+        .flat_map(|f| f.qs.iter())
+        .filter(|q| q.listed())
+        .collect();
 
     let order: Vec<&Q> = files.iter().flat_map(|f| f.qs.iter()).collect();
-    let Some(q) = pick_next(&order, &all, after.map(String::as_str), show.map(String::as_str)) else {
+    let Some(q) = pick_next(
+        &order,
+        &all,
+        after.map(String::as_str),
+        show.map(String::as_str),
+    ) else {
         // An asked question `answer` would refuse waits on another: nothing
         // is wrong, but nothing can be answered yet either.
         let waiting = !all.is_empty();
         body.push_str(&format!(
             "<header class=\"lead\">\n<h1>{}</h1>\n",
-            if waiting { "No question can be answered yet" } else { "Nothing to answer" }
+            if waiting {
+                "No question can be answered yet"
+            } else {
+                "Nothing to answer"
+            }
         ));
         body.push_str("</header>\n");
         if waiting {
@@ -61,12 +80,21 @@ pub(super) fn render_next(r: &Records, last: &[Line], after: Option<&String>, sh
 
     let depends = depends_text(r, sec);
     if !depends.is_empty() {
-        body.push_str(&format!("<p class=\"stands-on\">Stands on: {}</p>\n", esc(&depends.join(", "))));
+        body.push_str(&format!(
+            "<p class=\"stands-on\">Stands on: {}</p>\n",
+            esc(&depends.join(", "))
+        ));
     }
     if !sec.supersedes.is_empty() {
-        let names: Vec<String> =
-            sec.supersedes.iter().map(|id| r.names.get(id).cloned().unwrap_or_else(|| id.clone())).collect();
-        body.push_str(&format!("<p class=\"stands-on\">Supersedes: {}</p>\n", esc(&names.join(", "))));
+        let names: Vec<String> = sec
+            .supersedes
+            .iter()
+            .map(|id| r.names.get(id).cloned().unwrap_or_else(|| id.clone()))
+            .collect();
+        body.push_str(&format!(
+            "<p class=\"stands-on\">Supersedes: {}</p>\n",
+            esc(&names.join(", "))
+        ));
     }
     body.push_str(&neighbours(&show::neighbours_of(r, rf, q.heading())));
 
@@ -75,10 +103,16 @@ pub(super) fn render_next(r: &Records, last: &[Line], after: Option<&String>, sh
     if problem.is_some() || standard.is_some() {
         body.push_str("<dl class=\"framing\">\n");
         if let Some(p) = &problem {
-            body.push_str(&format!("<dt>Problem</dt><dd>{}</dd>\n", mark_terms(p, &words)));
+            body.push_str(&format!(
+                "<dt>Problem</dt><dd>{}</dd>\n",
+                mark_terms(p, &words)
+            ));
         }
         if let Some(s) = &standard {
-            body.push_str(&format!("<dt>Standard</dt><dd>{}</dd>\n", mark_terms(s, &words)));
+            body.push_str(&format!(
+                "<dt>Standard</dt><dd>{}</dd>\n",
+                mark_terms(s, &words)
+            ));
         }
         body.push_str("</dl>\n");
     }
@@ -182,7 +216,10 @@ pub(super) fn render_next(r: &Records, last: &[Line], after: Option<&String>, sh
 /// The open questions of every file: how many, and a link to each one
 /// `answer` takes, the others with what they wait on.
 fn queue(all: &[&Q], current: &str) -> String {
-    let mut s = format!("<section class=\"queue\">\n<h2>{}</h2>\n<ol class=\"open-list\">\n", plural(all.len(), "open question", "open questions"));
+    let mut s = format!(
+        "<section class=\"queue\">\n<h2>{}</h2>\n<ol class=\"open-list\">\n",
+        plural(all.len(), "open question", "open questions")
+    );
     for q in all {
         s.push_str(&open_item(q, q.id() == current));
     }
@@ -196,8 +233,15 @@ fn term_aside(words: &[WordPair], no_entry: &[String]) -> String {
     // Folded by default: the question and its options come first; the
     // definitions open on a click, and each paired word in the text keeps
     // its definition on hover.
-    let count = words.iter().map(|w| w.term_name.as_str()).collect::<std::collections::HashSet<_>>().len();
-    let mut s = format!("<aside class=\"tq\">\n<details>\n<summary>Terms in this question ({})</summary>\n", count);
+    let count = words
+        .iter()
+        .map(|w| w.term_name.as_str())
+        .collect::<std::collections::HashSet<_>>()
+        .len();
+    let mut s = format!(
+        "<aside class=\"tq\">\n<details>\n<summary>Terms in this question ({})</summary>\n",
+        count
+    );
     if words.is_empty() {
         s.push_str("<p class=\"meta\">No words pair a term.</p>\n");
     } else {
@@ -218,14 +262,20 @@ fn term_aside(words: &[WordPair], no_entry: &[String]) -> String {
             let (def, forms) = &groups[name];
             s.push_str(&format!("<dt>{}", esc(name)));
             if !forms.is_empty() {
-                s.push_str(&format!("<span class=\"forms\">{}</span>", esc(&forms.join(", "))));
+                s.push_str(&format!(
+                    "<span class=\"forms\">{}</span>",
+                    esc(&forms.join(", "))
+                ));
             }
             s.push_str(&format!("</dt><dd>{}</dd>\n", esc(def)));
         }
         s.push_str("</dl>\n");
     }
     if !no_entry.is_empty() {
-        s.push_str(&format!("<p class=\"none\"><b>No term:</b> {}</p>\n", esc(&no_entry.join(", "))));
+        s.push_str(&format!(
+            "<p class=\"none\"><b>No term:</b> {}</p>\n",
+            esc(&no_entry.join(", "))
+        ));
     }
     s.push_str("</details>\n</aside>\n");
     s
@@ -238,7 +288,11 @@ fn depends_text(r: &Records, sec: &Section) -> Vec<String> {
         .iter()
         .map(|d| match d {
             Dep::Text { text, set } => format!("{}{}", text, record::set_suffix(set)),
-            Dep::Id { id, set } => format!("{}{}", r.names.get(id).unwrap_or(id), record::set_suffix(set)),
+            Dep::Id { id, set } => format!(
+                "{}{}",
+                r.names.get(id).unwrap_or(id),
+                record::set_suffix(set)
+            ),
         })
         .collect()
 }
@@ -246,12 +300,17 @@ fn depends_text(r: &Records, sec: &Section) -> Vec<String> {
 /// The text after `prefix` (`Problem: `) on the first matching line of the
 /// body of `sec`.
 fn body_field(rf: &record::RecordFile, sec: &Section, prefix: &str) -> Option<String> {
-    rf.lines[sec.start..sec.end.min(rf.lines.len())].iter().find_map(|l| l.strip_prefix(prefix).map(|v| v.trim().to_string()))
+    rf.lines[sec.start..sec.end.min(rf.lines.len())]
+        .iter()
+        .find_map(|l| l.strip_prefix(prefix).map(|v| v.trim().to_string()))
 }
 
 /// For each option of `sec`, its letter and the `  Why: ` and `  Costs: `
 /// lines that follow it.
-fn option_details(rf: &record::RecordFile, sec: &Section) -> Vec<(char, Option<String>, Option<String>)> {
+fn option_details(
+    rf: &record::RecordFile,
+    sec: &Section,
+) -> Vec<(char, Option<String>, Option<String>)> {
     let lines = &rf.lines;
     let mut out = Vec::new();
     for opt in &sec.options {
@@ -280,7 +339,12 @@ fn option_details(rf: &record::RecordFile, sec: &Section) -> Vec<(char, Option<S
 /// then from the top; the one skipped comes last, and the place of one just
 /// answered is its own, though it is no longer open), else the first it
 /// takes. `order` holds every question of the files, `all` the open ones.
-fn pick_next<'a>(order: &[&'a Q<'a>], all: &[&'a Q<'a>], after: Option<&str>, show: Option<&str>) -> Option<&'a Q<'a>> {
+fn pick_next<'a>(
+    order: &[&'a Q<'a>],
+    all: &[&'a Q<'a>],
+    after: Option<&str>,
+    show: Option<&str>,
+) -> Option<&'a Q<'a>> {
     if let Some(id) = show {
         if let Some(q) = all.iter().find(|q| q.id() == id) {
             return Some(q);
@@ -289,7 +353,11 @@ fn pick_next<'a>(order: &[&'a Q<'a>], all: &[&'a Q<'a>], after: Option<&str>, sh
     let takes = |q: &&&Q| q.listed() && q.answerable();
     if let Some(id) = after {
         if let Some(pos) = order.iter().position(|q| q.id() == id) {
-            return order[pos + 1..].iter().chain(order[..=pos].iter()).find(takes).copied();
+            return order[pos + 1..]
+                .iter()
+                .chain(order[..=pos].iter())
+                .find(takes)
+                .copied();
         }
     }
     order.iter().find(takes).copied()

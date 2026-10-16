@@ -44,12 +44,28 @@ fn id_of(path: &Path, heading: &str) -> String {
 
 fn approve_ok(dir: &Path, name: &str) {
     let out = adr_owner(dir, &["approve", dir.join(rel(name)).to_str().unwrap()], "");
-    assert!(out.status.success(), "approve {} failed: {}", name, stderr(&out));
+    assert!(
+        out.status.success(),
+        "approve {} failed: {}",
+        name,
+        stderr(&out)
+    );
 }
 
 fn ask_ok(dir: &Path, name: &str) {
-    let out = adr(dir, &["ask", dir.join(rel(name)).to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask {} failed: {}{}", name, stdout(&out), stderr(&out));
+    let out = adr(
+        dir,
+        &["ask", dir.join(rel(name)).to_str().unwrap()],
+        &[],
+        "",
+    );
+    assert!(
+        out.status.success(),
+        "ask {} failed: {}{}",
+        name,
+        stdout(&out),
+        stderr(&out)
+    );
 }
 
 fn answer_ok(dir: &Path, name: &str, heading: &str, letter: &str) -> std::process::Output {
@@ -62,7 +78,11 @@ fn answer_ok(dir: &Path, name: &str, heading: &str, letter: &str) -> std::proces
 /// A file `name` holding `heading` (superseding `sup` when given), approved
 /// and asked.
 fn put(dir: &Path, name: &str, heading: &str, sup: Option<&str>) -> PathBuf {
-    let p = write_record(dir, &rel(name), &format!("# {}\n{}", name.to_uppercase(), sec(heading, sup)));
+    let p = write_record(
+        dir,
+        &rel(name),
+        &format!("# {}\n{}", name.to_uppercase(), sec(heading, sup)),
+    );
     approve_ok(dir, name);
     ask_ok(dir, name);
     p
@@ -80,13 +100,22 @@ fn read(dir: &Path, name: &str) -> String {
 }
 
 fn show_file(dir: &Path, name: &str) -> String {
-    let out = adr(dir, &["show", dir.join(rel(name)).to_str().unwrap()], &[], "");
+    let out = adr(
+        dir,
+        &["show", dir.join(rel(name)).to_str().unwrap()],
+        &[],
+        "",
+    );
     format!("{}{}", stdout(&out), stderr(&out))
 }
 
 fn no_superseded_failure(dir: &Path) {
     let f = check_failures(dir);
-    assert!(!f.contains("superseded"), "check fails on a superseded section: {}", f);
+    assert!(
+        !f.contains("superseded"),
+        "check fails on a superseded section: {}",
+        f
+    );
 }
 
 // adr: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
@@ -102,26 +131,53 @@ fn an_answer_strikes_the_target_and_an_older_superseded_section_from_other_files
     let b_text = read(&dir, "b");
     put(&dir, "c", Q3, Some(Q2));
     let out = answer_ok(&dir, "c", Q3, "A");
-    assert!(!read(&dir, "b").contains(Q2), "target not struck: {}", read(&dir, "b"));
-    assert!(stdout(&out).contains(&format!("written: {}", rel("b"))), "no written line: {}", stdout(&out));
+    assert!(
+        !read(&dir, "b").contains(Q2),
+        "target not struck: {}",
+        read(&dir, "b")
+    );
+    assert!(
+        stdout(&out).contains(&format!("written: {}", rel("b"))),
+        "no written line: {}",
+        stdout(&out)
+    );
     // an older superseded section left in a third file goes at the next answer
     std::fs::write(dir.join(rel("b")), b_text).unwrap();
     assert!(check_failures(&dir).contains("superseded"));
     put(&dir, "d", Q4, Some(Q1));
     answer_ok(&dir, "d", Q4, "A");
     assert!(!read(&dir, "a").contains(Q1));
-    assert!(!read(&dir, "b").contains(Q2), "older superseded section left: {}", read(&dir, "b"));
+    assert!(
+        !read(&dir, "b").contains(Q2),
+        "older superseded section left: {}",
+        read(&dir, "b")
+    );
     assert!(read(&dir, "c").contains(Q3));
     for n in ["a", "b", "c", "d"] {
         let s = show_file(&dir, n);
         assert!(s.contains("approved"), "{} not approved: {}", n, s);
         // a struck section never shows as a removed line
-        assert!(!s.contains(Q1) && !s.contains(Q2), "{} shows a struck section: {}", n, s);
+        assert!(
+            !s.contains(Q1) && !s.contains(Q2),
+            "{} shows a struck section: {}",
+            n,
+            s
+        );
     }
     no_superseded_failure(&dir);
     // ask works on a struck file
-    let out = adr(&dir, &["ask", dir.join(rel("a")).to_str().unwrap()], &[], "");
-    assert!(out.status.success(), "ask on struck file: {}{}", stdout(&out), stderr(&out));
+    let out = adr(
+        &dir,
+        &["ask", dir.join(rel("a")).to_str().unwrap()],
+        &[],
+        "",
+    );
+    assert!(
+        out.status.success(),
+        "ask on struck file: {}{}",
+        stdout(&out),
+        stderr(&out)
+    );
 }
 
 // adr: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
@@ -139,7 +195,11 @@ fn a_refusal_strikes_too() {
     assert!(check_failures(&dir).contains("superseded"));
     put(&dir, "c", Q5, None);
     answer_ok(&dir, "c", Q5, "refuse");
-    assert!(!read(&dir, "a").contains(Q1), "refuse did not strike: {}", read(&dir, "a"));
+    assert!(
+        !read(&dir, "a").contains(Q1),
+        "refuse did not strike: {}",
+        read(&dir, "a")
+    );
     no_superseded_failure(&dir);
     assert!(show_file(&dir, "a").contains("approved"));
 }
@@ -157,7 +217,11 @@ fn a_superseded_section_put_back_fails_check_with_the_agent_move() {
     std::fs::write(dir.join(rel("a")), a_text).unwrap();
     let f = check_failures(&dir);
     assert!(f.contains(&format!("\"{}\" is superseded", Q1)), "{}", f);
-    assert!(f.contains("agent removes the question from the file"), "{}", f);
+    assert!(
+        f.contains("agent removes the question from the file"),
+        "{}",
+        f
+    );
 }
 
 // adr: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
@@ -202,7 +266,11 @@ fn two_questions_naming_one_old_decision_both_answer_and_print_the_heading() {
     // answering the struck id says it is closed
     let out = adr_owner(&dir, &["answer", &format!("{}@00000000", id1), "A"], "");
     assert!(!out.status.success());
-    assert!(stderr(&out).contains("already superseded"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("already superseded"),
+        "{}",
+        stderr(&out)
+    );
 }
 
 // adr: b5ca161f-c88c-4f02-a9d9-1d406cf3a252
@@ -218,7 +286,10 @@ fn an_unrelated_line_naming_a_struck_decision_still_resolves() {
     let p = write_record(
         &dir,
         &rel("c"),
-        &format!("# C\n\n### {}\ndepends: widget\nunrelated: {}\n{}", Q5, id1, BODY),
+        &format!(
+            "# C\n\n### {}\ndepends: widget\nunrelated: {}\n{}",
+            Q5, id1, BODY
+        ),
     );
     let out = adr(&dir, &["plan", p.to_str().unwrap()], &[], "");
     let text = format!("{}{}", stdout(&out), stderr(&out));
@@ -234,7 +305,9 @@ fn show_superseded_reads_a_struck_section_from_the_ledger_and_git() {
     answer_ok(&dir, "a", Q1, "A");
     put(&dir, "b", Q4, Some(Q1));
     run_git(&dir, &["add", "-A"]);
-    assert!(run_git(&dir, &["commit", "-q", "-m", "both asked"]).status.success());
+    assert!(run_git(&dir, &["commit", "-q", "-m", "both asked"])
+        .status
+        .success());
     answer_ok(&dir, "b", Q4, "A");
     assert!(!read(&dir, "a").contains(Q1));
     let show = |flags: &[&str]| {
@@ -247,9 +320,20 @@ fn show_superseded_reads_a_struck_section_from_the_ledger_and_git() {
     };
     assert!(!show(&[]).contains(Q1));
     let s = show(&["--superseded"]);
-    assert!(s.contains(&format!("[superseded] {}\n  replaced by: {}\n", Q1, Q4)), "{}", s);
+    assert!(
+        s.contains(&format!("[superseded] {}\n  replaced by: {}\n", Q1, Q4)),
+        "{}",
+        s
+    );
     let s = show(&["--superseded", "--dependents"]);
-    assert!(s.contains(&format!("[superseded] {}\n  depends: widget\n  replaced by: {}\n", Q1, Q4)), "{}", s);
+    assert!(
+        s.contains(&format!(
+            "[superseded] {}\n  depends: widget\n  replaced by: {}\n",
+            Q1, Q4
+        )),
+        "{}",
+        s
+    );
 }
 
 fn many_heading(i: usize) -> String {
@@ -265,8 +349,17 @@ fn replacement_heading(i: usize) -> String {
 fn put_many(dir: &Path, name: &str, count: usize) {
     let mut text = format!("# {}\n", name.to_uppercase());
     for i in 0..count {
-        let dep = if i % 4 == 0 { "widget".to_string() } else { format!("widget, {}=*", many_heading(i - 1)) };
-        text.push_str(&format!("\n### {}\ndepends: {}\n{}", many_heading(i), dep, BODY));
+        let dep = if i % 4 == 0 {
+            "widget".to_string()
+        } else {
+            format!("widget, {}=*", many_heading(i - 1))
+        };
+        text.push_str(&format!(
+            "\n### {}\ndepends: {}\n{}",
+            many_heading(i),
+            dep,
+            BODY
+        ));
     }
     write_record(dir, &rel(name), &text);
     approve_ok(dir, name);
@@ -277,7 +370,15 @@ fn put_many(dir: &Path, name: &str, count: usize) {
 /// of chain `k` of the file "m", approved and asked.
 fn put_replacement(dir: &Path, name: &str, k: usize) {
     let sup: Vec<String> = (4 * k..4 * k + 4).map(many_heading).collect();
-    write_record(dir, &rel(name), &format!("# {}\n{}", name.to_uppercase(), sec(&replacement_heading(k), Some(&sup.join(", ")))));
+    write_record(
+        dir,
+        &rel(name),
+        &format!(
+            "# {}\n{}",
+            name.to_uppercase(),
+            sec(&replacement_heading(k), Some(&sup.join(", ")))
+        ),
+    );
     approve_ok(dir, name);
     ask_ok(dir, name);
 }
@@ -295,16 +396,32 @@ fn a_file_with_more_than_twelve_struck_sections_in_its_history_stays_approved() 
     }
     answer_ok(&dir, "ra", &replacement_heading(0), "A");
     answer_ok(&dir, "rb", &replacement_heading(1), "A");
-    assert!(!read(&dir, "m").contains(&many_heading(7)), "{}", read(&dir, "m"));
+    assert!(
+        !read(&dir, "m").contains(&many_heading(7)),
+        "{}",
+        read(&dir, "m")
+    );
     // the file is approved again with eight sections struck, then four more
     // and a last four go: sixteen struck in its history
     let m = dir.join(rel("m"));
-    std::fs::write(&m, read(&dir, "m").replace("# M\n", "# M\n\nParts of the widget.\n")).unwrap();
+    std::fs::write(
+        &m,
+        read(&dir, "m").replace("# M\n", "# M\n\nParts of the widget.\n"),
+    )
+    .unwrap();
     approve_ok(&dir, "m");
     answer_ok(&dir, "rc", &replacement_heading(2), "A");
-    assert!(show_file(&dir, "m").contains("approved"), "{}", show_file(&dir, "m"));
+    assert!(
+        show_file(&dir, "m").contains("approved"),
+        "{}",
+        show_file(&dir, "m")
+    );
     answer_ok(&dir, "rd", &replacement_heading(3), "A");
-    assert!(!read(&dir, "m").contains(&many_heading(15)), "{}", read(&dir, "m"));
+    assert!(
+        !read(&dir, "m").contains(&many_heading(15)),
+        "{}",
+        read(&dir, "m")
+    );
     let s = show_file(&dir, "m");
     assert!(s.starts_with("[approved]"), "{}", s);
     no_superseded_failure(&dir);
@@ -325,7 +442,11 @@ fn a_file_approved_while_holding_superseded_sections_reads_approved_after_they_a
     // file, and the file approved so
     std::fs::write(dir.join(rel("a")), &a_with).unwrap();
     approve_ok(&dir, "a");
-    assert!(show_file(&dir, "a").starts_with("[approved]"), "{}", show_file(&dir, "a"));
+    assert!(
+        show_file(&dir, "a").starts_with("[approved]"),
+        "{}",
+        show_file(&dir, "a")
+    );
     // removed by hand
     std::fs::write(dir.join(rel("a")), "# A\n").unwrap();
     let s = show_file(&dir, "a");
@@ -344,35 +465,68 @@ fn a_question_standing_on_a_struck_sibling_behaves_as_before_the_strike() {
     let a = write_record(
         &dir,
         &rel("a"),
-        &format!("# A\n\n### {}\ndepends: widget\n{}\n### {}\ndepends: widget, {}=A\n{}", Q1, BODY, tall, Q1, BODY),
+        &format!(
+            "# A\n\n### {}\ndepends: widget\n{}\n### {}\ndepends: widget, {}=A\n{}",
+            Q1, BODY, tall, Q1, BODY
+        ),
     );
     approve_ok(&dir, "a");
     ask_ok(&dir, "a");
     answer_ok(&dir, "a", Q1, "A");
     put(&dir, "b", Q4, Some(Q1));
     answer_ok(&dir, "b", Q4, "A");
-    assert!(!read(&dir, "a").contains(&format!("### {}", Q1)), "{}", read(&dir, "a"));
+    assert!(
+        !read(&dir, "a").contains(&format!("### {}", Q1)),
+        "{}",
+        read(&dir, "a")
+    );
     // check, show and show <file> name no depends failure
-    for args in [vec!["check"], vec!["show"], vec!["show", a.to_str().unwrap()]] {
+    for args in [
+        vec!["check"],
+        vec!["show"],
+        vec!["show", a.to_str().unwrap()],
+    ] {
         let o = adr(&dir, &args, &[], "");
         let all = format!("{}{}", stdout(&o), stderr(&o));
-        assert!(!all.contains("names no term and no question"), "{:?}: {}", args, all);
+        assert!(
+            !all.contains("names no term and no question"),
+            "{:?}: {}",
+            args,
+            all
+        );
     }
-    assert!(show_file(&dir, "a").contains(&format!("[asked")), "{}", show_file(&dir, "a"));
+    assert!(
+        show_file(&dir, "a").contains(&format!("[asked")),
+        "{}",
+        show_file(&dir, "a")
+    );
     // a new question standing on the sibling is approved and asked, and
     // waits for it
     let c = std::fs::read_to_string(&a).unwrap();
-    write_record(&dir, &rel("a"), &format!("{}\n### {}\ndepends: widget, {}=A\n{}", c, wide, tall, BODY));
+    write_record(
+        &dir,
+        &rel("a"),
+        &format!("{}\n### {}\ndepends: widget, {}=A\n{}", c, wide, tall, BODY),
+    );
     approve_ok(&dir, "a");
     ask_ok(&dir, "a");
     let early = adr_answer(&dir, &id_of(&a, wide), "A");
     assert!(!early.status.success());
-    assert!(stderr(&early).contains("has no decision yet"), "{}", stderr(&early));
+    assert!(
+        stderr(&early).contains("has no decision yet"),
+        "{}",
+        stderr(&early)
+    );
     // the sibling is answered, then the question above it
     answer_ok(&dir, "a", tall, "A");
     answer_ok(&dir, "a", wide, "A");
     let o = adr(&dir, &["check"], &[], "");
-    assert!(!format!("{}{}", stdout(&o), stderr(&o)).contains("names no term"), "{}{}", stdout(&o), stderr(&o));
+    assert!(
+        !format!("{}{}", stdout(&o), stderr(&o)).contains("names no term"),
+        "{}{}",
+        stdout(&o),
+        stderr(&o)
+    );
 }
 
 /// File a with Q1 asked, then answered and struck by Q4 in file b; returns
@@ -383,7 +537,11 @@ fn struck_q1(before: Option<&str>) -> (PathBuf, String, PathBuf) {
     let q1 = id_of(&a, Q1);
     if let Some(h) = before {
         let c = read(&dir, "a");
-        write_record(&dir, &rel("a"), &format!("{}\n### {}\ndepends: widget, {}=A\n{}", c, h, q1, BODY));
+        write_record(
+            &dir,
+            &rel("a"),
+            &format!("{}\n### {}\ndepends: widget, {}=A\n{}", c, h, q1, BODY),
+        );
         approve_ok(&dir, "a");
     }
     answer_ok(&dir, "a", Q1, "A");
@@ -410,7 +568,11 @@ fn approved_unasked_question_on_a_struck_one_is_asked_and_answered() {
 fn new_question_on_a_struck_one_under_a_set_is_refused() {
     let (dir, q1, a) = struck_q1(None);
     let c = read(&dir, "a");
-    write_record(&dir, &rel("a"), &format!("{}\n### {}\ndepends: widget, {}=A\n{}", c, Q3, q1, BODY));
+    write_record(
+        &dir,
+        &rel("a"),
+        &format!("{}\n### {}\ndepends: widget, {}=A\n{}", c, Q3, q1, BODY),
+    );
     let o = adr_owner(&dir, &["approve", a.to_str().unwrap()], "");
     assert!(!o.status.success(), "{}{}", stdout(&o), stderr(&o));
     assert!(
@@ -426,7 +588,11 @@ fn new_question_on_a_struck_one_under_a_set_is_refused() {
 fn new_question_on_a_struck_one_without_a_set_is_approved_asked_answered() {
     let (dir, q1, a) = struck_q1(None);
     let c = read(&dir, "a");
-    write_record(&dir, &rel("a"), &format!("{}\n### {}\ndepends: widget, {}\n{}", c, Q3, q1, BODY));
+    write_record(
+        &dir,
+        &rel("a"),
+        &format!("{}\n### {}\ndepends: widget, {}\n{}", c, Q3, q1, BODY),
+    );
     approve_ok(&dir, "a");
     ask_ok(&dir, "a");
     answer_ok(&dir, "a", Q3, "A");
@@ -437,7 +603,11 @@ fn new_question_on_a_struck_one_without_a_set_is_approved_asked_answered() {
 #[test]
 fn a_struck_question_counts_toward_the_two_question_cap() {
     let dir = setup();
-    let a = write_record(&dir, &rel("a"), &format!("# A\n{}{}{}", sec(Q1, None), sec(Q2, None), sec(Q3, None)));
+    let a = write_record(
+        &dir,
+        &rel("a"),
+        &format!("# A\n{}{}{}", sec(Q1, None), sec(Q2, None), sec(Q3, None)),
+    );
     approve_ok(&dir, "a");
     ask_ok(&dir, "a");
     let q1 = id_of(&a, Q1);
@@ -448,8 +618,20 @@ fn a_struck_question_counts_toward_the_two_question_cap() {
     answer_ok(&dir, "b", Q4, "A");
     assert!(!read(&dir, "a").contains(&format!("### {}", Q1)));
     let c = read(&dir, "a");
-    write_record(&dir, &rel("a"), &format!("{}\n### {}\ndepends: widget, {}, {}=A, {}=A\n{}", c, Q5, q1, q2, q3, BODY));
+    write_record(
+        &dir,
+        &rel("a"),
+        &format!(
+            "{}\n### {}\ndepends: widget, {}, {}=A, {}=A\n{}",
+            c, Q5, q1, q2, q3, BODY
+        ),
+    );
     let o = adr_owner(&dir, &["approve", a.to_str().unwrap()], "");
     assert!(!o.status.success());
-    assert!(stderr(&o).contains("the most is"), "{}{}", stdout(&o), stderr(&o));
+    assert!(
+        stderr(&o).contains("the most is"),
+        "{}{}",
+        stdout(&o),
+        stderr(&o)
+    );
 }

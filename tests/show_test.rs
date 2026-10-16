@@ -65,13 +65,25 @@ fn show_lists_every_question_with_its_state_and_tier() {
     assert!(out.status.success(), "stderr: {}", stderr(&out));
     let shown = stdout(&out);
 
-    assert!(shown.starts_with("[approved] Example (adrdom/decisions/example.md)\n"), "{}", shown);
+    assert!(
+        shown.starts_with("[approved] Example (adrdom/decisions/example.md)\n"),
+        "{}",
+        shown
+    );
     assert!(!shown.contains("tier 1"), "{}", shown);
-    assert!(shown.contains("[answered A] 1.1 Is this current?"), "{}", shown);
+    assert!(
+        shown.contains("[answered A] 1.1 Is this current?"),
+        "{}",
+        shown
+    );
     // An answered question carries its status and, on the line under, the
     // option picked, as the listing with no file named prints it; its body
     // is not printed.
-    assert!(shown.contains("[answered A] 1.1 Is this current?\n  Yes it is current.\n"), "{}", shown);
+    assert!(
+        shown.contains("[answered A] 1.1 Is this current?\n  Yes it is current.\n"),
+        "{}",
+        shown
+    );
     assert!(!shown.contains("- A) Yes it is current."), "{}", shown);
     // The second question is still open (asked, not answered): it is now
     // listed too, with its state, rather than left out.
@@ -146,18 +158,64 @@ fn show_prints_each_status_and_the_lines_each_question_carries() {
     // stand-in hash reads as "edited since", for the answered root as for
     // the open question (show prints no version and no owner command then).
     let rf = adr::record::load(&record).unwrap();
-    let root = rf.sections.iter().find(|s| s.id.as_deref() == Some("aaaaaaaa-0000-4000-8000-000000000001")).unwrap();
+    let root = rf
+        .sections
+        .iter()
+        .find(|s| s.id.as_deref() == Some("aaaaaaaa-0000-4000-8000-000000000001"))
+        .unwrap();
     let root_hash = adr::record::section_hash(&rf.lines, root);
-    append_ledger_row_at(&dir, "asked", "aaaaaaaa-0000-4000-8000-000000000001", &root_hash, "1.1 Root?", "2024-01-01T00:00:00Z");
-    append_ledger_row_at(&dir, "answered", "aaaaaaaa-0000-4000-8000-000000000001", &root_hash, "A", "2024-01-01T00:00:01Z");
-    let open = rf.sections.iter().find(|s| s.id.as_deref() == Some("aaaaaaaa-0000-4000-8000-000000000002")).unwrap();
+    append_ledger_row_at(
+        &dir,
+        "asked",
+        "aaaaaaaa-0000-4000-8000-000000000001",
+        &root_hash,
+        "1.1 Root?",
+        "2024-01-01T00:00:00Z",
+    );
+    append_ledger_row_at(
+        &dir,
+        "answered",
+        "aaaaaaaa-0000-4000-8000-000000000001",
+        &root_hash,
+        "A",
+        "2024-01-01T00:00:01Z",
+    );
+    let open = rf
+        .sections
+        .iter()
+        .find(|s| s.id.as_deref() == Some("aaaaaaaa-0000-4000-8000-000000000002"))
+        .unwrap();
     let open_hash = adr::record::section_hash(&rf.lines, open);
-    append_ledger_row(&dir, "asked", "aaaaaaaa-0000-4000-8000-000000000002", &open_hash, "2.1 Depends on root?");
+    append_ledger_row(
+        &dir,
+        "asked",
+        "aaaaaaaa-0000-4000-8000-000000000002",
+        &open_hash,
+        "2.1 Depends on root?",
+    );
     // The refused rows carry the section's real hash, as answer writes it.
-    let refused = rf.sections.iter().find(|s| s.id.as_deref() == Some("aaaaaaaa-0000-4000-8000-000000000003")).unwrap();
+    let refused = rf
+        .sections
+        .iter()
+        .find(|s| s.id.as_deref() == Some("aaaaaaaa-0000-4000-8000-000000000003"))
+        .unwrap();
     let refused_hash = adr::record::section_hash(&rf.lines, refused);
-    append_ledger_row_at(&dir, "asked", "aaaaaaaa-0000-4000-8000-000000000003", &refused_hash, "2.2 Also depends?", "2024-01-01T00:00:02Z");
-    append_ledger_row_at(&dir, "refused", "aaaaaaaa-0000-4000-8000-000000000003", &refused_hash, "2.2 Also depends?", "2024-01-01T00:00:03Z");
+    append_ledger_row_at(
+        &dir,
+        "asked",
+        "aaaaaaaa-0000-4000-8000-000000000003",
+        &refused_hash,
+        "2.2 Also depends?",
+        "2024-01-01T00:00:02Z",
+    );
+    append_ledger_row_at(
+        &dir,
+        "refused",
+        "aaaaaaaa-0000-4000-8000-000000000003",
+        &refused_hash,
+        "2.2 Also depends?",
+        "2024-01-01T00:00:03Z",
+    );
     let version = adr::record::version_of(&rf.lines, open);
 
     let out = adr(&dir, &["show", record.to_str().unwrap()], &[], "");
@@ -211,7 +269,11 @@ fn show_with_a_file_argument_shows_only_that_file() {
     let out = adr(&dir, &["show", one.to_str().unwrap()], &[], "");
     assert!(out.status.success(), "stderr: {}", stderr(&out));
     let shown = stdout(&out);
-    assert!(shown.contains("Tiered Topic (adrdom/decisions/one.md)"), "{}", shown);
+    assert!(
+        shown.contains("Tiered Topic (adrdom/decisions/one.md)"),
+        "{}",
+        shown
+    );
     assert!(!shown.contains("Second Topic"), "{}", shown);
 }
 
@@ -227,7 +289,12 @@ fn override_is_not_a_recognized_command() {
     let dir = init_repo();
     assert!(adr(&dir, &["install"], &[], "").status.success());
 
-    let out = adr(&dir, &["override", "some-stop", "because I said so"], &[], "");
+    let out = adr(
+        &dir,
+        &["override", "some-stop", "because I said so"],
+        &[],
+        "",
+    );
     assert!(
         !out.status.success(),
         "an `override` subcommand must not exist: {}",
@@ -265,7 +332,14 @@ fn show_names_a_heading_of_another_file_in_the_depends_line_of_an_unapproved_fil
     // A: an already-answered, current decision living in a topic file of
     // its own.
     let a_id = "77777777-7777-7777-7777-777777777777";
-    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Is A do a thing?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(
+        &dir,
+        "asked",
+        a_id,
+        "h1",
+        "1.1 Is A do a thing?",
+        "2024-01-01T00:00:00Z",
+    );
     append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
     let a_content = format!(
         "# Topic A\n\n### 1.1 Is A do a thing?\ndepends: decision\n\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
@@ -282,7 +356,11 @@ fn show_names_a_heading_of_another_file_in_the_depends_line_of_an_unapproved_fil
     assert!(out.status.success(), "stderr: {}", stderr(&out));
     let shown = stdout(&out);
 
-    assert!(shown.contains("[new] Topic B (adrdom/decisions/topic-b.md)"), "{}", shown);
+    assert!(
+        shown.contains("[new] Topic B (adrdom/decisions/topic-b.md)"),
+        "{}",
+        shown
+    );
     assert!(
         shown.contains("[not asked] 1.1 Is B stand on A?\n  + depends: 1.1 Is A do a thing?"),
         "B's only question should be listed as unasked, its new lines marked: {}",
@@ -312,7 +390,14 @@ fn show_prints_no_guess_for_a_heading_naming_decisions_of_two_other_files() {
     approve_minimal_terms(&dir, "decision");
 
     let a_id = "88888888-8888-8888-8888-888888888888";
-    append_ledger_row_at(&dir, "asked", a_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:00Z");
+    append_ledger_row_at(
+        &dir,
+        "asked",
+        a_id,
+        "h1",
+        "1.1 Shared heading?",
+        "2024-01-01T00:00:00Z",
+    );
     append_ledger_row_at(&dir, "answered", a_id, "h1", "A", "2024-01-01T00:00:01Z");
     let a_content = format!(
         "# Topic A\n\n### 1.1 Shared heading?\ndepends: decision\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
@@ -321,7 +406,14 @@ fn show_prints_no_guess_for_a_heading_naming_decisions_of_two_other_files() {
     write_record(&dir, "adrdom/decisions/topic-a.md", &a_content);
 
     let c_id = "99999999-8888-8888-8888-888888888888";
-    append_ledger_row_at(&dir, "asked", c_id, "h1", "1.1 Shared heading?", "2024-01-01T00:00:02Z");
+    append_ledger_row_at(
+        &dir,
+        "asked",
+        c_id,
+        "h1",
+        "1.1 Shared heading?",
+        "2024-01-01T00:00:02Z",
+    );
     append_ledger_row_at(&dir, "answered", c_id, "h1", "A", "2024-01-01T00:00:03Z");
     let c_content = format!(
         "# Topic C\n\n### 1.1 Shared heading?\ndepends: decision\nid: {}\n\nProblem: p.\n\nStandard: s.\n\n- A) x.\n  Why: w.\n  Costs: c.\n- B) y.\n  Why: w.\n  Costs: c.\n\n**Answer:** A\n",
@@ -341,9 +433,16 @@ fn show_prints_no_guess_for_a_heading_naming_decisions_of_two_other_files() {
     // move is the agent naming the decision by id -- never a guess at which
     // of the two decisions the heading means.
     let b_start = shown.find("[new] Topic B").expect("topic B status line");
-    let b_end = shown.find("Topic C (").map(|i| shown[..i].rfind('\n').unwrap()).unwrap_or(shown.len());
+    let b_end = shown
+        .find("Topic C (")
+        .map(|i| shown[..i].rfind('\n').unwrap())
+        .unwrap_or(shown.len());
     let b_block = shown[b_start..b_end].trim_end();
-    assert!(b_block.contains("  + depends: 1.1 Shared heading?"), "{}", shown);
+    assert!(
+        b_block.contains("  + depends: 1.1 Shared heading?"),
+        "{}",
+        shown
+    );
     assert!(
         b_block.contains("adrdom/decisions/topic-b.md: \"1.1 Does B stand on the shared heading?\" depends on \"1.1 Shared heading?\", a decision of another topic file; agent rewrites the depends line of"),
         "an ambiguous cross-file dependency names the agent's move and no guess: {}",

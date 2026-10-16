@@ -66,7 +66,12 @@ Standard: clear yes or no.
 fn line(time: &str, event: &str, id: &str, hash: &str, detail: &str) -> String {
     format!(
         "{}\t{}\t{}\t{}\t{}\t{}\n",
-        time, event, id, hash, detail, adr::version::VERSION
+        time,
+        event,
+        id,
+        hash,
+        detail,
+        adr::version::VERSION
     )
 }
 
@@ -145,7 +150,11 @@ fn two_commands_run_back_to_back_write_different_times() {
     let content = std::fs::read_to_string(&record).unwrap();
     let id = extract_ids(&content)[0].clone();
     let answer_out = adr_answer(&dir, &id, "A");
-    assert!(answer_out.status.success(), "answer failed: {}", stderr(&answer_out));
+    assert!(
+        answer_out.status.success(),
+        "answer failed: {}",
+        stderr(&answer_out)
+    );
     let answered_time = last_row_time(&dir, "\tanswered\t");
 
     assert_ne!(
@@ -183,7 +192,12 @@ fn one_commands_rows_share_one_time() {
         .filter(|l| l.contains("\tasked\t"))
         .map(|l| l.split('\t').next().unwrap())
         .collect();
-    assert_eq!(times.len(), 2, "both questions should have been asked: {}", content);
+    assert_eq!(
+        times.len(),
+        2,
+        "both questions should have been asked: {}",
+        content
+    );
     assert_eq!(
         times[0], times[1],
         "both asked rows from the one run must carry the same time"

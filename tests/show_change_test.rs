@@ -16,7 +16,9 @@ const TWO: &str = "Is the widget gate close?";
 
 fn commit_all(dir: &Path) {
     run_git(dir, &["add", "-A"]);
-    assert!(run_git(dir, &["commit", "-q", "-m", "step"]).status.success());
+    assert!(run_git(dir, &["commit", "-q", "-m", "step"])
+        .status
+        .success());
 }
 
 fn show(dir: &Path, args: &[&str]) -> String {
@@ -35,7 +37,15 @@ fn id_of(path: &Path, heading: &str) -> String {
 /// The gate with its two questions, approved and committed.
 fn approved() -> (PathBuf, PathBuf) {
     let dir = widget_repo();
-    let path = write_record(&dir, REL, &format!("# Gate\n\nThe gate.\n\nIt opens.\n\n{}\n{}", gate_question(ONE, "the widget breaks."), gate_question(TWO, "the widget breaks.")));
+    let path = write_record(
+        &dir,
+        REL,
+        &format!(
+            "# Gate\n\nThe gate.\n\nIt opens.\n\n{}\n{}",
+            gate_question(ONE, "the widget breaks."),
+            gate_question(TWO, "the widget breaks.")
+        ),
+    );
     approve_record(&dir, REL);
     commit_all(&dir);
     (dir, path)
@@ -49,7 +59,11 @@ fn approved() -> (PathBuf, PathBuf) {
 fn a_blank_line_edit_of_the_prose_is_marked() {
     let (dir, path) = approved();
     let text = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, text.replacen("The gate.\n\nIt opens.", "The gate.\n\n\nIt opens.", 1)).unwrap();
+    std::fs::write(
+        &path,
+        text.replacen("The gate.\n\nIt opens.", "The gate.\n\n\nIt opens.", 1),
+    )
+    .unwrap();
     let shown = show(&dir, &[REL]);
     assert!(shown.contains("[changed] prose\n"), "{}", shown);
     assert!(shown.contains("\n  + \n"), "{}", shown);
@@ -62,13 +76,29 @@ fn a_blank_line_edit_of_the_prose_is_marked() {
 #[test]
 fn a_change_whose_approved_text_no_commit_holds_says_so() {
     let dir = widget_repo();
-    let path = write_record(&dir, REL, &format!("# Gate\n\n{}", gate_question(ONE, "the widget breaks.")));
+    let path = write_record(
+        &dir,
+        REL,
+        &format!("# Gate\n\n{}", gate_question(ONE, "the widget breaks.")),
+    );
     approve_record(&dir, REL);
     let text = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, text.replacen("the widget breaks.", "the widget breaks in use.", 1)).unwrap();
+    std::fs::write(
+        &path,
+        text.replacen("the widget breaks.", "the widget breaks in use.", 1),
+    )
+    .unwrap();
     let shown = show(&dir, &[REL]);
-    assert!(shown.contains("the approved text is in no commit: every line shows as added"), "{}", shown);
-    assert!(shown.contains("+ Problem: the widget breaks in use."), "{}", shown);
+    assert!(
+        shown.contains("the approved text is in no commit: every line shows as added"),
+        "{}",
+        shown
+    );
+    assert!(
+        shown.contains("+ Problem: the widget breaks in use."),
+        "{}",
+        shown
+    );
 }
 
 // adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
@@ -81,13 +111,21 @@ fn a_question_put_back_after_a_plan_change_struck_it_reads_as_new() {
     let full = std::fs::read_to_string(&path).unwrap();
     let at = full.find(&format!("### {}\n", TWO)).unwrap();
     // Struck, and no line of the question left names it.
-    let kept: String = full[..at].lines().filter(|l| !l.starts_with("unrelated:")).map(|l| format!("{}\n", l)).collect();
+    let kept: String = full[..at]
+        .lines()
+        .filter(|l| !l.starts_with("unrelated:"))
+        .map(|l| format!("{}\n", l))
+        .collect();
     std::fs::write(&path, kept).unwrap();
     approve_record(&dir, REL);
     commit_all(&dir);
     std::fs::write(&path, &full).unwrap();
     let shown = show(&dir, &[REL]);
-    assert!(shown.contains(&format!("+ [not asked] {}\n", TWO)), "{}", shown);
+    assert!(
+        shown.contains(&format!("+ [not asked] {}\n", TWO)),
+        "{}",
+        shown
+    );
 }
 
 // adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
@@ -97,14 +135,28 @@ fn a_question_put_back_after_a_plan_change_struck_it_reads_as_new() {
 #[test]
 fn a_question_struck_from_an_uncommitted_asked_plan_is_named_by_its_heading() {
     let dir = widget_repo();
-    let path = write_record(&dir, REL, &format!("# Gate\n\n{}\n{}", gate_question(ONE, "the widget breaks."), gate_question(TWO, "the widget breaks.")));
+    let path = write_record(
+        &dir,
+        REL,
+        &format!(
+            "# Gate\n\n{}\n{}",
+            gate_question(ONE, "the widget breaks."),
+            gate_question(TWO, "the widget breaks.")
+        ),
+    );
     approve_record(&dir, REL);
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     let full = std::fs::read_to_string(&path).unwrap();
     let at = full.find(&format!("### {}\n", TWO)).unwrap();
     std::fs::write(&path, &full[..at]).unwrap();
     let shown = show(&dir, &[REL]);
-    assert!(shown.contains(&format!("- [removed] {}\n", TWO)), "{}", shown);
+    assert!(
+        shown.contains(&format!("- [removed] {}\n", TWO)),
+        "{}",
+        shown
+    );
 }
 
 // adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
@@ -115,19 +167,44 @@ fn a_question_struck_from_an_uncommitted_asked_plan_is_named_by_its_heading() {
 #[test]
 fn every_question_gone_is_named_when_the_ledger_cannot_tell_which_were_struck() {
     let dir = widget_repo();
-    let path = write_record(&dir, REL, &format!("# Gate\n\n{}", gate_question(ONE, "the widget breaks.")));
+    let path = write_record(
+        &dir,
+        REL,
+        &format!("# Gate\n\n{}", gate_question(ONE, "the widget breaks.")),
+    );
     approve_record(&dir, REL);
     // Thirteen questions approved for the file once and gone from it, and a
     // file hash no set of them completes.
-    let gone: Vec<String> = (0..13).map(|i| format!("aaaaaaaa-0000-4000-8000-{:012}", i)).collect();
+    let gone: Vec<String> = (0..13)
+        .map(|i| format!("aaaaaaaa-0000-4000-8000-{:012}", i))
+        .collect();
     for id in &gone {
-        append_ledger_row_at(&dir, "approved", id, &format!("{:064}", 1), REL, "2999-01-01T00:00:00Z");
+        append_ledger_row_at(
+            &dir,
+            "approved",
+            id,
+            &format!("{:064}", 1),
+            REL,
+            "2999-01-01T00:00:00Z",
+        );
     }
-    append_ledger_row_at(&dir, "approved", "-", &format!("{:064}", 2), REL, "2999-01-01T00:00:01Z");
+    append_ledger_row_at(
+        &dir,
+        "approved",
+        "-",
+        &format!("{:064}", 2),
+        REL,
+        "2999-01-01T00:00:01Z",
+    );
     let shown = show(&dir, &[REL]);
     assert!(shown.contains("the approved plan is in no commit: every question approved for this file and gone from it is named"), "{}", shown);
     for id in &gone {
-        assert!(shown.contains(&format!("- [removed] {}\n", id)), "{}: {}", id, shown);
+        assert!(
+            shown.contains(&format!("- [removed] {}\n", id)),
+            "{}: {}",
+            id,
+            shown
+        );
     }
     let _ = path;
 }
@@ -145,10 +222,28 @@ fn a_terms_file_reordered_prints_its_change() {
     let text = std::fs::read_to_string(dir.join("adrdom/terms.md")).unwrap();
     let (head, rest) = text.split_once("\n## widget").unwrap();
     let (widget, gadget) = rest.split_once("\n## gadget").unwrap();
-    std::fs::write(dir.join("adrdom/terms.md"), format!("{}\n## gadget{}\n## widget{}", head, gadget.trim_end(), widget)).unwrap();
+    std::fs::write(
+        dir.join("adrdom/terms.md"),
+        format!(
+            "{}\n## gadget{}\n## widget{}",
+            head,
+            gadget.trim_end(),
+            widget
+        ),
+    )
+    .unwrap();
     let shown = show(&dir, &["adrdom/terms.md"]);
-    assert!(shown.starts_with("[changed] adrdom/terms.md\n"), "{}", shown);
-    assert!(shown.lines().any(|l| l.starts_with("  - ")) && shown.lines().any(|l| l.starts_with("  + ")), "{}", shown);
+    assert!(
+        shown.starts_with("[changed] adrdom/terms.md\n"),
+        "{}",
+        shown
+    );
+    assert!(
+        shown.lines().any(|l| l.starts_with("  - "))
+            && shown.lines().any(|l| l.starts_with("  + ")),
+        "{}",
+        shown
+    );
 }
 
 //
@@ -158,7 +253,15 @@ fn a_terms_file_reordered_prints_its_change() {
 fn an_added_line_that_reads_like_a_heading_is_printed() {
     let (dir, path) = approved();
     let text = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, text.replacen("It opens.", "It opens.\n\n## Notes\n\nSome more words here.", 1)).unwrap();
+    std::fs::write(
+        &path,
+        text.replacen(
+            "It opens.",
+            "It opens.\n\n## Notes\n\nSome more words here.",
+            1,
+        ),
+    )
+    .unwrap();
     let shown = show(&dir, &[REL]);
     assert!(shown.contains("  + ## Notes\n"), "{}", shown);
 }
@@ -171,9 +274,17 @@ fn an_identifier_in_prose_is_printed_as_the_file_holds_it() {
     let (dir, path) = approved();
     let one = id_of(&path, ONE);
     let text = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, text.replacen("It opens.", &format!("It opens, as {} says.", one), 1)).unwrap();
+    std::fs::write(
+        &path,
+        text.replacen("It opens.", &format!("It opens, as {} says.", one), 1),
+    )
+    .unwrap();
     let shown = show(&dir, &[REL]);
-    assert!(shown.contains(&format!("+ It opens, as {} says.", one)), "{}", shown);
+    assert!(
+        shown.contains(&format!("+ It opens, as {} says.", one)),
+        "{}",
+        shown
+    );
 }
 
 // adr: c5e10ae8-258d-4f29-b9fe-13cb7ad2a550
@@ -184,14 +295,25 @@ fn an_identifier_in_prose_is_printed_as_the_file_holds_it() {
 #[test]
 fn a_removed_topic_file_lists_its_decisions_and_their_letters() {
     let (dir, path) = approved();
-    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "").status.success());
+    assert!(adr(&dir, &["ask", path.to_str().unwrap()], &[], "")
+        .status
+        .success());
     assert!(adr_answer(&dir, &id_of(&path, ONE), "A").status.success());
     commit_all(&dir);
     std::fs::remove_file(&path).unwrap();
     let listing = show(&dir, &[]);
-    assert!(listing.contains(&format!("[removed] {}\n  {}\n    Yes.\n", REL, ONE)), "{}", listing);
+    assert!(
+        listing.contains(&format!("[removed] {}\n  {}\n    Yes.\n", REL, ONE)),
+        "{}",
+        listing
+    );
     let form = show(&dir, &[REL]);
-    assert!(form.contains(&format!("[answered A] {}\n", ONE)) && !form.contains(&format!("[answered A] {}\n  depends: widget\n", ONE)), "{}", form);
+    assert!(
+        form.contains(&format!("[answered A] {}\n", ONE))
+            && !form.contains(&format!("[answered A] {}\n  depends: widget\n", ONE)),
+        "{}",
+        form
+    );
     assert!(form.contains(&format!("[asked @")), "{}", form);
     assert!(form.contains("  Problem: the widget breaks.\n"), "{}", form);
 }
@@ -205,15 +327,31 @@ fn an_unreadable_terms_or_topic_file_is_named() {
     let dir = widget_repo();
     std::fs::write(dir.join("adrdom/terms.md"), [0x23, 0x20, 0xff, 0xfe, 0x0a]).unwrap();
     let listing = show(&dir, &[]);
-    assert!(listing.contains("show: adrdom/terms.md: cannot be read as text"), "{}", listing);
+    assert!(
+        listing.contains("show: adrdom/terms.md: cannot be read as text"),
+        "{}",
+        listing
+    );
     let form = show(&dir, &["adrdom/terms.md"]);
-    assert!(form.contains("adrdom/terms.md: cannot be read as text"), "{}", form);
+    assert!(
+        form.contains("adrdom/terms.md: cannot be read as text"),
+        "{}",
+        form
+    );
     assert!(!form.contains("no such file"), "{}", form);
 
     std::fs::write(dir.join(REL), [0x23, 0x20, 0xff, 0x0a]).unwrap();
     let form = show(&dir, &[REL]);
-    assert!(form.contains(&format!("{}: cannot be read as text", REL)), "{}", form);
-    assert!(form.contains(&format!("agent rewrites {}", REL)), "{}", form);
+    assert!(
+        form.contains(&format!("{}: cannot be read as text", REL)),
+        "{}",
+        form
+    );
+    assert!(
+        form.contains(&format!("agent rewrites {}", REL)),
+        "{}",
+        form
+    );
 }
 
 // adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
@@ -225,10 +363,23 @@ fn an_unreadable_terms_or_topic_file_is_named() {
 fn a_blame_draft_prints_each_row_as_written_with_no_status() {
     let dir = blame_setup();
     let blob = write_origin(&dir, "docs/old.md", "one\ntwo\n");
-    write_blame_file(&dir, "adrdom/blame/old.md", "docs/old.md", &blob, "1-1\tdecision\n2-2\tdetail\n");
+    write_blame_file(
+        &dir,
+        "adrdom/blame/old.md",
+        "docs/old.md",
+        &blob,
+        "1-1\tdecision\n2-2\tdetail\n",
+    );
     let shown = show(&dir, &["adrdom/blame/old.md"]);
-    assert!(shown.contains("  + 1-1\tdecision\n  + 2-2\tdetail\n"), "{}", shown);
-    for row in shown.lines().filter(|l| l.contains("1-1\t") || l.contains("2-2\t")) {
+    assert!(
+        shown.contains("  + 1-1\tdecision\n  + 2-2\tdetail\n"),
+        "{}",
+        shown
+    );
+    for row in shown
+        .lines()
+        .filter(|l| l.contains("1-1\t") || l.contains("2-2\t"))
+    {
         assert!(!row.contains('['), "{}", row);
     }
 }
@@ -244,22 +395,40 @@ fn an_approved_text_is_found_in_a_sha256_repository() {
     let dir = init_repo();
     // The same repository, made again with sha256 object names.
     std::fs::remove_dir_all(dir.join(".git")).unwrap();
-    assert!(run_git(&dir, &["init", "-q", "--object-format=sha256"]).status.success());
+    assert!(run_git(&dir, &["init", "-q", "--object-format=sha256"])
+        .status
+        .success());
     run_git(&dir, &["config", "user.email", "test@example.com"]);
     run_git(&dir, &["config", "user.name", "Test User"]);
     run_git(&dir, &["config", "commit.gpgsign", "false"]);
     commit_all(&dir);
     assert!(adr(&dir, &["install"], &[], "").status.success());
     approve_terms_with(&dir, &["widget"]);
-    let path = write_record(&dir, REL, &format!("# Gate\n\n{}", gate_question(ONE, "the widget breaks.")));
+    let path = write_record(
+        &dir,
+        REL,
+        &format!("# Gate\n\n{}", gate_question(ONE, "the widget breaks.")),
+    );
     approve_record(&dir, REL);
     commit_all(&dir);
     let text = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, text.replacen("the widget breaks.", "the widget breaks in use.", 1)).unwrap();
+    std::fs::write(
+        &path,
+        text.replacen("the widget breaks.", "the widget breaks in use.", 1),
+    )
+    .unwrap();
     let shown = show(&dir, &[REL]);
     assert!(!shown.contains("in no commit"), "{}", shown);
-    assert!(shown.contains("- Problem: the widget breaks.\n"), "{}", shown);
-    assert!(shown.contains("+ Problem: the widget breaks in use.\n"), "{}", shown);
+    assert!(
+        shown.contains("- Problem: the widget breaks.\n"),
+        "{}",
+        shown
+    );
+    assert!(
+        shown.contains("+ Problem: the widget breaks in use.\n"),
+        "{}",
+        shown
+    );
 }
 
 // adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
@@ -273,7 +442,11 @@ fn the_change_of_a_question_shows_its_id_line() {
     let old = id_of(&path, ONE);
     let new = "0e0e0e0e-1111-4222-8333-444455556666";
     let text = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, text.replacen(&format!("id: {}", old), &format!("id: {}", new), 1)).unwrap();
+    std::fs::write(
+        &path,
+        text.replacen(&format!("id: {}", old), &format!("id: {}", new), 1),
+    )
+    .unwrap();
     let shown = show(&dir, &[REL]);
     assert!(shown.contains(&format!("- id: {}\n", old)), "{}", shown);
     assert!(shown.contains(&format!("+ id: {}\n", new)), "{}", shown);
@@ -294,19 +467,44 @@ fn a_blank_line_added_at_the_end_of_a_file_is_marked() {
     let text = std::fs::read_to_string(&terms).unwrap();
     std::fs::write(&terms, format!("{}\n", text)).unwrap();
     let shown = show(&dir, &["adrdom/terms.md"]);
-    assert!(shown.starts_with("[changed] adrdom/terms.md\n"), "{}", shown);
-    assert!(shown.lines().any(|l| l.trim() == "+" || l.trim() == "-"), "{}", shown);
+    assert!(
+        shown.starts_with("[changed] adrdom/terms.md\n"),
+        "{}",
+        shown
+    );
+    assert!(
+        shown.lines().any(|l| l.trim() == "+" || l.trim() == "-"),
+        "{}",
+        shown
+    );
 
     let dir = blame_setup();
     let blob = write_origin(&dir, "docs/old.md", "one\n");
-    let blame = write_blame_file(&dir, "adrdom/blame/old.md", "docs/old.md", &blob, "1-1\tdetail\n");
-    assert!(adr(&dir, &["approve", blame.to_str().unwrap()], &[("ADR_OWNER_BYPASS", "1")], "").status.success());
+    let blame = write_blame_file(
+        &dir,
+        "adrdom/blame/old.md",
+        "docs/old.md",
+        &blob,
+        "1-1\tdetail\n",
+    );
+    assert!(adr(
+        &dir,
+        &["approve", blame.to_str().unwrap()],
+        &[("ADR_OWNER_BYPASS", "1")],
+        ""
+    )
+    .status
+    .success());
     commit_all(&dir);
     let text = std::fs::read_to_string(&blame).unwrap();
     std::fs::write(&blame, format!("{}\n", text)).unwrap();
     let shown = show(&dir, &["adrdom/blame/old.md"]);
     assert!(shown.contains("[changed]"), "{}", shown);
-    assert!(shown.lines().any(|l| l.trim() == "+" || l.trim() == "-"), "{}", shown);
+    assert!(
+        shown.lines().any(|l| l.trim() == "+" || l.trim() == "-"),
+        "{}",
+        shown
+    );
 }
 
 // adr: 91f9652a-f053-4b32-9534-c9c39e7639a4
@@ -320,10 +518,18 @@ fn a_question_put_back_after_an_uncommitted_strike_reads_as_new() {
     let (dir, path) = approved();
     let full = std::fs::read_to_string(&path).unwrap();
     let at = full.find(&format!("### {}\n", TWO)).unwrap();
-    let kept: String = full[..at].lines().filter(|l| !l.starts_with("unrelated:")).map(|l| format!("{}\n", l)).collect();
+    let kept: String = full[..at]
+        .lines()
+        .filter(|l| !l.starts_with("unrelated:"))
+        .map(|l| format!("{}\n", l))
+        .collect();
     std::fs::write(&path, kept).unwrap();
     approve_record(&dir, REL);
     std::fs::write(&path, &full).unwrap();
     let shown = show(&dir, &[REL]);
-    assert!(shown.contains(&format!("+ [not asked] {}\n", TWO)), "{}", shown);
+    assert!(
+        shown.contains(&format!("+ [not asked] {}\n", TWO)),
+        "{}",
+        shown
+    );
 }
