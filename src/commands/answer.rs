@@ -62,7 +62,7 @@ pub fn run(id_arg: String, letter: String) -> i32 {
     // `adr answer <id>@<version> refuse` (per "Does the owner answer a
     // question with a refusal?") shares this command's owner gate and
     // dispatch with the letter path; only `do_answer`/`do_refuse` in
-    // src/actions.rs differ.
+    // src/actions differ.
     let outcome = if letter == "refuse" {
         actions::do_refuse(&root, id, version)
     } else {

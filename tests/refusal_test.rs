@@ -1,6 +1,6 @@
 // adr: b0e865b4-9204-4c55-9f5b-dcb755b3a03b
 //
-// "Does a refusal name the command that clears it?": src/msg.rs's own unit
+// "Does a refusal name the command that clears it?": src/msg's own unit
 // test (`every_refusal_names_its_next_move`) proves that every refusal or
 // failure *built through `msg::`* carries a next-move clause, because
 // `msg::`'s private `refuse()` is the one place that assembles the
@@ -9,7 +9,7 @@
 // That leaves one gap a unit test inside msg.rs cannot see: a command that
 // prints its own ad hoc refusal text instead of calling into `msg::` at
 // all. This test closes that gap from the outside, by reading the source
-// of every command and of src/actions.rs (the shared refusal-building code
+// of every command and of src/actions (the shared refusal-building code
 // those commands call into) and checking that every `eprintln!` there
 // either calls a `msg::` function directly, or passes through a single
 // identifier already verified (see VERIFIED_PASSTHROUGHS below) to carry
@@ -19,7 +19,7 @@
 // prove a passthrough identifier's provenance by itself. What it does
 // prove is that the set of "not obviously msg::-built" call sites is
 // exactly the small, named set below -- so a new eprintln! that hardcodes
-// its own message, anywhere under src/commands or in src/actions.rs, fails
+// its own message, anywhere under src/commands or in src/actions, fails
 // this test until it is either routed through msg:: or added here with a
 // reviewed justification.
 
@@ -72,7 +72,7 @@ fn find_eprintln_calls(src: &str) -> Vec<String> {
 /// written to already carry `msg::`-built text:
 ///
 /// - `e` (unban.rs, approve.rs): the `Err(String)` from
-///   `actions::do_unban`/`do_approve`, and every `Err` src/actions.rs
+///   `actions::do_unban`/`do_approve`, and every `Err` src/actions
 ///   returns is itself built from `msg::` calls (directly, or by joining
 ///   several `msg::`-built lines with "\n").
 /// - `line` (answer.rs): one line of that same kind of `Err(String)`,

@@ -283,7 +283,7 @@ fn show_with_a_file_argument_shows_only_that_file() {
 // recognizes, so clap itself refuses it (a non-zero exit, no file or
 // ledger touched) rather than the tool running some bypass action. The
 // other half of this decision -- every stop names the move that clears
-// it -- is tied in src/msg.rs's `every_refusal_names_its_next_move`.
+// it -- is tied in src/msg's `every_refusal_names_its_next_move`.
 #[test]
 fn override_is_not_a_recognized_command() {
     let dir = init_repo();

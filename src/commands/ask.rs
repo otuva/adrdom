@@ -501,7 +501,7 @@ fn find_conflicted_section(
     None
 }
 
-/// Removes the `**Answer:**` line `finish_answer` (src/actions.rs) once
+/// Removes the `**Answer:**` line `finish_answer` (src/actions) once
 /// spliced in for section `idx`, and the blank line it inserted directly
 /// above it, leaving the section exactly as it looked before it was first
 /// answered: `finish_answer` always inserts exactly those two lines

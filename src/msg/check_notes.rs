@@ -150,8 +150,4 @@ mod tests {
             "x.md: heading is answered and no tracked file holds its tie; agent builds it"
         );
     }
-
-    // adr: 50b31713-4fea-4aa3-842a-79c2750660ba
-    //
-    // A move that has two legitimate acts names both, and the one for a
 }

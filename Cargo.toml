@@ -8,6 +8,9 @@ license = "Apache-2.0"
 # not here. The release workflow writes that version into its checkout of this file, uncommitted.
 version = "0.0.0"
 edition = "2021"
+# The oldest toolchain the crate builds on: std file locks (1.89) and the
+# dependencies (1.88) set it.
+rust-version = "1.89"
 
 [lib]
 name = "adr"

@@ -491,7 +491,7 @@ fn question_identifier_survives_reword_and_a_move_to_another_file() {
 }
 
 /// Mirrors `msg::ledger_asked_id_missing`'s distinguishing text (see
-/// src/msg.rs) closely enough to search `check`'s output for it -- the
+/// src/msg) closely enough to search `check`'s output for it -- the
 /// crate has no lib target for tests to call the real formatter.
 fn msg_ledger_asked_id_missing(id: &str) -> String {
     format!("asked row id {} not found in any topic file", id)

@@ -70,7 +70,6 @@ use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-type Answered = (usize, Result<(String, String), String>);
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -261,6 +260,9 @@ pub fn read_live(root: &Path, pairs: &[Pair], live: &Live) -> Result<Vec<Row>, S
 pub fn read_with(root: &Path, reader: &dyn Reader, pairs: &[Pair]) -> Result<Vec<Row>, String> {
     read_with_live(root, reader, pairs, &Live::of(root))
 }
+
+/// One answer of the reader, by the index of the pair it answers.
+type Answered = (usize, Result<(String, String), String>);
 
 pub fn read_with_live(
     root: &Path,

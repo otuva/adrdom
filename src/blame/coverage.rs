@@ -33,8 +33,9 @@ pub fn coverage_errors(rows: &[Row], n: usize) -> (Vec<BeyondError>, Vec<GapErro
             });
         }
         // Only the part inside the origin marks coverage.
-        for c in covered.iter_mut().take(r.end.min(n) + 1).skip(r.start) {
-            *c = true;
+        let end = r.end.min(n);
+        if r.start <= end {
+            covered[r.start..=end].fill(true);
         }
     }
 

@@ -129,5 +129,3 @@ pub fn unrelated_ambiguous(rel: &str, heading: &str, entry: &str, files: &[Strin
         ambiguous_heading_next(),
     )
 }
-
-// --- ask: the lines of its summary ------------------------------------------

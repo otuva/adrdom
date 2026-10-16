@@ -20,7 +20,7 @@ const COMPETING_STATE_EVENTS: [&str; 6] = [
 ];
 
 /// The events rule (3) matches: every event whose `detail` column carries a
-/// file path (src/actions.rs's `approved`, `context`, `terms` and `blame`
+/// file path (src/actions's `approved`, `context`, `terms` and `blame`
 /// writers), per the dry run this decision's build asked for.
 const COMPETING_PATH_EVENTS: [&str; 4] = ["approved", "context", "terms", "blame"];
 

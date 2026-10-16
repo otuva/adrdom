@@ -590,7 +590,7 @@ pub fn gate_topic(heading: &str, lines: &str) -> String {
 // `approve_via_ledger` below writes `content` to `rel` and loads it back
 // through `record::load` so the `approved`/`context` ledger rows it writes
 // carry the real `record::plan_hash`/`record::context_hash` of that file
-// (see src/record.rs), rather than a hand-rolled mirror of that logic.
+// (see src/record), rather than a hand-rolled mirror of that logic.
 
 /// Writes `approved`/`context` ledger rows for `content` as if `adr
 /// approve` had just run on `rel` (path relative to `dir`, forward
