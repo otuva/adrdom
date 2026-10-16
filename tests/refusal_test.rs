@@ -91,7 +91,7 @@ fn every_eprintln_in_commands_and_actions_is_msg_built_or_a_verified_passthrough
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut files = Vec::new();
     collect_rs_files(&root.join("src/commands"), &mut files);
-    files.push(root.join("src/actions.rs"));
+    collect_rs_files(&root.join("src/actions"), &mut files);
     assert!(
         files.len() > 5,
         "expected to find the command files: {:?}",
