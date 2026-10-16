@@ -20,6 +20,14 @@ jobs:
           fetch-depth: 2
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: cargo fmt --check
+        run: cargo fmt --check
+
+      - name: cargo clippy --all-features --all-targets -- -D warnings
+        run: cargo clippy --all-features --all-targets -- -D warnings
 
       - name: cargo test --all-features
         run: cargo test --all-features
