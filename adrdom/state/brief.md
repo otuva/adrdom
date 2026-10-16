@@ -13,6 +13,8 @@ Behaviour no current decision covers is a question for the owner before it is bu
 A session that runs `adr plan` or `adr ask` is a planner until it ends: it does not build the decisions it asked, and its commits hold only paths under `adrdom/`. A subagent runs under the session's identifier and carries its role.
 A builder is another session; it builds from the record alone, and a decision is built once a test outside `adrdom/` carries the comment `adr: <id>` and shows the code follows it.
 In a review of a build, a behaviour with no decision behind it is a finding.
+A decision binds by its option sentence; Why and Costs explain it, and on a clash the option holds.
+Code that follows a decision may carry the comment `adr-code: <id>`, found by search; it ties no test and no rule judges it.
 The tool writes `adrdom/state/`; its tracked files are staged with the commit, never edited. Approve writes the `id:` lines, ask the `terms:` line, answer the `**Answer:**` line.
 `adr ban` bans a word the owner does not want in the repository; only the owner unbans.
 
@@ -47,3 +49,4 @@ A tier holds at most four questions; tiers are unlimited: a question that stands
 The owner reads the whole plan at each approval, so a plan changes as a whole, not line by line.
 `adr ask <file>` asks every unanswered question of the file at once; a question carries no lean, the agent's lean goes in chat.
 An old prose file enters the records through a blame file under `adrdom/blame/`, which the owner approves before any heading is written from it.
+A blame file holds `origin: <path>`, `blob: <hash>`, a blank line, then one row per line range, `<start>-<end>`, a tab, `decision` or `detail`, over every line of the origin; a question written from it carries `blame: <file> <start>-<end>`.
