@@ -76,34 +76,37 @@ Planner and builder are never one session. A planner's commits hold only `adrdom
 
 ## The records
 
+A question in `adrdom/decisions/http.md`:
+
 ```
-### Does the tool write a terms brief for the agent?
-depends: 7d44030a-…, f90dbd5b-…
-id: ec0b9293-…
+### Does the client retry a failed request?
+depends: 48429496-398b-49e0-a670-4d5b5deadcae
+id: de980582-c508-4d73-a581-0444e7a6d52c
+terms: retry=48429496-398b-49e0-a670-4d5b5deadcae
 
-Problem: an agent writes with term words whose definitions it has never read.
-Standard: a shared vocabulary is put in front of every contributor before they write.
+Problem: a request that fails once fails the whole job, though the next attempt would pass.
+Standard: retry with backoff, bounded.
 
-- A) Yes: the tool writes a terms brief from the terms file, a file made for the agent to read.
-  Why: the definitions reach the agent as one short file.
-  Costs: one more file, which the tool has to keep equal to the terms file.
-- B) No: show prints the name, the aliases and the definition of every term.
-  Why: no new file.
-  Costs: the definitions reach the agent only once it runs show.
+- A) Yes.
+  Why: a transient failure costs one more request, not the job.
+  Costs: a request that is not idempotent may run twice.
+- B) No.
+  Why: every failure is seen once, where it happened.
+  Costs: every transient failure fails the job.
 
 **Answer:** A
 ```
 
 ```
-$ adr show adrdom/decisions/terms-brief.md
-[approved] Terms brief (adrdom/decisions/terms-brief.md)
-[answered A] Does the tool write a terms brief for the agent?
-  Yes: the tool writes a terms brief from the terms file, a file made for the agent to read.
+$ adr show adrdom/decisions/http.md
+[approved] Http (adrdom/decisions/http.md)
+[answered A] Does the client retry a failed request?
+  Yes.
 ```
 
 ```
 $ tail -1 adrdom/state/ledger.tsv
-2026-10-15T19:24:20Z	answered	459c1b77-…	d1cac21e…	A	0.3.0
+2026-10-16T10:56:55Z	answered	de980582-c508-4d73-a581-0444e7a6d52c	7ea5a8572f03caec72701e2a0dc844652d0098528d16a6d995a043260e13296d	A	0.3.0
 ```
 
 ## Commands
@@ -120,10 +123,10 @@ $ tail -1 adrdom/state/ledger.tsv
 | owner | |
 |---|---|
 | `approve <file> [entry]` | topic file, terms entry or blame file |
-| `answer <id>@<version> <letter\|refuse>` | |
+| `answer <id>@<version> <letter\|refuse>` | pick an option, or refuse the question |
 | `serve` | owner's page on 127.0.0.1 |
 | `unban` | lift a ban |
-| `uninstall` | |
+| `uninstall` | remove what install wrote outside `adrdom/` |
 
 ## Contributing
 
