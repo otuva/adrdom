@@ -25,14 +25,21 @@
 //! question of the same plan that has no identifier yet, `text:` and the
 //! sha256 of that question's heading and body.
 //!
+//! "What does the reader run?" (5418b256-dfae-439a-96c1-57d82380cd1e A):
+//! the program of the agent named at install, found by the files install
+//! wrote for it: `CLAUDE.md` importing `AGENTS.md` for `claude`, else
+//! `.codex/rules/adrdom.rules` for `codex`. A repository installed for no
+//! agent has no reader, and with both the tool picks `claude`.
+//!
 //! "Does planning stop with no reader on the machine?"
-//! (bd94a89f-7142-4dab-b757-6482a718a0a0 A): yes. `load` refuses when the
-//! `claude` program is not on PATH; planning loads it only at the body
+//! (bd94a89f-7142-4dab-b757-6482a718a0a0 A): yes. `load` refuses when that
+//! program is not on PATH; planning loads it only at the body
 //! step. `adr read` loads the reader too, for a
 //! `Set` pair: a current decision against another, the first text the one
 //! with the lower identifier.
 //!
-//! `Claude` runs the `claude` program with a fixed model. `Fake`, built only
+//! `Claude` and `Codex` each run their program with a fixed model, the
+//! prompt on its standard input. `Fake`, built only
 //! with the `fake-model` feature and used only when `ADR_FAKE_MODEL=1`,
 //! needs no network: it answers with the word of the first marker
 //! `[word:<w>]` in the new text, or, for a marker `[word:<w>@<key>]`, only
@@ -40,7 +47,7 @@
 //! before one without. `<w>` may be `closes B`. A text with no fitting
 //! marker gets `unrelated`. A word outside the prompt's set is given as it
 //! is, so a test can see the error. With the feature on, `ADR_NO_READER=1` is
-//! a machine with no `claude` program.
+//! a machine with no reader program.
 use crate::ledger;
 use crate::msg;
 use crate::record::sha256_hex;
@@ -52,6 +59,8 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 pub const MODEL: &str = "claude-sonnet-5-5";
+/// The model `codex` is asked for; the key of the rows it reads.
+pub const CODEX_MODEL: &str = "gpt-5.6-terra";
 const TIMEOUT: Duration = Duration::from_secs(120);
 /// How many pairs are read at once; `adr read` hands the reader this many.
 pub const AT_ONCE: usize = 4;
@@ -522,9 +531,99 @@ fn closes_letter(kind: Kind, letters: &[char], word: &str) -> Option<char> {
 pub trait Reader: Sync {
     /// The raw reply of the reader to `pair`.
     fn ask(&self, pair: &Pair) -> Result<String, String>;
+    /// The model it reads with: the key of the rows it writes.
+    fn model(&self) -> &'static str;
 }
 
-pub struct Claude;
+/// The agent program that reads, one of the two `adr install` writes
+/// files for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Program {
+    Claude,
+    Codex,
+}
+
+impl Program {
+    pub fn name(self) -> &'static str {
+        match self {
+            Program::Claude => "claude",
+            Program::Codex => "codex",
+        }
+    }
+
+    pub fn model(self) -> &'static str {
+        match self {
+            Program::Claude => MODEL,
+            Program::Codex => CODEX_MODEL,
+        }
+    }
+}
+
+/// The program of the agent installed in `root` ("What does the reader
+/// run?", 5418b256 A): `claude` when `CLAUDE.md` has the import line,
+/// else `codex` when its rules file is there, else none.
+pub fn program(root: &Path) -> Option<Program> {
+    let imports = std::fs::read_to_string(root.join("CLAUDE.md"))
+        .map(|c| c.lines().any(|l| l == crate::commands::install::CLAUDE_MD_IMPORT))
+        .unwrap_or(false);
+    if imports {
+        Some(Program::Claude)
+    } else if root.join(".codex/rules/adrdom.rules").is_file() {
+        Some(Program::Codex)
+    } else {
+        None
+    }
+}
+
+/// The model the rows of `root` are read with now: the installed
+/// program's, and the fixed model when there is none or the fake reads.
+pub fn model_of(root: &Path) -> &'static str {
+    #[cfg(feature = "fake-model")]
+    if std::env::var("ADR_FAKE_MODEL").as_deref() == Ok("1") {
+        return MODEL;
+    }
+    program(root).map(Program::model).unwrap_or(MODEL)
+}
+
+/// The file suffixes a program name may carry on this platform.
+const SUFFIXES: &[&str] = if cfg!(windows) { &[".exe", ".cmd"] } else { &[""] };
+
+/// Whether `f` is a file the system can run: on unix, one with an
+/// executable bit; elsewhere any file.
+fn is_runnable(f: &Path) -> bool {
+    let Ok(meta) = std::fs::metadata(f) else { return false };
+    if !meta.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        meta.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
+/// The runnable file of the program `name` in a directory of `path`: in
+/// each directory, `name` with each of `suffixes` in order. On unix a file
+/// with no executable bit is skipped and the search goes on.
+pub fn find_program(name: &str, path: &std::ffi::OsStr, suffixes: &[&str]) -> Option<PathBuf> {
+    std::env::split_paths(path)
+        .flat_map(|d| suffixes.iter().map(move |s| d.join(format!("{}{}", name, s))))
+        .find(|f| is_runnable(f))
+}
+
+/// Reads with `claude`, found at `exe`.
+pub struct Claude {
+    pub exe: PathBuf,
+}
+
+/// Reads with `codex`, found at `exe`.
+pub struct Codex {
+    pub exe: PathBuf,
+}
 
 /// The message the reader is given for `pair`. Two decisions are given in
 /// the pair's fixed order: the new side, the lower identifier, first. Every
@@ -538,77 +637,141 @@ fn user_message(pair: &Pair) -> String {
     format!("{}:\n{}\n\n{}:\n{}", first, a, second, b)
 }
 
+/// Runs `cmd` in `cwd` with `input` on its standard input, and returns its
+/// standard output. The input is written on its own thread and closed, so
+/// a program that answers before it has read everything cannot block this
+/// one. A run that outlasts `TIMEOUT` is killed; a nonzero exit is an error
+/// with the program's standard error.
+fn run(mut cmd: Command, name: &str, input: String, cwd: &Path) -> Result<String, String> {
+    let mut child = cmd
+        .current_dir(cwd)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                msg::reader_missing(name)
+            } else {
+                format!("cannot run {}: {}", name, e)
+            }
+        })?;
+    let mut stdin = child.stdin.take().ok_or("no stdin")?;
+    let mut out = child.stdout.take().ok_or("no stdout")?;
+    let mut err = child.stderr.take().ok_or("no stderr")?;
+    let t_in = std::thread::spawn(move || {
+        use std::io::Write;
+        let _ = stdin.write_all(input.as_bytes());
+    });
+    let t_out = std::thread::spawn(move || {
+        let mut s = String::new();
+        let _ = out.read_to_string(&mut s);
+        s
+    });
+    let t_err = std::thread::spawn(move || {
+        let mut s = String::new();
+        let _ = err.read_to_string(&mut s);
+        s
+    });
+    let start = Instant::now();
+    let status = loop {
+        match child.try_wait().map_err(|e| e.to_string())? {
+            Some(s) => break s,
+            None if start.elapsed() > TIMEOUT => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("no answer in {} seconds", TIMEOUT.as_secs()));
+            }
+            None => std::thread::sleep(Duration::from_millis(50)),
+        }
+    };
+    let _ = t_in.join();
+    let stdout = t_out.join().unwrap_or_default();
+    let stderr = t_err.join().unwrap_or_default();
+    if !status.success() {
+        return Err(format!("{} exited with {}: {}", name, status, stderr.trim()));
+    }
+    Ok(stdout)
+}
+
 impl Reader for Claude {
+    fn model(&self) -> &'static str {
+        MODEL
+    }
+
     fn ask(&self, pair: &Pair) -> Result<String, String> {
         let user = user_message(pair);
         // A private directory made for this run: another local user cannot
         // plant settings or a CLAUDE.md in it.
         let cwd = PrivateDir::create()?;
-        let mut child = Command::new("claude")
-            .args([
-                "-p",
-                "--model",
-                MODEL,
-                "--output-format",
-                "json",
-                "--no-session-persistence",
-                // No MCP server of the user's config loads into a reader call.
-                "--strict-mcp-config",
-                // Not the user's global settings or CLAUDE.md (cwd is a private temp dir).
-                "--setting-sources",
-                "project",
-                "--tools",
-                "",
-                "--system-prompt",
-                pair.kind.prompt(),
-            ])
-            .arg(&user)
-            .current_dir(&cwd.0)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| {
-                if e.kind() == std::io::ErrorKind::NotFound {
-                    msg::reader_missing()
-                } else {
-                    format!("cannot run claude: {}", e)
-                }
-            })?;
-        let mut out = child.stdout.take().ok_or("no stdout")?;
-        let mut err = child.stderr.take().ok_or("no stderr")?;
-        let t_out = std::thread::spawn(move || {
-            let mut s = String::new();
-            let _ = out.read_to_string(&mut s);
-            s
-        });
-        let t_err = std::thread::spawn(move || {
-            let mut s = String::new();
-            let _ = err.read_to_string(&mut s);
-            s
-        });
-        let start = Instant::now();
-        let status = loop {
-            match child.try_wait().map_err(|e| e.to_string())? {
-                Some(s) => break s,
-                None if start.elapsed() > TIMEOUT => {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return Err(format!("no answer in {} seconds", TIMEOUT.as_secs()));
-                }
-                None => std::thread::sleep(Duration::from_millis(50)),
-            }
-        };
-        let stdout = t_out.join().unwrap_or_default();
-        let stderr = t_err.join().unwrap_or_default();
-        if !status.success() {
-            return Err(format!("claude exited with {}: {}", status, stderr.trim()));
-        }
+        let prompt_file = cwd.0.join("system-prompt.txt");
+        std::fs::write(&prompt_file, pair.kind.prompt()).map_err(|e| format!("cannot write the reader's prompt: {}", e))?;
+        let mut cmd = Command::new(&self.exe);
+        cmd.args([
+            "-p",
+            "--model",
+            MODEL,
+            "--output-format",
+            "json",
+            "--no-session-persistence",
+            // No MCP server of the user's config loads into a reader call.
+            "--strict-mcp-config",
+            // Not the user's global settings or CLAUDE.md (cwd is a private temp dir).
+            "--setting-sources",
+            "project",
+            "--tools",
+            "",
+            // A file, not an argument: a Windows .cmd shim refuses a multi-line one.
+            "--system-prompt-file",
+        ])
+        .arg(&prompt_file);
+        let stdout = run(cmd, "claude", user, &cwd.0)?;
         let v: serde_json::Value = serde_json::from_str(&stdout).map_err(|e| format!("reply is not JSON: {}", e))?;
         v.get("result")
             .and_then(|r| r.as_str())
             .map(String::from)
             .ok_or_else(|| "reply has no result field".to_string())
+    }
+}
+
+impl Reader for Codex {
+    fn model(&self) -> &'static str {
+        CODEX_MODEL
+    }
+
+    fn ask(&self, pair: &Pair) -> Result<String, String> {
+        // `codex exec` has no system prompt flag: the prompt comes first on
+        // standard input, set apart from the message. The user's config
+        // (effort, MCP servers) and the rules are not loaded, and the shell
+        // tool is off, so text inside a pair cannot make it run a command.
+        let input = format!("{}\n\n=====\n\n{}", pair.kind.prompt(), user_message(pair));
+        let cwd = PrivateDir::create()?;
+        let reply = cwd.0.join("reply.txt");
+        let mut cmd = Command::new(&self.exe);
+        cmd.args([
+            "exec",
+            "--skip-git-repo-check",
+            "--ephemeral",
+            "--ignore-user-config",
+            "--ignore-rules",
+            "--disable",
+            "shell_tool",
+            "--sandbox",
+            "read-only",
+            "--color",
+            "never",
+            "-m",
+            CODEX_MODEL,
+            "-C",
+        ])
+        .arg(&cwd.0)
+        .arg("-o")
+        .arg(&reply)
+        .arg("-");
+        run(cmd, "codex", input, &cwd.0)?;
+        std::fs::read_to_string(&reply)
+            .map(|s| s.trim().to_string())
+            .map_err(|e| format!("codex wrote no reply: {}", e))
     }
 }
 
@@ -641,30 +804,38 @@ impl Reader for Fake {
         let word = marked_word(&pair.new_text, &pair.neighbour).unwrap_or_else(|| "unrelated".to_string());
         Ok(format!("The fake reader's reason.\n{}", word))
     }
-}
 
-/// Whether a program named `claude` is in a directory of PATH.
-fn claude_on_path() -> bool {
-    std::env::var_os("PATH")
-        .map(|p| std::env::split_paths(&p).any(|d| d.join("claude").is_file()))
-        .unwrap_or(false)
+    fn model(&self) -> &'static str {
+        MODEL
+    }
 }
 
 /// The fake reader when the feature is on and `ADR_FAKE_MODEL=1`, else
-/// Claude. Refuses when there is no `claude` program to run.
-pub fn load() -> Result<Box<dyn Reader>, String> {
+/// the program of the agent installed in `root`. Refuses when no agent is
+/// installed or its program is not on PATH.
+pub fn load(root: &Path) -> Result<Box<dyn Reader>, String> {
     #[cfg(feature = "fake-model")]
     if std::env::var("ADR_NO_READER").as_deref() == Ok("1") {
-        return Err(msg::reader_missing());
+        return Err(match program(root) {
+            Some(p) => msg::reader_missing(p.name()),
+            None => msg::reader_no_agent(),
+        });
     }
     #[cfg(feature = "fake-model")]
     if std::env::var("ADR_FAKE_MODEL").as_deref() == Ok("1") {
         return Ok(Box::new(Fake));
     }
-    if !claude_on_path() {
-        return Err(msg::reader_missing());
-    }
-    Ok(Box::new(Claude))
+    load_in(root, &std::env::var_os("PATH").unwrap_or_default())
+}
+
+/// `load` with the directories of `path` searched, and no fake reader.
+pub fn load_in(root: &Path, path: &std::ffi::OsStr) -> Result<Box<dyn Reader>, String> {
+    let p = program(root).ok_or_else(msg::reader_no_agent)?;
+    let exe = find_program(p.name(), path, SUFFIXES).ok_or_else(|| msg::reader_missing(p.name()))?;
+    Ok(match p {
+        Program::Claude => Box::new(Claude { exe }),
+        Program::Codex => Box::new(Codex { exe }),
+    })
 }
 
 /// A row for every pair, in order. A pair whose text hash, neighbour,
@@ -678,7 +849,7 @@ pub fn read(root: &Path, pairs: &[Pair]) -> Result<Vec<Row>, String> {
 
 /// Like `read`, against the live sets a command read once for its run.
 pub fn read_live(root: &Path, pairs: &[Pair], live: &Live) -> Result<Vec<Row>, String> {
-    let reader = load()?;
+    let reader = load(root)?;
     read_with_live(root, reader.as_ref(), pairs, live)
 }
 
@@ -687,13 +858,14 @@ pub fn read_with(root: &Path, reader: &dyn Reader, pairs: &[Pair]) -> Result<Vec
 }
 
 pub fn read_with_live(root: &Path, reader: &dyn Reader, pairs: &[Pair], live: &Live) -> Result<Vec<Row>, String> {
+    let model = reader.model();
     let mut have: HashMap<(String, String, String, String), Row> = HashMap::new();
     for r in read_file(root).rows {
-        if r.model == MODEL {
+        if r.model == model {
             have.insert(r.key(), r);
         }
     }
-    let key = |p: &Pair| (sha256_hex(&p.new_text), p.neighbour.clone(), p.kind.prompt_hash(), MODEL.to_string());
+    let key = |p: &Pair| (sha256_hex(&p.new_text), p.neighbour.clone(), p.kind.prompt_hash(), model.to_string());
     let mut todo: Vec<usize> = Vec::new();
     let mut seen: HashSet<(String, String, String, String)> = HashSet::new();
     for (i, p) in pairs.iter().enumerate() {
@@ -750,18 +922,28 @@ pub fn read_with_live(root: &Path, reader: &dyn Reader, pairs: &[Pair], live: &L
     Ok(pairs.iter().map(|p| have[&key(p)].clone()).collect())
 }
 
-/// A fresh directory under the temp dir, named at random and open to its
-/// owner only; removed when dropped. `create_dir` fails when the name exists.
+/// A fresh directory under the absolute temp dir, named at random and open
+/// to its owner only; removed when dropped. `create_dir` fails when the name
+/// exists. The temp dir is made absolute, because the program runs with this
+/// directory as its working directory and is given paths into it.
 struct PrivateDir(PathBuf);
 
 impl PrivateDir {
     fn create() -> Result<PrivateDir, String> {
-        use std::os::unix::fs::DirBuilderExt;
-        let path = std::env::temp_dir().join(format!("adr-reader-{}", uuid::Uuid::new_v4()));
-        std::fs::DirBuilder::new()
-            .mode(0o700)
-            .create(&path)
-            .map_err(|e| format!("cannot make a directory for claude: {}", e))?;
+        PrivateDir::create_in(&std::env::temp_dir())
+    }
+
+    fn create_in(base: &Path) -> Result<PrivateDir, String> {
+        let base = std::fs::canonicalize(base).map_err(|e| format!("cannot make a directory for the reader: {}: {}", base.display(), e))?;
+        let path = base.join(format!("adr-reader-{}", uuid::Uuid::new_v4()));
+        #[allow(unused_mut)]
+        let mut dir = std::fs::DirBuilder::new();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            dir.mode(0o700);
+        }
+        dir.create(&path).map_err(|e| format!("cannot make a directory for the reader: {}", e))?;
         Ok(PrivateDir(path))
     }
 }
@@ -787,14 +969,29 @@ mod tests {
 
     #[test]
     fn a_run_directory_is_private_fresh_and_removed_after() {
-        use std::os::unix::fs::PermissionsExt;
         let a = PrivateDir::create().unwrap();
         let b = PrivateDir::create().unwrap();
         assert_ne!(a.0, b.0);
-        assert_eq!(std::fs::metadata(&a.0).unwrap().permissions().mode() & 0o777, 0o700);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::metadata(&a.0).unwrap().permissions().mode() & 0o777, 0o700);
+        }
         let path = a.0.clone();
         drop(a);
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn a_run_directory_is_made_under_the_canonical_base() {
+        let base = PrivateDir::create().unwrap();
+        std::fs::create_dir(base.0.join("x")).unwrap();
+        let d = PrivateDir::create_in(&base.0.join("x").join("..")).unwrap();
+        assert!(d.0.is_absolute());
+        assert!(!d.0.components().any(|c| c == std::path::Component::ParentDir), "{:?}", d.0);
+        assert_eq!(d.0.parent().unwrap(), base.0.canonicalize().unwrap());
+        let e = PrivateDir::create_in(&base.0.join("missing")).err().expect("refuses");
+        assert!(e.starts_with("cannot make a directory for the reader"), "{}", e);
     }
 
     fn row() -> Row {

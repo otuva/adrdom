@@ -2670,8 +2670,8 @@ pub fn gitignore_missing() -> Said {
     )
 }
 
-/// The embedding model is not on this machine and this build cannot fetch it.
-#[cfg(any(not(feature = "model"), feature = "fake-model"))]
+/// The embedding model is not in this build.
+#[cfg(not(feature = "model"))]
 pub fn model_missing() -> String {
     refuse(
         "model: the embedding model is missing".to_string(),
@@ -2679,13 +2679,81 @@ pub fn model_missing() -> String {
     )
 }
 
-/// The embedding model cannot be loaded from, or downloaded into, the cache directory.
+/// The one step that fetches what planning needs ("Does install fetch the
+/// embedding model?", e1c305af A).
 #[cfg(feature = "model")]
-pub fn model_load_failed(cache: &str, e: impl Display) -> String {
+fn install_planning() -> Next {
+    Next::agent_runs(Cmd::fixed("adr install --planning"))
+}
+
+/// The embedding model is not in the user cache directory.
+#[cfg(feature = "model")]
+pub fn model_not_installed(path: &str) -> String {
+    refuse(format!("model: the embedding model is not installed; looked in {}", path), install_planning())
+}
+
+/// The onnxruntime library is not in the user cache directory.
+#[cfg(feature = "model")]
+pub fn onnxruntime_not_installed(path: &str) -> String {
+    refuse(format!("model: the onnxruntime library is not installed; looked for {}", path), install_planning())
+}
+
+/// No user cache directory can be found on this machine.
+#[cfg(feature = "model")]
+pub fn cache_dir_missing() -> String {
     refuse(
-        format!("model: cannot load the embedding model from {}, which needs the network once: {}", cache, e),
+        "model: no user cache directory is known; set HOME or XDG_CACHE_HOME".to_string(),
         Next::agent(Act::RunsAgain),
     )
+}
+
+/// The embedding model, present in the user cache directory, cannot be loaded:
+/// its directory goes and the install step fetches it again.
+#[cfg(feature = "model")]
+pub fn model_load_failed(dir: &str, e: impl Display) -> String {
+    refuse(
+        format!("model: cannot load the embedding model from {}: {}", dir, e),
+        Next::agent_then_runs(Act::Removes(dir.to_string()), Cmd::fixed("adr install --planning")),
+    )
+}
+
+/// The onnxruntime library, present in the user cache directory, does not
+/// load; the install step checks it and fetches it again.
+#[cfg(feature = "model")]
+pub fn onnxruntime_load_failed(path: &str, e: impl Display) -> String {
+    refuse(format!("model: cannot load the onnxruntime library {}: {}", path, e), install_planning())
+}
+
+/// The install step found the onnxruntime library in the user cache
+/// directory unloadable and removed it.
+#[cfg(feature = "model")]
+pub fn onnxruntime_removed(path: &str, e: impl Display) -> String {
+    refuse(format!("model: removed the onnxruntime library {}, which does not load: {}", path, e), install_planning())
+}
+
+/// The onnxruntime library the install step just fetched, matching its pinned
+/// hash, does not load on this machine.
+#[cfg(feature = "model")]
+pub fn onnxruntime_unusable(path: &str, e: impl Display) -> String {
+    refuse(
+        format!("model: the fetched onnxruntime library {} does not load: {}", path, e),
+        Next::not_yet("an onnxruntime build this machine can load"),
+    )
+}
+
+/// The onnxruntime release has no library for this platform.
+#[cfg(feature = "model")]
+pub fn onnxruntime_no_build(platform: &str) -> String {
+    refuse(
+        format!("model: onnxruntime has no build for {}", platform),
+        Next::not_yet("an onnxruntime build for this platform"),
+    )
+}
+
+/// Fetching the onnxruntime library or the model failed.
+#[cfg(feature = "model")]
+pub fn model_fetch_failed(what: &str, e: impl Display) -> String {
+    refuse(format!("model: cannot fetch {}: {}", what, e), Next::agent(Act::RunsAgain))
 }
 
 pub fn embed_failed(e: impl Display) -> String {
@@ -2695,11 +2763,21 @@ pub fn embed_failed(e: impl Display) -> String {
     )
 }
 
-/// The reader is not on this machine: no `claude` program on PATH.
-pub fn reader_missing() -> String {
+/// The reader is not on this machine: the program of the installed agent
+/// (`claude` or `codex`) is not on PATH.
+pub fn reader_missing(program: &str) -> String {
     refuse(
-        "reader: the claude program is missing".to_string(),
-        Next::agent(Act::Installs("the claude program".into())),
+        format!("reader: the {} program is missing", program),
+        Next::agent(Act::Installs(format!("the {} program", program))),
+    )
+}
+
+/// The repository was installed for no agent, so there is no program to
+/// read with.
+pub fn reader_no_agent() -> String {
+    refuse(
+        "reader: no agent is installed for this repository".to_string(),
+        Next::agent(Act::Installs("an agent's files with adr install --claude or adr install --codex".into())),
     )
 }
 
@@ -2978,12 +3056,30 @@ mod tests {
             gitattributes_missing().text(),
             gitignore_differs().text(),
             gitignore_missing().text(),
-            #[cfg(any(not(feature = "model"), feature = "fake-model"))]
+            #[cfg(not(feature = "model"))]
             model_missing(),
             #[cfg(feature = "model")]
-            model_load_failed("adrdom/cache/model", "no network"),
+            model_not_installed("/home/x/.cache/adrdom/model"),
+            #[cfg(feature = "model")]
+            onnxruntime_not_installed("/home/x/.cache/adrdom/libonnxruntime.so.1.28.0"),
+            #[cfg(feature = "model")]
+            cache_dir_missing(),
+            #[cfg(feature = "model")]
+            model_load_failed("/home/x/.cache/adrdom/model", "bad file"),
+            #[cfg(feature = "model")]
+            onnxruntime_load_failed("/home/x/.cache/adrdom/libonnxruntime.so.1.28.0", "bad file"),
+            #[cfg(feature = "model")]
+            onnxruntime_removed("/home/x/.cache/adrdom/libonnxruntime.so.1.28.0", "bad file"),
+            #[cfg(feature = "model")]
+            onnxruntime_unusable("/home/x/.cache/adrdom/libonnxruntime.so.1.28.0", "bad file"),
+            #[cfg(feature = "model")]
+            onnxruntime_no_build("macos-x86_64"),
+            #[cfg(feature = "model")]
+            model_fetch_failed("the onnxruntime library", "no network"),
             embed_failed("x"),
-            reader_missing(),
+            reader_missing("claude"),
+            reader_missing("codex"),
+            reader_no_agent(),
             unrelated_names_nothing("x.md", "Does X?", "Y").text(),
             unrelated_ambiguous("x.md", "Does X?", "Y", &["a.md".to_string(), "b.md".to_string()]).text(),
             blame_entry_without_range("x.md", "Does X?", "notes").text(),
@@ -3084,7 +3180,7 @@ mod tests {
         ];
         for o in &outputs {
             assert!(
-                o.contains("; agent ") || o.contains("; owner "),
+                o.contains("; agent ") || o.contains("; owner ") || o.contains("; not yet: "),
                 "no next move: {}",
                 o
             );

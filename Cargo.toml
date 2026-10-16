@@ -1,8 +1,10 @@
 [package]
-name = "adr"
+name = "adrdom"
+description = "Command-line tool that governs how AI coding agents work in a git repository"
+repository = "https://github.com/otuva/adrdom"
 # Placeholder: the tool's version lives in the repo-root VERSION file
 # (see src/version.rs and "Does every ledger row carry the tool version?"),
-# not here.
+# not here. The release workflow writes that version into its checkout of this file, uncommitted.
 version = "0.0.0"
 edition = "2021"
 
@@ -21,10 +23,22 @@ uuid = { version = "1", features = ["v4"] }
 time = { version = "0.3", features = ["formatting", "parsing"] }
 serde_json = "1"
 tiny_http = "0.12"
-fastembed = { version = "7", optional = true }
+fastembed = { version = "7", optional = true, default-features = false, features = ["ort-load-dynamic", "hf-hub-rustls-tls"] }
+# fastembed does not re-export ort; the same version it pins, for `ort::init_from`.
+ort = { version = "=2.0.0-rc.13", optional = true, default-features = false, features = ["load-dynamic"] }
+dirs = { version = "6", optional = true }
+ureq = { version = "3", optional = true, default-features = false, features = ["rustls", "gzip"] }
+flate2 = { version = "1", optional = true }
+tar = { version = "0.4", optional = true }
+zip = { version = "8", optional = true, default-features = false, features = ["deflate"] }
 
 [features]
 default = ["model"]
-model = ["dep:fastembed"]
+model = ["dep:fastembed", "dep:ort", "dep:dirs", "dep:ureq", "dep:flate2", "dep:tar", "dep:zip"]
 owner-bypass = []
 fake-model = []
+
+# The profile cargo-dist builds release artifacts with.
+[profile.dist]
+inherits = "release"
+lto = "thin"

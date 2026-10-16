@@ -20,10 +20,22 @@ What `adr` does about them:
 
 ## Install and uninstall
 
-Build and install the binary from a clone (the package and the binary are both named `adr`):
+Install the binary from the latest GitHub release. On Linux and macOS:
 
 ```sh
-cargo install --path .
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/otuva/adrdom/releases/latest/download/adrdom-installer.sh | sh
+```
+
+On Windows (untested), in PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/otuva/adrdom/releases/latest/download/adrdom-installer.ps1 | iex"
+```
+
+Or build and install it from a clone (the package is named `adrdom`; the command it installs is `adr`). `--force` is needed because the package was renamed from `adr` to `adrdom`, so a plain reinstall over an old `adr` stops with "binary `adr` already exists":
+
+```sh
+cargo install --path . --force
 ```
 
 Then run, inside the repository to govern:
@@ -32,8 +44,11 @@ Then run, inside the repository to govern:
 adr install            # the repository setup
 adr install --claude   # the setup, plus the Claude Code files
 adr install --codex    # the setup, plus the Codex rules file
+adr install --planning # on a machine that plans: fetch the embedding model and the onnxruntime library
 adr uninstall          # owner-only: remove what install wrote outside adrdom/
 ```
+
+`adr install --planning` fetches the embedding model and the onnxruntime library into the user cache, once per machine: `~/.cache/adrdom` on Linux, `~/Library/Caches/adrdom` on macOS, `%LOCALAPPDATA%\adrdom` on Windows. `adr plan` and `adr read` stop and name this command when those files are missing. onnxruntime 1.28.0 has no build for Intel Macs, so `adr install --planning` refuses there; every other command works.
 
 `adr install` writes these files and one git setting:
 
@@ -47,7 +62,7 @@ adr uninstall          # owner-only: remove what install wrote outside adrdom/
 
 `adr install --codex` also writes `.codex/rules/adrdom.rules`, which forbids the owner's commands under Codex's project rules.
 
-`adr uninstall` removes the AGENTS.md section (and the file, if nothing else is in it), the import line it added to `CLAUDE.md`, the three hooks and `core.hooksPath` (only if they are unchanged since install), the deny entries, and `.codex/rules/adrdom.rules`. It leaves `adrdom/` as it is.
+`adr uninstall` removes the AGENTS.md section (and the file, if nothing else is in it), the import line it added to `CLAUDE.md`, the three hooks and `core.hooksPath` (only if they are unchanged since install), the deny entries, and `.codex/rules/adrdom.rules`. It leaves `adrdom/` and the user cache as they are.
 
 ## The workflow
 
@@ -134,7 +149,7 @@ Commands:
 - `adr install` sets up `adrdom/`, the hooks and `AGENTS.md`; see `adr install --help`.
 - `adr uninstall` is owner-only and removes what install wrote outside `adrdom/`; see `adr uninstall --help`.
 - `adr ask` asks the owner every question of a topic file that has a body and is not asked yet; see `adr ask --help`.
-- `adr plan` brings the neighbours of a topic file's headings and questions, names the lines still to write, and prints the next move; see `adr plan --help`.
+- `adr plan` brings the neighbours of a topic file's headings and questions, names the lines still to write, and prints the next move. It judges neighbours with a reader, the program of the agent install was run for: `claude` after `--claude`, `codex` after `--codex`; see `adr plan --help`.
 - `adr read` reads every current decision against its ten nearest and prints each pair marked same or inconsistent; see `adr read --help`.
 - `adr approve` is owner-only and approves a topic file, one terms entry or a blame file; see `adr approve --help`.
 - `adr answer` is owner-only and answers a question by `<id>@<version>`; see `adr answer --help`.
@@ -143,3 +158,7 @@ Commands:
 - `adr unban` is owner-only and removes lines from the ban list; see `adr unban --help`.
 - `adr serve` is owner-only and serves the owner's page on 127.0.0.1; see `adr serve --help`.
 - `adr check` runs all governance checks; see `adr check --help`.
+
+## Releases
+
+A push to `main` that changes `VERSION` builds the binary for Linux, macOS (Apple silicon and Intel) and Windows, and publishes a GitHub release tagged `v<VERSION>` with the installers. The release notes are generated from the commits. `.github/workflows/release.yml` does this; a release that exists already is skipped.

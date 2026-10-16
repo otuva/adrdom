@@ -56,13 +56,15 @@ pub const BAN_LIST: &str = "adrdom/state/banned.sha256";
 /// check reads this path the same way it reads the git hooks.
 pub const GITATTRIBUTES_PATH: &str = "adrdom/.gitattributes";
 
-/// Where `adr install` writes the rule that keeps the index and the model out
-/// of git ("Does git track a file the tool can get again without the owner?")
+/// Where `adr install` writes the rule that keeps the embedding index out
+/// of git (the model is outside the repository, in the user cache directory:
+/// "Does install put the embedding model outside the repository?", 459c1b77 A;
+/// "Does git track a file the tool can get again without the owner?")
 /// and the roles file too (1cec44fc).
 /// Its content is `commands::install::GITIGNORE_CONTENT`; `check`'s `install`
 /// check reads this path the same way it reads `GITATTRIBUTES_PATH`.
 pub const GITIGNORE_PATH: &str = "adrdom/.gitignore";
-/// The directory under adrdom that holds the index and the model files.
+/// The directory under adrdom that holds the embedding index.
 pub const CACHE_DIR: &str = "adrdom/cache";
 
 /// Where `adr install` writes the pre-commit hook, relative to the repo
