@@ -317,9 +317,15 @@ fn consistent_and_unrelated_pairs_alone_print_nothing() {
 fn reading_stops_without_the_model() {
     let (dir, _) = repo_with(&["", ""]);
     let before = rows(&dir);
+    let (want, next) = if cfg!(feature = "model") {
+        ("the embedding model is not installed", "agent runs: adr install --planning")
+    } else {
+        ("the embedding model is missing", "agent builds adr with the model feature")
+    };
     let out = read_with(&dir, &[("ADR_NO_MODEL", "1")]);
     assert!(!out.status.success(), "{}", stdout(&out));
-    assert!(stderr(&out).contains("the embedding model is missing"), "{}", stderr(&out));
+    assert!(stderr(&out).contains(want), "{}", stderr(&out));
+    assert!(stderr(&out).contains(next), "{}", stderr(&out));
     assert_eq!(rows(&dir), before);
 }
 
@@ -329,6 +335,7 @@ fn reading_stops_without_the_reader() {
     let before = rows(&dir);
     let out = read_with(&dir, &[("ADR_NO_READER", "1")]);
     assert!(!out.status.success(), "{}", stdout(&out));
+    assert!(stderr(&out).contains("no agent is installed for this repository"), "{}", stderr(&out));
     assert_eq!(rows(&dir), before);
 }
 

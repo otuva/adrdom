@@ -71,7 +71,7 @@ fn read_all(root: &std::path::Path) -> Result<Vec<Line>, String> {
     if decisions.len() < 2 {
         return Ok(Vec::new());
     }
-    reader::load()?;
+    reader::load(root)?;
     let emb = embed::load(root)?;
     // The whole pool is refreshed, so the cache file holds what `adr plan` keeps.
     let (all_vecs, _) = index::refresh(root, emb.as_ref(), &recs, &[])?;

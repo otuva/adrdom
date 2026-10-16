@@ -247,8 +247,14 @@ fn the_reader_reads_no_neighbour_of_a_heading() {
     // The model is still needed for it.
     let dir = repo();
     two_headings(&dir);
+    let (want, next) = if cfg!(feature = "model") {
+        ("the embedding model is not installed", "agent runs: adr install --planning")
+    } else {
+        ("the embedding model is missing", "agent builds adr with the model feature")
+    };
     let err = refused(&plan_with(&dir, &[("ADR_NO_MODEL", "1")]));
-    assert!(err.contains("the embedding model is missing"), "{}", err);
+    assert!(err.contains(want), "{}", err);
+    assert!(err.contains(next), "{}", err);
     assert_eq!(neighbour_rows(&dir).len(), held_n, "nothing was written");
 }
 
@@ -567,9 +573,14 @@ fn planning_stops_without_the_model() {
     let dir = repo();
     two_headings(&dir);
     let before = rows(&dir).len();
+    let (want, next) = if cfg!(feature = "model") {
+        ("the embedding model is not installed", "agent runs: adr install --planning")
+    } else {
+        ("the embedding model is missing", "agent builds adr with the model feature")
+    };
     let err = refused(&plan_with(&dir, &[("ADR_NO_MODEL", "1")]));
-    assert!(err.contains("the embedding model is missing"), "{}", err);
-    assert!(err.contains("agent builds adr with the model feature"), "{}", err);
+    assert!(err.contains(want), "{}", err);
+    assert!(err.contains(next), "{}", err);
     assert_eq!(rows(&dir).len(), before, "nothing was read");
 }
 
@@ -583,7 +594,9 @@ fn planning_stops_without_the_reader() {
     write_lines(&dir, &out);
     let (before, held) = (rows(&dir).len(), reader_text(&dir));
     let err = refused(&plan_with(&dir, &[("ADR_NO_READER", "1")]));
-    assert!(err.contains("the claude program is missing"), "{}", err);
+    // The repository is installed for no agent: there is no program to name.
+    assert!(err.contains("no agent is installed for this repository"), "{}", err);
+    assert!(err.contains("agent installs an agent's files"), "{}", err);
     assert_eq!(rows(&dir).len(), before, "nothing was read");
     assert_eq!(reader_text(&dir), held, "nothing was written");
     // The other commands run without it.

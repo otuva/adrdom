@@ -11,18 +11,21 @@ use std::path::Path;
 /// The agent's next move on any I/O failure while installing: fix what the
 /// error names, then run `command`, the install that failed, again.
 /// The install command as it was given, flags and all.
-fn install_command(claude: bool, codex: bool) -> Cmd {
-    command(&install_words(claude, codex))
+fn install_command(claude: bool, codex: bool, planning: bool) -> Cmd {
+    command(&install_words(claude, codex, planning))
 }
 
 /// The words of the install command as it was given, flags and all.
-fn install_words(claude: bool, codex: bool) -> Vec<&'static str> {
+fn install_words(claude: bool, codex: bool, planning: bool) -> Vec<&'static str> {
     let mut w = vec!["adr", "install"];
     if claude {
         w.push("--claude");
     }
     if codex {
         w.push("--codex");
+    }
+    if planning {
+        w.push("--planning");
     }
     w
 }
@@ -100,9 +103,10 @@ pub(crate) const PRE_PUSH_HOOK: &str = "#!/bin/sh\nadr check --push\nexit $?\n";
 /// compares `.codex/rules/adrdom.rules` against `codex_rules_content()`.
 pub(crate) const GITATTRIBUTES_CONTENT: &str = "state/ledger.tsv merge=union\nstate/reader.tsv merge=union\n";
 
-/// `adrdom/.gitignore`'s whole content: the index and the model files under
-/// `adrdom/cache` stay out of git ("Does git track a file the tool can get
-/// again without the owner?"), and so does the roles file, which is
+/// `adrdom/.gitignore`'s whole content: the embedding index under
+/// `adrdom/cache` stays out of git ("Does git track a file the tool can get
+/// again without the owner?"; the model lives in the user cache directory,
+/// not here), and so does the roles file, which is
 /// untracked (1cec44fc), and the neighbours file (60341be0).
 pub(crate) const GITIGNORE_CONTENT: &str = "cache/\nstate/roles.tsv\nstate/neighbours.tsv\n";
 
@@ -123,11 +127,11 @@ pub(crate) fn codex_rules_content() -> String {
     out
 }
 
-pub fn run(claude: bool, codex: bool) -> i32 {
+pub fn run(claude: bool, codex: bool, planning: bool) -> i32 {
     let root = match repo::find_root() {
         Some(r) => r,
         None => {
-            let words = install_words(claude, codex);
+            let words = install_words(claude, codex, planning);
             out::eprint_stop(Command::Install, &msg::not_a_repo("install", &words[2..], Actor::Agent));
             return 1;
         }
@@ -137,7 +141,7 @@ pub fn run(claude: bool, codex: bool) -> i32 {
     // does a command that writes print?", 069a6b4a A). The files written
     // before a failure are printed too: they are on disk.
     let mut events: Vec<Event> = Vec::new();
-    let result = install_all(&root, claude, codex, &mut events);
+    let result = install_all(&root, claude, codex, planning, &mut events);
     out::print_events(&events);
     match result {
         Ok(()) => 0,
@@ -150,8 +154,8 @@ pub fn run(claude: bool, codex: bool) -> i32 {
 
 /// Every piece install writes, in order, each file it writes pushed onto
 /// `events`; the first failure stops it, as its message.
-fn install_all(root: &Path, claude: bool, codex: bool, events: &mut Vec<Event>) -> Result<(), String> {
-    let cmd = &install_command(claude, codex);
+fn install_all(root: &Path, claude: bool, codex: bool, planning: bool, events: &mut Vec<Event>) -> Result<(), String> {
+    let cmd = &install_command(claude, codex, planning);
     for dir in [repo::DECISIONS_DIR, repo::STATE_DIR] {
         let path = root.join(dir);
         fs::create_dir_all(&path).map_err(|e| msg::create_failed(&path.display().to_string(), e, msg::after_fix_agent_runs(cmd.clone())))?;
@@ -199,6 +203,16 @@ fn install_all(root: &Path, claude: bool, codex: bool, events: &mut Vec<Event>) 
         events.extend(
             install_codex_rules(root).map_err(|e| msg::write_failed(".codex/rules/adrdom.rules", e, msg::after_fix_agent_runs(cmd.clone())))?,
         );
+    }
+
+    // The planning step runs last: the repository's own files are written
+    // whether or not the fetch succeeds ("Does install fetch the embedding
+    // model?", e1c305af A).
+    if planning {
+        #[cfg(feature = "model")]
+        crate::planning::run(events)?;
+        #[cfg(not(feature = "model"))]
+        return Err(msg::model_missing());
     }
     Ok(())
 }
