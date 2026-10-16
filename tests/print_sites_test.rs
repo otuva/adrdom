@@ -12,7 +12,7 @@ const REL: &str = "adrdom/decisions/gate.md";
 // adr: 1af76f91-5644-42ef-97ea-8f70f934c26c
 // adr: 8846f6d1-cd8c-4b87-b6f2-35bc8adf6763
 //
-// Every line a command prints goes through the one printer in src/out.rs,
+// Every line a command prints goes through the one printer in src/out,
 // so what a command prints is a `Line` (what it read, a status, a finding,
 // a move, an event) and nothing else: no `print!` and no handle on
 // standard output or error anywhere else in the tool.
@@ -28,7 +28,7 @@ fn no_source_file_but_the_printer_writes_to_the_terminal() {
     ];
     let mut found = Vec::new();
     for (rel, text) in source_files() {
-        if rel == "src/out.rs" {
+        if rel.starts_with("src/out/") {
             continue;
         }
         for (n, line) in code_lines(&text) {
@@ -39,7 +39,7 @@ fn no_source_file_but_the_printer_writes_to_the_terminal() {
     }
     assert!(
         found.is_empty(),
-        "printing outside src/out.rs:\n{}",
+        "printing outside src/out:\n{}",
         found.join("\n")
     );
 }
